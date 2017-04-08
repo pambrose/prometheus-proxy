@@ -1,5 +1,6 @@
 import argparse
 import logging
+import socket
 import time
 from concurrent import futures
 from threading import Thread, Lock
@@ -18,8 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 class PrometheusProxy(ProxyServiceServicer):
-    def __init__(self, port):
-        self.hostname = "[::]:{0}".format(port if port else GRPC_PORT_DEFAULT)
+    def __init__(self, grpc_port, http_port):
+        self.hostname = "[::]:{0}".format(grpc_port if grpc_port else GRPC_PORT_DEFAULT)
+        self.http_port = http_port
         self.stopped = False
         self.grpc_server = None
         self.agent_count = 0
@@ -53,7 +55,11 @@ class PrometheusProxy(ProxyServiceServicer):
     def registerAgent(self, request, context):
         with self.agent_lock:
             self.agent_count += 1
-            return RegisterResponse(agent_id=self.agent_count)
+            print("Registering agent {0} {1}".format(request.hostname, request.target_path))
+            return RegisterResponse(agent_id=self.agent_count,
+                                    proxy_url="http://{0}:{1}/{2}".format(socket.gethostname(),
+                                                                          self.http_port,
+                                                                          request.target_path))
 
 
 if __name__ == "__main__":
@@ -68,7 +74,7 @@ if __name__ == "__main__":
 
     setup_logging(level=args[LOG_LEVEL])
 
-    with PrometheusProxy(args[GRPC]):
+    with PrometheusProxy(args[GRPC], args[PORT]):
         http = Flask(__name__)
 
 

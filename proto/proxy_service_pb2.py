@@ -18,7 +18,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
     package='proxy_service',
     syntax='proto3',
     serialized_pb=_b(
-        '\n\x19proto/proxy_service.proto\x12\rproxy_service\"8\n\x0fRegisterRequest\x12\x10\n\x08hostname\x18\x01 \x01(\t\x12\x13\n\x0btarget_path\x18\x02 \x01(\t\"$\n\x10RegisterResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\"\x1a\n\nRequestMsg\x12\x0c\n\x04info\x18\x01 \x01(\t\"\x1b\n\x0bResponseMsg\x12\x0c\n\x04\x62ody\x18\x01 \x01(\t2\xad\x01\n\x0cProxyService\x12R\n\rregisterAgent\x12\x1e.proxy_service.RegisterRequest\x1a\x1f.proxy_service.RegisterResponse\"\x00\x12I\n\ngetMetrics\x12\x19.proxy_service.RequestMsg\x1a\x1a.proxy_service.ResponseMsg\"\x00(\x01\x30\x01\x62\x06proto3')
+        '\n\x19proto/proxy_service.proto\x12\rproxy_service\"8\n\x0fRegisterRequest\x12\x10\n\x08hostname\x18\x01 \x01(\t\x12\x13\n\x0btarget_path\x18\x02 \x01(\t\"7\n\x10RegisterResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tproxy_url\x18\x02 \x01(\t\"\x1a\n\nRequestMsg\x12\x0c\n\x04info\x18\x01 \x01(\t\"\x1b\n\x0bResponseMsg\x12\x0c\n\x04\x62ody\x18\x01 \x01(\t2\xad\x01\n\x0cProxyService\x12R\n\rregisterAgent\x12\x1e.proxy_service.RegisterRequest\x1a\x1f.proxy_service.RegisterResponse\"\x00\x12I\n\ngetMetrics\x12\x19.proxy_service.RequestMsg\x1a\x1a.proxy_service.ResponseMsg\"\x00(\x01\x30\x01\x62\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -59,6 +59,7 @@ _REGISTERREQUEST = _descriptor.Descriptor(
     serialized_end=100,
 )
 
+
 _REGISTERRESPONSE = _descriptor.Descriptor(
     name='RegisterResponse',
     full_name='proxy_service.RegisterResponse',
@@ -70,6 +71,13 @@ _REGISTERRESPONSE = _descriptor.Descriptor(
             name='agent_id', full_name='proxy_service.RegisterResponse.agent_id', index=0,
             number=1, type=5, cpp_type=1, label=1,
             has_default_value=False, default_value=0,
+            message_type=None, enum_type=None, containing_type=None,
+            is_extension=False, extension_scope=None,
+            options=None),
+        _descriptor.FieldDescriptor(
+            name='proxy_url', full_name='proxy_service.RegisterResponse.proxy_url', index=1,
+            number=2, type=9, cpp_type=9, label=1,
+            has_default_value=False, default_value=_b("").decode('utf-8'),
             message_type=None, enum_type=None, containing_type=None,
             is_extension=False, extension_scope=None,
             options=None),
@@ -86,8 +94,9 @@ _REGISTERRESPONSE = _descriptor.Descriptor(
     oneofs=[
     ],
     serialized_start=102,
-    serialized_end=138,
+    serialized_end=157,
 )
+
 
 _REQUESTMSG = _descriptor.Descriptor(
     name='RequestMsg',
@@ -115,9 +124,10 @@ _REQUESTMSG = _descriptor.Descriptor(
     extension_ranges=[],
     oneofs=[
     ],
-    serialized_start=140,
-    serialized_end=166,
+    serialized_start=159,
+    serialized_end=185,
 )
+
 
 _RESPONSEMSG = _descriptor.Descriptor(
     name='ResponseMsg',
@@ -145,8 +155,8 @@ _RESPONSEMSG = _descriptor.Descriptor(
     extension_ranges=[],
     oneofs=[
     ],
-    serialized_start=168,
-    serialized_end=195,
+    serialized_start=187,
+    serialized_end=214,
 )
 
 DESCRIPTOR.message_types_by_name['RegisterRequest'] = _REGISTERREQUEST
@@ -181,6 +191,7 @@ ResponseMsg = _reflection.GeneratedProtocolMessageType('ResponseMsg', (_message.
     # @@protoc_insertion_point(class_scope:proxy_service.ResponseMsg)
 ))
 _sym_db.RegisterMessage(ResponseMsg)
+
 
 try:
     # THESE ELEMENTS WILL BE DEPRECATED.

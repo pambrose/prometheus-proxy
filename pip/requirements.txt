@@ -1,4 +1,5 @@
+argparse
+flask
 grpcio
 grpcio-tools
-flask
 prometheus_client

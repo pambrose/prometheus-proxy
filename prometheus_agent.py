@@ -11,16 +11,20 @@ from utils import setup_logging, grpc_url
 
 
 class PrometheusAgent(object):
-    def __init__(self, hostname):
-        self.url = grpc_url(hostname)
-        channel = grpc.insecure_channel(self.url)
+    def __init__(self, hostname, path):
+        self.grpc_url = grpc_url(hostname)
+        channel = grpc.insecure_channel(self.grpc_url)
         self.stub = ProxyServiceStub(channel)
-        self.agent_info = RegisterRequest(hostname=socket.gethostname())
+        self.agent_info = RegisterRequest(hostname=socket.gethostname(), target_path=path)
+        self.agent_id = -1
+        self.proxy_url = None
 
     def connect(self):
         register_response = self.stub.registerAgent(self.agent_info)
-        print("Agent id: {0}".format(register_response.agent_id))
+        self.agent_id = register_response.agent_id
 
+    def __str__(self):
+        return "grpc_url={0}\nproxy_url={1}\nagent_id={2}".format(self.grpc_url, self.proxy_url, self.agent_id)
 
 if __name__ == "__main__":
     setup_logging()
@@ -35,5 +39,6 @@ if __name__ == "__main__":
 
     setup_logging(level=args[LOG_LEVEL])
 
-    agent = PrometheusAgent(args[PROXY])
+    agent = PrometheusAgent(args[PROXY], args[PATH])
     agent.connect()
+    print(agent)
