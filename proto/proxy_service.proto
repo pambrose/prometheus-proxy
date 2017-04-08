@@ -1,0 +1,29 @@
+syntax = "proto3";
+package proxy_service;
+
+message RegisterRequest {
+    string hostname = 1;
+    string target_path = 2;
+}
+
+message RegisterResponse {
+    int32 agent_id = 1;
+}
+
+message RequestMsg {
+    string info = 1;
+}
+
+message ResponseMsg {
+    string body = 1;
+}
+
+service ProxyService {
+
+    rpc registerAgent (RegisterRequest) returns (RegisterResponse) {
+    }
+
+    rpc getMetrics (stream RequestMsg) returns (stream ResponseMsg) {
+    }
+}
+
