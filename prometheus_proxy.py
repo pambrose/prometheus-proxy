@@ -3,19 +3,22 @@ import logging
 import socket
 import time
 from concurrent import futures
+from queue import Queue
 from threading import Thread, Lock
 
 import grpc
 from flask import Flask
-from prometheus_client import start_http_server
+from prometheus_client import start_http_server, Counter
 
 from constants import GRPC_PORT_DEFAULT, PORT, LOG_LEVEL, PROXY_PORT_DEFAULT, GRPC
-from proto.proxy_service_pb2 import ProxyServiceServicer
+from proto.proxy_service_pb2 import ProxyServiceServicer, ScrapeRequest
 from proto.proxy_service_pb2 import RegisterResponse
 from proto.proxy_service_pb2 import add_ProxyServiceServicer_to_server
 from utils import setup_logging
 
 logger = logging.getLogger(__name__)
+
+REQUEST_COUNTER = Counter('getDistances_request_type_count', 'getDistances() request type count', ['target'])
 
 
 class PrometheusProxy(ProxyServiceServicer):
@@ -26,6 +29,9 @@ class PrometheusProxy(ProxyServiceServicer):
         self.grpc_server = None
         self.agent_count = 0
         self.agent_lock = Lock()
+        self.request_queue = Queue()
+        self.scrape_id = 0
+        self.scrape_lock = Lock()
 
     def __enter__(self):
         self.start()
@@ -61,34 +67,51 @@ class PrometheusProxy(ProxyServiceServicer):
                                                                           self.http_port,
                                                                           request.target_path))
 
+    def submit_request(self, target):
+        self.request_queue.put(target)
+
+    def readRequests(self, request, context):
+        while True:
+            val = self.request_queue.get()
+            print("Processing: " + val)
+            self.request_queue.task_done()
+            with self.scrape_lock:
+                self.scrape_id += 1
+                val = ScrapeRequest(scrape_id=self.scrape_id, name=val)
+            yield val
+
+    def writeResponses(self, request_iterator, context):
+        for result in request_iterator:
+            print(result)
+
 
 if __name__ == "__main__":
     setup_logging()
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port", dest=PORT, type=int, default=PROXY_PORT_DEFAULT, help="Proxy listening port")
-    parser.add_argument("--grpc", dest=GRPC, type=int, default=GRPC_PORT_DEFAULT, help="gRPC listening port")
+    parser.add_argument("-g", "--grpc", dest=GRPC, type=int, default=GRPC_PORT_DEFAULT, help="gRPC listening port")
     parser.add_argument("-v", "--verbose", dest=LOG_LEVEL, default=logging.INFO, action="store_const",
                         const=logging.DEBUG, help="Enable debugging info")
     args = vars(parser.parse_args())
 
     setup_logging(level=args[LOG_LEVEL])
 
-    with PrometheusProxy(args[GRPC], args[PORT]):
+    with PrometheusProxy(args[GRPC], args[PORT]) as proxy:
         http = Flask(__name__)
 
 
-        @http.route("/<name>")
-        def target_request(name):
-            # See if name has been registered
-            return "Read {0} values".format(name)
+        @http.route("/<target>")
+        def target_request(target):
+            proxy.submit_request(target)
+            return "ok"
 
 
         # Run HTTP server in a thread
         Thread(target=http.run, kwargs={"port": args[PORT]}).start()
 
         # Start up a server to expose the metrics.
-        start_http_server(8000)
+        start_http_server(8001)
 
         try:
             while True:

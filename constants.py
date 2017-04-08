@@ -1,7 +1,8 @@
 LOG_LEVEL = "loglevel"
 PORT = "port"
 PROXY = "proxy"
-PATH = "path"
+TARGET = "target_url"
+PATH = "target_path"
 GRPC = "grpc"
 GRPC_PORT_DEFAULT = 50051
 PROXY_PORT_DEFAULT = 8080

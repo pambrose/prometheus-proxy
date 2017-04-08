@@ -15,10 +15,15 @@ class ProxyServiceStub(object):
             request_serializer=proto_dot_proxy__service__pb2.RegisterRequest.SerializeToString,
             response_deserializer=proto_dot_proxy__service__pb2.RegisterResponse.FromString,
         )
-        self.getMetrics = channel.stream_stream(
-            '/proxy_service.ProxyService/getMetrics',
-            request_serializer=proto_dot_proxy__service__pb2.RequestMsg.SerializeToString,
-            response_deserializer=proto_dot_proxy__service__pb2.ResponseMsg.FromString,
+        self.readRequests = channel.unary_stream(
+            '/proxy_service.ProxyService/readRequests',
+            request_serializer=proto_dot_proxy__service__pb2.AgentInfo.SerializeToString,
+            response_deserializer=proto_dot_proxy__service__pb2.ScrapeRequest.FromString,
+        )
+        self.writeResponses = channel.stream_unary(
+            '/proxy_service.ProxyService/writeResponses',
+            request_serializer=proto_dot_proxy__service__pb2.ScrapeResult.SerializeToString,
+            response_deserializer=proto_dot_proxy__service__pb2.Empty.FromString,
         )
 
 
@@ -28,7 +33,12 @@ class ProxyServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def getMetrics(self, request_iterator, context):
+    def readRequests(self, request, context):
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def writeResponses(self, request_iterator, context):
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -41,10 +51,15 @@ def add_ProxyServiceServicer_to_server(servicer, server):
             request_deserializer=proto_dot_proxy__service__pb2.RegisterRequest.FromString,
             response_serializer=proto_dot_proxy__service__pb2.RegisterResponse.SerializeToString,
         ),
-        'getMetrics': grpc.stream_stream_rpc_method_handler(
-            servicer.getMetrics,
-            request_deserializer=proto_dot_proxy__service__pb2.RequestMsg.FromString,
-            response_serializer=proto_dot_proxy__service__pb2.ResponseMsg.SerializeToString,
+        'readRequests': grpc.unary_stream_rpc_method_handler(
+            servicer.readRequests,
+            request_deserializer=proto_dot_proxy__service__pb2.AgentInfo.FromString,
+            response_serializer=proto_dot_proxy__service__pb2.ScrapeRequest.SerializeToString,
+        ),
+        'writeResponses': grpc.stream_unary_rpc_method_handler(
+            servicer.writeResponses,
+            request_deserializer=proto_dot_proxy__service__pb2.ScrapeResult.FromString,
+            response_serializer=proto_dot_proxy__service__pb2.Empty.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
