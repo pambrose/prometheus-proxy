@@ -14,6 +14,15 @@ message AgentRegisterResponse {
     string proxy_url = 2;
 }
 
+message PathRegisterRequest {
+    int32 agent_id = 1;
+    string path = 2;
+}
+
+message PathRegisterResponse {
+    int32 path_id = 1;
+}
+
 message AgentInfo {
     int32 agent_id = 1;
 }
@@ -34,6 +43,9 @@ message ScrapeResult {
 service ProxyService {
 
     rpc registerAgent (AgentRegisterRequest) returns (AgentRegisterResponse) {
+    }
+
+    rpc registerPath (PathRegisterRequest) returns (PathRegisterResponse) {
     }
 
     rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {

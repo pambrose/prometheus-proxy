@@ -18,7 +18,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='proxy_service',
   syntax='proto3',
   serialized_pb=_b(
-    '\n\x19proto/proxy_service.proto\x12\rproxy_service\"\x07\n\x05\x45mpty\"(\n\x14\x41gentRegisterRequest\x12\x10\n\x08hostname\x18\x01 \x01(\t\"<\n\x15\x41gentRegisterResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tproxy_url\x18\x02 \x01(\t\"\x1d\n\tAgentInfo\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\"0\n\rScrapeRequest\x12\x11\n\tscrape_id\x18\x01 \x01(\x05\x12\x0c\n\x04path\x18\x02 \x01(\t\"e\n\x0cScrapeResult\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tscrape_id\x18\x02 \x01(\x05\x12\r\n\x05valid\x18\x03 \x01(\x08\x12\x13\n\x0bstatus_code\x18\x04 \x01(\x05\x12\x0c\n\x04text\x18\x05 \x01(\t2\x91\x02\n\x0cProxyService\x12\\\n\rregisterAgent\x12#.proxy_service.AgentRegisterRequest\x1a$.proxy_service.AgentRegisterResponse\"\x00\x12S\n\x15readRequestsFromProxy\x12\x18.proxy_service.AgentInfo\x1a\x1c.proxy_service.ScrapeRequest\"\x00\x30\x01\x12N\n\x15writeResponsesToProxy\x12\x1b.proxy_service.ScrapeResult\x1a\x14.proxy_service.Empty\"\x00(\x01\x62\x06proto3')
+    '\n\x19proto/proxy_service.proto\x12\rproxy_service\"\x07\n\x05\x45mpty\"(\n\x14\x41gentRegisterRequest\x12\x10\n\x08hostname\x18\x01 \x01(\t\"<\n\x15\x41gentRegisterResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tproxy_url\x18\x02 \x01(\t\"5\n\x13PathRegisterRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x0c\n\x04path\x18\x02 \x01(\t\"\'\n\x14PathRegisterResponse\x12\x0f\n\x07path_id\x18\x01 \x01(\x05\"\x1d\n\tAgentInfo\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\"0\n\rScrapeRequest\x12\x11\n\tscrape_id\x18\x01 \x01(\x05\x12\x0c\n\x04path\x18\x02 \x01(\t\"e\n\x0cScrapeResult\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tscrape_id\x18\x02 \x01(\x05\x12\r\n\x05valid\x18\x03 \x01(\x08\x12\x13\n\x0bstatus_code\x18\x04 \x01(\x05\x12\x0c\n\x04text\x18\x05 \x01(\t2\xec\x02\n\x0cProxyService\x12\\\n\rregisterAgent\x12#.proxy_service.AgentRegisterRequest\x1a$.proxy_service.AgentRegisterResponse\"\x00\x12Y\n\x0cregisterPath\x12\".proxy_service.PathRegisterRequest\x1a#.proxy_service.PathRegisterResponse\"\x00\x12S\n\x15readRequestsFromProxy\x12\x18.proxy_service.AgentInfo\x1a\x1c.proxy_service.ScrapeRequest\"\x00\x30\x01\x12N\n\x15writeResponsesToProxy\x12\x1b.proxy_service.ScrapeResult\x1a\x14.proxy_service.Empty\"\x00(\x01\x62\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -44,6 +44,7 @@ _EMPTY = _descriptor.Descriptor(
   serialized_start=44,
   serialized_end=51,
 )
+
 
 _AGENTREGISTERREQUEST = _descriptor.Descriptor(
   name='AgentRegisterRequest',
@@ -74,6 +75,7 @@ _AGENTREGISTERREQUEST = _descriptor.Descriptor(
   serialized_start=53,
   serialized_end=93,
 )
+
 
 _AGENTREGISTERRESPONSE = _descriptor.Descriptor(
   name='AgentRegisterResponse',
@@ -112,6 +114,73 @@ _AGENTREGISTERRESPONSE = _descriptor.Descriptor(
   serialized_end=155,
 )
 
+_PATHREGISTERREQUEST = _descriptor.Descriptor(
+  name='PathRegisterRequest',
+  full_name='proxy_service.PathRegisterRequest',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='agent_id', full_name='proxy_service.PathRegisterRequest.agent_id', index=0,
+      number=1, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='path', full_name='proxy_service.PathRegisterRequest.path', index=1,
+      number=2, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=157,
+  serialized_end=210,
+)
+
+_PATHREGISTERRESPONSE = _descriptor.Descriptor(
+  name='PathRegisterResponse',
+  full_name='proxy_service.PathRegisterResponse',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='path_id', full_name='proxy_service.PathRegisterResponse.path_id', index=0,
+      number=1, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=212,
+  serialized_end=251,
+)
+
 
 _AGENTINFO = _descriptor.Descriptor(
   name='AgentInfo',
@@ -139,8 +208,8 @@ _AGENTINFO = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=157,
-  serialized_end=186,
+  serialized_start=253,
+  serialized_end=282,
 )
 
 
@@ -177,8 +246,8 @@ _SCRAPEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=188,
-  serialized_end=236,
+  serialized_start=284,
+  serialized_end=332,
 )
 
 
@@ -236,13 +305,15 @@ _SCRAPERESULT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=238,
-  serialized_end=339,
+  serialized_start=334,
+  serialized_end=435,
 )
 
 DESCRIPTOR.message_types_by_name['Empty'] = _EMPTY
 DESCRIPTOR.message_types_by_name['AgentRegisterRequest'] = _AGENTREGISTERREQUEST
 DESCRIPTOR.message_types_by_name['AgentRegisterResponse'] = _AGENTREGISTERRESPONSE
+DESCRIPTOR.message_types_by_name['PathRegisterRequest'] = _PATHREGISTERREQUEST
+DESCRIPTOR.message_types_by_name['PathRegisterResponse'] = _PATHREGISTERRESPONSE
 DESCRIPTOR.message_types_by_name['AgentInfo'] = _AGENTINFO
 DESCRIPTOR.message_types_by_name['ScrapeRequest'] = _SCRAPEREQUEST
 DESCRIPTOR.message_types_by_name['ScrapeResult'] = _SCRAPERESULT
@@ -267,6 +338,20 @@ AgentRegisterResponse = _reflection.GeneratedProtocolMessageType('AgentRegisterR
   # @@protoc_insertion_point(class_scope:proxy_service.AgentRegisterResponse)
 ))
 _sym_db.RegisterMessage(AgentRegisterResponse)
+
+PathRegisterRequest = _reflection.GeneratedProtocolMessageType('PathRegisterRequest', (_message.Message,), dict(
+  DESCRIPTOR=_PATHREGISTERREQUEST,
+  __module__='proto.proxy_service_pb2'
+  # @@protoc_insertion_point(class_scope:proxy_service.PathRegisterRequest)
+))
+_sym_db.RegisterMessage(PathRegisterRequest)
+
+PathRegisterResponse = _reflection.GeneratedProtocolMessageType('PathRegisterResponse', (_message.Message,), dict(
+  DESCRIPTOR=_PATHREGISTERRESPONSE,
+  __module__='proto.proxy_service_pb2'
+  # @@protoc_insertion_point(class_scope:proxy_service.PathRegisterResponse)
+))
+_sym_db.RegisterMessage(PathRegisterResponse)
 
 AgentInfo = _reflection.GeneratedProtocolMessageType('AgentInfo', (_message.Message,), dict(
   DESCRIPTOR=_AGENTINFO,
@@ -313,6 +398,11 @@ try:
         request_serializer=AgentRegisterRequest.SerializeToString,
         response_deserializer=AgentRegisterResponse.FromString,
       )
+      self.registerPath = channel.unary_unary(
+        '/proxy_service.ProxyService/registerPath',
+        request_serializer=PathRegisterRequest.SerializeToString,
+        response_deserializer=PathRegisterResponse.FromString,
+      )
       self.readRequestsFromProxy = channel.unary_stream(
         '/proxy_service.ProxyService/readRequestsFromProxy',
         request_serializer=AgentInfo.SerializeToString,
@@ -328,6 +418,11 @@ try:
   class ProxyServiceServicer(object):
 
     def registerAgent(self, request, context):
+      context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+      context.set_details('Method not implemented!')
+      raise NotImplementedError('Method not implemented!')
+
+    def registerPath(self, request, context):
       context.set_code(grpc.StatusCode.UNIMPLEMENTED)
       context.set_details('Method not implemented!')
       raise NotImplementedError('Method not implemented!')
@@ -349,6 +444,11 @@ try:
         servicer.registerAgent,
         request_deserializer=AgentRegisterRequest.FromString,
         response_serializer=AgentRegisterResponse.SerializeToString,
+      ),
+      'registerPath': grpc.unary_unary_rpc_method_handler(
+        servicer.registerPath,
+        request_deserializer=PathRegisterRequest.FromString,
+        response_serializer=PathRegisterResponse.SerializeToString,
       ),
       'readRequestsFromProxy': grpc.unary_stream_rpc_method_handler(
         servicer.readRequestsFromProxy,
@@ -372,13 +472,13 @@ try:
     It is recommended to use the GA API (classes and functions in this
     file not marked beta) for all further purposes. This class was generated
     only to ease transition from grpcio<0.15.0 to grpcio>=0.15.0."""
-
     def registerAgent(self, request, context):
       context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
 
+    def registerPath(self, request, context):
+      context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
     def readRequestsFromProxy(self, request, context):
       context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-
     def writeResponsesToProxy(self, request_iterator, context):
       context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
 
@@ -389,18 +489,18 @@ try:
     It is recommended to use the GA API (classes and functions in this
     file not marked beta) for all further purposes. This class was generated
     only to ease transition from grpcio<0.15.0 to grpcio>=0.15.0."""
-
     def registerAgent(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
       raise NotImplementedError()
-
     registerAgent.future = None
 
+    def registerPath(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+      raise NotImplementedError()
+
+    registerPath.future = None
     def readRequestsFromProxy(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
       raise NotImplementedError()
-
     def writeResponsesToProxy(self, request_iterator, timeout, metadata=None, with_call=False, protocol_options=None):
       raise NotImplementedError()
-
     writeResponsesToProxy.future = None
 
 
@@ -413,17 +513,20 @@ try:
     request_deserializers = {
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): AgentInfo.FromString,
       ('proxy_service.ProxyService', 'registerAgent'): AgentRegisterRequest.FromString,
+      ('proxy_service.ProxyService', 'registerPath'): PathRegisterRequest.FromString,
       ('proxy_service.ProxyService', 'writeResponsesToProxy'): ScrapeResult.FromString,
     }
     response_serializers = {
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): ScrapeRequest.SerializeToString,
       ('proxy_service.ProxyService', 'registerAgent'): AgentRegisterResponse.SerializeToString,
+      ('proxy_service.ProxyService', 'registerPath'): PathRegisterResponse.SerializeToString,
       ('proxy_service.ProxyService', 'writeResponsesToProxy'): Empty.SerializeToString,
     }
     method_implementations = {
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): face_utilities.unary_stream_inline(
         servicer.readRequestsFromProxy),
       ('proxy_service.ProxyService', 'registerAgent'): face_utilities.unary_unary_inline(servicer.registerAgent),
+      ('proxy_service.ProxyService', 'registerPath'): face_utilities.unary_unary_inline(servicer.registerPath),
       ('proxy_service.ProxyService', 'writeResponsesToProxy'): face_utilities.stream_unary_inline(
         servicer.writeResponsesToProxy),
     }
@@ -443,16 +546,19 @@ try:
     request_serializers = {
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): AgentInfo.SerializeToString,
       ('proxy_service.ProxyService', 'registerAgent'): AgentRegisterRequest.SerializeToString,
+      ('proxy_service.ProxyService', 'registerPath'): PathRegisterRequest.SerializeToString,
       ('proxy_service.ProxyService', 'writeResponsesToProxy'): ScrapeResult.SerializeToString,
     }
     response_deserializers = {
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): ScrapeRequest.FromString,
       ('proxy_service.ProxyService', 'registerAgent'): AgentRegisterResponse.FromString,
+      ('proxy_service.ProxyService', 'registerPath'): PathRegisterResponse.FromString,
       ('proxy_service.ProxyService', 'writeResponsesToProxy'): Empty.FromString,
     }
     cardinalities = {
       'readRequestsFromProxy': cardinality.Cardinality.UNARY_STREAM,
       'registerAgent': cardinality.Cardinality.UNARY_UNARY,
+      'registerPath': cardinality.Cardinality.UNARY_UNARY,
       'writeResponsesToProxy': cardinality.Cardinality.STREAM_UNARY,
     }
     stub_options = beta_implementations.stub_options(host=host, metadata_transformer=metadata_transformer,

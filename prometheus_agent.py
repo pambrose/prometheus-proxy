@@ -124,8 +124,9 @@ class PrometheusAgent(object):
             Thread(target=self.write_responses_to_proxy, args=(response_complete,), daemon=True).start()
             Thread(target=self.read_requests_from_proxy, args=(request_complete,), daemon=True).start()
 
-            request_complete.wait()
             response_complete.wait()
+            request_complete.wait()
+
             sleep(1)
             logger.info("Reconnecting...")
 

@@ -15,6 +15,11 @@ class ProxyServiceStub(object):
             request_serializer=proto_dot_proxy__service__pb2.AgentRegisterRequest.SerializeToString,
             response_deserializer=proto_dot_proxy__service__pb2.AgentRegisterResponse.FromString,
         )
+        self.registerPath = channel.unary_unary(
+            '/proxy_service.ProxyService/registerPath',
+            request_serializer=proto_dot_proxy__service__pb2.PathRegisterRequest.SerializeToString,
+            response_deserializer=proto_dot_proxy__service__pb2.PathRegisterResponse.FromString,
+        )
         self.readRequestsFromProxy = channel.unary_stream(
             '/proxy_service.ProxyService/readRequestsFromProxy',
             request_serializer=proto_dot_proxy__service__pb2.AgentInfo.SerializeToString,
@@ -29,6 +34,11 @@ class ProxyServiceStub(object):
 
 class ProxyServiceServicer(object):
     def registerAgent(self, request, context):
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def registerPath(self, request, context):
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -50,6 +60,11 @@ def add_ProxyServiceServicer_to_server(servicer, server):
             servicer.registerAgent,
             request_deserializer=proto_dot_proxy__service__pb2.AgentRegisterRequest.FromString,
             response_serializer=proto_dot_proxy__service__pb2.AgentRegisterResponse.SerializeToString,
+        ),
+        'registerPath': grpc.unary_unary_rpc_method_handler(
+            servicer.registerPath,
+            request_deserializer=proto_dot_proxy__service__pb2.PathRegisterRequest.FromString,
+            response_serializer=proto_dot_proxy__service__pb2.PathRegisterResponse.SerializeToString,
         ),
         'readRequestsFromProxy': grpc.unary_stream_rpc_method_handler(
             servicer.readRequestsFromProxy,

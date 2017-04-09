@@ -13,7 +13,7 @@ from prometheus_client import start_http_server, Counter
 from werkzeug.exceptions import abort
 
 from constants import GRPC_PORT_DEFAULT, PORT, LOG_LEVEL, PROXY_PORT_DEFAULT, GRPC
-from proto.proxy_service_pb2 import AgentRegisterResponse
+from proto.proxy_service_pb2 import AgentRegisterResponse, PathRegisterResponse
 from proto.proxy_service_pb2 import ProxyServiceServicer, ScrapeRequest
 from proto.proxy_service_pb2 import add_ProxyServiceServicer_to_server
 from utils import setup_logging
@@ -29,12 +29,16 @@ class PrometheusProxy(ProxyServiceServicer):
         self.http_port = http_port
         self.stopped = False
         self.grpc_server = None
-        self.agent_count = 0
         self.agent_lock = Lock()
-        self.request_queue = Queue()
+        self.path_lock = Lock()
+        self.agent_id_counter = 0
+        self.path_id_counter = 0
         self.scrape_id = 0
         self.scrape_lock = Lock()
-        self.request_dict = {}
+        # Map path to agent_id
+        self.path_dict = {}
+        # Map agent_id to AgentContext
+        self.agent_dict = {}
 
     def __enter__(self):
         self.start()
@@ -63,10 +67,37 @@ class PrometheusProxy(ProxyServiceServicer):
 
     def registerAgent(self, request, context):
         with self.agent_lock:
-            self.agent_count += 1
-            logger.info("Registered agent {0}".format(request.hostname))
-            return AgentRegisterResponse(agent_id=self.agent_count,
+            self.agent_id_counter += 1
+            logger.info("Registered agent %s %s", request.path, request.agent_id)
+            self.path_dict[self.agent_id_counter] = AgentContext(self.agent_id_counter)
+            return AgentRegisterResponse(agent_id=self.agent_id_counter,
                                          proxy_url="http://{0}:{1}/".format(socket.gethostname(), self.http_port))
+
+    def registerPath(self, request, context):
+        with self.path_lock:
+            self.path_id_counter += 1
+            logger.info("Registered path %s", request.path)
+            self.path_dict[request.path] = AgentContext(self.path_id_counter)
+            return PathRegisterResponse(agent_id=self.agent_id_counter,
+                                        proxy_url="http://{0}:{1}/".format(socket.gethostname(), self.http_port))
+
+    def readRequestsFromProxy(self, request, context):
+        agent_id = request.agent_id
+        req_queue = self.agent_dict[agent_id]
+        while True:
+            req = req_queue.get()
+            req_queue.task_done()
+            logger.info("Sending scrape_id:{0} {1} to agent".format(req.scrape_id, req.path))
+            yield req
+
+    def writeResponsesToProxy(self, request_iterator, context):
+        for result in request_iterator:
+            logger.info("Received scrape_id:{0} from agent".format(result.scrape_id))
+            agent_id = result.agent_id
+            req_queue = self.agent_dict[agent_id]
+            request_entry = req_queue[result.scrape_id]
+            request_entry.result = result
+            request_entry.ready.set()
 
     def fetch_metrics(self, path):
         logger.info("Request for {0}".format(path))
@@ -74,23 +105,17 @@ class PrometheusProxy(ProxyServiceServicer):
             self.scrape_id += 1
             req = ScrapeRequest(scrape_id=self.scrape_id, path=path)
             request_entry = RequestEntry(req)
+
             self.request_dict[self.scrape_id] = request_entry
         self.request_queue.put(req)
         return request_entry
 
-    def readRequestsFromProxy(self, request, context):
-        while True:
-            req = self.request_queue.get()
-            self.request_queue.task_done()
-            logger.info("Sending scrape_id:{0} {1} to agent".format(req.scrape_id, req.path))
-            yield req
 
-    def writeResponsesToProxy(self, request_iterator, context):
-        for result in request_iterator:
-            logger.info("Received scrape_id:{0} from agent".format(result.scrape_id))
-            request_entry = self.request_dict[result.scrape_id]
-            request_entry.result = result
-            request_entry.ready.set()
+class AgentContext(object):
+    def __init__(self, agent_id):
+        self.agent_id = agent_id
+        self.request_queue = Queue()
+        self.request_dict = {}
 
 
 class RequestEntry(object):
