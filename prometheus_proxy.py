@@ -4,7 +4,7 @@ import socket
 import time
 from concurrent import futures
 from queue import Queue
-from threading import Thread, Lock
+from threading import Thread, Lock, Event
 
 import grpc
 from flask import Flask
@@ -32,6 +32,7 @@ class PrometheusProxy(ProxyServiceServicer):
         self.request_queue = Queue()
         self.scrape_id = 0
         self.scrape_lock = Lock()
+        self.request_dict = {}
 
     def __enter__(self):
         self.start()
@@ -67,23 +68,35 @@ class PrometheusProxy(ProxyServiceServicer):
                                                                           self.http_port,
                                                                           request.target_path))
 
-    def submit_request(self, target):
-        self.request_queue.put(target)
+    def submit_name(self, name):
+        with self.scrape_lock:
+            self.scrape_id += 1
+            req = ScrapeRequest(scrape_id=self.scrape_id, name=name)
+            request_entry = RequestEntry(req)
+            self.request_dict[self.scrape_id] = request_entry
+        self.request_queue.put(req)
+        return request_entry
 
     def readRequests(self, request, context):
         while True:
-            val = self.request_queue.get()
-            print("Processing: " + val)
+            req = self.request_queue.get()
+            print("Processing: " + req.name)
             self.request_queue.task_done()
-            with self.scrape_lock:
-                self.scrape_id += 1
-                val = ScrapeRequest(scrape_id=self.scrape_id, name=val)
-            yield val
+            yield req
 
     def writeResponses(self, request_iterator, context):
         for result in request_iterator:
+            request_entry = self.request_dict[result.scrape_id]
+            request_entry.result = result
             print(result)
+            request_entry.ready.set()
 
+
+class RequestEntry(object):
+    def __init__(self, request):
+        self.request = request
+        self.ready = Event()
+        self.result = None
 
 if __name__ == "__main__":
     setup_logging()
@@ -101,10 +114,11 @@ if __name__ == "__main__":
         http = Flask(__name__)
 
 
-        @http.route("/<target>")
-        def target_request(target):
-            proxy.submit_request(target)
-            return "ok"
+        @http.route("/<name>")
+        def target_request(name):
+            request_entry = proxy.submit_name(name)
+            request_entry.ready.wait()
+            return request_entry.result.result
 
 
         # Run HTTP server in a thread

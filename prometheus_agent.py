@@ -79,7 +79,7 @@ if __name__ == "__main__":
     print(agent)
 
     agent.readRequests()
-    # agent.writeResults()
+    agent.writeResults()
 
     while True:
         sleep(1)
