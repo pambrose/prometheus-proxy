@@ -1,5 +1,6 @@
 import logging
 import sys
+from threading import Thread
 
 from constants import GRPC_PORT_DEFAULT
 
@@ -17,3 +18,9 @@ def setup_logging(filename=None,
 
 def grpc_url(hostname):
     return hostname if ":" in hostname else hostname + ":{0}".format(GRPC_PORT_DEFAULT)
+
+
+def run(target, daemon=True):
+    t = Thread(target=target)
+    t.setDaemon(daemon)
+    t.start()

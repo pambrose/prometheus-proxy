@@ -7,14 +7,15 @@ from queue import Queue
 from threading import Thread, Lock, Event
 
 import grpc
-from flask import Flask
+import requests
+from flask import Flask, Response
 from prometheus_client import start_http_server, Counter
 
 from constants import GRPC_PORT_DEFAULT, PORT, LOG_LEVEL, PROXY_PORT_DEFAULT, GRPC
 from proto.proxy_service_pb2 import ProxyServiceServicer, ScrapeRequest
 from proto.proxy_service_pb2 import RegisterResponse
 from proto.proxy_service_pb2 import add_ProxyServiceServicer_to_server
-from utils import setup_logging
+from utils import setup_logging, run
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class PrometheusProxy(ProxyServiceServicer):
         return self
 
     def start(self):
-        Thread(target=self.run_grpc_server).start()
+        run(target=self.run_grpc_server)
 
     def stop(self):
         if not self.stopped:
@@ -69,6 +70,7 @@ class PrometheusProxy(ProxyServiceServicer):
                                                                           request.target_path))
 
     def submit_name(self, name):
+        print("Submitting: " + name)
         with self.scrape_lock:
             self.scrape_id += 1
             req = ScrapeRequest(scrape_id=self.scrape_id, name=name)
@@ -77,18 +79,17 @@ class PrometheusProxy(ProxyServiceServicer):
         self.request_queue.put(req)
         return request_entry
 
-    def readRequests(self, request, context):
+    def readRequestsFromProxy(self, request, context):
         while True:
             req = self.request_queue.get()
             print("Processing: " + req.name)
             self.request_queue.task_done()
             yield req
 
-    def writeResponses(self, request_iterator, context):
+    def writeResponsesToProxy(self, request_iterator, context):
         for result in request_iterator:
             request_entry = self.request_dict[result.scrape_id]
             request_entry.result = result
-            print(result)
             request_entry.ready.set()
 
 
@@ -97,6 +98,7 @@ class RequestEntry(object):
         self.request = request
         self.ready = Event()
         self.result = None
+
 
 if __name__ == "__main__":
     setup_logging()
@@ -116,13 +118,18 @@ if __name__ == "__main__":
 
         @http.route("/<name>")
         def target_request(name):
-            request_entry = proxy.submit_name(name)
-            request_entry.ready.wait()
-            return request_entry.result.result
-
+            if name == "metrics":
+                f = requests.get("http://localhost:8001/metrics")
+                return Response(f.text, mimetype='text/plain')
+            else:
+                request_entry = proxy.submit_name(name)
+                request_entry.ready.wait()
+                return Response(request_entry.result.text, mimetype='text/plain')
 
         # Run HTTP server in a thread
-        Thread(target=http.run, kwargs={"port": args[PORT]}).start()
+        thread = Thread(target=http.run, kwargs={"port": args[PORT]})
+        thread.setDaemon(True)
+        thread.start()
 
         # Start up a server to expose the metrics.
         start_http_server(8001)

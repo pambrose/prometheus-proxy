@@ -2,6 +2,7 @@ LOG_LEVEL = "loglevel"
 PORT = "port"
 PROXY = "proxy"
 TARGET = "target_url"
+CONFIG = "config"
 PATH = "target_path"
 GRPC = "grpc"
 GRPC_PORT_DEFAULT = 50051

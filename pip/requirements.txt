@@ -3,3 +3,5 @@ flask
 grpcio
 grpcio-tools
 prometheus_client
+pyyaml
+requests
