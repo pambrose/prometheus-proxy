@@ -21,14 +21,14 @@ message AgentInfo {
 
 message ScrapeRequest {
     int32 scrape_id = 1;
-    string name = 2;
+    string path = 2;
 }
 
 message ScrapeResult {
     int32 agent_id = 1;
     int32 scrape_id = 2;
-    int32 status_code = 3;
-    string reason = 4;
+    bool valid = 3;
+    int32 status_code = 4;
     string text = 5;
 }
 

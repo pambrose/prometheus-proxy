@@ -18,7 +18,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
     package='proxy_service',
     syntax='proto3',
     serialized_pb=_b(
-        '\n\x19proto/proxy_service.proto\x12\rproxy_service\"8\n\x0fRegisterRequest\x12\x10\n\x08hostname\x18\x01 \x01(\t\x12\x13\n\x0btarget_path\x18\x02 \x01(\t\"7\n\x10RegisterResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tproxy_url\x18\x02 \x01(\t\"\x07\n\x05\x45mpty\"\x1d\n\tAgentInfo\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\"0\n\rScrapeRequest\x12\x11\n\tscrape_id\x18\x01 \x01(\x05\x12\x0c\n\x04name\x18\x02 \x01(\t\"f\n\x0cScrapeResult\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tscrape_id\x18\x02 \x01(\x05\x12\x13\n\x0bstatus_code\x18\x03 \x01(\x05\x12\x0e\n\x06reason\x18\x04 \x01(\t\x12\x0c\n\x04text\x18\x05 \x01(\t2\x87\x02\n\x0cProxyService\x12R\n\rregisterAgent\x12\x1e.proxy_service.RegisterRequest\x1a\x1f.proxy_service.RegisterResponse\"\x00\x12S\n\x15readRequestsFromProxy\x12\x18.proxy_service.AgentInfo\x1a\x1c.proxy_service.ScrapeRequest\"\x00\x30\x01\x12N\n\x15writeResponsesToProxy\x12\x1b.proxy_service.ScrapeResult\x1a\x14.proxy_service.Empty\"\x00(\x01\x62\x06proto3')
+        '\n\x19proto/proxy_service.proto\x12\rproxy_service\"8\n\x0fRegisterRequest\x12\x10\n\x08hostname\x18\x01 \x01(\t\x12\x13\n\x0btarget_path\x18\x02 \x01(\t\"7\n\x10RegisterResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tproxy_url\x18\x02 \x01(\t\"\x07\n\x05\x45mpty\"\x1d\n\tAgentInfo\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\"0\n\rScrapeRequest\x12\x11\n\tscrape_id\x18\x01 \x01(\x05\x12\x0c\n\x04path\x18\x02 \x01(\t\"e\n\x0cScrapeResult\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tscrape_id\x18\x02 \x01(\x05\x12\r\n\x05valid\x18\x03 \x01(\x08\x12\x13\n\x0bstatus_code\x18\x04 \x01(\x05\x12\x0c\n\x04text\x18\x05 \x01(\t2\x87\x02\n\x0cProxyService\x12R\n\rregisterAgent\x12\x1e.proxy_service.RegisterRequest\x1a\x1f.proxy_service.RegisterResponse\"\x00\x12S\n\x15readRequestsFromProxy\x12\x18.proxy_service.AgentInfo\x1a\x1c.proxy_service.ScrapeRequest\"\x00\x30\x01\x12N\n\x15writeResponsesToProxy\x12\x1b.proxy_service.ScrapeResult\x1a\x14.proxy_service.Empty\"\x00(\x01\x62\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -168,7 +168,7 @@ _SCRAPEREQUEST = _descriptor.Descriptor(
             is_extension=False, extension_scope=None,
             options=None),
         _descriptor.FieldDescriptor(
-            name='name', full_name='proxy_service.ScrapeRequest.name', index=1,
+            name='path', full_name='proxy_service.ScrapeRequest.path', index=1,
             number=2, type=9, cpp_type=9, label=1,
             has_default_value=False, default_value=_b("").decode('utf-8'),
             message_type=None, enum_type=None, containing_type=None,
@@ -213,16 +213,16 @@ _SCRAPERESULT = _descriptor.Descriptor(
             is_extension=False, extension_scope=None,
             options=None),
         _descriptor.FieldDescriptor(
-            name='status_code', full_name='proxy_service.ScrapeResult.status_code', index=2,
-            number=3, type=5, cpp_type=1, label=1,
-            has_default_value=False, default_value=0,
+            name='valid', full_name='proxy_service.ScrapeResult.valid', index=2,
+            number=3, type=8, cpp_type=7, label=1,
+            has_default_value=False, default_value=False,
             message_type=None, enum_type=None, containing_type=None,
             is_extension=False, extension_scope=None,
             options=None),
         _descriptor.FieldDescriptor(
-            name='reason', full_name='proxy_service.ScrapeResult.reason', index=3,
-            number=4, type=9, cpp_type=9, label=1,
-            has_default_value=False, default_value=_b("").decode('utf-8'),
+            name='status_code', full_name='proxy_service.ScrapeResult.status_code', index=3,
+            number=4, type=5, cpp_type=1, label=1,
+            has_default_value=False, default_value=0,
             message_type=None, enum_type=None, containing_type=None,
             is_extension=False, extension_scope=None,
             options=None),
@@ -246,7 +246,7 @@ _SCRAPERESULT = _descriptor.Descriptor(
     oneofs=[
     ],
     serialized_start=249,
-    serialized_end=351,
+    serialized_end=350,
 )
 
 DESCRIPTOR.message_types_by_name['RegisterRequest'] = _REGISTERREQUEST

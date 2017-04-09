@@ -10,12 +10,13 @@ import grpc
 import requests
 from flask import Flask, Response
 from prometheus_client import start_http_server, Counter
+from werkzeug.exceptions import abort
 
 from constants import GRPC_PORT_DEFAULT, PORT, LOG_LEVEL, PROXY_PORT_DEFAULT, GRPC
 from proto.proxy_service_pb2 import ProxyServiceServicer, ScrapeRequest
 from proto.proxy_service_pb2 import RegisterResponse
 from proto.proxy_service_pb2 import add_ProxyServiceServicer_to_server
-from utils import setup_logging, run
+from utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ class PrometheusProxy(ProxyServiceServicer):
         return self
 
     def start(self):
-        run(target=self.run_grpc_server)
+        Thread(target=self.run_grpc_server, daemon=True).start()
 
     def stop(self):
         if not self.stopped:
@@ -69,11 +70,10 @@ class PrometheusProxy(ProxyServiceServicer):
                                                                           self.http_port,
                                                                           request.target_path))
 
-    def submit_name(self, name):
-        print("Submitting: " + name)
+    def fetch_metrics(self, path):
         with self.scrape_lock:
             self.scrape_id += 1
-            req = ScrapeRequest(scrape_id=self.scrape_id, name=name)
+            req = ScrapeRequest(scrape_id=self.scrape_id, path=path)
             request_entry = RequestEntry(req)
             self.request_dict[self.scrape_id] = request_entry
         self.request_queue.put(req)
@@ -82,7 +82,6 @@ class PrometheusProxy(ProxyServiceServicer):
     def readRequestsFromProxy(self, request, context):
         while True:
             req = self.request_queue.get()
-            print("Processing: " + req.name)
             self.request_queue.task_done()
             yield req
 
@@ -116,20 +115,30 @@ if __name__ == "__main__":
         http = Flask(__name__)
 
 
-        @http.route("/<name>")
-        def target_request(name):
-            if name == "metrics":
-                f = requests.get("http://localhost:8001/metrics")
-                return Response(f.text, mimetype='text/plain')
+        @http.route("/<path>")
+        def target_request(path):
+            if path == "_metrics":
+                resp = requests.get("http://localhost:8001/metrics")
+                return Response(resp.text,
+                                status=resp.status_code,
+                                mimetype='text/plain',
+                                headers={"cache-control": "no-cache"})
             else:
-                request_entry = proxy.submit_name(name)
+                request_entry = proxy.fetch_metrics(path)
                 request_entry.ready.wait()
-                return Response(request_entry.result.text, mimetype='text/plain')
+                scrape_result = request_entry.result
+                if scrape_result.valid:
+                    return Response(scrape_result.text,
+                                    status=scrape_result.status_code,
+                                    mimetype='text/plain',
+                                    headers={"cache-control": "no-cache"})
+                else:
+                    logger.error("Error processing %s [%s]", path, scrape_result.text)
+                    abort(404)
+
 
         # Run HTTP server in a thread
-        thread = Thread(target=http.run, kwargs={"port": args[PORT]})
-        thread.setDaemon(True)
-        thread.start()
+        Thread(target=http.run, daemon=True, kwargs={"port": args[PORT]}).start()
 
         # Start up a server to expose the metrics.
         start_http_server(8001)
