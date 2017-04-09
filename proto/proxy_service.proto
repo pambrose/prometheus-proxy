@@ -1,18 +1,17 @@
 syntax = "proto3";
 package proxy_service;
 
-message RegisterRequest {
-    string hostname = 1;
-    string target_path = 2;
-}
-
-message RegisterResponse {
-    int32 agent_id = 1;
-    string proxy_url = 2;
-}
-
 message Empty {
 
+}
+
+message AgentRegisterRequest {
+    string hostname = 1;
+}
+
+message AgentRegisterResponse {
+    int32 agent_id = 1;
+    string proxy_url = 2;
 }
 
 message AgentInfo {
@@ -34,7 +33,7 @@ message ScrapeResult {
 
 service ProxyService {
 
-    rpc registerAgent (RegisterRequest) returns (RegisterResponse) {
+    rpc registerAgent (AgentRegisterRequest) returns (AgentRegisterResponse) {
     }
 
     rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {

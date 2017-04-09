@@ -13,8 +13,8 @@ from prometheus_client import start_http_server, Counter
 from werkzeug.exceptions import abort
 
 from constants import GRPC_PORT_DEFAULT, PORT, LOG_LEVEL, PROXY_PORT_DEFAULT, GRPC
+from proto.proxy_service_pb2 import AgentRegisterResponse
 from proto.proxy_service_pb2 import ProxyServiceServicer, ScrapeRequest
-from proto.proxy_service_pb2 import RegisterResponse
 from proto.proxy_service_pb2 import add_ProxyServiceServicer_to_server
 from utils import setup_logging
 
@@ -64,13 +64,12 @@ class PrometheusProxy(ProxyServiceServicer):
     def registerAgent(self, request, context):
         with self.agent_lock:
             self.agent_count += 1
-            print("Registering agent {0} {1}".format(request.hostname, request.target_path))
-            return RegisterResponse(agent_id=self.agent_count,
-                                    proxy_url="http://{0}:{1}/{2}".format(socket.gethostname(),
-                                                                          self.http_port,
-                                                                          request.target_path))
+            logger.info("Registered agent {0}".format(request.hostname))
+            return AgentRegisterResponse(agent_id=self.agent_count,
+                                         proxy_url="http://{0}:{1}/".format(socket.gethostname(), self.http_port))
 
     def fetch_metrics(self, path):
+        logger.info("Request for {0}".format(path))
         with self.scrape_lock:
             self.scrape_id += 1
             req = ScrapeRequest(scrape_id=self.scrape_id, path=path)
@@ -83,10 +82,12 @@ class PrometheusProxy(ProxyServiceServicer):
         while True:
             req = self.request_queue.get()
             self.request_queue.task_done()
+            logger.info("Sending scrape_id:{0} {1} to agent".format(req.scrape_id, req.path))
             yield req
 
     def writeResponsesToProxy(self, request_iterator, context):
         for result in request_iterator:
+            logger.info("Received scrape_id:{0} from agent".format(result.scrape_id))
             request_entry = self.request_dict[result.scrape_id]
             request_entry.result = result
             request_entry.ready.set()

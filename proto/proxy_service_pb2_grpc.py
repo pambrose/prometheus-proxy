@@ -12,8 +12,8 @@ class ProxyServiceStub(object):
         """
         self.registerAgent = channel.unary_unary(
             '/proxy_service.ProxyService/registerAgent',
-            request_serializer=proto_dot_proxy__service__pb2.RegisterRequest.SerializeToString,
-            response_deserializer=proto_dot_proxy__service__pb2.RegisterResponse.FromString,
+            request_serializer=proto_dot_proxy__service__pb2.AgentRegisterRequest.SerializeToString,
+            response_deserializer=proto_dot_proxy__service__pb2.AgentRegisterResponse.FromString,
         )
         self.readRequestsFromProxy = channel.unary_stream(
             '/proxy_service.ProxyService/readRequestsFromProxy',
@@ -48,8 +48,8 @@ def add_ProxyServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
         'registerAgent': grpc.unary_unary_rpc_method_handler(
             servicer.registerAgent,
-            request_deserializer=proto_dot_proxy__service__pb2.RegisterRequest.FromString,
-            response_serializer=proto_dot_proxy__service__pb2.RegisterResponse.SerializeToString,
+            request_deserializer=proto_dot_proxy__service__pb2.AgentRegisterRequest.FromString,
+            response_serializer=proto_dot_proxy__service__pb2.AgentRegisterResponse.SerializeToString,
         ),
         'readRequestsFromProxy': grpc.unary_stream_rpc_method_handler(
             servicer.readRequestsFromProxy,
