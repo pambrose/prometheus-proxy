@@ -29,16 +29,16 @@ class PrometheusProxy(ProxyServiceServicer):
         self.http_port = http_port
         self.stopped = False
         self.grpc_server = None
-        self.agent_lock = Lock()
-        self.path_lock = Lock()
+        self.agent_id_lock = Lock()
         self.agent_id_counter = 0
+        self.path_id_lock = Lock()
         self.path_id_counter = 0
-        self.scrape_id = 0
-        self.scrape_lock = Lock()
-        # Map path to agent_id
-        self.path_dict = {}
+        self.scrape_id_lock = Lock()
+        self.scrape_id_counter = 0
         # Map agent_id to AgentContext
         self.agent_dict = {}
+        # Map path to agent_id
+        self.path_dict = {}
 
     def __enter__(self):
         self.start()
@@ -66,24 +66,24 @@ class PrometheusProxy(ProxyServiceServicer):
         self.grpc_server.start()
 
     def registerAgent(self, request, context):
-        with self.agent_lock:
+        with self.agent_id_lock:
             self.agent_id_counter += 1
-            logger.info("Registered agent %s %s", request.path, request.agent_id)
-            self.path_dict[self.agent_id_counter] = AgentContext(self.agent_id_counter)
+            logger.info("Registered agent %s %s %s", request.hostname, context.peer(), self.agent_id_counter)
+            self.agent_dict[self.agent_id_counter] = AgentContext(self.agent_id_counter)
             return AgentRegisterResponse(agent_id=self.agent_id_counter,
                                          proxy_url="http://{0}:{1}/".format(socket.gethostname(), self.http_port))
 
     def registerPath(self, request, context):
-        with self.path_lock:
+        with self.path_id_lock:
             self.path_id_counter += 1
             logger.info("Registered path %s", request.path)
-            self.path_dict[request.path] = AgentContext(self.path_id_counter)
-            return PathRegisterResponse(agent_id=self.agent_id_counter,
-                                        proxy_url="http://{0}:{1}/".format(socket.gethostname(), self.http_port))
+            self.path_dict[request.path] = request.agent_id
+            return PathRegisterResponse(path_id=self.path_id_counter)
 
     def readRequestsFromProxy(self, request, context):
         agent_id = request.agent_id
-        req_queue = self.agent_dict[agent_id]
+        agent_context = self.agent_dict[agent_id]
+        req_queue = agent_context.request_queue
         while True:
             req = req_queue.get()
             req_queue.task_done()
@@ -94,20 +94,22 @@ class PrometheusProxy(ProxyServiceServicer):
         for result in request_iterator:
             logger.info("Received scrape_id:{0} from agent".format(result.scrape_id))
             agent_id = result.agent_id
-            req_queue = self.agent_dict[agent_id]
-            request_entry = req_queue[result.scrape_id]
+            agent_context = self.agent_dict[agent_id]
+            req_dict = agent_context.request_dict
+            request_entry = req_dict[result.scrape_id]
             request_entry.result = result
             request_entry.ready.set()
 
     def fetch_metrics(self, path):
         logger.info("Request for {0}".format(path))
-        with self.scrape_lock:
-            self.scrape_id += 1
-            req = ScrapeRequest(scrape_id=self.scrape_id, path=path)
+        with self.scrape_id_lock:
+            self.scrape_id_counter += 1
+            req = ScrapeRequest(scrape_id=self.scrape_id_counter, path=path)
             request_entry = RequestEntry(req)
-
-            self.request_dict[self.scrape_id] = request_entry
-        self.request_queue.put(req)
+            agent_id = self.path_dict[path]
+            agent_context = self.agent_dict[agent_id]
+            agent_context.request_dict[self.scrape_id_counter] = request_entry
+        agent_context.request_queue.put(req)
         return request_entry
 
 

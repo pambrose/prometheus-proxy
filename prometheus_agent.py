@@ -11,7 +11,7 @@ import yaml
 from prometheus_client import start_http_server
 
 from constants import LOG_LEVEL, PROXY, CONFIG
-from proto.proxy_service_pb2 import AgentRegisterRequest
+from proto.proxy_service_pb2 import AgentRegisterRequest, PathRegisterRequest
 from proto.proxy_service_pb2 import ProxyServiceStub, AgentInfo, ScrapeResult
 from utils import setup_logging, grpc_url
 
@@ -46,11 +46,18 @@ class PrometheusAgent(object):
                 logger.info("Connecting to proxy at %s...", self.grpc_url)
                 channel = grpc.insecure_channel(self.grpc_url)
                 self.stub = ProxyServiceStub(channel)
+                # Register agent
                 register_response = self.stub.registerAgent(AgentRegisterRequest(hostname=socket.gethostname()))
                 logger.info("Connected to proxy at %s", self.grpc_url)
                 self.agent_id = register_response.agent_id
                 self.proxy_url = register_response.proxy_url
                 self.response_queue.empty()
+
+                # Register paths
+                for path in self.path_dict.keys():
+                    logger.info("Registering path %s", path)
+                    register_response = self.stub.registerPath(PathRegisterRequest(agent_id=self.agent_id,
+                                                                                   path=path))
                 return
             except BaseException as e:
                 logger.error("Failed to connect to proxy at %s [%s]", self.grpc_url, e)
