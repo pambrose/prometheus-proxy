@@ -52,9 +52,6 @@ service ProxyService {
     rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {
     }
 
-    rpc writeResponsesToProxy (stream ScrapeResponse) returns (Empty) {
-    }
-
     rpc writeResponseToProxy (ScrapeResponse) returns (Empty) {
     }
 }

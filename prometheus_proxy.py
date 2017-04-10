@@ -93,22 +93,7 @@ class PrometheusProxy(ProxyServiceServicer):
             yield scrape_request
         logger.info("Completed readRequestsFromProxy()")
 
-    def writeResponsesToProxy(self, response_iterator, context):
-        logger.info("Started writeResponsesToProxy()")
-        for scrape_response in response_iterator:
-            logger.info("Received scrape_id:%s results from agent_id %s",
-                        scrape_response.scrape_id, scrape_response.agent_id)
-            agent_id = scrape_response.agent_id
-            agent_context = self.agent_dict[agent_id]
-            req_dict = agent_context.request_dict
-            request_entry = req_dict[scrape_response.scrape_id]
-            request_entry.scrape_response = scrape_response
-            request_entry.ready.set()
-        logger.info("Completed writeResponsesToProxy()")
-        return Empty()
-
     def writeResponseToProxy(self, scrape_response, context):
-        logger.info("Started writeResponseToProxy()")
         logger.info("Received scrape_id:%s results from agent_id %s",
                     scrape_response.scrape_id, scrape_response.agent_id)
         agent_id = scrape_response.agent_id
@@ -117,7 +102,6 @@ class PrometheusProxy(ProxyServiceServicer):
         request_entry = req_dict[scrape_response.scrape_id]
         request_entry.scrape_response = scrape_response
         request_entry.ready.set()
-        logger.info("Completed writeResponseToProxy()")
         return Empty()
 
     def fetch_metrics(self, path):

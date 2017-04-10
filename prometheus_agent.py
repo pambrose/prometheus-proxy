@@ -1,8 +1,7 @@
 import argparse
 import logging
 import socket
-from queue import Queue
-from threading import Thread, Event
+from threading import Thread
 from time import sleep
 
 import grpc
@@ -22,7 +21,6 @@ class PrometheusAgent(object):
     def __init__(self, hostname, config_file):
         self.grpc_url = grpc_url(hostname)
         self.stub = None
-        self.response_queue = Queue()
         self.agent_id = -1
         self.proxy_url = None
         self.stopped = False
@@ -51,21 +49,20 @@ class PrometheusAgent(object):
                 logger.info("Connected to proxy at %s with agent_id%s", self.grpc_url, register_response.agent_id)
                 self.agent_id = register_response.agent_id
                 self.proxy_url = register_response.proxy_url
-                self.response_queue.empty()
 
                 # Register paths
                 for path in self.path_dict.keys():
                     logger.info("Registering path %s...", path)
-                    register_response = self.stub.registerPath(PathRegisterRequest(agent_id=self.agent_id,
-                                                                                   path=path))
+                    register_response = self.stub.registerPath(PathRegisterRequest(agent_id=self.agent_id, path=path))
                     logger.info("Registered path %s as path_id:%s ", path, register_response.path_id)
 
+                # Return once agent and paths are registered
                 return
             except BaseException as e:
                 logger.error("Failed to connect to proxy at %s [%s]", self.grpc_url, e)
                 sleep(1)
 
-    def read_requests_from_proxy(self, complete):
+    def read_requests_from_proxy(self):
         try:
             logger.info("Starting request reader...")
             for scrape_request in self.stub.readRequestsFromProxy(AgentInfo(agent_id=self.agent_id)):
@@ -95,44 +92,10 @@ class PrometheusAgent(object):
                                                     valid=False,
                                                     text=str(e)))
         except BaseException:
-            logger.error("Request reader disconnected from proxy")
-        finally:
-            complete.set()
-
-    def respond2(self, result):
-        self.response_queue.put(result)
+            logger.error("Agent disconnected from proxy")
 
     def respond(self, result):
         self.stub.writeResponseToProxy(result)
-
-    def read_results_queue(self):
-        while not self.stopped:
-            result = self.response_queue.get()
-            self.response_queue.task_done()
-            logger.info("Returning scrape_id:%s results to proxy", result.scrape_id)
-            yield result
-
-    def write_responses_to_proxy2(self, complete):
-        try:
-            logger.info("Starting response writer...")
-            self.stub.writeResponsesToProxy(self.read_results_queue())
-        except BaseException:
-            logger.error("Response writer disconnected from proxy")
-        finally:
-            complete.set()
-
-    def write_responses_to_proxy(self, complete):
-        logger.info("Starting response writer...")
-        while not self.stopped:
-            try:
-                result = self.response_queue.get()
-                self.response_queue.task_done()
-                logger.info("Returning scrape_id:%s results to proxy", result.scrape_id)
-                self.stub.writeResponseToProxy(result)
-            except BaseException:
-                logger.error("Response writer disconnected from proxy")
-                break
-        complete.set()
 
     def start(self):
         Thread(target=self.reconnect_loop, daemon=True).start()
@@ -143,13 +106,7 @@ class PrometheusAgent(object):
     def reconnect_loop(self):
         while not self.stopped:
             self.connect()
-
-            request_complete = Event()
-
-            Thread(target=self.read_requests_from_proxy, args=(request_complete,), daemon=True).start()
-
-            request_complete.wait()
-
+            self.read_requests_from_proxy()
             sleep(1)
             logger.info("Reconnecting...")
 
