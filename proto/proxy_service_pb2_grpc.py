@@ -27,7 +27,12 @@ class ProxyServiceStub(object):
         )
         self.writeResponsesToProxy = channel.stream_unary(
             '/proxy_service.ProxyService/writeResponsesToProxy',
-            request_serializer=proto_dot_proxy__service__pb2.ScrapeResult.SerializeToString,
+            request_serializer=proto_dot_proxy__service__pb2.ScrapeResponse.SerializeToString,
+            response_deserializer=proto_dot_proxy__service__pb2.Empty.FromString,
+        )
+        self.writeResponseToProxy = channel.unary_unary(
+            '/proxy_service.ProxyService/writeResponseToProxy',
+            request_serializer=proto_dot_proxy__service__pb2.ScrapeResponse.SerializeToString,
             response_deserializer=proto_dot_proxy__service__pb2.Empty.FromString,
         )
 
@@ -53,6 +58,11 @@ class ProxyServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def writeResponseToProxy(self, request, context):
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ProxyServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -73,7 +83,12 @@ def add_ProxyServiceServicer_to_server(servicer, server):
         ),
         'writeResponsesToProxy': grpc.stream_unary_rpc_method_handler(
             servicer.writeResponsesToProxy,
-            request_deserializer=proto_dot_proxy__service__pb2.ScrapeResult.FromString,
+            request_deserializer=proto_dot_proxy__service__pb2.ScrapeResponse.FromString,
+            response_serializer=proto_dot_proxy__service__pb2.Empty.SerializeToString,
+        ),
+        'writeResponseToProxy': grpc.unary_unary_rpc_method_handler(
+            servicer.writeResponseToProxy,
+            request_deserializer=proto_dot_proxy__service__pb2.ScrapeResponse.FromString,
             response_serializer=proto_dot_proxy__service__pb2.Empty.SerializeToString,
         ),
     }

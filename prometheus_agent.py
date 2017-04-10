@@ -12,7 +12,7 @@ from prometheus_client import start_http_server
 
 from constants import LOG_LEVEL, PROXY, CONFIG
 from proto.proxy_service_pb2 import AgentRegisterRequest, PathRegisterRequest
-from proto.proxy_service_pb2 import ProxyServiceStub, AgentInfo, ScrapeResult
+from proto.proxy_service_pb2 import ProxyServiceStub, AgentInfo, ScrapeResponse
 from utils import setup_logging, grpc_url
 
 logger = logging.getLogger(__name__)
@@ -48,16 +48,18 @@ class PrometheusAgent(object):
                 self.stub = ProxyServiceStub(channel)
                 # Register agent
                 register_response = self.stub.registerAgent(AgentRegisterRequest(hostname=socket.gethostname()))
-                logger.info("Connected to proxy at %s", self.grpc_url)
+                logger.info("Connected to proxy at %s with agent_id%s", self.grpc_url, register_response.agent_id)
                 self.agent_id = register_response.agent_id
                 self.proxy_url = register_response.proxy_url
                 self.response_queue.empty()
 
                 # Register paths
                 for path in self.path_dict.keys():
-                    logger.info("Registering path %s", path)
+                    logger.info("Registering path %s...", path)
                     register_response = self.stub.registerPath(PathRegisterRequest(agent_id=self.agent_id,
                                                                                    path=path))
+                    logger.info("Registered path %s as path_id:%s ", path, register_response.path_id)
+
                 return
             except BaseException as e:
                 logger.error("Failed to connect to proxy at %s [%s]", self.grpc_url, e)
@@ -69,44 +71,48 @@ class PrometheusAgent(object):
             for scrape_request in self.stub.readRequestsFromProxy(AgentInfo(agent_id=self.agent_id)):
                 if self.stopped:
                     break
-                logger.info("Processing: {0}".format(scrape_request.path))
+                logger.info("Received scrape_id:%s %s for agent_id: %s",
+                            scrape_request.scrape_id, scrape_request.path, scrape_request.agent_id)
                 if scrape_request.path not in self.path_dict:
-                    self.respond(ScrapeResult(agent_id=self.agent_id,
-                                              scrape_id=scrape_request.scrape_id,
-                                              valid=False,
-                                              text="Invalid path {0}".format(scrape_request.path)))
+                    self.respond(ScrapeResponse(agent_id=self.agent_id,
+                                                scrape_id=scrape_request.scrape_id,
+                                                valid=False,
+                                                text="Invalid path {0}".format(scrape_request.path)))
                 else:
                     try:
                         url = self.path_dict[scrape_request.path]["url"]
-                        logger.info("Fetching: {0}".format(url))
+                        logger.info("Fetching: %s %s", scrape_request.path, url)
                         resp = requests.get(url)
-                        self.respond(ScrapeResult(agent_id=self.agent_id,
-                                                  scrape_id=scrape_request.scrape_id,
-                                                  valid=True,
-                                                  status_code=resp.status_code,
-                                                  text=resp.text))
+                        self.respond(ScrapeResponse(agent_id=self.agent_id,
+                                                    scrape_id=scrape_request.scrape_id,
+                                                    valid=True,
+                                                    status_code=resp.status_code,
+                                                    text=resp.text))
                     except BaseException as e:
                         logger.warning("Error processing %s [%s]", scrape_request.path, e)
-                        self.respond(ScrapeResult(agent_id=self.agent_id,
-                                                  scrape_id=scrape_request.scrape_id,
-                                                  valid=False,
-                                                  text=str(e)))
+                        self.respond(ScrapeResponse(agent_id=self.agent_id,
+                                                    scrape_id=scrape_request.scrape_id,
+                                                    valid=False,
+                                                    text=str(e)))
         except BaseException:
             logger.error("Request reader disconnected from proxy")
         finally:
             complete.set()
 
-    def respond(self, result):
+    def respond2(self, result):
         self.response_queue.put(result)
+
+    def respond(self, result):
+        self.stub.writeResponseToProxy(result)
 
     def read_results_queue(self):
         while not self.stopped:
             result = self.response_queue.get()
             self.response_queue.task_done()
-            logger.info("Sending scrape_id:{0} to proxy".format(result.scrape_id))
+            logger.info("Returning scrape_id:%s results to proxy", result.scrape_id)
             yield result
 
-    def write_responses_to_proxy(self, complete):
+    def write_responses_to_proxy2(self, complete):
         try:
             logger.info("Starting response writer...")
             self.stub.writeResponsesToProxy(self.read_results_queue())
@@ -114,6 +120,19 @@ class PrometheusAgent(object):
             logger.error("Response writer disconnected from proxy")
         finally:
             complete.set()
+
+    def write_responses_to_proxy(self, complete):
+        logger.info("Starting response writer...")
+        while not self.stopped:
+            try:
+                result = self.response_queue.get()
+                self.response_queue.task_done()
+                logger.info("Returning scrape_id:%s results to proxy", result.scrape_id)
+                self.stub.writeResponseToProxy(result)
+            except BaseException:
+                logger.error("Response writer disconnected from proxy")
+                break
+        complete.set()
 
     def start(self):
         Thread(target=self.reconnect_loop, daemon=True).start()
@@ -126,12 +145,9 @@ class PrometheusAgent(object):
             self.connect()
 
             request_complete = Event()
-            response_complete = Event()
 
-            Thread(target=self.write_responses_to_proxy, args=(response_complete,), daemon=True).start()
             Thread(target=self.read_requests_from_proxy, args=(request_complete,), daemon=True).start()
 
-            response_complete.wait()
             request_complete.wait()
 
             sleep(1)

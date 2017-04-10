@@ -28,11 +28,12 @@ message AgentInfo {
 }
 
 message ScrapeRequest {
-    int32 scrape_id = 1;
-    string path = 2;
+    int32 agent_id = 1;
+    int32 scrape_id = 2;
+    string path = 3;
 }
 
-message ScrapeResult {
+message ScrapeResponse {
     int32 agent_id = 1;
     int32 scrape_id = 2;
     bool valid = 3;
@@ -51,7 +52,10 @@ service ProxyService {
     rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {
     }
 
-    rpc writeResponsesToProxy (stream ScrapeResult) returns (Empty) {
+    rpc writeResponsesToProxy (stream ScrapeResponse) returns (Empty) {
+    }
+
+    rpc writeResponseToProxy (ScrapeResponse) returns (Empty) {
     }
 }
 

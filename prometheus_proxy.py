@@ -13,7 +13,7 @@ from prometheus_client import start_http_server, Counter
 from werkzeug.exceptions import abort
 
 from constants import GRPC_PORT_DEFAULT, PORT, LOG_LEVEL, PROXY_PORT_DEFAULT, GRPC
-from proto.proxy_service_pb2 import AgentRegisterResponse, PathRegisterResponse
+from proto.proxy_service_pb2 import AgentRegisterResponse, PathRegisterResponse, Empty
 from proto.proxy_service_pb2 import ProxyServiceServicer, ScrapeRequest
 from proto.proxy_service_pb2 import add_ProxyServiceServicer_to_server
 from utils import setup_logging
@@ -82,35 +82,55 @@ class PrometheusProxy(ProxyServiceServicer):
 
     def readRequestsFromProxy(self, request, context):
         agent_id = request.agent_id
-        agent_context = self.agent_dict[agent_id]
-        req_queue = agent_context.request_queue
-        while True:
-            req = req_queue.get()
-            req_queue.task_done()
-            logger.info("Sending scrape_id:{0} {1} to agent".format(req.scrape_id, req.path))
-            yield req
+        logger.info("Started readRequestsFromProxy() for agent_id:%s", agent_id)
+        while not self.stopped:
+            agent_context = self.agent_dict[agent_id]
+            request_queue = agent_context.request_queue
+            scrape_request = request_queue.get()
+            request_queue.task_done()
+            logger.info("Sending scrape_id:%s %s to agent_id%s",
+                        scrape_request.scrape_id, scrape_request.path, scrape_request.agent_id)
+            yield scrape_request
+        logger.info("Completed readRequestsFromProxy()")
 
-    def writeResponsesToProxy(self, request_iterator, context):
-        for result in request_iterator:
-            logger.info("Received scrape_id:{0} from agent".format(result.scrape_id))
-            agent_id = result.agent_id
+    def writeResponsesToProxy(self, response_iterator, context):
+        logger.info("Started writeResponsesToProxy()")
+        for scrape_response in response_iterator:
+            logger.info("Received scrape_id:%s results from agent_id %s",
+                        scrape_response.scrape_id, scrape_response.agent_id)
+            agent_id = scrape_response.agent_id
             agent_context = self.agent_dict[agent_id]
             req_dict = agent_context.request_dict
-            request_entry = req_dict[result.scrape_id]
-            request_entry.result = result
+            request_entry = req_dict[scrape_response.scrape_id]
+            request_entry.scrape_response = scrape_response
             request_entry.ready.set()
+        logger.info("Completed writeResponsesToProxy()")
+        return Empty()
+
+    def writeResponseToProxy(self, scrape_response, context):
+        logger.info("Started writeResponseToProxy()")
+        logger.info("Received scrape_id:%s results from agent_id %s",
+                    scrape_response.scrape_id, scrape_response.agent_id)
+        agent_id = scrape_response.agent_id
+        agent_context = self.agent_dict[agent_id]
+        req_dict = agent_context.request_dict
+        request_entry = req_dict[scrape_response.scrape_id]
+        request_entry.scrape_response = scrape_response
+        request_entry.ready.set()
+        logger.info("Completed writeResponseToProxy()")
+        return Empty()
 
     def fetch_metrics(self, path):
-        logger.info("Request for {0}".format(path))
+        logger.info("Request for %s", path)
+        agent_id = self.path_dict[path]
         with self.scrape_id_lock:
             self.scrape_id_counter += 1
-            req = ScrapeRequest(scrape_id=self.scrape_id_counter, path=path)
-            request_entry = RequestEntry(req)
-            agent_id = self.path_dict[path]
+            scrape_request = ScrapeRequest(agent_id=agent_id, scrape_id=self.scrape_id_counter, path=path)
+            pending_request = PendingScrapeRequest(scrape_request)
             agent_context = self.agent_dict[agent_id]
-            agent_context.request_dict[self.scrape_id_counter] = request_entry
-        agent_context.request_queue.put(req)
-        return request_entry
+            agent_context.request_dict[self.scrape_id_counter] = pending_request
+        agent_context.request_queue.put(scrape_request)
+        return pending_request
 
 
 class AgentContext(object):
@@ -120,11 +140,11 @@ class AgentContext(object):
         self.request_dict = {}
 
 
-class RequestEntry(object):
+class PendingScrapeRequest(object):
     def __init__(self, request):
         self.request = request
         self.ready = Event()
-        self.result = None
+        self.scrape_response = None
 
 
 if __name__ == "__main__":
@@ -152,16 +172,16 @@ if __name__ == "__main__":
                                 mimetype='text/plain',
                                 headers={"cache-control": "no-cache"})
             else:
-                request_entry = proxy.fetch_metrics(path)
-                request_entry.ready.wait()
-                scrape_result = request_entry.result
-                if scrape_result.valid:
-                    return Response(scrape_result.text,
-                                    status=scrape_result.status_code,
+                pending_request = proxy.fetch_metrics(path)
+                pending_request.ready.wait()
+                scrape_response = pending_request.scrape_response
+                if scrape_response.valid:
+                    return Response(scrape_response.text,
+                                    status=scrape_response.status_code,
                                     mimetype='text/plain',
                                     headers={"cache-control": "no-cache"})
                 else:
-                    logger.error("Error processing %s [%s]", path, scrape_result.text)
+                    logger.error("Error processing %s [%s]", path, scrape_response.text)
                     abort(404)
 
 
