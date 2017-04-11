@@ -1,15 +1,14 @@
 import argparse
+import grpc
 import logging
+import requests
 import socket
 import time
 from concurrent import futures
-from queue import Queue
-from threading import Thread, Lock, Event
-
-import grpc
-import requests
 from flask import Flask, Response
 from prometheus_client import start_http_server, Counter
+from queue import Queue
+from threading import Thread, Lock, Event
 from werkzeug.exceptions import abort
 
 from pb.proxy_service_pb2 import AgentRegisterResponse, PathRegisterResponse, Empty
@@ -135,8 +134,8 @@ if __name__ == "__main__":
     setup_logging()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--port", dest=PORT, type=int, default=PROXY_PORT_DEFAULT, help="Proxy listening port")
-    parser.add_argument("-g", "--grpc", dest=GRPC, type=int, default=GRPC_PORT_DEFAULT, help="gRPC listening port")
+    parser.add_argument("-p", "--port", dest=PORT, type=int, default=PROXY_PORT_DEFAULT, help="Proxy listen port")
+    parser.add_argument("-g", "--grpc", dest=GRPC, type=int, default=GRPC_PORT_DEFAULT, help="gRPC listen port")
     parser.add_argument("-v", "--verbose", dest=LOG_LEVEL, default=logging.INFO, action="store_const",
                         const=logging.DEBUG, help="Enable debugging info")
     args = vars(parser.parse_args())

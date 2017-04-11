@@ -11,34 +11,34 @@ message AgentRegisterRequest {
 }
 
 message AgentRegisterResponse {
-    int32 agent_id = 1;
+    int64 agent_id = 1;
     string proxy_url = 2;
 }
 
 message PathRegisterRequest {
-    int32 agent_id = 1;
+    int64 agent_id = 1;
     string path = 2;
 }
 
 message PathRegisterResponse {
-    int32 path_id = 1;
+    int64 path_id = 1;
 }
 
 message AgentInfo {
-    int32 agent_id = 1;
+    int64 agent_id = 1;
 }
 
 message ScrapeRequest {
-    int32 agent_id = 1;
-    int32 scrape_id = 2;
+    int64 agent_id = 1;
+    int64 scrape_id = 2;
     string path = 3;
 }
 
 message ScrapeResponse {
-    int32 agent_id = 1;
-    int32 scrape_id = 2;
+    int64 agent_id = 1;
+    int64 scrape_id = 2;
     bool valid = 3;
-    int32 status_code = 4;
+    int64 status_code = 4;
     string text = 5;
 }
 
