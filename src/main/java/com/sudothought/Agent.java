@@ -2,12 +2,21 @@ package com.sudothought;
 
 import com.cinch.grpc.AgentRegisterRequest;
 import com.cinch.grpc.AgentRegisterResponse;
+import com.cinch.grpc.PathRegisterRequest;
+import com.cinch.grpc.PathRegisterResponse;
 import com.cinch.grpc.ProxyServiceGrpc;
 import com.sudothought.args.AgentArgs;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
+import org.yaml.snakeyaml.Yaml;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -31,8 +40,7 @@ public class Agent {
       host = hostname;
       port = 50051;
     }
-    ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port)
-                                                                   .usePlaintext(true);
+    final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true);
     this.channel = channelBuilder.build();
     this.blockingStub = ProxyServiceGrpc.newBlockingStub(this.channel);
   }
@@ -43,13 +51,37 @@ public class Agent {
     final AgentArgs agentArgs = new AgentArgs();
     agentArgs.parseArgs(Agent.class.getName(), argv);
 
+
     Agent agent = new Agent(agentArgs.proxy);
     try {
-      agent.registerAgent();
+      long agent_id = agent.registerAgent();
+      System.out.println(agent_id);
+
+      try {
+        for (Map<String, String> agent_config : getAgentConfigs(agentArgs.config)) {
+          System.out.println(agent_config);
+          long path_id = agent.registerPath(agent_id, agent_config.get("path"));
+          System.out.println(path_id);
+        }
+      }
+      catch (FileNotFoundException e) {
+        logger.log(Level.INFO, String.format("Invalid config file name: %s", agentArgs.config));
+      }
+    }
+    catch (StatusRuntimeException e) {
+      logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
     }
     finally {
       agent.shutdown();
     }
+  }
+
+  private static List<Map<String, String>> getAgentConfigs(final String filename)
+      throws FileNotFoundException {
+    final Yaml yaml = new Yaml();
+    final InputStream input = new FileInputStream(new File(filename));
+    final Map<String, List<Map<String, String>>> data = (Map<String, List<Map<String, String>>>) yaml.load(input);
+    return data.get("agent_configs");
   }
 
   public void shutdown()
@@ -57,15 +89,19 @@ public class Agent {
     this.channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
   }
 
-  public void registerAgent() {
+  public long registerAgent() {
     final AgentRegisterRequest request = AgentRegisterRequest.newBuilder().setHostname(Utils.getHostName()).build();
-    try {
-      final AgentRegisterResponse response = this.blockingStub.registerAgent(request);
-      System.out.println(response.getAgentId());
-    }
-    catch (StatusRuntimeException e) {
-      logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
-    }
+    final AgentRegisterResponse response = this.blockingStub.registerAgent(request);
+    return response.getAgentId();
+  }
+
+  public long registerPath(final long agent_id, final String path) {
+    final PathRegisterRequest request = PathRegisterRequest.newBuilder()
+                                                           .setAgentId(agent_id)
+                                                           .setPath(path)
+                                                           .build();
+    final PathRegisterResponse response = this.blockingStub.registerPath(request);
+    return response.getPathId();
   }
 
 }

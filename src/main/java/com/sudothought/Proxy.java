@@ -14,27 +14,33 @@ import com.sudothought.args.ProxyArgs;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
+import spark.Spark;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 
 public class Proxy {
 
-  private static final Logger logger = Logger.getLogger(Proxy.class.getName());
+  private static final Logger     logger            = Logger.getLogger(Proxy.class.getName());
+  private static final AtomicLong PATH_ID_GENERATOR = new AtomicLong(0);
 
+  // Map agent_id to AgentContext
   private final Map<Long, AgentContext> agentContextMap = Maps.newConcurrentMap();
+  // Map path to agent_id
+  private final Map<String, Long>       pathMap         = Maps.newConcurrentMap();
 
   private final int    port;
-  private final Server server;
+  private final Server grpc_server;
 
-  public Proxy(int port)
+  public Proxy(final int grpc_port)
       throws IOException {
-    this.port = port;
-    this.server = ServerBuilder.forPort(this.port)
-                               .addService(new ProxyImpl(this))
-                               .build()
-                               .start();
+    this.port = grpc_port;
+    this.grpc_server = ServerBuilder.forPort(this.port)
+                                    .addService(new ProxyServiceImpl(this))
+                                    .build()
+                                    .start();
   }
 
   public static void main(final String[] argv)
@@ -45,6 +51,14 @@ public class Proxy {
 
     Proxy proxy = new Proxy(proxyArgs.grpc_port);
     proxy.start();
+
+    // Start Http Server
+    Spark.port(proxyArgs.http_port);
+    Spark.get("/*", (req, res) -> {
+      final String path = req.splat()[0];
+      return path;
+    });
+
     proxy.blockUntilShutdown();
   }
 
@@ -61,22 +75,23 @@ public class Proxy {
   }
 
   private void stop() {
-    if (this.server != null)
-      this.server.shutdown();
+    if (this.grpc_server != null)
+      this.grpc_server.shutdown();
+    Spark.stop();
   }
 
   private void blockUntilShutdown()
       throws InterruptedException {
-    if (this.server != null)
-      this.server.awaitTermination();
+    if (this.grpc_server != null)
+      this.grpc_server.awaitTermination();
   }
 
-  static class ProxyImpl
+  static class ProxyServiceImpl
       extends ProxyServiceGrpc.ProxyServiceImplBase {
 
     private final Proxy proxy;
 
-    public ProxyImpl(Proxy proxy) {
+    public ProxyServiceImpl(Proxy proxy) {
       this.proxy = proxy;
     }
 
@@ -84,14 +99,21 @@ public class Proxy {
     public void registerAgent(AgentRegisterRequest request, StreamObserver<AgentRegisterResponse> responseObserver) {
       final AgentContext agentContext = new AgentContext(request.getHostname());
       this.proxy.agentContextMap.put(agentContext.getAgentId(), agentContext);
-
-      AgentRegisterResponse response = AgentRegisterResponse.newBuilder().setAgentId(agentContext.getAgentId()).build();
+      final AgentRegisterResponse response = AgentRegisterResponse.newBuilder()
+                                                                  .setAgentId(agentContext.getAgentId())
+                                                                  .build();
       responseObserver.onNext(response);
       responseObserver.onCompleted();
     }
 
     @Override
     public void registerPath(PathRegisterRequest request, StreamObserver<PathRegisterResponse> responseObserver) {
+      this.proxy.pathMap.put(request.getPath(), request.getAgentId());
+      final PathRegisterResponse response = PathRegisterResponse.newBuilder()
+                                                                .setPathId(PATH_ID_GENERATOR.getAndIncrement())
+                                                                .build();
+      responseObserver.onNext(response);
+      responseObserver.onCompleted();
     }
 
     @Override
