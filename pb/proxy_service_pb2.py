@@ -13,37 +13,22 @@ from google.protobuf import symbol_database as _symbol_database
 
 _sym_db = _symbol_database.Default()
 
+from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
+
+from google.protobuf.empty_pb2 import *
+
 DESCRIPTOR = _descriptor.FileDescriptor(
     name='proxy_service.proto',
   package='proxy_service',
   syntax='proto3',
     serialized_pb=_b(
-        '\n\x13proxy_service.proto\x12\rproxy_service\"\x07\n\x05\x45mpty\"(\n\x14\x41gentRegisterRequest\x12\x10\n\x08hostname\x18\x01 \x01(\t\"<\n\x15\x41gentRegisterResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tproxy_url\x18\x02 \x01(\t\"5\n\x13PathRegisterRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x0c\n\x04path\x18\x02 \x01(\t\"\'\n\x14PathRegisterResponse\x12\x0f\n\x07path_id\x18\x01 \x01(\x05\"\x1d\n\tAgentInfo\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\"B\n\rScrapeRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tscrape_id\x18\x02 \x01(\x05\x12\x0c\n\x04path\x18\x03 \x01(\t\"g\n\x0eScrapeResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tscrape_id\x18\x02 \x01(\x05\x12\r\n\x05valid\x18\x03 \x01(\x08\x12\x13\n\x0bstatus_code\x18\x04 \x01(\x05\x12\x0c\n\x04text\x18\x05 \x01(\t2\xeb\x02\n\x0cProxyService\x12\\\n\rregisterAgent\x12#.proxy_service.AgentRegisterRequest\x1a$.proxy_service.AgentRegisterResponse\"\x00\x12Y\n\x0cregisterPath\x12\".proxy_service.PathRegisterRequest\x1a#.proxy_service.PathRegisterResponse\"\x00\x12S\n\x15readRequestsFromProxy\x12\x18.proxy_service.AgentInfo\x1a\x1c.proxy_service.ScrapeRequest\"\x00\x30\x01\x12M\n\x14writeResponseToProxy\x12\x1d.proxy_service.ScrapeResponse\x1a\x14.proxy_service.Empty\"\x00\x62\x06proto3')
-)
+        '\n\x13proxy_service.proto\x12\rproxy_service\x1a\x1bgoogle/protobuf/empty.proto\"(\n\x14\x41gentRegisterRequest\x12\x10\n\x08hostname\x18\x01 \x01(\t\"<\n\x15\x41gentRegisterResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tproxy_url\x18\x02 \x01(\t\"5\n\x13PathRegisterRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x0c\n\x04path\x18\x02 \x01(\t\"\'\n\x14PathRegisterResponse\x12\x0f\n\x07path_id\x18\x01 \x01(\x05\"\x1d\n\tAgentInfo\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\"B\n\rScrapeRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tscrape_id\x18\x02 \x01(\x05\x12\x0c\n\x04path\x18\x03 \x01(\t\"g\n\x0eScrapeResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x05\x12\x11\n\tscrape_id\x18\x02 \x01(\x05\x12\r\n\x05valid\x18\x03 \x01(\x08\x12\x13\n\x0bstatus_code\x18\x04 \x01(\x05\x12\x0c\n\x04text\x18\x05 \x01(\t2\xed\x02\n\x0cProxyService\x12\\\n\rregisterAgent\x12#.proxy_service.AgentRegisterRequest\x1a$.proxy_service.AgentRegisterResponse\"\x00\x12Y\n\x0cregisterPath\x12\".proxy_service.PathRegisterRequest\x1a#.proxy_service.PathRegisterResponse\"\x00\x12S\n\x15readRequestsFromProxy\x12\x18.proxy_service.AgentInfo\x1a\x1c.proxy_service.ScrapeRequest\"\x00\x30\x01\x12O\n\x14writeResponseToProxy\x12\x1d.proxy_service.ScrapeResponse\x1a\x16.google.protobuf.Empty\"\x00\x42\x12\n\x0e\x63om.cinch.grpcP\x01P\x00\x62\x06proto3')
+    ,
+    dependencies=[google_dot_protobuf_dot_empty__pb2.DESCRIPTOR, ],
+    public_dependencies=[google_dot_protobuf_dot_empty__pb2.DESCRIPTOR, ])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
-_EMPTY = _descriptor.Descriptor(
-  name='Empty',
-  full_name='proxy_service.Empty',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-    serialized_start=38,
-    serialized_end=45,
-)
+
 
 
 _AGENTREGISTERREQUEST = _descriptor.Descriptor(
@@ -72,8 +57,8 @@ _AGENTREGISTERREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=47,
-    serialized_end=87,
+    serialized_start=67,
+    serialized_end=107,
 )
 
 
@@ -110,8 +95,8 @@ _AGENTREGISTERRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=89,
-    serialized_end=149,
+    serialized_start=109,
+    serialized_end=169,
 )
 
 
@@ -148,8 +133,8 @@ _PATHREGISTERREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=151,
-    serialized_end=204,
+    serialized_start=171,
+    serialized_end=224,
 )
 
 
@@ -179,8 +164,8 @@ _PATHREGISTERRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=206,
-    serialized_end=245,
+    serialized_start=226,
+    serialized_end=265,
 )
 
 
@@ -210,8 +195,8 @@ _AGENTINFO = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=247,
-    serialized_end=276,
+    serialized_start=267,
+    serialized_end=296,
 )
 
 
@@ -255,8 +240,8 @@ _SCRAPEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=278,
-    serialized_end=344,
+    serialized_start=298,
+    serialized_end=364,
 )
 
 
@@ -314,11 +299,10 @@ _SCRAPERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=346,
-    serialized_end=449,
+    serialized_start=366,
+    serialized_end=469,
 )
 
-DESCRIPTOR.message_types_by_name['Empty'] = _EMPTY
 DESCRIPTOR.message_types_by_name['AgentRegisterRequest'] = _AGENTREGISTERREQUEST
 DESCRIPTOR.message_types_by_name['AgentRegisterResponse'] = _AGENTREGISTERRESPONSE
 DESCRIPTOR.message_types_by_name['PathRegisterRequest'] = _PATHREGISTERREQUEST
@@ -326,13 +310,6 @@ DESCRIPTOR.message_types_by_name['PathRegisterResponse'] = _PATHREGISTERRESPONSE
 DESCRIPTOR.message_types_by_name['AgentInfo'] = _AGENTINFO
 DESCRIPTOR.message_types_by_name['ScrapeRequest'] = _SCRAPEREQUEST
 DESCRIPTOR.message_types_by_name['ScrapeResponse'] = _SCRAPERESPONSE
-
-Empty = _reflection.GeneratedProtocolMessageType('Empty', (_message.Message,), dict(
-    DESCRIPTOR=_EMPTY,
-    __module__='proxy_service_pb2'
-  # @@protoc_insertion_point(class_scope:proxy_service.Empty)
-))
-_sym_db.RegisterMessage(Empty)
 
 AgentRegisterRequest = _reflection.GeneratedProtocolMessageType('AgentRegisterRequest', (_message.Message,), dict(
     DESCRIPTOR=_AGENTREGISTERREQUEST,
@@ -383,7 +360,8 @@ ScrapeResponse = _reflection.GeneratedProtocolMessageType('ScrapeResponse', (_me
 ))
 _sym_db.RegisterMessage(ScrapeResponse)
 
-
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('\n\016com.cinch.grpcP\001'))
 try:
   # THESE ELEMENTS WILL BE DEPRECATED.
   # Please use the generated *_pb2_grpc.py files instead.
@@ -420,7 +398,7 @@ try:
       self.writeResponseToProxy = channel.unary_unary(
           '/proxy_service.ProxyService/writeResponseToProxy',
           request_serializer=ScrapeResponse.SerializeToString,
-          response_deserializer=Empty.FromString,
+          response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
       )
 
 
@@ -467,7 +445,7 @@ try:
         'writeResponseToProxy': grpc.unary_unary_rpc_method_handler(
             servicer.writeResponseToProxy,
             request_deserializer=ScrapeResponse.FromString,
-            response_serializer=Empty.SerializeToString,
+            response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -526,7 +504,8 @@ try:
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): ScrapeRequest.SerializeToString,
       ('proxy_service.ProxyService', 'registerAgent'): AgentRegisterResponse.SerializeToString,
       ('proxy_service.ProxyService', 'registerPath'): PathRegisterResponse.SerializeToString,
-      ('proxy_service.ProxyService', 'writeResponseToProxy'): Empty.SerializeToString,
+        ('proxy_service.ProxyService',
+         'writeResponseToProxy'): google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
     }
     method_implementations = {
         ('proxy_service.ProxyService', 'readRequestsFromProxy'): face_utilities.unary_stream_inline(
@@ -559,7 +538,7 @@ try:
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): ScrapeRequest.FromString,
       ('proxy_service.ProxyService', 'registerAgent'): AgentRegisterResponse.FromString,
       ('proxy_service.ProxyService', 'registerPath'): PathRegisterResponse.FromString,
-      ('proxy_service.ProxyService', 'writeResponseToProxy'): Empty.FromString,
+        ('proxy_service.ProxyService', 'writeResponseToProxy'): google_dot_protobuf_dot_empty__pb2.Empty.FromString,
     }
     cardinalities = {
       'readRequestsFromProxy': cardinality.Cardinality.UNARY_STREAM,

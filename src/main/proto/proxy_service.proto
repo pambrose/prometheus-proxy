@@ -1,9 +1,10 @@
 syntax = "proto3";
 package proxy_service;
 
-message Empty {
+import public "google/protobuf/empty.proto";
 
-}
+option java_multiple_files = true;
+option java_package = "com.cinch.grpc";
 
 message AgentRegisterRequest {
     string hostname = 1;
@@ -52,7 +53,7 @@ service ProxyService {
     rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {
     }
 
-    rpc writeResponseToProxy (ScrapeResponse) returns (Empty) {
+    rpc writeResponseToProxy (ScrapeResponse) returns (google.protobuf.Empty) {
     }
 }
 
