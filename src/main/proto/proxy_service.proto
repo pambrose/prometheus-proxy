@@ -55,5 +55,8 @@ service ProxyService {
 
     rpc writeResponseToProxy (ScrapeResponse) returns (google.protobuf.Empty) {
     }
+
+    rpc exchangeScrapeMsgs (stream ScrapeResponse) returns (stream ScrapeRequest) {
+    }
 }
 

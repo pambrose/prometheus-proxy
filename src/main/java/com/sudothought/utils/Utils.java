@@ -1,11 +1,11 @@
-package com.sudothought;
+package com.sudothought.utils;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 public class Utils {
 
-  static String getHostName() {
+  public static String getHostName() {
     try {
       final String hostname = InetAddress.getLocalHost().getHostName();
       final String address = InetAddress.getLocalHost().getHostAddress();
