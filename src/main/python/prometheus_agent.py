@@ -9,10 +9,10 @@ import requests
 import yaml
 from prometheus_client import start_http_server
 
-from constants import LOG_LEVEL, PROXY, CONFIG
-from proto.proxy_service_pb2 import AgentRegisterRequest, PathRegisterRequest
-from proto.proxy_service_pb2 import ProxyServiceStub, AgentInfo, ScrapeResponse
-from utils import setup_logging, grpc_url
+from pb.proxy_service_pb2 import AgentRegisterRequest, PathRegisterRequest
+from pb.proxy_service_pb2 import ProxyServiceStub, AgentInfo, ScrapeResponse
+from src.main.python.constants import LOG_LEVEL, PROXY, CONFIG
+from src.main.python.utils import setup_logging, grpc_url
 
 logger = logging.getLogger(__name__)
 

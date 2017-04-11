@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from constants import GRPC_PORT_DEFAULT
+from src.main.python.constants import GRPC_PORT_DEFAULT
 
 
 def setup_logging(filename=None,

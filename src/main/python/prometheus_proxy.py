@@ -12,11 +12,11 @@ from flask import Flask, Response
 from prometheus_client import start_http_server, Counter
 from werkzeug.exceptions import abort
 
-from constants import GRPC_PORT_DEFAULT, PORT, LOG_LEVEL, PROXY_PORT_DEFAULT, GRPC
-from proto.proxy_service_pb2 import AgentRegisterResponse, PathRegisterResponse, Empty
-from proto.proxy_service_pb2 import ProxyServiceServicer, ScrapeRequest
-from proto.proxy_service_pb2 import add_ProxyServiceServicer_to_server
-from utils import setup_logging
+from pb.proxy_service_pb2 import AgentRegisterResponse, PathRegisterResponse, Empty
+from pb.proxy_service_pb2 import ProxyServiceServicer, ScrapeRequest
+from pb.proxy_service_pb2 import add_ProxyServiceServicer_to_server
+from src.main.python.constants import GRPC_PORT_DEFAULT, PORT, LOG_LEVEL, PROXY_PORT_DEFAULT, GRPC
+from src.main.python.utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
