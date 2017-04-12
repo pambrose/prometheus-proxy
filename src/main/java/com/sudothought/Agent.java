@@ -1,11 +1,11 @@
 package com.sudothought;
 
 import com.cinch.grpc.AgentInfo;
-import com.cinch.grpc.AgentRegisterRequest;
-import com.cinch.grpc.AgentRegisterResponse;
-import com.cinch.grpc.PathRegisterRequest;
-import com.cinch.grpc.PathRegisterResponse;
 import com.cinch.grpc.ProxyServiceGrpc;
+import com.cinch.grpc.RegisterAgentRequest;
+import com.cinch.grpc.RegisterAgentResponse;
+import com.cinch.grpc.RegisterPathRequest;
+import com.cinch.grpc.RegisterPathResponse;
 import com.cinch.grpc.ScrapeRequest;
 import com.cinch.grpc.ScrapeResponse;
 import com.google.common.collect.Maps;
@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -144,52 +143,6 @@ public class Agent {
     return data.get("agent_configs");
   }
 
-  public void exchangeMsgs()
-      throws InterruptedException {
-    final CountDownLatch finishLatch = new CountDownLatch(1);
-    StreamObserver<ScrapeResponse> requestObserver = this.asyncStub.exchangeScrapeMsgs(
-        new StreamObserver<ScrapeRequest>() {
-          @Override
-          public void onNext(ScrapeRequest scrapeRequest) {
-            final ScrapeResponse response = ScrapeResponse.newBuilder()
-                                                          .setAgentId(scrapeRequest.getAgentId())
-                                                          .setScrapeId(scrapeRequest.getScrapeId())
-                                                          .setValid(true)
-                                                          .setStatusCode(200)
-                                                          .setText("This is a result for " + scrapeRequest.getPath())
-                                                          .build();
-            scrapeResponseQueue.add(response);
-          }
-
-          @Override
-          public void onError(Throwable t) {
-            Status status = Status.fromThrowable(t);
-            logger.log(Level.WARNING, "Failed: {0}", status);
-            finishLatch.countDown();
-          }
-
-          @Override
-          public void onCompleted() {
-            finishLatch.countDown();
-          }
-        });
-
-    try {
-      while (!stopped.get()) {
-        final ScrapeResponse response = scrapeResponseQueue.take();
-        requestObserver.onNext(response);
-      }
-    }
-    catch (RuntimeException e) {
-      requestObserver.onError(e);
-      throw e;
-    }
-    // Mark the end of requests
-    requestObserver.onCompleted();
-
-    // Receiving happens asynchronously
-    finishLatch.await(1, TimeUnit.MINUTES);
-  }
 
   public void shutdown()
       throws InterruptedException {
@@ -197,17 +150,17 @@ public class Agent {
   }
 
   public long registerAgent() {
-    final AgentRegisterRequest request = AgentRegisterRequest.newBuilder().setHostname(Utils.getHostName()).build();
-    final AgentRegisterResponse response = this.blockingStub.registerAgent(request);
+    final RegisterAgentRequest request = RegisterAgentRequest.newBuilder().setHostname(Utils.getHostName()).build();
+    final RegisterAgentResponse response = this.blockingStub.registerAgent(request);
     return response.getAgentId();
   }
 
   public long registerPath(final long agent_id, final String path) {
-    final PathRegisterRequest request = PathRegisterRequest.newBuilder()
+    final RegisterPathRequest request = RegisterPathRequest.newBuilder()
                                                            .setAgentId(agent_id)
                                                            .setPath(path)
                                                            .build();
-    final PathRegisterResponse response = this.blockingStub.registerPath(request);
+    final RegisterPathResponse response = this.blockingStub.registerPath(request);
     return response.getPathId();
   }
 

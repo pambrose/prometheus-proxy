@@ -6,21 +6,21 @@ import public "google/protobuf/empty.proto";
 option java_multiple_files = true;
 option java_package = "com.cinch.grpc";
 
-message AgentRegisterRequest {
+message RegisterAgentRequest {
     string hostname = 1;
 }
 
-message AgentRegisterResponse {
+message RegisterAgentResponse {
     int64 agent_id = 1;
     string proxy_url = 2;
 }
 
-message PathRegisterRequest {
+message RegisterPathRequest {
     int64 agent_id = 1;
     string path = 2;
 }
 
-message PathRegisterResponse {
+message RegisterPathResponse {
     int64 path_id = 1;
 }
 
@@ -44,19 +44,16 @@ message ScrapeResponse {
 
 service ProxyService {
 
-    rpc registerAgent (AgentRegisterRequest) returns (AgentRegisterResponse) {
+    rpc registerAgent (RegisterAgentRequest) returns (RegisterAgentResponse) {
     }
 
-    rpc registerPath (PathRegisterRequest) returns (PathRegisterResponse) {
+    rpc registerPath (RegisterPathRequest) returns (RegisterPathResponse) {
     }
 
     rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {
     }
 
     rpc writeResponseToProxy (ScrapeResponse) returns (google.protobuf.Empty) {
-    }
-
-    rpc exchangeScrapeMsgs (stream ScrapeResponse) returns (stream ScrapeRequest) {
     }
 }
 

@@ -1,16 +1,15 @@
 import argparse
+import grpc
 import logging
+import requests
 import socket
+import yaml
+from prometheus_client import start_http_server
 from threading import Thread
 from time import sleep
 
-import grpc
-import requests
-import yaml
-from prometheus_client import start_http_server
-
-from pb.proxy_service_pb2 import AgentRegisterRequest, PathRegisterRequest
 from pb.proxy_service_pb2 import ProxyServiceStub, AgentInfo, ScrapeResponse
+from pb.proxy_service_pb2 import RegisterAgentRequest, RegisterPathRequest
 from src.main.python.constants import LOG_LEVEL, PROXY, CONFIG
 from src.main.python.utils import setup_logging, grpc_url
 
@@ -45,7 +44,7 @@ class PrometheusAgent(object):
                 channel = grpc.insecure_channel(self.grpc_url)
                 self.stub = ProxyServiceStub(channel)
                 # Register agent
-                register_response = self.stub.registerAgent(AgentRegisterRequest(hostname=socket.gethostname()))
+                register_response = self.stub.registerAgent(RegisterAgentRequest(hostname=socket.gethostname()))
                 logger.info("Connected to proxy at %s with agent_id%s", self.grpc_url, register_response.agent_id)
                 self.agent_id = register_response.agent_id
                 self.proxy_url = register_response.proxy_url
@@ -53,7 +52,7 @@ class PrometheusAgent(object):
                 # Register paths
                 for path in self.path_dict.keys():
                     logger.info("Registering path %s...", path)
-                    register_response = self.stub.registerPath(PathRegisterRequest(agent_id=self.agent_id, path=path))
+                    register_response = self.stub.registerPath(RegisterPathRequest(agent_id=self.agent_id, path=path))
                     logger.info("Registered path %s as path_id:%s ", path, register_response.path_id)
 
                 # Return once agent and paths are registered

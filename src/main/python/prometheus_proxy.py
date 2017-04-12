@@ -11,8 +11,8 @@ from queue import Queue
 from threading import Thread, Lock, Event
 from werkzeug.exceptions import abort
 
-from pb.proxy_service_pb2 import AgentRegisterResponse, PathRegisterResponse, Empty
 from pb.proxy_service_pb2 import ProxyServiceServicer, ScrapeRequest
+from pb.proxy_service_pb2 import RegisterAgentResponse, RegisterPathResponse, Empty
 from pb.proxy_service_pb2 import add_ProxyServiceServicer_to_server
 from src.main.python.constants import GRPC_PORT_DEFAULT, PORT, LOG_LEVEL, PROXY_PORT_DEFAULT, GRPC
 from src.main.python.utils import setup_logging
@@ -69,7 +69,7 @@ class PrometheusProxy(ProxyServiceServicer):
             self.agent_id_counter += 1
             logger.info("Registered agent %s %s %s", request.hostname, context.peer(), self.agent_id_counter)
             self.agent_dict[self.agent_id_counter] = AgentContext(self.agent_id_counter)
-            return AgentRegisterResponse(agent_id=self.agent_id_counter,
+            return RegisterAgentResponse(agent_id=self.agent_id_counter,
                                          proxy_url="http://{0}:{1}/".format(socket.gethostname(), self.http_port))
 
     def registerPath(self, request, context):
@@ -77,7 +77,7 @@ class PrometheusProxy(ProxyServiceServicer):
             self.path_id_counter += 1
             logger.info("Registered path %s", request.path)
             self.path_dict[request.path] = request.agent_id
-            return PathRegisterResponse(path_id=self.path_id_counter)
+            return RegisterPathResponse(path_id=self.path_id_counter)
 
     def readRequestsFromProxy(self, request, context):
         agent_id = request.agent_id

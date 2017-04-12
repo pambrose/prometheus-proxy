@@ -1,20 +1,17 @@
 package com.sudothought;
 
 import com.cinch.grpc.AgentInfo;
-import com.cinch.grpc.AgentRegisterRequest;
-import com.cinch.grpc.AgentRegisterResponse;
-import com.cinch.grpc.PathRegisterRequest;
-import com.cinch.grpc.PathRegisterResponse;
 import com.cinch.grpc.ProxyServiceGrpc;
+import com.cinch.grpc.RegisterAgentRequest;
+import com.cinch.grpc.RegisterAgentResponse;
+import com.cinch.grpc.RegisterPathRequest;
+import com.cinch.grpc.RegisterPathResponse;
 import com.cinch.grpc.ScrapeRequest;
 import com.cinch.grpc.ScrapeResponse;
 import com.google.protobuf.Empty;
 import io.grpc.stub.StreamObserver;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 class ProxyServiceImpl
@@ -31,10 +28,10 @@ class ProxyServiceImpl
   }
 
   @Override
-  public void registerAgent(AgentRegisterRequest request, StreamObserver<AgentRegisterResponse> responseObserver) {
+  public void registerAgent(RegisterAgentRequest request, StreamObserver<RegisterAgentResponse> responseObserver) {
     final AgentContext agentContext = new AgentContext(request.getHostname());
     this.proxy.getAgentContextMap().put(agentContext.getAgentId(), agentContext);
-    final AgentRegisterResponse response = AgentRegisterResponse.newBuilder()
+    final RegisterAgentResponse response = RegisterAgentResponse.newBuilder()
                                                                 .setAgentId(agentContext.getAgentId())
                                                                 .build();
     responseObserver.onNext(response);
@@ -42,9 +39,9 @@ class ProxyServiceImpl
   }
 
   @Override
-  public void registerPath(PathRegisterRequest request, StreamObserver<PathRegisterResponse> responseObserver) {
+  public void registerPath(RegisterPathRequest request, StreamObserver<RegisterPathResponse> responseObserver) {
     this.proxy.getPathMap().put(request.getPath(), request.getAgentId());
-    final PathRegisterResponse response = PathRegisterResponse.newBuilder()
+    final RegisterPathResponse response = RegisterPathResponse.newBuilder()
                                                               .setPathId(PATH_ID_GENERATOR.getAndIncrement())
                                                               .build();
     responseObserver.onNext(response);
@@ -71,44 +68,5 @@ class ProxyServiceImpl
     final ScrapeRequestContext scrapeRequestContext = proxy.getScrapeRequestMap().remove(scrapeId);
     scrapeRequestContext.getScrapeResponse().set(response);
     scrapeRequestContext.markComplete();
-  }
-
-  @Override
-  public StreamObserver<ScrapeResponse> exchangeScrapeMsgs(StreamObserver<ScrapeRequest> requests) {
-
-    final ExecutorService executorService = Executors.newFixedThreadPool(1);
-    /*
-    executorService.submit(() -> {
-      while (true) {
-        try {
-          final ScrapeRequestContext scrapeRequestContext = proxy.getScrapeRequestQueue().take();
-          requests.onNext(scrapeRequestContext.getScrapeRequest());
-        }
-        catch (InterruptedException e) {
-          e.printStackTrace();
-        }
-      }
-    });
-    */
-
-    return new StreamObserver<ScrapeResponse>() {
-      @Override
-      public void onNext(ScrapeResponse response) {
-        final long scrapeId = response.getScrapeId();
-        final ScrapeRequestContext scrapeRequestContext = proxy.getScrapeRequestMap().remove(scrapeId);
-        scrapeRequestContext.getScrapeResponse().set(response);
-        scrapeRequestContext.markComplete();
-      }
-
-      @Override
-      public void onError(Throwable t) {
-        logger.log(Level.WARNING, "Encountered error in routeChat", t);
-      }
-
-      @Override
-      public void onCompleted() {
-        requests.onCompleted();
-      }
-    };
   }
 }
