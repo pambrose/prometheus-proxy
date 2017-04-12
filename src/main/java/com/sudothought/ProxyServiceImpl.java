@@ -17,8 +17,8 @@ import java.util.logging.Logger;
 class ProxyServiceImpl
     extends ProxyServiceGrpc.ProxyServiceImplBase {
 
-  private static final Logger logger = Logger.getLogger(ProxyServiceImpl.class.getName());
-
+  private static final Logger     logger            = Logger.getLogger(ProxyServiceImpl.class.getName());
+  private static final Empty      EMPTY             = Empty.newBuilder().build();
   private static final AtomicLong PATH_ID_GENERATOR = new AtomicLong(0);
 
   private final Proxy proxy;
@@ -68,7 +68,9 @@ class ProxyServiceImpl
     final ScrapeRequestContext scrapeRequestContext = proxy.getScrapeRequestMap().remove(scrapeId);
     scrapeRequestContext.getScrapeResponse().set(response);
     scrapeRequestContext.markComplete();
-    responseObserver.onNext(Empty.newBuilder().build());
+
+    // Return Empty value
+    responseObserver.onNext(EMPTY);
     responseObserver.onCompleted();
   }
 }

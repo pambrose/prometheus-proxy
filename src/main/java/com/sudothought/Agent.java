@@ -13,6 +13,7 @@ import com.sudothought.args.AgentArgs;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import okhttp3.Response;
 import org.yaml.snakeyaml.Yaml;
@@ -26,10 +27,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -42,12 +45,15 @@ public class Agent {
   // Map path to PathContext
   private final Map<String, PathContext> pathContextMap = Maps.newConcurrentMap();
   private final AtomicBoolean            stopped        = new AtomicBoolean(false);
+  private final AtomicLong               agentIdRef     = new AtomicLong();
 
+  private final String                                    hostname;
+  private final List<Map<String, String>>                 agentConfigs;
   private final ManagedChannel                            channel;
   private final ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
   private final ProxyServiceGrpc.ProxyServiceStub         asyncStub;
 
-  public Agent(String hostname) {
+  public Agent(String hostname, final List<Map<String, String>> agentConfigs) {
     final String host;
     final int port;
     if (hostname.contains(":")) {
@@ -59,7 +65,9 @@ public class Agent {
       host = hostname;
       port = 50051;
     }
+    this.hostname = String.format("%s:%s", host, port);
     final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true);
+    this.agentConfigs = agentConfigs;
     this.channel = channelBuilder.build();
     this.blockingStub = ProxyServiceGrpc.newBlockingStub(this.channel);
     this.asyncStub = ProxyServiceGrpc.newStub(this.channel);
@@ -71,102 +79,20 @@ public class Agent {
     final AgentArgs agentArgs = new AgentArgs();
     agentArgs.parseArgs(Agent.class.getName(), argv);
 
-    final Agent agent = new Agent(agentArgs.proxy);
-
-    // Register Agent
-    long agentId = agent.registerAgent();
-    System.out.println(agentId);
-
-    // Register paths
+    final List<Map<String, String>> agentConfigs;
     try {
-      for (Map<String, String> agentConfig : getAgentConfigs(agentArgs.config)) {
-        System.out.println(agentConfig);
-        final String path = agentConfig.get("path");
-        final String url = agentConfig.get("url");
-        long pathId = agent.registerPath(agentId, path);
-        System.out.println(pathId);
-        agent.pathContextMap.put(path, new PathContext(pathId, path, url));
-      }
+      agentConfigs = readAgentConfigs(agentArgs.config);
     }
     catch (FileNotFoundException e) {
       logger.log(Level.WARNING, String.format("Invalid config file name: %s", agentArgs.config));
+      return;
     }
 
-    final ExecutorService executorService = Executors.newFixedThreadPool(2);
-
-    executorService.submit(() -> {
-      agent.asyncStub.readRequestsFromProxy(
-          AgentInfo.newBuilder().setAgentId(agentId).build(),
-          new StreamObserver<ScrapeRequest>() {
-            @Override
-            public void onNext(ScrapeRequest scrapeRequest) {
-              final PathContext pathContext = agent.pathContextMap.get(scrapeRequest.getPath());
-              ScrapeResponse scrapResponse;
-              try {
-                logger.log(Level.INFO, String.format("Fetching: %s", pathContext.getUrl()));
-                final Response response = pathContext.fetchUrl();
-                logger.log(Level.INFO, String.format("Fetched: %s", pathContext.getUrl()));
-                scrapResponse = ScrapeResponse.newBuilder()
-                                              .setAgentId(scrapeRequest.getAgentId())
-                                              .setScrapeId(scrapeRequest.getScrapeId())
-                                              .setValid(true)
-                                              .setStatusCode(response.code())
-                                              .setText(response.body().string())
-                                              .build();
-              }
-              catch (IOException e) {
-                scrapResponse = ScrapeResponse.newBuilder()
-                                              .setAgentId(scrapeRequest.getAgentId())
-                                              .setScrapeId(scrapeRequest.getScrapeId())
-                                              .setValid(false)
-                                              .setStatusCode(404)
-                                              .setText("")
-                                              .build();
-                e.printStackTrace();
-              }
-
-              logger.log(Level.INFO, String.format("Adding to scrapeResponseQueue: %s", pathContext.getUrl()));
-              try {
-                agent.scrapeResponseQueue.put(scrapResponse);
-              }
-              catch (InterruptedException e) {
-                e.printStackTrace();
-              }
-            }
-
-            @Override
-            public void onError(Throwable t) {
-              Status status = Status.fromThrowable(t);
-              logger.log(Level.WARNING, "Failed: {0}", status);
-            }
-
-            @Override
-            public void onCompleted() {
-              logger.log(Level.INFO, "Completed");
-            }
-          });
-
-    });
-
-    executorService.submit(() -> {
-      while (!agent.stopped.get()) {
-        try {
-          logger.log(Level.INFO, "Waiting on scrapeResponseQueue");
-          final ScrapeResponse response = agent.scrapeResponseQueue.take();
-          logger.log(Level.INFO, String.format("Returning scrapeId: %s", response.getScrapeId()));
-          agent.blockingStub.writeResponseToProxy(response);
-        }
-        catch (Exception e) {
-          e.printStackTrace();
-        }
-      }
-      logger.log(Level.INFO, "Exiting");
-    });
-
-    Thread.sleep(Integer.MAX_VALUE);
+    final Agent agent = new Agent(agentArgs.proxy, agentConfigs);
+    agent.connect(true);
   }
 
-  private static List<Map<String, String>> getAgentConfigs(final String filename)
+  private static List<Map<String, String>> readAgentConfigs(final String filename)
       throws FileNotFoundException {
     final Yaml yaml = new Yaml();
     final InputStream input = new FileInputStream(new File(filename));
@@ -174,6 +100,108 @@ public class Agent {
     return data.get("agent_configs");
   }
 
+  public void connect(final boolean reconnect)
+      throws InterruptedException {
+
+    final ExecutorService executorService = Executors.newFixedThreadPool(2);
+
+    while (true) {
+      try {
+        logger.log(Level.INFO, String.format("Connecting to proxy at %s...", this.hostname));
+        this.registerAgent();
+        logger.log(Level.INFO, String.format("Connected to proxy at %s", this.hostname));
+
+        this.registerPaths();
+
+        final CountDownLatch countDownLatch = new CountDownLatch(1);
+
+        executorService.submit(() -> {
+          final AgentInfo agentInfo = AgentInfo.newBuilder().setAgentId(agentIdRef.get()).build();
+          this.asyncStub.readRequestsFromProxy(
+              agentInfo,
+              new StreamObserver<ScrapeRequest>() {
+                @Override
+                public void onNext(ScrapeRequest scrapeRequest) {
+                  final PathContext pathContext = pathContextMap.get(scrapeRequest.getPath());
+                  ScrapeResponse scrapResponse;
+                  try {
+                    final Response response = pathContext.fetchUrl();
+                    scrapResponse = ScrapeResponse.newBuilder()
+                                                  .setAgentId(scrapeRequest.getAgentId())
+                                                  .setScrapeId(scrapeRequest.getScrapeId())
+                                                  .setValid(true)
+                                                  .setStatusCode(response.code())
+                                                  .setText(response.body().string())
+                                                  .build();
+                  }
+                  catch (IOException e) {
+                    scrapResponse = ScrapeResponse.newBuilder()
+                                                  .setAgentId(scrapeRequest.getAgentId())
+                                                  .setScrapeId(scrapeRequest.getScrapeId())
+                                                  .setValid(false)
+                                                  .setStatusCode(404)
+                                                  .setText("")
+                                                  .build();
+                    e.printStackTrace();
+                  }
+
+                  try {
+                    scrapeResponseQueue.put(scrapResponse);
+                  }
+                  catch (InterruptedException e) {
+                    e.printStackTrace();
+                  }
+                }
+
+                @Override
+                public void onError(Throwable t) {
+                  final Status status = Status.fromThrowable(t);
+                  logger.log(Level.WARNING, "Failed: {0}", status);
+                  countDownLatch.countDown();
+                }
+
+                @Override
+                public void onCompleted() {
+                  logger.log(Level.INFO, "Completed");
+                }
+              });
+        });
+
+        executorService.submit(() -> {
+          while (countDownLatch.getCount() > 0) {
+            try {
+              final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
+              if (response == null)
+                continue;
+              logger.log(Level.INFO, String.format("Returning scrapeId: %s", response.getScrapeId()));
+              this.blockingStub.writeResponseToProxy(response);
+            }
+            catch (InterruptedException e) {
+              e.printStackTrace();
+            }
+          }
+          logger.log(Level.INFO, "Exiting");
+        });
+
+        countDownLatch.await();
+        logger.log(Level.INFO, String.format("Disconnected from proxy at %s", this.hostname));
+
+        this.waitUntilDisconnected();
+      }
+      catch (StatusRuntimeException e) {
+        logger.log(Level.INFO, String.format("Cannot connect to proxy at %s [%s]", this.hostname, e.getMessage()));
+      }
+
+      if (!reconnect)
+        break;
+
+      Thread.sleep(2000);
+    }
+  }
+
+  public void waitUntilDisconnected() {
+
+  }
 
   public void shutdown()
       throws InterruptedException {
@@ -183,12 +211,25 @@ public class Agent {
   public long registerAgent() {
     final RegisterAgentRequest request = RegisterAgentRequest.newBuilder().setHostname(Utils.getHostName()).build();
     final RegisterAgentResponse response = this.blockingStub.registerAgent(request);
-    return response.getAgentId();
+    this.agentIdRef.set(response.getAgentId());
+    return this.agentIdRef.get();
   }
 
-  public long registerPath(final long agentId, final String path) {
+  public void registerPaths() {
+    // Register paths
+    for (Map<String, String> agentConfig : this.agentConfigs) {
+      System.out.println(agentConfig);
+      final String path = agentConfig.get("path");
+      final String url = agentConfig.get("url");
+      long pathId = this.registerPath(path);
+      System.out.println(pathId);
+      this.pathContextMap.put(path, new PathContext(pathId, path, url));
+    }
+  }
+
+  public long registerPath(final String path) {
     final RegisterPathRequest request = RegisterPathRequest.newBuilder()
-                                                           .setAgentId(agentId)
+                                                           .setAgentId(this.agentIdRef.get())
                                                            .setPath(path)
                                                            .build();
     final RegisterPathResponse response = this.blockingStub.registerPath(request);

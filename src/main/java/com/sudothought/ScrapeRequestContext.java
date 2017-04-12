@@ -17,9 +17,7 @@ public class ScrapeRequestContext {
     this.scrapeRequest = scrapeRequest;
   }
 
-  public ScrapeRequest getScrapeRequest() {
-    return this.scrapeRequest;
-  }
+  public ScrapeRequest getScrapeRequest() { return this.scrapeRequest; }
 
   public void waitUntilComplete() {
     try {
@@ -30,11 +28,7 @@ public class ScrapeRequestContext {
     }
   }
 
-  public void markComplete() {
-    this.complete.countDown();
-  }
+  public void markComplete() { this.complete.countDown(); }
 
-  public AtomicReference<ScrapeResponse> getScrapeResponse() {
-    return this.scrape_response;
-  }
+  public AtomicReference<ScrapeResponse> getScrapeResponse() { return this.scrape_response; }
 }
