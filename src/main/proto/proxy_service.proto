@@ -38,7 +38,7 @@ message ScrapeResponse {
     int64 agent_id = 1;
     int64 scrape_id = 2;
     bool valid = 3;
-    int64 status_code = 4;
+    int32 status_code = 4;
     string text = 5;
 }
 

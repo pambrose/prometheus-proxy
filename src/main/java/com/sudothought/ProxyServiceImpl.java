@@ -11,6 +11,8 @@ import com.cinch.grpc.ScrapeResponse;
 import com.google.protobuf.Empty;
 import io.grpc.stub.StreamObserver;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -58,20 +60,29 @@ class ProxyServiceImpl
   }
 
   @Override
-  public StreamObserver<ScrapeResponse> scrapePipe(StreamObserver<ScrapeRequest> requests) {
+  public StreamObserver<ScrapeResponse> exchangeScrapeMsgs(StreamObserver<ScrapeRequest> requests) {
+
+    final ExecutorService executorService = Executors.newFixedThreadPool(1);
+
+    executorService.submit(() -> {
+      while (true) {
+        try {
+          final ScrapeRequestContext scrapeRequestContext = proxy.getScrapeRequestQueue().take();
+          requests.onNext(scrapeRequestContext.getScrapeRequest());
+        }
+        catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
+    });
+
     return new StreamObserver<ScrapeResponse>() {
       @Override
       public void onNext(ScrapeResponse response) {
-
-        while (true) {
-          try {
-            final ScrapeRequestContext scrapeRequestContext = proxy.getScrapeRequestQueue().take();
-            requests.onNext(scrapeRequestContext.getScrapeRequest());
-          }
-          catch (InterruptedException e) {
-            e.printStackTrace();
-          }
-        }
+        final long scrapeId = response.getScrapeId();
+        final ScrapeRequestContext scrapeRequestContext = proxy.getScrapeRequestMap().remove(scrapeId);
+        scrapeRequestContext.getScrapeResponse().set(response);
+        scrapeRequestContext.markComplete();
       }
 
       @Override

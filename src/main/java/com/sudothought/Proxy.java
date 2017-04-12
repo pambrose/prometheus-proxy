@@ -23,6 +23,8 @@ public class Proxy {
   private final Map<Long, AgentContext>             agentContextMap    = Maps.newConcurrentMap();
   // Map path to agent_id
   private final Map<String, Long>                   pathMap            = Maps.newConcurrentMap();
+  // Map scrape_id to agent_id
+  private final Map<Long, ScrapeRequestContext>     scrapeRequestMap   = Maps.newConcurrentMap();
   private final BlockingQueue<ScrapeRequestContext> scrapeRequestQueue = new ArrayBlockingQueue<>(1000);
 
   private final int    port;
@@ -51,14 +53,20 @@ public class Proxy {
     Spark.get("/*", (req, res) -> {
       final String path = req.splat()[0];
       final long agent_id = proxy.pathMap.get(path);
-      final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(ScrapeRequest.newBuilder()
-                                                                                              .setAgentId(agent_id)
-                                                                                              .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
-                                                                                              .setPath(path)
-                                                                                              .build());
+      final long scrape_id = SCRAPE_ID_GENERATOR.getAndIncrement();
+      final ScrapeRequest scrapeRequest = ScrapeRequest.newBuilder()
+                                                       .setAgentId(agent_id)
+                                                       .setScrapeId(scrape_id)
+                                                       .setPath(path)
+                                                       .build();
+      final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(scrapeRequest);
+      proxy.getScrapeRequestMap().put(scrape_id, scrapeRequestContext);
       proxy.getScrapeRequestQueue().add(scrapeRequestContext);
-      scrapeRequestContext.getComplete().waitUntilTrue();
-      return scrapeRequestContext.getScrapeResponse();
+      scrapeRequestContext.waitUntilComplete();
+
+      res.status(scrapeRequestContext.getScrapeResponse().get().getStatusCode());
+      res.type("text/plain");
+      return scrapeRequestContext.getScrapeResponse().get().getText();
     });
 
     proxy.blockUntilShutdown();
@@ -90,6 +98,10 @@ public class Proxy {
 
   public BlockingQueue<ScrapeRequestContext> getScrapeRequestQueue() {
     return this.scrapeRequestQueue;
+  }
+
+  public Map<Long, ScrapeRequestContext> getScrapeRequestMap() {
+    return this.scrapeRequestMap;
   }
 
   public Map<Long, AgentContext> getAgentContextMap() {

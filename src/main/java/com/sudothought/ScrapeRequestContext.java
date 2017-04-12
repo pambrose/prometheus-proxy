@@ -1,14 +1,15 @@
 package com.sudothought;
 
 import com.cinch.grpc.ScrapeRequest;
-import com.sudothought.utils.BooleanMonitor;
+import com.cinch.grpc.ScrapeResponse;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class ScrapeRequestContext {
 
-  private final BooleanMonitor          complete        = new BooleanMonitor(false);
-  private final AtomicReference<String> scrape_response = new AtomicReference<>();
+  private final CountDownLatch                  complete        = new CountDownLatch(1);
+  private final AtomicReference<ScrapeResponse> scrape_response = new AtomicReference<>();
 
   private final ScrapeRequest scrapeRequest;
 
@@ -20,11 +21,20 @@ public class ScrapeRequestContext {
     return this.scrapeRequest;
   }
 
-  public BooleanMonitor getComplete() {
-    return this.complete;
+  public void waitUntilComplete() {
+    try {
+      this.complete.await();
+    }
+    catch (InterruptedException e) {
+      e.printStackTrace();
+    }
   }
 
-  public String getScrapeResponse() {
-    return this.scrape_response.get();
+  public void markComplete() {
+    this.complete.countDown();
+  }
+
+  public AtomicReference<ScrapeResponse> getScrapeResponse() {
+    return this.scrape_response;
   }
 }
