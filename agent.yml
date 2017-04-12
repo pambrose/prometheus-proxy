@@ -1,0 +1,7 @@
+agent_configs:
+  - name: test1
+    path: test1_path
+    url: http://localhost:9090/metrics
+  - name: test2
+    path: test2_path
+    url: http://localhost:8001/metrics
