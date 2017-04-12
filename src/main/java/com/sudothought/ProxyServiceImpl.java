@@ -68,5 +68,7 @@ class ProxyServiceImpl
     final ScrapeRequestContext scrapeRequestContext = proxy.getScrapeRequestMap().remove(scrapeId);
     scrapeRequestContext.getScrapeResponse().set(response);
     scrapeRequestContext.markComplete();
+    responseObserver.onNext(Empty.newBuilder().build());
+    responseObserver.onCompleted();
   }
 }

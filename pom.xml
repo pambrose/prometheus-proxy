@@ -16,6 +16,7 @@
         <jcommander.version>1.64</jcommander.version>
         <spark.version>2.5.5</spark.version>
         <yaml.version>1.18</yaml.version>
+        <okhttp.version>3.6.0</okhttp.version>
 
         <maven.compiler.version>3.6.1</maven.compiler.version>
         <maven-jar-plugin.version>3.0.2</maven-jar-plugin.version>
@@ -44,6 +45,12 @@
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
             <version>${yaml.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>${okhttp.version}</version>
         </dependency>
 
     </dependencies>

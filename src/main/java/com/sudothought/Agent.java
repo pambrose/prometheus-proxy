@@ -14,11 +14,13 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import okhttp3.Response;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
@@ -37,9 +39,9 @@ public class Agent {
 
   private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new ArrayBlockingQueue<>(1000);
 
-  // Map path to agent_id
-  private final Map<String, String> pathMap = Maps.newConcurrentMap();
-  private final AtomicBoolean       stopped = new AtomicBoolean(false);
+  // Map path to PathContext
+  private final Map<String, PathContext> pathContextMap = Maps.newConcurrentMap();
+  private final AtomicBoolean            stopped        = new AtomicBoolean(false);
 
   private final ManagedChannel                            channel;
   private final ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
@@ -72,40 +74,64 @@ public class Agent {
     final Agent agent = new Agent(agentArgs.proxy);
 
     // Register Agent
-    long agent_id = agent.registerAgent();
-    System.out.println(agent_id);
+    long agentId = agent.registerAgent();
+    System.out.println(agentId);
 
     // Register paths
     try {
-      for (Map<String, String> agent_config : getAgentConfigs(agentArgs.config)) {
-        System.out.println(agent_config);
-        final String path = agent_config.get("path");
-        final String url = agent_config.get("url");
-        long path_id = agent.registerPath(agent_id, path);
-        System.out.println(path_id);
-        agent.pathMap.put(path, url);
+      for (Map<String, String> agentConfig : getAgentConfigs(agentArgs.config)) {
+        System.out.println(agentConfig);
+        final String path = agentConfig.get("path");
+        final String url = agentConfig.get("url");
+        long pathId = agent.registerPath(agentId, path);
+        System.out.println(pathId);
+        agent.pathContextMap.put(path, new PathContext(pathId, path, url));
       }
     }
     catch (FileNotFoundException e) {
-      logger.log(Level.INFO, String.format("Invalid config file name: %s", agentArgs.config));
+      logger.log(Level.WARNING, String.format("Invalid config file name: %s", agentArgs.config));
     }
 
     final ExecutorService executorService = Executors.newFixedThreadPool(2);
 
     executorService.submit(() -> {
       agent.asyncStub.readRequestsFromProxy(
-          AgentInfo.newBuilder().setAgentId(agent_id).build(),
+          AgentInfo.newBuilder().setAgentId(agentId).build(),
           new StreamObserver<ScrapeRequest>() {
             @Override
             public void onNext(ScrapeRequest scrapeRequest) {
-              final ScrapeResponse response = ScrapeResponse.newBuilder()
-                                                            .setAgentId(scrapeRequest.getAgentId())
-                                                            .setScrapeId(scrapeRequest.getScrapeId())
-                                                            .setValid(true)
-                                                            .setStatusCode(200)
-                                                            .setText("This is a result for " + scrapeRequest.getPath())
-                                                            .build();
-              agent.scrapeResponseQueue.add(response);
+              final PathContext pathContext = agent.pathContextMap.get(scrapeRequest.getPath());
+              ScrapeResponse scrapResponse;
+              try {
+                logger.log(Level.INFO, String.format("Fetching: %s", pathContext.getUrl()));
+                final Response response = pathContext.fetchUrl();
+                logger.log(Level.INFO, String.format("Fetched: %s", pathContext.getUrl()));
+                scrapResponse = ScrapeResponse.newBuilder()
+                                              .setAgentId(scrapeRequest.getAgentId())
+                                              .setScrapeId(scrapeRequest.getScrapeId())
+                                              .setValid(true)
+                                              .setStatusCode(response.code())
+                                              .setText(response.body().string())
+                                              .build();
+              }
+              catch (IOException e) {
+                scrapResponse = ScrapeResponse.newBuilder()
+                                              .setAgentId(scrapeRequest.getAgentId())
+                                              .setScrapeId(scrapeRequest.getScrapeId())
+                                              .setValid(false)
+                                              .setStatusCode(404)
+                                              .setText("")
+                                              .build();
+                e.printStackTrace();
+              }
+
+              logger.log(Level.INFO, String.format("Adding to scrapeResponseQueue: %s", pathContext.getUrl()));
+              try {
+                agent.scrapeResponseQueue.put(scrapResponse);
+              }
+              catch (InterruptedException e) {
+                e.printStackTrace();
+              }
             }
 
             @Override
@@ -125,14 +151,19 @@ public class Agent {
     executorService.submit(() -> {
       while (!agent.stopped.get()) {
         try {
+          logger.log(Level.INFO, "Waiting on scrapeResponseQueue");
           final ScrapeResponse response = agent.scrapeResponseQueue.take();
+          logger.log(Level.INFO, String.format("Returning scrapeId: %s", response.getScrapeId()));
           agent.blockingStub.writeResponseToProxy(response);
         }
         catch (Exception e) {
           e.printStackTrace();
         }
       }
+      logger.log(Level.INFO, "Exiting");
     });
+
+    Thread.sleep(Integer.MAX_VALUE);
   }
 
   private static List<Map<String, String>> getAgentConfigs(final String filename)
@@ -155,9 +186,9 @@ public class Agent {
     return response.getAgentId();
   }
 
-  public long registerPath(final long agent_id, final String path) {
+  public long registerPath(final long agentId, final String path) {
     final RegisterPathRequest request = RegisterPathRequest.newBuilder()
-                                                           .setAgentId(agent_id)
+                                                           .setAgentId(agentId)
                                                            .setPath(path)
                                                            .build();
     final RegisterPathResponse response = this.blockingStub.registerPath(request);
