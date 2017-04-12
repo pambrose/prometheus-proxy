@@ -90,6 +90,8 @@ public class Agent {
 
     final Agent agent = new Agent(agentArgs.proxy, agentConfigs);
     agent.connect(true);
+
+    agent.shutdown();
   }
 
   private static List<Map<String, String>> readAgentConfigs(final String filename)
@@ -173,7 +175,6 @@ public class Agent {
               final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
               if (response == null)
                 continue;
-              logger.log(Level.INFO, String.format("Returning scrapeId: %s", response.getScrapeId()));
               this.blockingStub.writeResponseToProxy(response);
             }
             catch (InterruptedException e) {
@@ -185,8 +186,6 @@ public class Agent {
 
         countDownLatch.await();
         logger.log(Level.INFO, String.format("Disconnected from proxy at %s", this.hostname));
-
-        this.waitUntilDisconnected();
       }
       catch (StatusRuntimeException e) {
         logger.log(Level.INFO, String.format("Cannot connect to proxy at %s [%s]", this.hostname, e.getMessage()));
@@ -197,10 +196,6 @@ public class Agent {
 
       Thread.sleep(2000);
     }
-  }
-
-  public void waitUntilDisconnected() {
-
   }
 
   public void shutdown()
@@ -216,13 +211,11 @@ public class Agent {
   }
 
   public void registerPaths() {
-    // Register paths
     for (Map<String, String> agentConfig : this.agentConfigs) {
-      System.out.println(agentConfig);
       final String path = agentConfig.get("path");
       final String url = agentConfig.get("url");
-      long pathId = this.registerPath(path);
-      System.out.println(pathId);
+      final long pathId = this.registerPath(path);
+      logger.log(Level.INFO, String.format("Registered %s as /%s", url, path));
       this.pathContextMap.put(path, new PathContext(pathId, path, url));
     }
   }
