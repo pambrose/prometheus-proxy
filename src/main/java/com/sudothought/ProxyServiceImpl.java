@@ -52,18 +52,32 @@ class ProxyServiceImpl
   }
 
   @Override
-  public void readRequestsFromProxy(AgentInfo request, StreamObserver<ScrapeRequest> responseObserver) {
+  public void readRequestsFromProxy(AgentInfo agentInfo, StreamObserver<ScrapeRequest> requests) {
+    final AgentContext agentContext = this.proxy.getAgentContextMap().get(agentInfo.getAgentId());
+    while (true) {
+      try {
+        final ScrapeRequestContext scrapeRequestContext = agentContext.getScrapeRequestQueue().take();
+        requests.onNext(scrapeRequestContext.getScrapeRequest());
+      }
+      catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
   }
 
   @Override
-  public void writeResponseToProxy(ScrapeResponse request, StreamObserver<Empty> responseObserver) {
+  public void writeResponseToProxy(ScrapeResponse response, StreamObserver<Empty> responseObserver) {
+    final long scrapeId = response.getScrapeId();
+    final ScrapeRequestContext scrapeRequestContext = proxy.getScrapeRequestMap().remove(scrapeId);
+    scrapeRequestContext.getScrapeResponse().set(response);
+    scrapeRequestContext.markComplete();
   }
 
   @Override
   public StreamObserver<ScrapeResponse> exchangeScrapeMsgs(StreamObserver<ScrapeRequest> requests) {
 
     final ExecutorService executorService = Executors.newFixedThreadPool(1);
-
+    /*
     executorService.submit(() -> {
       while (true) {
         try {
@@ -75,6 +89,7 @@ class ProxyServiceImpl
         }
       }
     });
+    */
 
     return new StreamObserver<ScrapeResponse>() {
       @Override

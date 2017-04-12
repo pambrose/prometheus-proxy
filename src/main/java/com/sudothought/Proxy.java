@@ -9,8 +9,6 @@ import spark.Spark;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 
@@ -25,7 +23,6 @@ public class Proxy {
   private final Map<String, Long>                   pathMap            = Maps.newConcurrentMap();
   // Map scrape_id to agent_id
   private final Map<Long, ScrapeRequestContext>     scrapeRequestMap   = Maps.newConcurrentMap();
-  private final BlockingQueue<ScrapeRequestContext> scrapeRequestQueue = new ArrayBlockingQueue<>(1000);
 
   private final int    port;
   private final Server grpc_server;
@@ -60,8 +57,11 @@ public class Proxy {
                                                        .setPath(path)
                                                        .build();
       final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(scrapeRequest);
+
       proxy.getScrapeRequestMap().put(scrape_id, scrapeRequestContext);
-      proxy.getScrapeRequestQueue().add(scrapeRequestContext);
+      final AgentContext agentContext = proxy.getAgentContextMap().get(agent_id);
+      agentContext.getScrapeRequestQueue().add(scrapeRequestContext);
+
       scrapeRequestContext.waitUntilComplete();
 
       res.status(scrapeRequestContext.getScrapeResponse().get().getStatusCode());
@@ -94,10 +94,6 @@ public class Proxy {
       throws InterruptedException {
     if (this.grpc_server != null)
       this.grpc_server.awaitTermination();
-  }
-
-  public BlockingQueue<ScrapeRequestContext> getScrapeRequestQueue() {
-    return this.scrapeRequestQueue;
   }
 
   public Map<Long, ScrapeRequestContext> getScrapeRequestMap() {

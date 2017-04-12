@@ -1,5 +1,6 @@
 package com.sudothought;
 
+import com.cinch.grpc.AgentInfo;
 import com.cinch.grpc.AgentRegisterRequest;
 import com.cinch.grpc.AgentRegisterResponse;
 import com.cinch.grpc.PathRegisterRequest;
@@ -9,11 +10,9 @@ import com.cinch.grpc.ScrapeRequest;
 import com.cinch.grpc.ScrapeResponse;
 import com.google.common.collect.Maps;
 import com.sudothought.args.AgentArgs;
-import com.sudothought.utils.Utils;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import org.yaml.snakeyaml.Yaml;
 
@@ -26,6 +25,8 @@ import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
@@ -70,34 +71,69 @@ public class Agent {
     agentArgs.parseArgs(Agent.class.getName(), argv);
 
     final Agent agent = new Agent(agentArgs.proxy);
-    try {
-      // Register Agent
-      long agent_id = agent.registerAgent();
-      System.out.println(agent_id);
 
-      // Register paths
-      try {
-        for (Map<String, String> agent_config : getAgentConfigs(agentArgs.config)) {
-          System.out.println(agent_config);
-          final String path = agent_config.get("path");
-          final String url = agent_config.get("url");
-          long path_id = agent.registerPath(agent_id, path);
-          System.out.println(path_id);
-          agent.pathMap.put(path, url);
+    // Register Agent
+    long agent_id = agent.registerAgent();
+    System.out.println(agent_id);
+
+    // Register paths
+    try {
+      for (Map<String, String> agent_config : getAgentConfigs(agentArgs.config)) {
+        System.out.println(agent_config);
+        final String path = agent_config.get("path");
+        final String url = agent_config.get("url");
+        long path_id = agent.registerPath(agent_id, path);
+        System.out.println(path_id);
+        agent.pathMap.put(path, url);
+      }
+    }
+    catch (FileNotFoundException e) {
+      logger.log(Level.INFO, String.format("Invalid config file name: %s", agentArgs.config));
+    }
+
+    final ExecutorService executorService = Executors.newFixedThreadPool(2);
+
+    executorService.submit(() -> {
+      agent.asyncStub.readRequestsFromProxy(
+          AgentInfo.newBuilder().setAgentId(agent_id).build(),
+          new StreamObserver<ScrapeRequest>() {
+            @Override
+            public void onNext(ScrapeRequest scrapeRequest) {
+              final ScrapeResponse response = ScrapeResponse.newBuilder()
+                                                            .setAgentId(scrapeRequest.getAgentId())
+                                                            .setScrapeId(scrapeRequest.getScrapeId())
+                                                            .setValid(true)
+                                                            .setStatusCode(200)
+                                                            .setText("This is a result for " + scrapeRequest.getPath())
+                                                            .build();
+              agent.scrapeResponseQueue.add(response);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+              Status status = Status.fromThrowable(t);
+              logger.log(Level.WARNING, "Failed: {0}", status);
+            }
+
+            @Override
+            public void onCompleted() {
+              logger.log(Level.INFO, "Completed");
+            }
+          });
+
+    });
+
+    executorService.submit(() -> {
+      while (!agent.stopped.get()) {
+        try {
+          final ScrapeResponse response = agent.scrapeResponseQueue.take();
+          agent.blockingStub.writeResponseToProxy(response);
+        }
+        catch (Exception e) {
+          e.printStackTrace();
         }
       }
-      catch (FileNotFoundException e) {
-        logger.log(Level.INFO, String.format("Invalid config file name: %s", agentArgs.config));
-      }
-
-      agent.exchangeMsgs();
-    }
-    catch (StatusRuntimeException e) {
-      logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
-    }
-    finally {
-      agent.shutdown();
-    }
+    });
   }
 
   private static List<Map<String, String>> getAgentConfigs(final String filename)

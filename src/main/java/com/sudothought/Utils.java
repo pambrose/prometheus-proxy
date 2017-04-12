@@ -1,4 +1,4 @@
-package com.sudothought.utils;
+package com.sudothought;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
