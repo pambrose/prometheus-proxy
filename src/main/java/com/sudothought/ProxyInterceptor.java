@@ -8,12 +8,15 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
+import org.slf4j.LoggerFactory;
 
 import static com.sudothought.Proxy.AGENT_ID;
 import static com.sudothought.Proxy.ATTRIB_AGENT_ID;
 
 public class ProxyInterceptor
     implements ServerInterceptor {
+
+  private static final org.slf4j.Logger logger = LoggerFactory.getLogger(ProxyInterceptor.class);
 
   private static final Metadata.Key<String> META_AGENT_ID = Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER);
 

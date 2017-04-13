@@ -12,8 +12,9 @@ message RegisterAgentRequest {
 }
 
 message RegisterAgentResponse {
-    string agent_id = 1;
-    string proxy_url = 2;
+    bool valid = 1;
+    string agent_id = 2;
+    string proxy_url = 3;
 }
 
 message RegisterPathRequest {
@@ -22,7 +23,8 @@ message RegisterPathRequest {
 }
 
 message RegisterPathResponse {
-    int64 path_id = 1;
+    bool valid = 1;
+    int64 path_id = 2;
 }
 
 message AgentInfo {
@@ -36,9 +38,9 @@ message ScrapeRequest {
 }
 
 message ScrapeResponse {
-    string agent_id = 1;
-    int64 scrape_id = 2;
-    bool valid = 3;
+    bool valid = 1;
+    string agent_id = 2;
+    int64 scrape_id = 3;
     int32 status_code = 4;
     string text = 5;
 }

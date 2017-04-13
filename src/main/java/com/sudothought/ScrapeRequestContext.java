@@ -11,6 +11,7 @@ public class ScrapeRequestContext {
 
   private final CountDownLatch                  complete        = new CountDownLatch(1);
   private final AtomicReference<ScrapeResponse> scrape_response = new AtomicReference<>();
+  private final long                            createTime      = System.currentTimeMillis();
 
   private final ScrapeRequest scrapeRequest;
 
@@ -32,4 +33,6 @@ public class ScrapeRequestContext {
   public void markComplete() { this.complete.countDown(); }
 
   public AtomicReference<ScrapeResponse> getScrapeResponse() { return this.scrape_response; }
+
+  public long ageInSecs() { return (System.currentTimeMillis() - this.createTime) / 1000;}
 }

@@ -242,6 +242,9 @@ public class Agent {
         countDownLatch.await();
         logger.info("Disconnected from proxy at {}", this.hostname);
       }
+      catch (ReconnectException e) {
+        logger.info("Reconnecting on ReconnectException: {}", e.getMessage());
+      }
       catch (StatusRuntimeException e) {
         logger.info("Cannot connect to proxy at {} [{}]", this.hostname, e.getMessage());
       }
@@ -262,15 +265,19 @@ public class Agent {
     this.blockingStub.connectAgent(Empty.getDefaultInstance());
   }
 
-  public void registerAgent() {
+  public void registerAgent()
+      throws ReconnectException {
     final RegisterAgentRequest request = RegisterAgentRequest.newBuilder()
                                                              .setAgentId(this.agentIdRef.get())
                                                              .setHostname(Utils.getHostName())
                                                              .build();
     final RegisterAgentResponse response = this.blockingStub.registerAgent(request);
+    if (!response.getValid())
+      throw new ReconnectException("registerAgent()");
   }
 
-  public void registerPaths() {
+  public void registerPaths()
+      throws ReconnectException {
     for (Map<String, String> agentConfig : this.agentConfigs) {
       final String path = agentConfig.get("path");
       final String url = agentConfig.get("url");
@@ -280,12 +287,15 @@ public class Agent {
     }
   }
 
-  public long registerPath(final String path) {
+  public long registerPath(final String path)
+      throws ReconnectException {
     final RegisterPathRequest request = RegisterPathRequest.newBuilder()
                                                            .setAgentId(this.agentIdRef.get())
                                                            .setPath(path)
                                                            .build();
     final RegisterPathResponse response = this.blockingStub.registerPath(request);
+    if (!response.getValid())
+      throw new ReconnectException("registerPath()");
     return response.getPathId();
   }
 
