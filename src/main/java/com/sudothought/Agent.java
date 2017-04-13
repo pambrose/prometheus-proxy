@@ -56,6 +56,8 @@ public class Agent {
 
   private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new ArrayBlockingQueue<>(1000);
 
+  private final ExecutorService executorService = Executors.newFixedThreadPool(2);
+
   // Map path to PathContext
   private final Map<String, PathContext> pathContextMap = Maps.newConcurrentMap();
   private final AtomicReference<String>  agentIdRef     = new AtomicReference<>();
@@ -130,8 +132,7 @@ public class Agent {
     this.asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(this.channel, interceptor));
   }
 
-  public static void main(final String[] argv)
-      throws Exception {
+  public static void main(final String[] argv) {
 
     final AgentArgs agentArgs = new AgentArgs();
     agentArgs.parseArgs(Agent.class.getName(), argv);
@@ -146,9 +147,8 @@ public class Agent {
     }
 
     final Agent agent = new Agent(agentArgs.proxy, agentConfigs);
-    agent.start(true);
+    agent.run();
 
-    agent.shutdown();
   }
 
   private static List<Map<String, String>> readAgentConfigs(final String filename)
@@ -159,9 +159,16 @@ public class Agent {
     return data.get("agent_configs");
   }
 
-  public void start(final boolean reconnect) {
+  public void run() {
 
-    final ExecutorService executorService = Executors.newFixedThreadPool(2);
+    Runtime.getRuntime()
+           .addShutdownHook(
+               new Thread(() -> {
+                 System.err.println("*** Shutting down Agent since JVM is shutting down");
+                 Agent.this.stop();
+                 System.err.println("*** Agent shut down");
+               }));
+
 
     while (!this.isStopped()) {
       try {
@@ -177,70 +184,71 @@ public class Agent {
 
         final CountDownLatch countDownLatch = new CountDownLatch(1);
 
-        executorService.submit(() -> {
-          final AgentInfo agentInfo = AgentInfo.newBuilder()
-                                               .setAgentId(this.getAgenId())
-                                               .build();
-          this.asyncStub.readRequestsFromProxy(
-              agentInfo,
-              new StreamObserver<ScrapeRequest>() {
-                @Override
-                public void onNext(ScrapeRequest scrapeRequest) {
-                  final PathContext pathContext = pathContextMap.get(scrapeRequest.getPath());
-                  ScrapeResponse.Builder scrape_response = ScrapeResponse.newBuilder()
-                                                                         .setAgentId(scrapeRequest.getAgentId())
-                                                                         .setScrapeId(scrapeRequest.getScrapeId());
-                  try {
-                    logger.info("Fetching {}", pathContext.getUrl());
-                    final Response response = pathContext.fetchUrl();
+        this.executorService.submit(
+            () -> {
+              final AgentInfo agentInfo = AgentInfo.newBuilder()
+                                                   .setAgentId(this.getAgenId())
+                                                   .build();
+              this.asyncStub.readRequestsFromProxy(
+                  agentInfo,
+                  new StreamObserver<ScrapeRequest>() {
+                    @Override
+                    public void onNext(ScrapeRequest scrapeRequest) {
+                      final PathContext pathContext = pathContextMap.get(scrapeRequest.getPath());
+                      ScrapeResponse.Builder scrape_response = ScrapeResponse.newBuilder()
+                                                                             .setAgentId(scrapeRequest.getAgentId())
+                                                                             .setScrapeId(scrapeRequest.getScrapeId());
+                      try {
+                        logger.info("Fetching {}", pathContext.getUrl());
+                        final Response response = pathContext.fetchUrl();
 
-                    scrape_response.setValid(true)
-                                   .setStatusCode(response.code())
-                                   .setText(response.body().string())
-                                   .build();
-                  }
-                  catch (IOException e) {
-                    scrape_response.setValid(false)
-                                   .setStatusCode(404)
-                                   .setText("");
-                  }
+                        scrape_response.setValid(true)
+                                       .setStatusCode(response.code())
+                                       .setText(response.body().string())
+                                       .build();
+                      }
+                      catch (IOException e) {
+                        scrape_response.setValid(false)
+                                       .setStatusCode(404)
+                                       .setText("");
+                      }
 
-                  try {
-                    scrapeResponseQueue.put(scrape_response.build());
-                  }
-                  catch (InterruptedException e) {
-                    e.printStackTrace();
-                  }
+                      try {
+                        scrapeResponseQueue.put(scrape_response.build());
+                      }
+                      catch (InterruptedException e) {
+                        e.printStackTrace();
+                      }
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                      final Status status = Status.fromThrowable(t);
+                      logger.info("Failed: {}", status);
+                      countDownLatch.countDown();
+                    }
+
+                    @Override
+                    public void onCompleted() {
+                      logger.info("Completed");
+                    }
+                  });
+            });
+
+        this.executorService.submit(
+            () -> {
+              while (countDownLatch.getCount() > 0) {
+                try {
+                  final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
+                  if (response == null)
+                    continue;
+                  this.blockingStub.writeResponseToProxy(response);
                 }
-
-                @Override
-                public void onError(Throwable t) {
-                  final Status status = Status.fromThrowable(t);
-                  logger.warn("Failed: {}", status);
-                  countDownLatch.countDown();
+                catch (InterruptedException e) {
+                  // Ignore
                 }
-
-                @Override
-                public void onCompleted() {
-                  logger.info("Completed");
-                }
-              });
-        });
-
-        executorService.submit(() -> {
-          while (countDownLatch.getCount() > 0) {
-            try {
-              final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
-              if (response == null)
-                continue;
-              this.blockingStub.writeResponseToProxy(response);
-            }
-            catch (InterruptedException e) {
-              e.printStackTrace();
-            }
-          }
-          logger.info("Exiting");
-        });
+              }
+            });
 
         countDownLatch.await();
       }
@@ -256,9 +264,6 @@ public class Agent {
 
       logger.info("Disconnected from proxy at {}", this.hostname);
 
-      if (!reconnect)
-        break;
-
       try {
         Thread.sleep(2000);
       }
@@ -268,9 +273,25 @@ public class Agent {
     }
   }
 
-  public void shutdown()
-      throws InterruptedException {
-    this.channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+  public void stop() {
+    this.stopped.set(true);
+
+    try {
+      this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
+    }
+    catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+
+    this.executorService.shutdownNow();
+
+    try {
+      this.executorService.awaitTermination(1, TimeUnit.SECONDS);
+    }
+    catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+
   }
 
   public void connectAgent() { this.blockingStub.connectAgent(Empty.getDefaultInstance()); }
