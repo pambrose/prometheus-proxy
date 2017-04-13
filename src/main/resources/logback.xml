@@ -13,6 +13,7 @@
     </appender>
 
     <logger name="io.grpc.internal" level="WARN"/>
+    <logger name="spark.http.matching" level="WARN"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT"/>

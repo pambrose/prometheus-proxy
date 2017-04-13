@@ -36,6 +36,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.ConnectException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -145,7 +146,7 @@ public class Agent {
     }
 
     final Agent agent = new Agent(agentArgs.proxy, agentConfigs);
-    agent.connect(true);
+    agent.start(true);
 
     agent.shutdown();
   }
@@ -158,7 +159,7 @@ public class Agent {
     return data.get("agent_configs");
   }
 
-  public void connect(final boolean reconnect) {
+  public void start(final boolean reconnect) {
 
     final ExecutorService executorService = Executors.newFixedThreadPool(2);
 
@@ -190,7 +191,9 @@ public class Agent {
                                                                          .setAgentId(scrapeRequest.getAgentId())
                                                                          .setScrapeId(scrapeRequest.getScrapeId());
                   try {
+                    logger.info("Fetching {}", pathContext.getUrl());
                     final Response response = pathContext.fetchUrl();
+
                     scrape_response.setValid(true)
                                    .setStatusCode(response.code())
                                    .setText(response.body().string())
@@ -200,7 +203,6 @@ public class Agent {
                     scrape_response.setValid(false)
                                    .setStatusCode(404)
                                    .setText("");
-                    e.printStackTrace();
                   }
 
                   try {
@@ -242,11 +244,11 @@ public class Agent {
 
         countDownLatch.await();
       }
-      catch (ProxyException e) {
-        logger.info("Reconnecting on ProxyException: {}", e.getMessage());
+      catch (ConnectException e) {
+        logger.info("Reconnecting on ConnectException: {}", e.getMessage());
       }
       catch (StatusRuntimeException e) {
-        logger.info("Cannot connect to proxy at {} [{}]", this.hostname, e.getMessage());
+        logger.info("Cannot start to proxy at {} [{}]", this.hostname, e.getMessage());
       }
       catch (InterruptedException e) {
         e.printStackTrace();
@@ -274,18 +276,18 @@ public class Agent {
   public void connectAgent() { this.blockingStub.connectAgent(Empty.getDefaultInstance()); }
 
   public void registerAgent()
-      throws ProxyException {
+      throws ConnectException {
     final RegisterAgentRequest request = RegisterAgentRequest.newBuilder()
                                                              .setAgentId(this.getAgenId())
                                                              .setHostname(Utils.getHostName())
                                                              .build();
     final RegisterAgentResponse response = this.blockingStub.registerAgent(request);
     if (!response.getValid())
-      throw new ProxyException("registerAgent()");
+      throw new ConnectException("registerAgent()");
   }
 
   public void registerPaths()
-      throws ProxyException {
+      throws ConnectException {
     for (Map<String, String> agentConfig : this.agentConfigs) {
       final String path = agentConfig.get("path");
       final String url = agentConfig.get("url");
@@ -296,14 +298,14 @@ public class Agent {
   }
 
   public long registerPath(final String path)
-      throws ProxyException {
+      throws ConnectException {
     final RegisterPathRequest request = RegisterPathRequest.newBuilder()
                                                            .setAgentId(this.getAgenId())
                                                            .setPath(path)
                                                            .build();
     final RegisterPathResponse response = this.blockingStub.registerPath(request);
     if (!response.getValid())
-      throw new ProxyException("registerPath()");
+      throw new ConnectException("registerPath()");
     return response.getPathId();
   }
 

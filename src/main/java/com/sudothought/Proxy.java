@@ -93,7 +93,6 @@ public class Proxy {
 
     Spark.get("/*", (req, res) -> {
       res.header("cache-control", "no-cache");
-      res.type("text/plain");
 
       final String path = req.splat()[0];
       final String agent_id = proxy.pathMap.get(path);
@@ -129,7 +128,7 @@ public class Proxy {
         }
         else {
           // Check if agent is disconnected or agent is hung
-          if (!proxy.isValidAgentId(agent_id) || scrapeRequestContext.ageInSecs() >= 5) {
+          if (!proxy.isValidAgentId(agent_id) || scrapeRequestContext.ageInSecs() >= 5 || proxy.isStopped()) {
             res.status(503);
             return null;
           }
@@ -141,7 +140,14 @@ public class Proxy {
       final int status_code = scrapeRequestContext.getScrapeResponse().get().getStatusCode();
       res.status(status_code);
 
-      return status_code >= 400 ? null : scrapeRequestContext.getScrapeResponse().get().getText();
+      if (status_code >= 400) {
+        return null;
+      }
+      else {
+        res.type("text/plain");
+        return scrapeRequestContext.getScrapeResponse().get().getText();
+      }
+
     });
 
     proxy.blockUntilShutdown();

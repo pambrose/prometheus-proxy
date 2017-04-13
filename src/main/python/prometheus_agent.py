@@ -58,7 +58,7 @@ class PrometheusAgent(object):
                 # Return once agent and paths are registered
                 return
             except BaseException as e:
-                logger.error("Failed to connect to proxy at %s [%s]", self.grpc_url, e)
+                logger.error("Failed to start to proxy at %s [%s]", self.grpc_url, e)
                 sleep(1)
 
     def read_requests_from_proxy(self):

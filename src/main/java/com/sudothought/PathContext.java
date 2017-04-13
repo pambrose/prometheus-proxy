@@ -3,10 +3,13 @@ package com.sudothought;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 public class PathContext {
+
+  private static final org.slf4j.Logger logger = LoggerFactory.getLogger(PathContext.class);
 
   private final OkHttpClient client = new OkHttpClient();
 
@@ -37,6 +40,12 @@ public class PathContext {
 
   public Response fetchUrl()
       throws IOException {
-    return this.client.newCall(this.request).execute();
+    try {
+      return this.client.newCall(this.request).execute();
+    }
+    catch (IOException e) {
+      logger.info("Failed HTTP request: {} [{}: {}]", this.getUrl(), e.getClass().getSimpleName(), e.getMessage());
+      throw e;
+    }
   }
 }
