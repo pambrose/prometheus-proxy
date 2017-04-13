@@ -4,19 +4,20 @@ package proxy_service;
 import public "google/protobuf/empty.proto";
 
 option java_multiple_files = true;
-option java_package = "com.cinch.grpc";
+option java_package = "com.sudothought.grpc";
 
 message RegisterAgentRequest {
-    string hostname = 1;
+    string agent_id = 1;
+    string hostname = 2;
 }
 
 message RegisterAgentResponse {
-    int64 agent_id = 1;
+    string agent_id = 1;
     string proxy_url = 2;
 }
 
 message RegisterPathRequest {
-    int64 agent_id = 1;
+    string agent_id = 1;
     string path = 2;
 }
 
@@ -25,17 +26,17 @@ message RegisterPathResponse {
 }
 
 message AgentInfo {
-    int64 agent_id = 1;
+    string agent_id = 1;
 }
 
 message ScrapeRequest {
-    int64 agent_id = 1;
+    string agent_id = 1;
     int64 scrape_id = 2;
     string path = 3;
 }
 
 message ScrapeResponse {
-    int64 agent_id = 1;
+    string agent_id = 1;
     int64 scrape_id = 2;
     bool valid = 3;
     int32 status_code = 4;
@@ -43,6 +44,8 @@ message ScrapeResponse {
 }
 
 service ProxyService {
+    rpc connectAgent (google.protobuf.Empty) returns (google.protobuf.Empty) {
+    }
 
     rpc registerAgent (RegisterAgentRequest) returns (RegisterAgentResponse) {
     }

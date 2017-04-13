@@ -1,24 +1,24 @@
 package com.sudothought;
 
-import com.cinch.grpc.AgentInfo;
-import com.cinch.grpc.ProxyServiceGrpc;
-import com.cinch.grpc.RegisterAgentRequest;
-import com.cinch.grpc.RegisterAgentResponse;
-import com.cinch.grpc.RegisterPathRequest;
-import com.cinch.grpc.RegisterPathResponse;
-import com.cinch.grpc.ScrapeRequest;
-import com.cinch.grpc.ScrapeResponse;
 import com.google.protobuf.Empty;
+import com.sudothought.grpc.AgentInfo;
+import com.sudothought.grpc.ProxyServiceGrpc;
+import com.sudothought.grpc.RegisterAgentRequest;
+import com.sudothought.grpc.RegisterAgentResponse;
+import com.sudothought.grpc.RegisterPathRequest;
+import com.sudothought.grpc.RegisterPathResponse;
+import com.sudothought.grpc.ScrapeRequest;
+import com.sudothought.grpc.ScrapeResponse;
 import io.grpc.stub.StreamObserver;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Logger;
 
 class ProxyServiceImpl
     extends ProxyServiceGrpc.ProxyServiceImplBase {
 
-  private static final Logger     logger            = Logger.getLogger(ProxyServiceImpl.class.getName());
-  private static final Empty      EMPTY             = Empty.newBuilder().build();
+  private static final org.slf4j.Logger logger = LoggerFactory.getLogger(ProxyServiceImpl.class);
+
   private static final AtomicLong PATH_ID_GENERATOR = new AtomicLong(0);
 
   private final Proxy proxy;
@@ -28,9 +28,17 @@ class ProxyServiceImpl
   }
 
   @Override
-  public void registerAgent(RegisterAgentRequest request, StreamObserver<RegisterAgentResponse> responseObserver) {
-    final AgentContext agentContext = new AgentContext(request.getHostname());
-    this.proxy.getAgentContextMap().put(agentContext.getAgentId(), agentContext);
+  public void connectAgent(final Empty request, final StreamObserver<Empty> responseObserver) {
+    responseObserver.onNext(Empty.getDefaultInstance());
+    responseObserver.onCompleted();
+  }
+
+  @Override
+  public void registerAgent(final RegisterAgentRequest request,
+                            final StreamObserver<RegisterAgentResponse> responseObserver) {
+    final AgentContext agentContext = this.proxy.getAgentContextMap().get(request.getAgentId());
+    agentContext.setHostname(request.getHostname());
+    //this.proxy.getAgentContextMap().put(agentContext.getAgentId(), agentContext);
     final RegisterAgentResponse response = RegisterAgentResponse.newBuilder()
                                                                 .setAgentId(agentContext.getAgentId())
                                                                 .build();
@@ -39,7 +47,8 @@ class ProxyServiceImpl
   }
 
   @Override
-  public void registerPath(RegisterPathRequest request, StreamObserver<RegisterPathResponse> responseObserver) {
+  public void registerPath(final RegisterPathRequest request,
+                           final StreamObserver<RegisterPathResponse> responseObserver) {
     this.proxy.getPathMap().put(request.getPath(), request.getAgentId());
     final RegisterPathResponse response = RegisterPathResponse.newBuilder()
                                                               .setPathId(PATH_ID_GENERATOR.getAndIncrement())
@@ -49,12 +58,12 @@ class ProxyServiceImpl
   }
 
   @Override
-  public void readRequestsFromProxy(AgentInfo agentInfo, StreamObserver<ScrapeRequest> requests) {
+  public void readRequestsFromProxy(final AgentInfo agentInfo, final StreamObserver<ScrapeRequest> responseObserver) {
     final AgentContext agentContext = this.proxy.getAgentContextMap().get(agentInfo.getAgentId());
     while (true) {
       try {
         final ScrapeRequestContext scrapeRequestContext = agentContext.getScrapeRequestQueue().take();
-        requests.onNext(scrapeRequestContext.getScrapeRequest());
+        responseObserver.onNext(scrapeRequestContext.getScrapeRequest());
       }
       catch (InterruptedException e) {
         e.printStackTrace();
@@ -63,14 +72,13 @@ class ProxyServiceImpl
   }
 
   @Override
-  public void writeResponseToProxy(ScrapeResponse response, StreamObserver<Empty> responseObserver) {
+  public void writeResponseToProxy(final ScrapeResponse response, final StreamObserver<Empty> responseObserver) {
     final long scrapeId = response.getScrapeId();
     final ScrapeRequestContext scrapeRequestContext = proxy.getScrapeRequestMap().remove(scrapeId);
     scrapeRequestContext.getScrapeResponse().set(response);
     scrapeRequestContext.markComplete();
 
-    // Return Empty value
-    responseObserver.onNext(EMPTY);
+    responseObserver.onNext(Empty.getDefaultInstance());
     responseObserver.onCompleted();
   }
 }

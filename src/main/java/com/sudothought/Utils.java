@@ -9,7 +9,6 @@ public class Utils {
     try {
       final String hostname = InetAddress.getLocalHost().getHostName();
       final String address = InetAddress.getLocalHost().getHostAddress();
-      //LOGGER.debug("Hostname: {} Address: {}", hostname, address);
       return hostname;
     }
     catch (UnknownHostException e) {

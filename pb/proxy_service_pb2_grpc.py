@@ -12,6 +12,11 @@ class ProxyServiceStub(object):
         Args:
           channel: A grpc.Channel.
         """
+        self.connectAgent = channel.unary_unary(
+            '/proxy_service.ProxyService/connectAgent',
+            request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+        )
         self.registerAgent = channel.unary_unary(
             '/proxy_service.ProxyService/registerAgent',
             request_serializer=proxy__service__pb2.RegisterAgentRequest.SerializeToString,
@@ -35,6 +40,11 @@ class ProxyServiceStub(object):
 
 
 class ProxyServiceServicer(object):
+    def connectAgent(self, request, context):
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def registerAgent(self, request, context):
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -58,6 +68,11 @@ class ProxyServiceServicer(object):
 
 def add_ProxyServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
+        'connectAgent': grpc.unary_unary_rpc_method_handler(
+            servicer.connectAgent,
+            request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+            response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+        ),
         'registerAgent': grpc.unary_unary_rpc_method_handler(
             servicer.registerAgent,
             request_deserializer=proxy__service__pb2.RegisterAgentRequest.FromString,

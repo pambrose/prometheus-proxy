@@ -1,29 +1,34 @@
 package com.sudothought;
 
-import com.cinch.grpc.ScrapeRequest;
 import com.google.common.collect.Maps;
 import com.sudothought.args.ProxyArgs;
+import com.sudothought.grpc.ScrapeRequest;
+import io.grpc.Attributes;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerInterceptor;
+import io.grpc.ServerInterceptors;
+import io.grpc.ServerServiceDefinition;
+import io.grpc.ServerTransportFilter;
+import org.slf4j.LoggerFactory;
 import spark.Spark;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class Proxy {
 
-  private static final Logger     logger              = Logger.getLogger(Proxy.class.getName());
-  private static final AtomicLong SCRAPE_ID_GENERATOR = new AtomicLong(0);
-
+  public static final  String                          AGENT_ID            = "agent-id";
+  public static final  Attributes.Key<String>          ATTRIB_AGENT_ID     = Attributes.Key.of(AGENT_ID);
+  private static final org.slf4j.Logger                logger              = LoggerFactory.getLogger(Proxy.class);
+  private static final AtomicLong                      SCRAPE_ID_GENERATOR = new AtomicLong(0);
   // Map agentId to AgentContext
-  private final Map<Long, AgentContext>             agentContextMap    = Maps.newConcurrentMap();
+  private final        Map<String, AgentContext>       agentContextMap     = Maps.newConcurrentMap();
   // Map path to agentId
-  private final Map<String, Long>                   pathMap            = Maps.newConcurrentMap();
+  private final        Map<String, String>             pathMap             = Maps.newConcurrentMap();
   // Map scrapeId to agentId
-  private final Map<Long, ScrapeRequestContext>     scrapeRequestMap   = Maps.newConcurrentMap();
+  private final        Map<Long, ScrapeRequestContext> scrapeRequestMap    = Maps.newConcurrentMap();
 
   private final int    port;
   private final Server grpcServer;
@@ -31,10 +36,30 @@ public class Proxy {
   public Proxy(final int grpcPort)
       throws IOException {
     this.port = grpcPort;
+    final ProxyServiceImpl proxyService = new ProxyServiceImpl(this);
+    final ServerInterceptor interceptor = new ProxyInterceptor();
+    final ServerServiceDefinition serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptor);
     this.grpcServer = ServerBuilder.forPort(this.port)
-                                   .addService(new ProxyServiceImpl(this))
-                                   .build()
-                                   .start();
+                                   .addService(serviceDef)
+                                   .addTransportFilter(new ServerTransportFilter() {
+                                     @Override
+                                     public Attributes transportReady(Attributes attributes) {
+                                       final AgentContext agentContext = new AgentContext(attributes.get(Attributes.Key.of("remote-addr")));
+                                       agentContextMap.put(agentContext.getAgentId(), agentContext);
+                                       return Attributes.newBuilder()
+                                                        .set(ATTRIB_AGENT_ID, "" + agentContext.getAgentId())
+                                                        .setAll(attributes)
+                                                        .build();
+                                     }
+
+                                     @Override
+                                     public void transportTerminated(Attributes attributes) {
+                                       final String agent_id = attributes.get(ATTRIB_AGENT_ID);
+                                       final AgentContext agentContext = agentContextMap.remove(agent_id);
+                                       super.transportTerminated(attributes);
+                                     }
+                                   })
+                                   .build();
   }
 
   public static void main(final String[] argv)
@@ -50,7 +75,7 @@ public class Proxy {
     Spark.port(proxyArgs.http_port);
     Spark.get("/*", (req, res) -> {
       final String path = req.splat()[0];
-      final long agentId = proxy.pathMap.get(path);
+      final String agentId = proxy.pathMap.get(path);
       final long scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement();
       final ScrapeRequest scrapeRequest = ScrapeRequest.newBuilder()
                                                        .setAgentId(agentId)
@@ -65,8 +90,7 @@ public class Proxy {
 
       scrapeRequestContext.waitUntilComplete();
 
-      logger.log(Level.INFO, String.format("Results returned from agent for scrapeId: %s", scrapeId));
-
+      logger.info("Results returned from agent for scrapeId: {}", scrapeId);
 
       res.status(scrapeRequestContext.getScrapeResponse().get().getStatusCode());
       res.type("text/plain");
@@ -80,7 +104,8 @@ public class Proxy {
 
   private void start()
       throws IOException {
-    logger.info(String.format("gRPC server started listening on %s", port));
+    this.grpcServer.start();
+    logger.info("Started gRPC server listening on {}", port);
     Runtime.getRuntime()
            .addShutdownHook(
                new Thread(() -> {
@@ -102,15 +127,9 @@ public class Proxy {
       this.grpcServer.awaitTermination();
   }
 
-  public Map<Long, ScrapeRequestContext> getScrapeRequestMap() {
-    return this.scrapeRequestMap;
-  }
+  public Map<Long, ScrapeRequestContext> getScrapeRequestMap() { return this.scrapeRequestMap; }
 
-  public Map<Long, AgentContext> getAgentContextMap() {
-    return this.agentContextMap;
-  }
+  public Map<String, AgentContext> getAgentContextMap() { return this.agentContextMap; }
 
-  public Map<String, Long> getPathMap() {
-    return this.pathMap;
-  }
+  public Map<String, String> getPathMap() { return this.pathMap; }
 }

@@ -10,23 +10,25 @@ public class AgentContext {
 
   private final BlockingQueue<ScrapeRequestContext> scrapeRequestQueue = new ArrayBlockingQueue<>(1000);
 
-  private final long   agentId;
-  private final String hostname;
+  private final String agentId = "" + AGENT_ID_GENERATOR.incrementAndGet();
+  private final String remoteAddr;
+  private       String hostname;
 
-  public AgentContext(final String hostname) {
-    this.hostname = hostname;
-    this.agentId = AGENT_ID_GENERATOR.incrementAndGet();
+  public AgentContext(final String remoteAddr) {
+    this.remoteAddr = remoteAddr;
   }
 
   public BlockingQueue<ScrapeRequestContext> getScrapeRequestQueue() {
     return this.scrapeRequestQueue;
   }
 
-  public long getAgentId() {
+  public String getAgentId() {
     return this.agentId;
   }
 
-  public String getHostname() {
-    return this.hostname;
-  }
+  public String getHostname() { return this.hostname; }
+
+  public void setHostname(String hostname) { this.hostname = hostname; }
+
+  public String getRemoteAddr() { return this.remoteAddr; }
 }

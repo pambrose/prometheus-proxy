@@ -1,21 +1,34 @@
 package com.sudothought;
 
-import com.cinch.grpc.AgentInfo;
-import com.cinch.grpc.ProxyServiceGrpc;
-import com.cinch.grpc.RegisterAgentRequest;
-import com.cinch.grpc.RegisterAgentResponse;
-import com.cinch.grpc.RegisterPathRequest;
-import com.cinch.grpc.RegisterPathResponse;
-import com.cinch.grpc.ScrapeRequest;
-import com.cinch.grpc.ScrapeResponse;
+import com.google.common.base.Stopwatch;
 import com.google.common.collect.Maps;
+import com.google.protobuf.Empty;
 import com.sudothought.args.AgentArgs;
+import com.sudothought.grpc.AgentInfo;
+import com.sudothought.grpc.ProxyServiceGrpc;
+import com.sudothought.grpc.RegisterAgentRequest;
+import com.sudothought.grpc.RegisterAgentResponse;
+import com.sudothought.grpc.RegisterPathRequest;
+import com.sudothought.grpc.RegisterPathResponse;
+import com.sudothought.grpc.ScrapeRequest;
+import com.sudothought.grpc.ScrapeResponse;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ClientInterceptors;
+import io.grpc.ForwardingClientCall;
+import io.grpc.ForwardingClientCallListener;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import okhttp3.Response;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.File;
@@ -32,20 +45,20 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static com.sudothought.Proxy.AGENT_ID;
 
 public class Agent {
 
-  private static final Logger logger = Logger.getLogger(Agent.class.getName());
+  private static final Logger logger = LoggerFactory.getLogger(Agent.class);
 
   private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new ArrayBlockingQueue<>(1000);
 
   // Map path to PathContext
   private final Map<String, PathContext> pathContextMap = Maps.newConcurrentMap();
   private final AtomicBoolean            stopped        = new AtomicBoolean(false);
-  private final AtomicLong               agentIdRef     = new AtomicLong();
+  private final AtomicReference<String>  agentIdRef     = new AtomicReference();
 
   private final String                                    hostname;
   private final List<Map<String, String>>                 agentConfigs;
@@ -54,12 +67,13 @@ public class Agent {
   private final ProxyServiceGrpc.ProxyServiceStub         asyncStub;
 
   public Agent(String hostname, final List<Map<String, String>> agentConfigs) {
+    this.agentConfigs = agentConfigs;
     final String host;
     final int port;
     if (hostname.contains(":")) {
       String[] vals = hostname.split(":");
       host = vals[0];
-      port = Integer.getInteger(vals[1]);
+      port = Integer.valueOf(vals[1]);
     }
     else {
       host = hostname;
@@ -67,10 +81,50 @@ public class Agent {
     }
     this.hostname = String.format("%s:%s", host, port);
     final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true);
-    this.agentConfigs = agentConfigs;
     this.channel = channelBuilder.build();
-    this.blockingStub = ProxyServiceGrpc.newBlockingStub(this.channel);
-    this.asyncStub = ProxyServiceGrpc.newStub(this.channel);
+
+    final ClientInterceptor interceptor = new ClientInterceptor() {
+      @Override
+      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(final MethodDescriptor<ReqT, RespT> method,
+                                                                 final CallOptions callOptions,
+                                                                 final Channel next) {
+        final String methodName = method.getFullMethodName();
+        return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(channel.newCall(method, callOptions)) {
+          @Override
+          public void start(final Listener<RespT> responseListener, final Metadata headers) {
+            final Stopwatch stopwatch = Stopwatch.createStarted();
+            super.start(
+                new ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
+                  @Override
+                  public void onHeaders(Metadata headers) {
+                    String agent_id = headers.get(Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER));
+                    agentIdRef.set(agent_id);
+                    super.onHeaders(headers);
+                  }
+
+                  @Override
+                  public void onMessage(RespT message) {
+                    super.onMessage(message);
+                  }
+
+                  @Override
+                  public void onClose(Status status, Metadata trailers) {
+                    super.onClose(status, trailers);
+                  }
+
+                  @Override
+                  public void onReady() {
+                    super.onReady();
+                  }
+                },
+                headers);
+          }
+        };
+      }
+    };
+
+    this.blockingStub = ProxyServiceGrpc.newBlockingStub(ClientInterceptors.intercept(this.channel, interceptor));
+    this.asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(this.channel, interceptor));
   }
 
   public static void main(final String[] argv)
@@ -84,7 +138,7 @@ public class Agent {
       agentConfigs = readAgentConfigs(agentArgs.config);
     }
     catch (FileNotFoundException e) {
-      logger.log(Level.WARNING, String.format("Invalid config file name: %s", agentArgs.config));
+      logger.warn("Invalid config file name: {}", agentArgs.config);
       return;
     }
 
@@ -109,10 +163,11 @@ public class Agent {
 
     while (true) {
       try {
-        logger.log(Level.INFO, String.format("Connecting to proxy at %s...", this.hostname));
-        this.registerAgent();
-        logger.log(Level.INFO, String.format("Connected to proxy at %s", this.hostname));
+        logger.info("Connecting to proxy at {}...", this.hostname);
+        this.connectAgent();
+        logger.info("Connected to proxy at {}", this.hostname);
 
+        this.registerAgent();
         this.registerPaths();
 
         final CountDownLatch countDownLatch = new CountDownLatch(1);
@@ -158,13 +213,13 @@ public class Agent {
                 @Override
                 public void onError(Throwable t) {
                   final Status status = Status.fromThrowable(t);
-                  logger.log(Level.WARNING, "Failed: {0}", status);
+                  logger.warn("Failed: {}", status);
                   countDownLatch.countDown();
                 }
 
                 @Override
                 public void onCompleted() {
-                  logger.log(Level.INFO, "Completed");
+                  logger.info("Completed");
                 }
               });
         });
@@ -181,14 +236,14 @@ public class Agent {
               e.printStackTrace();
             }
           }
-          logger.log(Level.INFO, "Exiting");
+          logger.info("Exiting");
         });
 
         countDownLatch.await();
-        logger.log(Level.INFO, String.format("Disconnected from proxy at %s", this.hostname));
+        logger.info("Disconnected from proxy at {}", this.hostname);
       }
       catch (StatusRuntimeException e) {
-        logger.log(Level.INFO, String.format("Cannot connect to proxy at %s [%s]", this.hostname, e.getMessage()));
+        logger.info("Cannot connect to proxy at {} [{}]", this.hostname, e.getMessage());
       }
 
       if (!reconnect)
@@ -203,11 +258,16 @@ public class Agent {
     this.channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
   }
 
-  public long registerAgent() {
-    final RegisterAgentRequest request = RegisterAgentRequest.newBuilder().setHostname(Utils.getHostName()).build();
+  public void connectAgent() {
+    this.blockingStub.connectAgent(Empty.getDefaultInstance());
+  }
+
+  public void registerAgent() {
+    final RegisterAgentRequest request = RegisterAgentRequest.newBuilder()
+                                                             .setAgentId(this.agentIdRef.get())
+                                                             .setHostname(Utils.getHostName())
+                                                             .build();
     final RegisterAgentResponse response = this.blockingStub.registerAgent(request);
-    this.agentIdRef.set(response.getAgentId());
-    return this.agentIdRef.get();
   }
 
   public void registerPaths() {
@@ -215,7 +275,7 @@ public class Agent {
       final String path = agentConfig.get("path");
       final String url = agentConfig.get("url");
       final long pathId = this.registerPath(path);
-      logger.log(Level.INFO, String.format("Registered %s as /%s", url, path));
+      logger.info("Registered {} as /{}", url, path);
       this.pathContextMap.put(path, new PathContext(pathId, path, url));
     }
   }

@@ -23,7 +23,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='proxy_service',
   syntax='proto3',
     serialized_pb=_b(
-        '\n\x13proxy_service.proto\x12\rproxy_service\x1a\x1bgoogle/protobuf/empty.proto\"(\n\x14RegisterAgentRequest\x12\x10\n\x08hostname\x18\x01 \x01(\t\"<\n\x15RegisterAgentResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\x12\x11\n\tproxy_url\x18\x02 \x01(\t\"5\n\x13RegisterPathRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\x12\x0c\n\x04path\x18\x02 \x01(\t\"\'\n\x14RegisterPathResponse\x12\x0f\n\x07path_id\x18\x01 \x01(\x03\"\x1d\n\tAgentInfo\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\"B\n\rScrapeRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\x12\x11\n\tscrape_id\x18\x02 \x01(\x03\x12\x0c\n\x04path\x18\x03 \x01(\t\"g\n\x0eScrapeResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\x12\x11\n\tscrape_id\x18\x02 \x01(\x03\x12\r\n\x05valid\x18\x03 \x01(\x08\x12\x13\n\x0bstatus_code\x18\x04 \x01(\x05\x12\x0c\n\x04text\x18\x05 \x01(\t2\xed\x02\n\x0cProxyService\x12\\\n\rregisterAgent\x12#.proxy_service.RegisterAgentRequest\x1a$.proxy_service.RegisterAgentResponse\"\x00\x12Y\n\x0cregisterPath\x12\".proxy_service.RegisterPathRequest\x1a#.proxy_service.RegisterPathResponse\"\x00\x12S\n\x15readRequestsFromProxy\x12\x18.proxy_service.AgentInfo\x1a\x1c.proxy_service.ScrapeRequest\"\x00\x30\x01\x12O\n\x14writeResponseToProxy\x12\x1d.proxy_service.ScrapeResponse\x1a\x16.google.protobuf.Empty\"\x00\x42\x12\n\x0e\x63om.cinch.grpcP\x01P\x00\x62\x06proto3')
+        '\n\x13proxy_service.proto\x12\rproxy_service\x1a\x1bgoogle/protobuf/empty.proto\":\n\x14RegisterAgentRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\x12\x10\n\x08hostname\x18\x02 \x01(\t\"<\n\x15RegisterAgentResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\x12\x11\n\tproxy_url\x18\x02 \x01(\t\"5\n\x13RegisterPathRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\x12\x0c\n\x04path\x18\x02 \x01(\t\"\'\n\x14RegisterPathResponse\x12\x0f\n\x07path_id\x18\x01 \x01(\x03\"\x1d\n\tAgentInfo\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\"B\n\rScrapeRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\x12\x11\n\tscrape_id\x18\x02 \x01(\x03\x12\x0c\n\x04path\x18\x03 \x01(\t\"g\n\x0eScrapeResponse\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\x03\x12\x11\n\tscrape_id\x18\x02 \x01(\x03\x12\r\n\x05valid\x18\x03 \x01(\x08\x12\x13\n\x0bstatus_code\x18\x04 \x01(\x05\x12\x0c\n\x04text\x18\x05 \x01(\t2\xaf\x03\n\x0cProxyService\x12@\n\x0c\x63onnectAgent\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\"\x00\x12\\\n\rregisterAgent\x12#.proxy_service.RegisterAgentRequest\x1a$.proxy_service.RegisterAgentResponse\"\x00\x12Y\n\x0cregisterPath\x12\".proxy_service.RegisterPathRequest\x1a#.proxy_service.RegisterPathResponse\"\x00\x12S\n\x15readRequestsFromProxy\x12\x18.proxy_service.AgentInfo\x1a\x1c.proxy_service.ScrapeRequest\"\x00\x30\x01\x12O\n\x14writeResponseToProxy\x12\x1d.proxy_service.ScrapeResponse\x1a\x16.google.protobuf.Empty\"\x00\x42\x18\n\x14\x63om.sudothought.grpcP\x01P\x00\x62\x06proto3')
     ,
     dependencies=[google_dot_protobuf_dot_empty__pb2.DESCRIPTOR, ],
     public_dependencies=[google_dot_protobuf_dot_empty__pb2.DESCRIPTOR, ])
@@ -37,8 +37,15 @@ _REGISTERAGENTREQUEST = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-        name='hostname', full_name='proxy_service.RegisterAgentRequest.hostname', index=0,
-      number=1, type=9, cpp_type=9, label=1,
+        name='agent_id', full_name='proxy_service.RegisterAgentRequest.agent_id', index=0,
+        number=1, type=3, cpp_type=2, label=1,
+        has_default_value=False, default_value=0,
+        message_type=None, enum_type=None, containing_type=None,
+        is_extension=False, extension_scope=None,
+        options=None),
+      _descriptor.FieldDescriptor(
+          name='hostname', full_name='proxy_service.RegisterAgentRequest.hostname', index=1,
+          number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -56,8 +63,9 @@ _REGISTERAGENTREQUEST = _descriptor.Descriptor(
   oneofs=[
   ],
     serialized_start=67,
-    serialized_end=107,
+    serialized_end=125,
 )
+
 
 _REGISTERAGENTRESPONSE = _descriptor.Descriptor(
     name='RegisterAgentResponse',
@@ -92,9 +100,10 @@ _REGISTERAGENTRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=109,
-    serialized_end=169,
+    serialized_start=127,
+    serialized_end=187,
 )
+
 
 _REGISTERPATHREQUEST = _descriptor.Descriptor(
     name='RegisterPathRequest',
@@ -129,9 +138,10 @@ _REGISTERPATHREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=171,
-    serialized_end=224,
+    serialized_start=189,
+    serialized_end=242,
 )
+
 
 _REGISTERPATHRESPONSE = _descriptor.Descriptor(
     name='RegisterPathResponse',
@@ -159,8 +169,8 @@ _REGISTERPATHRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=226,
-    serialized_end=265,
+    serialized_start=244,
+    serialized_end=283,
 )
 
 
@@ -190,8 +200,8 @@ _AGENTINFO = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=267,
-    serialized_end=296,
+    serialized_start=285,
+    serialized_end=314,
 )
 
 
@@ -235,8 +245,8 @@ _SCRAPEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=298,
-    serialized_end=364,
+    serialized_start=316,
+    serialized_end=382,
 )
 
 
@@ -294,8 +304,8 @@ _SCRAPERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-    serialized_start=366,
-    serialized_end=469,
+    serialized_start=384,
+    serialized_end=487,
 )
 
 DESCRIPTOR.message_types_by_name['RegisterAgentRequest'] = _REGISTERAGENTREQUEST
@@ -357,7 +367,7 @@ _sym_db.RegisterMessage(ScrapeResponse)
 
 
 DESCRIPTOR.has_options = True
-DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('\n\016com.cinch.grpcP\001'))
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('\n\024com.sudothought.grpcP\001'))
 try:
   # THESE ELEMENTS WILL BE DEPRECATED.
   # Please use the generated *_pb2_grpc.py files instead.
@@ -376,6 +386,11 @@ try:
       Args:
         channel: A grpc.Channel.
       """
+      self.connectAgent = channel.unary_unary(
+          '/proxy_service.ProxyService/connectAgent',
+          request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+          response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+      )
       self.registerAgent = channel.unary_unary(
           '/proxy_service.ProxyService/registerAgent',
           request_serializer=RegisterAgentRequest.SerializeToString,
@@ -400,6 +415,11 @@ try:
 
   class ProxyServiceServicer(object):
 
+      def connectAgent(self, request, context):
+          context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+          context.set_details('Method not implemented!')
+          raise NotImplementedError('Method not implemented!')
+
     def registerAgent(self, request, context):
       context.set_code(grpc.StatusCode.UNIMPLEMENTED)
       context.set_details('Method not implemented!')
@@ -423,6 +443,11 @@ try:
 
   def add_ProxyServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
+        'connectAgent': grpc.unary_unary_rpc_method_handler(
+            servicer.connectAgent,
+            request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+            response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+        ),
         'registerAgent': grpc.unary_unary_rpc_method_handler(
             servicer.registerAgent,
             request_deserializer=RegisterAgentRequest.FromString,
@@ -455,6 +480,9 @@ try:
     It is recommended to use the GA API (classes and functions in this
     file not marked beta) for all further purposes. This class was generated
     only to ease transition from grpcio<0.15.0 to grpcio>=0.15.0."""
+
+    def connectAgent(self, request, context):
+        context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
     def registerAgent(self, request, context):
       context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
     def registerPath(self, request, context):
@@ -471,6 +499,11 @@ try:
     It is recommended to use the GA API (classes and functions in this
     file not marked beta) for all further purposes. This class was generated
     only to ease transition from grpcio<0.15.0 to grpcio>=0.15.0."""
+
+    def connectAgent(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+        raise NotImplementedError()
+
+    connectAgent.future = None
     def registerAgent(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
       raise NotImplementedError()
     registerAgent.future = None
@@ -491,12 +524,14 @@ try:
     file not marked beta) for all further purposes. This function was
     generated only to ease transition from grpcio<0.15.0 to grpcio>=0.15.0"""
     request_deserializers = {
+        ('proxy_service.ProxyService', 'connectAgent'): google_dot_protobuf_dot_empty__pb2.Empty.FromString,
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): AgentInfo.FromString,
         ('proxy_service.ProxyService', 'registerAgent'): RegisterAgentRequest.FromString,
         ('proxy_service.ProxyService', 'registerPath'): RegisterPathRequest.FromString,
       ('proxy_service.ProxyService', 'writeResponseToProxy'): ScrapeResponse.FromString,
     }
     response_serializers = {
+        ('proxy_service.ProxyService', 'connectAgent'): google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): ScrapeRequest.SerializeToString,
         ('proxy_service.ProxyService', 'registerAgent'): RegisterAgentResponse.SerializeToString,
         ('proxy_service.ProxyService', 'registerPath'): RegisterPathResponse.SerializeToString,
@@ -504,6 +539,7 @@ try:
          'writeResponseToProxy'): google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
     }
     method_implementations = {
+        ('proxy_service.ProxyService', 'connectAgent'): face_utilities.unary_unary_inline(servicer.connectAgent),
         ('proxy_service.ProxyService', 'readRequestsFromProxy'): face_utilities.unary_stream_inline(
             servicer.readRequestsFromProxy),
       ('proxy_service.ProxyService', 'registerAgent'): face_utilities.unary_unary_inline(servicer.registerAgent),
@@ -525,18 +561,21 @@ try:
     file not marked beta) for all further purposes. This function was
     generated only to ease transition from grpcio<0.15.0 to grpcio>=0.15.0"""
     request_serializers = {
+        ('proxy_service.ProxyService', 'connectAgent'): google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): AgentInfo.SerializeToString,
         ('proxy_service.ProxyService', 'registerAgent'): RegisterAgentRequest.SerializeToString,
         ('proxy_service.ProxyService', 'registerPath'): RegisterPathRequest.SerializeToString,
       ('proxy_service.ProxyService', 'writeResponseToProxy'): ScrapeResponse.SerializeToString,
     }
     response_deserializers = {
+        ('proxy_service.ProxyService', 'connectAgent'): google_dot_protobuf_dot_empty__pb2.Empty.FromString,
       ('proxy_service.ProxyService', 'readRequestsFromProxy'): ScrapeRequest.FromString,
         ('proxy_service.ProxyService', 'registerAgent'): RegisterAgentResponse.FromString,
         ('proxy_service.ProxyService', 'registerPath'): RegisterPathResponse.FromString,
         ('proxy_service.ProxyService', 'writeResponseToProxy'): google_dot_protobuf_dot_empty__pb2.Empty.FromString,
     }
     cardinalities = {
+        'connectAgent': cardinality.Cardinality.UNARY_UNARY,
       'readRequestsFromProxy': cardinality.Cardinality.UNARY_STREAM,
       'registerAgent': cardinality.Cardinality.UNARY_UNARY,
       'registerPath': cardinality.Cardinality.UNARY_UNARY,

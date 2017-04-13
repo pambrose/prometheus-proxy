@@ -1,7 +1,8 @@
 package com.sudothought;
 
-import com.cinch.grpc.ScrapeRequest;
-import com.cinch.grpc.ScrapeResponse;
+
+import com.sudothought.grpc.ScrapeRequest;
+import com.sudothought.grpc.ScrapeResponse;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
