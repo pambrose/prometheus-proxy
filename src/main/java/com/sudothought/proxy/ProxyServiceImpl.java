@@ -1,6 +1,7 @@
-package com.sudothought;
+package com.sudothought.proxy;
 
 import com.google.protobuf.Empty;
+import com.sudothought.agent.AgentContext;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.ProxyServiceGrpc;
 import com.sudothought.grpc.RegisterAgentRequest;

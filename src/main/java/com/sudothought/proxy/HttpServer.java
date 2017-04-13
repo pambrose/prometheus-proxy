@@ -1,5 +1,6 @@
-package com.sudothought;
+package com.sudothought.proxy;
 
+import com.sudothought.agent.AgentContext;
 import com.sudothought.grpc.ScrapeRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

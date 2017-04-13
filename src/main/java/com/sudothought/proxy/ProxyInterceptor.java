@@ -1,4 +1,4 @@
-package com.sudothought;
+package com.sudothought.proxy;
 
 import io.grpc.Attributes;
 import io.grpc.ForwardingServerCall;
@@ -10,15 +10,12 @@ import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import org.slf4j.LoggerFactory;
 
-import static com.sudothought.Proxy.AGENT_ID;
-import static com.sudothought.Proxy.ATTRIB_AGENT_ID;
-
 public class ProxyInterceptor
     implements ServerInterceptor {
 
   private static final org.slf4j.Logger logger = LoggerFactory.getLogger(ProxyInterceptor.class);
 
-  private static final Metadata.Key<String> META_AGENT_ID = Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER);
+  private static final Metadata.Key<String> META_AGENT_ID = Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER);
 
   @Override
   public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(final ServerCall<ReqT, RespT> call,
@@ -42,15 +39,11 @@ public class ProxyInterceptor
 
           @Override
           public void sendHeaders(Metadata headers) {
-            if (headers.get(META_AGENT_ID) == null) {
-              final String agent_id = attributes.get(ATTRIB_AGENT_ID);
-              if (agent_id != null)
-                headers.put(META_AGENT_ID, agent_id);
-              super.sendHeaders(headers);
-            }
-            else {
-              System.out.println("Already defined");
-            }
+            // agent_id was assigned in ServerTransportFilter
+            final String agent_id = attributes.get(Proxy.ATTRIB_AGENT_ID);
+            if (agent_id != null)
+              headers.put(META_AGENT_ID, agent_id);
+            super.sendHeaders(headers);
           }
 
           @Override

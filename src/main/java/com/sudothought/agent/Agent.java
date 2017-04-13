@@ -1,6 +1,5 @@
-package com.sudothought;
+package com.sudothought.agent;
 
-import com.google.common.base.Stopwatch;
 import com.google.common.collect.Maps;
 import com.google.protobuf.Empty;
 import com.sudothought.args.AgentArgs;
@@ -12,17 +11,10 @@ import com.sudothought.grpc.RegisterPathRequest;
 import com.sudothought.grpc.RegisterPathResponse;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
-import io.grpc.ForwardingClientCall;
-import io.grpc.ForwardingClientCallListener;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -37,6 +29,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ConnectException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -48,15 +42,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static com.sudothought.Proxy.AGENT_ID;
-
 public class Agent {
 
-  private static final Logger logger = LoggerFactory.getLogger(Agent.class);
+  private static final Logger logger        = LoggerFactory.getLogger(Agent.class);
+  private static final String AGENT_CONFIGS = "agent_configs";
 
   private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new ArrayBlockingQueue<>(1000);
-
-  private final ExecutorService executorService = Executors.newFixedThreadPool(2);
+  private final ExecutorService               executorService     = Executors.newFixedThreadPool(2);
 
   // Map path to PathContext
   private final Map<String, PathContext> pathContextMap = Maps.newConcurrentMap();
@@ -69,8 +61,9 @@ public class Agent {
   private final ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
   private final ProxyServiceGrpc.ProxyServiceStub         asyncStub;
 
-  public Agent(String hostname, final List<Map<String, String>> agentConfigs) {
+  private Agent(String hostname, final List<Map<String, String>> agentConfigs) {
     this.agentConfigs = agentConfigs;
+
     final String host;
     final int port;
     if (hostname.contains(":")) {
@@ -83,57 +76,17 @@ public class Agent {
       port = 50051;
     }
     this.hostname = String.format("%s:%s", host, port);
-    final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true);
+    final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port)
+                                                                         .usePlaintext(true);
     this.channel = channelBuilder.build();
 
-    final ClientInterceptor interceptor =
-        new ClientInterceptor() {
-          @Override
-          public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(final MethodDescriptor<ReqT, RespT> method,
-                                                                     final CallOptions callOptions,
-                                                                     final Channel next) {
-            final String methodName = method.getFullMethodName();
-            return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(channel.newCall(method,
-                                                                                                    callOptions)) {
-              @Override
-              public void start(final Listener<RespT> responseListener, final Metadata headers) {
-                final Stopwatch stopwatch = Stopwatch.createStarted();
-                super.start(
-                    new ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
-                      @Override
-                      public void onHeaders(Metadata headers) {
-                        String agent_id = headers.get(Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER));
-                        agentIdRef.set(agent_id);
-                        super.onHeaders(headers);
-                      }
-
-                      @Override
-                      public void onMessage(RespT message) {
-                        super.onMessage(message);
-                      }
-
-                      @Override
-                      public void onClose(Status status, Metadata trailers) {
-                        super.onClose(status, trailers);
-                      }
-
-                      @Override
-                      public void onReady() {
-                        super.onReady();
-                      }
-                    },
-                    headers);
-              }
-            };
-          }
-        };
+    final ClientInterceptor interceptor = new AgentClientInterceptor(this);
 
     this.blockingStub = ProxyServiceGrpc.newBlockingStub(ClientInterceptors.intercept(this.channel, interceptor));
     this.asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(this.channel, interceptor));
   }
 
   public static void main(final String[] argv) {
-
     final AgentArgs agentArgs = new AgentArgs();
     agentArgs.parseArgs(Agent.class.getName(), argv);
 
@@ -141,26 +94,41 @@ public class Agent {
     try {
       agentConfigs = readAgentConfigs(agentArgs.config);
     }
-    catch (FileNotFoundException e) {
-      logger.warn("Invalid config file name: {}", agentArgs.config);
+    catch (IOException e) {
+      logger.error(e.getMessage());
       return;
     }
 
     final Agent agent = new Agent(agentArgs.proxy, agentConfigs);
     agent.run();
-
   }
 
   private static List<Map<String, String>> readAgentConfigs(final String filename)
-      throws FileNotFoundException {
+      throws IOException {
     final Yaml yaml = new Yaml();
-    final InputStream input = new FileInputStream(new File(filename));
-    final Map<String, List<Map<String, String>>> data = (Map<String, List<Map<String, String>>>) yaml.load(input);
-    return data.get("agent_configs");
+    try (final InputStream input = new FileInputStream(new File(filename))) {
+      final Map<String, List<Map<String, String>>> data = (Map<String, List<Map<String, String>>>) yaml.load(input);
+      if (!data.containsKey(AGENT_CONFIGS))
+        throw new IOException(String.format("Missing %s key in config file %s", AGENT_CONFIGS, filename));
+      return data.get(AGENT_CONFIGS);
+    }
+    catch (FileNotFoundException e) {
+      throw new IOException(String.format("Invalid config file name %s", filename));
+    }
   }
 
-  public void run() {
+  private static String getHostName() {
+    try {
+      final String hostname = InetAddress.getLocalHost().getHostName();
+      final String address = InetAddress.getLocalHost().getHostAddress();
+      return hostname;
+    }
+    catch (UnknownHostException e) {
+      return "Unknown";
+    }
+  }
 
+  private void run() {
     Runtime.getRuntime()
            .addShutdownHook(
                new Thread(() -> {
@@ -169,10 +137,9 @@ public class Agent {
                  System.err.println("*** Agent shut down");
                }));
 
-
     while (!this.isStopped()) {
       try {
-        this.agentIdRef.set(null);
+        this.setAgentId(null);
         this.pathContextMap.clear();
 
         logger.info("Connecting to proxy at {}...", this.hostname);
@@ -182,7 +149,7 @@ public class Agent {
         this.registerAgent();
         this.registerPaths();
 
-        final CountDownLatch countDownLatch = new CountDownLatch(1);
+        final CountDownLatch countDownLatch = new CountDownLatch(2);
 
         this.executorService.submit(
             () -> {
@@ -237,8 +204,9 @@ public class Agent {
 
         this.executorService.submit(
             () -> {
-              while (countDownLatch.getCount() > 0) {
+              while (countDownLatch.getCount() < 2) {
                 try {
+                  // Set a short timeout to check if client has disconnected
                   final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
                   if (response == null)
                     continue;
@@ -248,8 +216,10 @@ public class Agent {
                   // Ignore
                 }
               }
+              countDownLatch.countDown();
             });
 
+        // Wait for both threads to finish
         countDownLatch.await();
       }
       catch (ConnectException e) {
@@ -294,20 +264,20 @@ public class Agent {
 
   }
 
-  public void connectAgent() { this.blockingStub.connectAgent(Empty.getDefaultInstance()); }
+  private void connectAgent() { this.blockingStub.connectAgent(Empty.getDefaultInstance()); }
 
-  public void registerAgent()
+  private void registerAgent()
       throws ConnectException {
     final RegisterAgentRequest request = RegisterAgentRequest.newBuilder()
                                                              .setAgentId(this.getAgenId())
-                                                             .setHostname(Utils.getHostName())
+                                                             .setHostname(getHostName())
                                                              .build();
     final RegisterAgentResponse response = this.blockingStub.registerAgent(request);
     if (!response.getValid())
       throw new ConnectException("registerAgent()");
   }
 
-  public void registerPaths()
+  private void registerPaths()
       throws ConnectException {
     for (Map<String, String> agentConfig : this.agentConfigs) {
       final String path = agentConfig.get("path");
@@ -318,7 +288,7 @@ public class Agent {
     }
   }
 
-  public long registerPath(final String path)
+  private long registerPath(final String path)
       throws ConnectException {
     final RegisterPathRequest request = RegisterPathRequest.newBuilder()
                                                            .setAgentId(this.getAgenId())
@@ -330,7 +300,12 @@ public class Agent {
     return response.getPathId();
   }
 
-  public boolean isStopped() { return this.stopped.get(); }
+  public ManagedChannel getChannel() { return this.channel; }
+
+  public void setAgentId(final String agent_id) { this.agentIdRef.set(agent_id); }
+
+  private boolean isStopped() { return this.stopped.get(); }
 
   private String getAgenId() { return this.agentIdRef.get(); }
+
 }

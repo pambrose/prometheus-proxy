@@ -1,4 +1,4 @@
-package com.sudothought;
+package com.sudothought.proxy;
 
 
 import com.sudothought.grpc.ScrapeRequest;

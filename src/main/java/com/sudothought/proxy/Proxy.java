@@ -1,6 +1,7 @@
-package com.sudothought;
+package com.sudothought.proxy;
 
 import com.google.common.collect.Maps;
+import com.sudothought.agent.AgentContext;
 import com.sudothought.args.ProxyArgs;
 import io.grpc.Attributes;
 import io.grpc.Server;
@@ -8,13 +9,11 @@ import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServerTransportFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Proxy {
@@ -37,7 +36,7 @@ public class Proxy {
   private final int        httpPort;
   private final HttpServer httpServer;
 
-  public Proxy(final int grpcPort, final int httpPort)
+  private Proxy(final int grpcPort, final int httpPort)
       throws IOException {
     this.grpcPort = grpcPort;
     this.httpPort = httpPort;
@@ -46,39 +45,9 @@ public class Proxy {
     final ServerServiceDefinition serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptor);
     this.grpcServer = ServerBuilder.forPort(this.grpcPort)
                                    .addService(serviceDef)
-                                   .addTransportFilter(new ServerTransportFilter() {
-                                     @Override
-                                     public Attributes transportReady(Attributes attributes) {
-                                       final Attributes.Key<String> remote_addr_key = Attributes.Key.of("remote-addr");
-                                       final Optional<Attributes.Key<?>> key_opt = attributes.keys()
-                                                                                             .stream()
-                                                                                             .filter(key -> key.toString().equals("remote-addr"))
-                                                                                             .findFirst();
-                                       final Attributes.Key<Object> key = (Attributes.Key<Object>) key_opt.get();
-                                       final Object remote_addr = attributes.get(key);
-                                       final AgentContext agentContext = new AgentContext(remote_addr.toString());
-                                       final String agent_id = agentContext.getAgentId();
-                                       agentContextMap.put(agent_id, agentContext);
-                                       logger.info("Connection from {} agent_id: {}", remote_addr, agent_id);
-                                       return Attributes.newBuilder()
-                                                        .set(ATTRIB_AGENT_ID, agent_id)
-                                                        .setAll(attributes)
-                                                        .build();
-                                     }
-
-                                     @Override
-                                     public void transportTerminated(Attributes attributes) {
-                                       final String agent_id = attributes.get(ATTRIB_AGENT_ID);
-                                       final AgentContext agentContext = agentContextMap.remove(agent_id);
-                                       logger.info("Disconnection from {} agent_id: {}",
-                                                   agentContext.getRemoteAddr(), agent_id);
-                                       super.transportTerminated(attributes);
-                                     }
-                                   })
+                                   .addTransportFilter(new ProxyTransportFilter(this))
                                    .build();
-
     this.httpServer = new HttpServer(this, this.httpPort);
-
   }
 
   public static void main(final String[] argv)

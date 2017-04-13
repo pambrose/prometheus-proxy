@@ -1,4 +1,6 @@
-package com.sudothought;
+package com.sudothought.agent;
+
+import com.sudothought.proxy.ScrapeRequestContext;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
