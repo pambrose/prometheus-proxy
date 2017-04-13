@@ -57,8 +57,8 @@ public class Agent {
 
   // Map path to PathContext
   private final Map<String, PathContext> pathContextMap = Maps.newConcurrentMap();
+  private final AtomicReference<String>  agentIdRef     = new AtomicReference<>();
   private final AtomicBoolean            stopped        = new AtomicBoolean(false);
-  private final AtomicReference<String>  agentIdRef     = new AtomicReference();
 
   private final String                                    hostname;
   private final List<Map<String, String>>                 agentConfigs;
@@ -83,45 +83,47 @@ public class Agent {
     final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true);
     this.channel = channelBuilder.build();
 
-    final ClientInterceptor interceptor = new ClientInterceptor() {
-      @Override
-      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(final MethodDescriptor<ReqT, RespT> method,
-                                                                 final CallOptions callOptions,
-                                                                 final Channel next) {
-        final String methodName = method.getFullMethodName();
-        return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(channel.newCall(method, callOptions)) {
+    final ClientInterceptor interceptor =
+        new ClientInterceptor() {
           @Override
-          public void start(final Listener<RespT> responseListener, final Metadata headers) {
-            final Stopwatch stopwatch = Stopwatch.createStarted();
-            super.start(
-                new ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
-                  @Override
-                  public void onHeaders(Metadata headers) {
-                    String agent_id = headers.get(Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER));
-                    agentIdRef.set(agent_id);
-                    super.onHeaders(headers);
-                  }
+          public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(final MethodDescriptor<ReqT, RespT> method,
+                                                                     final CallOptions callOptions,
+                                                                     final Channel next) {
+            final String methodName = method.getFullMethodName();
+            return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(channel.newCall(method,
+                                                                                                    callOptions)) {
+              @Override
+              public void start(final Listener<RespT> responseListener, final Metadata headers) {
+                final Stopwatch stopwatch = Stopwatch.createStarted();
+                super.start(
+                    new ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
+                      @Override
+                      public void onHeaders(Metadata headers) {
+                        String agent_id = headers.get(Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER));
+                        agentIdRef.set(agent_id);
+                        super.onHeaders(headers);
+                      }
 
-                  @Override
-                  public void onMessage(RespT message) {
-                    super.onMessage(message);
-                  }
+                      @Override
+                      public void onMessage(RespT message) {
+                        super.onMessage(message);
+                      }
 
-                  @Override
-                  public void onClose(Status status, Metadata trailers) {
-                    super.onClose(status, trailers);
-                  }
+                      @Override
+                      public void onClose(Status status, Metadata trailers) {
+                        super.onClose(status, trailers);
+                      }
 
-                  @Override
-                  public void onReady() {
-                    super.onReady();
-                  }
-                },
-                headers);
+                      @Override
+                      public void onReady() {
+                        super.onReady();
+                      }
+                    },
+                    headers);
+              }
+            };
           }
         };
-      }
-    };
 
     this.blockingStub = ProxyServiceGrpc.newBlockingStub(ClientInterceptors.intercept(this.channel, interceptor));
     this.asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(this.channel, interceptor));
@@ -156,13 +158,15 @@ public class Agent {
     return data.get("agent_configs");
   }
 
-  public void connect(final boolean reconnect)
-      throws InterruptedException {
+  public void connect(final boolean reconnect) {
 
     final ExecutorService executorService = Executors.newFixedThreadPool(2);
 
-    while (true) {
+    while (!this.isStopped()) {
       try {
+        this.agentIdRef.set(null);
+        this.pathContextMap.clear();
+
         logger.info("Connecting to proxy at {}...", this.hostname);
         this.connectAgent();
         logger.info("Connected to proxy at {}", this.hostname);
@@ -173,37 +177,34 @@ public class Agent {
         final CountDownLatch countDownLatch = new CountDownLatch(1);
 
         executorService.submit(() -> {
-          final AgentInfo agentInfo = AgentInfo.newBuilder().setAgentId(agentIdRef.get()).build();
+          final AgentInfo agentInfo = AgentInfo.newBuilder()
+                                               .setAgentId(this.getAgenId())
+                                               .build();
           this.asyncStub.readRequestsFromProxy(
               agentInfo,
               new StreamObserver<ScrapeRequest>() {
                 @Override
                 public void onNext(ScrapeRequest scrapeRequest) {
                   final PathContext pathContext = pathContextMap.get(scrapeRequest.getPath());
-                  ScrapeResponse scrapResponse;
+                  ScrapeResponse.Builder scrape_response = ScrapeResponse.newBuilder()
+                                                                         .setAgentId(scrapeRequest.getAgentId())
+                                                                         .setScrapeId(scrapeRequest.getScrapeId());
                   try {
                     final Response response = pathContext.fetchUrl();
-                    scrapResponse = ScrapeResponse.newBuilder()
-                                                  .setAgentId(scrapeRequest.getAgentId())
-                                                  .setScrapeId(scrapeRequest.getScrapeId())
-                                                  .setValid(true)
-                                                  .setStatusCode(response.code())
-                                                  .setText(response.body().string())
-                                                  .build();
+                    scrape_response.setValid(true)
+                                   .setStatusCode(response.code())
+                                   .setText(response.body().string())
+                                   .build();
                   }
                   catch (IOException e) {
-                    scrapResponse = ScrapeResponse.newBuilder()
-                                                  .setAgentId(scrapeRequest.getAgentId())
-                                                  .setScrapeId(scrapeRequest.getScrapeId())
-                                                  .setValid(false)
-                                                  .setStatusCode(404)
-                                                  .setText("")
-                                                  .build();
+                    scrape_response.setValid(false)
+                                   .setStatusCode(404)
+                                   .setText("");
                     e.printStackTrace();
                   }
 
                   try {
-                    scrapeResponseQueue.put(scrapResponse);
+                    scrapeResponseQueue.put(scrape_response.build());
                   }
                   catch (InterruptedException e) {
                     e.printStackTrace();
@@ -240,19 +241,28 @@ public class Agent {
         });
 
         countDownLatch.await();
-        logger.info("Disconnected from proxy at {}", this.hostname);
       }
-      catch (ReconnectException e) {
-        logger.info("Reconnecting on ReconnectException: {}", e.getMessage());
+      catch (ProxyException e) {
+        logger.info("Reconnecting on ProxyException: {}", e.getMessage());
       }
       catch (StatusRuntimeException e) {
         logger.info("Cannot connect to proxy at {} [{}]", this.hostname, e.getMessage());
       }
+      catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+
+      logger.info("Disconnected from proxy at {}", this.hostname);
 
       if (!reconnect)
         break;
 
-      Thread.sleep(2000);
+      try {
+        Thread.sleep(2000);
+      }
+      catch (InterruptedException e) {
+        e.printStackTrace();
+      }
     }
   }
 
@@ -261,23 +271,21 @@ public class Agent {
     this.channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
   }
 
-  public void connectAgent() {
-    this.blockingStub.connectAgent(Empty.getDefaultInstance());
-  }
+  public void connectAgent() { this.blockingStub.connectAgent(Empty.getDefaultInstance()); }
 
   public void registerAgent()
-      throws ReconnectException {
+      throws ProxyException {
     final RegisterAgentRequest request = RegisterAgentRequest.newBuilder()
-                                                             .setAgentId(this.agentIdRef.get())
+                                                             .setAgentId(this.getAgenId())
                                                              .setHostname(Utils.getHostName())
                                                              .build();
     final RegisterAgentResponse response = this.blockingStub.registerAgent(request);
     if (!response.getValid())
-      throw new ReconnectException("registerAgent()");
+      throw new ProxyException("registerAgent()");
   }
 
   public void registerPaths()
-      throws ReconnectException {
+      throws ProxyException {
     for (Map<String, String> agentConfig : this.agentConfigs) {
       final String path = agentConfig.get("path");
       final String url = agentConfig.get("url");
@@ -288,15 +296,18 @@ public class Agent {
   }
 
   public long registerPath(final String path)
-      throws ReconnectException {
+      throws ProxyException {
     final RegisterPathRequest request = RegisterPathRequest.newBuilder()
-                                                           .setAgentId(this.agentIdRef.get())
+                                                           .setAgentId(this.getAgenId())
                                                            .setPath(path)
                                                            .build();
     final RegisterPathResponse response = this.blockingStub.registerPath(request);
     if (!response.getValid())
-      throw new ReconnectException("registerPath()");
+      throw new ProxyException("registerPath()");
     return response.getPathId();
   }
 
+  public boolean isStopped() { return this.stopped.get(); }
+
+  private String getAgenId() { return this.agentIdRef.get(); }
 }

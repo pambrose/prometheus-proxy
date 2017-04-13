@@ -28,11 +28,11 @@ public class Proxy {
   private static final AtomicLong       SCRAPE_ID_GENERATOR = new AtomicLong(0);
 
   private final AtomicBoolean                   stopped          = new AtomicBoolean(false);
-  // Map agentId to AgentContext
+  // Map agent_id to AgentContext
   private final Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap();
-  // Map path to agentId
+  // Map path to agent_id
   private final Map<String, String>             pathMap          = Maps.newConcurrentMap();
-  // Map scrapeId to agentId
+  // Map scrape_id to agent_id
   private final Map<Long, ScrapeRequestContext> scrapeRequestMap = Maps.newConcurrentMap();
 
   private final int    port;
@@ -89,45 +89,59 @@ public class Proxy {
 
     // Start Http Server
     Spark.port(proxyArgs.http_port);
+    logger.info("Started proxy listening on {}", proxyArgs.http_port);
+
     Spark.get("/*", (req, res) -> {
       res.header("cache-control", "no-cache");
+      res.type("text/plain");
 
       final String path = req.splat()[0];
-      final String agentId = proxy.pathMap.get(path);
+      final String agent_id = proxy.pathMap.get(path);
 
-      if (agentId == null) {
+      if (agent_id == null) {
         logger.info("Missing path request /{}", path);
         res.status(404);
         return null;
       }
 
-      final AgentContext agentContext = proxy.getAgentContextMap().get(agentId);
+      final AgentContext agentContext = proxy.getAgentContextMap().get(agent_id);
       if (agentContext == null) {
-        proxy.getAgentContextMap().remove(agentId);
-        logger.info("Missing AgentContext /{} agent_id: {}", path, agentId);
+        proxy.getAgentContextMap().remove(agent_id);
+        logger.info("Missing AgentContext /{} agent_id: {}", path, agent_id);
         res.status(404);
         return null;
       }
 
-      final long scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement();
+      final long scrape_id = SCRAPE_ID_GENERATOR.getAndIncrement();
       final ScrapeRequest scrapeRequest = ScrapeRequest.newBuilder()
-                                                       .setAgentId(agentId)
-                                                       .setScrapeId(scrapeId)
+                                                       .setAgentId(agent_id)
+                                                       .setScrapeId(scrape_id)
                                                        .setPath(path)
                                                        .build();
       final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(scrapeRequest);
 
-      proxy.getScrapeRequestMap().put(scrapeId, scrapeRequestContext);
+      proxy.getScrapeRequestMap().put(scrape_id, scrapeRequestContext);
       agentContext.getScrapeRequestQueue().add(scrapeRequestContext);
 
-      scrapeRequestContext.waitUntilComplete();
+      while (true) {
+        if (scrapeRequestContext.waitUntilComplete()) {
+          break;
+        }
+        else {
+          // Check if agent is disconnected or agent is hung
+          if (!proxy.isValidAgentId(agent_id) || scrapeRequestContext.ageInSecs() >= 5) {
+            res.status(503);
+            return null;
+          }
+        }
+      }
 
-      logger.info("Results returned from agent for scrapeId: {}", scrapeId);
+      logger.info("Results returned from agent for scrape_id: {}", scrape_id);
 
-      res.type("text/plain");
-      res.status(scrapeRequestContext.getScrapeResponse().get().getStatusCode());
+      final int status_code = scrapeRequestContext.getScrapeResponse().get().getStatusCode();
+      res.status(status_code);
 
-      return scrapeRequestContext.getScrapeResponse().get().getText();
+      return status_code >= 400 ? null : scrapeRequestContext.getScrapeResponse().get().getText();
     });
 
     proxy.blockUntilShutdown();
@@ -158,6 +172,8 @@ public class Proxy {
     if (this.grpcServer != null)
       this.grpcServer.awaitTermination();
   }
+
+  public boolean isValidAgentId(final String agentId) {return this.getAgentContextMap().containsKey(agentId);}
 
   public boolean isStopped() { return this.stopped.get(); }
 

@@ -8,7 +8,7 @@ public class AgentContext {
 
   private static final AtomicLong AGENT_ID_GENERATOR = new AtomicLong(0);
 
-  private final BlockingQueue<ScrapeRequestContext> scrapeRequestQueue = new ArrayBlockingQueue<>(1000);
+  private final BlockingQueue<ScrapeRequestContext> scrapeRequestQueue = new ArrayBlockingQueue<>(1024);
 
   private final String agentId = "" + AGENT_ID_GENERATOR.incrementAndGet();
   private final String remoteAddr;
@@ -18,13 +18,9 @@ public class AgentContext {
     this.remoteAddr = remoteAddr;
   }
 
-  public BlockingQueue<ScrapeRequestContext> getScrapeRequestQueue() {
-    return this.scrapeRequestQueue;
-  }
+  public BlockingQueue<ScrapeRequestContext> getScrapeRequestQueue() { return this.scrapeRequestQueue; }
 
-  public String getAgentId() {
-    return this.agentId;
-  }
+  public String getAgentId() { return this.agentId; }
 
   public String getHostname() { return this.hostname; }
 

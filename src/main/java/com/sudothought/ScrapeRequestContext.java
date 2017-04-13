@@ -5,13 +5,14 @@ import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class ScrapeRequestContext {
 
+  private final long                            createTime      = System.currentTimeMillis();
   private final CountDownLatch                  complete        = new CountDownLatch(1);
   private final AtomicReference<ScrapeResponse> scrape_response = new AtomicReference<>();
-  private final long                            createTime      = System.currentTimeMillis();
 
   private final ScrapeRequest scrapeRequest;
 
@@ -21,13 +22,14 @@ public class ScrapeRequestContext {
 
   public ScrapeRequest getScrapeRequest() { return this.scrapeRequest; }
 
-  public void waitUntilComplete() {
+  public boolean waitUntilComplete() {
     try {
-      this.complete.await();
+      return this.complete.await(1, TimeUnit.SECONDS);
     }
     catch (InterruptedException e) {
       e.printStackTrace();
     }
+    return false;
   }
 
   public void markComplete() { this.complete.countDown(); }
