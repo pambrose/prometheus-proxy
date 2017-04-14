@@ -6,7 +6,10 @@ RUN apt-get -y install maven
 RUN apt-get -y install git
 RUN apt-get -y install make
 RUN apt-get -y install docker
-RUN apt-get clean
+RUN apt-get -y install --no-install-recommends apt-utils
+RUN apt-get -y clean
+
+RUN mvn --version
 
 RUN mkdir /git
 RUN cd /git && git clone https://github.com/pambrose/prometheus-proxy.git
