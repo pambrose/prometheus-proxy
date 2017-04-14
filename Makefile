@@ -14,5 +14,8 @@ plugincheck:
 
 versioncheck: jarcheck plugincheck
 
-docker-build: build
+docker-build:
 	./bin/build-docker-images.sh
+
+docker-push:
+	./bin/push-docker-images.sh

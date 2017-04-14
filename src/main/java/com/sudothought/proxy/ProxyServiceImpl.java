@@ -10,6 +10,7 @@ import com.sudothought.grpc.RegisterPathRequest;
 import com.sudothought.grpc.RegisterPathResponse;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -130,8 +131,11 @@ class ProxyServiceImpl
       }
 
       @Override
-      public void onError(final Throwable t) {
-        logger.warn("Encountered error in writeResponsesToProxy() [{}]", t.getMessage());
+      public void onError(Throwable t) {
+        final Status status = Status.fromThrowable(t);
+        logger.info("onError() in writeResponsesToProxy(): {}", status);
+        responseObserver.onNext(Empty.getDefaultInstance());
+        responseObserver.onCompleted();
       }
 
       @Override

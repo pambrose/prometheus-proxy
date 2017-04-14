@@ -1,4 +1,4 @@
-FROM pambrose/prometheus-proxy:1.0.0
+FROM pambrose/prometheus-base:1.0.0
 MAINTAINER Paul Ambrose "pambrose@mac.com"
 
 EXPOSE 8080
@@ -9,5 +9,3 @@ ENTRYPOINT ["/prometheus-proxy/bin/proxy.sh", \
             "--port", "8080", \
             "--metrics", "8081", \
 	        "--grpc", "50051"]
-
-

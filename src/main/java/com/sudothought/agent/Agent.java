@@ -98,7 +98,7 @@ public class Agent {
       return;
     }
 
-    final Agent agent = new Agent(agentArgs.proxy, agentConfigs);
+    final Agent agent = new Agent(agentArgs.proxy_hostname, agentConfigs);
     agent.run();
   }
 
@@ -112,7 +112,7 @@ public class Agent {
       return data.get(AGENT_CONFIGS);
     }
     catch (FileNotFoundException e) {
-      throw new IOException(String.format("Invalid config file name %s", filename));
+      throw new IOException(String.format("Config file not found: %s", filename));
     }
   }
 
@@ -175,7 +175,7 @@ public class Agent {
                     @Override
                     public void onError(Throwable t) {
                       final Status status = Status.fromThrowable(t);
-                      logger.info("Failed: {}", status);
+                      logger.info("onError() in readRequestsFromProxy(): {}", status);
                       countDownLatch.countDown();
                     }
 
@@ -198,7 +198,7 @@ public class Agent {
                     @Override
                     public void onError(Throwable t) {
                       final Status status = Status.fromThrowable(t);
-                      logger.info("Failed: {}", status);
+                      logger.info("onError() in writeResponsesToProxy(): {}", status);
                       countDownLatch.countDown();
                     }
 
