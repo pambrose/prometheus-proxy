@@ -5,3 +5,6 @@ agent_configs:
   - name: test2
     path: test2_path
     url: http://localhost:8001/metrics
+  - name: test3
+    path: proxy_metrics
+    url: http://localhost:8081/metrics

@@ -116,7 +116,7 @@ class ProxyServiceImpl
   @Override
   public void writeResponseToProxy(final ScrapeResponse response, final StreamObserver<Empty> responseObserver) {
     final long scrapeId = response.getScrapeId();
-    final ScrapeRequestContext scrapeRequestContext = this.proxy.getScrapeRequestMap().remove(scrapeId);
+    final ScrapeRequestContext scrapeRequestContext = this.proxy.removeScrapeRequest(scrapeId);
     if (scrapeRequestContext == null) {
       logger.error("Missing ScrapeRequestContext for scrape_id: {}", scrapeId);
     }

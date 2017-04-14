@@ -55,7 +55,7 @@ public class HttpServer {
                                                                         .build();
                        final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(scrapeRequest);
 
-                       this.proxy.getScrapeRequestMap().put(scrapeId, scrapeRequestContext);
+                       this.proxy.addScrapeRequest(scrapeId, scrapeRequestContext);
                        agentContext.getScrapeRequestQueue().add(scrapeRequestContext);
 
                        while (true) {

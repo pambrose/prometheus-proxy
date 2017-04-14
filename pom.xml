@@ -13,6 +13,7 @@
         <grpc.plugin.version>1.2.0</grpc.plugin.version>
         <protobuf.version>3.2.0</protobuf.version>
         <protobuf.plugin.version>0.5.0</protobuf.plugin.version>
+        <prometheus.version>0.0.21</prometheus.version>
         <jcommander.version>1.64</jcommander.version>
         <spark.version>2.5.5</spark.version>
         <yaml.version>1.18</yaml.version>
@@ -30,6 +31,24 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient</artifactId>
+            <version>${prometheus.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient_hotspot</artifactId>
+            <version>${prometheus.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient_servlet</artifactId>
+            <version>${prometheus.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>com.beust</groupId>
             <artifactId>jcommander</artifactId>
