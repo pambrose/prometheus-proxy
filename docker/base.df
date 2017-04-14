@@ -1,0 +1,10 @@
+FROM frolvlad/alpine-oraclejdk8:latest
+MAINTAINER Paul Ambrose "pambrose@mac.com"
+
+COPY ./target/bin /prometheus-proxy
+COPY ./target/classes /prometheus-proxy
+COPY ./target/lib /prometheus-proxy
+COPY ./logback/docker-logback.xml /prometheus-proxy/logback/logback.xml
+
+CMD ["bash"]
+

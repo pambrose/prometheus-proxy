@@ -1,3 +1,5 @@
+default: build
+
 build:
 	mvn -DskipTests=true clean package
 
@@ -11,3 +13,6 @@ plugincheck:
 	mvn versions:display-plugin-updates
 
 versioncheck: jarcheck plugincheck
+
+docker-build: build
+	./bin/build-docker-images.sh

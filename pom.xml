@@ -21,14 +21,17 @@
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.8.0-alpha1</slf4j.version>
 
+        <assembly.version>2.6</assembly.version>
         <maven.compiler.version>3.6.1</maven.compiler.version>
         <maven-jar-plugin.version>3.0.2</maven-jar-plugin.version>
-
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <appassembler.version>1.10</appassembler.version>
 
         <maven.version>3.0.5</maven.version>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
+
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <skipTests>true</skipTests>
     </properties>
 
     <prerequisites>
@@ -225,6 +228,115 @@
                                 </requireMavenVersion>
                             </rules>
                             <fail>true</fail>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>${assembly.version}</version>
+                <executions>
+
+                    <execution>
+                        <id>proxy</id>
+                        <goals>
+                            <goal>attached</goal>
+                        </goals>
+                        <phase>package</phase>
+
+                        <configuration>
+                            <finalName>proxy-1.0</finalName>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <archive>
+                                <manifest>
+                                    <mainClass>com.sudothought.proxy.Proxy</mainClass>
+                                    <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                                </manifest>
+                            </archive>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>agent</id>
+                        <goals>
+                            <goal>attached</goal>
+                        </goals>
+                        <phase>package</phase>
+
+                        <configuration>
+                            <finalName>agent-1.0</finalName>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <archive>
+                                <manifest>
+                                    <mainClass>com.sudothought.agent.Agent</mainClass>
+                                    <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                                </manifest>
+                            </archive>
+                        </configuration>
+                    </execution>
+
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>appassembler-maven-plugin</artifactId>
+                <version>${appassembler.version}</version>
+
+                <executions>
+                    <execution>
+
+                        <phase>package</phase>
+                        <goals>
+                            <goal>assemble</goal>
+                        </goals>
+
+                        <configuration>
+
+                            <assembleDirectory>target</assembleDirectory>
+                            <generateRepository>true</generateRepository>
+                            <repositoryLayout>flat</repositoryLayout>
+                            <repositoryName>lib</repositoryName>
+
+                            <binFileExtensions>
+                                <unix>.sh</unix>
+                            </binFileExtensions>
+
+                            <platforms>
+                                <platform>unix</platform>
+                            </platforms>
+
+                            <programs>
+                                <program>
+                                    <id>proxy</id>
+                                    <mainClass>com.sudothought.proxy.Proxy</mainClass>
+                                    <jvmSettings>
+                                        <extraArguments>
+                                            <extraArgument>
+                                                -Dlogback.configurationFile=file:./logback/docker-logback.xml
+                                            </extraArgument>
+                                        </extraArguments>
+                                    </jvmSettings>
+                                </program>
+
+                                <program>
+                                    <id>agent</id>
+                                    <mainClass>com.sudothought.agent.Agent</mainClass>
+                                    <jvmSettings>
+                                        <extraArguments>
+                                            <extraArgument>
+                                                -Dlogback.configurationFile=file:./logback/docker-logback.xml
+                                            </extraArgument>
+                                        </extraArguments>
+                                    </jvmSettings>
+                                </program>
+                            </programs>
+
                         </configuration>
                     </execution>
                 </executions>
