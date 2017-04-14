@@ -38,21 +38,21 @@ public class ProxyTransportFilter
   public Attributes transportReady(final Attributes attributes) {
     final String remote_addr = this.getRemoteAddr(attributes);
     final AgentContext agentContext = new AgentContext(remote_addr);
-    final String agent_id = agentContext.getAgentId();
-    this.proxy.getAgentContextMap().put(agent_id, agentContext);
-    logger.info("Connection from {} agent_id: {}", remote_addr, agent_id);
+    final String agentId = agentContext.getAgentId();
+    this.proxy.addAgentContext(agentId, agentContext);
+    logger.info("Connection from {} agent_id: {}", remote_addr, agentId);
     return Attributes.newBuilder()
-                     .set(Proxy.ATTRIB_AGENT_ID, agent_id)
+                     .set(Proxy.ATTRIB_AGENT_ID, agentId)
                      .setAll(attributes)
                      .build();
   }
 
   @Override
   public void transportTerminated(final Attributes attributes) {
-    final String agent_id = attributes.get(Proxy.ATTRIB_AGENT_ID);
-    final AgentContext agentContext = this.proxy.getAgentContextMap().remove(agent_id);
+    final String agentId = attributes.get(Proxy.ATTRIB_AGENT_ID);
+    final AgentContext agentContext = this.proxy.removeAgentContext(agentId);
     logger.info("Disconnection from {} agent_id: {}",
-                agentContext.getRemoteAddr(), agent_id);
+                agentContext.getRemoteAddr(), agentId);
     super.transportTerminated(attributes);
   }
 }

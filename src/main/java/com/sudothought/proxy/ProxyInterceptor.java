@@ -30,9 +30,9 @@ public class ProxyInterceptor
           @Override
           public void sendHeaders(Metadata headers) {
             // agent_id was assigned in ServerTransportFilter
-            final String agent_id = attributes.get(Proxy.ATTRIB_AGENT_ID);
-            if (agent_id != null)
-              headers.put(META_AGENT_ID, agent_id);
+            final String agentId = attributes.get(Proxy.ATTRIB_AGENT_ID);
+            if (agentId != null)
+              headers.put(META_AGENT_ID, agentId);
             super.sendHeaders(headers);
           }
         },

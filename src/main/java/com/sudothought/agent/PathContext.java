@@ -14,21 +14,21 @@ public class PathContext {
 
   private final OkHttpClient client = new OkHttpClient();
 
-  private final long   path_id;
+  private final long   pathId;
   private final String path;
   private final String url;
 
   private Request request;
 
-  public PathContext(long path_id, String path, String url) {
-    this.path_id = path_id;
+  public PathContext(long pathId, String path, String url) {
+    this.pathId = pathId;
     this.path = path;
     this.url = url;
     this.request = new Request.Builder().url(url).build();
   }
 
-  public long getPath_id() {
-    return this.path_id;
+  public long getPathId() {
+    return this.pathId;
   }
 
   public String getPath() {

@@ -38,11 +38,11 @@ class ProxyServiceImpl
   @Override
   public void registerAgent(final RegisterAgentRequest request,
                             final StreamObserver<RegisterAgentResponse> responseObserver) {
-    final String agent_id = request.getAgentId();
-    final AgentContext agentContext = this.proxy.getAgentContextMap().get(agent_id);
+    final String agentId = request.getAgentId();
+    final AgentContext agentContext = this.proxy.getAgentContext(agentId);
     final boolean valid;
     if (agentContext == null) {
-      logger.info("Missing AgentContext agent_id: {}", agent_id);
+      logger.info("Missing AgentContext agent_id: {}", agentId);
       valid = false;
     }
     else {
@@ -51,7 +51,7 @@ class ProxyServiceImpl
     }
     final RegisterAgentResponse response = RegisterAgentResponse.newBuilder()
                                                                 .setValid(valid)
-                                                                .setAgentId(agent_id)
+                                                                .setAgentId(agentId)
                                                                 .build();
     responseObserver.onNext(response);
     responseObserver.onCompleted();
@@ -64,25 +64,25 @@ class ProxyServiceImpl
     if (this.proxy.getPathMap().containsKey(path))
       logger.info("Overwriting path /{}", path);
 
-    final String agent_id = request.getAgentId();
-    this.proxy.getPathMap().put(path, agent_id);
+    final String agentId = request.getAgentId();
+    this.proxy.getPathMap().put(path, agentId);
 
-    final AgentContext agentContext = this.proxy.getAgentContextMap().get(agent_id);
+    final AgentContext agentContext = this.proxy.getAgentContext(agentId);
     final boolean valid;
-    final long path_id;
+    final long pathId;
     if (agentContext == null) {
-      logger.info("Missing AgentContext for agent_id: {}", agent_id);
+      logger.info("Missing AgentContext for agent_id: {}", agentId);
       valid = false;
-      path_id = -1;
+      pathId = -1;
     }
     else {
       logger.info("Registered path /{} to {} {}", path, agentContext.getRemoteAddr(), agentContext.getHostname());
       valid = true;
-      path_id = PATH_ID_GENERATOR.getAndIncrement();
+      pathId = PATH_ID_GENERATOR.getAndIncrement();
     }
     final RegisterPathResponse response = RegisterPathResponse.newBuilder()
                                                               .setValid(valid)
-                                                              .setPathId(path_id)
+                                                              .setPathId(pathId)
                                                               .build();
     responseObserver.onNext(response);
     responseObserver.onCompleted();
@@ -90,12 +90,12 @@ class ProxyServiceImpl
 
   @Override
   public void readRequestsFromProxy(final AgentInfo agentInfo, final StreamObserver<ScrapeRequest> responseObserver) {
-    final String agent_id = agentInfo.getAgentId();
+    final String agentId = agentInfo.getAgentId();
     while (!this.proxy.isStopped()) {
       // Lookup the agentContext each time in case agent has gone away
-      final AgentContext agentContext = this.proxy.getAgentContextMap().get(agent_id);
+      final AgentContext agentContext = this.proxy.getAgentContext(agentId);
       if (agentContext == null) {
-        logger.info("Missing AgentContext for agent_id: {}", agent_id);
+        logger.info("Missing AgentContext for agent_id: {}", agentId);
         break;
       }
 
@@ -115,10 +115,10 @@ class ProxyServiceImpl
 
   @Override
   public void writeResponseToProxy(final ScrapeResponse response, final StreamObserver<Empty> responseObserver) {
-    final long scrape_id = response.getScrapeId();
-    final ScrapeRequestContext scrapeRequestContext = this.proxy.getScrapeRequestMap().remove(scrape_id);
+    final long scrapeId = response.getScrapeId();
+    final ScrapeRequestContext scrapeRequestContext = this.proxy.getScrapeRequestMap().remove(scrapeId);
     if (scrapeRequestContext == null) {
-      logger.error("Missing ScrapeRequestContext for scrape_id: {}", scrape_id);
+      logger.error("Missing ScrapeRequestContext for scrape_id: {}", scrapeId);
     }
     else {
       scrapeRequestContext.setScrapeResponse(response);

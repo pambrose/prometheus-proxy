@@ -302,7 +302,7 @@ public class Agent {
 
   public ManagedChannel getChannel() { return this.channel; }
 
-  public void setAgentId(final String agent_id) { this.agentIdRef.set(agent_id); }
+  public void setAgentId(final String agentId) { this.agentIdRef.set(agentId); }
 
   private String getAgenId() { return this.agentIdRef.get(); }
 

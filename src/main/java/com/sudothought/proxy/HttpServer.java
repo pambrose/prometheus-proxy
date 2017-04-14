@@ -32,31 +32,30 @@ public class HttpServer {
                        res.header("cache-control", "no-cache");
 
                        final String path = req.splat()[0];
-                       final String agent_id = this.proxy.getPathMap().get(path);
+                       final String agentId = this.proxy.getPathMap().get(path);
 
-                       if (agent_id == null) {
+                       if (agentId == null) {
                          logger.info("Missing path request /{}", path);
                          res.status(404);
                          return null;
                        }
 
-                       final AgentContext agentContext = proxy.getAgentContextMap().get(agent_id);
+                       final AgentContext agentContext = proxy.getAgentContext(agentId);
                        if (agentContext == null) {
-                         this.proxy.getAgentContextMap().remove(agent_id);
-                         logger.info("Missing AgentContext /{} agent_id: {}", path, agent_id);
+                         logger.info("Missing AgentContext /{} agent_id: {}", path, agentId);
                          res.status(404);
                          return null;
                        }
 
-                       final long scrape_id = SCRAPE_ID_GENERATOR.getAndIncrement();
+                       final long scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement();
                        final ScrapeRequest scrapeRequest = ScrapeRequest.newBuilder()
-                                                                        .setAgentId(agent_id)
-                                                                        .setScrapeId(scrape_id)
+                                                                        .setAgentId(agentId)
+                                                                        .setScrapeId(scrapeId)
                                                                         .setPath(path)
                                                                         .build();
                        final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(scrapeRequest);
 
-                       this.proxy.getScrapeRequestMap().put(scrape_id, scrapeRequestContext);
+                       this.proxy.getScrapeRequestMap().put(scrapeId, scrapeRequestContext);
                        agentContext.getScrapeRequestQueue().add(scrapeRequestContext);
 
                        while (true) {
@@ -65,14 +64,14 @@ public class HttpServer {
                          }
                          else {
                            // Check if agent is disconnected or agent is hung
-                           if (!proxy.isValidAgentId(agent_id) || scrapeRequestContext.ageInSecs() >= 5 || proxy.isStopped()) {
+                           if (!proxy.isValidAgentId(agentId) || scrapeRequestContext.ageInSecs() >= 5 || proxy.isStopped()) {
                              res.status(503);
                              return null;
                            }
                          }
                        }
 
-                       logger.info("Results returned from agent for scrape_id: {}", scrape_id);
+                       logger.info("Results returned from agent for scrape_id: {}", scrapeId);
 
                        final int status_code = scrapeRequestContext.getScrapeResponse().getStatusCode();
                        res.status(status_code);

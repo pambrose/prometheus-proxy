@@ -39,9 +39,9 @@ public class AgentClientInterceptor
               @Override
               public void onHeaders(Metadata headers) {
                 // Grab agent_id from headers
-                final String agent_id = headers.get(Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER));
-                if (agent_id != null)
-                  agent.setAgentId(agent_id);
+                final String agentId = headers.get(Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER));
+                if (agentId != null)
+                  agent.setAgentId(agentId);
                 super.onHeaders(headers);
               }
             },

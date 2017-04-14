@@ -86,13 +86,19 @@ public class Proxy {
     this.grpcServer.awaitTermination();
   }
 
-  public boolean isValidAgentId(final String agentId) {return this.getAgentContextMap().containsKey(agentId);}
+  public boolean isValidAgentId(final String agentId) {return this.agentContextMap.containsKey(agentId);}
 
   public boolean isStopped() { return this.stopped.get(); }
 
+  public Map<String, String> getPathMap() { return this.pathMap; }
+
   public Map<Long, ScrapeRequestContext> getScrapeRequestMap() { return this.scrapeRequestMap; }
 
-  public Map<String, AgentContext> getAgentContextMap() { return this.agentContextMap; }
+  public void addAgentContext(final String agentId, final AgentContext agentContext) {
+    this.agentContextMap.put(agentId, agentContext);
+  }
 
-  public Map<String, String> getPathMap() { return this.pathMap; }
+  public AgentContext getAgentContext(String agentId) { return this.agentContextMap.get(agentId); }
+
+  public AgentContext removeAgentContext(String agentId) { return this.agentContextMap.remove(agentId); }
 }
