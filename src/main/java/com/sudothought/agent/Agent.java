@@ -137,14 +137,16 @@ public class Agent {
                }));
 
     while (!this.isStopped()) {
-      try {
-        this.setAgentId(null);
-        this.pathContextMap.clear();
-        this.scrapeResponseQueue.clear();
+      boolean connected = false;
+      this.setAgentId(null);
+      this.pathContextMap.clear();
+      this.scrapeResponseQueue.clear();
 
+      try {
         logger.info("Connecting to proxy at {}...", this.hostname);
         this.connectAgent();
         logger.info("Connected to proxy at {}", this.hostname);
+        connected = true;
 
         this.registerAgent();
         this.registerPaths();
@@ -160,27 +162,10 @@ public class Agent {
                   agentInfo,
                   new StreamObserver<ScrapeRequest>() {
                     @Override
-                    public void onNext(ScrapeRequest scrapeRequest) {
-                      final PathContext pathContext = pathContextMap.get(scrapeRequest.getPath());
-                      ScrapeResponse.Builder scrapeResponse = ScrapeResponse.newBuilder()
-                                                                            .setAgentId(scrapeRequest.getAgentId())
-                                                                            .setScrapeId(scrapeRequest.getScrapeId());
+                    public void onNext(final ScrapeRequest scrapeRequest) {
+                      final ScrapeResponse scrapeResponse = fetchScrapeResponse(scrapeRequest);
                       try {
-                        logger.info("Fetching {}", pathContext.getUrl());
-                        final Response response = pathContext.fetchUrl();
-                        scrapeResponse.setValid(true)
-                                      .setStatusCode(response.code())
-                                      .setText(response.body().string())
-                                      .build();
-                      }
-                      catch (IOException e) {
-                        scrapeResponse.setValid(false)
-                                      .setStatusCode(404)
-                                      .setText("");
-                      }
-
-                      try {
-                        scrapeResponseQueue.put(scrapeResponse.build());
+                        scrapeResponseQueue.put(scrapeResponse);
                       }
                       catch (InterruptedException e) {
                         e.printStackTrace();
@@ -196,42 +181,63 @@ public class Agent {
 
                     @Override
                     public void onCompleted() {
-                      logger.info("Completed");
+                      countDownLatch.countDown();
                     }
                   });
             });
 
         this.executorService.submit(
             () -> {
+              final StreamObserver<ScrapeResponse> responseObserver =
+                  this.asyncStub.writeResponsesToProxy(new StreamObserver<Empty>() {
+                    @Override
+                    public void onNext(Empty rmpty) {
+                      // Ignore
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                      final Status status = Status.fromThrowable(t);
+                      logger.info("Failed: {}", status);
+                      countDownLatch.countDown();
+                    }
+
+                    @Override
+                    public void onCompleted() {
+                      countDownLatch.countDown();
+                    }
+                  });
+
               while (countDownLatch.getCount() == 2) {
                 try {
                   // Set a short timeout to check if client has disconnected
                   final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
-                  if (response == null)
-                    continue;
-                  this.blockingStub.writeResponseToProxy(response);
+                  if (response != null)
+                    responseObserver.onNext(response);
                 }
                 catch (InterruptedException e) {
                   // Ignore
                 }
               }
-              countDownLatch.countDown();
+
+              responseObserver.onCompleted();
             });
 
         // Wait for both threads to finish
         countDownLatch.await();
       }
       catch (ConnectException e) {
-        logger.info("Reconnecting on ConnectException: {}", e.getMessage());
+        // Ignore
       }
       catch (StatusRuntimeException e) {
-        logger.info("Cannot start to proxy at {} [{}]", this.hostname, e.getMessage());
+        logger.info("Cannot connect to proxy at {} [{}]", this.hostname, e.getMessage());
       }
       catch (InterruptedException e) {
         e.printStackTrace();
       }
 
-      logger.info("Disconnected from proxy at {}", this.hostname);
+      if (connected)
+        logger.info("Disconnected from proxy at {}", this.hostname);
 
       try {
         Thread.sleep(2000);
@@ -240,6 +246,43 @@ public class Agent {
         e.printStackTrace();
       }
     }
+  }
+
+  private ScrapeResponse invalidScrapeResponse(final ScrapeRequest scrapeRequest) {
+    return ScrapeResponse.newBuilder()
+                         .setAgentId(scrapeRequest.getAgentId())
+                         .setScrapeId(scrapeRequest.getScrapeId())
+                         .setValid(false)
+                         .setStatusCode(404)
+                         .setText("")
+                         .build();
+  }
+
+  private ScrapeResponse fetchScrapeResponse(final ScrapeRequest scrapeRequest) {
+    final String path = scrapeRequest.getPath();
+    final PathContext pathContext = this.pathContextMap.get(path);
+    ScrapeResponse scrapeResponse;
+    if (pathContext == null) {
+      logger.warn("Invalid path request: {}", path);
+      scrapeResponse = this.invalidScrapeResponse(scrapeRequest);
+    }
+    else {
+      try {
+        logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
+        final Response response = pathContext.fetchUrl();
+        scrapeResponse = ScrapeResponse.newBuilder()
+                                       .setAgentId(scrapeRequest.getAgentId())
+                                       .setScrapeId(scrapeRequest.getScrapeId())
+                                       .setValid(true)
+                                       .setStatusCode(response.code())
+                                       .setText(response.body().string())
+                                       .build();
+      }
+      catch (IOException e) {
+        scrapeResponse = this.invalidScrapeResponse(scrapeRequest);
+      }
+    }
+    return scrapeResponse;
   }
 
   public void stop() {
@@ -260,7 +303,6 @@ public class Agent {
     catch (InterruptedException e) {
       e.printStackTrace();
     }
-
   }
 
   private void connectAgent() { this.blockingStub.connectAgent(Empty.getDefaultInstance()); }

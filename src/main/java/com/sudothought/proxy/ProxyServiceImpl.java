@@ -114,18 +114,31 @@ class ProxyServiceImpl
   }
 
   @Override
-  public void writeResponseToProxy(final ScrapeResponse response, final StreamObserver<Empty> responseObserver) {
-    final long scrapeId = response.getScrapeId();
-    final ScrapeRequestContext scrapeRequestContext = this.proxy.removeScrapeRequest(scrapeId);
-    if (scrapeRequestContext == null) {
-      logger.error("Missing ScrapeRequestContext for scrape_id: {}", scrapeId);
-    }
-    else {
-      scrapeRequestContext.setScrapeResponse(response);
-      scrapeRequestContext.markComplete();
-    }
+  public StreamObserver<ScrapeResponse> writeResponsesToProxy(StreamObserver<Empty> responseObserver) {
+    return new StreamObserver<ScrapeResponse>() {
+      @Override
+      public void onNext(final ScrapeResponse response) {
+        final long scrapeId = response.getScrapeId();
+        final ScrapeRequestContext scrapeRequestContext = proxy.removeScrapeRequest(scrapeId);
+        if (scrapeRequestContext == null) {
+          logger.error("Missing ScrapeRequestContext for scrape_id: {}", scrapeId);
+        }
+        else {
+          scrapeRequestContext.setScrapeResponse(response);
+          scrapeRequestContext.markComplete();
+        }
+      }
 
-    responseObserver.onNext(Empty.getDefaultInstance());
-    responseObserver.onCompleted();
+      @Override
+      public void onError(final Throwable t) {
+        logger.warn("Encountered error in writeResponsesToProxy() [{}]", t.getMessage());
+      }
+
+      @Override
+      public void onCompleted() {
+        responseObserver.onNext(Empty.getDefaultInstance());
+        responseObserver.onCompleted();
+      }
+    };
   }
 }
