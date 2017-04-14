@@ -10,9 +10,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class ScrapeRequestContext {
 
-  private final long                            createTime      = System.currentTimeMillis();
-  private final CountDownLatch                  complete        = new CountDownLatch(1);
-  private final AtomicReference<ScrapeResponse> scrape_response = new AtomicReference<>();
+  private final long                            createTime        = System.currentTimeMillis();
+  private final CountDownLatch                  complete          = new CountDownLatch(1);
+  private final AtomicReference<ScrapeResponse> scrapeResponseRef = new AtomicReference<>();
 
   private final ScrapeRequest scrapeRequest;
 
@@ -34,7 +34,9 @@ public class ScrapeRequestContext {
 
   public void markComplete() { this.complete.countDown(); }
 
-  public AtomicReference<ScrapeResponse> getScrapeResponse() { return this.scrape_response; }
+  public ScrapeResponse getScrapeResponse() { return this.scrapeResponseRef.get(); }
+
+  public void setScrapeResponse(final ScrapeResponse scrapeResponse) { this.scrapeResponseRef.set(scrapeResponse);}
 
   public long ageInSecs() { return (System.currentTimeMillis() - this.createTime) / 1000;}
 }

@@ -11,6 +11,7 @@ import com.sudothought.grpc.RegisterPathResponse;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import io.grpc.stub.StreamObserver;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
@@ -19,8 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
 class ProxyServiceImpl
     extends ProxyServiceGrpc.ProxyServiceImplBase {
 
-  private static final org.slf4j.Logger logger = LoggerFactory.getLogger(ProxyServiceImpl.class);
-
+  private static final Logger     logger            = LoggerFactory.getLogger(ProxyServiceImpl.class);
   private static final AtomicLong PATH_ID_GENERATOR = new AtomicLong(0);
 
   private final Proxy proxy;
@@ -121,7 +121,7 @@ class ProxyServiceImpl
       logger.error("Missing ScrapeRequestContext for scrape_id: {}", scrape_id);
     }
     else {
-      scrapeRequestContext.getScrapeResponse().set(response);
+      scrapeRequestContext.setScrapeResponse(response);
       scrapeRequestContext.markComplete();
     }
 

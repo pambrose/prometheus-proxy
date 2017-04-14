@@ -10,8 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class HttpServer {
 
-  private static final Logger logger = LoggerFactory.getLogger(HttpServer.class);
-
+  private static final Logger     logger              = LoggerFactory.getLogger(HttpServer.class);
   private static final AtomicLong SCRAPE_ID_GENERATOR = new AtomicLong(0);
 
   private final Proxy   proxy;
@@ -75,7 +74,7 @@ public class HttpServer {
 
                        logger.info("Results returned from agent for scrape_id: {}", scrape_id);
 
-                       final int status_code = scrapeRequestContext.getScrapeResponse().get().getStatusCode();
+                       final int status_code = scrapeRequestContext.getScrapeResponse().getStatusCode();
                        res.status(status_code);
 
                        if (status_code >= 400) {
@@ -83,7 +82,7 @@ public class HttpServer {
                        }
                        else {
                          res.type("text/plain");
-                         return scrapeRequestContext.getScrapeResponse().get().getText();
+                         return scrapeRequestContext.getScrapeResponse().getText();
                        }
 
                      });

@@ -47,8 +47,8 @@ public class Agent {
   private static final Logger logger        = LoggerFactory.getLogger(Agent.class);
   private static final String AGENT_CONFIGS = "agent_configs";
 
-  private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new ArrayBlockingQueue<>(1000);
   private final ExecutorService               executorService     = Executors.newFixedThreadPool(2);
+  private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new ArrayBlockingQueue<>(1000);
 
   // Map path to PathContext
   private final Map<String, PathContext> pathContextMap = Maps.newConcurrentMap();
@@ -141,6 +141,7 @@ public class Agent {
       try {
         this.setAgentId(null);
         this.pathContextMap.clear();
+        this.scrapeResponseQueue.clear();
 
         logger.info("Connecting to proxy at {}...", this.hostname);
         this.connectAgent();
@@ -162,26 +163,25 @@ public class Agent {
                     @Override
                     public void onNext(ScrapeRequest scrapeRequest) {
                       final PathContext pathContext = pathContextMap.get(scrapeRequest.getPath());
-                      ScrapeResponse.Builder scrape_response = ScrapeResponse.newBuilder()
-                                                                             .setAgentId(scrapeRequest.getAgentId())
-                                                                             .setScrapeId(scrapeRequest.getScrapeId());
+                      ScrapeResponse.Builder scrapeResponse = ScrapeResponse.newBuilder()
+                                                                            .setAgentId(scrapeRequest.getAgentId())
+                                                                            .setScrapeId(scrapeRequest.getScrapeId());
                       try {
                         logger.info("Fetching {}", pathContext.getUrl());
                         final Response response = pathContext.fetchUrl();
-
-                        scrape_response.setValid(true)
-                                       .setStatusCode(response.code())
-                                       .setText(response.body().string())
-                                       .build();
+                        scrapeResponse.setValid(true)
+                                      .setStatusCode(response.code())
+                                      .setText(response.body().string())
+                                      .build();
                       }
                       catch (IOException e) {
-                        scrape_response.setValid(false)
-                                       .setStatusCode(404)
-                                       .setText("");
+                        scrapeResponse.setValid(false)
+                                      .setStatusCode(404)
+                                      .setText("");
                       }
 
                       try {
-                        scrapeResponseQueue.put(scrape_response.build());
+                        scrapeResponseQueue.put(scrapeResponse.build());
                       }
                       catch (InterruptedException e) {
                         e.printStackTrace();
@@ -204,7 +204,7 @@ public class Agent {
 
         this.executorService.submit(
             () -> {
-              while (countDownLatch.getCount() < 2) {
+              while (countDownLatch.getCount() == 2) {
                 try {
                   // Set a short timeout to check if client has disconnected
                   final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
@@ -304,8 +304,9 @@ public class Agent {
 
   public void setAgentId(final String agent_id) { this.agentIdRef.set(agent_id); }
 
+  private String getAgenId() { return this.agentIdRef.get(); }
+
   private boolean isStopped() { return this.stopped.get(); }
 
-  private String getAgenId() { return this.agentIdRef.get(); }
 
 }

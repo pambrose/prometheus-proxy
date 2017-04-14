@@ -1,9 +1,3 @@
-PBAPIS = ${HOME}/git/protobuf/src
-
-py-stubs:
-	cd src/main/proto; python -m grpc_tools.protoc -I. -I$(PBAPIS) --python_out=../../../pb/ --grpc_python_out=../../../pb/ ./proxy_service.proto
-
-
 build:
 	mvn -DskipTests=true clean package
 

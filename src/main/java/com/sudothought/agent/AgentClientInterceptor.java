@@ -8,12 +8,16 @@ import io.grpc.ForwardingClientCall;
 import io.grpc.ForwardingClientCallListener;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.Status;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.sudothought.proxy.Proxy.AGENT_ID;
 
 public class AgentClientInterceptor
     implements ClientInterceptor {
+
+  private static final Logger logger = LoggerFactory.getLogger(AgentClientInterceptor.class);
+
   private final Agent agent;
 
   public AgentClientInterceptor(Agent agent) {
@@ -25,6 +29,7 @@ public class AgentClientInterceptor
                                                              final CallOptions callOptions,
                                                              final Channel next) {
     final String methodName = method.getFullMethodName();
+    // logger.info("Intercepting {}", methodName);
     return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(this.agent.getChannel().newCall(method,
                                                                                                             callOptions)) {
       @Override
@@ -38,21 +43,6 @@ public class AgentClientInterceptor
                 if (agent_id != null)
                   agent.setAgentId(agent_id);
                 super.onHeaders(headers);
-              }
-
-              @Override
-              public void onMessage(RespT message) {
-                super.onMessage(message);
-              }
-
-              @Override
-              public void onClose(Status status, Metadata trailers) {
-                super.onClose(status, trailers);
-              }
-
-              @Override
-              public void onReady() {
-                super.onReady();
               }
             },
             headers);
