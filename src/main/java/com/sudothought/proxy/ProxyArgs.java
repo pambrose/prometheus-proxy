@@ -1,6 +1,7 @@
-package com.sudothought.args;
+package com.sudothought.proxy;
 
 import com.beust.jcommander.Parameter;
+import com.sudothought.common.BaseArgs;
 
 public class ProxyArgs
     extends BaseArgs {

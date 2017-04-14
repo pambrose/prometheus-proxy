@@ -2,7 +2,6 @@ package com.sudothought.proxy;
 
 import com.google.common.collect.Maps;
 import com.sudothought.agent.AgentContext;
-import com.sudothought.args.ProxyArgs;
 import com.sudothought.common.MetricsServer;
 import io.grpc.Attributes;
 import io.grpc.Server;

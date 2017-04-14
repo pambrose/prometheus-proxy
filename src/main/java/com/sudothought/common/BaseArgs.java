@@ -1,4 +1,4 @@
-package com.sudothought.args;
+package com.sudothought.common;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;

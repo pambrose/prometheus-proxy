@@ -1,6 +1,7 @@
-package com.sudothought.args;
+package com.sudothought.agent;
 
 import com.beust.jcommander.Parameter;
+import com.sudothought.common.BaseArgs;
 
 public class AgentArgs
     extends BaseArgs {

@@ -2,7 +2,6 @@ package com.sudothought.agent;
 
 import com.google.common.collect.Maps;
 import com.google.protobuf.Empty;
-import com.sudothought.args.AgentArgs;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.ProxyServiceGrpc;
 import com.sudothought.grpc.RegisterAgentRequest;
