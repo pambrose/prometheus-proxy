@@ -19,7 +19,7 @@
         <yaml.version>1.18</yaml.version>
         <okhttp.version>3.6.0</okhttp.version>
         <logback.version>1.2.3</logback.version>
-        <slf4j.version>1.8.0-alpha0</slf4j.version>
+        <slf4j.version>1.8.0-alpha1</slf4j.version>
 
         <maven.compiler.version>3.6.1</maven.compiler.version>
         <maven-jar-plugin.version>3.0.2</maven-jar-plugin.version>
@@ -29,6 +29,10 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
+
+    <prerequisites>
+        <maven>3.5</maven>
+    </prerequisites>
 
     <dependencies>
         <dependency>
@@ -201,6 +205,7 @@
                     </execution>
                 </executions>
             </plugin>
+
         </plugins>
     </build>
 </project>

@@ -1,0 +1,16 @@
+FROM java:8
+MAINTAINER Paul Ambrose "pambrose@mac.com"
+
+RUN apt-get update
+RUN apt-get -y install maven
+RUN apt-get -y install git
+RUN apt-get -y install make
+RUN apt-get -y install docker
+RUN apt-get clean
+
+RUN mkdir /git
+RUN cd /git && git clone https://github.com/pambrose/prometheus-proxy.git
+RUN cd /git/prometheus-proxy && make build
+
+WORKDIR /git/haptava-system
+
