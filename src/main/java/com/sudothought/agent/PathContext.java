@@ -14,11 +14,10 @@ public class PathContext {
 
   private final OkHttpClient client = new OkHttpClient();
 
-  private final long   pathId;
-  private final String path;
-  private final String url;
-
-  private Request request;
+  private final long    pathId;
+  private final String  path;
+  private final String  url;
+  private final Request request;
 
   public PathContext(long pathId, String path, String url) {
     this.pathId = pathId;

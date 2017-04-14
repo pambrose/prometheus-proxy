@@ -3,7 +3,6 @@ package com.sudothought.proxy;
 import com.google.common.collect.Maps;
 import com.sudothought.agent.AgentContext;
 import com.sudothought.common.MetricsServer;
-import io.grpc.Attributes;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;
@@ -19,11 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Proxy {
 
-  public static final String                 AGENT_ID        = "agent-id";
-  public static final Attributes.Key<String> ATTRIB_AGENT_ID = Attributes.Key.of(AGENT_ID);
-
   private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
-
 
   private final AtomicBoolean                   stopped          = new AtomicBoolean(false);
   // Map agent_id to AgentContext

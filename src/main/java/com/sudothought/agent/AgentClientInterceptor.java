@@ -11,7 +11,7 @@ import io.grpc.MethodDescriptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.sudothought.proxy.Proxy.AGENT_ID;
+import static com.sudothought.common.Constants.AGENT_ID;
 
 public class AgentClientInterceptor
     implements ClientInterceptor {
