@@ -120,7 +120,7 @@ class ProxyServiceImpl
       public void onError(Throwable t) {
         final Status status = Status.fromThrowable(t);
         if (status != Status.CANCELLED)
-          logger.info("onError() in writeResponsesToProxy(): {}", status);
+          logger.info("Error in writeResponsesToProxy(): {}", status);
         try {
           responseObserver.onNext(Empty.getDefaultInstance());
           responseObserver.onCompleted();

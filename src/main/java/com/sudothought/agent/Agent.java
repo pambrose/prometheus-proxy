@@ -2,6 +2,7 @@ package com.sudothought.agent;
 
 import com.google.common.collect.Maps;
 import com.google.protobuf.Empty;
+import com.sudothought.common.MetricsServer;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.ProxyServiceGrpc;
 import com.sudothought.grpc.RegisterAgentRequest;
@@ -17,6 +18,8 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import io.prometheus.client.Summary;
+import io.prometheus.client.hotspot.DefaultExports;
 import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +42,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
+import static com.sudothought.agent.AgentMetrics.AGENT_SCRAPE_QUEUE_SIZE;
+import static com.sudothought.agent.AgentMetrics.AGENT_SCRAPE_REQUESTS;
+import static com.sudothought.agent.AgentMetrics.AGENT_SCRAPE_REQUEST_LATENCY;
 
 public class Agent {
 
@@ -57,8 +63,9 @@ public class Agent {
   private final ManagedChannel                            channel;
   private final ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
   private final ProxyServiceGrpc.ProxyServiceStub         asyncStub;
+  private final MetricsServer                             metricsServer;
 
-  private Agent(String hostname, final List<Map<String, String>> agentConfigs) {
+  private Agent(String hostname, final int metricsPort, final List<Map<String, String>> agentConfigs) {
     this.agentConfigs = agentConfigs;
 
     final String host;
@@ -76,14 +83,14 @@ public class Agent {
     final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port)
                                                                          .usePlaintext(true);
     this.channel = channelBuilder.build();
-
     final ClientInterceptor interceptor = new AgentClientInterceptor(this);
-
     this.blockingStub = ProxyServiceGrpc.newBlockingStub(ClientInterceptors.intercept(this.channel, interceptor));
     this.asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(this.channel, interceptor));
+    this.metricsServer = new MetricsServer(metricsPort);
   }
 
-  public static void main(final String[] argv) {
+  public static void main(final String[] argv)
+      throws IOException {
     final AgentArgs agentArgs = new AgentArgs();
     agentArgs.parseArgs(Agent.class.getName(), argv);
 
@@ -96,7 +103,7 @@ public class Agent {
       return;
     }
 
-    final Agent agent = new Agent(agentArgs.proxy_hostname, agentConfigs);
+    final Agent agent = new Agent(agentArgs.proxy_hostname, agentArgs.metrics_port, agentConfigs);
     agent.run();
   }
 
@@ -126,13 +133,17 @@ public class Agent {
     }
   }
 
-  private void run() {
+  private void run()
+      throws IOException {
+    this.metricsServer.start();
+    DefaultExports.initialize();
+
     Runtime.getRuntime()
            .addShutdownHook(
                new Thread(() -> {
-                 System.err.println("*** Shutting down Agent since JVM is shutting down");
+                 System.err.println("*** Shutting down Agent ***");
                  Agent.this.stop();
-                 System.err.println("*** Agent shut down");
+                 System.err.println("*** Agent shut down ***");
                }));
 
     while (!this.isStopped()) {
@@ -158,8 +169,10 @@ public class Agent {
                                    new StreamObserver<ScrapeRequest>() {
                                      @Override
                                      public void onNext(final ScrapeRequest scrapeRequest) {
-                                       final ScrapeResponse scrapeResponse = fetchScrapeResponse(scrapeRequest);
+                                       final ScrapeResponse scrapeResponse = fetchScrape(scrapeRequest);
                                        try {
+                                         AGENT_SCRAPE_REQUESTS.observe(1);
+                                         AGENT_SCRAPE_QUEUE_SIZE.inc();
                                          scrapeResponseQueue.put(scrapeResponse);
                                        }
                                        catch (InterruptedException e) {
@@ -170,7 +183,7 @@ public class Agent {
                                      @Override
                                      public void onError(Throwable t) {
                                        final Status status = Status.fromThrowable(t);
-                                       logger.info("onError() in readRequestsFromProxy(): {}", status);
+                                       logger.info("Error in readRequestsFromProxy(): {}", status);
                                        disconnected.set(true);
                                      }
 
@@ -190,7 +203,7 @@ public class Agent {
               @Override
               public void onError(Throwable t) {
                 final Status status = Status.fromThrowable(t);
-                logger.info("onError() in writeResponsesToProxy(): {}", status);
+                logger.info("Error in writeResponsesToProxy(): {}", status);
                 disconnected.set(true);
               }
 
@@ -205,7 +218,8 @@ public class Agent {
             // Set a short timeout to check if client has disconnected
             final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
             if (response != null)
-              responseObserver.onNext(response);
+              AGENT_SCRAPE_QUEUE_SIZE.dec();
+            responseObserver.onNext(response);
           }
           catch (InterruptedException e) {
             // Ignore
@@ -244,36 +258,42 @@ public class Agent {
                          .build();
   }
 
-  private ScrapeResponse fetchScrapeResponse(final ScrapeRequest scrapeRequest) {
-    final String path = scrapeRequest.getPath();
-    final PathContext pathContext = this.pathContextMap.get(path);
-    ScrapeResponse scrapeResponse;
-    if (pathContext == null) {
-      logger.warn("Invalid path request: {}", path);
-      scrapeResponse = this.invalidScrapeResponse(scrapeRequest);
-    }
-    else {
-      try {
-        logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
-        final Response res = pathContext.fetchUrl(scrapeRequest);
-        scrapeResponse = ScrapeResponse.newBuilder()
-                                       .setAgentId(scrapeRequest.getAgentId())
-                                       .setScrapeId(scrapeRequest.getScrapeId())
-                                       .setValid(true)
-                                       .setStatusCode(res.code())
-                                       .setText(res.body().string())
-                                       .setContentType(res.header(CONTENT_TYPE))
-                                       .build();
+  private ScrapeResponse fetchScrape(final ScrapeRequest scrapeRequest) {
+    final Summary.Timer requestTimer = AGENT_SCRAPE_REQUEST_LATENCY.startTimer();
+    try {
+      final String path = scrapeRequest.getPath();
+      final PathContext pathContext = this.pathContextMap.get(path);
+      if (pathContext == null) {
+        logger.warn("Invalid path request: {}", path);
+        return this.invalidScrapeResponse(scrapeRequest);
       }
-      catch (IOException e) {
-        scrapeResponse = this.invalidScrapeResponse(scrapeRequest);
+      else {
+        try {
+          logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
+          final Response res = pathContext.fetchUrl(scrapeRequest);
+          return ScrapeResponse.newBuilder()
+                               .setAgentId(scrapeRequest.getAgentId())
+                               .setScrapeId(scrapeRequest.getScrapeId())
+                               .setValid(true)
+                               .setStatusCode(res.code())
+                               .setText(res.body().string())
+                               .setContentType(res.header(CONTENT_TYPE))
+                               .build();
+        }
+        catch (IOException e) {
+          return this.invalidScrapeResponse(scrapeRequest);
+        }
       }
     }
-    return scrapeResponse;
+    finally {
+      requestTimer.observeDuration();
+    }
   }
 
   public void stop() {
     this.stopped.set(true);
+
+    this.metricsServer.stop();
 
     try {
       this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);

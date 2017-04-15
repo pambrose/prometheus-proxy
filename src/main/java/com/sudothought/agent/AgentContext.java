@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static com.sudothought.proxy.ProxyMetrics.AGENT_SCRAPE_QUEUE_SIZE;
+import static com.sudothought.proxy.ProxyMetrics.PROXY_SCRAPE_QUEUE_SIZE;
 
 public class AgentContext {
 
@@ -33,15 +33,15 @@ public class AgentContext {
   public String getRemoteAddr() { return this.remoteAddr; }
 
   public void addScrapeRequest(final ScrapeRequestContext scrapeRequest) {
+    PROXY_SCRAPE_QUEUE_SIZE.inc();
     this.scrapeRequestQueue.add(scrapeRequest);
-    AGENT_SCRAPE_QUEUE_SIZE.inc();
   }
 
   public ScrapeRequestContext pollScrapeRequestQueue(final long waitMillis) {
     try {
       final ScrapeRequestContext retval = this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS);
       if (retval != null)
-        AGENT_SCRAPE_QUEUE_SIZE.dec();
+        PROXY_SCRAPE_QUEUE_SIZE.dec();
       return retval;
     }
     catch (InterruptedException e) {

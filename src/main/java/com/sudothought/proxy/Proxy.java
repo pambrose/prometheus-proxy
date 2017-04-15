@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.sudothought.proxy.ProxyMetrics.PROXY_PATH_MAP_SIZE;
 import static com.sudothought.proxy.ProxyMetrics.PROXY_SCRAPE_MAP_SIZE;
-import static com.sudothought.proxy.ProxyMetrics.SCRAPE_REQUESTS;
+import static com.sudothought.proxy.ProxyMetrics.PROXY_SCRAPE_REQUESTS;
 
 public class Proxy {
 
@@ -67,7 +67,6 @@ public class Proxy {
     logger.info("Started gRPC server listening on {}", this.grpcPort);
 
     this.httpServer.start();
-
     this.metricsServer.start();
 
     DefaultExports.initialize();
@@ -75,9 +74,9 @@ public class Proxy {
     Runtime.getRuntime()
            .addShutdownHook(
                new Thread(() -> {
-                 System.err.println("*** Shutting down Proxy since JVM is shutting down");
+                 System.err.println("*** Shutting down Proxy ***");
                  Proxy.this.stop();
-                 System.err.println("*** Proxy shut down");
+                 System.err.println("*** Proxy shut down ***");
                }));
   }
 
@@ -122,7 +121,7 @@ public class Proxy {
 
   public void addScrapeRequest(final ScrapeRequestContext scrapeRequestContext) {
     this.scrapeRequestMap.put(scrapeRequestContext.getScrapeId(), scrapeRequestContext);
-    SCRAPE_REQUESTS.observe(1);
+    PROXY_SCRAPE_REQUESTS.observe(1);
     PROXY_SCRAPE_MAP_SIZE.inc();
   }
 

@@ -5,11 +5,11 @@ dev:
     - script:
       name: Build
       code: |
-        make build
+        mvn -DskipTests=true clean package
 
 build:
   steps:
     - script:
       name: Build
       code: |
-        make build
+        mvn -DskipTests=true clean package
