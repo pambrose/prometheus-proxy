@@ -217,9 +217,10 @@ public class Agent {
           try {
             // Set a short timeout to check if client has disconnected
             final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
-            if (response != null)
+            if (response != null) {
               AGENT_SCRAPE_QUEUE_SIZE.dec();
-            responseObserver.onNext(response);
+              responseObserver.onNext(response);
+            }
           }
           catch (InterruptedException e) {
             // Ignore
