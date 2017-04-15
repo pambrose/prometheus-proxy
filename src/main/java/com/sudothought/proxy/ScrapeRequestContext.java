@@ -7,29 +7,42 @@ import io.prometheus.client.Summary;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.sudothought.proxy.ProxyMetrics.SCRAPE_REQUEST_LATENCY;
+
 public class ScrapeRequestContext {
+
+  private static final AtomicLong SCRAPE_ID_GENERATOR = new AtomicLong(0);
 
   private final long                            createTime        = System.currentTimeMillis();
   private final CountDownLatch                  complete          = new CountDownLatch(1);
   private final AtomicReference<ScrapeResponse> scrapeResponseRef = new AtomicReference<>();
-  private final Summary.Timer                   requestTimer      = ProxyMetrics.SCRAPE_REQUEST_LATENCY.startTimer();
+  private final Summary.Timer                   requestTimer      = SCRAPE_REQUEST_LATENCY.startTimer();
 
   private final ScrapeRequest scrapeRequest;
 
-  public ScrapeRequestContext(final ScrapeRequest scrapeRequest) {
-    this.scrapeRequest = scrapeRequest;
+  public ScrapeRequestContext(final String agentId, final String path) {
+    this.scrapeRequest = ScrapeRequest.newBuilder()
+                                      .setAgentId(agentId)
+                                      .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
+                                      .setPath(path)
+                                      .build();
+  }
+
+  public long getScrapeId() {
+    return this.scrapeRequest.getScrapeId();
   }
 
   public ScrapeRequest getScrapeRequest() { return this.scrapeRequest; }
 
-  public boolean waitUntilComplete() {
+  public boolean waitUntilComplete(final long waitMillis) {
     try {
-      return this.complete.await(1, TimeUnit.SECONDS);
+      return this.complete.await(waitMillis, TimeUnit.MILLISECONDS);
     }
     catch (InterruptedException e) {
-      e.printStackTrace();
+      // Ignore
     }
     return false;
   }

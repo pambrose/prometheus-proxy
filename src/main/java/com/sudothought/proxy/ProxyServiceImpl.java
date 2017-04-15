@@ -11,11 +11,11 @@ import com.sudothought.grpc.RegisterPathResponse;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 class ProxyServiceImpl
@@ -62,29 +62,22 @@ class ProxyServiceImpl
   public void registerPath(final RegisterPathRequest request,
                            final StreamObserver<RegisterPathResponse> responseObserver) {
     final String path = request.getPath();
-    if (this.proxy.getPathMap().containsKey(path))
+    if (this.proxy.containsPath(path))
       logger.info("Overwriting path /{}", path);
 
     final String agentId = request.getAgentId();
-    this.proxy.getPathMap().put(path, agentId);
-
     final AgentContext agentContext = this.proxy.getAgentContext(agentId);
-    final boolean valid;
-    final long pathId;
-    if (agentContext == null) {
-      logger.info("Missing AgentContext for agent_id: {}", agentId);
-      valid = false;
-      pathId = -1;
-    }
-    else {
-      logger.info("Registered path /{} to {} {}", path, agentContext.getRemoteAddr(), agentContext.getHostname());
-      valid = true;
-      pathId = PATH_ID_GENERATOR.getAndIncrement();
-    }
     final RegisterPathResponse response = RegisterPathResponse.newBuilder()
-                                                              .setValid(valid)
-                                                              .setPathId(pathId)
+                                                              .setValid(agentContext != null)
+                                                              .setPathId(agentContext != null
+                                                                         ? PATH_ID_GENERATOR.getAndIncrement()
+                                                                         : -1)
                                                               .build();
+    if (agentContext == null)
+      logger.error("Missing AgentContext for agent_id: {}", agentId);
+    else
+      this.proxy.addPath(path, agentId, agentContext);
+
     responseObserver.onNext(response);
     responseObserver.onCompleted();
   }
@@ -96,20 +89,13 @@ class ProxyServiceImpl
       // Lookup the agentContext each time in case agent has gone away
       final AgentContext agentContext = this.proxy.getAgentContext(agentId);
       if (agentContext == null) {
-        logger.info("Missing AgentContext for agent_id: {}", agentId);
+        // logger.info("Missing AgentContext for agent_id: {}", agentId);
         break;
       }
 
-      try {
-        final ScrapeRequestContext scrapeRequestContext = agentContext.getScrapeRequestQueue().poll(1,
-                                                                                                    TimeUnit.SECONDS);
-        if (scrapeRequestContext == null)
-          continue;
+      final ScrapeRequestContext scrapeRequestContext = agentContext.pollScrapeRequestQueue(1000);
+      if (scrapeRequestContext != null)
         responseObserver.onNext(scrapeRequestContext.getScrapeRequest());
-      }
-      catch (InterruptedException e) {
-        e.printStackTrace();
-      }
     }
     responseObserver.onCompleted();
   }
@@ -133,9 +119,15 @@ class ProxyServiceImpl
       @Override
       public void onError(Throwable t) {
         final Status status = Status.fromThrowable(t);
-        logger.info("onError() in writeResponsesToProxy(): {}", status);
-        responseObserver.onNext(Empty.getDefaultInstance());
-        responseObserver.onCompleted();
+        if (status != Status.CANCELLED)
+          logger.info("onError() in writeResponsesToProxy(): {}", status);
+        try {
+          responseObserver.onNext(Empty.getDefaultInstance());
+          responseObserver.onCompleted();
+        }
+        catch (StatusRuntimeException e) {
+          // Ignore
+        }
       }
 
       @Override

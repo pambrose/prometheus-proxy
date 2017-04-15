@@ -1,17 +1,13 @@
 package com.sudothought.proxy;
 
 import com.sudothought.agent.AgentContext;
-import com.sudothought.grpc.ScrapeRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import spark.Service;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 public class HttpServer {
 
-  private static final Logger     logger              = LoggerFactory.getLogger(HttpServer.class);
-  private static final AtomicLong SCRAPE_ID_GENERATOR = new AtomicLong(0);
+  private static final Logger logger = LoggerFactory.getLogger(HttpServer.class);
 
   private final Proxy   proxy;
   private final int     port;
@@ -32,7 +28,7 @@ public class HttpServer {
                        res.header("cache-control", "no-cache");
 
                        final String path = req.splat()[0];
-                       final String agentId = this.proxy.getPathMap().get(path);
+                       final String agentId = this.proxy.getAgentIdByPath(path);
 
                        if (agentId == null) {
                          logger.info("Missing path request /{}", path);
@@ -47,35 +43,28 @@ public class HttpServer {
                          return null;
                        }
 
-                       final long scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement();
-                       final ScrapeRequest scrapeRequest = ScrapeRequest.newBuilder()
-                                                                        .setAgentId(agentId)
-                                                                        .setScrapeId(scrapeId)
-                                                                        .setPath(path)
-                                                                        .build();
-                       final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(scrapeRequest);
-
-                       this.proxy.addScrapeRequest(scrapeId, scrapeRequestContext);
-                       agentContext.getScrapeRequestQueue().add(scrapeRequestContext);
+                       final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(agentId, path);
+                       this.proxy.addScrapeRequest(scrapeRequestContext);
+                       agentContext.addScrapeRequest(scrapeRequestContext);
 
                        while (true) {
-                         if (scrapeRequestContext.waitUntilComplete()) {
+                         // Returns false if timed out
+                         if (scrapeRequestContext.waitUntilComplete(1000))
                            break;
-                         }
-                         else {
-                           // Check if agent is disconnected or agent is hung
-                           if (!proxy.isValidAgentId(agentId) || scrapeRequestContext.ageInSecs() >= 5 || proxy.isStopped()) {
-                             res.status(503);
-                             return null;
-                           }
+
+                         // Check if agent is disconnected or agent is hung
+                         if (!proxy.isValidAgentId(agentId) || scrapeRequestContext.ageInSecs() >= 5 || proxy.isStopped()) {
+                           res.status(503);
+                           return null;
                          }
                        }
 
-                       logger.info("Results returned from agent for scrape_id: {}", scrapeId);
+                       logger.info("Results returned from agent for scrape_id: {}", scrapeRequestContext.getScrapeId());
 
                        final int status_code = scrapeRequestContext.getScrapeResponse().getStatusCode();
                        res.status(status_code);
 
+                       // Do not return content on error status codes
                        if (status_code >= 400) {
                          return null;
                        }
@@ -87,7 +76,5 @@ public class HttpServer {
                      });
   }
 
-  public void stop() {
-    this.service.stop();
-  }
+  public void stop() { this.service.stop(); }
 }

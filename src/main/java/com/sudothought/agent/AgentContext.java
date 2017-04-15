@@ -4,8 +4,11 @@ import com.sudothought.proxy.ScrapeRequestContext;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static com.sudothought.proxy.ProxyMetrics.AGENT_SCRAPE_QUEUE_SIZE;
 
 public class AgentContext {
 
@@ -21,8 +24,6 @@ public class AgentContext {
     this.remoteAddr = remoteAddr;
   }
 
-  public BlockingQueue<ScrapeRequestContext> getScrapeRequestQueue() { return this.scrapeRequestQueue; }
-
   public String getAgentId() { return this.agentId; }
 
   public String getHostname() { return this.hostname.get(); }
@@ -30,4 +31,21 @@ public class AgentContext {
   public void setHostname(String hostname) { this.hostname.set(hostname); }
 
   public String getRemoteAddr() { return this.remoteAddr; }
+
+  public void addScrapeRequest(final ScrapeRequestContext scrapeRequest) {
+    this.scrapeRequestQueue.add(scrapeRequest);
+    AGENT_SCRAPE_QUEUE_SIZE.inc();
+  }
+
+  public ScrapeRequestContext pollScrapeRequestQueue(final long waitMillis) {
+    try {
+      final ScrapeRequestContext retval = this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS);
+      if (retval != null)
+        AGENT_SCRAPE_QUEUE_SIZE.dec();
+      return retval;
+    }
+    catch (InterruptedException e) {
+      return null;
+    }
+  }
 }

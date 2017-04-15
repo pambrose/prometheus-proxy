@@ -41,7 +41,7 @@ public class ProxyTransportFilter
     final AgentContext agentContext = new AgentContext(remote_addr);
     final String agentId = agentContext.getAgentId();
     this.proxy.addAgentContext(agentId, agentContext);
-    logger.info("Connection from {} agent_id: {}", remote_addr, agentId);
+    logger.info("Connected to {} agent_id: {}", remote_addr, agentId);
     return Attributes.newBuilder()
                      .set(Constants.ATTRIB_AGENT_ID, agentId)
                      .setAll(attributes)
@@ -51,9 +51,9 @@ public class ProxyTransportFilter
   @Override
   public void transportTerminated(final Attributes attributes) {
     final String agentId = attributes.get(Constants.ATTRIB_AGENT_ID);
+    this.proxy.removePathByAgentId(agentId);
     final AgentContext agentContext = this.proxy.removeAgentContext(agentId);
-    logger.info("Disconnection from {} agent_id: {}",
-                agentContext.getRemoteAddr(), agentId);
+    logger.info("Disconnected from {} agent_id: {}", agentContext.getRemoteAddr(), agentId);
     super.transportTerminated(attributes);
   }
 }

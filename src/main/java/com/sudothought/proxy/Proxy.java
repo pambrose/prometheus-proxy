@@ -16,6 +16,10 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.sudothought.proxy.ProxyMetrics.PROXY_PATH_MAP_SIZE;
+import static com.sudothought.proxy.ProxyMetrics.PROXY_SCRAPE_MAP_SIZE;
+import static com.sudothought.proxy.ProxyMetrics.SCRAPE_REQUESTS;
+
 public class Proxy {
 
   private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
@@ -46,7 +50,6 @@ public class Proxy {
     this.httpServer = new HttpServer(this, proxyPort);
     this.metricsServer = new MetricsServer(metricsPort);
   }
-
 
   public static void main(final String[] argv)
       throws IOException {
@@ -90,15 +93,13 @@ public class Proxy {
       this.grpcServer.awaitTermination();
     }
     catch (InterruptedException e) {
-      e.printStackTrace();
+      // Ignore
     }
   }
 
   public boolean isValidAgentId(final String agentId) {return this.agentContextMap.containsKey(agentId);}
 
   public boolean isStopped() { return this.stopped.get(); }
-
-  public Map<String, String> getPathMap() { return this.pathMap; }
 
   public void addAgentContext(final String agentId, final AgentContext agentContext) {
     this.agentContextMap.put(agentId, agentContext);
@@ -108,16 +109,54 @@ public class Proxy {
   public AgentContext getAgentContext(String agentId) { return this.agentContextMap.get(agentId); }
 
   public AgentContext removeAgentContext(String agentId) {
-    ProxyMetrics.CONNECTED_AGENTS.dec();
-    return this.agentContextMap.remove(agentId);
+    final AgentContext agentContext = this.agentContextMap.remove(agentId);
+    if (agentContext != null) {
+      logger.info("Removed AgentContext {} for agent_id: {}", agentContext.getRemoteAddr(), agentId);
+      ProxyMetrics.CONNECTED_AGENTS.dec();
+    }
+    else {
+      logger.error("Missing AgentContext for agent_id: {}", agentId);
+    }
+    return agentContext;
   }
 
-  public void addScrapeRequest(long scrapeId, ScrapeRequestContext scrapeRequestContext) {
-    this.scrapeRequestMap.put(scrapeId, scrapeRequestContext);
-    ProxyMetrics.SCRAPE_REQUESTS.observe(1);
+  public void addScrapeRequest(final ScrapeRequestContext scrapeRequestContext) {
+    this.scrapeRequestMap.put(scrapeRequestContext.getScrapeId(), scrapeRequestContext);
+    SCRAPE_REQUESTS.observe(1);
+    PROXY_SCRAPE_MAP_SIZE.inc();
   }
 
   public ScrapeRequestContext removeScrapeRequest(long scrapeId) {
-    return this.scrapeRequestMap.remove(scrapeId);
+    final ScrapeRequestContext retval = this.scrapeRequestMap.remove(scrapeId);
+    PROXY_SCRAPE_MAP_SIZE.dec();
+    return retval;
+  }
+
+  public String getAgentIdByPath(final String path) { return this.pathMap.get(path); }
+
+  public boolean containsPath(final String path) { return this.pathMap.containsKey(path);}
+
+  public void addPath(final String path, final String agentId, final AgentContext agentContext) {
+    synchronized (this.pathMap) {
+      this.pathMap.put(path, agentId);
+      PROXY_PATH_MAP_SIZE.inc();
+      logger.info("Added path /{} for agent_id: {} [{} {}}",
+                  path, agentId, agentContext.getRemoteAddr(), agentContext.getHostname());
+    }
+  }
+
+  public void removePathByAgentId(final String agentId) {
+    for (Map.Entry<String, String> elem : this.pathMap.entrySet()) {
+      if (elem.getValue().equals(agentId)) {
+        final String path = this.pathMap.remove(elem.getKey());
+        if (path != null) {
+          logger.info("Removed path /{} for agent_id: {}", elem.getKey(), agentId);
+          PROXY_PATH_MAP_SIZE.dec();
+        }
+        else {
+          logger.error("Missing path /{} for agent_id: {}", elem.getKey(), agentId);
+        }
+      }
+    }
   }
 }

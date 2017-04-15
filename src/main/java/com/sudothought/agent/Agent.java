@@ -168,7 +168,7 @@ public class Agent {
                         scrapeResponseQueue.put(scrapeResponse);
                       }
                       catch (InterruptedException e) {
-                        e.printStackTrace();
+                        // Ignore
                       }
                     }
 
@@ -226,14 +226,11 @@ public class Agent {
         // Wait for both threads to finish
         countDownLatch.await();
       }
-      catch (ConnectException e) {
+      catch (ConnectException | InterruptedException e) {
         // Ignore
       }
       catch (StatusRuntimeException e) {
         logger.info("Cannot connect to proxy at {} [{}]", this.hostname, e.getMessage());
-      }
-      catch (InterruptedException e) {
-        e.printStackTrace();
       }
 
       if (connected)
@@ -243,7 +240,7 @@ public class Agent {
         Thread.sleep(2000);
       }
       catch (InterruptedException e) {
-        e.printStackTrace();
+        // Ignore
       }
     }
   }
@@ -292,7 +289,7 @@ public class Agent {
       this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
     }
     catch (InterruptedException e) {
-      e.printStackTrace();
+      // Ignore
     }
 
     this.executorService.shutdownNow();
@@ -301,7 +298,7 @@ public class Agent {
       this.executorService.awaitTermination(1, TimeUnit.SECONDS);
     }
     catch (InterruptedException e) {
-      e.printStackTrace();
+      // Ignore
     }
   }
 
@@ -348,6 +345,4 @@ public class Agent {
   private String getAgenId() { return this.agentIdRef.get(); }
 
   private boolean isStopped() { return this.stopped.get(); }
-
-
 }

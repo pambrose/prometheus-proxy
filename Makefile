@@ -19,3 +19,5 @@ docker-build:
 
 docker-push:
 	./bin/push-docker-images.sh
+
+docker-all: build docker-build docker-push

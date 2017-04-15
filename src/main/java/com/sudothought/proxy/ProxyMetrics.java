@@ -14,6 +14,21 @@ public interface ProxyMetrics {
                                           .register();
   Summary SCRAPE_REQUEST_LATENCY = Summary.build()
                                           .name("scrape_request_latency_seconds")
-                                          .help("Request request latency in seconds")
+                                          .help("Scrape request latency in seconds")
                                           .register();
+
+  Gauge PROXY_PATH_MAP_SIZE = Gauge.build()
+                                   .name("proxy_path_map_size")
+                                   .help("Proxy path map size")
+                                   .register();
+
+  Gauge PROXY_SCRAPE_MAP_SIZE = Gauge.build()
+                                     .name("proxy_scrape_map_size")
+                                     .help("Proxy scrape requests map size")
+                                     .register();
+
+  Gauge AGENT_SCRAPE_QUEUE_SIZE = Gauge.build()
+                                       .name("agent_scrape_queue_size")
+                                       .help("Agent scrape queue size")
+                                       .register();
 }
