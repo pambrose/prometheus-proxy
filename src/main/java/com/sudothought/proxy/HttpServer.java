@@ -34,7 +34,6 @@ public class HttpServer {
           res.header("cache-control", "no-cache");
 
           final String path = req.splat()[0];
-          final String accept = req.headers(ACCEPT);
           final String agentId = this.proxy.getAgentIdByPath(path);
 
           if (agentId == null) {
@@ -50,7 +49,7 @@ public class HttpServer {
             return null;
           }
 
-          final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(agentId, path, accept);
+          final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(agentId, path, req.headers(ACCEPT));
           this.proxy.addScrapeRequest(scrapeRequestContext);
           agentContext.addScrapeRequest(scrapeRequestContext);
 

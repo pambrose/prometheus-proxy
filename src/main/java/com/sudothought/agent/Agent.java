@@ -34,9 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -48,7 +45,6 @@ public class Agent {
   private static final Logger logger        = LoggerFactory.getLogger(Agent.class);
   private static final String AGENT_CONFIGS = "agent_configs";
 
-  private final ExecutorService               executorService     = Executors.newFixedThreadPool(2);
   private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new ArrayBlockingQueue<>(1000);
 
   // Map path to PathContext
@@ -140,7 +136,8 @@ public class Agent {
                }));
 
     while (!this.isStopped()) {
-      boolean connected = false;
+      final AtomicBoolean connected = new AtomicBoolean(false);
+      // Reset on each connection attempt
       this.setAgentId(null);
       this.pathContextMap.clear();
       this.scrapeResponseQueue.clear();
@@ -149,94 +146,82 @@ public class Agent {
         logger.info("Connecting to proxy at {}...", this.hostname);
         this.connectAgent();
         logger.info("Connected to proxy at {}", this.hostname);
-        connected = true;
+        connected.set(true);
 
         this.registerAgent();
         this.registerPaths();
 
-        final CountDownLatch countDownLatch = new CountDownLatch(2);
+        final AtomicBoolean disconnected = new AtomicBoolean(false);
 
-        this.executorService.submit(
-            () -> {
-              final AgentInfo agentInfo = AgentInfo.newBuilder()
-                                                   .setAgentId(this.getAgenId())
-                                                   .build();
-              this.asyncStub.readRequestsFromProxy(
-                  agentInfo,
-                  new StreamObserver<ScrapeRequest>() {
-                    @Override
-                    public void onNext(final ScrapeRequest scrapeRequest) {
-                      final ScrapeResponse scrapeResponse = fetchScrapeResponse(scrapeRequest);
-                      try {
-                        scrapeResponseQueue.put(scrapeResponse);
-                      }
-                      catch (InterruptedException e) {
-                        // Ignore
-                      }
-                    }
+        this.asyncStub
+            .readRequestsFromProxy(AgentInfo.newBuilder().setAgentId(this.getAgenId()).build(),
+                                   new StreamObserver<ScrapeRequest>() {
+                                     @Override
+                                     public void onNext(final ScrapeRequest scrapeRequest) {
+                                       final ScrapeResponse scrapeResponse = fetchScrapeResponse(scrapeRequest);
+                                       try {
+                                         scrapeResponseQueue.put(scrapeResponse);
+                                       }
+                                       catch (InterruptedException e) {
+                                         // Ignore
+                                       }
+                                     }
 
-                    @Override
-                    public void onError(Throwable t) {
-                      final Status status = Status.fromThrowable(t);
-                      logger.info("onError() in readRequestsFromProxy(): {}", status);
-                      countDownLatch.countDown();
-                    }
+                                     @Override
+                                     public void onError(Throwable t) {
+                                       final Status status = Status.fromThrowable(t);
+                                       logger.info("onError() in readRequestsFromProxy(): {}", status);
+                                       disconnected.set(true);
+                                     }
 
-                    @Override
-                    public void onCompleted() {
-                      countDownLatch.countDown();
-                    }
-                  });
-            });
+                                     @Override
+                                     public void onCompleted() {
+                                       disconnected.set(true);
+                                     }
+                                   });
 
-        this.executorService.submit(
-            () -> {
-              final StreamObserver<ScrapeResponse> responseObserver =
-                  this.asyncStub.writeResponsesToProxy(new StreamObserver<Empty>() {
-                    @Override
-                    public void onNext(Empty rmpty) {
-                      // Ignore
-                    }
-
-                    @Override
-                    public void onError(Throwable t) {
-                      final Status status = Status.fromThrowable(t);
-                      logger.info("onError() in writeResponsesToProxy(): {}", status);
-                      countDownLatch.countDown();
-                    }
-
-                    @Override
-                    public void onCompleted() {
-                      countDownLatch.countDown();
-                    }
-                  });
-
-              while (countDownLatch.getCount() == 2) {
-                try {
-                  // Set a short timeout to check if client has disconnected
-                  final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
-                  if (response != null)
-                    responseObserver.onNext(response);
-                }
-                catch (InterruptedException e) {
-                  // Ignore
-                }
+        final StreamObserver<ScrapeResponse> responseObserver = this.asyncStub.writeResponsesToProxy(
+            new StreamObserver<Empty>() {
+              @Override
+              public void onNext(Empty rmpty) {
+                // Ignore
               }
 
-              responseObserver.onCompleted();
+              @Override
+              public void onError(Throwable t) {
+                final Status status = Status.fromThrowable(t);
+                logger.info("onError() in writeResponsesToProxy(): {}", status);
+                disconnected.set(true);
+              }
+
+              @Override
+              public void onCompleted() {
+                disconnected.set(true);
+              }
             });
 
-        // Wait for both threads to finish
-        countDownLatch.await();
+        while (!disconnected.get()) {
+          try {
+            // Set a short timeout to check if client has disconnected
+            final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
+            if (response != null)
+              responseObserver.onNext(response);
+          }
+          catch (InterruptedException e) {
+            // Ignore
+          }
+        }
+
+        // responseObserver.onCompleted();
       }
-      catch (ConnectException | InterruptedException e) {
+      catch (ConnectException e) {
         // Ignore
       }
       catch (StatusRuntimeException e) {
         logger.info("Cannot connect to proxy at {} [{}]", this.hostname, e.getMessage());
       }
 
-      if (connected)
+      if (connected.get())
         logger.info("Disconnected from proxy at {}", this.hostname);
 
       try {
@@ -292,15 +277,6 @@ public class Agent {
 
     try {
       this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
-    }
-    catch (InterruptedException e) {
-      // Ignore
-    }
-
-    this.executorService.shutdownNow();
-
-    try {
-      this.executorService.awaitTermination(1, TimeUnit.SECONDS);
     }
     catch (InterruptedException e) {
       // Ignore
