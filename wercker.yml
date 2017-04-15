@@ -1,0 +1,15 @@
+box: java
+
+dev:
+  steps:
+    - script:
+      name: Build
+      code: |
+        make build
+
+build:
+  steps:
+    - script:
+      name: Build
+      code: |
+        make build
