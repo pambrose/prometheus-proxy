@@ -21,3 +21,9 @@ docker-push:
 	./bin/push-docker-images.sh
 
 docker-all: build docker-build docker-push
+
+run-agent:
+	docker run --rm -p 8080:8080 -p 8082:8082 -v /Users/pambrose/Dropbox/prometheus-proxy/agent.yml:/prometheus-proxy/agent.yml pambrose/pambrose/prometheus-agent:1.0.0
+
+run-proxy:
+	docker run --rm -p 8080:8080 -p 8081:8081 -p 50051:50051 pambrose/pambrose/prometheus-proxy:1.0.0

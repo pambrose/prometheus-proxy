@@ -41,6 +41,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
+
 public class Agent {
 
   private static final Logger logger        = LoggerFactory.getLogger(Agent.class);
@@ -104,6 +106,7 @@ public class Agent {
 
   private static List<Map<String, String>> readAgentConfigs(final String filename)
       throws IOException {
+    logger.info("Loading configuration file {}", filename);
     final Yaml yaml = new Yaml();
     try (final InputStream input = new FileInputStream(new File(filename))) {
       final Map<String, List<Map<String, String>>> data = (Map<String, List<Map<String, String>>>) yaml.load(input);
@@ -252,6 +255,7 @@ public class Agent {
                          .setValid(false)
                          .setStatusCode(404)
                          .setText("")
+                         .setContentType("")
                          .build();
   }
 
@@ -266,13 +270,14 @@ public class Agent {
     else {
       try {
         logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
-        final Response response = pathContext.fetchUrl();
+        final Response res = pathContext.fetchUrl(scrapeRequest);
         scrapeResponse = ScrapeResponse.newBuilder()
                                        .setAgentId(scrapeRequest.getAgentId())
                                        .setScrapeId(scrapeRequest.getScrapeId())
                                        .setValid(true)
-                                       .setStatusCode(response.code())
-                                       .setText(response.body().string())
+                                       .setStatusCode(res.code())
+                                       .setText(res.body().string())
+                                       .setContentType(res.header(CONTENT_TYPE))
                                        .build();
       }
       catch (IOException e) {

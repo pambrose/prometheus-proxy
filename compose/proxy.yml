@@ -8,3 +8,11 @@ prometheus-proxy:
     - '80:8080'
     - '8081:8081'
     - '50051:50051'
+
+prometheus-test:
+  image: 'pambrose/prometheus-test:latest'
+  expose:
+    - '9090'
+  ports:
+    - '9090:9090'
+

@@ -23,11 +23,12 @@ public class ScrapeRequestContext {
 
   private final ScrapeRequest scrapeRequest;
 
-  public ScrapeRequestContext(final String agentId, final String path) {
+  public ScrapeRequestContext(final String agentId, final String path, final String accept) {
     this.scrapeRequest = ScrapeRequest.newBuilder()
                                       .setAgentId(agentId)
                                       .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
                                       .setPath(path)
+                                      .setAccept(accept)
                                       .build();
   }
 
