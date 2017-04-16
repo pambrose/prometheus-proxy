@@ -8,7 +8,7 @@ COPY  * /prometheus-proxy/
 RUN apk update && apk add maven && \
     mvn -DskipTests=true clean package && \
     apk del maven && \
-    rm -rf src target/*.jar target/protoc* target/maven* target/generated*  target/archive*
+    rm -rf src target/*.jar target/protoc* target/maven* target/generated* target/archive*
 
 CMD ["/bin/sh"]
 

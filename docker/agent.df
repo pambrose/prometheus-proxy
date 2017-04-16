@@ -1,5 +1,14 @@
-FROM pambrose/prometheus-alpine-base:1.0.0
+FROM frolvlad/alpine-oraclejdk8:latest
 MAINTAINER Paul Ambrose "pambrose@mac.com"
+
+WORKDIR /prometheus-proxy
+
+COPY  * /prometheus-proxy/
+
+RUN apk update && apk add maven && \
+    mvn -DskipTests=true clean package && \
+    apk del maven && \
+    rm -rf src target/*.jar target/protoc* target/maven* target/generated* target/archive*
 
 EXPOSE 8082
 
