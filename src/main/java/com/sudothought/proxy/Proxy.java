@@ -16,9 +16,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.sudothought.proxy.ProxyMetrics.PROXY_PATH_MAP_SIZE;
-import static com.sudothought.proxy.ProxyMetrics.PROXY_SCRAPE_MAP_SIZE;
-import static com.sudothought.proxy.ProxyMetrics.PROXY_SCRAPE_REQUESTS;
 
 public class Proxy {
 
@@ -31,6 +28,7 @@ public class Proxy {
   private final Map<String, String>             pathMap          = Maps.newConcurrentMap();
   // Map scrape_id to agent_id
   private final Map<Long, ScrapeRequestContext> scrapeRequestMap = Maps.newConcurrentMap();
+  private final ProxyMetrics                    metrics          = new ProxyMetrics();
 
   private final HttpServer    httpServer;
   private final int           grpcPort;
@@ -102,7 +100,7 @@ public class Proxy {
 
   public void addAgentContext(final String agentId, final AgentContext agentContext) {
     this.agentContextMap.put(agentId, agentContext);
-    ProxyMetrics.CONNECTED_AGENTS.inc();
+    this.metrics.connectedAgents.inc();
   }
 
   public AgentContext getAgentContext(String agentId) { return this.agentContextMap.get(agentId); }
@@ -111,7 +109,7 @@ public class Proxy {
     final AgentContext agentContext = this.agentContextMap.remove(agentId);
     if (agentContext != null) {
       logger.info("Removed AgentContext {} for agent_id: {}", agentContext.getRemoteAddr(), agentId);
-      ProxyMetrics.CONNECTED_AGENTS.dec();
+      this.metrics.connectedAgents.dec();
     }
     else {
       logger.error("Missing AgentContext for agent_id: {}", agentId);
@@ -121,13 +119,13 @@ public class Proxy {
 
   public void addScrapeRequest(final ScrapeRequestContext scrapeRequestContext) {
     this.scrapeRequestMap.put(scrapeRequestContext.getScrapeId(), scrapeRequestContext);
-    PROXY_SCRAPE_REQUESTS.observe(1);
-    PROXY_SCRAPE_MAP_SIZE.inc();
+    this.metrics.scrapeRequests.observe(1);
+    this.metrics.scrapeMapSize.inc();
   }
 
   public ScrapeRequestContext removeScrapeRequest(long scrapeId) {
     final ScrapeRequestContext retval = this.scrapeRequestMap.remove(scrapeId);
-    PROXY_SCRAPE_MAP_SIZE.dec();
+    this.metrics.scrapeMapSize.dec();
     return retval;
   }
 
@@ -138,7 +136,7 @@ public class Proxy {
   public void addPath(final String path, final String agentId, final AgentContext agentContext) {
     synchronized (this.pathMap) {
       this.pathMap.put(path, agentId);
-      PROXY_PATH_MAP_SIZE.inc();
+      this.metrics.pathMapSize.inc();
       logger.info("Added path /{} for agent_id: {} [{} {}}",
                   path, agentId, agentContext.getRemoteAddr(), agentContext.getHostname());
     }
@@ -150,7 +148,7 @@ public class Proxy {
         final String path = this.pathMap.remove(elem.getKey());
         if (path != null) {
           logger.info("Removed path /{} for agent_id: {}", elem.getKey(), agentId);
-          PROXY_PATH_MAP_SIZE.dec();
+          this.metrics.pathMapSize.dec();
         }
         else {
           logger.error("Missing path /{} for agent_id: {}", elem.getKey(), agentId);
@@ -158,4 +156,6 @@ public class Proxy {
       }
     }
   }
+
+  public ProxyMetrics getMetrics() { return this.metrics; }
 }

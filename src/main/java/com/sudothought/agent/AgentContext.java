@@ -1,5 +1,6 @@
 package com.sudothought.agent;
 
+import com.sudothought.proxy.Proxy;
 import com.sudothought.proxy.ScrapeRequestContext;
 
 import java.util.concurrent.ArrayBlockingQueue;
@@ -7,8 +8,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static com.sudothought.proxy.ProxyMetrics.PROXY_SCRAPE_QUEUE_SIZE;
 
 public class AgentContext {
 
@@ -18,9 +17,11 @@ public class AgentContext {
   private final AtomicReference<String>             hostname           = new AtomicReference<>();
   private final String                              agentId            = "" + AGENT_ID_GENERATOR.incrementAndGet();
 
+  private final Proxy  proxy;
   private final String remoteAddr;
 
-  public AgentContext(final String remoteAddr) {
+  public AgentContext(final Proxy proxy, final String remoteAddr) {
+    this.proxy = proxy;
     this.remoteAddr = remoteAddr;
   }
 
@@ -33,7 +34,7 @@ public class AgentContext {
   public String getRemoteAddr() { return this.remoteAddr; }
 
   public void addScrapeRequest(final ScrapeRequestContext scrapeRequest) {
-    PROXY_SCRAPE_QUEUE_SIZE.inc();
+    this.proxy.getMetrics().scrapeQueueSize.inc();
     this.scrapeRequestQueue.add(scrapeRequest);
   }
 
@@ -41,7 +42,7 @@ public class AgentContext {
     try {
       final ScrapeRequestContext retval = this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS);
       if (retval != null)
-        PROXY_SCRAPE_QUEUE_SIZE.dec();
+        this.proxy.getMetrics().scrapeQueueSize.dec();
       return retval;
     }
     catch (InterruptedException e) {

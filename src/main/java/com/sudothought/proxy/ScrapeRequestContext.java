@@ -10,8 +10,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static com.sudothought.proxy.ProxyMetrics.PROXY_SCRAPE_REQUEST_LATENCY;
-
 public class ScrapeRequestContext {
 
   private static final AtomicLong SCRAPE_ID_GENERATOR = new AtomicLong(0);
@@ -19,11 +17,12 @@ public class ScrapeRequestContext {
   private final long                            createTime        = System.currentTimeMillis();
   private final CountDownLatch                  complete          = new CountDownLatch(1);
   private final AtomicReference<ScrapeResponse> scrapeResponseRef = new AtomicReference<>();
-  private final Summary.Timer                   requestTimer      = PROXY_SCRAPE_REQUEST_LATENCY.startTimer();
 
+  private final Summary.Timer requestTimer;
   private final ScrapeRequest scrapeRequest;
 
-  public ScrapeRequestContext(final String agentId, final String path, final String accept) {
+  public ScrapeRequestContext(final Proxy proxy, final String agentId, final String path, final String accept) {
+    this.requestTimer = proxy.getMetrics().scrapeRequestLatency.startTimer();
     this.scrapeRequest = ScrapeRequest.newBuilder()
                                       .setAgentId(agentId)
                                       .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())

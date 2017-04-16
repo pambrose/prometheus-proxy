@@ -9,9 +9,6 @@ import spark.Service;
 import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.ACCEPT_ENCODING;
 import static com.google.common.net.HttpHeaders.CONTENT_ENCODING;
-import static com.sudothought.proxy.ProxyMetrics.PROXY_INVALID_PATHS;
-import static com.sudothought.proxy.ProxyMetrics.PROXY_PATHS_NOT_FOUND;
-import static com.sudothought.proxy.ProxyMetrics.PROXY_REQUESTS_TIMED_OUT;
 
 public class HttpServer {
 
@@ -41,7 +38,7 @@ public class HttpServer {
                     if (agentId == null) {
                       logger.info("Missing path request /{}", path);
                       res.status(404);
-                      PROXY_INVALID_PATHS.observe(1);
+                      this.proxy.getMetrics().invalidPaths.observe(1);
                       return null;
                     }
 
@@ -52,7 +49,8 @@ public class HttpServer {
                       return null;
                     }
 
-                    final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(agentId,
+                    final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(this.proxy,
+                                                                                               agentId,
                                                                                                path,
                                                                                                req.headers(ACCEPT));
                     this.proxy.addScrapeRequest(scrapeRequestContext);
@@ -66,7 +64,7 @@ public class HttpServer {
                       // Check if agent is disconnected or agent is hung
                       if (!proxy.isValidAgentId(agentId) || scrapeRequestContext.ageInSecs() >= 5 || proxy.isStopped()) {
                         res.status(503);
-                        PROXY_REQUESTS_TIMED_OUT.observe(1);
+                        this.proxy.getMetrics().requestsTimedOut.observe(1);
                         return null;
                       }
                     }
@@ -79,7 +77,7 @@ public class HttpServer {
 
                     // Do not return content on error status codes
                     if (status_code >= 400) {
-                      PROXY_PATHS_NOT_FOUND.observe(1);
+                      this.proxy.getMetrics().pathsNotFound.observe(1);
                       return null;
                     }
                     else {

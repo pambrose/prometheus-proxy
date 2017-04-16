@@ -1,12 +1,11 @@
 prometheus-proxy:
   image: 'pambrose/prometheus-proxy:1.0.0'
-  expose 8080
-  expose 8081
   ports:
+    - '8080:8080'
+    - '8081:8081'
     - '50051:50051'
 
 prometheus-test:
   image: 'pambrose/prometheus-test:latest'
   ports:
     - '9090:9090'
-

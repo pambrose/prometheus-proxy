@@ -37,14 +37,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
-import static com.sudothought.agent.AgentMetrics.AGENT_SCRAPE_QUEUE_SIZE;
-import static com.sudothought.agent.AgentMetrics.AGENT_SCRAPE_REQUESTS;
-import static com.sudothought.agent.AgentMetrics.AGENT_SCRAPE_REQUEST_LATENCY;
+import static com.sudothought.common.Utils.newInstrumentedThreadFactory;
+import static java.util.concurrent.Executors.newCachedThreadPool;
 
 public class Agent {
 
@@ -54,9 +54,13 @@ public class Agent {
   private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new ArrayBlockingQueue<>(1000);
 
   // Map path to PathContext
-  private final Map<String, PathContext> pathContextMap = Maps.newConcurrentMap();
-  private final AtomicReference<String>  agentIdRef     = new AtomicReference<>();
-  private final AtomicBoolean            stopped        = new AtomicBoolean(false);
+  private final Map<String, PathContext> pathContextMap  = Maps.newConcurrentMap();
+  private final AtomicReference<String>  agentIdRef      = new AtomicReference<>();
+  private final AtomicBoolean            stopped         = new AtomicBoolean(false);
+  private final AgentMetrics             metrics         = new AgentMetrics();
+  private final ExecutorService          executorService = newCachedThreadPool(newInstrumentedThreadFactory("agent_fetch",
+                                                                                                            "Agent fetch",
+                                                                                                            true));
 
   private final String                                    hostname;
   private final List<Map<String, String>>                 agentConfigs;
@@ -148,7 +152,8 @@ public class Agent {
 
     while (!this.isStopped()) {
       final AtomicBoolean connected = new AtomicBoolean(false);
-      // Reset on each connection attempt
+      final AtomicBoolean disconnected = new AtomicBoolean(false);
+      // Reset values for each connection attempt
       this.setAgentId(null);
       this.pathContextMap.clear();
       this.scrapeResponseQueue.clear();
@@ -162,22 +167,23 @@ public class Agent {
         this.registerAgent();
         this.registerPaths();
 
-        final AtomicBoolean disconnected = new AtomicBoolean(false);
-
         this.asyncStub
             .readRequestsFromProxy(AgentInfo.newBuilder().setAgentId(this.getAgenId()).build(),
                                    new StreamObserver<ScrapeRequest>() {
                                      @Override
                                      public void onNext(final ScrapeRequest scrapeRequest) {
-                                       final ScrapeResponse scrapeResponse = fetchScrape(scrapeRequest);
-                                       try {
-                                         AGENT_SCRAPE_REQUESTS.observe(1);
-                                         AGENT_SCRAPE_QUEUE_SIZE.inc();
-                                         scrapeResponseQueue.put(scrapeResponse);
-                                       }
-                                       catch (InterruptedException e) {
-                                         // Ignore
-                                       }
+                                       executorService.submit(
+                                           () -> {
+                                             final ScrapeResponse scrapeResponse = fetchMetrics(scrapeRequest);
+                                             metrics.scrapeRequests.observe(1);
+                                             metrics.scrapeQueueSize.inc();
+                                             try {
+                                               scrapeResponseQueue.put(scrapeResponse);
+                                             }
+                                             catch (InterruptedException e) {
+                                               // Ignore
+                                             }
+                                           });
                                      }
 
                                      @Override
@@ -218,7 +224,7 @@ public class Agent {
             // Set a short timeout to check if client has disconnected
             final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
             if (response != null) {
-              AGENT_SCRAPE_QUEUE_SIZE.dec();
+              metrics.scrapeQueueSize.dec();
               responseObserver.onNext(response);
             }
           }
@@ -248,7 +254,32 @@ public class Agent {
     }
   }
 
-  private ScrapeResponse invalidScrapeResponse(final ScrapeRequest scrapeRequest) {
+  private ScrapeResponse fetchMetrics(final ScrapeRequest scrapeRequest) {
+    final String path = scrapeRequest.getPath();
+    final PathContext pathContext = this.pathContextMap.get(path);
+    if (pathContext == null) {
+      logger.warn("Invalid path request: {}", path);
+      this.metrics.invalidPaths.observe(1);
+    }
+    else {
+      try {
+        logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
+        final Summary.Timer requestTimer = this.metrics.scrapeRequestLatency.startTimer();
+        final Response res = pathContext.fetchUrl(scrapeRequest);
+        requestTimer.observeDuration();
+        return ScrapeResponse.newBuilder()
+                             .setAgentId(scrapeRequest.getAgentId())
+                             .setScrapeId(scrapeRequest.getScrapeId())
+                             .setValid(true)
+                             .setStatusCode(res.code())
+                             .setText(res.body().string())
+                             .setContentType(res.header(CONTENT_TYPE))
+                             .build();
+      }
+      catch (IOException e) {
+        // Ignore
+      }
+    }
     return ScrapeResponse.newBuilder()
                          .setAgentId(scrapeRequest.getAgentId())
                          .setScrapeId(scrapeRequest.getScrapeId())
@@ -259,43 +290,9 @@ public class Agent {
                          .build();
   }
 
-  private ScrapeResponse fetchScrape(final ScrapeRequest scrapeRequest) {
-    final Summary.Timer requestTimer = AGENT_SCRAPE_REQUEST_LATENCY.startTimer();
-    try {
-      final String path = scrapeRequest.getPath();
-      final PathContext pathContext = this.pathContextMap.get(path);
-      if (pathContext == null) {
-        logger.warn("Invalid path request: {}", path);
-        return this.invalidScrapeResponse(scrapeRequest);
-      }
-      else {
-        try {
-          logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
-          final Response res = pathContext.fetchUrl(scrapeRequest);
-          return ScrapeResponse.newBuilder()
-                               .setAgentId(scrapeRequest.getAgentId())
-                               .setScrapeId(scrapeRequest.getScrapeId())
-                               .setValid(true)
-                               .setStatusCode(res.code())
-                               .setText(res.body().string())
-                               .setContentType(res.header(CONTENT_TYPE))
-                               .build();
-        }
-        catch (IOException e) {
-          return this.invalidScrapeResponse(scrapeRequest);
-        }
-      }
-    }
-    finally {
-      requestTimer.observeDuration();
-    }
-  }
-
   public void stop() {
     this.stopped.set(true);
-
     this.metricsServer.stop();
-
     try {
       this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
     }

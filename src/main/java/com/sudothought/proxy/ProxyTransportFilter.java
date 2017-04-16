@@ -31,14 +31,13 @@ public class ProxyTransportFilter
       if (val != null)
         return val.toString();
     }
-
     return "Unknown";
   }
 
   @Override
   public Attributes transportReady(final Attributes attributes) {
     final String remote_addr = this.getRemoteAddr(attributes);
-    final AgentContext agentContext = new AgentContext(remote_addr);
+    final AgentContext agentContext = new AgentContext(this.proxy, remote_addr);
     final String agentId = agentContext.getAgentId();
     this.proxy.addAgentContext(agentId, agentContext);
     logger.info("Connected to {} agent_id: {}", remote_addr, agentId);
