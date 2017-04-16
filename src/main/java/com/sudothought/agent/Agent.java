@@ -55,14 +55,13 @@ public class Agent {
   private final AgentMetrics                  metrics             = new AgentMetrics();
   private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(1024),
                                                                                                     this.metrics.scrapeQueueSize);
-
   // Map path to PathContext
-  private final Map<String, PathContext> pathContextMap  = Maps.newConcurrentMap();
-  private final AtomicReference<String>  agentIdRef      = new AtomicReference<>();
-  private final AtomicBoolean            stopped         = new AtomicBoolean(false);
-  private final ExecutorService          executorService = newCachedThreadPool(newInstrumentedThreadFactory("agent_fetch",
-                                                                                                            "Agent fetch",
-                                                                                                            true));
+  private final Map<String, PathContext>      pathContextMap      = Maps.newConcurrentMap();
+  private final AtomicReference<String>       agentIdRef          = new AtomicReference<>();
+  private final AtomicBoolean                 stopped             = new AtomicBoolean(false);
+  private final ExecutorService               executorService     = newCachedThreadPool(newInstrumentedThreadFactory("agent_fetch",
+                                                                                                                     "Agent fetch",
+                                                                                                                     true));
 
   private final String                                    hostname;
   private final List<Map<String, String>>                 agentConfigs;
@@ -255,35 +254,37 @@ public class Agent {
 
   private ScrapeResponse fetchMetrics(final ScrapeRequest scrapeRequest) {
     final String path = scrapeRequest.getPath();
+    int status_code = 404;
+    final ScrapeResponse.Builder scrapeResponse = ScrapeResponse.newBuilder()
+                                                                .setAgentId(scrapeRequest.getAgentId())
+                                                                .setScrapeId(scrapeRequest.getScrapeId());
     final PathContext pathContext = this.pathContextMap.get(path);
     if (pathContext == null) {
       logger.warn("Invalid path request: {}", path);
       this.metrics.invalidPaths.observe(1);
     }
     else {
+      final Summary.Timer requestTimer = this.metrics.scrapeRequestLatency.startTimer();
       try {
         logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
-        final Summary.Timer requestTimer = this.metrics.scrapeRequestLatency.startTimer();
-        final Response res = pathContext.fetchUrl(scrapeRequest);
-        requestTimer.observeDuration();
-        return ScrapeResponse.newBuilder()
-                             .setAgentId(scrapeRequest.getAgentId())
-                             .setScrapeId(scrapeRequest.getScrapeId())
-                             .setValid(true)
-                             .setStatusCode(res.code())
-                             .setText(res.body().string())
-                             .setContentType(res.header(CONTENT_TYPE))
-                             .build();
+        final Response response = pathContext.fetchUrl(scrapeRequest);
+        status_code = response.code();
+        if (response.isSuccessful())
+          return scrapeResponse.setValid(true)
+                               .setStatusCode(status_code)
+                               .setText(response.body().string())
+                               .setContentType(response.header(CONTENT_TYPE))
+                               .build();
       }
       catch (IOException e) {
         // Ignore
       }
+      finally {
+        requestTimer.observeDuration();
+      }
     }
-    return ScrapeResponse.newBuilder()
-                         .setAgentId(scrapeRequest.getAgentId())
-                         .setScrapeId(scrapeRequest.getScrapeId())
-                         .setValid(false)
-                         .setStatusCode(404)
+    return scrapeResponse.setValid(false)
+                         .setStatusCode(status_code)
                          .setText("")
                          .setContentType("")
                          .build();

@@ -34,18 +34,16 @@ public class Proxy {
   private final Map<Long, ScrapeRequestContext> scrapeRequestMap = new InstrumentedMap<>(Maps.newConcurrentMap(),
                                                                                          this.metrics.scrapeMapSize);
 
-  private final HttpServer    httpServer;
-  private final int           grpcPort;
   private final Server        grpcServer;
+  private final HttpServer    httpServer;
   private final MetricsServer metricsServer;
 
   private Proxy(final int proxyPort, final int metricsPort, final int grpcPort)
       throws IOException {
-    this.grpcPort = grpcPort;
     final ProxyServiceImpl proxyService = new ProxyServiceImpl(this);
     final ServerInterceptor interceptor = new ProxyInterceptor();
     final ServerServiceDefinition serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptor);
-    this.grpcServer = ServerBuilder.forPort(this.grpcPort)
+    this.grpcServer = ServerBuilder.forPort(grpcPort)
                                    .addService(serviceDef)
                                    .addTransportFilter(new ProxyTransportFilter(this))
                                    .build();
@@ -66,7 +64,7 @@ public class Proxy {
   private void start()
       throws IOException {
     this.grpcServer.start();
-    logger.info("Started gRPC server listening on {}", this.grpcPort);
+    logger.info("Started gRPC server listening on {}", this.grpcServer.getPort());
 
     this.httpServer.start();
     this.metricsServer.start();

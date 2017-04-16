@@ -44,9 +44,8 @@ public class PathContext {
   public Response fetchUrl(final ScrapeRequest scrapeRequest)
       throws IOException {
     try {
-      final Request req = this.request.header(ACCEPT, scrapeRequest.getAccept())
-                                      .build();
-      return this.client.newCall(req).execute();
+      final Request request = this.request.header(ACCEPT, scrapeRequest.getAccept()).build();
+      return this.client.newCall(request).execute();
     }
     catch (IOException e) {
       logger.info("Failed HTTP request: {} [{}: {}]", this.getUrl(), e.getClass().getSimpleName(), e.getMessage());
