@@ -5,7 +5,7 @@ EXPOSE 8080
 EXPOSE 8081
 EXPOSE 50051
 
-ENTRYPOINT ["/prometheus-proxy/bin/proxy.sh", \
+ENTRYPOINT ["/prometheus-proxy/target/bin/proxy.sh", \
             "--port", "8080", \
             "--metrics", "8081", \
 	        "--grpc", "50051"]

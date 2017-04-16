@@ -3,7 +3,7 @@ MAINTAINER Paul Ambrose "pambrose@mac.com"
 
 WORKDIR /prometheus-proxy
 
-COPY  * /prometheus-proxy/
+COPY . /prometheus-proxy/
 
 RUN apk update && apk add maven && \
     mvn -DskipTests=true clean package && \

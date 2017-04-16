@@ -1,0 +1,8 @@
+.*
+docker
+bin
+compose
+target
+*.yml
+*.iml
+*.md

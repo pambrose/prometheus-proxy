@@ -11,9 +11,9 @@ openjdk-base:
 alpine-base:
 	docker build -f ./docker/alpine-base.df -t=pambrose/prometheus-alpine-base:1.0.0 .
 
-docker-build: alpine-base
+docker-build: 
 	docker build -f ./docker/proxy.df -t=pambrose/prometheus-proxy:${VERSION} .
-    docker build -f ./docker/agent.df -t=pambrose/prometheus-agent:${VERSION} .
+	docker build -f ./docker/agent.df -t=pambrose/prometheus-agent:${VERSION} .
 
 docker-push:
 	docker push pambrose/prometheus-alpine-base:$VERSION
