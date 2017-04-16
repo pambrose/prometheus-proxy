@@ -1,4 +1,4 @@
-FROM pambrose/prometheus-base:1.0.0
+FROM pambrose/prometheus-alpine-base:1.0.0
 MAINTAINER Paul Ambrose "pambrose@mac.com"
 
 EXPOSE 8082

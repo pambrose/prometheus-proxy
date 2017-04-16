@@ -1,0 +1,18 @@
+FROM openjdk:8
+MAINTAINER Paul Ambrose "pambrose@mac.com"
+
+WORKDIR /prometheus-proxy
+
+COPY  * /prometheus-proxy/
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends apt-utils && \
+    apt-get install -y maven && \
+    apt-get clean && \
+    mvn -DskipTests=true clean package && \
+    apt-get remove -y maven apt-utils && \
+    apt-get autoremove -y && \
+    rm -rf src target/*.jar target/protoc* target/maven* target/generated*  target/archive*
+
+CMD ["/bin/sh"]
+

@@ -242,6 +242,7 @@ public class Agent {
       if (connected.get())
         logger.info("Disconnected from proxy at {}", this.hostname);
 
+      //RateLimiter reconnectLimiter =  RateLimiter.create(1);
       try {
         Thread.sleep(2000);
       }
