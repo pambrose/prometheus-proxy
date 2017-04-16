@@ -1,5 +1,6 @@
 package com.sudothought.common;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ForwardingMap;
 import io.prometheus.client.Gauge;
 
@@ -12,6 +13,8 @@ public class InstrumentedMap<K, V>
   private final Gauge     gauge;
 
   public InstrumentedMap(final Map<K, V> delegate, final Gauge gauge) {
+    Preconditions.checkNotNull(delegate);
+    Preconditions.checkNotNull(gauge);
     this.delegate = delegate;
     this.gauge = gauge;
   }

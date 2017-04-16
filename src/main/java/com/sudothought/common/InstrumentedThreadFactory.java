@@ -1,5 +1,6 @@
 package com.sudothought.common;
 
+import com.google.common.base.Preconditions;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
 
@@ -14,6 +15,9 @@ public class InstrumentedThreadFactory
   private final Summary       terminated;
 
   public InstrumentedThreadFactory(final ThreadFactory delegate, final String name, final String help) {
+    Preconditions.checkNotNull(delegate);
+    Preconditions.checkNotNull(name);
+    Preconditions.checkNotNull(help);
     this.delegate = delegate;
     this.created = Summary.build()
                           .name(String.format("%s_threads_created", name))

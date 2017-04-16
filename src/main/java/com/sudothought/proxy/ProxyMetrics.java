@@ -12,22 +12,8 @@ public class ProxyMetrics {
   public final Summary scrapeRequests = Summary.build()
                                                .name("proxy_scrape_requests")
                                                .help("Proxy scrape requests")
+                                               .labelNames("type")
                                                .register();
-
-  public final Summary invalidPaths = Summary.build()
-                                             .name("proxy_invalid_paths")
-                                             .help("Proxy invalid paths")
-                                             .register();
-
-  public final Summary pathsNotFound = Summary.build()
-                                              .name("proxy_paths_not_found")
-                                              .help("Proxy paths not found")
-                                              .register();
-
-  public final Summary requestsTimedOut = Summary.build()
-                                                 .name("proxy_requests_timed_out")
-                                                 .help("Proxy requests timed out")
-                                                 .register();
 
   public final Summary scrapeRequestLatency = Summary.build()
                                                      .name("proxy_scrape_request_latency_seconds")

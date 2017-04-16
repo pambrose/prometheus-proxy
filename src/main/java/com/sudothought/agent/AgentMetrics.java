@@ -7,12 +7,8 @@ public class AgentMetrics {
   public final Summary scrapeRequests = Summary.build()
                                                .name("agent_scrape_requests")
                                                .help("Agent scrape requests")
+                                               .labelNames("type")
                                                .register();
-
-  public final Summary invalidPaths = Summary.build()
-                                             .name("agent_invalid_paths")
-                                             .help("Agent invalid paths")
-                                             .register();
 
   public final Summary scrapeRequestLatency = Summary.build()
                                                      .name("agent_scrape_request_latency_seconds")

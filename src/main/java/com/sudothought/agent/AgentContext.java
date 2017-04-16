@@ -1,5 +1,6 @@
 package com.sudothought.agent;
 
+import com.sudothought.common.InstrumentedBlockingQueue;
 import com.sudothought.proxy.Proxy;
 import com.sudothought.proxy.ScrapeRequestContext;
 
@@ -13,16 +14,18 @@ public class AgentContext {
 
   private static final AtomicLong AGENT_ID_GENERATOR = new AtomicLong(0);
 
-  private final BlockingQueue<ScrapeRequestContext> scrapeRequestQueue = new ArrayBlockingQueue<>(1024);
-  private final AtomicReference<String>             hostname           = new AtomicReference<>();
-  private final String                              agentId            = "" + AGENT_ID_GENERATOR.incrementAndGet();
+  private final AtomicReference<String> hostname = new AtomicReference<>();
+  private final String                  agentId  = "" + AGENT_ID_GENERATOR.incrementAndGet();
 
-  private final Proxy  proxy;
-  private final String remoteAddr;
+  private final Proxy                               proxy;
+  private final String                              remoteAddr;
+  private final BlockingQueue<ScrapeRequestContext> scrapeRequestQueue;
 
   public AgentContext(final Proxy proxy, final String remoteAddr) {
     this.proxy = proxy;
     this.remoteAddr = remoteAddr;
+    this.scrapeRequestQueue = new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(256),
+                                                              this.proxy.getMetrics().scrapeQueueSize);
   }
 
   public String getAgentId() { return this.agentId; }
@@ -34,16 +37,12 @@ public class AgentContext {
   public String getRemoteAddr() { return this.remoteAddr; }
 
   public void addScrapeRequest(final ScrapeRequestContext scrapeRequest) {
-    this.proxy.getMetrics().scrapeQueueSize.inc();
     this.scrapeRequestQueue.add(scrapeRequest);
   }
 
   public ScrapeRequestContext pollScrapeRequestQueue(final long waitMillis) {
     try {
-      final ScrapeRequestContext retval = this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS);
-      if (retval != null)
-        this.proxy.getMetrics().scrapeQueueSize.dec();
-      return retval;
+      return this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS);
     }
     catch (InterruptedException e) {
       return null;

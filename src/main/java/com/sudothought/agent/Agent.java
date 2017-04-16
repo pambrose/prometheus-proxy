@@ -53,7 +53,7 @@ public class Agent {
   private static final String AGENT_CONFIGS = "agent_configs";
 
   private final AgentMetrics                  metrics             = new AgentMetrics();
-  private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(1024),
+  private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(256),
                                                                                                     this.metrics.scrapeQueueSize);
   // Map path to PathContext
   private final Map<String, PathContext>      pathContextMap      = Maps.newConcurrentMap();
@@ -169,14 +169,13 @@ public class Agent {
         this.registerPaths();
 
         this.asyncStub
-            .readRequestsFromProxy(AgentInfo.newBuilder().setAgentId(this.getAgenId()).build(),
+            .readRequestsFromProxy(AgentInfo.newBuilder().setAgentId(this.getAgentId()).build(),
                                    new StreamObserver<ScrapeRequest>() {
                                      @Override
                                      public void onNext(final ScrapeRequest scrapeRequest) {
                                        executorService.submit(
                                            () -> {
                                              final ScrapeResponse scrapeResponse = fetchMetrics(scrapeRequest);
-                                             metrics.scrapeRequests.observe(1);
                                              try {
                                                scrapeResponseQueue.put(scrapeResponse);
                                              }
@@ -253,36 +252,43 @@ public class Agent {
   }
 
   private ScrapeResponse fetchMetrics(final ScrapeRequest scrapeRequest) {
-    final String path = scrapeRequest.getPath();
     int status_code = 404;
+    final String path = scrapeRequest.getPath();
     final ScrapeResponse.Builder scrapeResponse = ScrapeResponse.newBuilder()
                                                                 .setAgentId(scrapeRequest.getAgentId())
                                                                 .setScrapeId(scrapeRequest.getScrapeId());
     final PathContext pathContext = this.pathContextMap.get(path);
     if (pathContext == null) {
       logger.warn("Invalid path request: {}", path);
-      this.metrics.invalidPaths.observe(1);
+      this.metrics.scrapeRequests.labels("invalid_path").observe(1);
+      return scrapeResponse.setValid(false)
+                           .setStatusCode(status_code)
+                           .setText("")
+                           .setContentType("")
+                           .build();
     }
-    else {
-      final Summary.Timer requestTimer = this.metrics.scrapeRequestLatency.startTimer();
-      try {
-        logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
-        final Response response = pathContext.fetchUrl(scrapeRequest);
-        status_code = response.code();
-        if (response.isSuccessful())
-          return scrapeResponse.setValid(true)
-                               .setStatusCode(status_code)
-                               .setText(response.body().string())
-                               .setContentType(response.header(CONTENT_TYPE))
-                               .build();
-      }
-      catch (IOException e) {
-        // Ignore
-      }
-      finally {
-        requestTimer.observeDuration();
+
+    final Summary.Timer requestTimer = this.metrics.scrapeRequestLatency.startTimer();
+    try {
+      logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
+      final Response response = pathContext.fetchUrl(scrapeRequest);
+      status_code = response.code();
+      if (response.isSuccessful()) {
+        this.metrics.scrapeRequests.labels("success").observe(1);
+        return scrapeResponse.setValid(true)
+                             .setStatusCode(status_code)
+                             .setText(response.body().string())
+                             .setContentType(response.header(CONTENT_TYPE))
+                             .build();
       }
     }
+    catch (IOException e) {
+      // Ignore
+    }
+    finally {
+      requestTimer.observeDuration();
+    }
+    metrics.scrapeRequests.labels("unsuccessful").observe(1);
     return scrapeResponse.setValid(false)
                          .setStatusCode(status_code)
                          .setText("")
@@ -301,12 +307,14 @@ public class Agent {
     }
   }
 
+  // If successful, this will create an agentContxt on the Proxy and an interceptor will
+  // add an agent_id to the headers
   private void connectAgent() { this.blockingStub.connectAgent(Empty.getDefaultInstance()); }
 
   private void registerAgent()
       throws ConnectException {
     final RegisterAgentRequest request = RegisterAgentRequest.newBuilder()
-                                                             .setAgentId(this.getAgenId())
+                                                             .setAgentId(this.getAgentId())
                                                              .setHostname(getHostName())
                                                              .build();
     final RegisterAgentResponse response = this.blockingStub.registerAgent(request);
@@ -328,7 +336,7 @@ public class Agent {
   private long registerPath(final String path)
       throws ConnectException {
     final RegisterPathRequest request = RegisterPathRequest.newBuilder()
-                                                           .setAgentId(this.getAgenId())
+                                                           .setAgentId(this.getAgentId())
                                                            .setPath(path)
                                                            .build();
     final RegisterPathResponse response = this.blockingStub.registerPath(request);
@@ -337,11 +345,12 @@ public class Agent {
     return response.getPathId();
   }
 
+  private boolean isStopped() { return this.stopped.get(); }
+
   public ManagedChannel getChannel() { return this.channel; }
+
+  public String getAgentId() { return this.agentIdRef.get(); }
 
   public void setAgentId(final String agentId) { this.agentIdRef.set(agentId); }
 
-  private String getAgenId() { return this.agentIdRef.get(); }
-
-  private boolean isStopped() { return this.stopped.get(); }
 }

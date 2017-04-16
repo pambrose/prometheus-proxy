@@ -38,10 +38,12 @@ public class AgentClientInterceptor
             new ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
               @Override
               public void onHeaders(Metadata headers) {
-                // Grab agent_id from headers
-                final String agentId = headers.get(Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER));
-                if (agentId != null)
-                  agent.setAgentId(agentId);
+                // Grab agent_id from headers if not already assigned
+                if (agent.getAgentId() == null) {
+                  final String agentId = headers.get(Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER));
+                  if (agentId != null)
+                    agent.setAgentId(agentId);
+                }
                 super.onHeaders(headers);
               }
             },

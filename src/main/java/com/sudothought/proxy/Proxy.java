@@ -119,7 +119,6 @@ public class Proxy {
 
   public void addScrapeRequest(final ScrapeRequestContext scrapeRequestContext) {
     this.scrapeRequestMap.put(scrapeRequestContext.getScrapeId(), scrapeRequestContext);
-    this.metrics.scrapeRequests.observe(1);
   }
 
   public ScrapeRequestContext removeScrapeRequest(long scrapeId) {

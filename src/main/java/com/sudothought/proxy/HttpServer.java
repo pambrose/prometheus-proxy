@@ -38,7 +38,7 @@ public class HttpServer {
                     if (agentId == null) {
                       logger.info("Missing path request /{}", path);
                       res.status(404);
-                      this.proxy.getMetrics().invalidPaths.observe(1);
+                      this.proxy.getMetrics().scrapeRequests.labels("invalid_path").observe(1);
                       return null;
                     }
 
@@ -46,6 +46,7 @@ public class HttpServer {
                     if (agentContext == null) {
                       logger.info("Missing AgentContext /{} agent_id: {}", path, agentId);
                       res.status(404);
+                      this.proxy.getMetrics().scrapeRequests.labels("missing_agent_id").observe(1);
                       return null;
                     }
 
@@ -64,7 +65,7 @@ public class HttpServer {
                       // Check if agent is disconnected or agent is hung
                       if (!proxy.isValidAgentId(agentId) || scrapeRequestContext.ageInSecs() >= 5 || proxy.isStopped()) {
                         res.status(503);
-                        this.proxy.getMetrics().requestsTimedOut.observe(1);
+                        this.proxy.getMetrics().scrapeRequests.labels("time_out").observe(1);
                         return null;
                       }
                     }
@@ -77,7 +78,7 @@ public class HttpServer {
 
                     // Do not return content on error status codes
                     if (status_code >= 400) {
-                      this.proxy.getMetrics().pathsNotFound.observe(1);
+                      this.proxy.getMetrics().scrapeRequests.labels("path_not_found").observe(1);
                       return null;
                     }
                     else {
@@ -85,6 +86,7 @@ public class HttpServer {
                       if (accept_encoding != null && accept_encoding.contains("gzip"))
                         res.header(CONTENT_ENCODING, "gzip");
                       res.type(scrapeResponse.getContentType());
+                      this.proxy.getMetrics().scrapeRequests.labels("success").observe(1);
                       return scrapeRequestContext.getScrapeResponse().getText();
                     }
                   });

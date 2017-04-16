@@ -1,5 +1,6 @@
 package com.sudothought.common;
 
+import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ForwardingBlockingQueue;
 import io.prometheus.client.Gauge;
 
@@ -14,6 +15,8 @@ public class InstrumentedBlockingQueue<E>
   private final Gauge            gauge;
 
   public InstrumentedBlockingQueue(final BlockingQueue<E> delegate, final Gauge gauge) {
+    Preconditions.checkNotNull(delegate);
+    Preconditions.checkNotNull(gauge);
     this.delegate = delegate;
     this.gauge = gauge;
   }
