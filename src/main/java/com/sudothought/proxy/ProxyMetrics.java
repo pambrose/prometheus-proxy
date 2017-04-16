@@ -4,10 +4,10 @@ import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
 
 public class ProxyMetrics {
-  public final Gauge connectedAgents = Gauge.build()
-                                            .name("proxy_connected_agents")
-                                            .help("Proxy connected agents")
-                                            .register();
+  public final Gauge agentMapSize = Gauge.build()
+                                         .name("proxy_connected_agents")
+                                         .help("Proxy connected agents")
+                                         .register();
 
   public final Summary scrapeRequests = Summary.build()
                                                .name("proxy_scrape_requests")

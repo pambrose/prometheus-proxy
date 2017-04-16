@@ -2,6 +2,7 @@ package com.sudothought.agent;
 
 import com.google.common.collect.Maps;
 import com.google.protobuf.Empty;
+import com.sudothought.common.InstrumentedBlockingQueue;
 import com.sudothought.common.MetricsServer;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.ProxyServiceGrpc;
@@ -51,13 +52,14 @@ public class Agent {
   private static final Logger logger        = LoggerFactory.getLogger(Agent.class);
   private static final String AGENT_CONFIGS = "agent_configs";
 
-  private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new ArrayBlockingQueue<>(1000);
+  private final AgentMetrics                  metrics             = new AgentMetrics();
+  private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(1024),
+                                                                                                    this.metrics.scrapeQueueSize);
 
   // Map path to PathContext
   private final Map<String, PathContext> pathContextMap  = Maps.newConcurrentMap();
   private final AtomicReference<String>  agentIdRef      = new AtomicReference<>();
   private final AtomicBoolean            stopped         = new AtomicBoolean(false);
-  private final AgentMetrics             metrics         = new AgentMetrics();
   private final ExecutorService          executorService = newCachedThreadPool(newInstrumentedThreadFactory("agent_fetch",
                                                                                                             "Agent fetch",
                                                                                                             true));
@@ -176,7 +178,6 @@ public class Agent {
                                            () -> {
                                              final ScrapeResponse scrapeResponse = fetchMetrics(scrapeRequest);
                                              metrics.scrapeRequests.observe(1);
-                                             metrics.scrapeQueueSize.inc();
                                              try {
                                                scrapeResponseQueue.put(scrapeResponse);
                                              }
@@ -223,10 +224,8 @@ public class Agent {
           try {
             // Set a short timeout to check if client has disconnected
             final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
-            if (response != null) {
-              metrics.scrapeQueueSize.dec();
+            if (response != null)
               responseObserver.onNext(response);
-            }
           }
           catch (InterruptedException e) {
             // Ignore
