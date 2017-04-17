@@ -11,6 +11,8 @@ import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
 import io.prometheus.client.hotspot.DefaultExports;
+import me.dinowernli.grpc.prometheus.Configuration;
+import me.dinowernli.grpc.prometheus.MonitoringServerInterceptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,8 +44,14 @@ public class Proxy {
   private Proxy(final int proxyPort, final int metricsPort, final int grpcPort)
       throws IOException {
     final ProxyServiceImpl proxyService = new ProxyServiceImpl(this);
-    final ServerInterceptor interceptor = new ProxyInterceptor();
-    final ServerServiceDefinition serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptor);
+    final ServerInterceptor proxyInterceptor = new ProxyInterceptor();
+    // TODO Make this a configuration option
+    //final Configuration grpc_metrics = Configuration.cheapMetricsOnly();
+    final Configuration grpc_metrics = Configuration.allMetrics();
+    final ServerInterceptor grpcInterceptor = MonitoringServerInterceptor.create(grpc_metrics);
+    final ServerServiceDefinition serviceDef = ServerInterceptors.intercept(proxyService.bindService(),
+                                                                            proxyInterceptor,
+                                                                            grpcInterceptor);
     this.grpcServer = ServerBuilder.forPort(grpcPort)
                                    .addService(serviceDef)
                                    .addTransportFilter(new ProxyTransportFilter(this))

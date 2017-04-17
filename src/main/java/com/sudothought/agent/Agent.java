@@ -15,7 +15,6 @@ import com.sudothought.grpc.RegisterPathResponse;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import io.grpc.ClientInterceptor;
-import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
@@ -23,6 +22,8 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import io.prometheus.client.Summary;
 import io.prometheus.client.hotspot.DefaultExports;
+import me.dinowernli.grpc.prometheus.Configuration;
+import me.dinowernli.grpc.prometheus.MonitoringClientInterceptor;
 import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +48,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.sudothought.common.Utils.newInstrumentedThreadFactory;
+import static com.sudothought.grpc.ProxyServiceGrpc.newBlockingStub;
+import static com.sudothought.grpc.ProxyServiceGrpc.newStub;
+import static io.grpc.ClientInterceptors.intercept;
 import static java.util.concurrent.Executors.newCachedThreadPool;
 
 public class Agent {
@@ -91,9 +95,12 @@ public class Agent {
     final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port)
                                                                          .usePlaintext(true);
     this.channel = channelBuilder.build();
-    final ClientInterceptor interceptor = new AgentClientInterceptor(this);
-    this.blockingStub = ProxyServiceGrpc.newBlockingStub(ClientInterceptors.intercept(this.channel, interceptor));
-    this.asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(this.channel, interceptor));
+    final ClientInterceptor agentInterceptor = new AgentClientInterceptor(this);
+    //final Configuration grpc_metrics = Configuration.cheapMetricsOnly();
+    final Configuration grpc_metrics = Configuration.allMetrics();
+    final ClientInterceptor clientInterceptor = MonitoringClientInterceptor.create(grpc_metrics);
+    this.blockingStub = newBlockingStub(intercept(this.channel, agentInterceptor, clientInterceptor));
+    this.asyncStub = newStub(intercept(this.channel, agentInterceptor, clientInterceptor));
     this.metricsServer = new MetricsServer(metricsPort);
   }
 

@@ -70,7 +70,8 @@ public class HttpServer {
                       }
                     }
 
-                    logger.info("Results returned from agent for scrape_id: {}", scrapeRequestContext.getScrapeId());
+                    logger.info("Results returned from agent_id: {} for scrape_id: {}",
+                                agentId, scrapeRequestContext.getScrapeId());
 
                     final ScrapeResponse scrapeResponse = scrapeRequestContext.getScrapeResponse();
                     final int status_code = scrapeResponse.getStatusCode();
