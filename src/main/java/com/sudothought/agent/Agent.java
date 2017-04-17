@@ -5,6 +5,7 @@ import com.google.common.util.concurrent.RateLimiter;
 import com.google.protobuf.Empty;
 import com.sudothought.common.InstrumentedBlockingQueue;
 import com.sudothought.common.MetricsServer;
+import com.sudothought.common.Utils;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.ProxyServiceGrpc;
 import com.sudothought.grpc.RegisterAgentRequest;
@@ -98,6 +99,8 @@ public class Agent {
 
   public static void main(final String[] argv)
       throws IOException {
+    logger.info(Utils.getBanner("banners/agent.txt"));
+
     final AgentArgs agentArgs = new AgentArgs();
     agentArgs.parseArgs(Agent.class.getName(), argv);
 

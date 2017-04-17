@@ -4,6 +4,7 @@ import com.google.common.collect.Maps;
 import com.sudothought.agent.AgentContext;
 import com.sudothought.common.InstrumentedMap;
 import com.sudothought.common.MetricsServer;
+import com.sudothought.common.Utils;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;
@@ -53,6 +54,8 @@ public class Proxy {
 
   public static void main(final String[] argv)
       throws IOException {
+    logger.info(Utils.getBanner("banners/proxy.txt"));
+
     final ProxyArgs proxyArgs = new ProxyArgs();
     proxyArgs.parseArgs(Proxy.class.getName(), argv);
 
