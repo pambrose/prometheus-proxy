@@ -76,7 +76,7 @@ class ProxyServiceImpl
     if (agentContext == null)
       logger.error("Missing AgentContext for agent_id: {}", agentId);
     else
-      this.proxy.addPath(path, agentId, agentContext);
+      this.proxy.addPath(path, agentContext);
 
     responseObserver.onNext(response);
     responseObserver.onCompleted();

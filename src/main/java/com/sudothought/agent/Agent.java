@@ -363,5 +363,4 @@ public class Agent {
   public String getAgentId() { return this.agentIdRef.get(); }
 
   public void setAgentId(final String agentId) { this.agentIdRef.set(agentId); }
-
 }

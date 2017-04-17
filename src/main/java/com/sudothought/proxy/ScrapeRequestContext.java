@@ -1,6 +1,7 @@
 package com.sudothought.proxy;
 
 
+import com.google.common.base.MoreObjects;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import io.prometheus.client.Summary;
@@ -57,4 +58,12 @@ public class ScrapeRequestContext {
   public void setScrapeResponse(final ScrapeResponse scrapeResponse) { this.scrapeResponseRef.set(scrapeResponse);}
 
   public long ageInSecs() { return (System.currentTimeMillis() - this.createTime) / 1000;}
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+                      .add("scrapeId", scrapeRequest.getScrapeId())
+                      .add("path", scrapeRequest.getPath())
+                      .toString();
+  }
 }

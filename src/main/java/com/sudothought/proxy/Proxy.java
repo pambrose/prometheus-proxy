@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-
 public class Proxy {
 
   private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
@@ -30,8 +29,8 @@ public class Proxy {
   // Map agent_id to AgentContext
   private final Map<String, AgentContext>       agentContextMap  = new InstrumentedMap<>(Maps.newConcurrentMap(),
                                                                                          this.metrics.agentMapSize);
-  // Map path to agent_id
-  private final Map<String, String>             pathMap          = new InstrumentedMap<>(Maps.newConcurrentMap(),
+  // Map path to AgentContext
+  private final Map<String, AgentContext>       pathMap          = new InstrumentedMap<>(Maps.newConcurrentMap(),
                                                                                          this.metrics.pathMapSize);
   // Map scrape_id to agent_id
   private final Map<Long, ScrapeRequestContext> scrapeRequestMap = new InstrumentedMap<>(Maps.newConcurrentMap(),
@@ -107,24 +106,20 @@ public class Proxy {
     }
   }
 
-  public boolean isValidAgentId(final String agentId) {return this.agentContextMap.containsKey(agentId);}
-
   public boolean isStopped() { return this.stopped.get(); }
 
-  public void addAgentContext(final String agentId, final AgentContext agentContext) {
-    this.agentContextMap.put(agentId, agentContext);
+  public void addAgentContext(final AgentContext agentContext) {
+    this.agentContextMap.put(agentContext.getAgentId(), agentContext);
   }
 
   public AgentContext getAgentContext(String agentId) { return this.agentContextMap.get(agentId); }
 
   public AgentContext removeAgentContext(String agentId) {
     final AgentContext agentContext = this.agentContextMap.remove(agentId);
-    if (agentContext != null) {
-      logger.info("Removed AgentContext {} for agent_id: {}", agentContext.getRemoteAddr(), agentId);
-    }
-    else {
+    if (agentContext != null)
+      logger.info("Removed {}", agentContext);
+    else
       logger.error("Missing AgentContext for agent_id: {}", agentId);
-    }
     return agentContext;
   }
 
@@ -136,27 +131,26 @@ public class Proxy {
     return this.scrapeRequestMap.remove(scrapeId);
   }
 
-  public String getAgentIdByPath(final String path) { return this.pathMap.get(path); }
+  public AgentContext getAgentContextByPath(final String path) { return this.pathMap.get(path); }
 
   public boolean containsPath(final String path) { return this.pathMap.containsKey(path);}
 
-  public void addPath(final String path, final String agentId, final AgentContext agentContext) {
+  public void addPath(final String path, final AgentContext agentContext) {
     synchronized (this.pathMap) {
-      this.pathMap.put(path, agentId);
-      logger.info("Added path /{} for agent_id: {} [{} {}}",
-                  path, agentId, agentContext.getRemoteAddr(), agentContext.getHostname());
+      this.pathMap.put(path, agentContext);
+      logger.info("Added path /{} for {}", path, agentContext);
     }
   }
 
   public void removePathByAgentId(final String agentId) {
-    for (Map.Entry<String, String> elem : this.pathMap.entrySet()) {
-      if (elem.getValue().equals(agentId)) {
-        final String path = this.pathMap.remove(elem.getKey());
-        if (path != null) {
-          logger.info("Removed path /{} for agent_id: {}", elem.getKey(), agentId);
-        }
-        else {
-          logger.error("Missing path /{} for agent_id: {}", elem.getKey(), agentId);
+    synchronized (this.pathMap) {
+      for (Map.Entry<String, AgentContext> elem : this.pathMap.entrySet()) {
+        if (elem.getValue().getAgentId().equals(agentId)) {
+          final AgentContext agentContext = this.pathMap.remove(elem.getKey());
+          if (agentContext != null)
+            logger.info("Removed path /{} for {}", elem.getKey(), agentContext);
+          else
+            logger.error("Missing path /{} for agent_id: {}", elem.getKey(), agentId);
         }
       }
     }

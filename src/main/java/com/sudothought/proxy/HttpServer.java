@@ -32,26 +32,26 @@ public class HttpServer {
                   (req, res) -> {
                     res.header("cache-control", "no-cache");
 
-                    final String path = req.splat()[0];
-                    final String agentId = this.proxy.getAgentIdByPath(path);
+                    final String[] vals = req.splat();
+                    if (vals == null || vals.length == 0) {
+                      logger.info("Request missing path");
+                      res.status(404);
+                      this.proxy.getMetrics().scrapeRequests.labels("missing_path").observe(1);
+                      return null;
+                    }
 
-                    if (agentId == null) {
+                    final String path = vals[0];
+                    final AgentContext agentContext = this.proxy.getAgentContextByPath(path);
+
+                    if (agentContext == null) {
                       logger.info("Missing path request /{}", path);
                       res.status(404);
                       this.proxy.getMetrics().scrapeRequests.labels("invalid_path").observe(1);
                       return null;
                     }
 
-                    final AgentContext agentContext = proxy.getAgentContext(agentId);
-                    if (agentContext == null) {
-                      logger.info("Missing AgentContext /{} agent_id: {}", path, agentId);
-                      res.status(404);
-                      this.proxy.getMetrics().scrapeRequests.labels("missing_agent_id").observe(1);
-                      return null;
-                    }
-
                     final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(this.proxy,
-                                                                                               agentId,
+                                                                                               agentContext.getAgentId(),
                                                                                                path,
                                                                                                req.headers(ACCEPT));
                     this.proxy.addScrapeRequest(scrapeRequestContext);
@@ -63,15 +63,14 @@ public class HttpServer {
                         break;
 
                       // Check if agent is disconnected or agent is hung
-                      if (!proxy.isValidAgentId(agentId) || scrapeRequestContext.ageInSecs() >= 5 || proxy.isStopped()) {
+                      if (scrapeRequestContext.ageInSecs() >= 5 || proxy.isStopped()) {
                         res.status(503);
                         this.proxy.getMetrics().scrapeRequests.labels("time_out").observe(1);
                         return null;
                       }
                     }
 
-                    logger.info("Results returned from agent_id: {} for scrape_id: {}",
-                                agentId, scrapeRequestContext.getScrapeId());
+                    logger.info("Results returned from {} for {}", agentContext, scrapeRequestContext);
 
                     final ScrapeResponse scrapeResponse = scrapeRequestContext.getScrapeResponse();
                     final int status_code = scrapeResponse.getStatusCode();

@@ -38,11 +38,10 @@ public class ProxyTransportFilter
   public Attributes transportReady(final Attributes attributes) {
     final String remote_addr = this.getRemoteAddr(attributes);
     final AgentContext agentContext = new AgentContext(this.proxy, remote_addr);
-    final String agentId = agentContext.getAgentId();
-    this.proxy.addAgentContext(agentId, agentContext);
-    logger.info("Connected to {} agent_id: {}", remote_addr, agentId);
+    this.proxy.addAgentContext(agentContext);
+    logger.info("Connected to {} agent_id: {}", remote_addr, agentContext.getAgentId());
     return Attributes.newBuilder()
-                     .set(Constants.ATTRIB_AGENT_ID, agentId)
+                     .set(Constants.ATTRIB_AGENT_ID, agentContext.getAgentId())
                      .setAll(attributes)
                      .build();
   }

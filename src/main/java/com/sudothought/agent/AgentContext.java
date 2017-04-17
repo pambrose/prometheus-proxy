@@ -1,5 +1,6 @@
 package com.sudothought.agent;
 
+import com.google.common.base.MoreObjects;
 import com.sudothought.common.InstrumentedBlockingQueue;
 import com.sudothought.proxy.Proxy;
 import com.sudothought.proxy.ScrapeRequestContext;
@@ -47,5 +48,14 @@ public class AgentContext {
     catch (InterruptedException e) {
       return null;
     }
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+                      .add("agentId", agentId)
+                      .add("hostname", hostname)
+                      .add("remoteAddr", remoteAddr)
+                      .toString();
   }
 }
