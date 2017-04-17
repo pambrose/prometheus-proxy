@@ -1,6 +1,7 @@
 package com.sudothought.agent;
 
 import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.RateLimiter;
 import com.google.protobuf.Empty;
 import com.sudothought.common.InstrumentedBlockingQueue;
 import com.sudothought.common.MetricsServer;
@@ -55,10 +56,11 @@ public class Agent {
   private final AgentMetrics                  metrics             = new AgentMetrics();
   private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(256),
                                                                                                     this.metrics.scrapeQueueSize);
+  private final AtomicBoolean                 stopped             = new AtomicBoolean(false);
   // Map path to PathContext
   private final Map<String, PathContext>      pathContextMap      = Maps.newConcurrentMap();
   private final AtomicReference<String>       agentIdRef          = new AtomicReference<>();
-  private final AtomicBoolean                 stopped             = new AtomicBoolean(false);
+  private final RateLimiter                   reconnectLimiter    = RateLimiter.create(1.0 / 3);
   private final ExecutorService               executorService     = newCachedThreadPool(newInstrumentedThreadFactory("agent_fetch",
                                                                                                                      "Agent fetch",
                                                                                                                      true));
@@ -142,6 +144,9 @@ public class Agent {
       throws IOException {
     this.metricsServer.start();
     DefaultExports.initialize();
+
+    // Prime the limiter
+    this.reconnectLimiter.acquire();
 
     Runtime.getRuntime()
            .addShutdownHook(
@@ -242,13 +247,8 @@ public class Agent {
       if (connected.get())
         logger.info("Disconnected from proxy at {}", this.hostname);
 
-      //RateLimiter reconnectLimiter =  RateLimiter.create(1);
-      try {
-        Thread.sleep(2000);
-      }
-      catch (InterruptedException e) {
-        // Ignore
-      }
+      final double secsWaiting = this.reconnectLimiter.acquire();
+      logger.info("Waited {} secs to reconnect", secsWaiting);
     }
   }
 
