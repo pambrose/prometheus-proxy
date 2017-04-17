@@ -1,11 +1,13 @@
 package com.sudothought.agent;
 
+import com.github.kristofa.brave.grpc.BraveGrpcClientInterceptor;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.protobuf.Empty;
 import com.sudothought.common.InstrumentedBlockingQueue;
 import com.sudothought.common.MetricsServer;
 import com.sudothought.common.Utils;
+import com.sudothought.common.ZipkinReporter;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.ProxyServiceGrpc;
 import com.sudothought.grpc.RegisterAgentRequest;
@@ -73,6 +75,7 @@ public class Agent {
   private final String                                    hostname;
   private final List<Map<String, String>>                 agentConfigs;
   private final ManagedChannel                            channel;
+  private final ZipkinReporter                            zipkinReporter;
   private final ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
   private final ProxyServiceGrpc.ProxyServiceStub         asyncStub;
   private final MetricsServer                             metricsServer;
@@ -95,12 +98,23 @@ public class Agent {
     final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port)
                                                                          .usePlaintext(true);
     this.channel = channelBuilder.build();
+
+    this.zipkinReporter = new ZipkinReporter("http://localhost:9411/api/v1/spans", "prometheus-agent");
+
     final ClientInterceptor agentInterceptor = new AgentClientInterceptor(this);
     //final Configuration grpc_metrics = Configuration.cheapMetricsOnly();
     final Configuration grpc_metrics = Configuration.allMetrics();
     final ClientInterceptor clientInterceptor = MonitoringClientInterceptor.create(grpc_metrics);
-    this.blockingStub = newBlockingStub(intercept(this.channel, agentInterceptor, clientInterceptor));
-    this.asyncStub = newStub(intercept(this.channel, agentInterceptor, clientInterceptor));
+    final ClientInterceptor zipkinInterceptor = BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave());
+    this.blockingStub = newBlockingStub(intercept(this.channel,
+                                                  agentInterceptor,
+                                                  clientInterceptor,
+                                                  zipkinInterceptor));
+    this.asyncStub = newStub(intercept(this.channel,
+                                       agentInterceptor,
+                                       clientInterceptor,
+                                       zipkinInterceptor));
+
     this.metricsServer = new MetricsServer(metricsPort);
   }
 
@@ -310,6 +324,7 @@ public class Agent {
   public void stop() {
     this.stopped.set(true);
     this.metricsServer.stop();
+    this.zipkinReporter.close();
     try {
       this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
     }

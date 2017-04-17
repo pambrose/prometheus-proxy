@@ -20,7 +20,9 @@
         <okhttp.version>3.7.0</okhttp.version>
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.8.0-alpha1</slf4j.version>
+        <brave.version>4.1.1</brave.version>
         <grpc-prom.version>0.3.0</grpc-prom.version>
+        <zipkin-reporter.version>0.6.13</zipkin-reporter.version>
 
         <assembly.version>2.6</assembly.version>
         <maven.compiler.version>3.6.1</maven.compiler.version>
@@ -40,6 +42,37 @@
     </prerequisites>
 
     <dependencies>
+
+        <dependency>
+            <groupId>io.zipkin.brave</groupId>
+            <artifactId>brave-sparkjava</artifactId>
+            <version>${brave.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.zipkin.brave</groupId>
+            <artifactId>brave-okhttp</artifactId>
+            <version>${brave.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.zipkin.brave</groupId>
+            <artifactId>brave-grpc</artifactId>
+            <version>${brave.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.zipkin.brave</groupId>
+            <artifactId>brave</artifactId>
+            <version>${brave.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.zipkin.reporter</groupId>
+            <artifactId>zipkin-sender-okhttp3</artifactId>
+            <version>${zipkin-reporter.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>io.prometheus</groupId>
             <artifactId>simpleclient</artifactId>

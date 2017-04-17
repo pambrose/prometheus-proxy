@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class ScrapeRequestContext {
+public class ScrapeRequestWrapper {
 
   private static final AtomicLong SCRAPE_ID_GENERATOR = new AtomicLong(0);
 
@@ -22,7 +22,7 @@ public class ScrapeRequestContext {
   private final Summary.Timer requestTimer;
   private final ScrapeRequest scrapeRequest;
 
-  public ScrapeRequestContext(final Proxy proxy, final String agentId, final String path, final String accept) {
+  public ScrapeRequestWrapper(final Proxy proxy, final String agentId, final String path, final String accept) {
     this.requestTimer = proxy.getMetrics().scrapeRequestLatency.startTimer();
     this.scrapeRequest = ScrapeRequest.newBuilder()
                                       .setAgentId(agentId)

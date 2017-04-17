@@ -93,9 +93,9 @@ class ProxyServiceImpl
         break;
       }
 
-      final ScrapeRequestContext scrapeRequestContext = agentContext.pollScrapeRequestQueue(1000);
-      if (scrapeRequestContext != null)
-        responseObserver.onNext(scrapeRequestContext.getScrapeRequest());
+      final ScrapeRequestWrapper scrapeRequest = agentContext.pollScrapeRequestQueue(1000);
+      if (scrapeRequest != null)
+        responseObserver.onNext(scrapeRequest.getScrapeRequest());
     }
     responseObserver.onCompleted();
   }
@@ -106,13 +106,13 @@ class ProxyServiceImpl
       @Override
       public void onNext(final ScrapeResponse response) {
         final long scrapeId = response.getScrapeId();
-        final ScrapeRequestContext scrapeRequestContext = proxy.removeScrapeRequest(scrapeId);
-        if (scrapeRequestContext == null) {
-          logger.error("Missing ScrapeRequestContext for scrape_id: {}", scrapeId);
+        final ScrapeRequestWrapper scrapeRequest = proxy.removeScrapeRequest(scrapeId);
+        if (scrapeRequest == null) {
+          logger.error("Missing ScrapeRequestWrapper for scrape_id: {}", scrapeId);
         }
         else {
-          scrapeRequestContext.setScrapeResponse(response);
-          scrapeRequestContext.markComplete();
+          scrapeRequest.setScrapeResponse(response);
+          scrapeRequest.markComplete();
         }
       }
 

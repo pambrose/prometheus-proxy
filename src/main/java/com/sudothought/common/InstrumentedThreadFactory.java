@@ -15,10 +15,9 @@ public class InstrumentedThreadFactory
   private final Summary       terminated;
 
   public InstrumentedThreadFactory(final ThreadFactory delegate, final String name, final String help) {
-    Preconditions.checkNotNull(delegate);
     Preconditions.checkNotNull(name);
     Preconditions.checkNotNull(help);
-    this.delegate = delegate;
+    this.delegate = Preconditions.checkNotNull(delegate);
     this.created = Summary.build()
                           .name(String.format("%s_threads_created", name))
                           .help(String.format("%s threads created", help))

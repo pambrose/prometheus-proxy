@@ -1,4 +1,5 @@
 prometheus-proxy:
+  autoredeploy: true
   image: 'pambrose/prometheus-proxy:1.0.0'
   ports:
     - '8080:8080'
@@ -9,3 +10,8 @@ prometheus-test:
   image: 'pambrose/prometheus-test:latest'
   ports:
     - '9090:9090'
+
+zipkin:
+  image: 'openzipkin/zipkin'
+  ports:
+    - '9411:9411'

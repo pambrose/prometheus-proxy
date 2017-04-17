@@ -13,10 +13,8 @@ public class InstrumentedMap<K, V>
   private final Gauge     gauge;
 
   public InstrumentedMap(final Map<K, V> delegate, final Gauge gauge) {
-    Preconditions.checkNotNull(delegate);
-    Preconditions.checkNotNull(gauge);
-    this.delegate = delegate;
-    this.gauge = gauge;
+    this.delegate = Preconditions.checkNotNull(delegate);
+    this.gauge = Preconditions.checkNotNull(gauge);
   }
 
   @Override

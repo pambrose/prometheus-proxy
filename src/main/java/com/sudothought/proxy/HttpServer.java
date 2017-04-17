@@ -1,9 +1,13 @@
 package com.sudothought.proxy;
 
+import com.github.kristofa.brave.sparkjava.BraveTracing;
 import com.sudothought.agent.AgentContext;
 import com.sudothought.grpc.ScrapeResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import spark.ExceptionHandlerImpl;
+import spark.Request;
+import spark.Response;
 import spark.Service;
 
 import static com.google.common.net.HttpHeaders.ACCEPT;
@@ -28,6 +32,17 @@ public class HttpServer {
   public void start() {
     logger.info("Started proxy listening on {}", this.port);
 
+    final BraveTracing tracing = BraveTracing.create(this.proxy.getBrave());
+    this.http.before(tracing.before());
+    this.http.exception(Exception.class, tracing.exception(new ExceptionHandlerImpl(Exception.class) {
+      @Override
+      public void handle(Exception exception, Request request, Response response) {
+        response.status(404);
+        exception.printStackTrace();
+      }
+    }));
+    this.http.afterAfter(tracing.afterAfter());
+
     this.http.get("/*",
                   (req, res) -> {
                     res.header("cache-control", "no-cache");
@@ -50,29 +65,29 @@ public class HttpServer {
                       return null;
                     }
 
-                    final ScrapeRequestContext scrapeRequestContext = new ScrapeRequestContext(this.proxy,
-                                                                                               agentContext.getAgentId(),
-                                                                                               path,
-                                                                                               req.headers(ACCEPT));
-                    this.proxy.addScrapeRequest(scrapeRequestContext);
-                    agentContext.addScrapeRequest(scrapeRequestContext);
+                    final ScrapeRequestWrapper scrapeRequest = new ScrapeRequestWrapper(this.proxy,
+                                                                                        agentContext.getAgentId(),
+                                                                                        path,
+                                                                                        req.headers(ACCEPT));
+                    this.proxy.addScrapeRequest(scrapeRequest);
+                    agentContext.addScrapeRequest(scrapeRequest);
 
                     while (true) {
                       // Returns false if timed out
-                      if (scrapeRequestContext.waitUntilComplete(1000))
+                      if (scrapeRequest.waitUntilComplete(1000))
                         break;
 
                       // Check if agent is disconnected or agent is hung
-                      if (scrapeRequestContext.ageInSecs() >= 5 || proxy.isStopped()) {
+                      if (scrapeRequest.ageInSecs() >= 5 || proxy.isStopped()) {
                         res.status(503);
                         this.proxy.getMetrics().scrapeRequests.labels("time_out").observe(1);
                         return null;
                       }
                     }
 
-                    logger.info("Results returned from {} for {}", agentContext, scrapeRequestContext);
+                    logger.info("Results returned from {} for {}", agentContext, scrapeRequest);
 
-                    final ScrapeResponse scrapeResponse = scrapeRequestContext.getScrapeResponse();
+                    final ScrapeResponse scrapeResponse = scrapeRequest.getScrapeResponse();
                     final int status_code = scrapeResponse.getStatusCode();
                     res.status(status_code);
 
@@ -87,7 +102,7 @@ public class HttpServer {
                         res.header(CONTENT_ENCODING, "gzip");
                       res.type(scrapeResponse.getContentType());
                       this.proxy.getMetrics().scrapeRequests.labels("success").observe(1);
-                      return scrapeRequestContext.getScrapeResponse().getText();
+                      return scrapeRequest.getScrapeResponse().getText();
                     }
                   });
   }

@@ -1,13 +1,15 @@
 package com.sudothought.proxy;
 
+import com.github.kristofa.brave.Brave;
+import com.github.kristofa.brave.grpc.BraveGrpcServerInterceptor;
 import com.google.common.collect.Maps;
 import com.sudothought.agent.AgentContext;
 import com.sudothought.common.InstrumentedMap;
 import com.sudothought.common.MetricsServer;
 import com.sudothought.common.Utils;
+import com.sudothought.common.ZipkinReporter;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
-import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
 import io.prometheus.client.hotspot.DefaultExports;
@@ -33,24 +35,26 @@ public class Proxy {
   private final Map<String, AgentContext>       pathMap          = new InstrumentedMap<>(Maps.newConcurrentMap(),
                                                                                          this.metrics.pathMapSize);
   // Map scrape_id to agent_id
-  private final Map<Long, ScrapeRequestContext> scrapeRequestMap = new InstrumentedMap<>(Maps.newConcurrentMap(),
+  private final Map<Long, ScrapeRequestWrapper> scrapeRequestMap = new InstrumentedMap<>(Maps.newConcurrentMap(),
                                                                                          this.metrics.scrapeMapSize);
-
-  private final Server        grpcServer;
-  private final HttpServer    httpServer;
-  private final MetricsServer metricsServer;
+  private final ZipkinReporter zipkinReporter;
+  private final Server         grpcServer;
+  private final HttpServer     httpServer;
+  private final MetricsServer  metricsServer;
 
   private Proxy(final int proxyPort, final int metricsPort, final int grpcPort)
       throws IOException {
+
+    this.zipkinReporter = new ZipkinReporter("http://45.55.23.198:9411/api/v1/spans", "prometheus-proxy");
     final ProxyServiceImpl proxyService = new ProxyServiceImpl(this);
-    final ServerInterceptor proxyInterceptor = new ProxyInterceptor();
     // TODO Make this a configuration option
     //final Configuration grpc_metrics = Configuration.cheapMetricsOnly();
     final Configuration grpc_metrics = Configuration.allMetrics();
-    final ServerInterceptor grpcInterceptor = MonitoringServerInterceptor.create(grpc_metrics);
-    final ServerServiceDefinition serviceDef = ServerInterceptors.intercept(proxyService.bindService(),
-                                                                            proxyInterceptor,
-                                                                            grpcInterceptor);
+    final ServerServiceDefinition serviceDef =
+        ServerInterceptors.intercept(proxyService.bindService(),
+                                     new ProxyInterceptor(),
+                                     MonitoringServerInterceptor.create(grpc_metrics),
+                                     BraveGrpcServerInterceptor.create(this.zipkinReporter.getBrave()));
     this.grpcServer = ServerBuilder.forPort(grpcPort)
                                    .addService(serviceDef)
                                    .addTransportFilter(new ProxyTransportFilter(this))
@@ -92,9 +96,10 @@ public class Proxy {
 
   private void stop() {
     this.stopped.set(true);
-    this.grpcServer.shutdown();
     this.httpServer.stop();
     this.metricsServer.stop();
+    this.zipkinReporter.close();
+    this.grpcServer.shutdown();
   }
 
   private void waitUntilShutdown() {
@@ -123,11 +128,11 @@ public class Proxy {
     return agentContext;
   }
 
-  public void addScrapeRequest(final ScrapeRequestContext scrapeRequestContext) {
-    this.scrapeRequestMap.put(scrapeRequestContext.getScrapeId(), scrapeRequestContext);
+  public void addScrapeRequest(final ScrapeRequestWrapper scrapeRequest) {
+    this.scrapeRequestMap.put(scrapeRequest.getScrapeId(), scrapeRequest);
   }
 
-  public ScrapeRequestContext removeScrapeRequest(long scrapeId) {
+  public ScrapeRequestWrapper removeScrapeRequest(long scrapeId) {
     return this.scrapeRequestMap.remove(scrapeId);
   }
 
@@ -157,4 +162,6 @@ public class Proxy {
   }
 
   public ProxyMetrics getMetrics() { return this.metrics; }
+
+  public Brave getBrave() { return this.zipkinReporter.getBrave(); }
 }

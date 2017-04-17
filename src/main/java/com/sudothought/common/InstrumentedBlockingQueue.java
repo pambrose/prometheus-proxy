@@ -15,10 +15,8 @@ public class InstrumentedBlockingQueue<E>
   private final Gauge            gauge;
 
   public InstrumentedBlockingQueue(final BlockingQueue<E> delegate, final Gauge gauge) {
-    Preconditions.checkNotNull(delegate);
-    Preconditions.checkNotNull(gauge);
-    this.delegate = delegate;
-    this.gauge = gauge;
+    this.delegate = Preconditions.checkNotNull(delegate);
+    this.gauge = Preconditions.checkNotNull(gauge);
   }
 
   @Override

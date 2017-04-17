@@ -3,7 +3,7 @@ package com.sudothought.agent;
 import com.google.common.base.MoreObjects;
 import com.sudothought.common.InstrumentedBlockingQueue;
 import com.sudothought.proxy.Proxy;
-import com.sudothought.proxy.ScrapeRequestContext;
+import com.sudothought.proxy.ScrapeRequestWrapper;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -20,7 +20,7 @@ public class AgentContext {
 
   private final Proxy                               proxy;
   private final String                              remoteAddr;
-  private final BlockingQueue<ScrapeRequestContext> scrapeRequestQueue;
+  private final BlockingQueue<ScrapeRequestWrapper> scrapeRequestQueue;
 
   public AgentContext(final Proxy proxy, final String remoteAddr) {
     this.proxy = proxy;
@@ -37,11 +37,11 @@ public class AgentContext {
 
   public String getRemoteAddr() { return this.remoteAddr; }
 
-  public void addScrapeRequest(final ScrapeRequestContext scrapeRequest) {
+  public void addScrapeRequest(final ScrapeRequestWrapper scrapeRequest) {
     this.scrapeRequestQueue.add(scrapeRequest);
   }
 
-  public ScrapeRequestContext pollScrapeRequestQueue(final long waitMillis) {
+  public ScrapeRequestWrapper pollScrapeRequestQueue(final long waitMillis) {
     try {
       return this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS);
     }
