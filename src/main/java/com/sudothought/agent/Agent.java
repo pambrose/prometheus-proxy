@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.InetAddress;
+import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Map;
@@ -133,27 +134,33 @@ public class Agent {
     final AgentArgs args = new AgentArgs();
     args.parseArgs(Agent.class.getName(), argv);
 
-    final ConfigSyntax configSyntax;
-    if (args.config.endsWith(".json"))
-      configSyntax = ConfigSyntax.JSON;
-    else if (args.config.endsWith(".props") || args.config.endsWith(".properties"))
-      configSyntax = ConfigSyntax.PROPERTIES;
-    else
-      configSyntax = ConfigSyntax.CONF;
 
+    Config config;
     if (args.config.startsWith("http://") || args.config.startsWith("https://")) {
+      final ConfigSyntax configSyntax;
+      if (args.config.endsWith(".json") || args.config.endsWith(".jsn"))
+        configSyntax = ConfigSyntax.JSON;
+      else if (args.config.endsWith(".properties") || args.config.endsWith(".props"))
+        configSyntax = ConfigSyntax.PROPERTIES;
+      else
+        configSyntax = ConfigSyntax.CONF;
 
+      config = ConfigFactory.parseURL(new URL(args.config),
+                                      ConfigParseOptions.defaults()
+                                                        .setSyntax(configSyntax)
+                                                        .setAllowMissing(true));
+    }
+    else {
+      config = ConfigFactory.parseFileAnySyntax(new File(args.config),
+                                                ConfigParseOptions.defaults()
+                                                                  .setAllowMissing(true));
     }
 
 
-    final Config config = ConfigFactory.parseFile(new File(args.config),
-                                                  ConfigParseOptions.defaults()
-                                                                    .setSyntax(configSyntax)
-                                                                    .setAllowMissing(true))
-                                       .withFallback(ConfigFactory.load())
-                                       .resolve(ConfigResolveOptions.defaults()
-                                                                    .setUseSystemEnvironment(true)
-                                                                    .setAllowUnresolved(true));
+    config = config.withFallback(ConfigFactory.load())
+                   .resolve(ConfigResolveOptions.defaults()
+                                                .setUseSystemEnvironment(true)
+                                                .setAllowUnresolved(true));
 
     final CoreConfig coreConfig = new CoreConfig(config);
     final List<CoreConfig.Agent.PathConfigs$Elm> vals = coreConfig.agent.pathConfigs;
