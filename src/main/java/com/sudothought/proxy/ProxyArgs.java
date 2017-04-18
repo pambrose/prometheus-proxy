@@ -7,10 +7,10 @@ public class ProxyArgs
     extends BaseArgs {
 
   @Parameter(names = {"-p", "--port"}, description = "Proxy listen port")
-  public int http_port    = 8080;
+  public Integer http_port    = null;
   @Parameter(names = {"-m", "--metrics"}, description = "Metrics listen port")
-  public int metrics_port = 8082;
+  public Integer metrics_port = null;
   @Parameter(names = {"-g", "--grpc"}, description = "gRPC listen port")
-  public int grpc_port    = 50051;
+  public Integer grpc_port    = null;
 
 }

@@ -12,7 +12,4 @@ RUN apk update && apk add maven && \
 
 EXPOSE 8082
 
-ENTRYPOINT ["/prometheus-proxy/target/bin/agent.sh", \
-            "--proxy", "pleiku", \
-            "--config", "agent.yml", \
-            "--metrics", "8082"]
+ENTRYPOINT ["/prometheus-proxy/target/bin/agent.sh"]

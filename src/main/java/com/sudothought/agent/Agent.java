@@ -57,6 +57,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
+import static com.sudothought.common.EnvVars.AGENT_CONFIG;
 import static com.sudothought.common.Utils.newInstrumentedThreadFactory;
 import static com.sudothought.grpc.ProxyServiceGrpc.newBlockingStub;
 import static com.sudothought.grpc.ProxyServiceGrpc.newStub;
@@ -68,7 +69,6 @@ public class Agent {
   private static final Logger logger        = LoggerFactory.getLogger(Agent.class);
   private static final String AGENT_CONFIGS = "agent_configs";
 
-  private final AgentMetrics             metrics         = new AgentMetrics();
   private final AtomicBoolean            stopped         = new AtomicBoolean(false);
   private final Map<String, PathContext> pathContextMap  = Maps.newConcurrentMap();  // Map path to PathContext
   private final AtomicReference<String>  agentIdRef      = new AtomicReference<>();
@@ -76,6 +76,7 @@ public class Agent {
                                                                                                             "Agent fetch",
                                                                                                             true));
   private final ConfigVals                                configVals;
+  private final AgentMetrics                              metrics;
   private final BlockingQueue<ScrapeResponse>             scrapeResponseQueue;
   private final RateLimiter                               reconnectLimiter;
   private final MetricsServer                             metricsServer;
@@ -86,25 +87,26 @@ public class Agent {
   private final ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
   private final ProxyServiceGrpc.ProxyServiceStub         asyncStub;
 
-  private Agent(String host, final int metricsPort, final ConfigVals configVals) {
+  private Agent(final ConfigVals configVals, final String host, final int metricsPort) {
     this.configVals = configVals;
 
-
-    this.scrapeResponseQueue = this.configVals.agent.scrape.metricsEnabled
-                               ? new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(this.configVals.agent.scrape.queueSize),
-                                                                 this.metrics.scrapeQueueSize)
-                               : new ArrayBlockingQueue<>(this.configVals.agent.scrape.queueSize);
-
-    logger.info("Assigning proxy reconnect pause time to {} secs", this.configVals.agent.proxy.reconectPauseSecs);
-    this.reconnectLimiter = RateLimiter.create(1.0 / this.configVals.agent.proxy.reconectPauseSecs);
-
-    if (this.getConfigVals().agent.metrics.enabled) {
-      this.metricsServer = new MetricsServer(metricsPort, this.configVals.agent.metrics.path);
+    if (this.getConfigVals().metrics.enabled) {
+      this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
+      this.metrics = new AgentMetrics();
     }
     else {
       logger.info("Metrics endpoint disabled");
       this.metricsServer = null;
+      this.metrics = null;
     }
+
+    this.scrapeResponseQueue = this.metrics != null && this.getConfigVals().scrape.metricsEnabled
+                               ? new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(this.getConfigVals().scrape.queueSize),
+                                                                 this.metrics.scrapeQueueSize)
+                               : new ArrayBlockingQueue<>(this.getConfigVals().scrape.queueSize);
+
+    logger.info("Assigning proxy reconnect pause time to {} secs", this.getConfigVals().proxy.reconectPauseSecs);
+    this.reconnectLimiter = RateLimiter.create(1.0 / this.getConfigVals().proxy.reconectPauseSecs);
 
     this.pathConfigs = configVals.agent.pathConfigs.stream()
                                                    .map(v -> ImmutableMap.of("name", v.name,
@@ -114,8 +116,8 @@ public class Agent {
                                                                           v.get("path"), v.get("url")))
                                                    .collect(Collectors.toList());
 
-    if (this.getConfigVals().agent.zipkin.enabled) {
-      final ConfigVals.Agent.Zipkin zipkin = this.getConfigVals().agent.zipkin;
+    if (this.getConfigVals().zipkin.enabled) {
+      final ConfigVals.Agent.Zipkin zipkin = this.getConfigVals().zipkin;
       final String zipkinHost = String.format("http://%s:%d/%s", zipkin.hostname, zipkin.port, zipkin.path);
       logger.info("Creating zipkin reporter for {}", zipkinHost);
       this.zipkinReporter = new ZipkinReporter(zipkinHost, zipkin.serviceName);
@@ -140,12 +142,10 @@ public class Agent {
     this.channel = ManagedChannelBuilder.forAddress(hostname, port).usePlaintext(true).build();
 
     final List<ClientInterceptor> interceptors = Lists.newArrayList(new AgentClientInterceptor(this));
-
-    if (this.getConfigVals().agent.prometheus.enabled)
-      interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().agent.prometheus.allMetrics
+    if (this.getConfigVals().prometheus.enabled)
+      interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().prometheus.allMetrics
                                                           ? Configuration.allMetrics()
                                                           : Configuration.cheapMetricsOnly()));
-
     if (this.zipkinReporter != null)
       interceptors.add(BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave()));
 
@@ -160,20 +160,21 @@ public class Agent {
     final AgentArgs args = new AgentArgs();
     args.parseArgs(Agent.class.getName(), argv);
 
-    final Config config = Utils.readConfig(args.config, "AGENT_CONFIG", ConfigParseOptions.defaults()
-                                                                                          .setAllowMissing(true));
-
+    final Config config = Utils.readConfig(args.config,
+                                           AGENT_CONFIG, ConfigParseOptions.defaults()
+                                                                           .setAllowMissing(false),
+                                           ConfigFactory.load(),
+                                           true)
+                               .resolve(ConfigResolveOptions.defaults());
     final ConfigVals configVals = new ConfigVals(config.withFallback(ConfigFactory.load())
-                                                       .resolve(ConfigResolveOptions.defaults()
-                                                                                    .setUseSystemEnvironment(true)
-                                                                                    .setAllowUnresolved(true)));
+                                                       .resolve(ConfigResolveOptions.defaults()));
     if (args.proxy_host == null)
       args.proxy_host = String.format("%s:%d", configVals.agent.proxy.hostname, configVals.agent.proxy.port);
 
     if (args.metrics_port == null)
       args.metrics_port = configVals.agent.metrics.port;
 
-    final Agent agent = new Agent(args.proxy_host, args.metrics_port, configVals);
+    final Agent agent = new Agent(configVals, args.proxy_host, args.metrics_port);
     agent.run();
   }
 
@@ -326,7 +327,8 @@ public class Agent {
     final PathContext pathContext = this.pathContextMap.get(path);
     if (pathContext == null) {
       logger.warn("Invalid path request: {}", path);
-      this.metrics.scrapeRequests.labels("invalid_path").observe(1);
+      if (this.metrics != null)
+        this.metrics.scrapeRequests.labels("invalid_path").observe(1);
       return scrapeResponse.setValid(false)
                            .setStatusCode(status_code)
                            .setText("")
@@ -334,13 +336,14 @@ public class Agent {
                            .build();
     }
 
-    final Summary.Timer requestTimer = this.metrics.scrapeRequestLatency.startTimer();
+    final Summary.Timer requestTimer = this.metrics != null ? this.metrics.scrapeRequestLatency.startTimer() : null;
     try {
       logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
       final Response response = pathContext.fetchUrl(scrapeRequest);
       status_code = response.code();
       if (response.isSuccessful()) {
-        this.metrics.scrapeRequests.labels("success").observe(1);
+        if (this.metrics != null)
+          this.metrics.scrapeRequests.labels("success").observe(1);
         return scrapeResponse.setValid(true)
                              .setStatusCode(status_code)
                              .setText(response.body().string())
@@ -352,9 +355,11 @@ public class Agent {
       // Ignore
     }
     finally {
-      requestTimer.observeDuration();
+      if (requestTimer != null)
+        requestTimer.observeDuration();
     }
-    metrics.scrapeRequests.labels("unsuccessful").observe(1);
+    if (this.metrics != null)
+      this.metrics.scrapeRequests.labels("unsuccessful").observe(1);
     return scrapeResponse.setValid(false)
                          .setStatusCode(status_code)
                          .setText("")
@@ -422,5 +427,5 @@ public class Agent {
 
   public void setAgentId(final String agentId) { this.agentIdRef.set(agentId); }
 
-  public ConfigVals getConfigVals() { return this.configVals; }
+  public ConfigVals.Agent getConfigVals() { return this.configVals.agent; }
 }

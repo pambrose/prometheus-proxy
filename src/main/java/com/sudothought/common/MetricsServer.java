@@ -31,7 +31,7 @@ public class MetricsServer {
     context.addServlet(new ServletHolder(new MetricsServlet()), "/" + this.path);
     try {
       this.server.start();
-      logger.info("Started local proxy metrics server at http://localhost:{}/{}", this.port, this.path);
+      logger.info("Started metrics server at http://localhost:{}/{}", this.port, this.path);
     }
     catch (Exception e) {
       e.printStackTrace();

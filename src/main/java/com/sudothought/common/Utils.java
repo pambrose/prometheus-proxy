@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
@@ -79,31 +80,61 @@ public interface Utils {
 
   static Config readConfig(final String cliConfig,
                            final String envConfig,
-                           final ConfigParseOptions configParseOptions)
+                           final ConfigParseOptions configParseOptions,
+                           final Config fallback,
+                           final boolean exitOnMissingConfig)
       throws MalformedURLException {
 
     // Precedence of confg settings: CLI, ENV_VAR
     final String configName = cliConfig != null ? cliConfig : System.getenv(envConfig);
 
     if (configName == null) {
-      System.err.println(String.format("A configuration file or url must be specified with --config or $%s", envConfig));
-      System.exit(1);
+      if (exitOnMissingConfig) {
+        System.err.println(String.format("A configuration file or url must be specified with --config or $%s", envConfig));
+        System.exit(1);
+      }
+      else {
+        return fallback;
+      }
     }
 
-    if (configName.startsWith("http://") || configName.startsWith("https://")) {
+    final String lcname = configName.toLowerCase();
+
+    if (lcname.startsWith("http://") || lcname.startsWith("https://")) {
       final ConfigSyntax configSyntax;
-      if (configName.endsWith(".json") || configName.endsWith(".jsn"))
+      if (lcname.endsWith(".json") || lcname.endsWith(".jsn"))
         configSyntax = ConfigSyntax.JSON;
-      else if (configName.endsWith(".properties") || configName.endsWith(".props"))
+      else if (lcname.endsWith(".properties") || lcname.endsWith(".props"))
         configSyntax = ConfigSyntax.PROPERTIES;
       else
         configSyntax = ConfigSyntax.CONF;
 
-      return ConfigFactory.parseURL(new URL(configName), configParseOptions.setSyntax(configSyntax));
+      try {
+        return ConfigFactory.parseURL(new URL(configName), configParseOptions.setSyntax(configSyntax))
+                            .withFallback(fallback);
+      }
+      catch (Exception e) {
+        if (e.getCause() instanceof FileNotFoundException)
+          logger.error("Invalid config url: {}", configName);
+        else
+          logger.error(e.getMessage(), e);
+        System.exit(1);
+      }
     }
     else {
-      return ConfigFactory.parseFileAnySyntax(new File(configName), configParseOptions);
+      try {
+        return ConfigFactory.parseFileAnySyntax(new File(configName), configParseOptions)
+                            .withFallback(fallback);
+      }
+      catch (Exception e) {
+        if (e.getCause() instanceof FileNotFoundException)
+          logger.error("Invalid config filename: {}", configName);
+        else
+          logger.error(e.getMessage(), e);
+        System.exit(1);
+      }
     }
+    // Never reached
+    return fallback;
   }
-
 }

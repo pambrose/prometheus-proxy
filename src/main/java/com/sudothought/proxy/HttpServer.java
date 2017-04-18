@@ -32,16 +32,18 @@ public class HttpServer {
   public void start() {
     logger.info("Started proxy listening on {}", this.port);
 
-    final BraveTracing tracing = BraveTracing.create(this.proxy.getBrave());
-    this.http.before(tracing.before());
-    this.http.exception(Exception.class, tracing.exception(new ExceptionHandlerImpl(Exception.class) {
-      @Override
-      public void handle(Exception exception, Request request, Response response) {
-        response.status(404);
-        exception.printStackTrace();
-      }
-    }));
-    this.http.afterAfter(tracing.afterAfter());
+    if (this.proxy.isZipkinReportingEnabled()) {
+      final BraveTracing tracing = BraveTracing.create(this.proxy.getBrave());
+      this.http.before(tracing.before());
+      this.http.exception(Exception.class, tracing.exception(new ExceptionHandlerImpl(Exception.class) {
+        @Override
+        public void handle(Exception exception, Request request, Response response) {
+          response.status(404);
+          exception.printStackTrace();
+        }
+      }));
+      this.http.afterAfter(tracing.afterAfter());
+    }
 
     this.http.get("/*",
                   (req, res) -> {
