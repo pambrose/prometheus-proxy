@@ -73,7 +73,7 @@ public class Proxy {
                                                        : Maps.newConcurrentMap();
 
     if (this.getConfigVals().zipkin.enabled) {
-      final ConfigVals.Proxy2.Zipkin2 zipkin = this.getConfigVals().zipkin;
+      final ConfigVals.Proxy.Zipkin2 zipkin = this.getConfigVals().zipkin;
       final String zipkinHost = String.format("http://%s:%d/%s", zipkin.hostname, zipkin.port, zipkin.path);
       logger.info("Creating zipkin reporter for {}", zipkinHost);
       this.zipkinReporter = new ZipkinReporter(zipkinHost, zipkin.serviceName);
@@ -84,8 +84,8 @@ public class Proxy {
     }
 
     final List<ServerInterceptor> interceptors = Lists.newArrayList(new ProxyInterceptor());
-    if (this.getConfigVals().prometheus.enabled)
-      interceptors.add(MonitoringServerInterceptor.create(this.getConfigVals().prometheus.allMetrics
+    if (this.getConfigVals().grpc.metricsEnabled)
+      interceptors.add(MonitoringServerInterceptor.create(this.getConfigVals().grpc.allMetrics
                                                           ? Configuration.allMetrics()
                                                           : Configuration.cheapMetricsOnly()));
     if (this.zipkinReporter != null)
@@ -238,5 +238,5 @@ public class Proxy {
 
   public Brave getBrave() { return this.zipkinReporter.getBrave(); }
 
-  public ConfigVals.Proxy2 getConfigVals() { return this.configVals.proxy; }
+  public ConfigVals.Proxy getConfigVals() { return this.configVals.proxy; }
 }

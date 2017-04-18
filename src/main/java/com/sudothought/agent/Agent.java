@@ -36,13 +36,8 @@ import me.dinowernli.grpc.prometheus.MonitoringClientInterceptor;
 import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.yaml.snakeyaml.Yaml;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -67,7 +62,6 @@ import static java.util.concurrent.Executors.newCachedThreadPool;
 public class Agent {
 
   private static final Logger logger        = LoggerFactory.getLogger(Agent.class);
-  private static final String AGENT_CONFIGS = "agent_configs";
 
   private final AtomicBoolean            stopped         = new AtomicBoolean(false);
   private final Map<String, PathContext> pathContextMap  = Maps.newConcurrentMap();  // Map path to PathContext
@@ -105,8 +99,8 @@ public class Agent {
                                                                  this.metrics.scrapeQueueSize)
                                : new ArrayBlockingQueue<>(this.getConfigVals().scrape.queueSize);
 
-    logger.info("Assigning proxy reconnect pause time to {} secs", this.getConfigVals().proxy.reconectPauseSecs);
-    this.reconnectLimiter = RateLimiter.create(1.0 / this.getConfigVals().proxy.reconectPauseSecs);
+    logger.info("Assigning proxy reconnect pause time to {} secs", this.getConfigVals().grpc.reconectPauseSecs);
+    this.reconnectLimiter = RateLimiter.create(1.0 / this.getConfigVals().grpc.reconectPauseSecs);
 
     this.pathConfigs = configVals.agent.pathConfigs.stream()
                                                    .map(v -> ImmutableMap.of("name", v.name,
@@ -142,8 +136,8 @@ public class Agent {
     this.channel = ManagedChannelBuilder.forAddress(hostname, port).usePlaintext(true).build();
 
     final List<ClientInterceptor> interceptors = Lists.newArrayList(new AgentClientInterceptor(this));
-    if (this.getConfigVals().prometheus.enabled)
-      interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().prometheus.allMetrics
+    if (this.getConfigVals().grpc.metricsEnabled)
+      interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().grpc.allMetrics
                                                           ? Configuration.allMetrics()
                                                           : Configuration.cheapMetricsOnly()));
     if (this.zipkinReporter != null)
@@ -169,28 +163,13 @@ public class Agent {
     final ConfigVals configVals = new ConfigVals(config.withFallback(ConfigFactory.load())
                                                        .resolve(ConfigResolveOptions.defaults()));
     if (args.proxy_host == null)
-      args.proxy_host = String.format("%s:%d", configVals.agent.proxy.hostname, configVals.agent.proxy.port);
+      args.proxy_host = String.format("%s:%d", configVals.agent.grpc.hostname, configVals.agent.grpc.port);
 
     if (args.metrics_port == null)
       args.metrics_port = configVals.agent.metrics.port;
 
     final Agent agent = new Agent(configVals, args.proxy_host, args.metrics_port);
     agent.run();
-  }
-
-  private static List<Map<String, String>> readAgentConfigs(final String filename)
-      throws IOException {
-    logger.info("Loading configuration file {}", filename);
-    final Yaml yaml = new Yaml();
-    try (final InputStream input = new FileInputStream(new File(filename))) {
-      final Map<String, List<Map<String, String>>> data = (Map<String, List<Map<String, String>>>) yaml.load(input);
-      if (!data.containsKey(AGENT_CONFIGS))
-        throw new IOException(String.format("Missing %s key in config file %s", AGENT_CONFIGS, filename));
-      return data.get(AGENT_CONFIGS);
-    }
-    catch (FileNotFoundException e) {
-      throw new IOException(String.format("Config file not found: %s", filename));
-    }
   }
 
   private static String getHostName() {

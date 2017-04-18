@@ -3,8 +3,11 @@ prometheus-proxy:
   image: 'pambrose/prometheus-proxy:1.0.0'
   ports:
     - '8080:8080'
-    - '8081:8081'
+    - '8087:8087'
     - '50051:50051'
+  environment:
+    - PROXY_CONFIG=https://dl.dropboxusercontent.com/u/481551/prometheus/cloud-proxy.conf
+
 
 prometheus-test:
   image: 'pambrose/prometheus-test:latest'
