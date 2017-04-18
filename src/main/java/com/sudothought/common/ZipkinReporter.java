@@ -25,7 +25,6 @@ public class ZipkinReporter {
                         .reporter(this.reporter)
                         .build();
     this.brave = TracerAdapter.newBrave(this.tracer);
-
   }
 
   public Brave getBrave() { return this.brave; }

@@ -29,7 +29,7 @@ run-proxy:
 	docker run --rm -p 8080:8080 -p 8081:8081 -p 50051:50051 pambrose/pambrose/prometheus-proxy:1.0.0
 
 config:
-	java -jar ./etc/jars/tscfg-0.8.0.jar --spec etc/config/spec.conf --pn com.sudothought.common --cn CoreConfig --dd src/main/java/com/sudothought/common
+	java -jar ./etc/jars/tscfg-0.8.0.jar --spec etc/config/config.conf --pn com.sudothought.common --cn ConfigVals --dd src/main/java/com/sudothought/common
 
 tree:
 	mvn dependency:tree

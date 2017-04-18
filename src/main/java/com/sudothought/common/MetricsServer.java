@@ -14,10 +14,12 @@ public class MetricsServer {
   private static final Logger logger = LoggerFactory.getLogger(MetricsServer.class);
 
   private final int    port;
+  private final String path;
   private final Server server;
 
-  public MetricsServer(int port) {
+  public MetricsServer(final int port, final String path) {
     this.port = port;
+    this.path = path;
     this.server = new Server(this.port);
   }
 
@@ -26,10 +28,10 @@ public class MetricsServer {
     final ServletContextHandler context = new ServletContextHandler();
     context.setContextPath("/");
     this.server.setHandler(context);
-    context.addServlet(new ServletHolder(new MetricsServlet()), "/metrics");
+    context.addServlet(new ServletHolder(new MetricsServlet()), "/" + this.path);
     try {
       this.server.start();
-      logger.info("Started local proxy metrics server at http://localhost:{}/metrics", this.port);
+      logger.info("Started local proxy metrics server at http://localhost:{}/{}", this.port, this.path);
     }
     catch (Exception e) {
       e.printStackTrace();

@@ -1,7 +1,7 @@
 .*
 docker
 bin
-compose
+etc/compose
 target
 *.yml
 *.iml

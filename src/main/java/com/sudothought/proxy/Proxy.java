@@ -60,7 +60,7 @@ public class Proxy {
                                    .addTransportFilter(new ProxyTransportFilter(this))
                                    .build();
     this.httpServer = new HttpServer(this, proxyPort);
-    this.metricsServer = new MetricsServer(metricsPort);
+    this.metricsServer = new MetricsServer(metricsPort, "metrics");
   }
 
   public static void main(final String[] argv)

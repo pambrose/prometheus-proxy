@@ -5,11 +5,18 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
+import com.typesafe.config.ConfigParseOptions;
+import com.typesafe.config.ConfigSyntax;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.List;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -69,4 +76,34 @@ public interface Utils {
       return format("Banner %s cannot be found", filename);
     }
   }
+
+  static Config readConfig(final String cliConfig,
+                           final String envConfig,
+                           final ConfigParseOptions configParseOptions)
+      throws MalformedURLException {
+
+    // Precedence of confg settings: CLI, ENV_VAR
+    final String configName = cliConfig != null ? cliConfig : System.getenv(envConfig);
+
+    if (configName == null) {
+      System.err.println(String.format("A configuration file or url must be specified with --config or $%s", envConfig));
+      System.exit(1);
+    }
+
+    if (configName.startsWith("http://") || configName.startsWith("https://")) {
+      final ConfigSyntax configSyntax;
+      if (configName.endsWith(".json") || configName.endsWith(".jsn"))
+        configSyntax = ConfigSyntax.JSON;
+      else if (configName.endsWith(".properties") || configName.endsWith(".props"))
+        configSyntax = ConfigSyntax.PROPERTIES;
+      else
+        configSyntax = ConfigSyntax.CONF;
+
+      return ConfigFactory.parseURL(new URL(configName), configParseOptions.setSyntax(configSyntax));
+    }
+    else {
+      return ConfigFactory.parseFileAnySyntax(new File(configName), configParseOptions);
+    }
+  }
+
 }

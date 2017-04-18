@@ -2,10 +2,11 @@ package com.sudothought.agent;
 
 import com.github.kristofa.brave.grpc.BraveGrpcClientInterceptor;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.protobuf.Empty;
-import com.sudothought.common.CoreConfig;
+import com.sudothought.common.ConfigVals;
 import com.sudothought.common.InstrumentedBlockingQueue;
 import com.sudothought.common.MetricsServer;
 import com.sudothought.common.Utils;
@@ -22,7 +23,6 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigParseOptions;
 import com.typesafe.config.ConfigResolveOptions;
-import com.typesafe.config.ConfigSyntax;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -45,7 +45,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.InetAddress;
-import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Map;
@@ -69,62 +68,89 @@ public class Agent {
   private static final Logger logger        = LoggerFactory.getLogger(Agent.class);
   private static final String AGENT_CONFIGS = "agent_configs";
 
-  private final AgentMetrics                  metrics             = new AgentMetrics();
-  private final BlockingQueue<ScrapeResponse> scrapeResponseQueue = new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(256),
-                                                                                                    this.metrics.scrapeQueueSize);
-  private final AtomicBoolean                 stopped             = new AtomicBoolean(false);
-  // Map path to PathContext
-  private final Map<String, PathContext>      pathContextMap      = Maps.newConcurrentMap();
-  private final AtomicReference<String>       agentIdRef          = new AtomicReference<>();
-  private final RateLimiter                   reconnectLimiter    = RateLimiter.create(1.0 / 3);
-  private final ExecutorService               executorService     = newCachedThreadPool(newInstrumentedThreadFactory("agent_fetch",
-                                                                                                                     "Agent fetch",
-                                                                                                                     true));
-
-  private final String                                    hostname;
+  private final AgentMetrics             metrics         = new AgentMetrics();
+  private final AtomicBoolean            stopped         = new AtomicBoolean(false);
+  private final Map<String, PathContext> pathContextMap  = Maps.newConcurrentMap();  // Map path to PathContext
+  private final AtomicReference<String>  agentIdRef      = new AtomicReference<>();
+  private final ExecutorService          executorService = newCachedThreadPool(newInstrumentedThreadFactory("agent_fetch",
+                                                                                                            "Agent fetch",
+                                                                                                            true));
+  private final ConfigVals                                configVals;
+  private final BlockingQueue<ScrapeResponse>             scrapeResponseQueue;
+  private final RateLimiter                               reconnectLimiter;
+  private final MetricsServer                             metricsServer;
   private final List<Map<String, String>>                 pathConfigs;
+  private final String                                    host;
   private final ManagedChannel                            channel;
   private final ZipkinReporter                            zipkinReporter;
   private final ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
   private final ProxyServiceGrpc.ProxyServiceStub         asyncStub;
-  private final MetricsServer                             metricsServer;
 
-  private Agent(String hostname, final int metricsPort, final List<Map<String, String>> pathConfigs) {
-    this.pathConfigs = pathConfigs;
+  private Agent(String host, final int metricsPort, final ConfigVals configVals) {
+    this.configVals = configVals;
 
-    final String host;
+
+    this.scrapeResponseQueue = this.configVals.agent.scrape.metricsEnabled
+                               ? new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(this.configVals.agent.scrape.queueSize),
+                                                                 this.metrics.scrapeQueueSize)
+                               : new ArrayBlockingQueue<>(this.configVals.agent.scrape.queueSize);
+
+    logger.info("Assigning proxy reconnect pause time to {} secs", this.configVals.agent.proxy.reconectPauseSecs);
+    this.reconnectLimiter = RateLimiter.create(1.0 / this.configVals.agent.proxy.reconectPauseSecs);
+
+    if (this.getConfigVals().agent.metrics.enabled) {
+      this.metricsServer = new MetricsServer(metricsPort, this.configVals.agent.metrics.path);
+    }
+    else {
+      logger.info("Metrics endpoint disabled");
+      this.metricsServer = null;
+    }
+
+    this.pathConfigs = configVals.agent.pathConfigs.stream()
+                                                   .map(v -> ImmutableMap.of("name", v.name,
+                                                                             "path", v.path,
+                                                                             "url", v.url))
+                                                   .peek(v -> logger.info("Proxy path /{} will be assigned to {}",
+                                                                          v.get("path"), v.get("url")))
+                                                   .collect(Collectors.toList());
+
+    if (this.getConfigVals().agent.zipkin.enabled) {
+      final ConfigVals.Agent.Zipkin zipkin = this.getConfigVals().agent.zipkin;
+      final String zipkinHost = String.format("http://%s:%d/%s", zipkin.hostname, zipkin.port, zipkin.path);
+      logger.info("Creating zipkin reporter for {}", zipkinHost);
+      this.zipkinReporter = new ZipkinReporter(zipkinHost, zipkin.serviceName);
+    }
+    else {
+      logger.info("Zipkin reporter disabled");
+      this.zipkinReporter = null;
+    }
+
+    final String hostname;
     final int port;
-    if (hostname.contains(":")) {
-      String[] vals = hostname.split(":");
-      host = vals[0];
+    if (host.contains(":")) {
+      String[] vals = host.split(":");
+      hostname = vals[0];
       port = Integer.valueOf(vals[1]);
     }
     else {
-      host = hostname;
+      hostname = host;
       port = 50051;
     }
-    this.hostname = String.format("%s:%s", host, port);
-    final ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port)
-                                                                         .usePlaintext(true);
-    this.channel = channelBuilder.build();
+    this.host = String.format("%s:%s", hostname, port);
+    this.channel = ManagedChannelBuilder.forAddress(hostname, port).usePlaintext(true).build();
 
-    this.zipkinReporter = new ZipkinReporter("http://localhost:9411/api/v1/spans", "prometheus-agent");
+    final List<ClientInterceptor> interceptors = Lists.newArrayList(new AgentClientInterceptor(this));
 
-    final ClientInterceptor agentInterceptor = new AgentClientInterceptor(this);
-    //final Configuration grpc_metrics = Configuration.cheapMetricsOnly();
-    final Configuration grpc_metrics = Configuration.allMetrics();
-    final ClientInterceptor clientInterceptor = MonitoringClientInterceptor.create(grpc_metrics);
-    final ClientInterceptor zipkinInterceptor = BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave());
-    this.blockingStub = newBlockingStub(intercept(this.channel,
-                                                  agentInterceptor,
-                                                  clientInterceptor,
-                                                  zipkinInterceptor));
-    this.asyncStub = newStub(intercept(this.channel,
-                                       agentInterceptor,
-                                       clientInterceptor,
-                                       zipkinInterceptor));
+    if (this.getConfigVals().agent.prometheus.enabled)
+      interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().agent.prometheus.allMetrics
+                                                          ? Configuration.allMetrics()
+                                                          : Configuration.cheapMetricsOnly()));
 
-    this.metricsServer = new MetricsServer(metricsPort);
+    if (this.zipkinReporter != null)
+      interceptors.add(BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave()));
+
+    this.blockingStub = newBlockingStub(intercept(this.channel, interceptors));
+    this.asyncStub = newStub(intercept(this.channel, interceptors));
   }
 
   public static void main(final String[] argv)
@@ -134,49 +160,20 @@ public class Agent {
     final AgentArgs args = new AgentArgs();
     args.parseArgs(Agent.class.getName(), argv);
 
+    final Config config = Utils.readConfig(args.config, "AGENT_CONFIG", ConfigParseOptions.defaults()
+                                                                                          .setAllowMissing(true));
 
-    Config config;
-    if (args.config.startsWith("http://") || args.config.startsWith("https://")) {
-      final ConfigSyntax configSyntax;
-      if (args.config.endsWith(".json") || args.config.endsWith(".jsn"))
-        configSyntax = ConfigSyntax.JSON;
-      else if (args.config.endsWith(".properties") || args.config.endsWith(".props"))
-        configSyntax = ConfigSyntax.PROPERTIES;
-      else
-        configSyntax = ConfigSyntax.CONF;
-
-      config = ConfigFactory.parseURL(new URL(args.config),
-                                      ConfigParseOptions.defaults()
-                                                        .setSyntax(configSyntax)
-                                                        .setAllowMissing(true));
-    }
-    else {
-      config = ConfigFactory.parseFileAnySyntax(new File(args.config),
-                                                ConfigParseOptions.defaults()
-                                                                  .setAllowMissing(true));
-    }
-
-
-    config = config.withFallback(ConfigFactory.load())
-                   .resolve(ConfigResolveOptions.defaults()
-                                                .setUseSystemEnvironment(true)
-                                                .setAllowUnresolved(true));
-
-    final CoreConfig coreConfig = new CoreConfig(config);
-    final List<CoreConfig.Agent.PathConfigs$Elm> vals = coreConfig.agent.pathConfigs;
-    final List<Map<String, String>> pathConfigs = vals.stream()
-                                                      .map(v -> ImmutableMap.of("name", v.name,
-                                                                                "path", v.path,
-                                                                                "url", v.url))
-                                                      .collect(Collectors.toList());
-
-    if (args.proxy_hostname == null)
-      args.proxy_hostname = String.format("%s:%d", coreConfig.agent.proxy.hostname, coreConfig.agent.proxy.port);
+    final ConfigVals configVals = new ConfigVals(config.withFallback(ConfigFactory.load())
+                                                       .resolve(ConfigResolveOptions.defaults()
+                                                                                    .setUseSystemEnvironment(true)
+                                                                                    .setAllowUnresolved(true)));
+    if (args.proxy_host == null)
+      args.proxy_host = String.format("%s:%d", configVals.agent.proxy.hostname, configVals.agent.proxy.port);
 
     if (args.metrics_port == null)
-      args.metrics_port = coreConfig.agent.metrics.port;
+      args.metrics_port = configVals.agent.metrics.port;
 
-    final Agent agent = new Agent(args.proxy_hostname, args.metrics_port, pathConfigs);
+    final Agent agent = new Agent(args.proxy_host, args.metrics_port, configVals);
     agent.run();
   }
 
@@ -208,8 +205,10 @@ public class Agent {
 
   private void run()
       throws IOException {
-    this.metricsServer.start();
-    DefaultExports.initialize();
+    if (this.metricsServer != null) {
+      this.metricsServer.start();
+      DefaultExports.initialize();
+    }
 
     // Prime the limiter
     this.reconnectLimiter.acquire();
@@ -231,9 +230,9 @@ public class Agent {
       this.scrapeResponseQueue.clear();
 
       try {
-        logger.info("Connecting to proxy at {}...", this.hostname);
+        logger.info("Connecting to proxy at {}...", this.host);
         this.connectAgent();
-        logger.info("Connected to proxy at {}", this.hostname);
+        logger.info("Connected to proxy at {}", this.host);
         connected.set(true);
 
         this.registerAgent();
@@ -307,11 +306,11 @@ public class Agent {
         // Ignore
       }
       catch (StatusRuntimeException e) {
-        logger.info("Cannot connect to proxy at {} [{}]", this.hostname, e.getMessage());
+        logger.info("Cannot connect to proxy at {} [{}]", this.host, e.getMessage());
       }
 
       if (connected.get())
-        logger.info("Disconnected from proxy at {}", this.hostname);
+        logger.info("Disconnected from proxy at {}", this.host);
 
       final double secsWaiting = this.reconnectLimiter.acquire();
       logger.info("Waited {} secs to reconnect", secsWaiting);
@@ -365,8 +364,10 @@ public class Agent {
 
   public void stop() {
     this.stopped.set(true);
-    this.metricsServer.stop();
-    this.zipkinReporter.close();
+    if (this.metricsServer != null)
+      this.metricsServer.stop();
+    if (this.zipkinReporter != null)
+      this.zipkinReporter.close();
     try {
       this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
     }
@@ -420,4 +421,6 @@ public class Agent {
   public String getAgentId() { return this.agentIdRef.get(); }
 
   public void setAgentId(final String agentId) { this.agentIdRef.set(agentId); }
+
+  public ConfigVals getConfigVals() { return this.configVals; }
 }
