@@ -67,10 +67,10 @@ public class Proxy {
       throws IOException {
     logger.info(Utils.getBanner("banners/proxy.txt"));
 
-    final ProxyArgs proxyArgs = new ProxyArgs();
-    proxyArgs.parseArgs(Proxy.class.getName(), argv);
+    final ProxyArgs args = new ProxyArgs();
+    args.parseArgs(Proxy.class.getName(), argv);
 
-    final Proxy proxy = new Proxy(proxyArgs.http_port, proxyArgs.metrics_port, proxyArgs.grpc_port);
+    final Proxy proxy = new Proxy(args.http_port, args.metrics_port, args.grpc_port);
     proxy.start();
     proxy.waitUntilShutdown();
   }

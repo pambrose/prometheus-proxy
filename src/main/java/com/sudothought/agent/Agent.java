@@ -1,9 +1,11 @@
 package com.sudothought.agent;
 
 import com.github.kristofa.brave.grpc.BraveGrpcClientInterceptor;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.protobuf.Empty;
+import com.sudothought.common.CoreConfig;
 import com.sudothought.common.InstrumentedBlockingQueue;
 import com.sudothought.common.MetricsServer;
 import com.sudothought.common.Utils;
@@ -16,6 +18,11 @@ import com.sudothought.grpc.RegisterPathRequest;
 import com.sudothought.grpc.RegisterPathResponse;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
+import com.typesafe.config.ConfigParseOptions;
+import com.typesafe.config.ConfigResolveOptions;
+import com.typesafe.config.ConfigSyntax;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -47,6 +54,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.sudothought.common.Utils.newInstrumentedThreadFactory;
@@ -73,15 +81,15 @@ public class Agent {
                                                                                                                      true));
 
   private final String                                    hostname;
-  private final List<Map<String, String>>                 agentConfigs;
+  private final List<Map<String, String>>                 pathConfigs;
   private final ManagedChannel                            channel;
   private final ZipkinReporter                            zipkinReporter;
   private final ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
   private final ProxyServiceGrpc.ProxyServiceStub         asyncStub;
   private final MetricsServer                             metricsServer;
 
-  private Agent(String hostname, final int metricsPort, final List<Map<String, String>> agentConfigs) {
-    this.agentConfigs = agentConfigs;
+  private Agent(String hostname, final int metricsPort, final List<Map<String, String>> pathConfigs) {
+    this.pathConfigs = pathConfigs;
 
     final String host;
     final int port;
@@ -122,19 +130,46 @@ public class Agent {
       throws IOException {
     logger.info(Utils.getBanner("banners/agent.txt"));
 
-    final AgentArgs agentArgs = new AgentArgs();
-    agentArgs.parseArgs(Agent.class.getName(), argv);
+    final AgentArgs args = new AgentArgs();
+    args.parseArgs(Agent.class.getName(), argv);
 
-    final List<Map<String, String>> agentConfigs;
-    try {
-      agentConfigs = readAgentConfigs(agentArgs.config);
-    }
-    catch (IOException e) {
-      logger.error(e.getMessage());
-      return;
+    final ConfigSyntax configSyntax;
+    if (args.config.endsWith(".json"))
+      configSyntax = ConfigSyntax.JSON;
+    else if (args.config.endsWith(".props") || args.config.endsWith(".properties"))
+      configSyntax = ConfigSyntax.PROPERTIES;
+    else
+      configSyntax = ConfigSyntax.CONF;
+
+    if (args.config.startsWith("http://") || args.config.startsWith("https://")) {
+
     }
 
-    final Agent agent = new Agent(agentArgs.proxy_hostname, agentArgs.metrics_port, agentConfigs);
+
+    final Config config = ConfigFactory.parseFile(new File(args.config),
+                                                  ConfigParseOptions.defaults()
+                                                                    .setSyntax(configSyntax)
+                                                                    .setAllowMissing(true))
+                                       .withFallback(ConfigFactory.load())
+                                       .resolve(ConfigResolveOptions.defaults()
+                                                                    .setUseSystemEnvironment(true)
+                                                                    .setAllowUnresolved(true));
+
+    final CoreConfig coreConfig = new CoreConfig(config);
+    final List<CoreConfig.Agent.PathConfigs$Elm> vals = coreConfig.agent.pathConfigs;
+    final List<Map<String, String>> pathConfigs = vals.stream()
+                                                      .map(v -> ImmutableMap.of("name", v.name,
+                                                                                "path", v.path,
+                                                                                "url", v.url))
+                                                      .collect(Collectors.toList());
+
+    if (args.proxy_hostname == null)
+      args.proxy_hostname = String.format("%s:%d", coreConfig.agent.proxy.hostname, coreConfig.agent.proxy.port);
+
+    if (args.metrics_port == null)
+      args.metrics_port = coreConfig.agent.metrics.port;
+
+    final Agent agent = new Agent(args.proxy_hostname, args.metrics_port, pathConfigs);
     agent.run();
   }
 
@@ -350,7 +385,7 @@ public class Agent {
 
   private void registerPaths()
       throws ConnectException {
-    for (Map<String, String> agentConfig : this.agentConfigs) {
+    for (Map<String, String> agentConfig : this.pathConfigs) {
       final String path = agentConfig.get("path");
       final String url = agentConfig.get("url");
       final long pathId = this.registerPath(path);
