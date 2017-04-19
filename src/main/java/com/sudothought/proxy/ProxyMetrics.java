@@ -34,7 +34,7 @@ public class ProxyMetrics {
                      "Proxy path map size",
                      proxy::getPathMapSize).register();
 
-    new SamplerGauge("test_proxy_scrape_map_size",
+    new SamplerGauge("proxy_scrape_map_size",
                      "Proxy scrape map size",
                      proxy::getScrapeMapSize).register();
 
