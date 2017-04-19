@@ -57,19 +57,20 @@ public class Proxy {
 
     if (this.isMetricsEnabled()) {
       logger.info("Metrics server enabled");
-      this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
-      this.metrics = new ProxyMetrics();
+      this.metrics = new ProxyMetrics(this);
       this.getMetrics().startTime.setToCurrentTime();
     }
     else {
       logger.info("Metrics server disabled");
-      this.metricsServer = null;
       this.metrics = null;
     }
+
 
     this.agentContextMap = this.isMetricsEnabled() ? new InstrumentedMap<>(Maps.newConcurrentMap(),
                                                                            this.getMetrics().agentMapSize)
                                                    : Maps.newConcurrentMap();
+
+
     this.pathMap = this.isMetricsEnabled() ? new InstrumentedMap<>(Maps.newConcurrentMap(),
                                                                    this.getMetrics().pathMapSize)
                                            : Maps.newConcurrentMap();
@@ -103,6 +104,17 @@ public class Proxy {
                                    .addTransportFilter(new ProxyTransportFilter(this))
                                    .build();
 
+    if (this.isMetricsEnabled()) {
+      this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
+    }
+    else {
+      this.metricsServer = null;
+    }
+
+    if (this.isMetricsEnabled())
+      this.metrics.register();
+
+
     this.httpServer = new ProxyHttpServer(this, httpPort);
 
     if (this.isMetricsEnabled()) {
@@ -110,22 +122,23 @@ public class Proxy {
       this.getMetrics().cummulativeAgentRequestQueueSize.set(0);
 
       if (this.getConfigVals().internal.agentQueueSizeMetricsEnabled)
-        this.executorService.submit(() -> {
-          while (!this.isStopped()) {
-            final int size = this.agentContextMap.values()
-                                                 .stream()
-                                                 .mapToInt(AgentContext::scrapeRequestQueueSize)
-                                                 .sum();
-            this.getMetrics().cummulativeAgentRequestQueueSize.set(size);
+        this.executorService.submit(
+            () -> {
+              while (!this.isStopped()) {
+                final int size = this.agentContextMap.values()
+                                                     .stream()
+                                                     .mapToInt(AgentContext::scrapeRequestQueueSize)
+                                                     .sum();
+                this.getMetrics().cummulativeAgentRequestQueueSize.set(size);
 
-            try {
-              Thread.sleep(this.getConfigVals().internal.agentQueueSizePauseSecs);
-            }
-            catch (InterruptedException e) {
-              // Ignore
-            }
-          }
-        });
+                try {
+                  Thread.sleep(this.getConfigVals().internal.agentQueueSizePauseSecs);
+                }
+                catch (InterruptedException e) {
+                  // Ignore
+                }
+              }
+            });
     }
   }
 
@@ -260,6 +273,12 @@ public class Proxy {
     }
   }
 
+  public int getAgentContextSize() { return this.agentContextMap.size(); }
+
+  public int getPathMapSize() { return this.pathMap.size(); }
+
+  public int getScrapeMapSize() { return this.scrapeRequestMap.size(); }
+
   public boolean isMetricsEnabled() { return this.getConfigVals().metrics.enabled; }
 
   public ProxyMetrics getMetrics() { return this.metrics; }
@@ -271,4 +290,11 @@ public class Proxy {
   public Brave getBrave() { return this.getZipkinReporter().getBrave(); }
 
   public ConfigVals.Proxy getConfigVals() { return this.configVals.proxy; }
+
+  public int getTotalAgentRequestQueueSize() {
+    return this.agentContextMap.values()
+                               .stream()
+                               .mapToInt(AgentContext::scrapeRequestQueueSize)
+                               .sum();
+  }
 }

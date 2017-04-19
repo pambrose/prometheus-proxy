@@ -5,6 +5,9 @@ default: build
 build:
 	mvn -DskipTests=true clean package
 
+clean:
+	mvn -DskipTests=true clean
+
 openjdk-base:
 	docker build -f ./docker/openjdk-base.df -t=pambrose/prometheus-openjdk-base:${VERSION} .
 
@@ -20,7 +23,7 @@ docker-push:
 	docker push pambrose/prometheus-proxy:$VERSION
 	docker push pambrose/prometheus-agent:$VERSION
 
-docker-all: build docker-build docker-push
+docker-all: clean docker-build docker-push
 
 run-agent:
 	docker run --rm -p 8080:8080 -p 8082:8082 -v /Users/pambrose/Dropbox/prometheus-proxy/agent.yml:/prometheus-proxy/agent.yml pambrose/pambrose/prometheus-agent:1.0.0

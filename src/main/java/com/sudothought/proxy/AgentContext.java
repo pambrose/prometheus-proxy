@@ -1,7 +1,6 @@
 package com.sudothought.proxy;
 
 import com.google.common.base.MoreObjects;
-import com.sudothought.common.InstrumentedBlockingQueue;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -23,10 +22,7 @@ public class AgentContext {
   public AgentContext(final Proxy proxy, final String remoteAddr) {
     this.remoteAddr = remoteAddr;
     final int queueSize = proxy.getConfigVals().internal.scrapeQueueSize;
-    this.scrapeRequestQueue = proxy.isMetricsEnabled()
-                              ? new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(queueSize),
-                                                                proxy.getMetrics().scrapeQueueSize)
-                              : new ArrayBlockingQueue<>(queueSize);
+    this.scrapeRequestQueue = new ArrayBlockingQueue<>(queueSize);
   }
 
   public String getAgentId() { return this.agentId; }
