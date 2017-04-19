@@ -87,6 +87,7 @@ public class Agent {
     if (this.getConfigVals().metrics.enabled) {
       this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
       this.metrics = new AgentMetrics();
+      this.metrics.startTime.setToCurrentTime();
     }
     else {
       logger.info("Metrics endpoint disabled");

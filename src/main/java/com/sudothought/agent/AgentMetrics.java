@@ -4,6 +4,11 @@ import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
 
 public class AgentMetrics {
+  public final Gauge startTime = Gauge.build()
+                                      .name("agent_start_time_seconds")
+                                      .help("Agent start time in seconds")
+                                      .register();
+
   public final Summary scrapeRequests = Summary.build()
                                                .name("agent_scrape_requests")
                                                .help("Agent scrape requests")

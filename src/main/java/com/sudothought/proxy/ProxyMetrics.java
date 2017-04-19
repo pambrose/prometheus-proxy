@@ -4,6 +4,11 @@ import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
 
 public class ProxyMetrics {
+  public final Gauge startTime = Gauge.build()
+                                      .name("proxy_start_time_seconds")
+                                      .help("Proxy start time in seconds")
+                                      .register();
+
   public final Gauge agentMapSize = Gauge.build()
                                          .name("proxy_connected_agents")
                                          .help("Proxy connected agents")

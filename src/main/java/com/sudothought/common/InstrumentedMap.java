@@ -37,7 +37,8 @@ public class InstrumentedMap<K, V>
   @Override
   public V put(K key, V value) {
     final V retval = super.put(key, value);
-    this.gauge.inc();
+    if (retval == null)
+      this.gauge.inc();
     return retval;
   }
 
