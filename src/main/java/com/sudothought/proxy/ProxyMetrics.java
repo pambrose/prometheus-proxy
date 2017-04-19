@@ -23,7 +23,6 @@ public class ProxyMetrics {
   public final Counter scrapeRequestsMapCleanup = Counter.build()
                                                          .name("proxy_scrape_map_removals")
                                                          .help("Proxy scrape map removals")
-                                                         .labelNames("type")
                                                          .register();
 
   public final Counter scrapeRequests = Counter.build()

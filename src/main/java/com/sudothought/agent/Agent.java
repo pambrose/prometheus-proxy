@@ -85,6 +85,7 @@ public class Agent {
   private Agent(final ConfigVals configVals, final String agentName, final String host, final int metricsPort) {
     this.configVals = configVals;
     this.agentName = Strings.isNullOrEmpty(agentName) ? String.format("Unnamed-%s", Utils.getHostName()) : agentName;
+    logger.info("Creating Agent {}", this.agentName);
 
     if (this.isMetricsEnabled()) {
       logger.info("Metrics server enabled");
