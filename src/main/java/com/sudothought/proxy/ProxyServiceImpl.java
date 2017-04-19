@@ -108,7 +108,7 @@ class ProxyServiceImpl
       @Override
       public void onNext(final ScrapeResponse response) {
         final long scrapeId = response.getScrapeId();
-        final ScrapeRequestWrapper scrapeRequest = proxy.removeScrapeRequest(scrapeId);
+        final ScrapeRequestWrapper scrapeRequest = proxy.removeFromScrapeRequestMap(scrapeId);
         if (scrapeRequest == null) {
           logger.error("Missing ScrapeRequestWrapper for scrape_id: {}", scrapeId);
         }

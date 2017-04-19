@@ -37,7 +37,6 @@ public class HttpServer {
 
   public void start() {
     logger.info("Started proxy listening on {}", this.port);
-
     if (this.proxy.isZipkinReportingEnabled()) {
       final BraveTracing tracing = BraveTracing.create(this.proxy.getBrave());
       this.http.before(tracing.before());
@@ -65,7 +64,7 @@ public class HttpServer {
                       if (vals == null || vals.length == 0) {
                         logger.info("Request missing path");
                         res.status(404);
-                        this.proxy.getMetrics().scrapeRequests.labels("missing_path").observe(1);
+                        this.proxy.getMetrics().scrapeRequests.labels("missing_path").inc();
                         return null;
                       }
 
@@ -75,30 +74,41 @@ public class HttpServer {
                       if (agentContext == null) {
                         logger.info("Missing path request /{}", path);
                         res.status(404);
-                        this.proxy.getMetrics().scrapeRequests.labels("invalid_path").observe(1);
+                        this.proxy.getMetrics().scrapeRequests.labels("invalid_path").inc();
                         return null;
                       }
 
                       if (rootSpan != null)
                         rootSpan.tag("path", path);
-                      final ScrapeRequestWrapper scrapeRequest = new ScrapeRequestWrapper(this,
+                      final ScrapeRequestWrapper scrapeRequest = new ScrapeRequestWrapper(this.proxy,
                                                                                           rootSpan,
                                                                                           agentContext.getAgentId(),
                                                                                           path,
                                                                                           req.headers(ACCEPT));
-                      this.proxy.addScrapeRequest(scrapeRequest);
-                      agentContext.addScrapeRequest(scrapeRequest);
+                      try {
+                        this.proxy.addToScrapeRequestMap(scrapeRequest);
+                        agentContext.addToScrapeRequestQueue(scrapeRequest);
 
-                      while (true) {
-                        // Returns false if timed out
-                        if (scrapeRequest.waitUntilComplete(1000))
-                          break;
+                        while (true) {
+                          // Returns false if timed out
+                          if (scrapeRequest.waitUntilComplete(1000))
+                            break;
 
-                        // Check if agent is disconnected or agent is hung
-                        if (scrapeRequest.ageInSecs() >= 5 || proxy.isStopped()) {
-                          res.status(503);
-                          this.proxy.getMetrics().scrapeRequests.labels("time_out").observe(1);
-                          return null;
+                          // Check if agent is disconnected or agent is hung
+                          if (scrapeRequest.ageInSecs() >= 5 || this.proxy.isStopped()) {
+                            res.status(503);
+                            this.proxy.getMetrics().scrapeRequests.labels("time_out").inc();
+                            return null;
+                          }
+                        }
+                      }
+                      finally {
+                        // Make sure scrapeRequest is removed from map
+                        final ScrapeRequestWrapper request = this.proxy.removeFromScrapeRequestMap(scrapeRequest.getScrapeId());
+                        if (request != null) {
+                          logger.info("Cleaned up ScrapeRequestMap for scrape {}", request);
+                          if (this.proxy.getMetrics() != null)
+                            this.proxy.getMetrics().scrapeRequestsMapCleanup.inc();
                         }
                       }
 
@@ -110,7 +120,7 @@ public class HttpServer {
 
                       // Do not return content on error status codes
                       if (status_code >= 400) {
-                        this.proxy.getMetrics().scrapeRequests.labels("path_not_found").observe(1);
+                        this.proxy.getMetrics().scrapeRequests.labels("path_not_found").inc();
                         return null;
                       }
                       else {
@@ -118,7 +128,7 @@ public class HttpServer {
                         if (accept_encoding != null && accept_encoding.contains("gzip"))
                           res.header(CONTENT_ENCODING, "gzip");
                         res.type(scrapeResponse.getContentType());
-                        this.proxy.getMetrics().scrapeRequests.labels("success").observe(1);
+                        this.proxy.getMetrics().scrapeRequests.labels("success").inc();
                         return scrapeRequest.getScrapeResponse().getText();
                       }
                     }
@@ -128,8 +138,6 @@ public class HttpServer {
                     }
                   });
   }
-
-  public Proxy getProxy() { return this.proxy; }
 
   public void stop() { this.http.stop(); }
 }

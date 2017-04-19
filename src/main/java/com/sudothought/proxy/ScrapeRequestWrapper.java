@@ -21,18 +21,16 @@ public class ScrapeRequestWrapper {
   private final AtomicReference<ScrapeResponse> scrapeResponseRef = new AtomicReference<>();
 
   private final Span          rootSpan;
-  private final HttpServer    httpServer;
   private final Summary.Timer requestTimer;
   private final ScrapeRequest scrapeRequest;
 
-  public ScrapeRequestWrapper(final HttpServer httpServer,
+  public ScrapeRequestWrapper(final Proxy proxy,
                               final Span rootSpan,
                               final String agentId,
                               final String path,
                               final String accept) {
-    this.httpServer = httpServer;
     this.rootSpan = rootSpan;
-    this.requestTimer = this.httpServer.getProxy().getMetrics().scrapeRequestLatency.startTimer();
+    this.requestTimer = proxy.getMetrics().scrapeRequestLatency.startTimer();
     this.scrapeRequest = ScrapeRequest.newBuilder()
                                       .setAgentId(agentId)
                                       .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
@@ -40,8 +38,6 @@ public class ScrapeRequestWrapper {
                                       .setAccept(accept)
                                       .build();
   }
-
-  public HttpServer getHttpServer() { return this.httpServer; }
 
   public void annotateSpan(final String value) {
     if (this.rootSpan != null)

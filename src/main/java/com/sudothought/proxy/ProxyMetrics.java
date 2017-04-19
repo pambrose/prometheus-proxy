@@ -1,5 +1,6 @@
 package com.sudothought.proxy;
 
+import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
 
@@ -14,7 +15,13 @@ public class ProxyMetrics {
                                          .help("Proxy connected agents")
                                          .register();
 
-  public final Summary scrapeRequests = Summary.build()
+  public final Counter scrapeRequestsMapCleanup = Counter.build()
+                                                         .name("proxy_scrape_map_removals")
+                                                         .help("Proxy scrape map removals")
+                                                         .labelNames("type")
+                                                         .register();
+
+  public final Counter scrapeRequests = Counter.build()
                                                .name("proxy_scrape_requests")
                                                .help("Proxy scrape requests")
                                                .labelNames("type")

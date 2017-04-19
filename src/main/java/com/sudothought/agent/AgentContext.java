@@ -35,7 +35,9 @@ public class AgentContext {
 
   public String getRemoteAddr() { return this.remoteAddr; }
 
-  public void addScrapeRequest(final ScrapeRequestWrapper scrapeRequest) { this.scrapeRequestQueue.add(scrapeRequest); }
+  public void addToScrapeRequestQueue(final ScrapeRequestWrapper scrapeRequest) {
+    this.scrapeRequestQueue.add(scrapeRequest);
+  }
 
   public ScrapeRequestWrapper pollScrapeRequestQueue(final long waitMillis) {
     try {

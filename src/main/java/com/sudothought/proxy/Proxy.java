@@ -189,11 +189,11 @@ public class Proxy {
     return agentContext;
   }
 
-  public void addScrapeRequest(final ScrapeRequestWrapper scrapeRequest) {
+  public void addToScrapeRequestMap(final ScrapeRequestWrapper scrapeRequest) {
     this.scrapeRequestMap.put(scrapeRequest.getScrapeId(), scrapeRequest);
   }
 
-  public ScrapeRequestWrapper removeScrapeRequest(long scrapeId) {
+  public ScrapeRequestWrapper removeFromScrapeRequestMap(long scrapeId) {
     return this.scrapeRequestMap.remove(scrapeId);
   }
 
