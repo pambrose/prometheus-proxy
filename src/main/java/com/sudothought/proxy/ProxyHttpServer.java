@@ -15,16 +15,16 @@ import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.ACCEPT_ENCODING;
 import static com.google.common.net.HttpHeaders.CONTENT_ENCODING;
 
-public class HttpServer {
+public class ProxyHttpServer {
 
-  private static final Logger logger = LoggerFactory.getLogger(HttpServer.class);
+  private static final Logger logger = LoggerFactory.getLogger(ProxyHttpServer.class);
 
   private final Proxy   proxy;
   private final int     port;
   private final Service http;
   private       Tracer  tracer;
 
-  public HttpServer(final Proxy proxy, final int port) {
+  public ProxyHttpServer(final Proxy proxy, final int port) {
     this.proxy = proxy;
     this.port = port;
     this.http = Service.ignite();

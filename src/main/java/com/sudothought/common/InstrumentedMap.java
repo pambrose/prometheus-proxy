@@ -42,10 +42,4 @@ public class InstrumentedMap<K, V>
       this.gauge.inc();
     return retval;
   }
-
-  @Override
-  public void putAll(Map<? extends K, ? extends V> map) {
-    super.putAll(map);
-    this.gauge.inc(map.size());
-  }
 }

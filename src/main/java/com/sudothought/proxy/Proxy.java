@@ -49,7 +49,7 @@ public class Proxy {
   private final Map<Long, ScrapeRequestWrapper> scrapeRequestMap;  // Map scrape_id to agent_id
   private final ZipkinReporter                  zipkinReporter;
   private final Server                          grpcServer;
-  private final HttpServer                      httpServer;
+  private final ProxyHttpServer                 httpServer;
 
   private Proxy(final ConfigVals configVals, final int httpPort, final int metricsPort, final int grpcPort)
       throws IOException {
@@ -103,7 +103,7 @@ public class Proxy {
                                    .addTransportFilter(new ProxyTransportFilter(this))
                                    .build();
 
-    this.httpServer = new HttpServer(this, httpPort);
+    this.httpServer = new ProxyHttpServer(this, httpPort);
 
     if (this.isMetricsEnabled()) {
       // Zero out the gauge value
