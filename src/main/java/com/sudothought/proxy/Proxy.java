@@ -5,7 +5,6 @@ import com.github.kristofa.brave.grpc.BraveGrpcServerInterceptor;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.sudothought.common.ConfigVals;
-import com.sudothought.common.InstrumentedMap;
 import com.sudothought.common.MetricsServer;
 import com.sudothought.common.Utils;
 import com.sudothought.common.ZipkinReporter;
@@ -27,8 +26,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.sudothought.common.EnvVars.METRICS_PORT;
@@ -38,15 +35,14 @@ public class Proxy {
 
   private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
 
-  private final AtomicBoolean   stopped         = new AtomicBoolean(false);
-  private final ExecutorService executorService = Executors.newFixedThreadPool(1);
+  private final AtomicBoolean                   stopped          = new AtomicBoolean(false);
+  private final Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap();   // Map agent_id to AgentContext
+  private final Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap();           // Map path to AgentContext
+  private final Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap();  // Map scrape_id to agent_id
 
   private final ConfigVals                      configVals;
   private final MetricsServer                   metricsServer;
   private final ProxyMetrics                    metrics;
-  private final Map<String, AgentContext>       agentContextMap;   // Map agent_id to AgentContext
-  private final Map<String, AgentContext>       pathMap;           // Map path to AgentContext
-  private final Map<Long, ScrapeRequestWrapper> scrapeRequestMap;  // Map scrape_id to agent_id
   private final ZipkinReporter                  zipkinReporter;
   private final Server                          grpcServer;
   private final ProxyHttpServer                 httpServer;
@@ -57,26 +53,15 @@ public class Proxy {
 
     if (this.isMetricsEnabled()) {
       logger.info("Metrics server enabled");
+      this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
       this.metrics = new ProxyMetrics(this);
-      this.getMetrics().startTime.setToCurrentTime();
     }
     else {
       logger.info("Metrics server disabled");
+      this.metricsServer = null;
       this.metrics = null;
     }
 
-
-    this.agentContextMap = this.isMetricsEnabled() ? new InstrumentedMap<>(Maps.newConcurrentMap(),
-                                                                           this.getMetrics().agentMapSize)
-                                                   : Maps.newConcurrentMap();
-
-
-    this.pathMap = this.isMetricsEnabled() ? new InstrumentedMap<>(Maps.newConcurrentMap(),
-                                                                   this.getMetrics().pathMapSize)
-                                           : Maps.newConcurrentMap();
-    this.scrapeRequestMap = this.isMetricsEnabled() ? new InstrumentedMap<>(Maps.newConcurrentMap(),
-                                                                            this.getMetrics().scrapeMapSize)
-                                                    : Maps.newConcurrentMap();
 
     if (this.isZipkinEnabled()) {
       final ConfigVals.Proxy.Zipkin2 zipkin = this.getConfigVals().zipkin;
@@ -104,42 +89,7 @@ public class Proxy {
                                    .addTransportFilter(new ProxyTransportFilter(this))
                                    .build();
 
-    if (this.isMetricsEnabled()) {
-      this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
-    }
-    else {
-      this.metricsServer = null;
-    }
-
-    if (this.isMetricsEnabled())
-      this.metrics.register();
-
-
     this.httpServer = new ProxyHttpServer(this, httpPort);
-
-    if (this.isMetricsEnabled()) {
-      // Zero out the gauge value
-      this.getMetrics().cummulativeAgentRequestQueueSize.set(0);
-
-      if (this.getConfigVals().internal.agentQueueSizeMetricsEnabled)
-        this.executorService.submit(
-            () -> {
-              while (!this.isStopped()) {
-                final int size = this.agentContextMap.values()
-                                                     .stream()
-                                                     .mapToInt(AgentContext::scrapeRequestQueueSize)
-                                                     .sum();
-                this.getMetrics().cummulativeAgentRequestQueueSize.set(size);
-
-                try {
-                  Thread.sleep(this.getConfigVals().internal.agentQueueSizePauseSecs);
-                }
-                catch (InterruptedException e) {
-                  // Ignore
-                }
-              }
-            });
-    }
   }
 
   public static void main(final String[] argv)
@@ -181,8 +131,8 @@ public class Proxy {
     this.httpServer.start();
 
     if (this.isMetricsEnabled()) {
-      this.metricsServer.start();
       DefaultExports.initialize();
+      this.metricsServer.start();
     }
 
     Runtime.getRuntime()
@@ -206,8 +156,6 @@ public class Proxy {
       this.getZipkinReporter().close();
 
     this.grpcServer.shutdown();
-
-    this.executorService.shutdownNow();
   }
 
   private void waitUntilShutdown() {

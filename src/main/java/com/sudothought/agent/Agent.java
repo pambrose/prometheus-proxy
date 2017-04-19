@@ -9,7 +9,6 @@ import com.google.common.util.concurrent.RateLimiter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.Empty;
 import com.sudothought.common.ConfigVals;
-import com.sudothought.common.InstrumentedBlockingQueue;
 import com.sudothought.common.MetricsServer;
 import com.sudothought.common.Utils;
 import com.sudothought.common.ZipkinReporter;
@@ -87,11 +86,13 @@ public class Agent {
     this.agentName = Strings.isNullOrEmpty(agentName) ? String.format("Unnamed-%s", Utils.getHostName()) : agentName;
     logger.info("Creating Agent {}", this.agentName);
 
+    final int queueSize = this.getConfigVals().internal.scrapeQueueSize;
+    this.scrapeResponseQueue = new ArrayBlockingQueue<>(queueSize);
+
     if (this.isMetricsEnabled()) {
       logger.info("Metrics server enabled");
       this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
-      this.metrics = new AgentMetrics();
-      this.getMetrics().startTime.setToCurrentTime();
+      this.metrics = new AgentMetrics(this);
     }
     else {
       logger.info("Metrics server disabled");
@@ -106,12 +107,6 @@ public class Agent {
                                                : new ThreadFactoryBuilder().setNameFormat("agent_fetch-%d")
                                                                            .setDaemon(true)
                                                                            .build());
-
-    final int queueSize = this.getConfigVals().internal.scrapeQueueSize;
-    this.scrapeResponseQueue = this.isMetricsEnabled() && this.getConfigVals().internal.prometheusMetricsEnabled
-                               ? new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(queueSize),
-                                                                 this.getMetrics().scrapeQueueSize)
-                               : new ArrayBlockingQueue<>(queueSize);
 
     logger.info("Assigning proxy reconnect pause time to {} secs", this.getConfigVals().grpc.reconectPauseSecs);
     this.reconnectLimiter = RateLimiter.create(1.0 / this.getConfigVals().grpc.reconectPauseSecs);
@@ -192,8 +187,8 @@ public class Agent {
   private void run()
       throws IOException {
     if (this.isMetricsEnabled()) {
-      this.metricsServer.start();
       DefaultExports.initialize();
+      this.metricsServer.start();
     }
 
     // Prime the limiter
@@ -303,6 +298,23 @@ public class Agent {
     }
   }
 
+  public void stop() {
+    this.stopped.set(true);
+
+    if (this.isMetricsEnabled())
+      this.metricsServer.stop();
+
+    if (this.isZipkinReportingEnabled())
+      this.zipkinReporter.close();
+
+    try {
+      this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
+    }
+    catch (InterruptedException e) {
+      // Ignore
+    }
+  }
+
   private ScrapeResponse fetchMetrics(final ScrapeRequest scrapeRequest) {
     int status_code = 404;
     final String path = scrapeRequest.getPath();
@@ -353,20 +365,6 @@ public class Agent {
                          .build();
   }
 
-  public void stop() {
-    this.stopped.set(true);
-    if (this.isMetricsEnabled())
-      this.metricsServer.stop();
-    if (this.isZipkinReportingEnabled())
-      this.zipkinReporter.close();
-    try {
-      this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
-    }
-    catch (InterruptedException e) {
-      // Ignore
-    }
-  }
-
   // If successful, this will create an agentContxt on the Proxy and an interceptor will
   // add an agent_id to the headers
   private void connectAgent() { this.blockingStub.connectAgent(Empty.getDefaultInstance()); }
@@ -405,6 +403,8 @@ public class Agent {
       throw new ConnectException("registerPath()");
     return response.getPathId();
   }
+
+  public int getScrapeResponseQueueSize() { return this.scrapeResponseQueue.size(); }
 
   public AgentMetrics getMetrics() { return this.metrics; }
 
