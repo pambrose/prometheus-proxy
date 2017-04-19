@@ -164,10 +164,11 @@ public class Proxy {
     logger.info("Started gRPC server listening on {}", this.grpcServer.getPort());
 
     this.httpServer.start();
-    if (this.isMetricsEnabled())
-      this.metricsServer.start();
 
-    DefaultExports.initialize();
+    if (this.isMetricsEnabled()) {
+      this.metricsServer.start();
+      DefaultExports.initialize();
+    }
 
     Runtime.getRuntime()
            .addShutdownHook(
@@ -180,11 +181,15 @@ public class Proxy {
 
   private void stop() {
     this.stopped.set(true);
+
     this.httpServer.stop();
+
     if (this.isMetricsEnabled())
       this.metricsServer.stop();
+
     if (this.isZipkinEnabled())
       this.getZipkinReporter().close();
+
     this.grpcServer.shutdown();
 
     this.executorService.shutdownNow();

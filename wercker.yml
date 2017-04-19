@@ -5,6 +5,7 @@ dev:
     - script:
       name: Build
       code: |
+        apt-get update
         apt-get install -y maven
         mvn -DskipTests=true clean package
 
@@ -13,5 +14,6 @@ build:
     - script:
       name: Build
       code: |
+        apt-get update
         apt-get install -y maven
         mvn -DskipTests=true clean package
