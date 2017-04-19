@@ -30,7 +30,9 @@ public class HttpServer {
     this.port = port;
     this.http = Service.ignite();
     this.http.port(this.port);
-    this.tracer = this.proxy.getZipkinReporter().newTracer("proxy");
+    this.tracer = this.proxy.isZipkinReportingEnabled()
+                  ? this.proxy.getZipkinReporter().newTracer("proxy-http")
+                  : null;
   }
 
   public void start() {
@@ -53,10 +55,11 @@ public class HttpServer {
                   (req, res) -> {
                     res.header("cache-control", "no-cache");
 
-                    final Span span = this.tracer.newTrace()
-                                                 .name("round-trip")
-                                                 .tag("version", "1.0.0")
-                                                 .start();
+                    final Span rootSpan = this.tracer != null ? this.tracer.newTrace()
+                                                                           .name("round-trip")
+                                                                           .tag("version", "1.0.0")
+                                                                           .start()
+                                                              : null;
                     try {
                       final String[] vals = req.splat();
                       if (vals == null || vals.length == 0) {
@@ -76,9 +79,10 @@ public class HttpServer {
                         return null;
                       }
 
-                      span.tag("path", path);
+                      if (rootSpan != null)
+                        rootSpan.tag("path", path);
                       final ScrapeRequestWrapper scrapeRequest = new ScrapeRequestWrapper(this,
-                                                                                          span,
+                                                                                          rootSpan,
                                                                                           agentContext.getAgentId(),
                                                                                           path,
                                                                                           req.headers(ACCEPT));
@@ -119,7 +123,8 @@ public class HttpServer {
                       }
                     }
                     finally {
-                      span.finish();
+                      if (rootSpan != null)
+                        rootSpan.finish();
                     }
                   });
 

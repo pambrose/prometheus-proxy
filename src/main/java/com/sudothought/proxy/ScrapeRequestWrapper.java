@@ -43,7 +43,10 @@ public class ScrapeRequestWrapper {
 
   public HttpServer getHttpServer() { return this.httpServer; }
 
-  public Span getRootSpan() { return this.rootSpan; }
+  public void annotateSpan(final String value) {
+    if (this.rootSpan != null)
+      this.rootSpan.annotate(value);
+  }
 
   public long getScrapeId() { return this.scrapeRequest.getScrapeId(); }
 

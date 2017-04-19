@@ -61,7 +61,7 @@ import static java.util.concurrent.Executors.newCachedThreadPool;
 
 public class Agent {
 
-  private static final Logger logger        = LoggerFactory.getLogger(Agent.class);
+  private static final Logger logger = LoggerFactory.getLogger(Agent.class);
 
   private final AtomicBoolean            stopped         = new AtomicBoolean(false);
   private final Map<String, PathContext> pathContextMap  = Maps.newConcurrentMap();  // Map path to PathContext
@@ -95,7 +95,7 @@ public class Agent {
       this.metrics = null;
     }
 
-    this.scrapeResponseQueue = this.metrics != null && this.getConfigVals().scrape.metricsEnabled
+    this.scrapeResponseQueue = this.metrics != null && this.getConfigVals().scrape.prometheusMetricsEnabled
                                ? new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(this.getConfigVals().scrape.queueSize),
                                                                  this.metrics.scrapeQueueSize)
                                : new ArrayBlockingQueue<>(this.getConfigVals().scrape.queueSize);
@@ -137,11 +137,11 @@ public class Agent {
     this.channel = ManagedChannelBuilder.forAddress(hostname, port).usePlaintext(true).build();
 
     final List<ClientInterceptor> interceptors = Lists.newArrayList(new AgentClientInterceptor(this));
-    if (this.getConfigVals().grpc.metricsEnabled)
-      interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().grpc.allMetrics
+    if (this.getConfigVals().grpc.prometheusMetricsEnabled)
+      interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().grpc.allPrometheusMetrics
                                                           ? Configuration.allMetrics()
                                                           : Configuration.cheapMetricsOnly()));
-    if (this.zipkinReporter != null)
+    if (this.zipkinReporter != null && this.getConfigVals().grpc.zipkinReportingEnabled)
       interceptors.add(BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave()));
 
     this.blockingStub = newBlockingStub(intercept(this.channel, interceptors));

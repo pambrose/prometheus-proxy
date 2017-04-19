@@ -95,7 +95,7 @@ class ProxyServiceImpl
 
       final ScrapeRequestWrapper scrapeRequest = agentContext.pollScrapeRequestQueue(1000);
       if (scrapeRequest != null) {
-        scrapeRequest.getRootSpan().annotate("send-to-agent");
+        scrapeRequest.annotateSpan("send-to-agent");
         responseObserver.onNext(scrapeRequest.getScrapeRequest());
       }
     }
@@ -115,7 +115,7 @@ class ProxyServiceImpl
         else {
           scrapeRequest.setScrapeResponse(response);
           scrapeRequest.markComplete();
-          scrapeRequest.getRootSpan().annotate("received-from-agent");
+          scrapeRequest.annotateSpan("received-from-agent");
         }
       }
 

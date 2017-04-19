@@ -85,11 +85,11 @@ public class Proxy {
     }
 
     final List<ServerInterceptor> interceptors = Lists.newArrayList(new ProxyInterceptor());
-    if (this.getConfigVals().grpc.metricsEnabled)
-      interceptors.add(MonitoringServerInterceptor.create(this.getConfigVals().grpc.allMetrics
+    if (this.getConfigVals().grpc.prometheusMetricsEnabled)
+      interceptors.add(MonitoringServerInterceptor.create(this.getConfigVals().grpc.allPrometheusMetrics
                                                           ? Configuration.allMetrics()
                                                           : Configuration.cheapMetricsOnly()));
-    if (this.isZipkinReportingEnabled())
+    if (this.isZipkinReportingEnabled() && this.getConfigVals().grpc.zipkinReportingEnabled)
       interceptors.add(BraveGrpcServerInterceptor.create(this.getZipkinReporter().getBrave()));
 
     final ProxyServiceImpl proxyService = new ProxyServiceImpl(this);
@@ -190,14 +190,11 @@ public class Proxy {
   }
 
   public void addScrapeRequest(final ScrapeRequestWrapper scrapeRequest) {
-    scrapeRequest.getRootSpan().annotate("map-placement");
     this.scrapeRequestMap.put(scrapeRequest.getScrapeId(), scrapeRequest);
   }
 
   public ScrapeRequestWrapper removeScrapeRequest(long scrapeId) {
     final ScrapeRequestWrapper scrapeRequest = this.scrapeRequestMap.remove(scrapeId);
-    if (scrapeRequest != null)
-      scrapeRequest.getRootSpan().annotate("map-removal");
     return scrapeRequest;
   }
 
@@ -225,8 +222,6 @@ public class Proxy {
       }
     }
   }
-
-  public HttpServer getHttpServer() { return this.httpServer; }
 
   public ProxyMetrics getMetrics() { return this.metrics; }
 
