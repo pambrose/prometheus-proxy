@@ -1,5 +1,6 @@
 package com.sudothought.agent;
 
+import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
 
@@ -9,7 +10,7 @@ public class AgentMetrics {
                                       .help("Agent start time in seconds")
                                       .register();
 
-  public final Summary scrapeRequests = Summary.build()
+  public final Counter scrapeRequests = Counter.build()
                                                .name("agent_scrape_requests")
                                                .help("Agent scrape requests")
                                                .labelNames("type")

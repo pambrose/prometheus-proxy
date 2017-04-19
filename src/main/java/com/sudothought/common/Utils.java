@@ -15,8 +15,10 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -138,5 +140,16 @@ public interface Utils {
         System.exit(1);
     }
     return Optional.empty();
+  }
+
+  static String getHostName() {
+    try {
+      final String hostname = InetAddress.getLocalHost().getHostName();
+      //final String address = InetAddress.getLocalHost().getHostAddress();
+      return hostname;
+    }
+    catch (UnknownHostException e) {
+      return "Unknown";
+    }
   }
 }

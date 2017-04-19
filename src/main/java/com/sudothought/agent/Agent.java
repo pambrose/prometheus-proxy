@@ -1,6 +1,7 @@
 package com.sudothought.agent;
 
 import com.github.kristofa.brave.grpc.BraveGrpcClientInterceptor;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -40,8 +41,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.ConnectException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -54,6 +53,7 @@ import java.util.stream.Collectors;
 
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.sudothought.common.EnvVars.AGENT_CONFIG;
+import static com.sudothought.common.EnvVars.AGENT_NAME;
 import static com.sudothought.common.InstrumentedThreadFactory.newInstrumentedThreadFactory;
 import static com.sudothought.grpc.ProxyServiceGrpc.newBlockingStub;
 import static com.sudothought.grpc.ProxyServiceGrpc.newStub;
@@ -67,7 +67,9 @@ public class Agent {
   private final AtomicBoolean            stopped        = new AtomicBoolean(false);
   private final Map<String, PathContext> pathContextMap = Maps.newConcurrentMap();  // Map path to PathContext
   private final AtomicReference<String>  agentIdRef     = new AtomicReference<>();
+
   private final ConfigVals                                configVals;
+  private final String                                    agentName;
   private final AgentMetrics                              metrics;
   private final ExecutorService                           executorService;
   private final BlockingQueue<ScrapeResponse>             scrapeResponseQueue;
@@ -80,27 +82,29 @@ public class Agent {
   private final ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
   private final ProxyServiceGrpc.ProxyServiceStub         asyncStub;
 
-  private Agent(final ConfigVals configVals, final String host, final int metricsPort) {
+  private Agent(final ConfigVals configVals, final String agentName, final String host, final int metricsPort) {
     this.configVals = configVals;
+    this.agentName = Strings.isNullOrEmpty(agentName) ? String.format("Unnamed-%s", Utils.getHostName()) : agentName;
 
     if (this.isMetricsEnabled()) {
+      logger.info("Metrics server enabled");
       this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
       this.metrics = new AgentMetrics();
       this.getMetrics().startTime.setToCurrentTime();
     }
     else {
-      logger.info("Metrics endpoint disabled");
+      logger.info("Metrics server disabled");
       this.metricsServer = null;
       this.metrics = null;
     }
 
-    executorService = newCachedThreadPool(this.isMetricsEnabled()
-                                          ? newInstrumentedThreadFactory("agent_fetch",
-                                                                         "Agent fetch",
-                                                                         true)
-                                          : new ThreadFactoryBuilder().setNameFormat("agent_fetch-%d")
-                                                                      .setDaemon(true)
-                                                                      .build());
+    this.executorService = newCachedThreadPool(this.isMetricsEnabled()
+                                               ? newInstrumentedThreadFactory("agent_fetch",
+                                                                              "Agent fetch",
+                                                                              true)
+                                               : new ThreadFactoryBuilder().setNameFormat("agent_fetch-%d")
+                                                                           .setDaemon(true)
+                                                                           .build());
 
     final int queueSize = this.getConfigVals().internal.scrapeQueueSize;
     this.scrapeResponseQueue = this.isMetricsEnabled() && this.getConfigVals().internal.prometheusMetricsEnabled
@@ -122,7 +126,7 @@ public class Agent {
     if (this.getConfigVals().zipkin.enabled) {
       final ConfigVals.Agent.Zipkin zipkin = this.getConfigVals().zipkin;
       final String zipkinHost = String.format("http://%s:%d/%s", zipkin.hostname, zipkin.port, zipkin.path);
-      logger.info("Creating zipkin reporter for {}", zipkinHost);
+      logger.info("Zipkin reporter enabled for {}", zipkinHost);
       this.zipkinReporter = new ZipkinReporter(zipkinHost, zipkin.serviceName);
     }
     else {
@@ -177,19 +181,11 @@ public class Agent {
     if (args.metrics_port == null)
       args.metrics_port = configVals.agent.metrics.port;
 
-    final Agent agent = new Agent(configVals, args.proxy_host, args.metrics_port);
-    agent.run();
-  }
+    if (args.agent_name == null)
+      args.agent_name = System.getenv(AGENT_NAME) != null ? System.getenv(AGENT_NAME) : configVals.agent.name;
 
-  private static String getHostName() {
-    try {
-      final String hostname = InetAddress.getLocalHost().getHostName();
-      final String address = InetAddress.getLocalHost().getHostAddress();
-      return hostname;
-    }
-    catch (UnknownHostException e) {
-      return "Unknown";
-    }
+    final Agent agent = new Agent(configVals, args.agent_name, args.proxy_host, args.metrics_port);
+    agent.run();
   }
 
   private void run()
@@ -316,7 +312,7 @@ public class Agent {
     if (pathContext == null) {
       logger.warn("Invalid path request: {}", path);
       if (this.isMetricsEnabled())
-        this.getMetrics().scrapeRequests.labels("invalid_path").observe(1);
+        this.getMetrics().scrapeRequests.labels("invalid_path").inc();
       return scrapeResponse.setValid(false)
                            .setStatusCode(status_code)
                            .setText("")
@@ -332,7 +328,7 @@ public class Agent {
       status_code = response.code();
       if (response.isSuccessful()) {
         if (this.isMetricsEnabled())
-          this.getMetrics().scrapeRequests.labels("success").observe(1);
+          this.getMetrics().scrapeRequests.labels("success").inc();
         return scrapeResponse.setValid(true)
                              .setStatusCode(status_code)
                              .setText(response.body().string())
@@ -348,7 +344,7 @@ public class Agent {
         requestTimer.observeDuration();
     }
     if (this.isMetricsEnabled())
-      this.getMetrics().scrapeRequests.labels("unsuccessful").observe(1);
+      this.getMetrics().scrapeRequests.labels("unsuccessful").inc();
     return scrapeResponse.setValid(false)
                          .setStatusCode(status_code)
                          .setText("")
@@ -378,7 +374,8 @@ public class Agent {
       throws ConnectException {
     final RegisterAgentRequest request = RegisterAgentRequest.newBuilder()
                                                              .setAgentId(this.getAgentId())
-                                                             .setHostname(getHostName())
+                                                             .setAgentName(this.agentName)
+                                                             .setHostname(Utils.getHostName())
                                                              .build();
     final RegisterAgentResponse response = this.blockingStub.registerAgent(request);
     if (!response.getValid())

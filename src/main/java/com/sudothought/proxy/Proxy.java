@@ -56,12 +56,13 @@ public class Proxy {
     this.configVals = configVals;
 
     if (this.isMetricsEnabled()) {
+      logger.info("Metrics server enabled");
       this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
       this.metrics = new ProxyMetrics();
       this.getMetrics().startTime.setToCurrentTime();
     }
     else {
-      logger.info("Metrics endpoint disabled");
+      logger.info("Metrics server disabled");
       this.metricsServer = null;
       this.metrics = null;
     }
@@ -79,7 +80,7 @@ public class Proxy {
     if (this.isZipkinEnabled()) {
       final ConfigVals.Proxy.Zipkin2 zipkin = this.getConfigVals().zipkin;
       final String zipkinHost = String.format("http://%s:%d/%s", zipkin.hostname, zipkin.port, zipkin.path);
-      logger.info("Creating zipkin reporter for {}", zipkinHost);
+      logger.info("Zipkin reporter enabled for {}", zipkinHost);
       this.zipkinReporter = new ZipkinReporter(zipkinHost, zipkin.serviceName);
     }
     else {
@@ -146,9 +147,9 @@ public class Proxy {
       args.http_port = configVals.proxy.http.port;
 
     if (args.metrics_port == null)
-      args.metrics_port = System.getenv(METRICS_PORT) == null
-                          ? configVals.proxy.metrics.port
-                          : Utils.getEnvInt(METRICS_PORT, true).orElse(configVals.proxy.metrics.port);
+      args.metrics_port = System.getenv(METRICS_PORT) != null
+                          ? Utils.getEnvInt(METRICS_PORT, true).orElse(-1)
+                          : configVals.proxy.metrics.port; // -1 never returned
 
     if (args.grpc_port == null)
       args.grpc_port = configVals.proxy.grpc.port;

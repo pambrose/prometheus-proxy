@@ -8,7 +8,8 @@ option java_package = "com.sudothought.grpc";
 
 message RegisterAgentRequest {
     string agent_id = 1;
-    string hostname = 2;
+    string agent_name = 2;
+    string hostname = 3;
 }
 
 message RegisterAgentResponse {

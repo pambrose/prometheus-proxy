@@ -13,8 +13,9 @@ public class AgentContext {
 
   private static final AtomicLong AGENT_ID_GENERATOR = new AtomicLong(0);
 
-  private final AtomicReference<String> hostname = new AtomicReference<>();
-  private final String                  agentId  = "" + AGENT_ID_GENERATOR.incrementAndGet();
+  private final AtomicReference<String> agentName = new AtomicReference<>();
+  private final AtomicReference<String> hostname  = new AtomicReference<>();
+  private final String                  agentId   = "" + AGENT_ID_GENERATOR.incrementAndGet();
 
   private final String                              remoteAddr;
   private final BlockingQueue<ScrapeRequestWrapper> scrapeRequestQueue;
@@ -33,6 +34,10 @@ public class AgentContext {
   public String getHostname() { return this.hostname.get(); }
 
   public void setHostname(String hostname) { this.hostname.set(hostname); }
+
+  public String getAgentName() { return this.agentName.get(); }
+
+  public void setAgentName(String agentName) { this.agentName.set(agentName); }
 
   public String getRemoteAddr() { return this.remoteAddr; }
 
@@ -54,9 +59,10 @@ public class AgentContext {
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
-                      .add("agentId", agentId)
-                      .add("hostname", hostname)
-                      .add("remoteAddr", remoteAddr)
+                      .add("agentId", this.agentId)
+                      .add("agentName", this.agentName)
+                      .add("hostname", this.hostname)
+                      .add("remoteAddr", this.remoteAddr)
                       .toString();
   }
 }

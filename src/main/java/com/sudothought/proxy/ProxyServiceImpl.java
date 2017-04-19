@@ -25,7 +25,7 @@ class ProxyServiceImpl
 
   private final Proxy proxy;
 
-  public ProxyServiceImpl(Proxy proxy) {
+  public ProxyServiceImpl(final Proxy proxy) {
     this.proxy = proxy;
   }
 
@@ -40,17 +40,15 @@ class ProxyServiceImpl
                             final StreamObserver<RegisterAgentResponse> responseObserver) {
     final String agentId = request.getAgentId();
     final AgentContext agentContext = this.proxy.getAgentContext(agentId);
-    final boolean valid;
     if (agentContext == null) {
       logger.info("Missing AgentContext agent_id: {}", agentId);
-      valid = false;
     }
     else {
+      agentContext.setAgentName(request.getAgentName());
       agentContext.setHostname(request.getHostname());
-      valid = true;
     }
     final RegisterAgentResponse response = RegisterAgentResponse.newBuilder()
-                                                                .setValid(valid)
+                                                                .setValid(agentContext != null)
                                                                 .setAgentId(agentId)
                                                                 .build();
     responseObserver.onNext(response);
@@ -87,10 +85,8 @@ class ProxyServiceImpl
     while (!this.proxy.isStopped()) {
       // Lookup the agentContext each time in case agent has gone away
       final AgentContext agentContext = this.proxy.getAgentContext(agentId);
-      if (agentContext == null) {
-        // logger.info("Missing AgentContext for agent_id: {}", agentId);
+      if (agentContext == null)
         break;
-      }
 
       final ScrapeRequestWrapper scrapeRequest = agentContext.pollScrapeRequestQueue(1000);
       if (scrapeRequest != null) {
