@@ -19,6 +19,7 @@ import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -84,8 +85,7 @@ public interface Utils {
                            final Config fallback,
                            final boolean exitOnMissingConfig)
       throws MalformedURLException {
-
-    // Precedence of confg settings: CLI, ENV_VAR
+    // Precedence of confg settings: CLI, ENV_VAR, config info
     final String configName = cliConfig != null ? cliConfig : System.getenv(envConfig);
 
     if (configName == null) {
@@ -136,5 +136,18 @@ public interface Utils {
     }
     // Never reached
     return fallback;
+  }
+
+  static Optional<Integer> getEnvInt(final String varName, final boolean exitOnException) {
+    final String val = System.getenv(varName);
+    try {
+      return Optional.of(Integer.parseInt(val));
+    }
+    catch (Throwable e) {
+      logger.error("Invaid value for {}: {}", varName, val);
+      if (exitOnException)
+        System.exit(1);
+    }
+    return Optional.empty();
   }
 }

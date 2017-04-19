@@ -1,6 +1,7 @@
 package com.sudothought.proxy;
 
 
+import brave.Span;
 import com.google.common.base.MoreObjects;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
@@ -19,11 +20,19 @@ public class ScrapeRequestWrapper {
   private final CountDownLatch                  complete          = new CountDownLatch(1);
   private final AtomicReference<ScrapeResponse> scrapeResponseRef = new AtomicReference<>();
 
+  private final Span          rootSpan;
+  private final HttpServer    httpServer;
   private final Summary.Timer requestTimer;
   private final ScrapeRequest scrapeRequest;
 
-  public ScrapeRequestWrapper(final Proxy proxy, final String agentId, final String path, final String accept) {
-    this.requestTimer = proxy.getMetrics().scrapeRequestLatency.startTimer();
+  public ScrapeRequestWrapper(final HttpServer httpServer,
+                              final Span rootSpan,
+                              final String agentId,
+                              final String path,
+                              final String accept) {
+    this.httpServer = httpServer;
+    this.rootSpan = rootSpan;
+    this.requestTimer = this.httpServer.getProxy().getMetrics().scrapeRequestLatency.startTimer();
     this.scrapeRequest = ScrapeRequest.newBuilder()
                                       .setAgentId(agentId)
                                       .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
@@ -32,11 +41,24 @@ public class ScrapeRequestWrapper {
                                       .build();
   }
 
-  public long getScrapeId() {
-    return this.scrapeRequest.getScrapeId();
-  }
+  public HttpServer getHttpServer() { return this.httpServer; }
+
+  public Span getRootSpan() { return this.rootSpan; }
+
+  public long getScrapeId() { return this.scrapeRequest.getScrapeId(); }
 
   public ScrapeRequest getScrapeRequest() { return this.scrapeRequest; }
+
+  public ScrapeResponse getScrapeResponse() { return this.scrapeResponseRef.get(); }
+
+  public void setScrapeResponse(final ScrapeResponse scrapeResponse) { this.scrapeResponseRef.set(scrapeResponse);}
+
+  public long ageInSecs() { return (System.currentTimeMillis() - this.createTime) / 1000;}
+
+  public void markComplete() {
+    this.requestTimer.observeDuration();
+    this.complete.countDown();
+  }
 
   public boolean waitUntilComplete(final long waitMillis) {
     try {
@@ -47,17 +69,6 @@ public class ScrapeRequestWrapper {
     }
     return false;
   }
-
-  public void markComplete() {
-    this.requestTimer.observeDuration();
-    this.complete.countDown();
-  }
-
-  public ScrapeResponse getScrapeResponse() { return this.scrapeResponseRef.get(); }
-
-  public void setScrapeResponse(final ScrapeResponse scrapeResponse) { this.scrapeResponseRef.set(scrapeResponse);}
-
-  public long ageInSecs() { return (System.currentTimeMillis() - this.createTime) / 1000;}
 
   @Override
   public String toString() {

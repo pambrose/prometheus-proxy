@@ -14,17 +14,19 @@ public class ZipkinReporter {
 
   private final Sender              sender;
   private final AsyncReporter<Span> reporter;
-  private final Tracer              tracer;
   private final Brave               brave;
 
   public ZipkinReporter(final String url, final String serviceName) {
     this.sender = OkHttpSender.create(url);
     this.reporter = AsyncReporter.builder(this.sender).build();
-    this.tracer = Tracer.newBuilder()
-                        .localServiceName(serviceName)
-                        .reporter(this.reporter)
-                        .build();
-    this.brave = TracerAdapter.newBrave(this.tracer);
+    this.brave = TracerAdapter.newBrave(this.newTracer(serviceName));
+  }
+
+  public Tracer newTracer(final String serviceName) {
+    return Tracer.newBuilder()
+                 .localServiceName(serviceName)
+                 .reporter(this.reporter)
+                 .build();
   }
 
   public Brave getBrave() { return this.brave; }
@@ -36,6 +38,7 @@ public class ZipkinReporter {
     catch (IOException e) {
       e.printStackTrace();
     }
+
     this.reporter.close();
   }
 }

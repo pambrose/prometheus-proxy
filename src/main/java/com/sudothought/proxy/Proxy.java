@@ -88,8 +88,8 @@ public class Proxy {
       interceptors.add(MonitoringServerInterceptor.create(this.getConfigVals().grpc.allMetrics
                                                           ? Configuration.allMetrics()
                                                           : Configuration.cheapMetricsOnly()));
-    if (this.zipkinReporter != null)
-      interceptors.add(BraveGrpcServerInterceptor.create(this.zipkinReporter.getBrave()));
+    if (this.isZipkinReportingEnabled())
+      interceptors.add(BraveGrpcServerInterceptor.create(this.getZipkinReporter().getBrave()));
 
     final ProxyServiceImpl proxyService = new ProxyServiceImpl(this);
     final ServerServiceDefinition serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors);
@@ -119,21 +119,10 @@ public class Proxy {
     if (args.http_port == null)
       args.http_port = configVals.proxy.http.port;
 
-    if (args.metrics_port == null) {
-      final String p = System.getenv(METRICS_PORT);
-      if (p != null) {
-        try {
-          args.metrics_port = Integer.parseInt(p);
-        }
-        catch (Throwable e) {
-          logger.error("Invaid value for {}: {}", METRICS_PORT, p);
-          System.exit(1);
-        }
-      }
-      else {
-        args.metrics_port = configVals.proxy.metrics.port;
-      }
-    }
+    if (args.metrics_port == null)
+      args.metrics_port = System.getenv(METRICS_PORT) == null
+                          ? configVals.proxy.metrics.port
+                          : Utils.getEnvInt(METRICS_PORT, true).orElse(configVals.proxy.metrics.port);
 
     if (args.grpc_port == null)
       args.grpc_port = configVals.proxy.grpc.port;
@@ -169,7 +158,7 @@ public class Proxy {
     if (this.metricsServer != null)
       this.metricsServer.stop();
     if (this.isZipkinReportingEnabled())
-      this.zipkinReporter.close();
+      this.getZipkinReporter().close();
     this.grpcServer.shutdown();
   }
 
@@ -200,11 +189,15 @@ public class Proxy {
   }
 
   public void addScrapeRequest(final ScrapeRequestWrapper scrapeRequest) {
+    scrapeRequest.getRootSpan().annotate("map-placement");
     this.scrapeRequestMap.put(scrapeRequest.getScrapeId(), scrapeRequest);
   }
 
   public ScrapeRequestWrapper removeScrapeRequest(long scrapeId) {
-    return this.scrapeRequestMap.remove(scrapeId);
+    final ScrapeRequestWrapper scrapeRequest = this.scrapeRequestMap.remove(scrapeId);
+    if (scrapeRequest != null)
+      scrapeRequest.getRootSpan().annotate("map-removal");
+    return scrapeRequest;
   }
 
   public AgentContext getAgentContextByPath(final String path) { return this.pathMap.get(path); }
@@ -232,11 +225,15 @@ public class Proxy {
     }
   }
 
+  public HttpServer getHttpServer() { return this.httpServer; }
+
   public ProxyMetrics getMetrics() { return this.metrics; }
 
-  public boolean isZipkinReportingEnabled() { return this.zipkinReporter != null; }
+  public boolean isZipkinReportingEnabled() { return this.getZipkinReporter() != null; }
 
-  public Brave getBrave() { return this.zipkinReporter.getBrave(); }
+  public ZipkinReporter getZipkinReporter() { return this.zipkinReporter; }
+
+  public Brave getBrave() { return this.getZipkinReporter().getBrave(); }
 
   public ConfigVals.Proxy getConfigVals() { return this.configVals.proxy; }
 }

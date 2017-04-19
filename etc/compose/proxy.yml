@@ -10,6 +10,7 @@ prometheus-proxy:
 
 
 prometheus-test:
+  autoredeploy: true
   image: 'pambrose/prometheus-test:latest'
   ports:
     - '9090:9090'
