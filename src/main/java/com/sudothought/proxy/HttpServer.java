@@ -29,14 +29,14 @@ public class HttpServer {
     this.port = port;
     this.http = Service.ignite();
     this.http.port(this.port);
-    this.tracer = this.proxy.isZipkinReportingEnabled()
+    this.tracer = this.proxy.isZipkinEnabled()
                   ? this.proxy.getZipkinReporter().newTracer("proxy-http")
                   : null;
   }
 
   public void start() {
     logger.info("Started proxy listening on {}", this.port);
-    if (this.proxy.isZipkinReportingEnabled()) {
+    if (this.proxy.isZipkinEnabled()) {
       final BraveTracing tracing = BraveTracing.create(this.proxy.getBrave());
       this.http.before(tracing.before());
       this.http.exception(Exception.class, tracing.exception(new ExceptionHandlerImpl(Exception.class) {
