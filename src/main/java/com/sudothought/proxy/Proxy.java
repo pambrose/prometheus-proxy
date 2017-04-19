@@ -106,6 +106,9 @@ public class Proxy {
     this.httpServer = new HttpServer(this, httpPort);
 
     if (this.isMetricsEnabled()) {
+      // Zero out the gauge value
+      this.getMetrics().cummulativeAgentRequestQueueSize.set(0);
+
       if (this.getConfigVals().internal.agentQueueSizeMetricsEnabled)
         this.executorService.submit(() -> {
           while (!this.isStopped()) {
@@ -123,8 +126,6 @@ public class Proxy {
             }
           }
         });
-      else
-        this.getMetrics().cummulativeAgentRequestQueueSize.set(0);
     }
   }
 
