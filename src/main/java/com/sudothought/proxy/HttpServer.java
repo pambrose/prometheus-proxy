@@ -72,7 +72,7 @@ public class HttpServer {
                       final AgentContext agentContext = this.proxy.getAgentContextByPath(path);
 
                       if (agentContext == null) {
-                        logger.info("Missing path request /{}", path);
+                        logger.debug("Invalid path request /{}", path);
                         res.status(404);
                         if (this.proxy.isMetricsEnabled())
                           this.proxy.getMetrics().scrapeRequests.labels("invalid_path").inc();
@@ -116,7 +116,7 @@ public class HttpServer {
                         }
                       }
 
-                      logger.info("Results returned from {} for {}", agentContext, scrapeRequest);
+                      logger.debug("Results returned from {} for {}", agentContext, scrapeRequest);
 
                       final ScrapeResponse scrapeResponse = scrapeRequest.getScrapeResponse();
                       final int status_code = scrapeResponse.getStatusCode();
