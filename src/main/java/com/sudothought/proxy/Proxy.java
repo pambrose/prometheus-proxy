@@ -194,8 +194,7 @@ public class Proxy {
   }
 
   public ScrapeRequestWrapper removeScrapeRequest(long scrapeId) {
-    final ScrapeRequestWrapper scrapeRequest = this.scrapeRequestMap.remove(scrapeId);
-    return scrapeRequest;
+    return this.scrapeRequestMap.remove(scrapeId);
   }
 
   public AgentContext getAgentContextByPath(final String path) { return this.pathMap.get(path); }

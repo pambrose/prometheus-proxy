@@ -18,15 +18,13 @@ public class AgentContext {
   private final AtomicReference<String> hostname = new AtomicReference<>();
   private final String                  agentId  = "" + AGENT_ID_GENERATOR.incrementAndGet();
 
-  private final Proxy                               proxy;
   private final String                              remoteAddr;
   private final BlockingQueue<ScrapeRequestWrapper> scrapeRequestQueue;
 
   public AgentContext(final Proxy proxy, final String remoteAddr) {
-    this.proxy = proxy;
     this.remoteAddr = remoteAddr;
     this.scrapeRequestQueue = new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(256),
-                                                              this.proxy.getMetrics().scrapeQueueSize);
+                                                              proxy.getMetrics().scrapeQueueSize);
   }
 
   public String getAgentId() { return this.agentId; }

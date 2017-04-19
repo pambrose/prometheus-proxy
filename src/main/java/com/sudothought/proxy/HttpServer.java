@@ -127,10 +127,7 @@ public class HttpServer {
                         rootSpan.finish();
                     }
                   });
-
   }
-
-  public Tracer getTracer() { return this.tracer; }
 
   public Proxy getProxy() { return this.proxy; }
 

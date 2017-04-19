@@ -70,4 +70,23 @@ public class InstrumentedBlockingQueue<E>
     this.gauge.dec();
     return retval;
   }
+
+  @Override
+  public boolean removeAll(Collection<?> collection) {
+    return super.removeAll(collection);
+  }
+
+  @Override
+  public boolean add(E element) {
+    final boolean retval = super.add(element);
+    if (retval)
+      this.gauge.inc();
+    return retval;
+  }
+
+  @Override
+  public void clear() {
+    super.clear();
+    this.gauge.clear();
+  }
 }
