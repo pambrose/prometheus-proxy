@@ -107,13 +107,8 @@ public class HttpServer {
                       }
                       finally {
                         final ScrapeRequestWrapper prev = this.proxy.removeFromScrapeRequestMap(scrapeRequest.getScrapeId());
-                        if (prev == null) {
-                          logger.error("Scrape request missing in map {}", prev);
-                        }
-                        else {
-                          if (this.proxy.isMetricsEnabled())
-                            this.proxy.getMetrics().scrapeRequestsMapCleanup.inc();
-                        }
+                        if (prev == null)
+                          logger.error("Scrape request missing in map {}", scrapeRequest.getScrapeId());
                       }
 
                       logger.debug("Results returned from {} for {}", agentContext, scrapeRequest);

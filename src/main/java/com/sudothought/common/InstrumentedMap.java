@@ -32,7 +32,7 @@ public class InstrumentedMap<K, V>
   @Override
   public void clear() {
     super.clear();
-    this.gauge.clear();
+    this.gauge.set(0);
   }
 
   @Override

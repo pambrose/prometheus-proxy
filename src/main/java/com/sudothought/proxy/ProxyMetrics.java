@@ -20,11 +20,6 @@ public class ProxyMetrics {
                                                              .help("Proxy cummulative agent queue size")
                                                              .register();
 
-  public final Counter scrapeRequestsMapCleanup = Counter.build()
-                                                         .name("proxy_scrape_map_removals")
-                                                         .help("Proxy scrape map removals")
-                                                         .register();
-
   public final Counter scrapeRequests = Counter.build()
                                                .name("proxy_scrape_requests")
                                                .help("Proxy scrape requests")

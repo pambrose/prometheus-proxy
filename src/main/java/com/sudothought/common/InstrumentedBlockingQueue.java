@@ -88,6 +88,6 @@ public class InstrumentedBlockingQueue<E>
   @Override
   public void clear() {
     super.clear();
-    this.gauge.clear();
+    this.gauge.set(0);
   }
 }
