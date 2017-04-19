@@ -1,8 +1,9 @@
 package com.sudothought.common;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
-import io.prometheus.client.Summary;
 
 import java.util.concurrent.ThreadFactory;
 
@@ -10,15 +11,15 @@ public class InstrumentedThreadFactory
     implements ThreadFactory {
 
   private final ThreadFactory delegate;
-  private final Summary       created;
+  private final Counter       created;
   private final Gauge         running;
-  private final Summary       terminated;
+  private final Counter       terminated;
 
   public InstrumentedThreadFactory(final ThreadFactory delegate, final String name, final String help) {
     Preconditions.checkNotNull(name);
     Preconditions.checkNotNull(help);
     this.delegate = Preconditions.checkNotNull(delegate);
-    this.created = Summary.build()
+    this.created = Counter.build()
                           .name(String.format("%s_threads_created", name))
                           .help(String.format("%s threads created", help))
                           .register();
@@ -26,17 +27,26 @@ public class InstrumentedThreadFactory
                         .name(String.format("%s_threads_running", name))
                         .help(String.format("%s threads running", help))
                         .register();
-    this.terminated = Summary.build()
+    this.terminated = Counter.build()
                              .name(String.format("%s_threads_terminated", name))
                              .help(String.format("%s threads terminated", help))
                              .register();
+  }
+
+  public static ThreadFactory newInstrumentedThreadFactory(final String name,
+                                                           final String help,
+                                                           final boolean daemon) {
+    final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat(name + "-%d")
+                                                                  .setDaemon(daemon)
+                                                                  .build();
+    return new InstrumentedThreadFactory(threadFactory, name, help);
   }
 
   @Override
   public Thread newThread(final Runnable runnable) {
     final Runnable wrappedRunnable = new InstrumentedRunnable(runnable);
     final Thread thread = this.delegate.newThread(wrappedRunnable);
-    this.created.observe(1);
+    this.created.inc();
     return thread;
   }
 
@@ -57,7 +67,7 @@ public class InstrumentedThreadFactory
       }
       finally {
         running.dec();
-        terminated.observe(1);
+        terminated.inc();
       }
     }
   }

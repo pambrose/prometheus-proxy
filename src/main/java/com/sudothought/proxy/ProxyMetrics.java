@@ -15,6 +15,11 @@ public class ProxyMetrics {
                                          .help("Proxy connected agents")
                                          .register();
 
+  public final Gauge cummulativeAgentRequestQueueSize = Gauge.build()
+                                                             .name("proxy_cummulative_agent_queue_size")
+                                                             .help("Proxy cummulative agent queue size")
+                                                             .register();
+
   public final Counter scrapeRequestsMapCleanup = Counter.build()
                                                          .name("proxy_scrape_map_removals")
                                                          .help("Proxy scrape map removals")

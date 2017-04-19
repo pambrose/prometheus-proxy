@@ -4,7 +4,6 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.io.CharStreams;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigParseOptions;
@@ -20,7 +19,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -29,15 +27,6 @@ import static java.lang.String.format;
 public interface Utils {
 
   Logger logger = LoggerFactory.getLogger(Utils.class);
-
-  static ThreadFactory newInstrumentedThreadFactory(final String name,
-                                                    final String help,
-                                                    final boolean daemon) {
-    final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat(name + "-%d")
-                                                                  .setDaemon(daemon)
-                                                                  .build();
-    return new InstrumentedThreadFactory(threadFactory, name, help);
-  }
 
   static String getBanner(final String filename) {
     try (final InputStream in = logger.getClass().getClassLoader().getResourceAsStream(filename)) {

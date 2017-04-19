@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.RateLimiter;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.Empty;
 import com.sudothought.common.ConfigVals;
 import com.sudothought.common.InstrumentedBlockingQueue;
@@ -53,7 +54,7 @@ import java.util.stream.Collectors;
 
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.sudothought.common.EnvVars.AGENT_CONFIG;
-import static com.sudothought.common.Utils.newInstrumentedThreadFactory;
+import static com.sudothought.common.InstrumentedThreadFactory.newInstrumentedThreadFactory;
 import static com.sudothought.grpc.ProxyServiceGrpc.newBlockingStub;
 import static com.sudothought.grpc.ProxyServiceGrpc.newStub;
 import static io.grpc.ClientInterceptors.intercept;
@@ -63,14 +64,12 @@ public class Agent {
 
   private static final Logger logger = LoggerFactory.getLogger(Agent.class);
 
-  private final AtomicBoolean            stopped         = new AtomicBoolean(false);
-  private final Map<String, PathContext> pathContextMap  = Maps.newConcurrentMap();  // Map path to PathContext
-  private final AtomicReference<String>  agentIdRef      = new AtomicReference<>();
-  private final ExecutorService          executorService = newCachedThreadPool(newInstrumentedThreadFactory("agent_fetch",
-                                                                                                            "Agent fetch",
-                                                                                                            true));
+  private final AtomicBoolean            stopped        = new AtomicBoolean(false);
+  private final Map<String, PathContext> pathContextMap = Maps.newConcurrentMap();  // Map path to PathContext
+  private final AtomicReference<String>  agentIdRef     = new AtomicReference<>();
   private final ConfigVals                                configVals;
   private final AgentMetrics                              metrics;
+  private final ExecutorService                           executorService;
   private final BlockingQueue<ScrapeResponse>             scrapeResponseQueue;
   private final RateLimiter                               reconnectLimiter;
   private final MetricsServer                             metricsServer;
@@ -84,10 +83,10 @@ public class Agent {
   private Agent(final ConfigVals configVals, final String host, final int metricsPort) {
     this.configVals = configVals;
 
-    if (this.getConfigVals().metrics.enabled) {
+    if (this.isMetricsEnabled()) {
       this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
       this.metrics = new AgentMetrics();
-      this.metrics.startTime.setToCurrentTime();
+      this.getMetrics().startTime.setToCurrentTime();
     }
     else {
       logger.info("Metrics endpoint disabled");
@@ -95,10 +94,19 @@ public class Agent {
       this.metrics = null;
     }
 
-    this.scrapeResponseQueue = this.metrics != null && this.getConfigVals().scrape.prometheusMetricsEnabled
-                               ? new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(this.getConfigVals().scrape.queueSize),
-                                                                 this.metrics.scrapeQueueSize)
-                               : new ArrayBlockingQueue<>(this.getConfigVals().scrape.queueSize);
+    executorService = newCachedThreadPool(this.isMetricsEnabled()
+                                          ? newInstrumentedThreadFactory("agent_fetch",
+                                                                         "Agent fetch",
+                                                                         true)
+                                          : new ThreadFactoryBuilder().setNameFormat("agent_fetch-%d")
+                                                                      .setDaemon(true)
+                                                                      .build());
+
+    final int queueSize = this.getConfigVals().internal.scrapeQueueSize;
+    this.scrapeResponseQueue = this.isMetricsEnabled() && this.getConfigVals().internal.prometheusMetricsEnabled
+                               ? new InstrumentedBlockingQueue<>(new ArrayBlockingQueue<>(queueSize),
+                                                                 this.getMetrics().scrapeQueueSize)
+                               : new ArrayBlockingQueue<>(queueSize);
 
     logger.info("Assigning proxy reconnect pause time to {} secs", this.getConfigVals().grpc.reconectPauseSecs);
     this.reconnectLimiter = RateLimiter.create(1.0 / this.getConfigVals().grpc.reconectPauseSecs);
@@ -156,8 +164,8 @@ public class Agent {
     args.parseArgs(Agent.class.getName(), argv);
 
     final Config config = Utils.readConfig(args.config,
-                                           AGENT_CONFIG, ConfigParseOptions.defaults()
-                                                                           .setAllowMissing(false),
+                                           AGENT_CONFIG,
+                                           ConfigParseOptions.defaults().setAllowMissing(false),
                                            ConfigFactory.load(),
                                            true)
                                .resolve(ConfigResolveOptions.defaults());
@@ -186,7 +194,7 @@ public class Agent {
 
   private void run()
       throws IOException {
-    if (this.metricsServer != null) {
+    if (this.isMetricsEnabled()) {
       this.metricsServer.start();
       DefaultExports.initialize();
     }
@@ -307,8 +315,8 @@ public class Agent {
     final PathContext pathContext = this.pathContextMap.get(path);
     if (pathContext == null) {
       logger.warn("Invalid path request: {}", path);
-      if (this.metrics != null)
-        this.metrics.scrapeRequests.labels("invalid_path").observe(1);
+      if (this.isMetricsEnabled())
+        this.getMetrics().scrapeRequests.labels("invalid_path").observe(1);
       return scrapeResponse.setValid(false)
                            .setStatusCode(status_code)
                            .setText("")
@@ -316,14 +324,15 @@ public class Agent {
                            .build();
     }
 
-    final Summary.Timer requestTimer = this.metrics != null ? this.metrics.scrapeRequestLatency.startTimer() : null;
+    final Summary.Timer requestTimer = this.isMetricsEnabled() ? this.getMetrics().scrapeRequestLatency.startTimer()
+                                                               : null;
     try {
       logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
       final Response response = pathContext.fetchUrl(scrapeRequest);
       status_code = response.code();
       if (response.isSuccessful()) {
-        if (this.metrics != null)
-          this.metrics.scrapeRequests.labels("success").observe(1);
+        if (this.isMetricsEnabled())
+          this.getMetrics().scrapeRequests.labels("success").observe(1);
         return scrapeResponse.setValid(true)
                              .setStatusCode(status_code)
                              .setText(response.body().string())
@@ -338,8 +347,8 @@ public class Agent {
       if (requestTimer != null)
         requestTimer.observeDuration();
     }
-    if (this.metrics != null)
-      this.metrics.scrapeRequests.labels("unsuccessful").observe(1);
+    if (this.isMetricsEnabled())
+      this.getMetrics().scrapeRequests.labels("unsuccessful").observe(1);
     return scrapeResponse.setValid(false)
                          .setStatusCode(status_code)
                          .setText("")
@@ -349,9 +358,9 @@ public class Agent {
 
   public void stop() {
     this.stopped.set(true);
-    if (this.metricsServer != null)
+    if (this.isMetricsEnabled())
       this.metricsServer.stop();
-    if (this.zipkinReporter != null)
+    if (this.isZipkinReportingEnabled())
       this.zipkinReporter.close();
     try {
       this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
@@ -398,6 +407,12 @@ public class Agent {
       throw new ConnectException("registerPath()");
     return response.getPathId();
   }
+
+  public AgentMetrics getMetrics() { return this.metrics; }
+
+  public boolean isMetricsEnabled() { return this.getConfigVals().metrics.enabled; }
+
+  public boolean isZipkinReportingEnabled() { return this.zipkinReporter != null; }
 
   private boolean isStopped() { return this.stopped.get(); }
 

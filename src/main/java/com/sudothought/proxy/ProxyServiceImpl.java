@@ -1,7 +1,6 @@
 package com.sudothought.proxy;
 
 import com.google.protobuf.Empty;
-import com.sudothought.agent.AgentContext;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.ProxyServiceGrpc;
 import com.sudothought.grpc.RegisterAgentRequest;
@@ -108,7 +107,7 @@ class ProxyServiceImpl
       @Override
       public void onNext(final ScrapeResponse response) {
         final long scrapeId = response.getScrapeId();
-        final ScrapeRequestWrapper scrapeRequest = proxy.removeFromScrapeRequestMap(scrapeId);
+        final ScrapeRequestWrapper scrapeRequest = proxy.getFromScrapeRequestMap(scrapeId);
         if (scrapeRequest == null) {
           logger.error("Missing ScrapeRequestWrapper for scrape_id: {}", scrapeId);
         }

@@ -1,6 +1,5 @@
 package com.sudothought.proxy;
 
-import com.sudothought.agent.AgentContext;
 import com.sudothought.common.Constants;
 import io.grpc.Attributes;
 import io.grpc.ServerTransportFilter;

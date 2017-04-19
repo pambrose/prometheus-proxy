@@ -3,7 +3,6 @@ package com.sudothought.proxy;
 import brave.Span;
 import brave.Tracer;
 import com.github.kristofa.brave.sparkjava.BraveTracing;
-import com.sudothought.agent.AgentContext;
 import com.sudothought.grpc.ScrapeResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +63,8 @@ public class HttpServer {
                       if (vals == null || vals.length == 0) {
                         logger.info("Request missing path");
                         res.status(404);
-                        this.proxy.getMetrics().scrapeRequests.labels("missing_path").inc();
+                        if (this.proxy.isMetricsEnabled())
+                          this.proxy.getMetrics().scrapeRequests.labels("missing_path").inc();
                         return null;
                       }
 
@@ -74,7 +74,8 @@ public class HttpServer {
                       if (agentContext == null) {
                         logger.info("Missing path request /{}", path);
                         res.status(404);
-                        this.proxy.getMetrics().scrapeRequests.labels("invalid_path").inc();
+                        if (this.proxy.isMetricsEnabled())
+                          this.proxy.getMetrics().scrapeRequests.labels("invalid_path").inc();
                         return null;
                       }
 
@@ -95,19 +96,22 @@ public class HttpServer {
                             break;
 
                           // Check if agent is disconnected or agent is hung
-                          if (scrapeRequest.ageInSecs() >= 5 || this.proxy.isStopped()) {
+                          final int timeoutSecs = this.proxy.getConfigVals().internal.requestTimeoutSecs;
+                          if (scrapeRequest.ageInSecs() >= timeoutSecs || this.proxy.isStopped()) {
                             res.status(503);
-                            this.proxy.getMetrics().scrapeRequests.labels("time_out").inc();
+                            if (this.proxy.isMetricsEnabled())
+                              this.proxy.getMetrics().scrapeRequests.labels("time_out").inc();
                             return null;
                           }
                         }
                       }
                       finally {
-                        // Make sure scrapeRequest is removed from map
-                        final ScrapeRequestWrapper request = this.proxy.removeFromScrapeRequestMap(scrapeRequest.getScrapeId());
-                        if (request != null) {
-                          logger.info("Cleaned up ScrapeRequestMap for scrape {}", request);
-                          if (this.proxy.getMetrics() != null)
+                        final ScrapeRequestWrapper prev = this.proxy.removeFromScrapeRequestMap(scrapeRequest.getScrapeId());
+                        if (prev == null) {
+                          logger.error("Scrape request missing in map {}", prev);
+                        }
+                        else {
+                          if (this.proxy.isMetricsEnabled())
                             this.proxy.getMetrics().scrapeRequestsMapCleanup.inc();
                         }
                       }
@@ -120,7 +124,8 @@ public class HttpServer {
 
                       // Do not return content on error status codes
                       if (status_code >= 400) {
-                        this.proxy.getMetrics().scrapeRequests.labels("path_not_found").inc();
+                        if (this.proxy.isMetricsEnabled())
+                          this.proxy.getMetrics().scrapeRequests.labels("path_not_found").inc();
                         return null;
                       }
                       else {
@@ -128,7 +133,8 @@ public class HttpServer {
                         if (accept_encoding != null && accept_encoding.contains("gzip"))
                           res.header(CONTENT_ENCODING, "gzip");
                         res.type(scrapeResponse.getContentType());
-                        this.proxy.getMetrics().scrapeRequests.labels("success").inc();
+                        if (this.proxy.isMetricsEnabled())
+                          this.proxy.getMetrics().scrapeRequests.labels("success").inc();
                         return scrapeRequest.getScrapeResponse().getText();
                       }
                     }

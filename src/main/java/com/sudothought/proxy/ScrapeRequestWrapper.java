@@ -30,7 +30,7 @@ public class ScrapeRequestWrapper {
                               final String path,
                               final String accept) {
     this.rootSpan = rootSpan;
-    this.requestTimer = proxy.getMetrics().scrapeRequestLatency.startTimer();
+    this.requestTimer = proxy.isMetricsEnabled() ? proxy.getMetrics().scrapeRequestLatency.startTimer() : null;
     this.scrapeRequest = ScrapeRequest.newBuilder()
                                       .setAgentId(agentId)
                                       .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
@@ -55,7 +55,8 @@ public class ScrapeRequestWrapper {
   public long ageInSecs() { return (System.currentTimeMillis() - this.createTime) / 1000;}
 
   public void markComplete() {
-    this.requestTimer.observeDuration();
+    if (this.requestTimer != null)
+      this.requestTimer.observeDuration();
     this.complete.countDown();
   }
 
