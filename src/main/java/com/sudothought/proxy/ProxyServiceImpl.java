@@ -2,6 +2,7 @@ package com.sudothought.proxy;
 
 import com.google.protobuf.Empty;
 import com.sudothought.grpc.AgentInfo;
+import com.sudothought.grpc.HeartBeatRequest;
 import com.sudothought.grpc.ProxyServiceGrpc;
 import com.sudothought.grpc.RegisterAgentRequest;
 import com.sudothought.grpc.RegisterAgentResponse;
@@ -31,6 +32,16 @@ class ProxyServiceImpl
 
   @Override
   public void connectAgent(final Empty request, final StreamObserver<Empty> responseObserver) {
+    if (this.proxy.isMetricsEnabled())
+      this.proxy.getMetrics().connects.inc();
+    responseObserver.onNext(Empty.getDefaultInstance());
+    responseObserver.onCompleted();
+  }
+
+  @Override
+  public void sendHeartBeat(final HeartBeatRequest request, final StreamObserver<Empty> responseObserver) {
+    if (this.proxy.isMetricsEnabled())
+      this.proxy.getMetrics().heartbeats.inc();
     responseObserver.onNext(Empty.getDefaultInstance());
     responseObserver.onCompleted();
   }

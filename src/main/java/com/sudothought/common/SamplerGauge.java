@@ -3,12 +3,11 @@ package com.sudothought.common;
 import com.google.common.collect.Lists;
 import io.prometheus.client.Collector;
 
+import java.util.Collections;
 import java.util.List;
 
 public class SamplerGauge
     extends Collector {
-
-  private static final List<String> EMPTY_LIST = Lists.newArrayList();
 
   private final String           name;
   private final String           help;
@@ -23,8 +22,8 @@ public class SamplerGauge
   @Override
   public List<MetricFamilySamples> collect() {
     final MetricFamilySamples.Sample sample = new MetricFamilySamples.Sample(this.name,
-                                                                             EMPTY_LIST,
-                                                                             EMPTY_LIST,
+                                                                             Collections.emptyList(),
+                                                                             Collections.emptyList(),
                                                                              this.samplerGaugeData.value());
     return Lists.newArrayList(new MetricFamilySamples(this.name,
                                                       Type.GAUGE,

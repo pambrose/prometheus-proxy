@@ -41,8 +41,10 @@ public class AgentClientInterceptor
                 // Grab agent_id from headers if not already assigned
                 if (agent.getAgentId() == null) {
                   final String agentId = headers.get(Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER));
-                  if (agentId != null)
+                  if (agentId != null) {
                     agent.setAgentId(agentId);
+                    logger.info("Assigned agentId to {}", agent);
+                  }
                 }
                 super.onHeaders(headers);
               }

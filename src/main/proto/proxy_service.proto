@@ -48,6 +48,10 @@ message ScrapeResponse {
     string content_type = 6;
 }
 
+message HeartBeatRequest {
+    string agent_id = 1;
+}
+
 service ProxyService {
     rpc connectAgent (google.protobuf.Empty) returns (google.protobuf.Empty) {
     }
@@ -62,6 +66,9 @@ service ProxyService {
     }
 
     rpc writeResponsesToProxy (stream ScrapeResponse) returns (google.protobuf.Empty) {
+    }
+
+    rpc sendHeartBeat (HeartBeatRequest) returns (google.protobuf.Empty) {
     }
 }
 

@@ -31,7 +31,7 @@ public class MetricsServer {
     context.addServlet(new ServletHolder(new MetricsServlet()), "/" + this.path);
     try {
       this.server.start();
-      logger.info("Started metrics server at http://localhost:{}/{}", this.port, this.path);
+      logger.info("Started metrics server at {}", this.getUrl());
     }
     catch (Exception e) {
       e.printStackTrace();
@@ -47,4 +47,12 @@ public class MetricsServer {
       e.printStackTrace();
     }
   }
+
+  public String getUrl() {
+    return String.format("http://localhost:%d/%s", this.port, this.path);
+  }
+
+  public int getPort() { return this.port; }
+
+  public String getPath() { return this.path; }
 }

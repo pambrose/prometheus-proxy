@@ -1,6 +1,7 @@
 package com.sudothought.agent;
 
 import com.sudothought.common.SamplerGauge;
+import io.prometheus.client.Collector;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
@@ -13,10 +14,19 @@ public class AgentMetrics {
                                                .labelNames("type")
                                                .register();
 
+  public final Counter connects = Counter.build()
+                                         .name("agent_connect_count")
+                                         .help("Agent connect counts")
+                                         .labelNames("type")
+                                         .register();
+
   public final Summary scrapeRequestLatency = Summary.build()
                                                      .name("agent_scrape_request_latency_seconds")
                                                      .help("Agent scrape request latency in seconds")
+                                                     .labelNames("agent_name")
                                                      .register();
+
+  private final Collector agentScrapeQueue;
 
   public AgentMetrics(final Agent agent) {
     Gauge.build()
@@ -25,8 +35,8 @@ public class AgentMetrics {
          .register()
          .setToCurrentTime();
 
-    new SamplerGauge("agent_scrape_queue_size",
-                     "Agent scrape response queue size",
-                     agent::getScrapeResponseQueueSize).register();
+    this.agentScrapeQueue = new SamplerGauge("agent_scrape_queue_size",
+                                             "Agent scrape response queue size",
+                                             agent::getScrapeResponseQueueSize).register();
   }
 }

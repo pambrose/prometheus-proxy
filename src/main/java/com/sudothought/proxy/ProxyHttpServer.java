@@ -107,6 +107,7 @@ public class ProxyHttpServer {
                       }
                       finally {
                         final ScrapeRequestWrapper prev = this.proxy.removeFromScrapeRequestMap(scrapeRequest.getScrapeId());
+                        //System.err.println("After remove size = " + this.proxy.getScrapeMapSize());
                         if (prev == null)
                           logger.error("Scrape request missing in map {}", scrapeRequest.getScrapeId());
                       }

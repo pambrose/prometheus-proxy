@@ -13,6 +13,16 @@ public class ProxyMetrics {
                                                .labelNames("type")
                                                .register();
 
+  public final Counter connects = Counter.build()
+                                         .name("proxy_connect_count")
+                                         .help("Proxy connect count")
+                                         .register();
+
+  public final Counter heartbeats = Counter.build()
+                                           .name("proxy_heartbeat_count")
+                                           .help("Proxy heartbeat count")
+                                           .register();
+
   public final Summary scrapeRequestLatency = Summary.build()
                                                      .name("proxy_scrape_request_latency_seconds")
                                                      .help("Proxy scrape request latency in seconds")

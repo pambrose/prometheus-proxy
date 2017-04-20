@@ -6,6 +6,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.sudothought.common.ConfigVals;
 import com.sudothought.common.MetricsServer;
+import com.sudothought.common.SystemMetrics;
 import com.sudothought.common.Utils;
 import com.sudothought.common.ZipkinReporter;
 import com.typesafe.config.Config;
@@ -17,7 +18,6 @@ import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
-import io.prometheus.client.hotspot.DefaultExports;
 import me.dinowernli.grpc.prometheus.Configuration;
 import me.dinowernli.grpc.prometheus.MonitoringServerInterceptor;
 import org.slf4j.Logger;
@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.sudothought.common.EnvVars.METRICS_PORT;
 import static com.sudothought.common.EnvVars.PROXY_CONFIG;
 
 public class Proxy {
@@ -40,28 +39,34 @@ public class Proxy {
   private final Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap();           // Map path to AgentContext
   private final Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap();  // Map scrape_id to agent_id
 
-  private final ConfigVals                      configVals;
-  private final MetricsServer                   metricsServer;
-  private final ProxyMetrics                    metrics;
-  private final ZipkinReporter                  zipkinReporter;
-  private final Server                          grpcServer;
-  private final ProxyHttpServer                 httpServer;
+  private final ConfigVals      configVals;
+  private final MetricsServer   metricsServer;
+  private final ProxyMetrics    metrics;
+  private final ZipkinReporter  zipkinReporter;
+  private final Server          grpcServer;
+  private final ProxyHttpServer httpServer;
 
-  private Proxy(final ConfigVals configVals, final int httpPort, final int metricsPort, final int grpcPort)
+  private Proxy(final ConfigVals configVals, final int grpcPort, final int httpPort, final boolean metricsEnabled,
+                final int metricsPort)
       throws IOException {
     this.configVals = configVals;
 
-    if (this.isMetricsEnabled()) {
+    if (metricsEnabled) {
       logger.info("Metrics server enabled");
       this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
       this.metrics = new ProxyMetrics(this);
+      SystemMetrics.initialize(this.getConfigVals().metrics.standardExportsEnabled,
+                               this.getConfigVals().metrics.memoryPoolsExportsEnabled,
+                               this.getConfigVals().metrics.garbageCollectorExportsEnabled,
+                               this.getConfigVals().metrics.threadExportsEnabled,
+                               this.getConfigVals().metrics.classLoadingExportsEnabled,
+                               this.getConfigVals().metrics.versionInfoExportsEnabled);
     }
     else {
       logger.info("Metrics server disabled");
       this.metricsServer = null;
       this.metrics = null;
     }
-
 
     if (this.isZipkinEnabled()) {
       final ConfigVals.Proxy.Zipkin2 zipkin = this.getConfigVals().zipkin;
@@ -75,8 +80,8 @@ public class Proxy {
     }
 
     final List<ServerInterceptor> interceptors = Lists.newArrayList(new ProxyInterceptor());
-    if (this.getConfigVals().grpc.prometheusMetricsEnabled)
-      interceptors.add(MonitoringServerInterceptor.create(this.getConfigVals().grpc.allPrometheusMetrics
+    if (this.getConfigVals().grpc.metricsEnabled)
+      interceptors.add(MonitoringServerInterceptor.create(this.getConfigVals().grpc.allMetricsReported
                                                           ? Configuration.allMetrics()
                                                           : Configuration.cheapMetricsOnly()));
     if (this.isZipkinEnabled() && this.getConfigVals().grpc.zipkinReportingEnabled)
@@ -107,18 +112,9 @@ public class Proxy {
                                .resolve(ConfigResolveOptions.defaults());
 
     final ConfigVals configVals = new ConfigVals(config);
-    if (args.http_port == null)
-      args.http_port = configVals.proxy.http.port;
+    args.assignArgs(configVals);
 
-    if (args.metrics_port == null)
-      args.metrics_port = System.getenv(METRICS_PORT) != null
-                          ? Utils.getEnvInt(METRICS_PORT, true).orElse(-1)
-                          : configVals.proxy.metrics.port; // -1 never returned
-
-    if (args.grpc_port == null)
-      args.grpc_port = configVals.proxy.grpc.port;
-
-    final Proxy proxy = new Proxy(configVals, args.http_port, args.metrics_port, args.grpc_port);
+    final Proxy proxy = new Proxy(configVals, args.grpc_port, args.http_port, !args.disable_metrics, args.metrics_port);
     proxy.start();
     proxy.waitUntilShutdown();
   }
@@ -130,10 +126,8 @@ public class Proxy {
 
     this.httpServer.start();
 
-    if (this.isMetricsEnabled()) {
-      DefaultExports.initialize();
+    if (this.isMetricsEnabled())
       this.metricsServer.start();
-    }
 
     Runtime.getRuntime()
            .addShutdownHook(
@@ -227,7 +221,7 @@ public class Proxy {
 
   public int getScrapeMapSize() { return this.scrapeRequestMap.size(); }
 
-  public boolean isMetricsEnabled() { return this.getConfigVals().metrics.enabled; }
+  public boolean isMetricsEnabled() { return this.metricsServer != null; }
 
   public ProxyMetrics getMetrics() { return this.metrics; }
 
