@@ -114,7 +114,6 @@ class ProxyServiceImpl
         if (scrapeRequest != null) {
           scrapeRequest.annotateSpan("send-to-agent");
           responseObserver.onNext(scrapeRequest.getScrapeRequest());
-          agentContext.markActivity();
         }
       }
     }

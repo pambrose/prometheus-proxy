@@ -134,24 +134,24 @@ public class Proxy {
 
     if (this.getConfigVals().internal.staleAgentCheckEnabled) {
       final long maxInactivitySecs = this.getConfigVals().internal.maxAgentInactivitySecs;
-      final long pauseSecs = this.getConfigVals().internal.staleAgentCheckIntervalSecs;
-      logger.info("Agent eviction thread started ({} max secs {} pause)", maxInactivitySecs, pauseSecs);
+      final long threadPauseSecs = this.getConfigVals().internal.staleAgentCheckPauseSecs;
+      logger.info("Agent eviction thread started ({} max secs {} pause)", maxInactivitySecs, threadPauseSecs);
       this.cleanupService.submit(() -> {
         while (!this.isStopped()) {
           this.agentContextMap
-              .forEach((key, agentContext) -> {
+              .forEach((agentId, agentContext) -> {
                 final long inactivitySecs = agentContext.inactivitySecs();
                 if (inactivitySecs > maxInactivitySecs) {
                   logger.info("Evicting agent after {} secs of inactivty {}", inactivitySecs, agentContext);
-                  removeAgentContext(agentContext.getAgentId());
+                  removeAgentContext(agentId);
                   this.getMetrics().agentEvictions.inc();
                 }
-                else {
-                  logger.info("Agent kept ({} secs) {}", inactivitySecs, agentContext);
-                }
+                //else {
+                // logger.info("Agent kept ({} secs) {}", inactivitySecs, agentContext);
+                //}
               });
 
-          Utils.sleepForSecs(pauseSecs);
+          Utils.sleepForSecs(threadPauseSecs);
         }
       });
     }
