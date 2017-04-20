@@ -132,21 +132,32 @@ public class Proxy {
     if (this.isMetricsEnabled())
       this.metricsServer.start();
 
-    this.cleanupService.submit(() -> {
+    if (this.getConfigVals().internal.staleAgentCheckEnabled) {
       final long maxInactivitySecs = this.getConfigVals().internal.maxAgentInactivitySecs;
-      while (!this.isStopped()) {
-        this.agentContextMap.forEach((key, agentContext) -> {
-          final long inactivtySecs = agentContext.inactivitySecs();
-          if (inactivtySecs > maxInactivitySecs) {
-            logger.info("Invalidating agent {} after {} secs of inactivty", agentContext, inactivtySecs);
-            removeAgentContext(agentContext.getAgentId());
-            this.getMetrics().agentEvictions.inc();
-          }
-        });
+      final long pauseSecs = this.getConfigVals().internal.staleAgentCheckIntervalSecs;
+      logger.info("Agent eviction thread started ({} max secs {} pause)", maxInactivitySecs, pauseSecs);
+      this.cleanupService.submit(() -> {
+        while (!this.isStopped()) {
+          this.agentContextMap
+              .forEach((key, agentContext) -> {
+                final long inactivitySecs = agentContext.inactivitySecs();
+                if (inactivitySecs > maxInactivitySecs) {
+                  logger.info("Evicting agent after {} secs of inactivty {}", inactivitySecs, agentContext);
+                  removeAgentContext(agentContext.getAgentId());
+                  this.getMetrics().agentEvictions.inc();
+                }
+                else {
+                  logger.info("Agent kept ({} secs) {}", inactivitySecs, agentContext);
+                }
+              });
 
-        Utils.sleepForSecs(this.getConfigVals().internal.staleAgentCheckIntervalSecs);
-      }
-    });
+          Utils.sleepForSecs(pauseSecs);
+        }
+      });
+    }
+    else {
+      logger.info("Agent eviction thread not started");
+    }
 
     Runtime.getRuntime()
            .addShutdownHook(

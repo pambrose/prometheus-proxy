@@ -90,13 +90,13 @@ public class ProxyHttpServer {
                         this.proxy.addToScrapeRequestMap(scrapeRequest);
                         agentContext.addToScrapeRequestQueue(scrapeRequest);
 
+                        final int timeoutSecs = this.proxy.getConfigVals().internal.requestTimeoutSecs;
                         while (true) {
                           // Returns false if timed out
                           if (scrapeRequest.waitUntilComplete(1000))
                             break;
 
                           // Check if agent is disconnected or agent is hung
-                          final int timeoutSecs = this.proxy.getConfigVals().internal.requestTimeoutSecs;
                           if (scrapeRequest.ageInSecs() >= timeoutSecs || this.proxy.isStopped()) {
                             res.status(503);
                             if (this.proxy.isMetricsEnabled())

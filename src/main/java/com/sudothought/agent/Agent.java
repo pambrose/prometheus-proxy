@@ -221,7 +221,11 @@ public class Agent {
     while (!this.isStopped()) {
       final AtomicBoolean connected = new AtomicBoolean(false);
       final AtomicBoolean disconnected = new AtomicBoolean(false);
-      final AtomicBoolean proxyDisconnectedCleanly = new AtomicBoolean(false);
+
+      // Reset gRPC stubs if previous iteration had a successful connection
+      if (this.getAgentId() != null)
+        this.resetGrpcStubs();
+
       // Reset values for each connection attempt
       this.setAgentId(null);
       this.pathContextMap.clear();
@@ -288,7 +292,6 @@ public class Agent {
 
                                                @Override
                                                public void onCompleted() {
-                                                 proxyDisconnectedCleanly.set(true);
                                                  disconnected.set(true);
                                                }
                                              });
@@ -303,13 +306,12 @@ public class Agent {
               @Override
               public void onError(Throwable t) {
                 final Status status = Status.fromThrowable(t);
-                logger.info("Error in writeResponsesToProxy(): {}", status);
+                logger.info("Error in writeResponsesToProxy(): {} {}", status.getCode(), status.getDescription());
                 disconnected.set(true);
               }
 
               @Override
               public void onCompleted() {
-                proxyDisconnectedCleanly.set(true);
                 disconnected.set(true);
               }
             });
@@ -341,9 +343,6 @@ public class Agent {
         logger.info("Disconnected from proxy at {}", this.getProxyHost());
       else if (this.isMetricsEnabled())
         this.getMetrics().connects.labels("failure").inc();
-
-      if (proxyDisconnectedCleanly.get())
-        this.resetGrpcStubs();
 
       final double secsWaiting = this.reconnectLimiter.acquire();
       logger.info("Waited {} secs to reconnect", secsWaiting);
