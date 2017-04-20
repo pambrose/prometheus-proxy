@@ -15,7 +15,7 @@ prometheus-test:
   ports:
     - '9090:9090'
 
-zipkin:
-  image: 'openzipkin/zipkin'
-  ports:
-    - '9411:9411'
+#zipkin:
+#  image: 'openzipkin/zipkin'
+#  ports:
+#    - '9411:9411'

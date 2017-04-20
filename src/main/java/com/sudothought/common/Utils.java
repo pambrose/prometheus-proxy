@@ -152,4 +152,13 @@ public interface Utils {
       return "Unknown";
     }
   }
+
+  static void sleepForSecs(final double time) {
+    try {
+      Thread.sleep((long) time * 1000);
+    }
+    catch (InterruptedException e) {
+      // Ignore
+    }
+  }
 }

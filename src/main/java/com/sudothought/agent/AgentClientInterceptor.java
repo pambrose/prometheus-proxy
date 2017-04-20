@@ -43,7 +43,10 @@ public class AgentClientInterceptor
                   final String agentId = headers.get(Metadata.Key.of(AGENT_ID, Metadata.ASCII_STRING_MARSHALLER));
                   if (agentId != null) {
                     agent.setAgentId(agentId);
-                    logger.info("Assigned agentId to {}", agent);
+                    logger.info("Assigned agentId {} to {}", agentId, agent);
+                  }
+                  else {
+                    logger.error("Headers missing AGENT_ID key");
                   }
                 }
                 super.onHeaders(headers);

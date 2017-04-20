@@ -5,6 +5,7 @@ import com.google.common.base.MoreObjects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -12,9 +13,11 @@ public class AgentContext {
 
   private static final AtomicLong AGENT_ID_GENERATOR = new AtomicLong(0);
 
-  private final AtomicReference<String> agentName = new AtomicReference<>();
-  private final AtomicReference<String> hostname  = new AtomicReference<>();
-  private final String                  agentId   = "" + AGENT_ID_GENERATOR.incrementAndGet();
+  private final String                  agentId          = "" + AGENT_ID_GENERATOR.incrementAndGet();
+  private final AtomicBoolean           valid            = new AtomicBoolean(true);
+  private final AtomicLong              lastActivityTime = new AtomicLong();
+  private final AtomicReference<String> agentName        = new AtomicReference<>();
+  private final AtomicReference<String> hostname         = new AtomicReference<>();
 
   private final String                              remoteAddr;
   private final BlockingQueue<ScrapeRequestWrapper> scrapeRequestQueue;
@@ -23,6 +26,7 @@ public class AgentContext {
     this.remoteAddr = remoteAddr;
     final int queueSize = proxy.getConfigVals().internal.scrapeQueueSize;
     this.scrapeRequestQueue = new ArrayBlockingQueue<>(queueSize);
+    this.markActivity();
   }
 
   public String getAgentId() { return this.agentId; }
@@ -52,13 +56,23 @@ public class AgentContext {
     }
   }
 
+  public long inactivitySecs() { return (System.currentTimeMillis() - this.lastActivityTime.get()) / 1000;}
+
+  public boolean isValid() { return this.valid.get();}
+
+  public void markInvalid() { this.valid.set(false);}
+
+  public void markActivity() { this.lastActivityTime.set(System.currentTimeMillis()); }
+
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
                       .add("agentId", this.agentId)
+                      .add("valid", this.isValid())
                       .add("agentName", this.agentName)
                       .add("hostname", this.hostname)
                       .add("remoteAddr", this.remoteAddr)
+                      .add("inactivitySecs", this.inactivitySecs())
                       .toString();
   }
 }

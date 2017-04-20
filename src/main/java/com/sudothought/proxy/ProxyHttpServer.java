@@ -82,8 +82,8 @@ public class ProxyHttpServer {
                       if (rootSpan != null)
                         rootSpan.tag("path", path);
                       final ScrapeRequestWrapper scrapeRequest = new ScrapeRequestWrapper(this.proxy,
+                                                                                          agentContext,
                                                                                           rootSpan,
-                                                                                          agentContext.getAgentId(),
                                                                                           path,
                                                                                           req.headers(ACCEPT));
                       try {

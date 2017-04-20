@@ -3,6 +3,7 @@ package com.sudothought.proxy;
 import com.google.protobuf.Empty;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.HeartBeatRequest;
+import com.sudothought.grpc.HeartBeatResponse;
 import com.sudothought.grpc.ProxyServiceGrpc;
 import com.sudothought.grpc.RegisterAgentRequest;
 import com.sudothought.grpc.RegisterAgentResponse;
@@ -39,25 +40,19 @@ class ProxyServiceImpl
   }
 
   @Override
-  public void sendHeartBeat(final HeartBeatRequest request, final StreamObserver<Empty> responseObserver) {
-    if (this.proxy.isMetricsEnabled())
-      this.proxy.getMetrics().heartbeats.inc();
-    responseObserver.onNext(Empty.getDefaultInstance());
-    responseObserver.onCompleted();
-  }
-
-  @Override
   public void registerAgent(final RegisterAgentRequest request,
                             final StreamObserver<RegisterAgentResponse> responseObserver) {
     final String agentId = request.getAgentId();
     final AgentContext agentContext = this.proxy.getAgentContext(agentId);
     if (agentContext == null) {
-      logger.info("Missing AgentContext agent_id: {}", agentId);
+      logger.info("registerAgent() missing AgentContext agent_id: {}", agentId);
     }
     else {
       agentContext.setAgentName(request.getAgentName());
       agentContext.setHostname(request.getHostname());
+      agentContext.markActivity();
     }
+
     final RegisterAgentResponse response = RegisterAgentResponse.newBuilder()
                                                                 .setValid(agentContext != null)
                                                                 .setAgentId(agentId)
@@ -81,28 +76,46 @@ class ProxyServiceImpl
                                                                          ? PATH_ID_GENERATOR.getAndIncrement()
                                                                          : -1)
                                                               .build();
-    if (agentContext == null)
+    if (agentContext == null) {
       logger.error("Missing AgentContext for agent_id: {}", agentId);
-    else
+    }
+    else {
       this.proxy.addPath(path, agentContext);
+      agentContext.markActivity();
+    }
 
     responseObserver.onNext(response);
     responseObserver.onCompleted();
   }
 
   @Override
+  public void sendHeartBeat(final HeartBeatRequest request, final StreamObserver<HeartBeatResponse> responseObserver) {
+    if (this.proxy.isMetricsEnabled())
+      this.proxy.getMetrics().heartbeats.inc();
+
+    final String agentId = request.getAgentId();
+    final AgentContext agentContext = this.proxy.getAgentContext(agentId);
+    if (agentContext == null)
+      logger.info("sendHeartBeat() missing AgentContext agent_id: {}", agentId);
+    else
+      agentContext.markActivity();
+
+    responseObserver.onNext(HeartBeatResponse.newBuilder().setValid(agentContext != null).build());
+    responseObserver.onCompleted();
+  }
+
+  @Override
   public void readRequestsFromProxy(final AgentInfo agentInfo, final StreamObserver<ScrapeRequest> responseObserver) {
     final String agentId = agentInfo.getAgentId();
-    while (!this.proxy.isStopped()) {
-      // Lookup the agentContext each time in case agent has gone away
-      final AgentContext agentContext = this.proxy.getAgentContext(agentId);
-      if (agentContext == null)
-        break;
-
-      final ScrapeRequestWrapper scrapeRequest = agentContext.pollScrapeRequestQueue(1000);
-      if (scrapeRequest != null) {
-        scrapeRequest.annotateSpan("send-to-agent");
-        responseObserver.onNext(scrapeRequest.getScrapeRequest());
+    final AgentContext agentContext = this.proxy.getAgentContext(agentId);
+    if (agentContext != null) {
+      while (!this.proxy.isStopped() && agentContext.isValid()) {
+        final ScrapeRequestWrapper scrapeRequest = agentContext.pollScrapeRequestQueue(1000);
+        if (scrapeRequest != null) {
+          scrapeRequest.annotateSpan("send-to-agent");
+          responseObserver.onNext(scrapeRequest.getScrapeRequest());
+          agentContext.markActivity();
+        }
       }
     }
     responseObserver.onCompleted();
@@ -122,6 +135,7 @@ class ProxyServiceImpl
           scrapeRequest.setScrapeResponse(response);
           scrapeRequest.markComplete();
           scrapeRequest.annotateSpan("received-from-agent");
+          scrapeRequest.getAgentContext().markActivity();
         }
       }
 

@@ -16,6 +16,7 @@ import com.sudothought.common.Utils;
 import com.sudothought.common.ZipkinReporter;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.HeartBeatRequest;
+import com.sudothought.grpc.HeartBeatResponse;
 import com.sudothought.grpc.ProxyServiceGrpc;
 import com.sudothought.grpc.RegisterAgentRequest;
 import com.sudothought.grpc.RegisterAgentResponse;
@@ -72,19 +73,21 @@ public class Agent {
   private final AtomicLong               lastMsgSent      = new AtomicLong();
   private final ExecutorService          heartbeatService = Executors.newFixedThreadPool(1);
 
-  private final ConfigVals                                configVals;
-  private final String                                    agentName;
-  private final AgentMetrics                              metrics;
-  private final ExecutorService                           executorService;
-  private final BlockingQueue<ScrapeResponse>             scrapeResponseQueue;
-  private final RateLimiter                               reconnectLimiter;
-  private final MetricsServer                             metricsServer;
-  private final List<Map<String, String>>                 pathConfigs;
-  private final String                                    proxyHost;
-  private final ManagedChannel                            channel;
-  private final ZipkinReporter                            zipkinReporter;
-  private final ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
-  private final ProxyServiceGrpc.ProxyServiceStub         asyncStub;
+  private final ConfigVals                    configVals;
+  private final String                        agentName;
+  private final String                        hostname;
+  private final int                           port;
+  private final AgentMetrics                  metrics;
+  private final ExecutorService               executorService;
+  private final BlockingQueue<ScrapeResponse> scrapeResponseQueue;
+  private final RateLimiter                   reconnectLimiter;
+  private final MetricsServer                 metricsServer;
+  private final List<Map<String, String>>     pathConfigs;
+  private final ZipkinReporter                zipkinReporter;
+
+  private ManagedChannel                            channel;
+  private ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
+  private ProxyServiceGrpc.ProxyServiceStub         asyncStub;
 
   private Agent(final ConfigVals configVals,
                 final String agentName,
@@ -146,30 +149,17 @@ public class Agent {
       this.zipkinReporter = null;
     }
 
-    final String hostname;
-    final int port;
     if (proxyHost.contains(":")) {
       String[] vals = proxyHost.split(":");
-      hostname = vals[0];
-      port = Integer.valueOf(vals[1]);
+      this.hostname = vals[0];
+      this.port = Integer.valueOf(vals[1]);
     }
     else {
-      hostname = proxyHost;
-      port = 50051;
+      this.hostname = proxyHost;
+      this.port = 50051;
     }
-    this.proxyHost = String.format("%s:%s", hostname, port);
-    this.channel = ManagedChannelBuilder.forAddress(hostname, port).usePlaintext(true).build();
 
-    final List<ClientInterceptor> interceptors = Lists.newArrayList(new AgentClientInterceptor(this));
-    if (this.getConfigVals().grpc.metricsEnabled)
-      interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().grpc.allMetricsReported
-                                                          ? Configuration.allMetrics()
-                                                          : Configuration.cheapMetricsOnly()));
-    if (this.zipkinReporter != null && this.getConfigVals().grpc.zipkinReportingEnabled)
-      interceptors.add(BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave()));
-
-    this.blockingStub = newBlockingStub(intercept(this.channel, interceptors));
-    this.asyncStub = newStub(intercept(this.channel, interceptors));
+    this.resetGrpcStubs();
   }
 
   public static void main(final String[] argv)
@@ -197,6 +187,21 @@ public class Agent {
     agent.run();
   }
 
+  private void resetGrpcStubs() {
+    logger.info("Assigning gRPC stubs");
+    this.channel = ManagedChannelBuilder.forAddress(hostname, port).usePlaintext(true).build();
+
+    final List<ClientInterceptor> interceptors = Lists.newArrayList(new AgentClientInterceptor(this));
+    if (this.getConfigVals().grpc.metricsEnabled)
+      interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().grpc.allMetricsReported
+                                                          ? Configuration.allMetrics()
+                                                          : Configuration.cheapMetricsOnly()));
+    if (this.zipkinReporter != null && this.getConfigVals().grpc.zipkinReportingEnabled)
+      interceptors.add(BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave()));
+    this.blockingStub = newBlockingStub(intercept(this.channel, interceptors));
+    this.asyncStub = newStub(intercept(this.channel, interceptors));
+  }
+
   private void run()
       throws IOException {
     if (this.isMetricsEnabled())
@@ -216,6 +221,7 @@ public class Agent {
     while (!this.isStopped()) {
       final AtomicBoolean connected = new AtomicBoolean(false);
       final AtomicBoolean disconnected = new AtomicBoolean(false);
+      final AtomicBoolean proxyDisconnectedCleanly = new AtomicBoolean(false);
       // Reset values for each connection attempt
       this.setAgentId(null);
       this.pathContextMap.clear();
@@ -223,9 +229,9 @@ public class Agent {
       this.lastMsgSent.set(0);
 
       try {
-        logger.info("Connecting to proxy at {}...", this.proxyHost);
+        logger.info("Connecting to proxy at {}...", this.getProxyHost());
         this.connectAgent();
-        logger.info("Connected to proxy at {}", this.proxyHost);
+        logger.info("Connected to proxy at {}", this.getProxyHost());
         connected.set(true);
 
         if (this.isMetricsEnabled())
@@ -234,24 +240,28 @@ public class Agent {
         this.registerAgent();
         this.registerPaths();
 
-        this.heartbeatService.submit(() -> {
-          while (!disconnected.get()) {
-            final long timeSinceLastWrite = System.currentTimeMillis() - this.lastMsgSent.get();
-            if (timeSinceLastWrite > this.getConfigVals().internal.heartbeatInactivitySecs * 1000)
-              try {
-                this.sendHeartBeat();
-              }
-              catch (StatusRuntimeException e) {
-                disconnected.set(true);
-              }
-            try {
-              Thread.sleep(500);
+        if (this.getConfigVals().internal.heartbeatEnabled) {
+          final int maxInactivitySecs = this.getConfigVals().internal.heartbeatMaxInactivitySecs;
+          logger.info("Heartbeat started with a {} sec inactivity setting", maxInactivitySecs);
+          this.heartbeatService.submit(() -> {
+            while (!disconnected.get()) {
+              final long timeSinceLastWrite = System.currentTimeMillis() - this.lastMsgSent.get();
+              if (timeSinceLastWrite > maxInactivitySecs * 1000)
+                try {
+                  this.sendHeartBeat();
+                }
+                catch (StatusRuntimeException e) {
+                  logger.info("Hearbeat failed {}", e.getStatus());
+                  disconnected.set(true);
+                }
+
+              Utils.sleepForSecs(.5);
             }
-            catch (InterruptedException e) {
-              // Ignore
-            }
-          }
-        });
+          });
+        }
+        else {
+          logger.info("Agent heartbeat disabled");
+        }
 
         this.asyncStub.readRequestsFromProxy(AgentInfo.newBuilder().setAgentId(this.getAgentId()).build(),
                                              new StreamObserver<ScrapeRequest>() {
@@ -278,6 +288,7 @@ public class Agent {
 
                                                @Override
                                                public void onCompleted() {
+                                                 proxyDisconnectedCleanly.set(true);
                                                  disconnected.set(true);
                                                }
                                              });
@@ -285,7 +296,7 @@ public class Agent {
         final StreamObserver<ScrapeResponse> responseObserver = this.asyncStub.writeResponsesToProxy(
             new StreamObserver<Empty>() {
               @Override
-              public void onNext(Empty rmpty) {
+              public void onNext(Empty empty) {
                 // Ignore
               }
 
@@ -298,6 +309,7 @@ public class Agent {
 
               @Override
               public void onCompleted() {
+                proxyDisconnectedCleanly.set(true);
                 disconnected.set(true);
               }
             });
@@ -305,7 +317,7 @@ public class Agent {
         while (!disconnected.get()) {
           try {
             // Set a short timeout to check if client has disconnected
-            final ScrapeResponse response = this.scrapeResponseQueue.poll(1, TimeUnit.SECONDS);
+            final ScrapeResponse response = this.scrapeResponseQueue.poll(500, TimeUnit.MILLISECONDS);
             if (response != null) {
               responseObserver.onNext(response);
               this.markMsgSent();
@@ -316,18 +328,22 @@ public class Agent {
           }
         }
 
+        responseObserver.onCompleted();
       }
       catch (ConnectException e) {
         // Ignore
       }
       catch (StatusRuntimeException e) {
-        logger.info("Cannot connect to proxy at {} [{}]", this.proxyHost, e.getMessage());
+        logger.info("Cannot connect to proxy at {} [{}]", this.getProxyHost(), e.getMessage());
       }
 
       if (connected.get())
-        logger.info("Disconnected from proxy at {}", this.proxyHost);
+        logger.info("Disconnected from proxy at {}", this.getProxyHost());
       else if (this.isMetricsEnabled())
         this.getMetrics().connects.labels("failure").inc();
+
+      if (proxyDisconnectedCleanly.get())
+        this.resetGrpcStubs();
 
       final double secsWaiting = this.reconnectLimiter.acquire();
       logger.info("Waited {} secs to reconnect", secsWaiting);
@@ -449,17 +465,21 @@ public class Agent {
     this.lastMsgSent.set(System.currentTimeMillis());
   }
 
-  public void sendHeartBeat() {
+  private void sendHeartBeat() {
     final String agentId = this.getAgentId();
     if (agentId != null) {
-      final HeartBeatRequest request = HeartBeatRequest.newBuilder()
-                                                       .setAgentId(agentId)
-                                                       .build();
-      this.blockingStub.sendHeartBeat(request);
+      final HeartBeatRequest request = HeartBeatRequest.newBuilder().setAgentId(agentId).build();
+      final HeartBeatResponse response = this.blockingStub.sendHeartBeat(request);
       this.markMsgSent();
-      logger.info("HeartBeat Sent");
+      logger.info("HeartBeat sent");
+      if (!response.getValid()) {
+        logger.info("AgentId {} not found on proxy", agentId);
+        throw new StatusRuntimeException(Status.NOT_FOUND);
+      }
     }
   }
+
+  private String getProxyHost() { return String.format("%s:%s", hostname, port); }
 
   private String getMetricsAgentId() { return String.format("%s:%s", this.agentName, this.getAgentId()); }
 
@@ -488,7 +508,7 @@ public class Agent {
                       .add("agentName", this.agentName)
                       .add("metricsPort", this.isMetricsEnabled() ? this.metricsServer.getPort() : "Disabled")
                       .add("metricsPath", this.isMetricsEnabled() ? "/" + this.metricsServer.getPath() : "Disabled")
-                      .add("proxyHost", this.proxyHost)
+                      .add("proxyHost", this.getProxyHost())
                       .toString();
   }
 }

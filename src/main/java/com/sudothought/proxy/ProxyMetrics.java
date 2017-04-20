@@ -18,6 +18,11 @@ public class ProxyMetrics {
                                          .help("Proxy connect count")
                                          .register();
 
+  public final Counter agentEvictions = Counter.build()
+                                               .name("proxy_eviction_count")
+                                               .help("Proxy eviction count")
+                                               .register();
+
   public final Counter heartbeats = Counter.build()
                                            .name("proxy_heartbeat_count")
                                            .help("Proxy heartbeat count")

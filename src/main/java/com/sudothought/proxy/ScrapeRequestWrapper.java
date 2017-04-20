@@ -3,6 +3,7 @@ package com.sudothought.proxy;
 
 import brave.Span;
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import io.prometheus.client.Summary;
@@ -20,19 +21,21 @@ public class ScrapeRequestWrapper {
   private final CountDownLatch                  complete          = new CountDownLatch(1);
   private final AtomicReference<ScrapeResponse> scrapeResponseRef = new AtomicReference<>();
 
+  private final AgentContext  agentContext;
   private final Span          rootSpan;
   private final Summary.Timer requestTimer;
   private final ScrapeRequest scrapeRequest;
 
   public ScrapeRequestWrapper(final Proxy proxy,
+                              final AgentContext agentContext,
                               final Span rootSpan,
-                              final String agentId,
                               final String path,
                               final String accept) {
+    this.agentContext = Preconditions.checkNotNull(agentContext);
     this.rootSpan = rootSpan;
     this.requestTimer = proxy.isMetricsEnabled() ? proxy.getMetrics().scrapeRequestLatency.startTimer() : null;
     this.scrapeRequest = ScrapeRequest.newBuilder()
-                                      .setAgentId(agentId)
+                                      .setAgentId(agentContext.getAgentId())
                                       .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
                                       .setPath(path)
                                       .setAccept(accept)
@@ -43,6 +46,8 @@ public class ScrapeRequestWrapper {
     if (this.rootSpan != null)
       this.rootSpan.annotate(value);
   }
+
+  public AgentContext getAgentContext() { return this.agentContext; }
 
   public long getScrapeId() { return this.scrapeRequest.getScrapeId(); }
 

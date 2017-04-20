@@ -26,6 +26,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.sudothought.common.EnvVars.PROXY_CONFIG;
@@ -35,9 +37,10 @@ public class Proxy {
   private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
 
   private final AtomicBoolean                   stopped          = new AtomicBoolean(false);
-  private final Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap();   // Map agent_id to AgentContext
-  private final Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap();           // Map path to AgentContext
-  private final Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap();  // Map scrape_id to agent_id
+  private final Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap(); // Map agent_id to AgentContext
+  private final Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap(); // Map path to AgentContext
+  private final Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap(); // Map scrape_id to agent_id
+  private final ExecutorService                 cleanupService   = Executors.newFixedThreadPool(1);
 
   private final ConfigVals      configVals;
   private final MetricsServer   metricsServer;
@@ -129,6 +132,22 @@ public class Proxy {
     if (this.isMetricsEnabled())
       this.metricsServer.start();
 
+    this.cleanupService.submit(() -> {
+      final long maxInactivitySecs = this.getConfigVals().internal.maxAgentInactivitySecs;
+      while (!this.isStopped()) {
+        this.agentContextMap.forEach((key, agentContext) -> {
+          final long inactivtySecs = agentContext.inactivitySecs();
+          if (inactivtySecs > maxInactivitySecs) {
+            logger.info("Invalidating agent {} after {} secs of inactivty", agentContext, inactivtySecs);
+            removeAgentContext(agentContext.getAgentId());
+            this.getMetrics().agentEvictions.inc();
+          }
+        });
+
+        Utils.sleepForSecs(this.getConfigVals().internal.staleAgentCheckIntervalSecs);
+      }
+    });
+
     Runtime.getRuntime()
            .addShutdownHook(
                new Thread(() -> {
@@ -171,8 +190,10 @@ public class Proxy {
 
   public AgentContext removeAgentContext(String agentId) {
     final AgentContext agentContext = this.agentContextMap.remove(agentId);
-    if (agentContext != null)
+    if (agentContext != null) {
       logger.info("Removed {}", agentContext);
+      agentContext.markInvalid();
+    }
     else
       logger.error("Missing AgentContext for agent_id: {}", agentId);
     return agentContext;
