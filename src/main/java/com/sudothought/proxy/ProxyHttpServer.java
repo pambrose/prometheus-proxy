@@ -69,6 +69,12 @@ public class ProxyHttpServer {
                       }
 
                       final String path = vals[0];
+
+                      if (this.proxy.getConfigVals().internal.blitzEnabled && path.equals("mu-1234-cafe-5678-babe")) {
+                        res.status(200);
+                        return "42";
+                      }
+
                       final AgentContext agentContext = this.proxy.getAgentContextByPath(path);
 
                       if (agentContext == null) {

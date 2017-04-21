@@ -159,8 +159,6 @@ public class Agent {
       this.hostname = proxyHost;
       this.port = 50051;
     }
-
-    this.resetGrpcStubs();
   }
 
   public static void main(final String[] argv)
@@ -205,6 +203,9 @@ public class Agent {
 
   private void run()
       throws IOException {
+
+    this.resetGrpcStubs();
+
     if (this.isMetricsEnabled())
       this.metricsServer.start();
 
