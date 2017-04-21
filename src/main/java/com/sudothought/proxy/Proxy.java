@@ -1,7 +1,6 @@
 package com.sudothought.proxy;
 
 import com.github.kristofa.brave.Brave;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.sudothought.common.ConfigVals;
 import com.sudothought.common.MetricsServer;
@@ -9,24 +8,16 @@ import com.sudothought.common.SystemMetrics;
 import com.sudothought.common.Utils;
 import com.sudothought.common.ZipkinReporter;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
-import com.typesafe.config.ConfigParseOptions;
-import com.typesafe.config.ConfigResolveOptions;
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
-import io.grpc.ServerInterceptor;
-import io.grpc.ServerInterceptors;
-import io.grpc.ServerServiceDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.sudothought.common.EnvVars.PROXY_CONFIG;
 
 public class Proxy {
@@ -43,11 +34,15 @@ public class Proxy {
   private final MetricsServer   metricsServer;
   private final ProxyMetrics    metrics;
   private final ZipkinReporter  zipkinReporter;
-  private final Server          grpcServer;
+  private final ProxyGrpcServer grpcServer;
   private final ProxyHttpServer httpServer;
 
-  private Proxy(final ConfigVals configVals, final int grpcPort, final int httpPort, final boolean metricsEnabled,
-                final int metricsPort)
+  public Proxy(final ConfigVals configVals,
+               final int grpcPort,
+               final int httpPort,
+               final boolean metricsEnabled,
+               final int metricsPort,
+               final String inProcessServerName)
       throws IOException {
     this.configVals = configVals;
 
@@ -79,23 +74,8 @@ public class Proxy {
       this.zipkinReporter = null;
     }
 
-    final List<ServerInterceptor> interceptors = Lists.newArrayList(new ProxyInterceptor());
-    /*
-    if (this.getConfigVals().grpc.metricsEnabled)
-      interceptors.add(MonitoringServerInterceptor.create(this.getConfigVals().grpc.allMetricsReported
-                                                          ? Configuration.allMetrics()
-                                                          : Configuration.cheapMetricsOnly()));
-    if (this.isZipkinEnabled() && this.getConfigVals().grpc.zipkinReportingEnabled)
-      interceptors.add(BraveGrpcServerInterceptor.create(this.getZipkinReporter().getBrave()));
-    */
-
-    final ProxyServiceImpl proxyService = new ProxyServiceImpl(this);
-    final ServerServiceDefinition serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors);
-    this.grpcServer = ServerBuilder.forPort(grpcPort)
-                                   .addService(serviceDef)
-                                   .addTransportFilter(new ProxyTransportFilter(this))
-                                   .build();
-
+    this.grpcServer = isNullOrEmpty(inProcessServerName) ? ProxyGrpcServer.create(this, grpcPort)
+                                                         : ProxyGrpcServer.create(this, inProcessServerName);
     this.httpServer = new ProxyHttpServer(this, httpPort);
   }
 
@@ -106,35 +86,69 @@ public class Proxy {
     final ProxyArgs args = new ProxyArgs();
     args.parseArgs(Proxy.class.getName(), argv);
 
-    final Config config = Utils.readConfig(args.config,
-                                           PROXY_CONFIG,
-                                           ConfigParseOptions.defaults().setAllowMissing(false),
-                                           ConfigFactory.load().resolve(),
-                                           false)
-                               .resolve(ConfigResolveOptions.defaults());
-
+    final Config config = Utils.readConfig(args.config, PROXY_CONFIG, false);
     final ConfigVals configVals = new ConfigVals(config);
     args.assignArgs(configVals);
 
-    final Proxy proxy = new Proxy(configVals, args.grpc_port, args.http_port, !args.disable_metrics, args.metrics_port);
+    final Proxy proxy = new Proxy(configVals,
+                                  args.grpc_port,
+                                  args.http_port,
+                                  !args.disable_metrics,
+                                  args.metrics_port,
+                                  null);
     proxy.start();
     proxy.waitUntilShutdown();
   }
 
-  private void start()
+  public void start()
       throws IOException {
     this.grpcServer.start();
-    logger.info("Started gRPC server listening on {}", this.grpcServer.getPort());
 
     this.httpServer.start();
 
     if (this.isMetricsEnabled())
       this.metricsServer.start();
 
+    this.startStaleAgentCheck();
+
+    Runtime.getRuntime()
+           .addShutdownHook(
+               new Thread(() -> {
+                 System.err.println("*** Shutting down Proxy ***");
+                 Proxy.this.stop();
+                 System.err.println("*** Proxy shut down ***");
+               }));
+  }
+
+  public void stop() {
+    this.stopped.set(true);
+
+    this.httpServer.stop();
+
+    if (this.isMetricsEnabled())
+      this.metricsServer.stop();
+
+    if (this.isZipkinEnabled())
+      this.getZipkinReporter().close();
+
+    this.grpcServer.shutdown();
+  }
+
+  public void waitUntilShutdown() {
+    try {
+      this.grpcServer.awaitTermination();
+    }
+    catch (InterruptedException e) {
+      // Ignore
+    }
+  }
+
+  private void startStaleAgentCheck() {
     if (this.getConfigVals().internal.staleAgentCheckEnabled) {
       final long maxInactivitySecs = this.getConfigVals().internal.maxAgentInactivitySecs;
       final long threadPauseSecs = this.getConfigVals().internal.staleAgentCheckPauseSecs;
-      logger.info("Agent eviction thread started ({} max secs {} pause)", maxInactivitySecs, threadPauseSecs);
+      logger.info("Agent eviction thread started ({} secs max inactivity secs with {} secs pause)",
+                  maxInactivitySecs, threadPauseSecs);
       this.cleanupService.submit(() -> {
         while (!this.isStopped()) {
           this.agentContextMap
@@ -153,37 +167,6 @@ public class Proxy {
     }
     else {
       logger.info("Agent eviction thread not started");
-    }
-
-    Runtime.getRuntime()
-           .addShutdownHook(
-               new Thread(() -> {
-                 System.err.println("*** Shutting down Proxy ***");
-                 Proxy.this.stop();
-                 System.err.println("*** Proxy shut down ***");
-               }));
-  }
-
-  private void stop() {
-    this.stopped.set(true);
-
-    this.httpServer.stop();
-
-    if (this.isMetricsEnabled())
-      this.metricsServer.stop();
-
-    if (this.isZipkinEnabled())
-      this.getZipkinReporter().close();
-
-    this.grpcServer.shutdown();
-  }
-
-  private void waitUntilShutdown() {
-    try {
-      this.grpcServer.awaitTermination();
-    }
-    catch (InterruptedException e) {
-      // Ignore
     }
   }
 

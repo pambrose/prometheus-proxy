@@ -7,6 +7,7 @@ import com.google.common.io.CharStreams;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigParseOptions;
+import com.typesafe.config.ConfigResolveOptions;
 import com.typesafe.config.ConfigSyntax;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +17,6 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.List;
@@ -70,12 +70,18 @@ public interface Utils {
     }
   }
 
+  static Config readConfig(final String cliConfig, final String envConfig, final boolean exitOnMissingConfig) {
+    return readConfig(cliConfig,
+                      envConfig,
+                      ConfigParseOptions.defaults().setAllowMissing(false),
+                      ConfigFactory.load().resolve(), exitOnMissingConfig).resolve(ConfigResolveOptions.defaults());
+  }
+
   static Config readConfig(final String cliConfig,
                            final String envConfig,
                            final ConfigParseOptions configParseOptions,
                            final Config fallback,
-                           final boolean exitOnMissingConfig)
-      throws MalformedURLException {
+                           final boolean exitOnMissingConfig) {
     // Precedence of confg settings: CLI, ENV_VAR, config info
     final String configName = cliConfig != null ? cliConfig : System.getenv(envConfig);
 

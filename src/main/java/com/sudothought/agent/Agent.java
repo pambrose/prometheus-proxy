@@ -1,7 +1,6 @@
 package com.sudothought.agent;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -24,14 +23,12 @@ import com.sudothought.grpc.RegisterPathResponse;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
-import com.typesafe.config.ConfigParseOptions;
-import com.typesafe.config.ConfigResolveOptions;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import io.grpc.inprocess.InProcessChannelBuilder;
+import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
 import io.prometheus.client.Summary;
 import okhttp3.Response;
@@ -44,14 +41,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.sudothought.common.EnvVars.AGENT_CONFIG;
 import static com.sudothought.common.InstrumentedThreadFactory.newInstrumentedThreadFactory;
@@ -70,8 +70,11 @@ public class Agent {
   private final AtomicReference<String>  agentIdRef       = new AtomicReference<>();
   private final AtomicLong               lastMsgSent      = new AtomicLong();
   private final ExecutorService          heartbeatService = Executors.newFixedThreadPool(1);
+  private final ExecutorService          runService       = Executors.newFixedThreadPool(1);
+  private final CountDownLatch           stoppedLatch     = new CountDownLatch(1);
 
   private final ConfigVals                    configVals;
+  private final String                        inProcessServerName;
   private final String                        agentName;
   private final String                        hostname;
   private final int                           port;
@@ -87,13 +90,15 @@ public class Agent {
   private ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
   private ProxyServiceGrpc.ProxyServiceStub         asyncStub;
 
-  private Agent(final ConfigVals configVals,
-                final String agentName,
-                final String proxyHost,
-                final boolean metricsEnabled,
-                final int metricsPort) {
+  public Agent(final ConfigVals configVals,
+               final String inProcessServerName,
+               final String agentName,
+               final String proxyHost,
+               final boolean metricsEnabled,
+               final int metricsPort) {
     this.configVals = configVals;
-    this.agentName = Strings.isNullOrEmpty(agentName)
+    this.inProcessServerName = inProcessServerName;
+    this.agentName = isNullOrEmpty(agentName)
                      ? String.format("Unnamed-%s", Utils.getHostName()) : agentName;
     logger.info("Creating Agent {}", this.agentName);
 
@@ -165,27 +170,28 @@ public class Agent {
     final AgentArgs args = new AgentArgs();
     args.parseArgs(Agent.class.getName(), argv);
 
-    final Config config = Utils.readConfig(args.config,
-                                           AGENT_CONFIG,
-                                           ConfigParseOptions.defaults().setAllowMissing(false),
-                                           ConfigFactory.load(),
-                                           true)
-                               .resolve(ConfigResolveOptions.defaults());
-
+    final Config config = Utils.readConfig(args.config, AGENT_CONFIG, true);
     final ConfigVals configVals = new ConfigVals(config);
     args.assignArgs(configVals);
 
     final Agent agent = new Agent(configVals,
+                                  null,
                                   args.agent_name,
                                   args.proxy_host,
                                   !args.disable_metrics,
                                   args.metrics_port);
-    agent.run();
+    agent.start();
+    agent.waitUntilShutdown();
   }
 
   private void resetGrpcStubs() {
     logger.info("Assigning gRPC stubs");
-    this.channel = ManagedChannelBuilder.forAddress(hostname, port).usePlaintext(true).build();
+    this.channel = isNullOrEmpty(this.inProcessServerName) ? NettyChannelBuilder.forAddress(this.hostname, this.port)
+                                                                                .usePlaintext(true)
+                                                                                .build()
+                                                           : InProcessChannelBuilder.forName(this.inProcessServerName)
+                                                                                    .usePlaintext(true)
+                                                                                    .build();
 
     final List<ClientInterceptor> interceptors = Lists.newArrayList(new AgentClientInterceptor(this));
     /*
@@ -200,7 +206,7 @@ public class Agent {
     this.asyncStub = newStub(intercept(this.channel, interceptors));
   }
 
-  private void run()
+  public void start()
       throws IOException {
 
     this.resetGrpcStubs();
@@ -219,137 +225,123 @@ public class Agent {
                  System.err.println("*** Agent shut down ***");
                }));
 
-    while (!this.isStopped()) {
-      final AtomicBoolean connected = new AtomicBoolean(false);
-      final AtomicBoolean disconnected = new AtomicBoolean(false);
+    this.runService.submit(
+        () -> {
+          try {
+            while (!this.isStopped()) {
+              final AtomicBoolean connected = new AtomicBoolean(false);
+              final AtomicBoolean disconnected = new AtomicBoolean(false);
 
-      // Reset gRPC stubs if previous iteration had a successful connection
-      if (this.getAgentId() != null)
-        this.resetGrpcStubs();
+              // Reset gRPC stubs if previous iteration had a successful connection
+              if (this.getAgentId() != null)
+                this.resetGrpcStubs();
 
-      // Reset values for each connection attempt
-      this.setAgentId(null);
-      this.pathContextMap.clear();
-      this.scrapeResponseQueue.clear();
-      this.lastMsgSent.set(0);
+              // Reset values for each connection attempt
+              this.setAgentId(null);
+              this.pathContextMap.clear();
+              this.scrapeResponseQueue.clear();
+              this.lastMsgSent.set(0);
 
-      try {
-        logger.info("Connecting to proxy at {}...", this.getProxyHost());
-        this.connectAgent();
-        logger.info("Connected to proxy at {}", this.getProxyHost());
-        connected.set(true);
+              try {
+                logger.info("Connecting to proxy at {}...", this.getProxyHost());
+                this.connectAgent();
+                logger.info("Connected to proxy at {}", this.getProxyHost());
+                connected.set(true);
 
-        if (this.isMetricsEnabled())
-          this.getMetrics().connects.labels("success").inc();
+                if (this.isMetricsEnabled())
+                  this.getMetrics().connects.labels("success").inc();
 
-        this.registerAgent();
-        this.registerPaths();
+                this.registerAgent();
+                this.registerPaths();
 
-        if (this.getConfigVals().internal.heartbeatEnabled) {
-          final long threadPauseSecs = this.getConfigVals().internal.heartbeatCheckPauseMillis;
-          final int maxInactivitySecs = this.getConfigVals().internal.heartbeatMaxInactivitySecs;
-          logger.info("Heartbeat scheduled to run after {} secs of inactivity ", maxInactivitySecs);
-          this.heartbeatService.submit(() -> {
-            while (!disconnected.get()) {
-              final long timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSent.get();
-              if (timeSinceLastWriteMillis > toMillis(maxInactivitySecs))
-                try {
-                  this.sendHeartBeat();
-                }
-                catch (StatusRuntimeException e) {
-                  logger.info("Hearbeat failed {}", e.getStatus());
-                  disconnected.set(true);
-                }
+                this.startHeartBeat(disconnected);
 
-              Utils.sleepForMillis(threadPauseSecs);
-            }
-          });
-        }
-        else {
-          logger.info("Heartbeat disabled");
-        }
-
-        this.asyncStub.readRequestsFromProxy(AgentInfo.newBuilder().setAgentId(this.getAgentId()).build(),
-                                             new StreamObserver<ScrapeRequest>() {
-                                               @Override
-                                               public void onNext(final ScrapeRequest request) {
-                                                 executorService.submit(
-                                                     () -> {
-                                                       final ScrapeResponse response = fetchMetrics(request);
-                                                       try {
-                                                         scrapeResponseQueue.put(response);
+                this.asyncStub.readRequestsFromProxy(AgentInfo.newBuilder().setAgentId(this.getAgentId()).build(),
+                                                     new StreamObserver<ScrapeRequest>() {
+                                                       @Override
+                                                       public void onNext(final ScrapeRequest request) {
+                                                         executorService.submit(
+                                                             () -> {
+                                                               final ScrapeResponse response = fetchMetrics(request);
+                                                               try {
+                                                                 scrapeResponseQueue.put(response);
+                                                               }
+                                                               catch (InterruptedException e) {
+                                                                 // Ignore
+                                                               }
+                                                             });
                                                        }
-                                                       catch (InterruptedException e) {
-                                                         // Ignore
+
+                                                       @Override
+                                                       public void onError(Throwable t) {
+                                                         final Status status = Status.fromThrowable(t);
+                                                         logger.info("Error in readRequestsFromProxy(): {}", status);
+                                                         disconnected.set(true);
+                                                       }
+
+                                                       @Override
+                                                       public void onCompleted() {
+                                                         disconnected.set(true);
                                                        }
                                                      });
-                                               }
 
-                                               @Override
-                                               public void onError(Throwable t) {
-                                                 final Status status = Status.fromThrowable(t);
-                                                 logger.info("Error in readRequestsFromProxy(): {}", status);
-                                                 disconnected.set(true);
-                                               }
+                final StreamObserver<ScrapeResponse> responseObserver = this.asyncStub.writeResponsesToProxy(
+                    new StreamObserver<Empty>() {
+                      @Override
+                      public void onNext(Empty empty) {
+                        // Ignore
+                      }
 
-                                               @Override
-                                               public void onCompleted() {
-                                                 disconnected.set(true);
-                                               }
-                                             });
+                      @Override
+                      public void onError(Throwable t) {
+                        final Status s = Status.fromThrowable(t);
+                        logger.info("Error in writeResponsesToProxy(): {} {}", s.getCode(), s.getDescription());
+                        disconnected.set(true);
+                      }
 
-        final StreamObserver<ScrapeResponse> responseObserver = this.asyncStub.writeResponsesToProxy(
-            new StreamObserver<Empty>() {
-              @Override
-              public void onNext(Empty empty) {
+                      @Override
+                      public void onCompleted() {
+                        disconnected.set(true);
+                      }
+                    });
+
+                final long checkMillis = this.getConfigVals().internal.scrapeResponseQueueCheckMillis;
+                while (!disconnected.get()) {
+                  try {
+                    // Set a short timeout to check if client has disconnected
+                    final ScrapeResponse response = this.scrapeResponseQueue.poll(checkMillis, TimeUnit.MILLISECONDS);
+                    if (response != null) {
+                      responseObserver.onNext(response);
+                      this.markMsgSent();
+                    }
+                  }
+                  catch (InterruptedException e) {
+                    // Ignore
+                  }
+                }
+
+                responseObserver.onCompleted();
+              }
+              catch (ConnectException e) {
                 // Ignore
               }
-
-              @Override
-              public void onError(Throwable t) {
-                final Status status = Status.fromThrowable(t);
-                logger.info("Error in writeResponsesToProxy(): {} {}", status.getCode(), status.getDescription());
-                disconnected.set(true);
+              catch (StatusRuntimeException e) {
+                logger.info("Cannot connect to proxy at {} [{}]", this.getProxyHost(), e.getMessage());
               }
 
-              @Override
-              public void onCompleted() {
-                disconnected.set(true);
-              }
-            });
+              if (connected.get())
+                logger.info("Disconnected from proxy at {}", this.getProxyHost());
+              else if (this.isMetricsEnabled())
+                this.getMetrics().connects.labels("failure").inc();
 
-        final long checkMillis = this.getConfigVals().internal.scrapeResponseQueueCheckMillis;
-        while (!disconnected.get()) {
-          try {
-            // Set a short timeout to check if client has disconnected
-            final ScrapeResponse response = this.scrapeResponseQueue.poll(checkMillis, TimeUnit.MILLISECONDS);
-            if (response != null) {
-              responseObserver.onNext(response);
-              this.markMsgSent();
+              final double secsWaiting = this.reconnectLimiter.acquire();
+              logger.info("Waited {} secs to reconnect", secsWaiting);
             }
           }
-          catch (InterruptedException e) {
-            // Ignore
+          finally {
+            stoppedLatch.countDown();
           }
-        }
-
-        responseObserver.onCompleted();
-      }
-      catch (ConnectException e) {
-        // Ignore
-      }
-      catch (StatusRuntimeException e) {
-        logger.info("Cannot connect to proxy at {} [{}]", this.getProxyHost(), e.getMessage());
-      }
-
-      if (connected.get())
-        logger.info("Disconnected from proxy at {}", this.getProxyHost());
-      else if (this.isMetricsEnabled())
-        this.getMetrics().connects.labels("failure").inc();
-
-      final double secsWaiting = this.reconnectLimiter.acquire();
-      logger.info("Waited {} secs to reconnect", secsWaiting);
-    }
+        });
   }
 
   public void stop() {
@@ -366,6 +358,44 @@ public class Agent {
     }
     catch (InterruptedException e) {
       // Ignore
+    }
+  }
+
+  public void waitUntilShutdown() {
+    try {
+      this.stoppedLatch.await();
+    }
+    catch (InterruptedException e) {
+      // Ignore
+    }
+  }
+
+  private void startHeartBeat(final AtomicBoolean disconnected) {
+    if (this.getConfigVals().internal.heartbeatEnabled) {
+      final long threadPauseMillis = this.getConfigVals().internal.heartbeatCheckPauseMillis;
+      final int maxInactivitySecs = this.getConfigVals().internal.heartbeatMaxInactivitySecs;
+      logger.info("Heartbeat scheduled to start after {} secs of inactivity", maxInactivitySecs);
+      final Future<?> future = this.heartbeatService.submit(
+          () -> {
+            while (!disconnected.get()) {
+              final long timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSent.get();
+              if (timeSinceLastWriteMillis > toMillis(maxInactivitySecs))
+                try {
+                  this.sendHeartBeat();
+                }
+                catch (StatusRuntimeException e) {
+                  logger.info("Hearbeat failed {}", e.getStatus());
+                  disconnected.set(true);
+                }
+
+              Utils.sleepForMillis(threadPauseMillis);
+            }
+            logger.info("Heartbeat completed");
+          });
+
+    }
+    else {
+      logger.info("Heartbeat disabled");
     }
   }
 
