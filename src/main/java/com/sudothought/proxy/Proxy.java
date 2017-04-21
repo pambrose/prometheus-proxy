@@ -1,7 +1,6 @@
 package com.sudothought.proxy;
 
 import com.github.kristofa.brave.Brave;
-import com.github.kristofa.brave.grpc.BraveGrpcServerInterceptor;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.sudothought.common.ConfigVals;
@@ -18,8 +17,6 @@ import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
-import me.dinowernli.grpc.prometheus.Configuration;
-import me.dinowernli.grpc.prometheus.MonitoringServerInterceptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,12 +80,14 @@ public class Proxy {
     }
 
     final List<ServerInterceptor> interceptors = Lists.newArrayList(new ProxyInterceptor());
+    /*
     if (this.getConfigVals().grpc.metricsEnabled)
       interceptors.add(MonitoringServerInterceptor.create(this.getConfigVals().grpc.allMetricsReported
                                                           ? Configuration.allMetrics()
                                                           : Configuration.cheapMetricsOnly()));
     if (this.isZipkinEnabled() && this.getConfigVals().grpc.zipkinReportingEnabled)
       interceptors.add(BraveGrpcServerInterceptor.create(this.getZipkinReporter().getBrave()));
+    */
 
     final ProxyServiceImpl proxyService = new ProxyServiceImpl(this);
     final ServerServiceDefinition serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors);

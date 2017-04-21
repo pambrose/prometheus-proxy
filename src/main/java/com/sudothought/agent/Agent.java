@@ -1,6 +1,5 @@
 package com.sudothought.agent;
 
-import com.github.kristofa.brave.grpc.BraveGrpcClientInterceptor;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
@@ -35,8 +34,6 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import io.prometheus.client.Summary;
-import me.dinowernli.grpc.prometheus.Configuration;
-import me.dinowernli.grpc.prometheus.MonitoringClientInterceptor;
 import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -191,12 +188,14 @@ public class Agent {
     this.channel = ManagedChannelBuilder.forAddress(hostname, port).usePlaintext(true).build();
 
     final List<ClientInterceptor> interceptors = Lists.newArrayList(new AgentClientInterceptor(this));
+    /*
     if (this.getConfigVals().grpc.metricsEnabled)
       interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().grpc.allMetricsReported
                                                           ? Configuration.allMetrics()
                                                           : Configuration.cheapMetricsOnly()));
     if (this.zipkinReporter != null && this.getConfigVals().grpc.zipkinReportingEnabled)
       interceptors.add(BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave()));
+    */
     this.blockingStub = newBlockingStub(intercept(this.channel, interceptors));
     this.asyncStub = newStub(intercept(this.channel, interceptors));
   }
@@ -249,7 +248,7 @@ public class Agent {
         if (this.getConfigVals().internal.heartbeatEnabled) {
           final long threadPauseSecs = this.getConfigVals().internal.heartbeatCheckPauseMillis;
           final int maxInactivitySecs = this.getConfigVals().internal.heartbeatMaxInactivitySecs;
-          logger.info("Heartbeat started with a {} sec inactivity setting", maxInactivitySecs);
+          logger.info("Heartbeat scheduled to run after {} secs of inactivity ", maxInactivitySecs);
           this.heartbeatService.submit(() -> {
             while (!disconnected.get()) {
               final long timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSent.get();
@@ -267,7 +266,7 @@ public class Agent {
           });
         }
         else {
-          logger.info("Agent heartbeat disabled");
+          logger.info("Heartbeat disabled");
         }
 
         this.asyncStub.readRequestsFromProxy(AgentInfo.newBuilder().setAgentId(this.getAgentId()).build(),
@@ -392,7 +391,7 @@ public class Agent {
                                        ? this.getMetrics().scrapeRequestLatency.labels(this.agentName).startTimer()
                                        : null;
     try {
-      logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
+      //logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
       final Response response = pathContext.fetchUrl(scrapeRequest);
       status_code = response.code();
       if (response.isSuccessful()) {

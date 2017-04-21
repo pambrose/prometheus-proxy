@@ -21,9 +21,10 @@ public class BaseArgs {
 
   public void parseArgs(final String programName, final String[] argv) {
     try {
-      final JCommander jcom = new JCommander(this, argv);
+      final JCommander jcom = new JCommander(this);
       jcom.setProgramName(programName);
       jcom.setCaseSensitiveOptions(false);
+      jcom.parse(argv);
 
       if (this.help) {
         jcom.usage();

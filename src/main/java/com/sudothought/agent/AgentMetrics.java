@@ -1,7 +1,6 @@
 package com.sudothought.agent;
 
 import com.sudothought.common.SamplerGauge;
-import io.prometheus.client.Collector;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
@@ -26,8 +25,6 @@ public class AgentMetrics {
                                                      .labelNames("agent_name")
                                                      .register();
 
-  private final Collector agentScrapeQueue;
-
   public AgentMetrics(final Agent agent) {
     Gauge.build()
          .name("agent_start_time_seconds")
@@ -35,8 +32,8 @@ public class AgentMetrics {
          .register()
          .setToCurrentTime();
 
-    this.agentScrapeQueue = new SamplerGauge("agent_scrape_queue_size",
-                                             "Agent scrape response queue size",
-                                             agent::getScrapeResponseQueueSize).register();
+    new SamplerGauge("agent_scrape_queue_size",
+                     "Agent scrape response queue size",
+                     agent::getScrapeResponseQueueSize).register();
   }
 }
