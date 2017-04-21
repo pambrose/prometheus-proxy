@@ -3,6 +3,7 @@ package com.sudothought.proxy;
 import brave.Span;
 import brave.Tracer;
 import com.github.kristofa.brave.sparkjava.BraveTracing;
+import com.sudothought.common.ConfigVals;
 import com.sudothought.grpc.ScrapeResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,10 +20,11 @@ public class ProxyHttpServer {
 
   private static final Logger logger = LoggerFactory.getLogger(ProxyHttpServer.class);
 
-  private final Proxy   proxy;
-  private final int     port;
-  private final Service http;
-  private       Tracer  tracer;
+  private final Proxy            proxy;
+  private final int              port;
+  private final Service          http;
+  private final Tracer           tracer;
+  private final ConfigVals.Proxy configVals;
 
   public ProxyHttpServer(final Proxy proxy, final int port) {
     this.proxy = proxy;
@@ -32,6 +34,7 @@ public class ProxyHttpServer {
     this.tracer = this.proxy.isZipkinEnabled()
                   ? this.proxy.getZipkinReporter().newTracer("proxy-http")
                   : null;
+    this.configVals = this.proxy.getConfigVals();
   }
 
   public void start() {
@@ -70,8 +73,9 @@ public class ProxyHttpServer {
 
                       final String path = vals[0];
 
-                      if (this.proxy.getConfigVals().internal.blitzEnabled && path.equals("mu-1234-cafe-5678-babe")) {
+                      if (this.configVals.internal.blitzEnabled && path.equals(this.configVals.internal.blitzPath)) {
                         res.status(200);
+                        res.type("text/plain");
                         return "42";
                       }
 
@@ -96,8 +100,8 @@ public class ProxyHttpServer {
                         this.proxy.addToScrapeRequestMap(scrapeRequest);
                         agentContext.addToScrapeRequestQueue(scrapeRequest);
 
-                        final int timeoutSecs = this.proxy.getConfigVals().internal.scrapeRequestTimeoutSecs;
-                        final int checkMillis = this.proxy.getConfigVals().internal.scrapeRequestCheckMillis;
+                        final int timeoutSecs = this.configVals.internal.scrapeRequestTimeoutSecs;
+                        final int checkMillis = this.configVals.internal.scrapeRequestCheckMillis;
                         while (true) {
                           // Returns false if timed out
                           if (scrapeRequest.waitUntilCompleteMillis(checkMillis))
