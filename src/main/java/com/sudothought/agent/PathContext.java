@@ -1,5 +1,6 @@
 package com.sudothought.agent;
 
+import com.google.common.base.Strings;
 import com.sudothought.grpc.ScrapeRequest;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -44,8 +45,10 @@ public class PathContext {
   public Response fetchUrl(final ScrapeRequest scrapeRequest)
       throws IOException {
     try {
-      final Request request = this.request.header(ACCEPT, scrapeRequest.getAccept()).build();
-      return this.client.newCall(request).execute();
+      final Request.Builder request = !Strings.isNullOrEmpty(scrapeRequest.getAccept())
+                                      ? this.request.header(ACCEPT, scrapeRequest.getAccept())
+                                      : this.request;
+      return this.client.newCall(request.build()).execute();
     }
     catch (IOException e) {
       logger.info("Failed HTTP request: {} [{}: {}]", this.getUrl(), e.getClass().getSimpleName(), e.getMessage());

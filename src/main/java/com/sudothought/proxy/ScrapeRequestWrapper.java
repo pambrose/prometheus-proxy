@@ -4,6 +4,7 @@ package com.sudothought.proxy;
 import brave.Span;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import io.prometheus.client.Summary;
@@ -34,12 +35,13 @@ public class ScrapeRequestWrapper {
     this.agentContext = Preconditions.checkNotNull(agentContext);
     this.rootSpan = rootSpan;
     this.requestTimer = proxy.isMetricsEnabled() ? proxy.getMetrics().scrapeRequestLatency.startTimer() : null;
-    this.scrapeRequest = ScrapeRequest.newBuilder()
-                                      .setAgentId(agentContext.getAgentId())
-                                      .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
-                                      .setPath(path)
-                                      .setAccept(accept != null ? accept : "")
-                                      .build();
+    ScrapeRequest.Builder builder = ScrapeRequest.newBuilder()
+                                                 .setAgentId(agentContext.getAgentId())
+                                                 .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
+                                                 .setPath(path);
+    if (!Strings.isNullOrEmpty(accept))
+      builder = builder.setAccept(accept);
+    this.scrapeRequest = builder.build();
   }
 
   public void annotateSpan(final String value) {
