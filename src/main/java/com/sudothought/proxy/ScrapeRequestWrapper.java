@@ -38,7 +38,7 @@ public class ScrapeRequestWrapper {
                                       .setAgentId(agentContext.getAgentId())
                                       .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
                                       .setPath(path)
-                                      .setAccept(accept)
+                                      .setAccept(accept != null ? accept : "")
                                       .build();
   }
 
