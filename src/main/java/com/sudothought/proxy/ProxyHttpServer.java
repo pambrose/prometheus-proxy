@@ -90,14 +90,17 @@ public class ProxyHttpServer {
                         this.proxy.addToScrapeRequestMap(scrapeRequest);
                         agentContext.addToScrapeRequestQueue(scrapeRequest);
 
-                        final int timeoutSecs = this.proxy.getConfigVals().internal.requestTimeoutSecs;
+                        final int timeoutSecs = this.proxy.getConfigVals().internal.scrapeRequestTimeoutSecs;
+                        final int checkMillis = this.proxy.getConfigVals().internal.scrapeRequestCheckMillis;
                         while (true) {
                           // Returns false if timed out
-                          if (scrapeRequest.waitUntilComplete(1000))
+                          if (scrapeRequest.waitUntilCompleteMillis(checkMillis))
                             break;
 
                           // Check if agent is disconnected or agent is hung
-                          if (scrapeRequest.ageInSecs() >= timeoutSecs || this.proxy.isStopped()) {
+                          if (scrapeRequest.ageInSecs() >= timeoutSecs
+                              || !scrapeRequest.getAgentContext().isValid()
+                              || this.proxy.isStopped()) {
                             res.status(503);
                             if (this.proxy.isMetricsEnabled())
                               this.proxy.getMetrics().scrapeRequests.labels("time_out").inc();
@@ -109,7 +112,7 @@ public class ProxyHttpServer {
                         final ScrapeRequestWrapper prev = this.proxy.removeFromScrapeRequestMap(scrapeRequest.getScrapeId());
                         //System.err.println("After remove size = " + this.proxy.getScrapeMapSize());
                         if (prev == null)
-                          logger.error("Scrape request missing in map {}", scrapeRequest.getScrapeId());
+                          logger.error("Scrape request {} missing in map", scrapeRequest.getScrapeId());
                       }
 
                       logger.debug("Results returned from {} for {}", agentContext, scrapeRequest);

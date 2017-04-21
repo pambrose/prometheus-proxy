@@ -65,7 +65,7 @@ public class ScrapeRequestWrapper {
     this.complete.countDown();
   }
 
-  public boolean waitUntilComplete(final long waitMillis) {
+  public boolean waitUntilCompleteMillis(final long waitMillis) {
     try {
       return this.complete.await(waitMillis, TimeUnit.MILLISECONDS);
     }

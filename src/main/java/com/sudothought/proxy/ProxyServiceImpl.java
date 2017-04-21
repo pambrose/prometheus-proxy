@@ -110,7 +110,7 @@ class ProxyServiceImpl
     final AgentContext agentContext = this.proxy.getAgentContext(agentId);
     if (agentContext != null) {
       while (!this.proxy.isStopped() && agentContext.isValid()) {
-        final ScrapeRequestWrapper scrapeRequest = agentContext.pollScrapeRequestQueue(1000);
+        final ScrapeRequestWrapper scrapeRequest = agentContext.pollScrapeRequestQueue();
         if (scrapeRequest != null) {
           scrapeRequest.annotateSpan("send-to-agent");
           responseObserver.onNext(scrapeRequest.getScrapeRequest());

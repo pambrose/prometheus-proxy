@@ -21,11 +21,14 @@ public class AgentContext {
 
   private final String                              remoteAddr;
   private final BlockingQueue<ScrapeRequestWrapper> scrapeRequestQueue;
+  private final long                                waitMillis;
 
   public AgentContext(final Proxy proxy, final String remoteAddr) {
     this.remoteAddr = remoteAddr;
-    final int queueSize = proxy.getConfigVals().internal.scrapeQueueSize;
+    final int queueSize = proxy.getConfigVals().internal.scrapeRequestQueueSize;
     this.scrapeRequestQueue = new ArrayBlockingQueue<>(queueSize);
+    this.waitMillis = proxy.getConfigVals().internal.scrapeRequestQueueCheckMillis;
+
     this.markActivity();
   }
 
@@ -47,7 +50,7 @@ public class AgentContext {
 
   public int scrapeRequestQueueSize() { return this.scrapeRequestQueue.size(); }
 
-  public ScrapeRequestWrapper pollScrapeRequestQueue(final long waitMillis) {
+  public ScrapeRequestWrapper pollScrapeRequestQueue() {
     try {
       return this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS);
     }

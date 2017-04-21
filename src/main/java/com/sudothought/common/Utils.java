@@ -153,12 +153,29 @@ public interface Utils {
     }
   }
 
-  static void sleepForSecs(final double time) {
+  static void sleepForMillis(final long millis) {
     try {
-      Thread.sleep((long) time * 1000);
+      Thread.sleep(millis);
     }
     catch (InterruptedException e) {
       // Ignore
     }
+  }
+
+  static void sleepForSecs(final long secs) {
+    try {
+      Thread.sleep(toMillis(secs));
+    }
+    catch (InterruptedException e) {
+      // Ignore
+    }
+  }
+
+  static long toMillis(final long secs) {
+    return secs * 1000;
+  }
+
+  static long toSecs(final long millis) {
+    return millis / 1000;
   }
 }

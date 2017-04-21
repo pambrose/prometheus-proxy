@@ -146,9 +146,6 @@ public class Proxy {
                   removeAgentContext(agentId);
                   this.getMetrics().agentEvictions.inc();
                 }
-                //else {
-                // logger.info("Agent kept ({} secs) {}", inactivitySecs, agentContext);
-                //}
               });
 
           Utils.sleepForSecs(threadPauseSecs);
@@ -207,6 +204,7 @@ public class Proxy {
     }
     else
       logger.error("Missing AgentContext for agent_id: {}", agentId);
+
     return agentContext;
   }
 

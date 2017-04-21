@@ -58,6 +58,7 @@ import java.util.stream.Collectors;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.sudothought.common.EnvVars.AGENT_CONFIG;
 import static com.sudothought.common.InstrumentedThreadFactory.newInstrumentedThreadFactory;
+import static com.sudothought.common.Utils.toMillis;
 import static com.sudothought.grpc.ProxyServiceGrpc.newBlockingStub;
 import static com.sudothought.grpc.ProxyServiceGrpc.newStub;
 import static io.grpc.ClientInterceptors.intercept;
@@ -99,7 +100,7 @@ public class Agent {
                      ? String.format("Unnamed-%s", Utils.getHostName()) : agentName;
     logger.info("Creating Agent {}", this.agentName);
 
-    final int queueSize = this.getConfigVals().internal.scrapeQueueSize;
+    final int queueSize = this.getConfigVals().internal.scrapeResponseQueueSize;
     this.scrapeResponseQueue = new ArrayBlockingQueue<>(queueSize);
 
     if (metricsEnabled) {
@@ -245,12 +246,13 @@ public class Agent {
         this.registerPaths();
 
         if (this.getConfigVals().internal.heartbeatEnabled) {
+          final long threadPauseSecs = this.getConfigVals().internal.heartbeatCheckPauseMillis;
           final int maxInactivitySecs = this.getConfigVals().internal.heartbeatMaxInactivitySecs;
           logger.info("Heartbeat started with a {} sec inactivity setting", maxInactivitySecs);
           this.heartbeatService.submit(() -> {
             while (!disconnected.get()) {
-              final long timeSinceLastWrite = System.currentTimeMillis() - this.lastMsgSent.get();
-              if (timeSinceLastWrite > maxInactivitySecs * 1000)
+              final long timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSent.get();
+              if (timeSinceLastWriteMillis > toMillis(maxInactivitySecs))
                 try {
                   this.sendHeartBeat();
                 }
@@ -259,7 +261,7 @@ public class Agent {
                   disconnected.set(true);
                 }
 
-              Utils.sleepForSecs(.5);
+              Utils.sleepForMillis(threadPauseSecs);
             }
           });
         }
@@ -316,10 +318,11 @@ public class Agent {
               }
             });
 
+        final long checkMillis = this.getConfigVals().internal.scrapeResponseQueueCheckMillis;
         while (!disconnected.get()) {
           try {
             // Set a short timeout to check if client has disconnected
-            final ScrapeResponse response = this.scrapeResponseQueue.poll(500, TimeUnit.MILLISECONDS);
+            final ScrapeResponse response = this.scrapeResponseQueue.poll(checkMillis, TimeUnit.MILLISECONDS);
             if (response != null) {
               responseObserver.onNext(response);
               this.markMsgSent();
@@ -470,7 +473,7 @@ public class Agent {
       final HeartBeatRequest request = HeartBeatRequest.newBuilder().setAgentId(agentId).build();
       final HeartBeatResponse response = this.blockingStub.sendHeartBeat(request);
       this.markMsgSent();
-      logger.info("HeartBeat sent");
+      // logger.info("HeartBeat sent");
       if (!response.getValid()) {
         logger.info("AgentId {} not found on proxy", agentId);
         throw new StatusRuntimeException(Status.NOT_FOUND);
