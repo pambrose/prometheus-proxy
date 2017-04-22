@@ -25,7 +25,26 @@ message RegisterPathRequest {
 
 message RegisterPathResponse {
     bool valid = 1;
-    int64 path_id = 2;
+    int32 path_count = 2;
+    int64 path_id = 3;
+}
+
+message UnregisterPathRequest {
+    string agent_id = 1;
+    string path = 2;
+}
+
+message UnregisterPathResponse {
+    bool valid = 1;
+    int32 path_count = 2;
+}
+
+message PathMapSizeRequest {
+    string agent_id = 1;
+}
+
+message PathMapSizeResponse {
+    int32 path_count = 1;
 }
 
 message AgentInfo {
@@ -64,6 +83,12 @@ service ProxyService {
     }
 
     rpc registerPath (RegisterPathRequest) returns (RegisterPathResponse) {
+    }
+
+    rpc unregisterPath (UnregisterPathRequest) returns (UnregisterPathResponse) {
+    }
+
+    rpc pathMapSize (PathMapSizeRequest) returns (PathMapSizeResponse) {
     }
 
     rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {

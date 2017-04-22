@@ -123,6 +123,8 @@ public class Proxy {
   public void stop() {
     this.stopped.set(true);
 
+    this.cleanupService.shutdownNow();
+
     this.httpServer.stop();
 
     if (this.isMetricsEnabled())
@@ -212,6 +214,27 @@ public class Proxy {
       logger.info("Added path /{} for {}", path, agentContext);
     }
   }
+
+  public boolean removePath(final String path, final String agentId) {
+    synchronized (this.pathMap) {
+      final AgentContext agentContext = this.pathMap.get(path);
+      if (agentContext == null) {
+        logger.info("Unable to remove path /{} - path not found", path);
+        return false;
+      }
+      else if (!agentContext.getAgentId().equals(agentId)) {
+        logger.info("Unable to remove path /{} - invalid agentId: {} (owner is {})", path, agentId, agentContext.getAgentId());
+        return false;
+      }
+      else {
+        this.pathMap.remove(path);
+        logger.info("Removed path /{} for {}", path, agentContext);
+        return true;
+      }
+    }
+  }
+
+  public int pathMapSize() { return this.pathMap.size(); }
 
   public void removePathByAgentId(final String agentId) {
     synchronized (this.pathMap) {

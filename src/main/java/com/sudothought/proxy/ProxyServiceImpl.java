@@ -4,6 +4,8 @@ import com.google.protobuf.Empty;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.HeartBeatRequest;
 import com.sudothought.grpc.HeartBeatResponse;
+import com.sudothought.grpc.PathMapSizeRequest;
+import com.sudothought.grpc.PathMapSizeResponse;
 import com.sudothought.grpc.ProxyServiceGrpc;
 import com.sudothought.grpc.RegisterAgentRequest;
 import com.sudothought.grpc.RegisterAgentResponse;
@@ -11,6 +13,8 @@ import com.sudothought.grpc.RegisterPathRequest;
 import com.sudothought.grpc.RegisterPathResponse;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
+import com.sudothought.grpc.UnregisterPathRequest;
+import com.sudothought.grpc.UnregisterPathResponse;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -72,6 +76,7 @@ class ProxyServiceImpl
     final AgentContext agentContext = this.proxy.getAgentContext(agentId);
     final RegisterPathResponse response = RegisterPathResponse.newBuilder()
                                                               .setValid(agentContext != null)
+                                                              .setPathCount(this.proxy.pathMapSize())
                                                               .setPathId(agentContext != null
                                                                          ? PATH_ID_GENERATOR.getAndIncrement()
                                                                          : -1)
@@ -84,6 +89,39 @@ class ProxyServiceImpl
       agentContext.markActivity();
     }
 
+    responseObserver.onNext(response);
+    responseObserver.onCompleted();
+  }
+
+  @Override
+  public void unregisterPath(final UnregisterPathRequest request,
+                             final StreamObserver<UnregisterPathResponse> responseObserver) {
+    final String path = request.getPath();
+    final String agentId = request.getAgentId();
+    final AgentContext agentContext = this.proxy.getAgentContext(agentId);
+    final boolean success;
+    if (agentContext == null) {
+      logger.error("Missing AgentContext for agent_id: {}", agentId);
+      success = false;
+    }
+    else {
+      success = this.proxy.removePath(path, agentId);
+      agentContext.markActivity();
+    }
+
+    final UnregisterPathResponse response = UnregisterPathResponse.newBuilder()
+                                                                  .setValid(success)
+                                                                  .setPathCount(this.proxy.pathMapSize())
+                                                                  .build();
+    responseObserver.onNext(response);
+    responseObserver.onCompleted();
+  }
+
+  @Override
+  public void pathMapSize(PathMapSizeRequest request, StreamObserver<PathMapSizeResponse> responseObserver) {
+    final PathMapSizeResponse response = PathMapSizeResponse.newBuilder()
+                                                            .setPathCount(this.proxy.pathMapSize())
+                                                            .build();
     responseObserver.onNext(response);
     responseObserver.onCompleted();
   }
