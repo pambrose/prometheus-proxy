@@ -56,6 +56,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.sudothought.common.EnvVars.AGENT_CONFIG;
@@ -427,7 +428,6 @@ public class Agent {
                                        ? this.getMetrics().scrapeRequestLatency.labels(this.agentName).startTimer()
                                        : null;
     try {
-      //logger.info("Fetching path request /{} {}", path, pathContext.getUrl());
       final Response response = pathContext.fetchUrl(scrapeRequest);
       status_code = response.code();
       if (response.isSuccessful()) {
@@ -484,22 +484,23 @@ public class Agent {
     }
   }
 
-  public void registerPath(final String path, final String url)
+  public void registerPath(final String pathVal, final String url)
       throws ConnectException {
+    final String path = checkNotNull(pathVal).startsWith("/") ? pathVal.substring(1) : pathVal;
     final long pathId = this.registerPathOnProxy(path);
     logger.info("Registered {} as /{}", url, path);
     this.pathContextMap.put(path, new PathContext(this.okHttpClient, pathId, path, url));
   }
 
-  public int unregisterPath(final String path)
+  public void unregisterPath(final String pathVal)
       throws ConnectException {
-    final int pathMapSize = this.unregisterPathOnProxy(path);
+    final String path = checkNotNull(pathVal).startsWith("/") ? pathVal.substring(1) : pathVal;
+    this.unregisterPathOnProxy(path);
     final PathContext pathContext = this.pathContextMap.remove(path);
     if (pathContext == null)
       logger.info("No path value /{} found in pathContextMap", path);
     else
       logger.info("Unregistered /{} for {}", path, pathContext.getUrl());
-    return pathMapSize;
   }
 
   public int pathMapSize()
@@ -556,8 +557,6 @@ public class Agent {
   }
 
   private String getProxyHost() { return String.format("%s:%s", hostname, port); }
-
-  private String getMetricsAgentId() { return String.format("%s:%s", this.agentName, this.getAgentId()); }
 
   public int getScrapeResponseQueueSize() { return this.scrapeResponseQueue.size(); }
 

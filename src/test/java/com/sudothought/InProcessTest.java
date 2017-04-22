@@ -58,7 +58,6 @@ public class InProcessTest {
     final String[] argv = {"--config", "https://dl.dropboxusercontent.com/u/481551/prometheus/junit-config.conf"};
     final String serverName = "server1";
 
-
     logger.info(Utils.getBanner("banners/proxy.txt"));
     final ProxyArgs proxyArgs = new ProxyArgs();
     proxyArgs.parseArgs(Proxy.class.getName(), argv);
@@ -111,8 +110,8 @@ public class InProcessTest {
 
     int cnt = 0;
     for (int i = 0; i < REPS; i++) {
-      final String path = "test-" + i;
-      AGENT.registerPath(path, format("http://localhost:%d/" + path, PROXY_PORT));
+      final String path = format("test-%d", i);
+      AGENT.registerPath(path, format("http://localhost:%d/%s", PROXY_PORT, path));
       cnt++;
       assertThat(AGENT.pathMapSize()).isEqualTo(originalSize + cnt);
       AGENT.unregisterPath(path);
@@ -136,12 +135,12 @@ public class InProcessTest {
              .forEach(val -> {
                EXECUTOR_SERVICE.submit(
                    () -> {
-                     final String path = "test-" + cnt.getAndIncrement();
+                     final String path = format("test-%d", cnt.getAndIncrement());
                      synchronized (paths) {
                        paths.add(path);
                      }
                      try {
-                       final String url = format("http://localhost:%d/" + path, PROXY_PORT);
+                       final String url = format("http://localhost:%d/%s", PROXY_PORT, path);
                        AGENT.registerPath(path, url);
                        latch1.countDown();
                      }
@@ -199,13 +198,40 @@ public class InProcessTest {
 
     AGENT.registerPath(badPath, "http://localhost:33/metrics");
 
-    String url = format("http://localhost:%d/" + badPath, PROXY_PORT);
+    String url = format("http://localhost:%d/%s", PROXY_PORT, badPath);
     Request.Builder request = new Request.Builder().url(url);
     Response respone = OK_HTTP_CLIENT.newCall(request.build()).execute();
     assertThat(respone.code()).isEqualTo(404);
 
     AGENT.unregisterPath(badPath);
   }
+
+  @Test
+  public void timeoutTest()
+      throws IOException {
+    int agentPort = 9700;
+    String proxyPath = "proxy-timeout";
+    String agentPath = "agent-timeout";
+
+    Service http = Service.ignite();
+    http.port(agentPort)
+        .get(format("/%s", agentPath),
+             (req, res) -> {
+               res.type("text/plain");
+               Utils.sleepForSecs(10);
+               return "I timed out";
+             });
+    String agentUrl = format("http://localhost:%d/%s", agentPort, agentPath);
+    AGENT.registerPath("/" + proxyPath, agentUrl);
+
+    String proxyUrl = format("http://localhost:%d/%s", PROXY_PORT, proxyPath);
+    Request.Builder request = new Request.Builder().url(proxyUrl);
+    Response respone = OK_HTTP_CLIENT.newCall(request.build()).execute();
+    assertThat(respone.code()).isEqualTo(404);
+
+    AGENT.unregisterPath("/" + proxyPath);
+  }
+
 
   @Test
   public void proxyCallTest()
@@ -227,10 +253,10 @@ public class InProcessTest {
              .forEach(i -> {
                Service http = Service.ignite();
                http.port(startingPort + i)
-                   .get("/agent-" + i,
+                   .get(format("/agent-%d", i),
                         (req, res) -> {
                           res.type("text/plain");
-                          return "value: " + i;
+                          return format("value: %d", i);
                         });
                httpServers.add(http);
              });
@@ -238,8 +264,8 @@ public class InProcessTest {
     // Create the paths
     for (int i = 0; i < pathCount; i++) {
       int index = abs(RANDOM.nextInt()) % httpServers.size();
-      String url = format("http://localhost:%d/agent-" + index, startingPort + index);
-      AGENT.registerPath("proxy-" + i, url);
+      String url = format("http://localhost:%d/agent-%d", startingPort + index, index);
+      AGENT.registerPath(format("proxy-%d", i), url);
       pathMap.put(i, index);
     }
 
@@ -272,7 +298,7 @@ public class InProcessTest {
     final AtomicInteger errorCnt = new AtomicInteger();
     pathMap.forEach((k, v) -> {
       try {
-        AGENT.unregisterPath("proxy-" + k);
+        AGENT.unregisterPath(format("proxy-%d", k));
       }
       catch (ConnectException e) {
         errorCnt.incrementAndGet();
@@ -290,11 +316,11 @@ public class InProcessTest {
     // Choose one of the pathMap values
     int index = abs(RANDOM.nextInt() % pathMap.size());
     int httpVal = pathMap.get(index);
-    String url = format("http://localhost:%d/proxy-" + index, PROXY_PORT);
+    String url = format("http://localhost:%d/proxy-%d", PROXY_PORT, index);
     Request.Builder request = new Request.Builder().url(url);
     Response respone = OK_HTTP_CLIENT.newCall(request.build()).execute();
     String body = respone.body().string();
-    assertThat(body).isEqualTo("value: " + httpVal);
+    assertThat(body).isEqualTo(format("value: %d", httpVal));
   }
 
 }

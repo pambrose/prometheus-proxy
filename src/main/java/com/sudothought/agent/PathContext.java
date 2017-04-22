@@ -1,6 +1,6 @@
 package com.sudothought.agent;
 
-import com.google.common.base.Strings;
+import com.google.common.base.MoreObjects;
 import com.sudothought.grpc.ScrapeRequest;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.net.HttpHeaders.ACCEPT;
 
 public class PathContext {
@@ -30,14 +31,6 @@ public class PathContext {
     this.request = new Request.Builder().url(url);
   }
 
-  public long getPathId() {
-    return this.pathId;
-  }
-
-  public String getPath() {
-    return this.path;
-  }
-
   public String getUrl() {
     return this.url;
   }
@@ -45,7 +38,8 @@ public class PathContext {
   public Response fetchUrl(final ScrapeRequest scrapeRequest)
       throws IOException {
     try {
-      final Request.Builder request = !Strings.isNullOrEmpty(scrapeRequest.getAccept())
+      logger.debug("Fetching {}", this);
+      final Request.Builder request = !isNullOrEmpty(scrapeRequest.getAccept())
                                       ? this.request.header(ACCEPT, scrapeRequest.getAccept())
                                       : this.request;
       return this.okHttpClient.newCall(request.build()).execute();
@@ -54,5 +48,14 @@ public class PathContext {
       logger.info("Failed HTTP request: {} [{}: {}]", this.getUrl(), e.getClass().getSimpleName(), e.getMessage());
       throw e;
     }
+  }
+
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+                      .add("path", "/" + path)
+                      .add("url", url)
+                      .toString();
   }
 }
