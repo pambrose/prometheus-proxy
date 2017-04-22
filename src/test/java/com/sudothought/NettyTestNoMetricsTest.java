@@ -14,9 +14,9 @@ import java.io.IOException;
 import static com.sudothought.common.Utils.sleepForSecs;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class NettyTestWithMetrics {
+public class NettyTestNoMetricsTest {
 
-  private static final Logger logger = LoggerFactory.getLogger(NettyTestWithMetrics.class);
+  private static final Logger logger = LoggerFactory.getLogger(NettyTestNoMetricsTest.class);
 
   private static Proxy PROXY = null;
   private static Agent AGENT = null;
@@ -25,12 +25,10 @@ public class NettyTestWithMetrics {
   public static void setUp()
       throws IOException, InterruptedException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = Utils.startProxy(null, true);
-    AGENT = Utils.startAgent(null, true);
+    PROXY = Utils.startProxy(null, false);
+    AGENT = Utils.startAgent(null, false);
 
     AGENT.awaitInitialConnection(10, SECONDS);
-    // Wait long enough to trigger heartbeat for code coverage
-    sleepForSecs(15);
   }
 
   @AfterClass
@@ -40,7 +38,11 @@ public class NettyTestWithMetrics {
     PROXY.waitUntilShutdown(5, SECONDS);
     AGENT.stop();
     AGENT.waitUntilShutdown(5, SECONDS);
+
+    // Give agent a chance to login
+    sleepForSecs(5);
   }
+
 
   @Test
   public void missingPathTest()

@@ -13,9 +13,9 @@ import java.io.IOException;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class InProcessTestNoMetrics {
+public class InProcessTestWithMetricsTest {
 
-  private static final Logger logger = LoggerFactory.getLogger(InProcessTestNoMetrics.class);
+  private static final Logger logger = LoggerFactory.getLogger(InProcessTestWithMetricsTest.class);
 
   private static Proxy PROXY = null;
   private static Agent AGENT = null;
@@ -24,8 +24,8 @@ public class InProcessTestNoMetrics {
   public static void setUp()
       throws IOException, InterruptedException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = Utils.startProxy("nometrics", false);
-    AGENT = Utils.startAgent("nometrics", false);
+    PROXY = Utils.startProxy("withmetrics", true);
+    AGENT = Utils.startAgent("withmetrics", true);
 
     AGENT.awaitInitialConnection(10, SECONDS);
   }
@@ -38,7 +38,6 @@ public class InProcessTestNoMetrics {
     AGENT.stop();
     AGENT.waitUntilShutdown(5, SECONDS);
   }
-
 
   @Test
   public void missingPathTest()
@@ -80,7 +79,7 @@ public class InProcessTestNoMetrics {
   @Test
   public void proxyCallTest()
       throws Exception {
-    Tests.proxyCallTest(AGENT, 5, 50, 100);
+    Tests.proxyCallTest(AGENT, 25, 100, 500);
   }
 
 }

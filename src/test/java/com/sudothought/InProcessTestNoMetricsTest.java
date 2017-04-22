@@ -11,12 +11,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-import static com.sudothought.common.Utils.sleepForSecs;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class NettyTestNoMetrics {
+public class InProcessTestNoMetricsTest {
 
-  private static final Logger logger = LoggerFactory.getLogger(NettyTestNoMetrics.class);
+  private static final Logger logger = LoggerFactory.getLogger(InProcessTestNoMetricsTest.class);
 
   private static Proxy PROXY = null;
   private static Agent AGENT = null;
@@ -25,8 +24,8 @@ public class NettyTestNoMetrics {
   public static void setUp()
       throws IOException, InterruptedException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = Utils.startProxy(null, false);
-    AGENT = Utils.startAgent(null, false);
+    PROXY = Utils.startProxy("nometrics", false);
+    AGENT = Utils.startAgent("nometrics", false);
 
     AGENT.awaitInitialConnection(10, SECONDS);
   }
@@ -38,9 +37,6 @@ public class NettyTestNoMetrics {
     PROXY.waitUntilShutdown(5, SECONDS);
     AGENT.stop();
     AGENT.waitUntilShutdown(5, SECONDS);
-
-    // Give agent a chance to login
-    sleepForSecs(5);
   }
 
 
@@ -80,5 +76,11 @@ public class NettyTestNoMetrics {
     Tests.timeoutTest(AGENT);
   }
 
-  // proxyCallTest() called in InProcess tests
+
+  @Test
+  public void proxyCallTest()
+      throws Exception {
+    Tests.proxyCallTest(AGENT, 5, 50, 100);
+  }
+
 }
