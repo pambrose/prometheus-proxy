@@ -38,15 +38,18 @@ public class Proxy {
   private final ZipkinReporter  zipkinReporter;
   private final ProxyGrpcServer grpcServer;
   private final ProxyHttpServer httpServer;
+  private final boolean         testMode;
 
   public Proxy(final ConfigVals configVals,
                final int grpcPort,
                final int httpPort,
                final boolean metricsEnabled,
                final int metricsPort,
-               final String inProcessServerName)
+               final String inProcessServerName,
+               final boolean testMode)
       throws IOException {
     this.configVals = configVals;
+    this.testMode = testMode;
 
     if (metricsEnabled) {
       logger.info("Metrics server enabled");
@@ -97,7 +100,8 @@ public class Proxy {
                                   args.http_port,
                                   !args.disable_metrics,
                                   args.metrics_port,
-                                  null);
+                                  null,
+                                  false);
     proxy.start();
     proxy.waitUntilShutdown();
   }
@@ -140,7 +144,7 @@ public class Proxy {
 
   public void waitUntilShutdown()
       throws InterruptedException {
-      this.grpcServer.awaitTermination();
+    this.grpcServer.awaitTermination();
   }
 
   public void waitUntilShutdown(final long timeout, final TimeUnit unit)
@@ -214,7 +218,8 @@ public class Proxy {
   public void addPath(final String path, final AgentContext agentContext) {
     synchronized (this.pathMap) {
       this.pathMap.put(path, agentContext);
-      logger.info("Added path /{} for {}", path, agentContext);
+      if (!this.testMode)
+        logger.info("Added path /{} for {}", path, agentContext);
     }
   }
 
@@ -231,7 +236,8 @@ public class Proxy {
       }
       else {
         this.pathMap.remove(path);
-        logger.info("Removed path /{} for {}", path, agentContext);
+        if (!this.testMode)
+          logger.info("Removed path /{} for {}", path, agentContext);
         return true;
       }
     }

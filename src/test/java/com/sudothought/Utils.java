@@ -34,7 +34,8 @@ public class Utils {
                             Constants.PROXY_PORT,
                             metrics_enabled,
                             proxyArgs.metrics_port,
-                            serverName);
+                            serverName,
+                            true);
     proxy.start();
 
     return proxy;
@@ -56,7 +57,8 @@ public class Utils {
                             agentArgs.agent_name,
                             agentArgs.proxy_host,
                             metrics_enabled,
-                            agentArgs.metrics_port);
+                            agentArgs.metrics_port,
+                            true);
     agent.start();
 
     return agent;

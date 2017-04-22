@@ -94,19 +94,22 @@ public class Agent {
   private final MetricsServer                 metricsServer;
   private final List<Map<String, String>>     pathConfigs;
   private final ZipkinReporter                zipkinReporter;
+  private final boolean                       testMode;
 
-  private ManagedChannel                            channel;
-  private ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub;
-  private ProxyServiceGrpc.ProxyServiceStub         asyncStub;
+  private ManagedChannel                            channel      = null;
+  private ProxyServiceGrpc.ProxyServiceBlockingStub blockingStub = null;
+  private ProxyServiceGrpc.ProxyServiceStub         asyncStub    = null;
 
   public Agent(final ConfigVals configVals,
                final String inProcessServerName,
                final String agentName,
                final String proxyHost,
                final boolean metricsEnabled,
-               final int metricsPort) {
+               final int metricsPort,
+               final boolean testMode) {
     this.configVals = configVals;
     this.inProcessServerName = inProcessServerName;
+    this.testMode = testMode;
     this.agentName = isNullOrEmpty(agentName) ? format("Unnamed-%s", Utils.getHostName()) : agentName;
     logger.info("Creating Agent {}", this.agentName);
 
@@ -187,7 +190,8 @@ public class Agent {
                                   args.agent_name,
                                   args.proxy_host,
                                   !args.disable_metrics,
-                                  args.metrics_port);
+                                  args.metrics_port,
+                                  false);
     agent.start();
     agent.waitUntilShutdown();
   }
@@ -427,7 +431,8 @@ public class Agent {
       throws ConnectException {
     final String path = checkNotNull(pathVal).startsWith("/") ? pathVal.substring(1) : pathVal;
     final long pathId = this.registerPathOnProxy(path);
-    logger.info("Registered {} as /{}", url, path);
+    if (!this.testMode)
+      logger.info("Registered {} as /{}", url, path);
     this.pathContextMap.put(path, new PathContext(this.okHttpClient, pathId, path, url));
   }
 
@@ -438,7 +443,7 @@ public class Agent {
     final PathContext pathContext = this.pathContextMap.remove(path);
     if (pathContext == null)
       logger.info("No path value /{} found in pathContextMap", path);
-    else
+    else if (!this.testMode)
       logger.info("Unregistered /{} for {}", path, pathContext.getUrl());
   }
 
