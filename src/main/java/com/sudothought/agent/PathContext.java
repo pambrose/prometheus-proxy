@@ -16,14 +16,14 @@ public class PathContext {
 
   private static final Logger logger = LoggerFactory.getLogger(PathContext.class);
 
-  private final OkHttpClient client = new OkHttpClient();
-
+  private final OkHttpClient    okHttpClient;
   private final long            pathId;
   private final String          path;
   private final String          url;
   private final Request.Builder request;
 
-  public PathContext(long pathId, String path, String url) {
+  public PathContext(final OkHttpClient okHttpClient, long pathId, String path, String url) {
+    this.okHttpClient = okHttpClient;
     this.pathId = pathId;
     this.path = path;
     this.url = url;
@@ -48,7 +48,7 @@ public class PathContext {
       final Request.Builder request = !Strings.isNullOrEmpty(scrapeRequest.getAccept())
                                       ? this.request.header(ACCEPT, scrapeRequest.getAccept())
                                       : this.request;
-      return this.client.newCall(request.build()).execute();
+      return this.okHttpClient.newCall(request.build()).execute();
     }
     catch (IOException e) {
       logger.info("Failed HTTP request: {} [{}: {}]", this.getUrl(), e.getClass().getSimpleName(), e.getMessage());

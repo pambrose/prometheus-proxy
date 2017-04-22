@@ -35,6 +35,7 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
 import io.prometheus.client.Summary;
+import okhttp3.OkHttpClient;
 import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +77,7 @@ public class Agent {
   private final ExecutorService          heartbeatService = Executors.newFixedThreadPool(1);
   private final ExecutorService          runService       = Executors.newFixedThreadPool(1);
   private final CountDownLatch           stoppedLatch     = new CountDownLatch(1);
+  private final OkHttpClient             okHttpClient     = new OkHttpClient();
 
   private final ConfigVals                    configVals;
   private final String                        inProcessServerName;
@@ -265,7 +267,7 @@ public class Agent {
                                                      public void onNext(final ScrapeRequest request) {
                                                        executorService.submit(
                                                            () -> {
-                                                             final ScrapeResponse response = fetchMetrics(request);
+                                                             final ScrapeResponse response = fetchUrl(request);
                                                              try {
                                                                scrapeResponseQueue.put(response);
                                                              }
@@ -403,7 +405,7 @@ public class Agent {
     }
   }
 
-  private ScrapeResponse fetchMetrics(final ScrapeRequest scrapeRequest) {
+  private ScrapeResponse fetchUrl(final ScrapeRequest scrapeRequest) {
     int status_code = 404;
     final String path = scrapeRequest.getPath();
     final ScrapeResponse.Builder scrapeResponse = ScrapeResponse.newBuilder()
@@ -411,7 +413,7 @@ public class Agent {
                                                                 .setScrapeId(scrapeRequest.getScrapeId());
     final PathContext pathContext = this.pathContextMap.get(path);
     if (pathContext == null) {
-      logger.warn("Invalid path request: {}", path);
+      logger.warn("Invalid path in fetchUrl(): {}", path);
       if (this.isMetricsEnabled())
         this.getMetrics().scrapeRequests.labels("invalid_path").inc();
       return scrapeResponse.setValid(false)
@@ -486,7 +488,7 @@ public class Agent {
       throws ConnectException {
     final long pathId = this.registerPathOnProxy(path);
     logger.info("Registered {} as /{}", url, path);
-    this.pathContextMap.put(path, new PathContext(pathId, path, url));
+    this.pathContextMap.put(path, new PathContext(this.okHttpClient, pathId, path, url));
   }
 
   public int unregisterPath(final String path)
