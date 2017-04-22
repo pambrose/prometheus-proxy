@@ -15,10 +15,12 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.sudothought.common.EnvVars.PROXY_CONFIG;
+import static java.lang.String.format;
 
 public class Proxy {
 
@@ -65,7 +67,7 @@ public class Proxy {
 
     if (this.isZipkinEnabled()) {
       final ConfigVals.Proxy.Zipkin2 zipkin = this.getConfigVals().zipkin;
-      final String zipkinHost = String.format("http://%s:%d/%s", zipkin.hostname, zipkin.port, zipkin.path);
+      final String zipkinHost = format("http://%s:%d/%s", zipkin.hostname, zipkin.port, zipkin.path);
       logger.info("Zipkin reporter enabled for {}", zipkinHost);
       this.zipkinReporter = new ZipkinReporter(zipkinHost, zipkin.serviceName);
     }
@@ -80,7 +82,7 @@ public class Proxy {
   }
 
   public static void main(final String[] argv)
-      throws IOException {
+      throws IOException, InterruptedException {
     logger.info(Utils.getBanner("banners/proxy.txt"));
 
     final ProxyArgs args = new ProxyArgs();
@@ -136,13 +138,14 @@ public class Proxy {
     this.grpcServer.shutdown();
   }
 
-  public void waitUntilShutdown() {
-    try {
+  public void waitUntilShutdown()
+      throws InterruptedException {
       this.grpcServer.awaitTermination();
-    }
-    catch (InterruptedException e) {
-      // Ignore
-    }
+  }
+
+  public void waitUntilShutdown(final long timeout, final TimeUnit unit)
+      throws InterruptedException {
+    this.grpcServer.awaitTermination(timeout, unit);
   }
 
   private void startStaleAgentCheck() {

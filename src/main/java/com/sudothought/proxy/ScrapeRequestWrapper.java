@@ -4,7 +4,6 @@ package com.sudothought.proxy;
 import brave.Span;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import io.prometheus.client.Summary;
@@ -13,6 +12,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class ScrapeRequestWrapper {
 
@@ -39,7 +40,7 @@ public class ScrapeRequestWrapper {
                                                  .setAgentId(agentContext.getAgentId())
                                                  .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
                                                  .setPath(path);
-    if (!Strings.isNullOrEmpty(accept))
+    if (!isNullOrEmpty(accept))
       builder = builder.setAccept(accept);
     this.scrapeRequest = builder.build();
   }

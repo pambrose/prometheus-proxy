@@ -1,7 +1,6 @@
 package com.sudothought.proxy;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -14,6 +13,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class ProxyGrpcServer {
 
@@ -25,7 +27,7 @@ public class ProxyGrpcServer {
 
   private ProxyGrpcServer(final Proxy proxy, final int grpcPort, final String serverName) {
     this.serverName = serverName;
-    this.inProcessServer = !Strings.isNullOrEmpty(serverName);
+    this.inProcessServer = !isNullOrEmpty(serverName);
 
     final List<ServerInterceptor> interceptors = Lists.newArrayList(new ProxyInterceptor());
 
@@ -75,4 +77,7 @@ public class ProxyGrpcServer {
 
   public void awaitTermination()
       throws InterruptedException { this.grpcServer.awaitTermination(); }
+
+  public void awaitTermination(final long timeout, final TimeUnit unit)
+      throws InterruptedException { this.grpcServer.awaitTermination(timeout, unit); }
 }

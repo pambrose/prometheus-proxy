@@ -111,7 +111,6 @@ class ProxyServiceImpl
 
     final UnregisterPathResponse response = UnregisterPathResponse.newBuilder()
                                                                   .setValid(success)
-                                                                  .setPathCount(this.proxy.pathMapSize())
                                                                   .build();
     responseObserver.onNext(response);
     responseObserver.onCompleted();

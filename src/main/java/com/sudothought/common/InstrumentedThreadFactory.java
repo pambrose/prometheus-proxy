@@ -7,6 +7,8 @@ import io.prometheus.client.Gauge;
 
 import java.util.concurrent.ThreadFactory;
 
+import static java.lang.String.format;
+
 public class InstrumentedThreadFactory
     implements ThreadFactory {
 
@@ -20,16 +22,16 @@ public class InstrumentedThreadFactory
     Preconditions.checkNotNull(help);
     this.delegate = Preconditions.checkNotNull(delegate);
     this.created = Counter.build()
-                          .name(String.format("%s_threads_created", name))
-                          .help(String.format("%s threads created", help))
+                          .name(format("%s_threads_created", name))
+                          .help(format("%s threads created", help))
                           .register();
     this.running = Gauge.build()
-                        .name(String.format("%s_threads_running", name))
-                        .help(String.format("%s threads running", help))
+                        .name(format("%s_threads_running", name))
+                        .help(format("%s threads running", help))
                         .register();
     this.terminated = Counter.build()
-                             .name(String.format("%s_threads_terminated", name))
-                             .help(String.format("%s threads terminated", help))
+                             .name(format("%s_threads_terminated", name))
+                             .help(format("%s threads terminated", help))
                              .register();
   }
 

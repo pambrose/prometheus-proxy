@@ -36,7 +36,6 @@ message UnregisterPathRequest {
 
 message UnregisterPathResponse {
     bool valid = 1;
-    int32 path_count = 2;
 }
 
 message PathMapSizeRequest {

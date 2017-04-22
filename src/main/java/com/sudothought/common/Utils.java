@@ -87,7 +87,7 @@ public interface Utils {
 
     if (configName == null) {
       if (exitOnMissingConfig) {
-        System.err.println(String.format("A configuration file or url must be specified with --config or $%s", envConfig));
+        System.err.println(format("A configuration file or url must be specified with --config or $%s", envConfig));
         System.exit(1);
       }
       else {

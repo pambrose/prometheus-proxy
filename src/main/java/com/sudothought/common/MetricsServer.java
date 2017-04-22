@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+import static java.lang.String.format;
+
 public class MetricsServer {
 
   private static final Logger logger = LoggerFactory.getLogger(MetricsServer.class);
@@ -31,7 +33,7 @@ public class MetricsServer {
     context.addServlet(new ServletHolder(new MetricsServlet()), "/" + this.path);
     try {
       this.server.start();
-      logger.info("Started metrics server at {}", this.getUrl());
+      logger.info("Started metrics server at {}", this.url());
     }
     catch (Exception e) {
       e.printStackTrace();
@@ -48,9 +50,7 @@ public class MetricsServer {
     }
   }
 
-  public String getUrl() {
-    return String.format("http://localhost:%d/%s", this.port, this.path);
-  }
+  public String url() { return format("http://localhost:%d/%s", this.port, this.path); }
 
   public int getPort() { return this.port; }
 
