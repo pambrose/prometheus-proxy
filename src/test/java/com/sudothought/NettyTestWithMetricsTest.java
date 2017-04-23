@@ -25,8 +25,8 @@ public class NettyTestWithMetricsTest {
   public static void setUp()
       throws IOException, InterruptedException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = Utils.startProxy(null, true);
-    AGENT = Utils.startAgent(null, true);
+    PROXY = TestUtils.startProxy(null, true);
+    AGENT = TestUtils.startAgent(null, true);
 
     AGENT.awaitInitialConnection(10, SECONDS);
     // Wait long enough to trigger heartbeat for code coverage

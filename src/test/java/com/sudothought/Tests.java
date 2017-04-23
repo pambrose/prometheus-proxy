@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import static com.sudothought.Constants.RANDOM;
+import static com.sudothought.TestConstants.RANDOM;
 import static java.lang.Math.abs;
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,18 +26,18 @@ public class Tests {
 
   public static void missingPathTest()
       throws IOException {
-    String url = format("http://localhost:%d/", Constants.PROXY_PORT);
+    String url = format("http://localhost:%d/", TestConstants.PROXY_PORT);
     Request.Builder request = new Request.Builder().url(url);
-    try (Response respone = Constants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+    try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
       assertThat(respone.code()).isEqualTo(404);
     }
   }
 
   public static void invalidPathTest()
       throws IOException {
-    String url = format("http://localhost:%d/invalid_path", Constants.PROXY_PORT);
+    String url = format("http://localhost:%d/invalid_path", TestConstants.PROXY_PORT);
     Request.Builder request = new Request.Builder().url(url);
-    try (Response respone = Constants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+    try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
       assertThat(respone.code()).isEqualTo(404);
     }
   }
@@ -49,9 +49,9 @@ public class Tests {
     int originalSize = agent.pathMapSize();
 
     int cnt = 0;
-    for (int i = 0; i < Constants.REPS; i++) {
+    for (int i = 0; i < TestConstants.REPS; i++) {
       final String path = format("test-%d", i);
-      agent.registerPath(path, format("http://localhost:%d/%s", Constants.PROXY_PORT, path));
+      agent.registerPath(path, format("http://localhost:%d/%s", TestConstants.PROXY_PORT, path));
       cnt++;
       assertThat(agent.pathMapSize()).isEqualTo(originalSize + cnt);
       agent.unregisterPath(path);
@@ -64,22 +64,22 @@ public class Tests {
       throws ConnectException, InterruptedException {
     final List<String> paths = Lists.newArrayList();
     final AtomicInteger cnt = new AtomicInteger(0);
-    final CountDownLatch latch1 = new CountDownLatch(Constants.REPS);
-    final CountDownLatch latch2 = new CountDownLatch(Constants.REPS);
+    final CountDownLatch latch1 = new CountDownLatch(TestConstants.REPS);
+    final CountDownLatch latch2 = new CountDownLatch(TestConstants.REPS);
 
     // Take into account pre-existing paths already registered
     int originalSize = agent.pathMapSize();
 
-    IntStream.range(0, Constants.REPS)
+    IntStream.range(0, TestConstants.REPS)
              .forEach(val -> {
-               Constants.EXECUTOR_SERVICE.submit(
+               TestConstants.EXECUTOR_SERVICE.submit(
                    () -> {
                      final String path = format("test-%d", cnt.getAndIncrement());
                      synchronized (paths) {
                        paths.add(path);
                      }
                      try {
-                       final String url = format("http://localhost:%d/%s", Constants.PROXY_PORT, path);
+                       final String url = format("http://localhost:%d/%s", TestConstants.PROXY_PORT, path);
                        agent.registerPath(path, url);
                        latch1.countDown();
                      }
@@ -90,12 +90,12 @@ public class Tests {
              });
 
     assertThat(latch1.await(5, TimeUnit.SECONDS)).isTrue();
-    assertThat(paths.size()).isEqualTo(Constants.REPS);
-    assertThat(agent.pathMapSize()).isEqualTo(originalSize + Constants.REPS);
+    assertThat(paths.size()).isEqualTo(TestConstants.REPS);
+    assertThat(agent.pathMapSize()).isEqualTo(originalSize + TestConstants.REPS);
 
     paths.forEach(
         (path) -> {
-          Constants.EXECUTOR_SERVICE.submit(
+          TestConstants.EXECUTOR_SERVICE.submit(
               () -> {
                 try {
                   agent.unregisterPath(path);
@@ -118,9 +118,9 @@ public class Tests {
 
     agent.registerPath(badPath, "http://localhost:33/metrics");
 
-    String url = format("http://localhost:%d/%s", Constants.PROXY_PORT, badPath);
+    String url = format("http://localhost:%d/%s", TestConstants.PROXY_PORT, badPath);
     Request.Builder request = new Request.Builder().url(url);
-    try (Response respone = Constants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+    try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
       assertThat(respone.code()).isEqualTo(404);
     }
 
@@ -144,9 +144,9 @@ public class Tests {
     String agentUrl = format("http://localhost:%d/%s", agentPort, agentPath);
     agent.registerPath("/" + proxyPath, agentUrl);
 
-    String proxyUrl = format("http://localhost:%d/%s", Constants.PROXY_PORT, proxyPath);
+    String proxyUrl = format("http://localhost:%d/%s", TestConstants.PROXY_PORT, proxyPath);
     Request.Builder request = new Request.Builder().url(proxyUrl);
-    try (Response respone = Constants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+    try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
       assertThat(respone.code()).isEqualTo(404);
     }
 
@@ -200,7 +200,7 @@ public class Tests {
     IntStream.range(0, threadedQueryCount)
              .forEach(
                  i -> {
-                   Constants.EXECUTOR_SERVICE.submit(
+                   TestConstants.EXECUTOR_SERVICE.submit(
                        () -> {
                          try {
                            callProxy(pathMap);
@@ -236,9 +236,9 @@ public class Tests {
     // Choose one of the pathMap values
     int index = abs(RANDOM.nextInt() % pathMap.size());
     int httpVal = pathMap.get(index);
-    String url = format("http://localhost:%d/proxy-%d", Constants.PROXY_PORT, index);
+    String url = format("http://localhost:%d/proxy-%d", TestConstants.PROXY_PORT, index);
     Request.Builder request = new Request.Builder().url(url);
-    try (Response respone = Constants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+    try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
       String body = respone.body().string();
       assertThat(body).isEqualTo(format("value: %d", httpVal));
     }

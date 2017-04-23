@@ -24,8 +24,8 @@ public class InProcessTestNoMetricsTest {
   public static void setUp()
       throws IOException, InterruptedException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = Utils.startProxy("nometrics", false);
-    AGENT = Utils.startAgent("nometrics", false);
+    PROXY = TestUtils.startProxy("nometrics", false);
+    AGENT = TestUtils.startAgent("nometrics", false);
 
     AGENT.awaitInitialConnection(10, SECONDS);
   }

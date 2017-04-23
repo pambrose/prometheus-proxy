@@ -14,16 +14,16 @@ import java.io.IOException;
 import static com.sudothought.common.EnvVars.AGENT_CONFIG;
 import static com.sudothought.common.EnvVars.PROXY_CONFIG;
 
-public class Utils {
+public class TestUtils {
 
-  private static final Logger logger = LoggerFactory.getLogger(Utils.class);
+  private static final Logger logger = LoggerFactory.getLogger(TestUtils.class);
 
   public static Proxy startProxy(final String serverName, final boolean metrics_enabled)
       throws IOException {
 
     logger.info(com.sudothought.common.Utils.getBanner("banners/proxy.txt"));
     final ProxyArgs proxyArgs = new ProxyArgs();
-    proxyArgs.parseArgs(Proxy.class.getName(), Constants.argv);
+    proxyArgs.parseArgs(Proxy.class.getName(), TestConstants.argv);
 
     final Config proxyConfig = com.sudothought.common.Utils.readConfig(proxyArgs.config, PROXY_CONFIG, false);
     final ConfigVals proxyConfigVals = new ConfigVals(proxyConfig);
@@ -31,7 +31,7 @@ public class Utils {
 
     Proxy proxy = new Proxy(proxyConfigVals,
                             proxyArgs.grpc_port,
-                            Constants.PROXY_PORT,
+                            TestConstants.PROXY_PORT,
                             metrics_enabled,
                             proxyArgs.metrics_port,
                             serverName,
@@ -46,7 +46,7 @@ public class Utils {
 
     logger.info(com.sudothought.common.Utils.getBanner("banners/agent.txt"));
     final AgentArgs agentArgs = new AgentArgs();
-    agentArgs.parseArgs(Agent.class.getName(), Constants.argv);
+    agentArgs.parseArgs(Agent.class.getName(), TestConstants.argv);
 
     final Config agentConfig = com.sudothought.common.Utils.readConfig(agentArgs.config, AGENT_CONFIG, true);
     final ConfigVals configVals = new ConfigVals(agentConfig);

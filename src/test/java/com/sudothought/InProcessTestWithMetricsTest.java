@@ -24,8 +24,8 @@ public class InProcessTestWithMetricsTest {
   public static void setUp()
       throws IOException, InterruptedException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = Utils.startProxy("withmetrics", true);
-    AGENT = Utils.startAgent("withmetrics", true);
+    PROXY = TestUtils.startProxy("withmetrics", true);
+    AGENT = TestUtils.startAgent("withmetrics", true);
 
     AGENT.awaitInitialConnection(10, SECONDS);
   }

@@ -25,8 +25,8 @@ public class NettyTestNoMetricsTest {
   public static void setUp()
       throws IOException, InterruptedException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = Utils.startProxy(null, false);
-    AGENT = Utils.startAgent(null, false);
+    PROXY = TestUtils.startProxy(null, false);
+    AGENT = TestUtils.startAgent(null, false);
 
     AGENT.awaitInitialConnection(10, SECONDS);
   }
