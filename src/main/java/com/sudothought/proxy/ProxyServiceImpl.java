@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import static java.lang.String.format;
+
 class ProxyServiceImpl
     extends ProxyServiceGrpc.ProxyServiceImplBase {
 
@@ -49,7 +51,7 @@ class ProxyServiceImpl
     final String agentId = request.getAgentId();
     final AgentContext agentContext = this.proxy.getAgentContext(agentId);
     if (agentContext == null) {
-      logger.info("registerAgent() missing AgentContext agent_id: {}", agentId);
+      logger.info("registerAgent() missing AgentContext agentId: {}", agentId);
     }
     else {
       agentContext.setAgentName(request.getAgentName());
@@ -59,6 +61,7 @@ class ProxyServiceImpl
 
     final RegisterAgentResponse response = RegisterAgentResponse.newBuilder()
                                                                 .setValid(agentContext != null)
+                                                                .setReason(format("Invalid agentId: %s", agentId))
                                                                 .setAgentId(agentId)
                                                                 .build();
     responseObserver.onNext(response);
@@ -76,13 +79,14 @@ class ProxyServiceImpl
     final AgentContext agentContext = this.proxy.getAgentContext(agentId);
     final RegisterPathResponse response = RegisterPathResponse.newBuilder()
                                                               .setValid(agentContext != null)
+                                                              .setReason(format("Invalid agentId: %s", agentId))
                                                               .setPathCount(this.proxy.pathMapSize())
                                                               .setPathId(agentContext != null
                                                                          ? PATH_ID_GENERATOR.getAndIncrement()
                                                                          : -1)
                                                               .build();
     if (agentContext == null) {
-      logger.error("Missing AgentContext for agent_id: {}", agentId);
+      logger.error("Missing AgentContext for agentId: {}", agentId);
     }
     else {
       this.proxy.addPath(path, agentContext);
@@ -99,20 +103,19 @@ class ProxyServiceImpl
     final String path = request.getPath();
     final String agentId = request.getAgentId();
     final AgentContext agentContext = this.proxy.getAgentContext(agentId);
-    final boolean success;
+
+    final UnregisterPathResponse.Builder responseBuilder = UnregisterPathResponse.newBuilder();
+
     if (agentContext == null) {
-      logger.error("Missing AgentContext for agent_id: {}", agentId);
-      success = false;
+      logger.error("Missing AgentContext for agentId: {}", agentId);
+      responseBuilder.setValid(false).setReason(format("Invalid agentId: %s", agentId));
     }
     else {
-      success = this.proxy.removePath(path, agentId);
+      this.proxy.removePath(path, agentId, responseBuilder);
       agentContext.markActivity();
     }
 
-    final UnregisterPathResponse response = UnregisterPathResponse.newBuilder()
-                                                                  .setValid(success)
-                                                                  .build();
-    responseObserver.onNext(response);
+    responseObserver.onNext(responseBuilder.build());
     responseObserver.onCompleted();
   }
 
@@ -133,11 +136,14 @@ class ProxyServiceImpl
     final String agentId = request.getAgentId();
     final AgentContext agentContext = this.proxy.getAgentContext(agentId);
     if (agentContext == null)
-      logger.info("sendHeartBeat() missing AgentContext agent_id: {}", agentId);
+      logger.info("sendHeartBeat() missing AgentContext agentId: {}", agentId);
     else
       agentContext.markActivity();
 
-    responseObserver.onNext(HeartBeatResponse.newBuilder().setValid(agentContext != null).build());
+    responseObserver.onNext(HeartBeatResponse.newBuilder()
+                                             .setValid(agentContext != null)
+                                             .setReason(format("Invalid agentId: %s", agentId))
+                                             .build());
     responseObserver.onCompleted();
   }
 

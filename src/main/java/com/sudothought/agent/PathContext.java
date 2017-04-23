@@ -39,10 +39,10 @@ public class PathContext {
       throws IOException {
     try {
       logger.debug("Fetching {}", this);
-      final Request.Builder request = !isNullOrEmpty(scrapeRequest.getAccept())
+      final Request.Builder builder = !isNullOrEmpty(scrapeRequest.getAccept())
                                       ? this.request.header(ACCEPT, scrapeRequest.getAccept())
                                       : this.request;
-      return this.okHttpClient.newCall(request.build()).execute();
+      return this.okHttpClient.newCall(builder.build()).execute();
     }
     catch (IOException e) {
       logger.info("Failed HTTP request: {} [{}: {}]", this.getUrl(), e.getClass().getSimpleName(), e.getMessage());

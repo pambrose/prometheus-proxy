@@ -14,8 +14,9 @@ message RegisterAgentRequest {
 
 message RegisterAgentResponse {
     bool valid = 1;
-    string agent_id = 2;
-    string proxy_url = 3;
+    string reason = 2;
+    string agent_id = 3;
+    string proxy_url = 4;
 }
 
 message RegisterPathRequest {
@@ -25,8 +26,9 @@ message RegisterPathRequest {
 
 message RegisterPathResponse {
     bool valid = 1;
-    int32 path_count = 2;
-    int64 path_id = 3;
+    string reason = 2;
+    int32 path_count = 3;
+    int64 path_id = 4;
 }
 
 message UnregisterPathRequest {
@@ -36,6 +38,7 @@ message UnregisterPathRequest {
 
 message UnregisterPathResponse {
     bool valid = 1;
+    string reason = 2;
 }
 
 message PathMapSizeRequest {
@@ -59,11 +62,12 @@ message ScrapeRequest {
 
 message ScrapeResponse {
     bool valid = 1;
-    string agent_id = 2;
-    int64 scrape_id = 3;
-    int32 status_code = 4;
-    string text = 5;
-    string content_type = 6;
+    string reason = 2;
+    string agent_id = 3;
+    int64 scrape_id = 4;
+    int32 status_code = 5;
+    string text = 6;
+    string content_type = 7;
 }
 
 message HeartBeatRequest {
@@ -72,6 +76,7 @@ message HeartBeatRequest {
 
 message HeartBeatResponse {
     bool valid = 1;
+    string reason = 2;
 }
 
 service ProxyService {

@@ -19,12 +19,12 @@ public class ProxyTransportFilter
   }
 
   private String getRemoteAddr(Attributes attributes) {
-    final Optional<Attributes.Key<?>> key_opt = attributes.keys()
-                                                          .stream()
-                                                          .filter(key -> key.toString().equals("remote-addr"))
-                                                          .findFirst();
-    if (key_opt.isPresent()) {
-      final Attributes.Key<Object> key = (Attributes.Key<Object>) key_opt.get();
+    final Optional<Attributes.Key<?>> keyOptional = attributes.keys()
+                                                              .stream()
+                                                              .filter(key -> key.toString().equals("remote-addr"))
+                                                              .findFirst();
+    if (keyOptional.isPresent()) {
+      final Attributes.Key<Object> key = (Attributes.Key<Object>) keyOptional.get();
       final Object val = attributes.get(key);
       if (val != null)
         return val.toString();
@@ -34,8 +34,8 @@ public class ProxyTransportFilter
 
   @Override
   public Attributes transportReady(final Attributes attributes) {
-    final String remote_addr = this.getRemoteAddr(attributes);
-    final AgentContext agentContext = new AgentContext(this.proxy, remote_addr);
+    final String remoteAddr = this.getRemoteAddr(attributes);
+    final AgentContext agentContext = new AgentContext(this.proxy, remoteAddr);
     this.proxy.addAgentContext(agentContext);
     logger.info("Connected to {}", agentContext);
     return Attributes.newBuilder()
@@ -52,7 +52,7 @@ public class ProxyTransportFilter
     if (agentContext != null)
       logger.info("Disconnected from {}", agentContext);
     else
-      logger.info("Disconnected with invalid agent_id:{}", agentId);
+      logger.info("Disconnected with invalid agentId: {}", agentId);
     super.transportTerminated(attributes);
   }
 }

@@ -35,7 +35,7 @@ config:
 	java -jar ./etc/jars/tscfg-0.8.0.jar --spec etc/config/config.conf --pn com.sudothought.common --cn ConfigVals --dd src/main/java/com/sudothought/common
 
 build-coverage:
-	mvn clean package test jacoco:report
+	mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report
 
 report-coverage:
 	mvn -DrepoToken=${COVERALLS_TOKEN} clean package test jacoco:report coveralls:report

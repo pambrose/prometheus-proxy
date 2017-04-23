@@ -77,6 +77,7 @@ public class ScrapeRequestWrapper {
     }
     catch (InterruptedException e) {
       logger.warn("Thread interrupted", e);
+      Thread.currentThread().interrupt();
     }
     return false;
   }

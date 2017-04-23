@@ -4,11 +4,4 @@
 
 # Prometheus Proxy
 
-## Proxy
 
-### Usage
-
-#### Command Line
-Command Line Arguments
-
-### Docker 

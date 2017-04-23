@@ -427,6 +427,75 @@
 
                         </configuration>
                     </execution>
+
+                    <!-- Create jmxconnectorlauncher jsw scripts -->
+                    <execution>
+
+                        <id>generate-jmxconnectorlauncher-jsw-scripts</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>generate-daemons</goal>
+                        </goals>
+
+                        <configuration>
+
+                            <generateRepository>true</generateRepository>
+                            <repositoryLayout>flat</repositoryLayout>
+                            <configurationDirectory>etc/jmxconnectorlauncher</configurationDirectory>
+
+                            <daemons>
+                                <daemon>
+                                    <id>jmxconnectorlauncher</id>
+                                    <wrapperMainClass>org.tanukisoftware.wrapper.WrapperSimpleApp</wrapperMainClass>
+                                    <mainClass>io.haptava.launcher.jsw.JmxConnectorLauncherJsw</mainClass>
+
+                                    <platforms>
+                                        <platform>jsw</platform>
+                                    </platforms>
+
+                                    <generatorConfigurations>
+                                        <generatorConfiguration>
+                                            <generator>jsw</generator>
+                                            <includes>
+                                                <include>macosx-universal-64</include>
+                                                <include>linux-x86-64</include>
+                                                <include>solaris-sparc-64</include>
+                                                <include>windows-x86-64</include>
+                                            </includes>
+                                            <configuration>
+                                                <property>
+                                                    <name>configuration.directory.in.classpath.first</name>
+                                                    <value>etc</value>
+                                                </property>
+                                                <property>
+                                                    <name>set.default.REPO_DIR</name>
+                                                    <value>lib</value>
+                                                </property>
+                                                <property>
+                                                    <name>wrapper.logfile</name>
+                                                    <value>logs/wrapper.log</value>
+                                                </property>
+                                            </configuration>
+                                        </generatorConfiguration>
+                                    </generatorConfigurations>
+                                    <jvmSettings>
+                                        <initialMemorySize>256M</initialMemorySize>
+                                        <maxMemorySize>1024M</maxMemorySize>
+                                        <systemProperties>
+                                            <systemProperty>
+                                                logback.configurationFile=file:conf/jmxconnectorlauncher.logback.xml
+                                            </systemProperty>
+                                        </systemProperties>
+                                        <extraArguments>
+                                            <extraArgument>-server</extraArgument>
+                                        </extraArguments>
+                                    </jvmSettings>
+
+                                </daemon>
+                            </daemons>
+                        </configuration>
+                    </execution>
+
                 </executions>
             </plugin>
 

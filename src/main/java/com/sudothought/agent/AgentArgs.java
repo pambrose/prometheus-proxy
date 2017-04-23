@@ -6,23 +6,22 @@ import com.sudothought.common.ConfigVals;
 
 import static com.sudothought.common.EnvVars.AGENT_NAME;
 import static java.lang.String.format;
-import static java.lang.System.getenv;
 
 public class AgentArgs
     extends BaseArgs {
 
   @Parameter(names = {"-p", "--proxy"}, description = "Proxy hostname")
-  public String proxy_host = null;
+  public String proxyHost = null;
   @Parameter(names = {"-n", "--name"}, description = "Agent name")
-  public String agent_name = null;
+  public String agentName = null;
 
   public void assignArgs(final ConfigVals configVals) {
 
-    if (this.proxy_host == null)
-      this.proxy_host = format("%s:%d", configVals.agent.grpc.hostname, configVals.agent.grpc.port);
+    if (this.proxyHost == null)
+      this.proxyHost = format("%s:%d", configVals.agent.grpc.hostname, configVals.agent.grpc.port);
 
-    if (this.agent_name == null)
-      this.agent_name = getenv(AGENT_NAME) != null ? getenv(AGENT_NAME) : configVals.agent.name;
+    if (this.agentName == null)
+      this.agentName = AGENT_NAME.getEnv(configVals.agent.name);
 
     this.assignMetricsPort(configVals.agent.metrics.port);
     this.assignDisableMetrics(!configVals.agent.metrics.enabled);

@@ -3,13 +3,12 @@ package com.sudothought;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.sudothought.agent.Agent;
+import com.sudothought.agent.RequestFailureException;
 import com.sudothought.common.Utils;
 import okhttp3.Request;
 import okhttp3.Response;
 import spark.Service;
 
-import java.io.IOException;
-import java.net.ConnectException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -25,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class Tests {
 
   public static void missingPathTest()
-      throws IOException {
+      throws Exception {
     String url = format("http://localhost:%d/", TestConstants.PROXY_PORT);
     Request.Builder request = new Request.Builder().url(url);
     try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
@@ -34,7 +33,7 @@ public class Tests {
   }
 
   public static void invalidPathTest()
-      throws IOException {
+      throws Exception {
     String url = format("http://localhost:%d/invalid_path", TestConstants.PROXY_PORT);
     Request.Builder request = new Request.Builder().url(url);
     try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
@@ -43,7 +42,7 @@ public class Tests {
   }
 
   public static void addRemovePathsTest(final Agent agent)
-      throws ConnectException {
+      throws Exception {
 
     // Take into account pre-existing paths already registered
     int originalSize = agent.pathMapSize();
@@ -61,7 +60,7 @@ public class Tests {
   }
 
   public static void threadedAddRemovePathsTest(final Agent agent)
-      throws ConnectException, InterruptedException {
+      throws Exception {
     final List<String> paths = Lists.newArrayList();
     final AtomicInteger cnt = new AtomicInteger(0);
     final CountDownLatch latch1 = new CountDownLatch(TestConstants.REPS);
@@ -83,7 +82,7 @@ public class Tests {
                        agent.registerPath(path, url);
                        latch1.countDown();
                      }
-                     catch (ConnectException e) {
+                     catch (RequestFailureException e) {
                        e.printStackTrace();
                      }
                    });
@@ -101,7 +100,7 @@ public class Tests {
                   agent.unregisterPath(path);
                   latch2.countDown();
                 }
-                catch (ConnectException e) {
+                catch (RequestFailureException e) {
                   e.printStackTrace();
                 }
               });
@@ -113,7 +112,7 @@ public class Tests {
   }
 
   public static void invalidAgentUrlTest(final Agent agent)
-      throws IOException {
+      throws Exception {
     final String badPath = "badPath";
 
     agent.registerPath(badPath, "http://localhost:33/metrics");
@@ -128,7 +127,7 @@ public class Tests {
   }
 
   public static void timeoutTest(final Agent agent)
-      throws IOException {
+      throws Exception {
     int agentPort = 9700;
     String proxyPath = "proxy-timeout";
     String agentPath = "agent-timeout";
@@ -158,7 +157,7 @@ public class Tests {
                                    final int httpServerCount,
                                    final int pathCount,
                                    final int queryCount)
-      throws IOException, InterruptedException {
+      throws Exception {
 
     final int startingPort = 9600;
     final List<Service> httpServers = Lists.newArrayList();
@@ -206,7 +205,7 @@ public class Tests {
                            callProxy(pathMap);
                            latch.countDown();
                          }
-                         catch (IOException e) {
+                         catch (Exception e) {
                            e.printStackTrace();
                          }
                        });
@@ -220,7 +219,7 @@ public class Tests {
           try {
             agent.unregisterPath(format("proxy-%d", k));
           }
-          catch (ConnectException e) {
+          catch (RequestFailureException e) {
             errorCnt.incrementAndGet();
           }
         });
@@ -232,7 +231,7 @@ public class Tests {
   }
 
   private static void callProxy(final Map<Integer, Integer> pathMap)
-      throws IOException {
+      throws Exception {
     // Choose one of the pathMap values
     int index = abs(RANDOM.nextInt() % pathMap.size());
     int httpVal = pathMap.get(index);

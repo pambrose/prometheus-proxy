@@ -7,11 +7,13 @@ import com.sudothought.common.MetricsServer;
 import com.sudothought.common.SystemMetrics;
 import com.sudothought.common.Utils;
 import com.sudothought.common.ZipkinReporter;
+import com.sudothought.grpc.UnregisterPathResponse;
 import com.typesafe.config.Config;
 import io.grpc.Attributes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -23,7 +25,8 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.sudothought.common.EnvVars.PROXY_CONFIG;
 import static java.lang.String.format;
 
-public class Proxy {
+public class Proxy
+    implements Closeable {
 
   public static final  String                          AGENT_ID         = "agent-id";
   public static final  Attributes.Key<String>          ATTRIB_AGENT_ID  = Attributes.Key.of(AGENT_ID);
@@ -32,7 +35,7 @@ public class Proxy {
   private final        Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap(); // Map agent_id to AgentContext
   private final        Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap(); // Map path to AgentContext
   private final        Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap(); // Map scrape_id to agent_id
-  private final ExecutorService                 cleanupService   = Executors.newFixedThreadPool(1);
+  private final        ExecutorService                 cleanupService   = Executors.newFixedThreadPool(1);
 
   private final ConfigVals      configVals;
   private final MetricsServer   metricsServer;
@@ -93,15 +96,15 @@ public class Proxy {
     final ProxyArgs args = new ProxyArgs();
     args.parseArgs(Proxy.class.getName(), argv);
 
-    final Config config = Utils.readConfig(args.config, PROXY_CONFIG, false);
+    final Config config = Utils.readConfig(args.config, PROXY_CONFIG.getConstVal(), false);
     final ConfigVals configVals = new ConfigVals(config);
     args.assignArgs(configVals);
 
     final Proxy proxy = new Proxy(configVals,
-                                  args.grpc_port,
-                                  args.http_port,
-                                  !args.disable_metrics,
-                                  args.metrics_port,
+                                  args.grpcPort,
+                                  args.httpPort,
+                                  !args.disableMetrics,
+                                  args.metricsPort,
                                   null,
                                   false);
     proxy.start();
@@ -128,20 +131,25 @@ public class Proxy {
                }));
   }
 
+  @Override
+  public void close()
+      throws IOException {
+    this.stop();
+  }
+
   public void stop() {
-    this.stopped.set(true);
+    if (this.stopped.compareAndSet(false, true)) {
+      this.cleanupService.shutdownNow();
+      this.httpServer.stop();
 
-    this.cleanupService.shutdownNow();
+      if (this.isMetricsEnabled())
+        this.metricsServer.stop();
 
-    this.httpServer.stop();
+      if (this.isZipkinEnabled())
+        this.getZipkinReporter().close();
 
-    if (this.isMetricsEnabled())
-      this.metricsServer.stop();
-
-    if (this.isZipkinEnabled())
-      this.getZipkinReporter().close();
-
-    this.grpcServer.shutdown();
+      this.grpcServer.shutdown();
+    }
   }
 
   public void waitUntilShutdown()
@@ -196,7 +204,7 @@ public class Proxy {
       agentContext.markInvalid();
     }
     else
-      logger.error("Missing AgentContext for agent_id: {}", agentId);
+      logger.error("Missing AgentContext for agentId: {}", agentId);
 
     return agentContext;
   }
@@ -225,22 +233,26 @@ public class Proxy {
     }
   }
 
-  public boolean removePath(final String path, final String agentId) {
+  public void removePath(final String path, final String agentId,
+                         final UnregisterPathResponse.Builder responseBuilder) {
     synchronized (this.pathMap) {
       final AgentContext agentContext = this.pathMap.get(path);
       if (agentContext == null) {
-        logger.info("Unable to remove path /{} - path not found", path);
-        return false;
+        final String msg = format("Unable to remove path /%s - path not found", path);
+        logger.info(msg);
+        responseBuilder.setValid(false).setReason(msg);
       }
       else if (!agentContext.getAgentId().equals(agentId)) {
-        logger.info("Unable to remove path /{} - invalid agentId: {} (owner is {})", path, agentId, agentContext.getAgentId());
-        return false;
+        final String msg = format("Unable to remove path /%s - invalid agentId: %s (owner is %s)",
+                                  path, agentId, agentContext.getAgentId());
+        logger.info(msg);
+        responseBuilder.setValid(false).setReason(msg);
       }
       else {
         this.pathMap.remove(path);
         if (!this.testMode)
           logger.info("Removed path /{} for {}", path, agentContext);
-        return true;
+        responseBuilder.setValid(true).setReason("");
       }
     }
   }
@@ -255,7 +267,7 @@ public class Proxy {
           if (agentContext != null)
             logger.info("Removed path /{} for {}", elem.getKey(), agentContext);
           else
-            logger.error("Missing path /{} for agent_id: {}", elem.getKey(), agentId);
+            logger.error("Missing path /{} for agentId: {}", elem.getKey(), agentId);
         }
       }
     }

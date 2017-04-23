@@ -6,18 +6,17 @@ import com.beust.jcommander.ParameterException;
 
 import static com.sudothought.common.EnvVars.DISABLE_METRICS;
 import static com.sudothought.common.EnvVars.METRICS_PORT;
-import static java.lang.System.getenv;
 
 public class BaseArgs {
 
   @Parameter(names = {"-m", "--metrics"}, description = "Metrics listen port")
-  public  Integer metrics_port    = null;
+  public  Integer metricsPort    = null;
   @Parameter(names = {"-d", "--disablemetrics"}, description = "Metrics disabled")
-  public  Boolean disable_metrics = null;
+  public  Boolean disableMetrics = null;
   @Parameter(names = {"-c", "--conf", "--config"}, description = "Configuration file or url")
-  public  String  config          = null;
+  public  String  config         = null;
   @Parameter(names = {"-h", "--help"}, help = true)
-  private boolean help            = false;
+  private boolean help           = false;
 
   public void parseArgs(final String programName, final String[] argv) {
     try {
@@ -28,9 +27,8 @@ public class BaseArgs {
 
       if (this.help) {
         jcom.usage();
-        System.exit(1);
+        System.exit(0);
       }
-
     }
     catch (ParameterException e) {
       System.out.println(e.getMessage());
@@ -39,16 +37,12 @@ public class BaseArgs {
   }
 
   protected void assignDisableMetrics(final boolean configVal) {
-    if (this.disable_metrics == null)
-      this.disable_metrics = System.getenv(DISABLE_METRICS) != null
-                             ? Boolean.parseBoolean(getenv(DISABLE_METRICS)) :
-                             configVal;
+    if (this.disableMetrics == null)
+      this.disableMetrics = DISABLE_METRICS.getEnv(configVal);
   }
 
   protected void assignMetricsPort(final int configVal) {
-    if (this.metrics_port == null)
-      this.metrics_port = System.getenv(METRICS_PORT) != null
-                          ? Utils.getEnvInt(METRICS_PORT, true).orElse(-1)
-                          : configVal; // -1 never returned
+    if (this.metricsPort == null)
+      this.metricsPort = METRICS_PORT.getEnv(configVal);
   }
 }

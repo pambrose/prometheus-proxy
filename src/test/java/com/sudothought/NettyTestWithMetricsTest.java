@@ -29,6 +29,7 @@ public class NettyTestWithMetricsTest {
     AGENT = TestUtils.startAgent(null, true);
 
     AGENT.awaitInitialConnection(10, SECONDS);
+
     // Wait long enough to trigger heartbeat for code coverage
     sleepForSecs(15);
   }

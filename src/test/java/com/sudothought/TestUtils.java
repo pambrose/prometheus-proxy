@@ -3,6 +3,7 @@ package com.sudothought;
 import com.sudothought.agent.Agent;
 import com.sudothought.agent.AgentArgs;
 import com.sudothought.common.ConfigVals;
+import com.sudothought.common.Utils;
 import com.sudothought.proxy.Proxy;
 import com.sudothought.proxy.ProxyArgs;
 import com.typesafe.config.Config;
@@ -21,19 +22,19 @@ public class TestUtils {
   public static Proxy startProxy(final String serverName, final boolean metrics_enabled)
       throws IOException {
 
-    logger.info(com.sudothought.common.Utils.getBanner("banners/proxy.txt"));
+    logger.info(Utils.getBanner("banners/proxy.txt"));
     final ProxyArgs proxyArgs = new ProxyArgs();
     proxyArgs.parseArgs(Proxy.class.getName(), TestConstants.argv);
 
-    final Config proxyConfig = com.sudothought.common.Utils.readConfig(proxyArgs.config, PROXY_CONFIG, false);
+    final Config proxyConfig = Utils.readConfig(proxyArgs.config, PROXY_CONFIG.getConstVal(), false);
     final ConfigVals proxyConfigVals = new ConfigVals(proxyConfig);
     proxyArgs.assignArgs(proxyConfigVals);
 
     Proxy proxy = new Proxy(proxyConfigVals,
-                            proxyArgs.grpc_port,
+                            proxyArgs.grpcPort,
                             TestConstants.PROXY_PORT,
                             metrics_enabled,
-                            proxyArgs.metrics_port,
+                            proxyArgs.metricsPort,
                             serverName,
                             true);
     proxy.start();
@@ -44,20 +45,20 @@ public class TestUtils {
   public static Agent startAgent(final String serverName, final boolean metrics_enabled)
       throws IOException {
 
-    logger.info(com.sudothought.common.Utils.getBanner("banners/agent.txt"));
+    logger.info(Utils.getBanner("banners/agent.txt"));
     final AgentArgs agentArgs = new AgentArgs();
     agentArgs.parseArgs(Agent.class.getName(), TestConstants.argv);
 
-    final Config agentConfig = com.sudothought.common.Utils.readConfig(agentArgs.config, AGENT_CONFIG, true);
+    final Config agentConfig = Utils.readConfig(agentArgs.config, AGENT_CONFIG.getConstVal(), true);
     final ConfigVals configVals = new ConfigVals(agentConfig);
     agentArgs.assignArgs(configVals);
 
     Agent agent = new Agent(configVals,
                             serverName,
-                            agentArgs.agent_name,
-                            agentArgs.proxy_host,
+                            agentArgs.agentName,
+                            agentArgs.proxyHost,
                             metrics_enabled,
-                            agentArgs.metrics_port,
+                            agentArgs.metricsPort,
                             true);
     agent.start();
 

@@ -33,10 +33,11 @@ public class MetricsServer {
     context.addServlet(new ServletHolder(new MetricsServlet()), "/" + this.path);
     try {
       this.server.start();
-      logger.info("Started metrics server at {}", this.url());
+      final String url = this.url();
+      logger.info("Started metrics server at {}", url);
     }
     catch (Exception e) {
-      e.printStackTrace();
+      logger.error("Starting server", e);
       throw new IOException(e.getMessage());
     }
   }
@@ -46,7 +47,7 @@ public class MetricsServer {
       this.server.stop();
     }
     catch (Exception e) {
-      e.printStackTrace();
+      logger.error("Stopping server", e);
     }
   }
 

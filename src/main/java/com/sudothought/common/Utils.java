@@ -20,7 +20,6 @@ import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -68,7 +67,7 @@ public class Utils {
                          .collect(Collectors.toList()));
       return format("%n%n%s%n%n", noNulls);
     }
-    catch (Throwable e) {
+    catch (Exception e) {
       return format("Banner %s cannot be found", filename);
     }
   }
@@ -92,24 +91,15 @@ public class Utils {
       if (exitOnMissingConfig) {
         System.err.println(format("A configuration file or url must be specified with --config or $%s", envConfig));
         System.exit(1);
+        return null; // Never reached
       }
-      else {
-        return fallback;
-      }
+
+      return fallback;
     }
 
-    final String lcname = configName.toLowerCase();
-
-    if (lcname.startsWith("http://") || lcname.startsWith("https://")) {
-      final ConfigSyntax configSyntax;
-      if (lcname.endsWith(".json") || lcname.endsWith(".jsn"))
-        configSyntax = ConfigSyntax.JSON;
-      else if (lcname.endsWith(".properties") || lcname.endsWith(".props"))
-        configSyntax = ConfigSyntax.PROPERTIES;
-      else
-        configSyntax = ConfigSyntax.CONF;
-
+    if (isUrlPrefix(configName)) {
       try {
+        final ConfigSyntax configSyntax = getConfigSyntax(configName);
         return ConfigFactory.parseURL(new URL(configName), configParseOptions.setSyntax(configSyntax))
                             .withFallback(fallback);
       }
@@ -118,7 +108,6 @@ public class Utils {
           logger.error("Invalid config url: {}", configName);
         else
           logger.error(e.getMessage(), e);
-        System.exit(1);
       }
     }
     else {
@@ -131,30 +120,37 @@ public class Utils {
           logger.error("Invalid config filename: {}", configName);
         else
           logger.error(e.getMessage(), e);
-        System.exit(1);
       }
     }
-    // Never reached
-    return fallback;
+
+    System.exit(1);
+    return null; // Never reached
   }
 
-  public static Optional<Integer> getEnvInt(final String varName, final boolean exitOnException) {
-    final String val = System.getenv(varName);
-    try {
-      return Optional.of(Integer.parseInt(val));
-    }
-    catch (Throwable e) {
-      logger.error("Invaid value for {}: {}", varName, val);
-      if (exitOnException)
-        System.exit(1);
-    }
-    return Optional.empty();
+  private static ConfigSyntax getConfigSyntax(final String configName) {
+    if (isJsonSuffix(configName))
+      return ConfigSyntax.JSON;
+    else if (isPropertiesSuffix(configName))
+      return ConfigSyntax.PROPERTIES;
+    else
+      return ConfigSyntax.CONF;
+  }
+
+  private static boolean isUrlPrefix(final String str) {
+    return str.toLowerCase().startsWith("http://") || str.toLowerCase().startsWith("https://");
+  }
+
+  private static boolean isJsonSuffix(final String str) {
+    return str.toLowerCase().endsWith(".json") || str.toLowerCase().endsWith(".jsn");
+  }
+
+  private static boolean isPropertiesSuffix(final String str) {
+    return str.toLowerCase().endsWith(".properties") || str.toLowerCase().endsWith(".props");
   }
 
   public static String getHostName() {
     try {
       return InetAddress.getLocalHost().getHostName();
-      //final String address = InetAddress.getLocalHost().getHostAddress();
     }
     catch (UnknownHostException e) {
       return "Unknown";
@@ -166,7 +162,7 @@ public class Utils {
       Thread.sleep(millis);
     }
     catch (InterruptedException e) {
-      logger.warn("Thread interrupted", e);
+      Thread.currentThread().interrupt();
     }
   }
 
@@ -175,7 +171,7 @@ public class Utils {
       Thread.sleep(toMillis(secs));
     }
     catch (InterruptedException e) {
-      logger.warn("Thread interrupted", e);
+      Thread.currentThread().interrupt();
     }
   }
 
