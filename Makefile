@@ -40,6 +40,9 @@ build-coverage:
 report-coverage:
 	mvn -DrepoToken=${COVERALLS_TOKEN} clean package test jacoco:report coveralls:report
 
+site:
+	mvn site
+
 tree:
 	mvn dependency:tree
 

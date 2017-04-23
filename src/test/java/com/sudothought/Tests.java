@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
+import static com.sudothought.Constants.RANDOM;
 import static java.lang.Math.abs;
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -156,7 +157,9 @@ public class Tests {
   public static void proxyCallTest(final Agent agent,
                                    final int httpServerCount,
                                    final int pathCount,
-                                   final int queryCount)
+                                   final int queryCount,
+                                   final boolean pauseOnCalls,
+                                   final boolean pauseOnFetch)
       throws IOException, InterruptedException {
 
     final int startingPort = 9600;
@@ -174,6 +177,8 @@ public class Tests {
                    .get(format("/agent-%d", i),
                         (req, res) -> {
                           res.type("text/plain");
+                          if (pauseOnFetch)
+                            Utils.sleepForMillis(abs(RANDOM.nextInt() % 50));
                           return format("value: %d", i);
                         });
                httpServers.add(http);
@@ -181,7 +186,7 @@ public class Tests {
 
     // Create the paths
     for (int i = 0; i < pathCount; i++) {
-      int index = abs(Constants.RANDOM.nextInt()) % httpServers.size();
+      int index = abs(RANDOM.nextInt()) % httpServers.size();
       String url = format("http://localhost:%d/agent-%d", startingPort + index, index);
       agent.registerPath(format("proxy-%d", i), url);
       pathMap.put(i, index);
@@ -190,8 +195,11 @@ public class Tests {
     assertThat(agent.pathMapSize()).isEqualTo(originalSize + pathCount);
 
     // Call the proxy sequentially
-    for (int i = 0; i < queryCount; i++)
+    for (int i = 0; i < queryCount; i++) {
       callProxy(pathMap);
+      if (pauseOnCalls)
+        Utils.sleepForMillis(abs(RANDOM.nextInt() % 100));
+    }
 
     // Call the proxy in parallel
     int threadedQueryCount = 100;
@@ -232,7 +240,7 @@ public class Tests {
   private static void callProxy(final Map<Integer, Integer> pathMap)
       throws IOException {
     // Choose one of the pathMap values
-    int index = abs(Constants.RANDOM.nextInt() % pathMap.size());
+    int index = abs(RANDOM.nextInt() % pathMap.size());
     int httpVal = pathMap.get(index);
     String url = format("http://localhost:%d/proxy-%d", Constants.PROXY_PORT, index);
     Request.Builder request = new Request.Builder().url(url);
@@ -241,5 +249,4 @@ public class Tests {
       assertThat(body).isEqualTo(format("value: %d", httpVal));
     }
   }
-
 }

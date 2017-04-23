@@ -14,6 +14,7 @@
         <grpc.plugin.version>1.2.0</grpc.plugin.version>
         <protobuf.version>3.2.0</protobuf.version>
         <protobuf.plugin.version>0.5.0</protobuf.plugin.version>
+        <guava.version>19.0</guava.version>
         <prometheus.version>0.0.21</prometheus.version>
         <jcommander.version>1.69</jcommander.version>
         <spark.version>2.5.5</spark.version>
@@ -44,6 +45,21 @@
     <prerequisites>
         <maven>${maven.version}</maven>
     </prerequisites>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>${guava.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.squareup.okhttp3</groupId>
+                <artifactId>okhttp</artifactId>
+                <version>${okhttp.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
 
@@ -423,10 +439,11 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.7.6.201602180812</version>
+                <version>0.7.9</version>
                 <configuration>
                     <excludes>
-                        <exclude>**/grpc/*.*</exclude>
+                        <exclude>**/grpc/*.class</exclude>
+                        <exclude>**/ZipkinReporter*.class</exclude>
                     </excludes>
                 </configuration>
                 <executions>
@@ -441,4 +458,28 @@
 
         </plugins>
     </build>
+
+    <reporting>
+        <plugins>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>**/grpc/**</exclude>
+                        <exclude>**/ZipkinReporter*.class</exclude>
+                    </excludes>
+                </configuration>
+                <reportSets>
+                    <reportSet>
+                        <reports>
+                            <!-- select non-aggregate reports -->
+                            <report>report</report>
+                        </reports>
+                    </reportSet>
+                </reportSets>
+            </plugin>
+        </plugins>
+    </reporting>
+
 </project>
