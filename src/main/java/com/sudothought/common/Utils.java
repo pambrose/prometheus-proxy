@@ -26,11 +26,14 @@ import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 
-public interface Utils {
+public class Utils {
 
-  Logger logger = LoggerFactory.getLogger(Utils.class);
+  private static final Logger logger = LoggerFactory.getLogger(Utils.class);
 
-  static String getBanner(final String filename) {
+  private Utils() {
+  }
+
+  public static String getBanner(final String filename) {
     try (final InputStream in = logger.getClass().getClassLoader().getResourceAsStream(filename)) {
       final String banner = CharStreams.toString(new InputStreamReader(in, Charsets.UTF_8.name()));
       final List<String> lines = Splitter.on("\n").splitToList(banner);
@@ -63,25 +66,25 @@ public interface Utils {
                              })
                          .map(input -> format("     %s", input))
                          .collect(Collectors.toList()));
-      return format("\n\n%s\n\n", noNulls);
+      return format("%n%n%s%n%n", noNulls);
     }
     catch (Throwable e) {
       return format("Banner %s cannot be found", filename);
     }
   }
 
-  static Config readConfig(final String cliConfig, final String envConfig, final boolean exitOnMissingConfig) {
+  public static Config readConfig(final String cliConfig, final String envConfig, final boolean exitOnMissingConfig) {
     return readConfig(cliConfig,
                       envConfig,
                       ConfigParseOptions.defaults().setAllowMissing(false),
                       ConfigFactory.load().resolve(), exitOnMissingConfig).resolve(ConfigResolveOptions.defaults());
   }
 
-  static Config readConfig(final String cliConfig,
-                           final String envConfig,
-                           final ConfigParseOptions configParseOptions,
-                           final Config fallback,
-                           final boolean exitOnMissingConfig) {
+  public static Config readConfig(final String cliConfig,
+                                  final String envConfig,
+                                  final ConfigParseOptions configParseOptions,
+                                  final Config fallback,
+                                  final boolean exitOnMissingConfig) {
     // Precedence of confg settings: CLI, ENV_VAR, config info
     final String configName = cliConfig != null ? cliConfig : System.getenv(envConfig);
 
@@ -135,7 +138,7 @@ public interface Utils {
     return fallback;
   }
 
-  static Optional<Integer> getEnvInt(final String varName, final boolean exitOnException) {
+  public static Optional<Integer> getEnvInt(final String varName, final boolean exitOnException) {
     final String val = System.getenv(varName);
     try {
       return Optional.of(Integer.parseInt(val));
@@ -148,40 +151,39 @@ public interface Utils {
     return Optional.empty();
   }
 
-  static String getHostName() {
+  public static String getHostName() {
     try {
-      final String hostname = InetAddress.getLocalHost().getHostName();
+      return InetAddress.getLocalHost().getHostName();
       //final String address = InetAddress.getLocalHost().getHostAddress();
-      return hostname;
     }
     catch (UnknownHostException e) {
       return "Unknown";
     }
   }
 
-  static void sleepForMillis(final long millis) {
+  public static void sleepForMillis(final long millis) {
     try {
       Thread.sleep(millis);
     }
     catch (InterruptedException e) {
-      // Ignore
+      logger.warn("Thread interrupted", e);
     }
   }
 
-  static void sleepForSecs(final long secs) {
+  public static void sleepForSecs(final long secs) {
     try {
       Thread.sleep(toMillis(secs));
     }
     catch (InterruptedException e) {
-      // Ignore
+      logger.warn("Thread interrupted", e);
     }
   }
 
-  static long toMillis(final long secs) {
+  public static long toMillis(final long secs) {
     return secs * 1000;
   }
 
-  static long toSecs(final long millis) {
+  public static long toSecs(final long millis) {
     return millis / 1000;
   }
 }

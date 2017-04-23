@@ -1,6 +1,5 @@
 package com.sudothought.proxy;
 
-import com.sudothought.common.Constants;
 import io.grpc.Attributes;
 import io.grpc.ForwardingServerCall;
 import io.grpc.Metadata;
@@ -15,7 +14,7 @@ public class ProxyInterceptor
     implements ServerInterceptor {
 
   private static final Logger               logger        = LoggerFactory.getLogger(ProxyInterceptor.class);
-  private static final Metadata.Key<String> META_AGENT_ID = Metadata.Key.of(Constants.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER);
+  private static final Metadata.Key<String> META_AGENT_ID = Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER);
 
 
   public ProxyInterceptor() {
@@ -35,7 +34,7 @@ public class ProxyInterceptor
           @Override
           public void sendHeaders(Metadata headers) {
             // agent_id was assigned in ServerTransportFilter
-            final String agentId = attributes.get(Constants.ATTRIB_AGENT_ID);
+            final String agentId = attributes.get(Proxy.ATTRIB_AGENT_ID);
             if (agentId != null)
               headers.put(META_AGENT_ID, agentId);
             super.sendHeaders(headers);

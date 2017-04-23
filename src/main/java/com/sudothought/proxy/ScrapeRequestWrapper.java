@@ -7,6 +7,8 @@ import com.google.common.base.Preconditions;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import io.prometheus.client.Summary;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -17,6 +19,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class ScrapeRequestWrapper {
 
+  private static final Logger     logger              = LoggerFactory.getLogger(ScrapeRequestWrapper.class);
   private static final AtomicLong SCRAPE_ID_GENERATOR = new AtomicLong(0);
 
   private final long                            createTime        = System.currentTimeMillis();
@@ -73,7 +76,7 @@ public class ScrapeRequestWrapper {
       return this.complete.await(waitMillis, TimeUnit.MILLISECONDS);
     }
     catch (InterruptedException e) {
-      // Ignore
+      logger.warn("Thread interrupted", e);
     }
     return false;
   }

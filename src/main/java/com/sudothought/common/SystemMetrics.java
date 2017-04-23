@@ -10,6 +10,9 @@ import io.prometheus.client.hotspot.VersionInfoExports;
 public class SystemMetrics {
   private static boolean initialized = false;
 
+  private SystemMetrics() {
+  }
+
   public static synchronized void initialize(final boolean enableStandardExports,
                                              final boolean enableMemoryPoolsExports,
                                              final boolean enableGarbageCollectorExports,

@@ -1,6 +1,5 @@
 package com.sudothought.proxy;
 
-import com.sudothought.common.Constants;
 import io.grpc.Attributes;
 import io.grpc.ServerTransportFilter;
 import org.slf4j.Logger;
@@ -40,14 +39,14 @@ public class ProxyTransportFilter
     this.proxy.addAgentContext(agentContext);
     logger.info("Connected to {}", agentContext);
     return Attributes.newBuilder()
-                     .set(Constants.ATTRIB_AGENT_ID, agentContext.getAgentId())
+                     .set(Proxy.ATTRIB_AGENT_ID, agentContext.getAgentId())
                      .setAll(attributes)
                      .build();
   }
 
   @Override
   public void transportTerminated(final Attributes attributes) {
-    final String agentId = attributes.get(Constants.ATTRIB_AGENT_ID);
+    final String agentId = attributes.get(Proxy.ATTRIB_AGENT_ID);
     this.proxy.removePathByAgentId(agentId);
     final AgentContext agentContext = this.proxy.removeAgentContext(agentId);
     if (agentContext != null)

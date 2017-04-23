@@ -8,6 +8,7 @@ import com.sudothought.common.SystemMetrics;
 import com.sudothought.common.Utils;
 import com.sudothought.common.ZipkinReporter;
 import com.typesafe.config.Config;
+import io.grpc.Attributes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,12 +25,13 @@ import static java.lang.String.format;
 
 public class Proxy {
 
-  private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
-
-  private final AtomicBoolean                   stopped          = new AtomicBoolean(false);
-  private final Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap(); // Map agent_id to AgentContext
-  private final Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap(); // Map path to AgentContext
-  private final Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap(); // Map scrape_id to agent_id
+  public static final  String                          AGENT_ID         = "agent-id";
+  public static final  Attributes.Key<String>          ATTRIB_AGENT_ID  = Attributes.Key.of(AGENT_ID);
+  private static final Logger                          logger           = LoggerFactory.getLogger(Proxy.class);
+  private final        AtomicBoolean                   stopped          = new AtomicBoolean(false);
+  private final        Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap(); // Map agent_id to AgentContext
+  private final        Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap(); // Map path to AgentContext
+  private final        Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap(); // Map scrape_id to agent_id
   private final ExecutorService                 cleanupService   = Executors.newFixedThreadPool(1);
 
   private final ConfigVals      configVals;

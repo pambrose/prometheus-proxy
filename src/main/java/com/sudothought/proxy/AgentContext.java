@@ -1,6 +1,8 @@
 package com.sudothought.proxy;
 
 import com.google.common.base.MoreObjects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -9,11 +11,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static java.lang.String.format;
+
 public class AgentContext {
 
+  private static final Logger     logger             = LoggerFactory.getLogger(AgentContext.class);
   private static final AtomicLong AGENT_ID_GENERATOR = new AtomicLong(0);
 
-  private final String                  agentId          = "" + AGENT_ID_GENERATOR.incrementAndGet();
+  private final String                  agentId          = format("%s", AGENT_ID_GENERATOR.incrementAndGet());
   private final AtomicBoolean           valid            = new AtomicBoolean(true);
   private final AtomicLong              lastActivityTime = new AtomicLong();
   private final AtomicReference<String> agentName        = new AtomicReference<>();
@@ -55,6 +60,7 @@ public class AgentContext {
       return this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS);
     }
     catch (InterruptedException e) {
+      logger.warn("Thread interrupted", e);
       return null;
     }
   }
