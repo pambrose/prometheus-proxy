@@ -79,10 +79,7 @@ public class InProcessTestWithMetricsTest {
   @Test
   public void proxyCallTest()
       throws Exception {
-    Tests.proxyCallTest(AGENT, 5, 50, 250, false, false);
-    Tests.proxyCallTest(AGENT, 5, 50, 250, false, true);
-    Tests.proxyCallTest(AGENT, 5, 50, 250, true, false);
-    Tests.proxyCallTest(AGENT, 5, 50, 250, true, true);
+    Tests.proxyCallTest(AGENT, 25, 50, 500);
   }
 
 }

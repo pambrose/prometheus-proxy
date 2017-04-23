@@ -76,11 +76,5 @@ public class InProcessTestNoMetricsTest {
     Tests.timeoutTest(AGENT);
   }
 
-
-  @Test
-  public void proxyCallTest()
-      throws Exception {
-    Tests.proxyCallTest(AGENT, 1, 10, 100, true, true);
-  }
-
+  // proxyCallTest() called in InProcess tests
 }

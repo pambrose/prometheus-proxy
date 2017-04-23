@@ -157,9 +157,7 @@ public class Tests {
   public static void proxyCallTest(final Agent agent,
                                    final int httpServerCount,
                                    final int pathCount,
-                                   final int queryCount,
-                                   final boolean pauseOnCalls,
-                                   final boolean pauseOnFetch)
+                                   final int queryCount)
       throws IOException, InterruptedException {
 
     final int startingPort = 9600;
@@ -177,8 +175,6 @@ public class Tests {
                    .get(format("/agent-%d", i),
                         (req, res) -> {
                           res.type("text/plain");
-                          if (pauseOnFetch)
-                            Utils.sleepForMillis(abs(RANDOM.nextInt() % 50));
                           return format("value: %d", i);
                         });
                httpServers.add(http);
@@ -195,11 +191,8 @@ public class Tests {
     assertThat(agent.pathMapSize()).isEqualTo(originalSize + pathCount);
 
     // Call the proxy sequentially
-    for (int i = 0; i < queryCount; i++) {
+    for (int i = 0; i < queryCount; i++)
       callProxy(pathMap);
-      if (pauseOnCalls)
-        Utils.sleepForMillis(abs(RANDOM.nextInt() % 100));
-    }
 
     // Call the proxy in parallel
     int threadedQueryCount = 100;
@@ -222,14 +215,15 @@ public class Tests {
     assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
 
     final AtomicInteger errorCnt = new AtomicInteger();
-    pathMap.forEach((k, v) -> {
-      try {
-        agent.unregisterPath(format("proxy-%d", k));
-      }
-      catch (ConnectException e) {
-        errorCnt.incrementAndGet();
-      }
-    });
+    pathMap.forEach(
+        (k, v) -> {
+          try {
+            agent.unregisterPath(format("proxy-%d", k));
+          }
+          catch (ConnectException e) {
+            errorCnt.incrementAndGet();
+          }
+        });
 
     assertThat(errorCnt.get()).isEqualTo(0);
     assertThat(agent.pathMapSize()).isEqualTo(originalSize);

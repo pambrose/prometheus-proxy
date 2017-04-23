@@ -443,6 +443,7 @@
                 <configuration>
                     <excludes>
                         <exclude>**/grpc/*.class</exclude>
+                        <exclude>**/ConfigVals*.class</exclude>
                         <exclude>**/ZipkinReporter*.class</exclude>
                     </excludes>
                 </configuration>
@@ -467,6 +468,7 @@
                 <configuration>
                     <excludes>
                         <exclude>**/grpc/**</exclude>
+                        <exclude>**/ConfigVals*.class</exclude>
                         <exclude>**/ZipkinReporter*.class</exclude>
                     </excludes>
                 </configuration>
