@@ -28,7 +28,7 @@ public class ProxyOptions
     this.assignEnableMetrics(configVals.proxy.metrics.enabled);
   }
 
-  public Integer getHttpPort() { return this.httpPort; }
+  public int getHttpPort() { return this.httpPort; }
 
-  public Integer getGrpcPort() { return this.grpcPort; }
+  public int getGrpcPort() { return this.grpcPort; }
 }

@@ -315,7 +315,7 @@ public class Agent
     if (this.getConfigVals().internal.heartbeatEnabled) {
       final long threadPauseMillis = this.getConfigVals().internal.heartbeatCheckPauseMillis;
       final int maxInactivitySecs = this.getConfigVals().internal.heartbeatMaxInactivitySecs;
-      logger.info("Heartbeat scheduled to start after {} secs of inactivity", maxInactivitySecs);
+      logger.info("Heartbeat scheduled to fire after {} secs of inactivity", maxInactivitySecs);
       this.heartbeatService.submit(
           () -> {
             while (!disconnected.get()) {

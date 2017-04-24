@@ -94,9 +94,13 @@ public class BaseOptions {
     return configRef.get();
   }
 
-  public Integer getMetricsPort() { return this.metricsPort; }
+  public int getMetricsPort() { return this.metricsPort; }
 
-  public Boolean getEnableMetrics() { return this.enableMetrics; }
+  public boolean getEnableMetrics() {
+    return this.enableMetrics;
+  }
 
-  public Map<String, String> getDynamicParams() { return this.dynamicParams; }
+  public Map<String, String> getDynamicParams() {
+    return this.dynamicParams;
+  }
 }
