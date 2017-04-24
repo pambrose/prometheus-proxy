@@ -1,5 +1,6 @@
-package com.sudothought.agent;
+package com.sudothought;
 
+import com.beust.jcommander.JCommander;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -7,6 +8,11 @@ import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.Empty;
+import com.sudothought.agent.AgentClientInterceptor;
+import com.sudothought.agent.AgentMetrics;
+import com.sudothought.agent.AgentOptions;
+import com.sudothought.agent.PathContext;
+import com.sudothought.agent.RequestFailureException;
 import com.sudothought.common.ConfigVals;
 import com.sudothought.common.MetricsServer;
 import com.sudothought.common.SystemMetrics;
@@ -26,7 +32,6 @@ import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import com.sudothought.grpc.UnregisterPathRequest;
 import com.sudothought.grpc.UnregisterPathResponse;
-import com.typesafe.config.Config;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
@@ -176,21 +181,24 @@ public class Agent
 
   public static void main(final String[] argv)
       throws IOException, InterruptedException {
+
+    final AgentOptions options = new AgentOptions();
+    options.parseArgs(Agent.class.getName(), argv);
+    options.readConfig(AGENT_CONFIG.getText(), true);
+    options.applyDynamicParams();
+
+    final ConfigVals configVals = new ConfigVals(options.getConfig());
+    options.assignOptions(configVals);
+
     logger.info(Utils.getBanner("banners/agent.txt"));
-
-    final AgentArgs args = new AgentArgs();
-    args.parseArgs(Agent.class.getName(), argv);
-
-    final Config config = Utils.readConfig(args.config, AGENT_CONFIG.getConstVal(), true);
-    final ConfigVals configVals = new ConfigVals(config);
-    args.assignArgs(configVals);
+    logger.info(Utils.getVersionDesc());
 
     final Agent agent = new Agent(configVals,
                                   null,
-                                  args.agentName,
-                                  args.proxyHost,
-                                  !args.disableMetrics,
-                                  args.metricsPort,
+                                  options.getAgentName(),
+                                  options.getProxyHostname(),
+                                  options.getEnableMetrics(),
+                                  options.getMetricsPort(),
                                   false);
     agent.start();
     agent.waitUntilShutdown();
@@ -208,9 +216,9 @@ public class Agent
     Runtime.getRuntime()
            .addShutdownHook(
                new Thread(() -> {
-                 System.err.println("*** Shutting down Agent ***");
+                 JCommander.getConsole().println("*** Shutting down Agent ***");
                  Agent.this.stop();
-                 System.err.println("*** Agent shut down ***");
+                 JCommander.getConsole().println("*** Agent shut down ***");
                }));
 
     this.resetGrpcStubs();

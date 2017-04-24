@@ -1,6 +1,7 @@
 package com.sudothought.proxy;
 
 import com.google.protobuf.Empty;
+import com.sudothought.Proxy;
 import com.sudothought.grpc.AgentInfo;
 import com.sudothought.grpc.HeartBeatRequest;
 import com.sudothought.grpc.HeartBeatResponse;

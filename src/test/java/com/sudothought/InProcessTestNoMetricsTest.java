@@ -1,7 +1,5 @@
 package com.sudothought;
 
-import com.sudothought.agent.Agent;
-import com.sudothought.proxy.Proxy;
 import io.prometheus.client.CollectorRegistry;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;

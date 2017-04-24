@@ -2,7 +2,6 @@ package com.sudothought;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.sudothought.agent.Agent;
 import com.sudothought.agent.RequestFailureException;
 import com.sudothought.common.Utils;
 import okhttp3.Request;

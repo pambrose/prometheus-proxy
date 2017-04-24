@@ -1,5 +1,6 @@
 package com.sudothought.proxy;
 
+import com.sudothought.Proxy;
 import com.sudothought.common.SamplerGauge;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;

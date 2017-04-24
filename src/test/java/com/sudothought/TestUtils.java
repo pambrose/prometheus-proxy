@@ -1,12 +1,9 @@
 package com.sudothought;
 
-import com.sudothought.agent.Agent;
-import com.sudothought.agent.AgentArgs;
+import com.sudothought.agent.AgentOptions;
 import com.sudothought.common.ConfigVals;
 import com.sudothought.common.Utils;
-import com.sudothought.proxy.Proxy;
-import com.sudothought.proxy.ProxyArgs;
-import com.typesafe.config.Config;
+import com.sudothought.proxy.ProxyOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,22 +16,25 @@ public class TestUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(TestUtils.class);
 
-  public static Proxy startProxy(final String serverName, final boolean metrics_enabled)
+  public static Proxy startProxy(String serverName, boolean metrics_enabled)
       throws IOException {
 
-    logger.info(Utils.getBanner("banners/proxy.txt"));
-    final ProxyArgs proxyArgs = new ProxyArgs();
-    proxyArgs.parseArgs(Proxy.class.getName(), TestConstants.argv);
+    ProxyOptions proxyOptions = new ProxyOptions();
+    proxyOptions.parseArgs(Proxy.class.getName(), TestConstants.argv);
+    proxyOptions.readConfig(PROXY_CONFIG.getText(), false);
+    proxyOptions.applyDynamicParams();
 
-    final Config proxyConfig = Utils.readConfig(proxyArgs.config, PROXY_CONFIG.getConstVal(), false);
-    final ConfigVals proxyConfigVals = new ConfigVals(proxyConfig);
-    proxyArgs.assignArgs(proxyConfigVals);
+    ConfigVals proxyConfigVals = new ConfigVals(proxyOptions.getConfig());
+    proxyOptions.assignOptions(proxyConfigVals);
+
+    logger.info(Utils.getBanner("banners/proxy.txt"));
+    logger.info(Utils.getVersionDesc());
 
     Proxy proxy = new Proxy(proxyConfigVals,
-                            proxyArgs.grpcPort,
+                            proxyOptions.getGrpcPort(),
                             TestConstants.PROXY_PORT,
                             metrics_enabled,
-                            proxyArgs.metricsPort,
+                            proxyOptions.getMetricsPort(),
                             serverName,
                             true);
     proxy.start();
@@ -42,23 +42,26 @@ public class TestUtils {
     return proxy;
   }
 
-  public static Agent startAgent(final String serverName, final boolean metrics_enabled)
+  public static Agent startAgent(String serverName, boolean metrics_enabled)
       throws IOException {
 
-    logger.info(Utils.getBanner("banners/agent.txt"));
-    final AgentArgs agentArgs = new AgentArgs();
-    agentArgs.parseArgs(Agent.class.getName(), TestConstants.argv);
+    AgentOptions agentOptions = new AgentOptions();
+    agentOptions.parseArgs(Agent.class.getName(), TestConstants.argv);
+    agentOptions.readConfig(AGENT_CONFIG.getText(), true);
+    agentOptions.applyDynamicParams();
 
-    final Config agentConfig = Utils.readConfig(agentArgs.config, AGENT_CONFIG.getConstVal(), true);
-    final ConfigVals configVals = new ConfigVals(agentConfig);
-    agentArgs.assignArgs(configVals);
+    ConfigVals configVals = new ConfigVals(agentOptions.getConfig());
+    agentOptions.assignOptions(configVals);
+
+    logger.info(Utils.getBanner("banners/agent.txt"));
+    logger.info(Utils.getVersionDesc());
 
     Agent agent = new Agent(configVals,
                             serverName,
-                            agentArgs.agentName,
-                            agentArgs.proxyHost,
+                            agentOptions.getAgentName(),
+                            agentOptions.getProxyHostname(),
                             metrics_enabled,
-                            agentArgs.metricsPort,
+                            agentOptions.getMetricsPort(),
                             true);
     agent.start();
 

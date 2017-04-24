@@ -4,6 +4,7 @@ package com.sudothought.proxy;
 import brave.Span;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
+import com.sudothought.Proxy;
 import com.sudothought.grpc.ScrapeRequest;
 import com.sudothought.grpc.ScrapeResponse;
 import io.prometheus.client.Summary;

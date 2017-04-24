@@ -1,5 +1,6 @@
 package com.sudothought.proxy;
 
+import com.sudothought.Proxy;
 import io.grpc.Attributes;
 import io.grpc.ServerTransportFilter;
 import org.slf4j.Logger;

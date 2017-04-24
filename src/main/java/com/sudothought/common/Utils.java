@@ -1,13 +1,17 @@
 package com.sudothought.common;
 
+import com.beust.jcommander.IParameterValidator;
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.internal.Console;
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
 import com.google.common.io.CharStreams;
+import com.sudothought.Proxy;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigParseOptions;
-import com.typesafe.config.ConfigResolveOptions;
 import com.typesafe.config.ConfigSyntax;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,26 +76,18 @@ public class Utils {
     }
   }
 
-  public static Config readConfig(final String cliConfig, final String envConfig, final boolean exitOnMissingConfig) {
-    return readConfig(cliConfig,
-                      envConfig,
-                      ConfigParseOptions.defaults().setAllowMissing(false),
-                      ConfigFactory.load().resolve(), exitOnMissingConfig).resolve(ConfigResolveOptions.defaults());
-  }
-
   public static Config readConfig(final String cliConfig,
                                   final String envConfig,
                                   final ConfigParseOptions configParseOptions,
                                   final Config fallback,
                                   final boolean exitOnMissingConfig) {
-    // Precedence of confg settings: CLI, ENV_VAR, config info
+
     final String configName = cliConfig != null ? cliConfig : System.getenv(envConfig);
 
-    if (configName == null) {
+    if (Strings.isNullOrEmpty(configName)) {
       if (exitOnMissingConfig) {
-        System.err.println(format("A configuration file or url must be specified with --config or $%s", envConfig));
+        logger.error("A configuration file or url must be specified with --getConfig or ${}", envConfig);
         System.exit(1);
-        return null; // Never reached
       }
 
       return fallback;
@@ -104,10 +100,9 @@ public class Utils {
                             .withFallback(fallback);
       }
       catch (Exception e) {
-        if (e.getCause() instanceof FileNotFoundException)
-          logger.error("Invalid config url: {}", configName);
-        else
-          logger.error(e.getMessage(), e);
+        logger.error(e.getCause() instanceof FileNotFoundException
+                     ? format("Invalid getConfig url: %s", configName)
+                     : format("Exception: %s - %s", e.getClass().getSimpleName(), e.getMessage()), e);
       }
     }
     else {
@@ -116,15 +111,14 @@ public class Utils {
                             .withFallback(fallback);
       }
       catch (Exception e) {
-        if (e.getCause() instanceof FileNotFoundException)
-          logger.error("Invalid config filename: {}", configName);
-        else
-          logger.error(e.getMessage(), e);
+        logger.error(e.getCause() instanceof FileNotFoundException
+                     ? format("Invalid getConfig filename: %s", configName)
+                     : format("Exception: %s - %s", e.getClass().getSimpleName(), e.getMessage()), e);
       }
     }
 
     System.exit(1);
-    return null; // Never reached
+    return fallback; // Never reached
   }
 
   private static ConfigSyntax getConfigSyntax(final String configName) {
@@ -175,11 +169,26 @@ public class Utils {
     }
   }
 
+  public static String getVersionDesc() {
+    final VersionAnnotation val = Proxy.class.getPackage().getAnnotation(VersionAnnotation.class);
+    return format("Version: %s Release Date: %s", val.version(), val.date());
+  }
+
   public static long toMillis(final long secs) {
     return secs * 1000;
   }
 
   public static long toSecs(final long millis) {
     return millis / 1000;
+  }
+
+  public static class VersionValidator
+      implements IParameterValidator {
+    @Override
+    public void validate(final String name, final String value) {
+      final Console console = JCommander.getConsole();
+      console.println(getVersionDesc());
+      System.exit(0);
+    }
   }
 }

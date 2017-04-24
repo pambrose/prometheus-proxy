@@ -1,5 +1,6 @@
 package com.sudothought.agent;
 
+import com.sudothought.Agent;
 import com.sudothought.common.SamplerGauge;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;

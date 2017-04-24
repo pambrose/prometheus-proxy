@@ -2,6 +2,7 @@ package com.sudothought.proxy;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.sudothought.Proxy;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;

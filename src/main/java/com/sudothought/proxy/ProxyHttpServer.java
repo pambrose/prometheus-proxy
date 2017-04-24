@@ -3,6 +3,7 @@ package com.sudothought.proxy;
 import brave.Span;
 import brave.Tracer;
 import com.github.kristofa.brave.sparkjava.BraveTracing;
+import com.sudothought.Proxy;
 import com.sudothought.common.ConfigVals;
 import com.sudothought.grpc.ScrapeResponse;
 import org.slf4j.Logger;
@@ -91,6 +92,7 @@ public class ProxyHttpServer {
 
                       if (rootSpan != null)
                         rootSpan.tag("path", path);
+
                       final ScrapeRequestWrapper scrapeRequest = new ScrapeRequestWrapper(this.proxy,
                                                                                           agentContext,
                                                                                           rootSpan,

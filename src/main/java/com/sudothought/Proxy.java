@@ -1,5 +1,6 @@
-package com.sudothought.proxy;
+package com.sudothought;
 
+import com.beust.jcommander.JCommander;
 import com.github.kristofa.brave.Brave;
 import com.google.common.collect.Maps;
 import com.sudothought.common.ConfigVals;
@@ -8,7 +9,12 @@ import com.sudothought.common.SystemMetrics;
 import com.sudothought.common.Utils;
 import com.sudothought.common.ZipkinReporter;
 import com.sudothought.grpc.UnregisterPathResponse;
-import com.typesafe.config.Config;
+import com.sudothought.proxy.AgentContext;
+import com.sudothought.proxy.ProxyGrpcServer;
+import com.sudothought.proxy.ProxyHttpServer;
+import com.sudothought.proxy.ProxyMetrics;
+import com.sudothought.proxy.ProxyOptions;
+import com.sudothought.proxy.ScrapeRequestWrapper;
 import io.grpc.Attributes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,9 +34,10 @@ import static java.lang.String.format;
 public class Proxy
     implements Closeable {
 
+  private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
+
   public static final  String                          AGENT_ID         = "agent-id";
   public static final  Attributes.Key<String>          ATTRIB_AGENT_ID  = Attributes.Key.of(AGENT_ID);
-  private static final Logger                          logger           = LoggerFactory.getLogger(Proxy.class);
   private final        AtomicBoolean                   stopped          = new AtomicBoolean(false);
   private final        Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap(); // Map agent_id to AgentContext
   private final        Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap(); // Map path to AgentContext
@@ -91,20 +98,22 @@ public class Proxy
 
   public static void main(final String[] argv)
       throws IOException, InterruptedException {
+    final ProxyOptions options = new ProxyOptions();
+    options.parseArgs(Proxy.class.getName(), argv);
+    options.readConfig(PROXY_CONFIG.getText(), false);
+    options.applyDynamicParams();
+
+    final ConfigVals configVals = new ConfigVals(options.getConfig());
+    options.assignOptions(configVals);
+
     logger.info(Utils.getBanner("banners/proxy.txt"));
-
-    final ProxyArgs args = new ProxyArgs();
-    args.parseArgs(Proxy.class.getName(), argv);
-
-    final Config config = Utils.readConfig(args.config, PROXY_CONFIG.getConstVal(), false);
-    final ConfigVals configVals = new ConfigVals(config);
-    args.assignArgs(configVals);
+    logger.info(Utils.getVersionDesc());
 
     final Proxy proxy = new Proxy(configVals,
-                                  args.grpcPort,
-                                  args.httpPort,
-                                  !args.disableMetrics,
-                                  args.metricsPort,
+                                  options.getGrpcPort(),
+                                  options.getHttpPort(),
+                                  options.getEnableMetrics(),
+                                  options.getMetricsPort(),
                                   null,
                                   false);
     proxy.start();
@@ -125,9 +134,9 @@ public class Proxy
     Runtime.getRuntime()
            .addShutdownHook(
                new Thread(() -> {
-                 System.err.println("*** Shutting down Proxy ***");
+                 JCommander.getConsole().println("*** Shutting down Proxy ***");
                  Proxy.this.stop();
-                 System.err.println("*** Proxy shut down ***");
+                 JCommander.getConsole().println("*** Proxy shut down ***");
                }));
   }
 

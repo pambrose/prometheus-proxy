@@ -1,5 +1,6 @@
 package com.sudothought.proxy;
 
+import com.sudothought.Proxy;
 import io.grpc.Attributes;
 import io.grpc.ForwardingServerCall;
 import io.grpc.Metadata;
@@ -26,7 +27,7 @@ public class ProxyInterceptor
                                                                final ServerCallHandler<ReqT, RespT> handler) {
     final Attributes attributes = call.getAttributes();
     final MethodDescriptor<ReqT, RespT> methodDescriptor = call.getMethodDescriptor();
-    final String methodName = methodDescriptor.getFullMethodName();
+    // final String methodName = methodDescriptor.getFullMethodName();
     // logger.info("Intercepting {}", methodName);
 
     return handler.startCall(

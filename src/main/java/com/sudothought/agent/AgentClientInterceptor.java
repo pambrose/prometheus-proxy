@@ -1,5 +1,6 @@
 package com.sudothought.agent;
 
+import com.sudothought.Agent;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -11,7 +12,7 @@ import io.grpc.MethodDescriptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.sudothought.proxy.Proxy.AGENT_ID;
+import static com.sudothought.Proxy.AGENT_ID;
 
 public class AgentClientInterceptor
     implements ClientInterceptor {
