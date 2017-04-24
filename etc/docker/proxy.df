@@ -10,6 +10,8 @@ RUN apk update && apk add maven && \
     apk del maven && \
     rm -rf src target/*.jar target/protoc* target/maven* target/generated* target/archive*
 
+EXPOSE 8080
 EXPOSE 8082
+EXPOSE 50051
 
-ENTRYPOINT ["/prometheus-proxy/target/bin/agent.sh"]
+ENTRYPOINT ["/prometheus-proxy/target/bin/proxy.sh"]

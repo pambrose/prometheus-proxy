@@ -1,8 +1,8 @@
 .*
-docker
 bin
-etc/compose
 target
+etc/docker
+etc/compose
 *.yml
 *.iml
 *.md

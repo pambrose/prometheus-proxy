@@ -16,6 +16,10 @@ public class AgentOptions
   @Parameter(names = {"-n", "--name"}, description = "Agent name")
   private String agentName     = null;
 
+  public AgentOptions(String programName) {
+    super(programName);
+  }
+
   public void assignOptions(final ConfigVals configVals) {
 
     if (this.proxyHostname == null) {

@@ -182,10 +182,9 @@ public class Agent
   public static void main(final String[] argv)
       throws IOException, InterruptedException {
 
-    final AgentOptions options = new AgentOptions();
-    options.parseArgs(Agent.class.getName(), argv);
+    final AgentOptions options = new AgentOptions(Agent.class.getName());
+    options.parseArgs(argv);
     options.readConfig(AGENT_CONFIG.getText(), true);
-    options.applyDynamicParams();
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);

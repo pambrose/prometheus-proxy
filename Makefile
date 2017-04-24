@@ -5,18 +5,21 @@ default: build
 build:
 	mvn -DskipTests=true clean package
 
+config:
+	java -jar ./etc/jars/tscfg-0.8.0.jar --spec etc/config/config.conf --pn com.sudothought.common --cn ConfigVals --dd src/main/java/com/sudothought/common
+
 clean:
 	mvn -DskipTests=true clean
 
 openjdk-base:
-	docker build -f ./docker/openjdk-base.df -t=pambrose/prometheus-openjdk-base:${VERSION} .
+	docker build -f ./etc/docker/openjdk-base.df -t=pambrose/prometheus-openjdk-base:${VERSION} .
 
 alpine-base:
-	docker build -f ./docker/alpine-base.df -t=pambrose/prometheus-alpine-base:1.0.0 .
+	docker build -f ./etc/docker/alpine-base.df -t=pambrose/prometheus-alpine-base:1.0.0 .
 
 docker-build: 
-	docker build -f ./docker/proxy.df -t=pambrose/prometheus-proxy:${VERSION} .
-	docker build -f ./docker/agent.df -t=pambrose/prometheus-agent:${VERSION} .
+	docker build -f ./etc/docker/proxy.df -t=pambrose/prometheus-proxy:${VERSION} .
+	docker build -f ./etc/docker/agent.df -t=pambrose/prometheus-agent:${VERSION} .
 
 docker-push:
 	docker push pambrose/prometheus-alpine-base:$VERSION
@@ -30,9 +33,6 @@ run-agent:
 
 run-proxy:
 	docker run --rm -p 8080:8080 -p 8081:8081 -p 50051:50051 pambrose/pambrose/prometheus-proxy:1.0.0
-
-config:
-	java -jar ./etc/jars/tscfg-0.8.0.jar --spec etc/config/config.conf --pn com.sudothought.common --cn ConfigVals --dd src/main/java/com/sudothought/common
 
 build-coverage:
 	mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report

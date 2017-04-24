@@ -19,10 +19,9 @@ public class TestUtils {
   public static Proxy startProxy(String serverName, boolean metrics_enabled)
       throws IOException {
 
-    ProxyOptions proxyOptions = new ProxyOptions();
-    proxyOptions.parseArgs(Proxy.class.getName(), TestConstants.argv);
+    ProxyOptions proxyOptions = new ProxyOptions(Proxy.class.getName());
+    proxyOptions.parseArgs(TestConstants.argv);
     proxyOptions.readConfig(PROXY_CONFIG.getText(), false);
-    proxyOptions.applyDynamicParams();
 
     ConfigVals proxyConfigVals = new ConfigVals(proxyOptions.getConfig());
     proxyOptions.assignOptions(proxyConfigVals);
@@ -45,10 +44,9 @@ public class TestUtils {
   public static Agent startAgent(String serverName, boolean metrics_enabled)
       throws IOException {
 
-    AgentOptions agentOptions = new AgentOptions();
-    agentOptions.parseArgs(Agent.class.getName(), TestConstants.argv);
+    AgentOptions agentOptions = new AgentOptions(Agent.class.getName());
+    agentOptions.parseArgs(TestConstants.argv);
     agentOptions.readConfig(AGENT_CONFIG.getText(), true);
-    agentOptions.applyDynamicParams();
 
     ConfigVals configVals = new ConfigVals(agentOptions.getConfig());
     agentOptions.assignOptions(configVals);

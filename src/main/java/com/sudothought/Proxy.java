@@ -36,13 +36,13 @@ public class Proxy
 
   private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
 
-  public static final  String                          AGENT_ID         = "agent-id";
-  public static final  Attributes.Key<String>          ATTRIB_AGENT_ID  = Attributes.Key.of(AGENT_ID);
-  private final        AtomicBoolean                   stopped          = new AtomicBoolean(false);
-  private final        Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap(); // Map agent_id to AgentContext
-  private final        Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap(); // Map path to AgentContext
-  private final        Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap(); // Map scrape_id to agent_id
-  private final        ExecutorService                 cleanupService   = Executors.newFixedThreadPool(1);
+  public static final String                          AGENT_ID         = "agent-id";
+  public static final Attributes.Key<String>          ATTRIB_AGENT_ID  = Attributes.Key.of(AGENT_ID);
+  private final       AtomicBoolean                   stopped          = new AtomicBoolean(false);
+  private final       Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap(); // Map agent_id to AgentContext
+  private final       Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap(); // Map path to AgentContext
+  private final       Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap(); // Map scrape_id to agent_id
+  private final       ExecutorService                 cleanupService   = Executors.newFixedThreadPool(1);
 
   private final ConfigVals      configVals;
   private final MetricsServer   metricsServer;
@@ -98,10 +98,9 @@ public class Proxy
 
   public static void main(final String[] argv)
       throws IOException, InterruptedException {
-    final ProxyOptions options = new ProxyOptions();
-    options.parseArgs(Proxy.class.getName(), argv);
+    final ProxyOptions options = new ProxyOptions(Proxy.class.getName());
+    options.parseArgs(argv);
     options.readConfig(PROXY_CONFIG.getText(), false);
-    options.applyDynamicParams();
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);

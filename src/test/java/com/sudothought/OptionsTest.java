@@ -7,13 +7,14 @@ import org.junit.Test;
 
 import java.util.List;
 
-import static com.google.common.collect.Iterables.toArray;
 import static com.sudothought.common.EnvVars.AGENT_CONFIG;
 import static com.sudothought.common.EnvVars.PROXY_CONFIG;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.util.Lists.newArrayList;
 
 public class OptionsTest {
+
+  private static String CONFIG = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/junit-test.conf";
 
   @Test
   public void verifyDefaultValues() {
@@ -24,8 +25,7 @@ public class OptionsTest {
 
   @Test
   public void verifyConfValues() {
-    final ConfigVals configVals = readProxyOptions(newArrayList("--config",
-                                                                "https://dl.dropboxusercontent.com/u/481551/prometheus/junit-tests.conf"));
+    final ConfigVals configVals = readProxyOptions(newArrayList("--config", CONFIG));
     assertThat(configVals.proxy.http.port).isEqualTo(8181);
     assertThat(configVals.proxy.zipkin.enabled).isEqualTo(true);
   }
@@ -45,31 +45,27 @@ public class OptionsTest {
 
   @Test
   public void verifyPathConfigs() {
-    final ConfigVals configVals = readAgentOptions(newArrayList("--config",
-                                                                "https://dl.dropboxusercontent.com/u/481551/prometheus/junit-tests.conf"));
+    final ConfigVals configVals = readAgentOptions(newArrayList("--config", CONFIG));
     assertThat(configVals.agent.pathConfigs.size()).isEqualTo(3);
   }
 
 
   public void verifyProxyDefaults() {
-    final ProxyOptions options = new ProxyOptions();
-    options.parseArgs(Proxy.class.getName(), toArray(newArrayList(), String.class));
+    final ProxyOptions options = new ProxyOptions(Proxy.class.getName());
+    options.parseArgs(newArrayList());
     options.readConfig(PROXY_CONFIG.getText(), false);
-    options.applyDynamicParams();
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);
 
     assertThat(options.getHttpPort()).isEqualTo(8080);
     assertThat(options.getGrpcPort()).isEqualTo(50021);
-
   }
 
   public void verifyAgentDefaults() {
-    AgentOptions options = new AgentOptions();
-    options.parseArgs(Agent.class.getName(), toArray(newArrayList("--name", "test-name", "--proxy", "host5"), String.class));
+    AgentOptions options = new AgentOptions(Agent.class.getName());
+    options.parseArgs(newArrayList("--name", "test-name", "--proxy", "host5"));
     options.readConfig(AGENT_CONFIG.getText(), false);
-    options.applyDynamicParams();
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);
@@ -81,10 +77,9 @@ public class OptionsTest {
   }
 
   private ConfigVals readProxyOptions(final List<String> argList) {
-    final ProxyOptions options = new ProxyOptions();
-    options.parseArgs(Proxy.class.getName(), toArray(argList, String.class));
+    final ProxyOptions options = new ProxyOptions(Proxy.class.getName());
+    options.parseArgs(argList);
     options.readConfig(PROXY_CONFIG.getText(), false);
-    options.applyDynamicParams();
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);
@@ -92,10 +87,9 @@ public class OptionsTest {
   }
 
   private ConfigVals readAgentOptions(final List<String> argList) {
-    AgentOptions options = new AgentOptions();
-    options.parseArgs(Agent.class.getName(), toArray(argList, String.class));
+    AgentOptions options = new AgentOptions(Agent.class.getName());
+    options.parseArgs(argList);
     options.readConfig(AGENT_CONFIG.getText(), false);
-    options.applyDynamicParams();
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);

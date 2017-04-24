@@ -15,6 +15,9 @@ public class ProxyOptions
   @Parameter(names = {"-a", "--agent_port"}, description = "Listen port for agents")
   private Integer grpcPort = null;
 
+  public ProxyOptions(String programName) {
+    super(programName);
+  }
 
   public void assignOptions(final ConfigVals configVals) {
 
