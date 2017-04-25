@@ -21,7 +21,7 @@ public class TestUtils {
 
     ProxyOptions proxyOptions = new ProxyOptions(Proxy.class.getName());
     proxyOptions.parseArgs(TestConstants.argv);
-    proxyOptions.readConfig(PROXY_CONFIG.getText(), false);
+    proxyOptions.readConfig(PROXY_CONFIG.name(), false);
 
     ConfigVals proxyConfigVals = new ConfigVals(proxyOptions.getConfig());
     proxyOptions.assignOptions(proxyConfigVals);
@@ -46,7 +46,7 @@ public class TestUtils {
 
     AgentOptions agentOptions = new AgentOptions(Agent.class.getName());
     agentOptions.parseArgs(TestConstants.argv);
-    agentOptions.readConfig(AGENT_CONFIG.getText(), true);
+    agentOptions.readConfig(AGENT_CONFIG.name(), true);
 
     ConfigVals configVals = new ConfigVals(agentOptions.getConfig());
     agentOptions.assignOptions(configVals);

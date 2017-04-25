@@ -63,6 +63,15 @@ public class ProxyHttpServer {
                                                                            .start()
                                                               : null;
                     try {
+
+                      if (this.proxy.isStopped()) {
+                        logger.error("Proxy stopped");
+                        res.status(503);
+                        if (this.proxy.isMetricsEnabled())
+                          this.proxy.getMetrics().scrapeRequests.labels("proxy_stopped").inc();
+                        return null;
+                      }
+
                       final String[] vals = req.splat();
                       if (vals == null || vals.length == 0) {
                         logger.info("Request missing path");
@@ -87,6 +96,14 @@ public class ProxyHttpServer {
                         res.status(404);
                         if (this.proxy.isMetricsEnabled())
                           this.proxy.getMetrics().scrapeRequests.labels("invalid_path").inc();
+                        return null;
+                      }
+
+                      if (!agentContext.isValid()) {
+                        logger.error("Invalid AgentContext");
+                        res.status(404);
+                        if (this.proxy.isMetricsEnabled())
+                          this.proxy.getMetrics().scrapeRequests.labels("invalid_agent_context").inc();
                         return null;
                       }
 

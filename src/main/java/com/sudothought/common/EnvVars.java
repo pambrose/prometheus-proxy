@@ -6,28 +6,20 @@ import static java.lang.System.getenv;
 public enum EnvVars {
 
   // Proxy
-  PROXY_CONFIG("PROXY_CONFIG"),
-  PROXY_PORT("PROXY_PORT"),
-  AGENT_PORT("AGENT_PORT"),
+  PROXY_CONFIG,
+  PROXY_PORT,
+  AGENT_PORT,
 
   // Agent
-  AGENT_CONFIG("AGENT_CONFIG"),
-  PROXY_HOSTNAME("PROXY_HOSTNAME"),
-  AGENT_NAME("AGENT_NAME"),
+  AGENT_CONFIG,
+  PROXY_HOSTNAME,
+  AGENT_NAME,
 
   // Common
-  METRICS_PORT("METRICS_PORT"),
-  ENABLE_METRICS("ENABLE_METRICS");
+  METRICS_PORT,
+  ENABLE_METRICS;
 
-  private final String text;
-
-  EnvVars(final String text) {
-    this.text = text;
-  }
-
-  public String getText() { return this.text; }
-
-  private String getEnv() { return getenv(this.getText()); }
+  private String getEnv() { return getenv(this.name()); }
 
   public String getEnv(final String defaultVal) {
     return this.getEnv() != null ? this.getEnv() : defaultVal;

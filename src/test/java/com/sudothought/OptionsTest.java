@@ -53,7 +53,7 @@ public class OptionsTest {
   public void verifyProxyDefaults() {
     final ProxyOptions options = new ProxyOptions(Proxy.class.getName());
     options.parseArgs(newArrayList());
-    options.readConfig(PROXY_CONFIG.getText(), false);
+    options.readConfig(PROXY_CONFIG.name(), false);
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);
@@ -65,7 +65,7 @@ public class OptionsTest {
   public void verifyAgentDefaults() {
     AgentOptions options = new AgentOptions(Agent.class.getName());
     options.parseArgs(newArrayList("--name", "test-name", "--proxy", "host5"));
-    options.readConfig(AGENT_CONFIG.getText(), false);
+    options.readConfig(AGENT_CONFIG.name(), false);
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);
@@ -79,7 +79,7 @@ public class OptionsTest {
   private ConfigVals readProxyOptions(final List<String> argList) {
     final ProxyOptions options = new ProxyOptions(Proxy.class.getName());
     options.parseArgs(argList);
-    options.readConfig(PROXY_CONFIG.getText(), false);
+    options.readConfig(PROXY_CONFIG.name(), false);
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);
@@ -89,7 +89,7 @@ public class OptionsTest {
   private ConfigVals readAgentOptions(final List<String> argList) {
     AgentOptions options = new AgentOptions(Agent.class.getName());
     options.parseArgs(argList);
-    options.readConfig(AGENT_CONFIG.getText(), false);
+    options.readConfig(AGENT_CONFIG.name(), false);
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);

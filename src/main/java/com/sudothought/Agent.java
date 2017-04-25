@@ -184,7 +184,7 @@ public class Agent
 
     final AgentOptions options = new AgentOptions(Agent.class.getName());
     options.parseArgs(argv);
-    options.readConfig(AGENT_CONFIG.getText(), true);
+    options.readConfig(AGENT_CONFIG.name(), true);
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);

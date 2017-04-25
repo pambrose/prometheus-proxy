@@ -100,7 +100,7 @@ public class Proxy
       throws IOException, InterruptedException {
     final ProxyOptions options = new ProxyOptions(Proxy.class.getName());
     options.parseArgs(argv);
-    options.readConfig(PROXY_CONFIG.getText(), false);
+    options.readConfig(PROXY_CONFIG.name(), false);
 
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);
