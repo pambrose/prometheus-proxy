@@ -61,8 +61,8 @@ public class AgentContext {
       return this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS);
     }
     catch (InterruptedException e) {
-      logger.warn("Thread interrupted", e);
-      Thread.currentThread().interrupt();
+      // logger.warn("Thread interrupted", e);
+      // Thread.currentThread().interrupt();
       return null;
     }
   }

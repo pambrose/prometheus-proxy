@@ -292,8 +292,8 @@ public class Agent
         this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
       }
       catch (InterruptedException e) {
-        logger.warn("Thread interrupted", e);
-        Thread.currentThread().interrupt();
+        // Thread.currentThread().interrupt();
+        // logger.warn("Thread interrupted", e);
       }
 
       stoppedLatch.countDown();
@@ -524,8 +524,8 @@ public class Agent
                     scrapeResponseQueue.put(response);
                   }
                   catch (InterruptedException e) {
-                    logger.warn("Thread interrupted", e);
-                    Thread.currentThread().interrupt();
+                    // logger.warn("Thread interrupted", e);
+                    // Thread.currentThread().interrupt();
                   }
                 });
           }
@@ -577,8 +577,8 @@ public class Agent
         }
       }
       catch (InterruptedException e) {
-        logger.warn("Thread interrupted", e);
-        Thread.currentThread().interrupt();
+        // logger.warn("Thread interrupted", e);
+        // Thread.currentThread().interrupt();
       }
     }
 

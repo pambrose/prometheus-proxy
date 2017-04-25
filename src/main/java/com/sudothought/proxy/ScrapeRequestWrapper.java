@@ -77,8 +77,8 @@ public class ScrapeRequestWrapper {
       return this.complete.await(waitMillis, TimeUnit.MILLISECONDS);
     }
     catch (InterruptedException e) {
-      logger.warn("Thread interrupted", e);
-      Thread.currentThread().interrupt();
+      // logger.warn("Thread interrupted", e);
+      // Thread.currentThread().interrupt();
     }
     return false;
   }

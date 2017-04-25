@@ -156,7 +156,7 @@ public class Utils {
       Thread.sleep(millis);
     }
     catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
+      // Thread.currentThread().interrupt();
     }
   }
 
@@ -165,7 +165,7 @@ public class Utils {
       Thread.sleep(toMillis(secs));
     }
     catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
+      // Thread.currentThread().interrupt();
     }
   }
 
