@@ -122,7 +122,7 @@ public class Agent
     this.scrapeResponseQueue = new ArrayBlockingQueue<>(queueSize);
 
     if (metricsEnabled) {
-      logger.info("Metrics server enabled");
+      logger.info("Metrics server at {} /{} enabled", metricsPort, this.getConfigVals().metrics.path);
       this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
       this.metrics = new AgentMetrics(this);
       SystemMetrics.initialize(this.getConfigVals().metrics.standardExportsEnabled,
