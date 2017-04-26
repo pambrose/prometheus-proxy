@@ -3,13 +3,13 @@ VERSION=1.0.0
 default: build
 
 build:
-	mvn -DskipTests=true clean package
+	./mvnw -DskipTests=true clean package
 
 config:
 	java -jar ./etc/jars/tscfg-0.8.0.jar --spec etc/config/config.conf --pn com.sudothought.common --cn ConfigVals --dd src/main/java/com/sudothought/common
 
 clean:
-	mvn -DskipTests=true clean
+	./mvnw -DskipTests=true clean
 
 openjdk-base:
 	docker build -f ./etc/docker/openjdk-base.df -t=pambrose/prometheus-openjdk-base:${VERSION} .
@@ -35,22 +35,22 @@ run-proxy:
 	docker run --rm -p 8080:8080 -p 8081:8081 -p 50051:50051 pambrose/pambrose/prometheus-proxy:1.0.0
 
 build-coverage:
-	mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report
+	./mvnw clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report
 
 report-coverage:
-	mvn -DrepoToken=${COVERALLS_TOKEN} clean package test jacoco:report coveralls:report
+	./mvnw -DrepoToken=${COVERALLS_TOKEN} clean package test jacoco:report coveralls:report
 
 site:
-	mvn site
+	./mvnw site
 
 tree:
-	mvn dependency:tree
+	./mvnw dependency:tree
 
 jarcheck:
-	mvn versions:display-dependency-updates
+	./mvnw versions:display-dependency-updates
 
 plugincheck:
-	mvn versions:display-plugin-updates
+	./mvnw versions:display-plugin-updates
 
 versioncheck: jarcheck plugincheck
 

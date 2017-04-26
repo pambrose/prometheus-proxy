@@ -5,9 +5,7 @@ WORKDIR /prometheus-proxy
 
 COPY . /prometheus-proxy/
 
-RUN apk update && apk add maven && \
-    mvn -DskipTests=true clean package && \
-    apk del maven && \
+RUN ./mvnw -DskipTests=true clean package && \
     rm -rf src target/*.jar target/protoc* target/maven* target/generated* target/archive*
 
 CMD ["/bin/sh"]
