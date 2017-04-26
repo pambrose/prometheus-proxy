@@ -21,11 +21,11 @@ public class ProxyHttpServer {
 
   private static final Logger logger = LoggerFactory.getLogger(ProxyHttpServer.class);
 
-  private final Proxy            proxy;
-  private final int              port;
-  private final Service          http;
-  private final Tracer           tracer;
-  private final ConfigVals.Proxy configVals;
+  private final Proxy             proxy;
+  private final int               port;
+  private final Service           http;
+  private final Tracer            tracer;
+  private final ConfigVals.Proxy2 configVals;
 
   public ProxyHttpServer(final Proxy proxy, final int port) {
     this.proxy = proxy;
@@ -83,7 +83,7 @@ public class ProxyHttpServer {
 
                       final String path = vals[0];
 
-                      if (this.configVals.internal.blitzEnabled && path.equals(this.configVals.internal.blitzPath)) {
+                      if (this.configVals.internal.blitz.enabled && path.equals(this.configVals.internal.blitz.path)) {
                         res.status(200);
                         res.type("text/plain");
                         return "42";

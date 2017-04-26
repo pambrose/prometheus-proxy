@@ -30,7 +30,7 @@ public class TestUtils {
     logger.info(Utils.getVersionDesc());
 
     Proxy proxy = new Proxy(proxyConfigVals,
-                            proxyOptions.getGrpcPort(),
+                            proxyOptions.getAgentPort(),
                             TestConstants.PROXY_PORT,
                             metrics_enabled,
                             proxyOptions.getMetricsPort(),

@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.sudothought.common.EnvVars.PROXY_CONFIG;
+import static com.sudothought.common.Utils.sleepForSecs;
 import static java.lang.String.format;
 
 public class Proxy
@@ -81,7 +82,7 @@ public class Proxy
     }
 
     if (this.isZipkinEnabled()) {
-      final ConfigVals.Proxy.Zipkin2 zipkin = this.getConfigVals().zipkin;
+      final ConfigVals.Proxy2.Internal2.Zipkin2 zipkin = this.getConfigVals().internal.zipkin;
       final String zipkinHost = format("http://%s:%d/%s", zipkin.hostname, zipkin.port, zipkin.path);
       logger.info("Zipkin reporter enabled for {}", zipkinHost);
       this.zipkinReporter = new ZipkinReporter(zipkinHost, zipkin.serviceName);
@@ -109,8 +110,8 @@ public class Proxy
     logger.info(Utils.getVersionDesc());
 
     final Proxy proxy = new Proxy(configVals,
-                                  options.getGrpcPort(),
-                                  options.getHttpPort(),
+                                  options.getAgentPort(),
+                                  options.getProxyPort(),
                                   options.getEnableMetrics(),
                                   options.getMetricsPort(),
                                   null,
@@ -188,7 +189,7 @@ public class Proxy
                 }
               });
 
-          Utils.sleepForSecs(threadPauseSecs);
+          sleepForSecs(threadPauseSecs);
         }
       });
     }
@@ -291,13 +292,13 @@ public class Proxy
 
   public ProxyMetrics getMetrics() { return this.metrics; }
 
-  public boolean isZipkinEnabled() { return this.getConfigVals().zipkin.enabled; }
+  public boolean isZipkinEnabled() { return this.getConfigVals().internal.zipkin.enabled; }
 
   public ZipkinReporter getZipkinReporter() { return this.zipkinReporter; }
 
   public Brave getBrave() { return this.getZipkinReporter().getBrave(); }
 
-  public ConfigVals.Proxy getConfigVals() { return this.configVals.proxy; }
+  public ConfigVals.Proxy2 getConfigVals() { return this.configVals.proxy; }
 
   public int getTotalAgentRequestQueueSize() {
     return this.agentContextMap.values()

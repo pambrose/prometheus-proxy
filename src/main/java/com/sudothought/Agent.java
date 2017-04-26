@@ -65,6 +65,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.sudothought.common.EnvVars.AGENT_CONFIG;
 import static com.sudothought.common.InstrumentedThreadFactory.newInstrumentedThreadFactory;
+import static com.sudothought.common.Utils.sleepForMillis;
 import static com.sudothought.common.Utils.toMillis;
 import static com.sudothought.grpc.ProxyServiceGrpc.newBlockingStub;
 import static com.sudothought.grpc.ProxyServiceGrpc.newStub;
@@ -146,8 +147,8 @@ public class Agent
                                                                            .setDaemon(true)
                                                                            .build());
 
-    logger.info("Assigning proxy reconnect pause time to {} secs", this.getConfigVals().grpc.reconectPauseSecs);
-    this.reconnectLimiter = RateLimiter.create(1.0 / this.getConfigVals().grpc.reconectPauseSecs);
+    logger.info("Assigning proxy reconnect pause time to {} secs", this.getConfigVals().internal.reconectPauseSecs);
+    this.reconnectLimiter = RateLimiter.create(1.0 / this.getConfigVals().internal.reconectPauseSecs);
 
     this.pathConfigs = configVals.agent.pathConfigs.stream()
                                                    .map(v -> ImmutableMap.of("name", v.name,
@@ -157,8 +158,8 @@ public class Agent
                                                                           v.get("path"), v.get("url")))
                                                    .collect(Collectors.toList());
 
-    if (this.getConfigVals().zipkin.enabled) {
-      final ConfigVals.Agent.Zipkin zipkin = this.getConfigVals().zipkin;
+    if (this.getConfigVals().internal.zipkin.enabled) {
+      final ConfigVals.Agent.Internal.Zipkin zipkin = this.getConfigVals().internal.zipkin;
       final String zipkinHost = format("http://%s:%d/%s", zipkin.hostname, zipkin.port, zipkin.path);
       logger.info("Zipkin reporter enabled for {}", zipkinHost);
       this.zipkinReporter = new ZipkinReporter(zipkinHost, zipkin.serviceName);
@@ -321,7 +322,7 @@ public class Agent
               final long timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSent.get();
               if (timeSinceLastWriteMillis > toMillis(maxInactivitySecs))
                 this.sendHeartBeat(disconnected);
-              Utils.sleepForMillis(threadPauseMillis);
+              sleepForMillis(threadPauseMillis);
             }
             logger.info("Heartbeat completed");
           });

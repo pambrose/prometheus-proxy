@@ -20,21 +20,21 @@ public class OptionsTest {
   public void verifyDefaultValues() {
     final ConfigVals configVals = readProxyOptions(newArrayList());
     assertThat(configVals.proxy.http.port).isEqualTo(8080);
-    assertThat(configVals.proxy.zipkin.enabled).isEqualTo(false);
+    assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(false);
   }
 
   @Test
   public void verifyConfValues() {
     final ConfigVals configVals = readProxyOptions(newArrayList("--config", CONFIG));
     assertThat(configVals.proxy.http.port).isEqualTo(8181);
-    assertThat(configVals.proxy.zipkin.enabled).isEqualTo(true);
+    assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(true);
   }
 
   @Test
   public void verifyUnquotedPropValue() {
-    final ConfigVals configVals = readProxyOptions(newArrayList("-Dproxy.http.port=9393", "-Dproxy.zipkin.enabled=true"));
+    final ConfigVals configVals = readProxyOptions(newArrayList("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"));
     assertThat(configVals.proxy.http.port).isEqualTo(9393);
-    assertThat(configVals.proxy.zipkin.enabled).isEqualTo(true);
+    assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(true);
   }
 
   @Test
@@ -58,8 +58,8 @@ public class OptionsTest {
     final ConfigVals configVals = new ConfigVals(options.getConfig());
     options.assignOptions(configVals);
 
-    assertThat(options.getHttpPort()).isEqualTo(8080);
-    assertThat(options.getGrpcPort()).isEqualTo(50021);
+    assertThat(options.getProxyPort()).isEqualTo(8080);
+    assertThat(options.getAgentPort()).isEqualTo(50021);
   }
 
   public void verifyAgentDefaults() {

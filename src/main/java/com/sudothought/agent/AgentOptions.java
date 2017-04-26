@@ -23,11 +23,11 @@ public class AgentOptions
   public void assignOptions(final ConfigVals configVals) {
 
     if (this.proxyHostname == null) {
-      final String configHostname = configVals.agent.grpc.hostname;
+      final String configHostname = configVals.agent.proxy.hostname;
       this.proxyHostname = PROXY_HOSTNAME.getEnv(configHostname.contains(":") ? configHostname
                                                                               : format("%s:%d",
                                                                                        configHostname,
-                                                                                       configVals.agent.grpc.port));
+                                                                                       configVals.agent.proxy.port));
     }
 
     if (this.agentName == null)

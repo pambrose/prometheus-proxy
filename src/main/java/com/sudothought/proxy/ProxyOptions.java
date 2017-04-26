@@ -11,9 +11,9 @@ public class ProxyOptions
     extends BaseOptions {
 
   @Parameter(names = {"-p", "--port"}, description = "Listen port for Prometheus")
-  private Integer httpPort = null;
+  private Integer proxyPort = null;
   @Parameter(names = {"-a", "--agent_port"}, description = "Listen port for agents")
-  private Integer grpcPort = null;
+  private Integer agentPort = null;
 
   public ProxyOptions(String programName) {
     super(programName);
@@ -21,17 +21,17 @@ public class ProxyOptions
 
   public void assignOptions(final ConfigVals configVals) {
 
-    if (this.httpPort == null)
-      this.httpPort = PROXY_PORT.getEnv(configVals.proxy.http.port);
+    if (this.proxyPort == null)
+      this.proxyPort = PROXY_PORT.getEnv(configVals.proxy.http.port);
 
-    if (this.grpcPort == null)
-      this.grpcPort = AGENT_PORT.getEnv(configVals.proxy.grpc.port);
+    if (this.agentPort == null)
+      this.agentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port);
 
     this.assignMetricsPort(configVals.proxy.metrics.port);
     this.assignEnableMetrics(configVals.proxy.metrics.enabled);
   }
 
-  public int getHttpPort() { return this.httpPort; }
+  public int getProxyPort() { return this.proxyPort; }
 
-  public int getGrpcPort() { return this.grpcPort; }
+  public int getAgentPort() { return this.agentPort; }
 }
