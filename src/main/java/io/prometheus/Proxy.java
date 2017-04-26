@@ -98,17 +98,12 @@ public class Proxy
 
   public static void main(final String[] argv)
       throws IOException, InterruptedException {
-    final ProxyOptions options = new ProxyOptions(Proxy.class.getName());
-    options.parseArgs(argv);
-    options.readConfig(PROXY_CONFIG.name(), false);
-
-    final ConfigVals configVals = new ConfigVals(options.getConfig());
-    options.assignOptions(configVals);
+    final ProxyOptions options = new ProxyOptions(Proxy.class.getName(), argv, PROXY_CONFIG.name(), false);
 
     logger.info(Utils.getBanner("banners/proxy.txt"));
     logger.info(Utils.getVersionDesc());
 
-    final Proxy proxy = new Proxy(configVals,
+    final Proxy proxy = new Proxy(options.getConfigVals(),
                                   options.getAgentPort(),
                                   options.getProxyPort(),
                                   options.getEnableMetrics(),

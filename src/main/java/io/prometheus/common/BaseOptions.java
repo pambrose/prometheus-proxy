@@ -4,7 +4,6 @@ import com.beust.jcommander.DynamicParameter;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
-import com.google.common.collect.Iterables;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigParseOptions;
@@ -14,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -22,13 +20,17 @@ import static io.prometheus.common.EnvVars.ENABLE_METRICS;
 import static io.prometheus.common.EnvVars.METRICS_PORT;
 import static java.lang.String.format;
 
-public class BaseOptions {
+public abstract class BaseOptions {
 
-  private static final Logger                  logger     = LoggerFactory.getLogger(BaseOptions.class);
-  private static final ConfigParseOptions      PROPS      = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES);
-  private static final String[]                EMPTY_ARGV = {};
-  private final        AtomicReference<Config> configRef  = new AtomicReference<>();
-  private final String programName;
+  private static final Logger             logger     = LoggerFactory.getLogger(BaseOptions.class);
+  private static final ConfigParseOptions PROPS      = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES);
+  private static final String[]           EMPTY_ARGV = {};
+
+  private final AtomicReference<Config> configRef = new AtomicReference<>();
+
+  private final String     programName;
+  private final ConfigVals configVals;
+
   @Parameter(names = {"-c", "--conf", "--config"}, description = "Configuration file or url")
   private String              config_name   = null;
   @Parameter(names = {"-m", "--metrics_port"}, description = "Metrics listen port")
@@ -42,15 +44,20 @@ public class BaseOptions {
   @DynamicParameter(names = "-D", description = "Dynamic property assignment")
   private Map<String, String> dynamicParams = new HashMap<>();
 
-  public BaseOptions(final String programName) {
+  protected BaseOptions(final String programName, final String[] argv, final String envConfig,
+                        final boolean exitOnMissingConfig) {
     this.programName = programName;
+    this.parseArgs(argv);
+    this.readConfig(envConfig, exitOnMissingConfig);
+
+    this.configVals = new ConfigVals(this.configRef.get());
   }
 
-  public void parseArgs(final List<String> args) {
-    this.parseArgs(Iterables.toArray(args, String.class));
-  }
+  public ConfigVals getConfigVals() { return this.configVals; }
 
-  public void parseArgs(final String[] argv) {
+  protected abstract void assignConfigVals(final ConfigVals configVals);
+
+  private void parseArgs(final String[] argv) {
     try {
       final JCommander jcom = new JCommander(this);
       jcom.setProgramName(this.programName);
@@ -78,7 +85,7 @@ public class BaseOptions {
       this.enableMetrics = ENABLE_METRICS.getEnv(configVal);
   }
 
-  public void readConfig(final String envConfig, final boolean exitOnMissingConfig) {
+  private void readConfig(final String envConfig, final boolean exitOnMissingConfig) {
     final Config config = Utils.readConfig(this.config_name,
                                            envConfig,
                                            ConfigParseOptions.defaults().setAllowMissing(false),
@@ -95,13 +102,10 @@ public class BaseOptions {
                                                    : value);
           System.setProperty(key, prop);
           final Config newConfig = ConfigFactory.parseString(prop, PROPS);
-          configRef.set(newConfig.withFallback(configRef.get()).resolve());
+          configRef.set(newConfig.withFallback(this.configRef.get()).resolve());
         });
   }
 
-  public Config getConfig() {
-    return configRef.get();
-  }
 
   public int getMetricsPort() { return this.metricsPort; }
 

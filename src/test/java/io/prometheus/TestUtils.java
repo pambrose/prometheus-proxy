@@ -1,14 +1,15 @@
 package io.prometheus;
 
 import io.prometheus.agent.AgentOptions;
-import io.prometheus.common.ConfigVals;
-import io.prometheus.common.EnvVars;
 import io.prometheus.common.Utils;
 import io.prometheus.proxy.ProxyOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+
+import static io.prometheus.common.EnvVars.AGENT_CONFIG;
+import static io.prometheus.common.EnvVars.PROXY_CONFIG;
 
 public class TestUtils {
 
@@ -17,21 +18,19 @@ public class TestUtils {
   public static Proxy startProxy(String serverName, boolean metrics_enabled)
       throws IOException {
 
-    ProxyOptions proxyOptions = new ProxyOptions(Proxy.class.getName());
-    proxyOptions.parseArgs(TestConstants.argv);
-    proxyOptions.readConfig(EnvVars.PROXY_CONFIG.name(), false);
-
-    ConfigVals proxyConfigVals = new ConfigVals(proxyOptions.getConfig());
-    proxyOptions.assignOptions(proxyConfigVals);
+    ProxyOptions options = new ProxyOptions(Proxy.class.getName(),
+                                            TestConstants.argv,
+                                            PROXY_CONFIG.name(),
+                                            false);
 
     logger.info(Utils.getBanner("banners/proxy.txt"));
     logger.info(Utils.getVersionDesc());
 
-    Proxy proxy = new Proxy(proxyConfigVals,
-                            proxyOptions.getAgentPort(),
+    Proxy proxy = new Proxy(options.getConfigVals(),
+                            options.getAgentPort(),
                             TestConstants.PROXY_PORT,
                             metrics_enabled,
-                            proxyOptions.getMetricsPort(),
+                            options.getMetricsPort(),
                             serverName,
                             true);
     proxy.start();
@@ -42,22 +41,20 @@ public class TestUtils {
   public static Agent startAgent(String serverName, boolean metrics_enabled)
       throws IOException {
 
-    AgentOptions agentOptions = new AgentOptions(Agent.class.getName());
-    agentOptions.parseArgs(TestConstants.argv);
-    agentOptions.readConfig(EnvVars.AGENT_CONFIG.name(), true);
-
-    ConfigVals configVals = new ConfigVals(agentOptions.getConfig());
-    agentOptions.assignOptions(configVals);
+    AgentOptions options = new AgentOptions(Agent.class.getName(),
+                                            TestConstants.argv,
+                                            AGENT_CONFIG.name(),
+                                            false);
 
     logger.info(Utils.getBanner("banners/agent.txt"));
     logger.info(Utils.getVersionDesc());
 
-    Agent agent = new Agent(configVals,
+    Agent agent = new Agent(options.getConfigVals(),
                             serverName,
-                            agentOptions.getAgentName(),
-                            agentOptions.getProxyHostname(),
+                            options.getAgentName(),
+                            options.getProxyHostname(),
                             metrics_enabled,
-                            agentOptions.getMetricsPort(),
+                            options.getMetricsPort(),
                             true);
     agent.start();
 

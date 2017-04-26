@@ -1,9 +1,12 @@
 package io.prometheus.agent;
 
 import com.beust.jcommander.Parameter;
+import com.google.common.collect.Iterables;
 import io.prometheus.common.BaseOptions;
 import io.prometheus.common.ConfigVals;
 import io.prometheus.common.EnvVars;
+
+import java.util.List;
 
 import static java.lang.String.format;
 
@@ -15,11 +18,23 @@ public class AgentOptions
   @Parameter(names = {"-n", "--name"}, description = "Agent name")
   private String agentName     = null;
 
-  public AgentOptions(String programName) {
-    super(programName);
+  public AgentOptions(final String programName,
+                      final List<String> args,
+                      final String envConfig,
+                      final boolean exitOnMissingConfig) {
+    this(programName, Iterables.toArray(args, String.class), envConfig, exitOnMissingConfig);
   }
 
-  public void assignOptions(final ConfigVals configVals) {
+  public AgentOptions(final String programName,
+                      final String[] argv,
+                      final String envConfig,
+                      final boolean exitOnMissingConfig) {
+    super(programName, argv, envConfig, exitOnMissingConfig);
+    this.assignConfigVals(this.getConfigVals());
+  }
+
+  @Override
+  protected void assignConfigVals(final ConfigVals configVals) {
 
     if (this.proxyHostname == null) {
       final String configHostname = configVals.agent.proxy.hostname;

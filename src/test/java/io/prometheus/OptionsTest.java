@@ -50,24 +50,17 @@ public class OptionsTest {
 
 
   public void verifyProxyDefaults() {
-    final ProxyOptions options = new ProxyOptions(Proxy.class.getName());
-    options.parseArgs(newArrayList());
-    options.readConfig(EnvVars.PROXY_CONFIG.name(), false);
-
-    final ConfigVals configVals = new ConfigVals(options.getConfig());
-    options.assignOptions(configVals);
+    final ProxyOptions options = new ProxyOptions(Proxy.class.getName(), newArrayList(), EnvVars.PROXY_CONFIG.name(), false);
 
     assertThat(options.getProxyPort()).isEqualTo(8080);
     assertThat(options.getAgentPort()).isEqualTo(50021);
   }
 
   public void verifyAgentDefaults() {
-    AgentOptions options = new AgentOptions(Agent.class.getName());
-    options.parseArgs(newArrayList("--name", "test-name", "--proxy", "host5"));
-    options.readConfig(EnvVars.AGENT_CONFIG.name(), false);
-
-    final ConfigVals configVals = new ConfigVals(options.getConfig());
-    options.assignOptions(configVals);
+    AgentOptions options = new AgentOptions(Agent.class.getName(),
+                                            newArrayList("--name", "test-name", "--proxy", "host5"),
+                                            EnvVars.AGENT_CONFIG.name(),
+                                            false);
 
     assertThat(options.getEnableMetrics()).isEqualTo(false);
     assertThat(options.getDynamicParams().size()).isEqualTo(0);
@@ -76,22 +69,12 @@ public class OptionsTest {
   }
 
   private ConfigVals readProxyOptions(final List<String> argList) {
-    final ProxyOptions options = new ProxyOptions(Proxy.class.getName());
-    options.parseArgs(argList);
-    options.readConfig(EnvVars.PROXY_CONFIG.name(), false);
-
-    final ConfigVals configVals = new ConfigVals(options.getConfig());
-    options.assignOptions(configVals);
-    return configVals;
+    final ProxyOptions options = new ProxyOptions(Proxy.class.getName(), argList, EnvVars.PROXY_CONFIG.name(), false);
+    return options.getConfigVals();
   }
 
   private ConfigVals readAgentOptions(final List<String> argList) {
-    AgentOptions options = new AgentOptions(Agent.class.getName());
-    options.parseArgs(argList);
-    options.readConfig(EnvVars.AGENT_CONFIG.name(), false);
-
-    final ConfigVals configVals = new ConfigVals(options.getConfig());
-    options.assignOptions(configVals);
-    return configVals;
+    AgentOptions options = new AgentOptions(Agent.class.getName(), argList, EnvVars.AGENT_CONFIG.name(), false);
+    return options.getConfigVals();
   }
 }

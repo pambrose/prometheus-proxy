@@ -183,17 +183,12 @@ public class Agent
   public static void main(final String[] argv)
       throws IOException, InterruptedException {
 
-    final AgentOptions options = new AgentOptions(Agent.class.getName());
-    options.parseArgs(argv);
-    options.readConfig(AGENT_CONFIG.name(), true);
-
-    final ConfigVals configVals = new ConfigVals(options.getConfig());
-    options.assignOptions(configVals);
+    final AgentOptions options = new AgentOptions(Agent.class.getName(), argv, AGENT_CONFIG.name(), true);
 
     logger.info(Utils.getBanner("banners/agent.txt"));
     logger.info(Utils.getVersionDesc());
 
-    final Agent agent = new Agent(configVals,
+    final Agent agent = new Agent(options.getConfigVals(),
                                   null,
                                   options.getAgentName(),
                                   options.getProxyHostname(),

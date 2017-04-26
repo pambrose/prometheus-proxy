@@ -1,8 +1,11 @@
 package io.prometheus.proxy;
 
 import com.beust.jcommander.Parameter;
+import com.google.common.collect.Iterables;
 import io.prometheus.common.BaseOptions;
 import io.prometheus.common.ConfigVals;
+
+import java.util.List;
 
 import static io.prometheus.common.EnvVars.AGENT_PORT;
 import static io.prometheus.common.EnvVars.PROXY_PORT;
@@ -15,11 +18,23 @@ public class ProxyOptions
   @Parameter(names = {"-a", "--agent_port"}, description = "Listen port for agents")
   private Integer agentPort = null;
 
-  public ProxyOptions(String programName) {
-    super(programName);
+  public ProxyOptions(final String programName,
+                      final List<String> args,
+                      final String envConfig,
+                      final boolean exitOnMissingConfig) {
+    this(programName, Iterables.toArray(args, String.class), envConfig, exitOnMissingConfig);
   }
 
-  public void assignOptions(final ConfigVals configVals) {
+  public ProxyOptions(final String programName,
+                      final String[] argv,
+                      final String envConfig,
+                      final boolean exitOnMissingConfig) {
+    super(programName, argv, envConfig, exitOnMissingConfig);
+    this.assignConfigVals(this.getConfigVals());
+  }
+
+  @Override
+  protected void assignConfigVals(final ConfigVals configVals) {
 
     if (this.proxyPort == null)
       this.proxyPort = PROXY_PORT.getEnv(configVals.proxy.http.port);
