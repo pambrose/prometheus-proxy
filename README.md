@@ -16,6 +16,8 @@ Agents connect to a Proxy and register the paths for which they will provide dat
 
 ## CLI Usage
 
+Download the proxy and agent uber-jars from [here](https://github.com/pambrose/prometheus-proxy/releases).
+
 Start a proxy with:
 
 ```bash
@@ -29,8 +31,8 @@ $ java -jar prometheus-agent.jar --config https://raw.githubusercontent.com/pamb
 ```
 
 If prometheus-proxy were running on a machine named *proxy.local* and the 
-prometheus-agent had this `agent.pathConfigs` value in the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) 
-config file:
+`agent.pathConfigs` value in the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) 
+config file had these values:
 
 ```hocon
 agent {
@@ -55,6 +57,7 @@ agent {
 ```
 
 then the *prometheus.yml* scrape_config would target the three apps at:
+
 * http://proxy.local:8080/myapp1_metrics
 * http://proxy.local:8080/myapp2_metrics
 * http://proxy.local:8080/myapp3_metrics
