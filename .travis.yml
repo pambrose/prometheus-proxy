@@ -6,9 +6,6 @@ jdk:
 notifications:
   email:
     - pambrose@mac.com
-#    on_success: always
-#    on_failure: always
-#  email: false
 
 after_success:
-  - mvn clean test jacoco:report coveralls:report
+  - ./mvnw clean test jacoco:report coveralls:report

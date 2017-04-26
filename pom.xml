@@ -35,7 +35,7 @@
         <maven-jar-plugin.version>3.0.2</maven-jar-plugin.version>
         <appassembler.version>1.10</appassembler.version>
 
-        <maven.version>3.0.5</maven.version>
+        <maven.version>3.5.0</maven.version>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
 
