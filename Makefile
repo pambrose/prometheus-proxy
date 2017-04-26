@@ -11,22 +11,13 @@ config:
 clean:
 	./mvnw -DskipTests=true clean
 
-openjdk-base:
-	docker build -f ./etc/docker/openjdk-base.df -t=pambrose/prometheus-openjdk-base:${VERSION} .
-
-alpine-base:
-	docker build -f ./etc/docker/alpine-base.df -t=pambrose/prometheus-alpine-base:1.0.0 .
-
-docker-build: 
+docker-build:
 	docker build -f ./etc/docker/proxy.df -t=pambrose/prometheus-proxy:${VERSION} .
 	docker build -f ./etc/docker/agent.df -t=pambrose/prometheus-agent:${VERSION} .
 
 docker-push:
-	docker push pambrose/prometheus-alpine-base:$VERSION
 	docker push pambrose/prometheus-proxy:$VERSION
 	docker push pambrose/prometheus-agent:$VERSION
-
-docker-all: clean docker-build docker-push
 
 run-agent:
 	docker run --rm -p 8080:8080 -p 8082:8082 -v /Users/pambrose/Dropbox/prometheus-proxy/agent.yml:/prometheus-proxy/agent.yml pambrose/pambrose/prometheus-agent:1.0.0
