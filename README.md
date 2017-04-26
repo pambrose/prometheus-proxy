@@ -27,7 +27,7 @@ $ java -jar prometheus-proxy.jar
 Start an agent with: 
 
 ```bash
-$ java -jar prometheus-agent.jar --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
+$ java -jar prometheus-agent.jar -Dagent.proxy.hostname=proxy.local --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
 ```
 
 If prometheus-proxy were running on a machine named *proxy.local* and the 
@@ -104,7 +104,7 @@ $ docker run --rm -p 8083:8083 \
         pambrose/prometheus-agent:1.0.0
 ```
 
-Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf,
+Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy on *localhost* at:
 * http://localohost:8080/proxy_metrics
 * http://localohost:8080/agent_metrics
