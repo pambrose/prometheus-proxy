@@ -6,7 +6,7 @@ build:
 	./mvnw -DskipTests=true clean package
 
 config:
-	java -jar ./etc/jars/tscfg-0.8.0.jar --spec etc/config/config.conf --pn com.sudothought.common --cn ConfigVals --dd src/main/java/com/sudothought/common
+	java -jar ./etc/jars/tscfg-0.8.0.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
 clean:
 	./mvnw -DskipTests=true clean

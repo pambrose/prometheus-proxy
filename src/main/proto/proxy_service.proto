@@ -4,7 +4,7 @@ package proxy_service;
 import public "google/protobuf/empty.proto";
 
 option java_multiple_files = true;
-option java_package = "com.sudothought.grpc";
+option java_package = "io.prometheus.grpc";
 
 message RegisterAgentRequest {
     string agent_id = 1;

@@ -1,4 +1,6 @@
-.idea
+.idea/
+.git/
+.wercker/
 bin
 target
 etc/docker

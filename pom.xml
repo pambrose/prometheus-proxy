@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.sudothought</groupId>
+    <groupId>io.prometheus</groupId>
     <artifactId>prometheus-proxy</artifactId>
     <version>1.0-SNAPSHOT</version>
 
@@ -340,7 +340,7 @@
                             </descriptorRefs>
                             <archive>
                                 <manifest>
-                                    <mainClass>com.sudothought.Proxy</mainClass>
+                                    <mainClass>io.prometheus.Proxy</mainClass>
                                     <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                                 </manifest>
                             </archive>
@@ -361,7 +361,7 @@
                             </descriptorRefs>
                             <archive>
                                 <manifest>
-                                    <mainClass>com.sudothought.Agent</mainClass>
+                                    <mainClass>io.prometheus.Agent</mainClass>
                                     <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                                 </manifest>
                             </archive>
@@ -402,7 +402,7 @@
                             <programs>
                                 <program>
                                     <id>proxy</id>
-                                    <mainClass>com.sudothought.Proxy</mainClass>
+                                    <mainClass>io.prometheus.Proxy</mainClass>
                                     <jvmSettings>
                                         <extraArguments>
                                             <extraArgument>
@@ -414,7 +414,7 @@
 
                                 <program>
                                     <id>agent</id>
-                                    <mainClass>com.sudothought.Agent</mainClass>
+                                    <mainClass>io.prometheus.Agent</mainClass>
                                     <jvmSettings>
                                         <extraArguments>
                                             <extraArgument>
