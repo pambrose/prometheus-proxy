@@ -131,6 +131,6 @@ $ docker run --rm -p 8082:8082 -p 50051:50051 -p 8080:8080 pambrose/prometheus-p
 
 ```bash
 $ docker run --rm -p 8083:8083 \
-        -v agent.conf:/prometheus-proxy/agent.conf \
+        -e AGENT_CONF='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         pambrose/prometheus-agent:1.0.0
 ```
