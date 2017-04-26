@@ -25,6 +25,11 @@ build-coverage:
 report-coverage:
 	./mvnw -DrepoToken=${COVERALLS_TOKEN} clean package test jacoco:report coveralls:report
 
+distro: build
+	mkdir target/distro
+	mv target/proxy-1.0-jar-with-dependencies.jar target/distro/prometheus-proxy.jar
+	mv target/agent-1.0-jar-with-dependencies.jar target/distro/prometheus-agent.jar
+
 site:
 	./mvnw site
 

@@ -14,7 +14,7 @@ Endpoints running behind a firewall require a Prometheus Agent to be run inside 
 An Agent can run as a stand-alone server, embedded in another java server or as a java agent. 
 Agents connect to a Proxy and register the paths for which they will provide data. A Proxy can work one or many Agents.
 
-## Usage
+## CLI Usage
 
 Start a proxy with:
 
@@ -29,7 +29,8 @@ $ java -jar prometheus-agent.jar --config https://raw.githubusercontent.com/pamb
 ```
 
 If prometheus-proxy were running on a machine named *proxy.local* and the 
-prometheus-agent had this `agent.pathConfigs` value in the *myapps.conf* config:
+prometheus-agent had this `agent.pathConfigs` value in the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) 
+config file:
 
 ```hocon
 agent {
@@ -76,6 +77,34 @@ scrape_configs:
       - targets: ['proxy.local:8080']
 ```
 
+## Docker Usage
+
+The docker images are available via:
+```bash
+$ docker pull pambrose/prometheus-proxy:1.0.0
+$ docker pull pambrose/prometheus-agent:1.0.0
+```
+
+Start the proxy and an agent in separate shells on your local machine:
+
+```bash
+$ docker run --rm -p 8082:8082 -p 50051:50051 -p 8080:8080 \
+        -e HOSTNAME=${HOSTNAME} \
+        -e PROXY_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+        pambrose/prometheus-proxy:1.0.0
+```
+
+```bash
+$ docker run --rm -p 8083:8083 \
+        -e HOSTNAME=${HOSTNAME} \
+        -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+        pambrose/prometheus-agent:1.0.0
+```
+
+Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf,
+the proxy and the agent metrics would be available from the proxy on *localhost* at:
+* http://localohost:8080/proxy_metrics
+* http://localohost:8080/agent_metrics
 
 ## Configuration
 
@@ -101,6 +130,7 @@ The only required argument is an Agent config value, which should have an `agent
 | -m --metrics_port   | METRICS_PORT    | proxy.metrics.port     | 8082   | Proxy metrics listen port              |
 | -v --version        |                 |                        |        | Print version info and exit            |
 | -u --usage          |                 |                        |        | Print usage message and exit           |
+| -D                  |                 |                        |        | Dynamic property assignment            |
 
 
 ### Agent CLI Options
@@ -114,25 +144,19 @@ The only required argument is an Agent config value, which should have an `agent
 | -m --metrics_port   | METRICS_PORT    | agent.metrics.port     | 8083   | Agent metrics listen port              |
 | -v --version        |                 |                        |        | Print version info and exit            |
 | -u --usage          |                 |                        |        | Print usage message and exit           |
+| -D                  |                 |                        |        | Dynamic property assignment            |
 
 Misc notes:
 * If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
 * JSON config files must have a *.json* suffix
 * Java Properties config files must have a *.properties*  or *.prop* suffix
 * HOCON config files must have a *.conf* suffix
+* Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
+* Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
 
-## Docker
 
-```bash
-$ docker run --rm -p 8082:8082 -p 50051:50051 -p 8080:8080 \
-        -e HOSTNAME=${HOSTNAME} \
-        -e PROXY_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-proxy:1.0.0
-```
+## Related Links
 
-```bash
-$ docker run --rm -p 8083:8083 \
-        -e HOSTNAME=${HOSTNAME} \
-        -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.0.0
-```
+* [Prometheus.io](http://prometheus.io)
+* [gRPC](http://grpc.io)
+* [Typesafe Config](https://github.com/typesafehub/config)

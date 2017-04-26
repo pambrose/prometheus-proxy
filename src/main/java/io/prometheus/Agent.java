@@ -336,8 +336,9 @@ public class Agent
                                                                                     .build();
 
     final List<ClientInterceptor> interceptors = Lists.newArrayList(new AgentClientInterceptor(this));
+
     /*
-    if (this.getConfigVals().grpc.metricsEnabled)
+    if (this.getConfigVals().metrics.grpc.metricsEnabled)
       interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().grpc.allMetricsReported
                                                           ? Configuration.allMetrics()
                                                           : Configuration.cheapMetricsOnly()));

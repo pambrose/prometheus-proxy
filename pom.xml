@@ -17,11 +17,11 @@
         <guava.version>19.0</guava.version>
         <prometheus.version>0.0.21</prometheus.version>
         <jcommander.version>1.69</jcommander.version>
-        <spark.version>2.5.5</spark.version>
+        <spark.version>2.6.0.RC0</spark.version>
         <okhttp.version>3.7.0</okhttp.version>
         <grpc-prom.version>0.3.0</grpc-prom.version>
-        <brave.version>4.1.1</brave.version>
-        <zipkin-reporter.version>0.6.13</zipkin-reporter.version>
+        <brave.version>4.2.0</brave.version>
+        <zipkin-reporter.version>0.7.0</zipkin-reporter.version>
 
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.7.25</slf4j.version>
@@ -53,10 +53,29 @@
                 <artifactId>guava</artifactId>
                 <version>${guava.version}</version>
             </dependency>
+
             <dependency>
                 <groupId>com.squareup.okhttp3</groupId>
                 <artifactId>okhttp</artifactId>
                 <version>${okhttp.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-protobuf</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-stub</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-netty</artifactId>
+                <version>${grpc.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -117,7 +136,9 @@
             <artifactId>brave-grpc</artifactId>
             <version>${brave.version}</version>
         </dependency>
+        -->
 
+        <!-- Add this back when they update their grpc lib
         <dependency>
             <groupId>me.dinowernli</groupId>
             <artifactId>java-grpc-prometheus</artifactId>
@@ -325,7 +346,6 @@
                 <artifactId>maven-assembly-plugin</artifactId>
                 <version>${assembly.version}</version>
                 <executions>
-
                     <execution>
                         <id>proxy</id>
                         <goals>
