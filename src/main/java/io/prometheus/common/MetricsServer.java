@@ -34,10 +34,10 @@ public class MetricsServer {
     try {
       this.server.start();
       final String url = this.url();
-      logger.info("Started metrics server at {}", url);
+      logger.info("Started metrics server started at {}", url);
     }
     catch (Exception e) {
-      logger.error("Starting server", e);
+      logger.error("Unsuccessful starting server", e);
       throw new IOException(e.getMessage());
     }
   }
@@ -47,7 +47,7 @@ public class MetricsServer {
       this.server.stop();
     }
     catch (Exception e) {
-      logger.error("Stopping server", e);
+      logger.error("Unsuccessful stopping server", e);
     }
   }
 

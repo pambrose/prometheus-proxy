@@ -192,7 +192,8 @@ class ProxyServiceImpl
           responseObserver.onCompleted();
         }
         catch (StatusRuntimeException e) {
-          logger.warn("StatusRuntimeException", e);
+          // logger.warn("StatusRuntimeException", e);
+          // Ignore
         }
       }
 

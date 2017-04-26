@@ -64,7 +64,7 @@ public class Proxy
     this.testMode = testMode;
 
     if (metricsEnabled) {
-      logger.info("Metrics server at {} /{} enabled", metricsPort, this.getConfigVals().metrics.path);
+      logger.info("Metrics server enabled with {} /{}", metricsPort, this.getConfigVals().metrics.path);
       this.metricsServer = new MetricsServer(metricsPort, this.getConfigVals().metrics.path);
       this.metrics = new ProxyMetrics(this);
       SystemMetrics.initialize(this.getConfigVals().metrics.standardExportsEnabled,

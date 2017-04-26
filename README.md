@@ -84,6 +84,7 @@ Highlights include:
 * supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
 * config files can be files or urls
 * config values can come from CLI options, environment vars, Java system properties, and/or config files.
+* config files can reference environment variables
   
 The Proxy and Agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
 The only required argument is an Agent config value, which should have an `agent.pathConfigs` value.
@@ -126,11 +127,15 @@ The Proxy docker image is [here](https://hub.docker.com/r/pambrose/prometheus-pr
 The Agent docker image is [here](https://hub.docker.com/r/pambrose/prometheus-agent//)
 
 ```bash
-$ docker run --rm -p 8082:8082 -p 50051:50051 -p 8080:8080 pambrose/prometheus-proxy:1.0.0
+$ docker run --rm -p 8082:8082 -p 50051:50051 -p 8080:8080 \
+        -e HOSTNAME=${HOSTNAME} \
+        -e PROXY_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+        pambrose/prometheus-proxy:1.0.0
 ```
 
 ```bash
 $ docker run --rm -p 8083:8083 \
-        -e AGENT_CONF='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+        -e HOSTNAME=${HOSTNAME} \
+        -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         pambrose/prometheus-agent:1.0.0
 ```
