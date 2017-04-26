@@ -2,8 +2,6 @@ package io.prometheus.proxy;
 
 import com.google.common.base.MoreObjects;
 import io.prometheus.Proxy;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -16,7 +14,6 @@ import static java.lang.String.format;
 
 public class AgentContext {
 
-  private static final Logger     logger             = LoggerFactory.getLogger(AgentContext.class);
   private static final AtomicLong AGENT_ID_GENERATOR = new AtomicLong(0);
 
   private final String                  agentId          = format("%s", AGENT_ID_GENERATOR.incrementAndGet());
@@ -61,8 +58,6 @@ public class AgentContext {
       return this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS);
     }
     catch (InterruptedException e) {
-      // logger.warn("Thread interrupted", e);
-      // Thread.currentThread().interrupt();
       return null;
     }
   }

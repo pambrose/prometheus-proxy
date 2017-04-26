@@ -32,7 +32,7 @@ public abstract class BaseOptions {
   private final ConfigVals configVals;
 
   @Parameter(names = {"-c", "--conf", "--config"}, description = "Configuration file or url")
-  private String              config_name   = null;
+  private String              configName    = null;
   @Parameter(names = {"-m", "--metrics_port"}, description = "Metrics listen port")
   private Integer             metricsPort   = null;
   @Parameter(names = {"-e", "--metrics"}, description = "Metrics enabled")
@@ -86,7 +86,7 @@ public abstract class BaseOptions {
   }
 
   private void readConfig(final String envConfig, final boolean exitOnMissingConfig) {
-    final Config config = Utils.readConfig(this.config_name,
+    final Config config = Utils.readConfig(this.configName,
                                            envConfig,
                                            ConfigParseOptions.defaults().setAllowMissing(false),
                                            ConfigFactory.load().resolve(),

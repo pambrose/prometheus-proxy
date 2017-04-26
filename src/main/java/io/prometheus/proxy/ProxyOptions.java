@@ -8,6 +8,7 @@ import io.prometheus.common.ConfigVals;
 import java.util.List;
 
 import static io.prometheus.common.EnvVars.AGENT_PORT;
+import static io.prometheus.common.EnvVars.PROXY_CONFIG;
 import static io.prometheus.common.EnvVars.PROXY_PORT;
 
 public class ProxyOptions
@@ -18,24 +19,17 @@ public class ProxyOptions
   @Parameter(names = {"-a", "--agent_port"}, description = "Listen port for agents")
   private Integer agentPort = null;
 
-  public ProxyOptions(final String programName,
-                      final List<String> args,
-                      final String envConfig,
-                      final boolean exitOnMissingConfig) {
-    this(programName, Iterables.toArray(args, String.class), envConfig, exitOnMissingConfig);
+  public ProxyOptions(final String programName, final List<String> args) {
+    this(programName, Iterables.toArray(args, String.class));
   }
 
-  public ProxyOptions(final String programName,
-                      final String[] argv,
-                      final String envConfig,
-                      final boolean exitOnMissingConfig) {
-    super(programName, argv, envConfig, exitOnMissingConfig);
+  public ProxyOptions(final String programName, final String[] argv) {
+    super(programName, argv, PROXY_CONFIG.name(), false);
     this.assignConfigVals(this.getConfigVals());
   }
 
   @Override
   protected void assignConfigVals(final ConfigVals configVals) {
-
     if (this.proxyPort == null)
       this.proxyPort = PROXY_PORT.getEnv(configVals.proxy.http.port);
 

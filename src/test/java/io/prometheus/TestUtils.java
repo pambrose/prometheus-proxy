@@ -8,9 +8,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-import static io.prometheus.common.EnvVars.AGENT_CONFIG;
-import static io.prometheus.common.EnvVars.PROXY_CONFIG;
-
 public class TestUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(TestUtils.class);
@@ -18,10 +15,7 @@ public class TestUtils {
   public static Proxy startProxy(String serverName, boolean metrics_enabled)
       throws IOException {
 
-    ProxyOptions options = new ProxyOptions(Proxy.class.getName(),
-                                            TestConstants.argv,
-                                            PROXY_CONFIG.name(),
-                                            false);
+    ProxyOptions options = new ProxyOptions(Proxy.class.getName(), TestConstants.argv);
 
     logger.info(Utils.getBanner("banners/proxy.txt"));
     logger.info(Utils.getVersionDesc());
@@ -41,10 +35,7 @@ public class TestUtils {
   public static Agent startAgent(String serverName, boolean metrics_enabled)
       throws IOException {
 
-    AgentOptions options = new AgentOptions(Agent.class.getName(),
-                                            TestConstants.argv,
-                                            AGENT_CONFIG.name(),
-                                            false);
+    AgentOptions options = new AgentOptions(Agent.class.getName(), TestConstants.argv, false);
 
     logger.info(Utils.getBanner("banners/agent.txt"));
     logger.info(Utils.getVersionDesc());

@@ -89,7 +89,6 @@ public class Utils {
         logger.error("A configuration file or url must be specified with --getConfig or ${}", envConfig);
         System.exit(1);
       }
-
       return fallback;
     }
 

@@ -28,7 +28,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static io.prometheus.common.EnvVars.PROXY_CONFIG;
 import static java.lang.String.format;
 
 public class Proxy
@@ -98,7 +97,7 @@ public class Proxy
 
   public static void main(final String[] argv)
       throws IOException, InterruptedException {
-    final ProxyOptions options = new ProxyOptions(Proxy.class.getName(), argv, PROXY_CONFIG.name(), false);
+    final ProxyOptions options = new ProxyOptions(Proxy.class.getName(), argv);
 
     logger.info(Utils.getBanner("banners/proxy.txt"));
     logger.info(Utils.getVersionDesc());

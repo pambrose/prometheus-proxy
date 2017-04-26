@@ -45,9 +45,9 @@ public class ProxyHttpServer {
       this.http.before(tracing.before());
       this.http.exception(Exception.class, tracing.exception(new ExceptionHandlerImpl(Exception.class) {
         @Override
-        public void handle(Exception exception, Request request, Response response) {
+        public void handle(Exception e, Request request, Response response) {
           response.status(404);
-          exception.printStackTrace();
+          logger.error("Error in ProxyHttpServer", e);
         }
       }));
       this.http.afterAfter(tracing.afterAfter());
@@ -57,18 +57,16 @@ public class ProxyHttpServer {
                   (req, res) -> {
                     res.header("cache-control", "no-cache");
 
-                    final Span rootSpan = this.tracer != null ? this.tracer.newTrace()
-                                                                           .name("round-trip")
-                                                                           .tag("version", "1.0.0")
-                                                                           .start()
-                                                              : null;
+                    final Span span = this.tracer != null ? this.tracer.newTrace()
+                                                                       .name("round-trip")
+                                                                       .tag("version", "1.0.0")
+                                                                       .start()
+                                                          : null;
                     try {
-
                       if (this.proxy.isStopped()) {
                         logger.error("Proxy stopped");
                         res.status(503);
-                        if (this.proxy.isMetricsEnabled())
-                          this.proxy.getMetrics().scrapeRequests.labels("proxy_stopped").inc();
+                        this.updateScrapeRequests("proxy_stopped");
                         return null;
                       }
 
@@ -76,8 +74,7 @@ public class ProxyHttpServer {
                       if (vals == null || vals.length == 0) {
                         logger.info("Request missing path");
                         res.status(404);
-                        if (this.proxy.isMetricsEnabled())
-                          this.proxy.getMetrics().scrapeRequests.labels("missing_path").inc();
+                        this.updateScrapeRequests("missing_path");
                         return null;
                       }
 
@@ -94,83 +91,89 @@ public class ProxyHttpServer {
                       if (agentContext == null) {
                         logger.debug("Invalid path request /{}", path);
                         res.status(404);
-                        if (this.proxy.isMetricsEnabled())
-                          this.proxy.getMetrics().scrapeRequests.labels("invalid_path").inc();
+                        this.updateScrapeRequests("invalid_path");
                         return null;
                       }
 
                       if (!agentContext.isValid()) {
                         logger.error("Invalid AgentContext");
                         res.status(404);
-                        if (this.proxy.isMetricsEnabled())
-                          this.proxy.getMetrics().scrapeRequests.labels("invalid_agent_context").inc();
+                        this.updateScrapeRequests("invalid_agent_context");
                         return null;
                       }
 
-                      if (rootSpan != null)
-                        rootSpan.tag("path", path);
+                      if (span != null)
+                        span.tag("path", path);
 
-                      final ScrapeRequestWrapper scrapeRequest = new ScrapeRequestWrapper(this.proxy,
-                                                                                          agentContext,
-                                                                                          rootSpan,
-                                                                                          path,
-                                                                                          req.headers(ACCEPT));
-                      try {
-                        this.proxy.addToScrapeRequestMap(scrapeRequest);
-                        agentContext.addToScrapeRequestQueue(scrapeRequest);
+                      return submitScrapeRequest(req, res, agentContext, path, span);
 
-                        final int timeoutSecs = this.configVals.internal.scrapeRequestTimeoutSecs;
-                        final int checkMillis = this.configVals.internal.scrapeRequestCheckMillis;
-                        while (true) {
-                          // Returns false if timed out
-                          if (scrapeRequest.waitUntilCompleteMillis(checkMillis))
-                            break;
-
-                          // Check if agent is disconnected or agent is hung
-                          if (scrapeRequest.ageInSecs() >= timeoutSecs
-                              || !scrapeRequest.getAgentContext().isValid()
-                              || this.proxy.isStopped()) {
-                            res.status(503);
-                            if (this.proxy.isMetricsEnabled())
-                              this.proxy.getMetrics().scrapeRequests.labels("time_out").inc();
-                            return null;
-                          }
-                        }
-                      }
-                      finally {
-                        final ScrapeRequestWrapper prev = this.proxy.removeFromScrapeRequestMap(scrapeRequest.getScrapeId());
-                        //System.err.println("After remove size = " + this.proxy.getScrapeMapSize());
-                        if (prev == null)
-                          logger.error("Scrape request {} missing in map", scrapeRequest.getScrapeId());
-                      }
-
-                      logger.debug("Results returned from {} for {}", agentContext, scrapeRequest);
-
-                      final ScrapeResponse scrapeResponse = scrapeRequest.getScrapeResponse();
-                      final int status_code = scrapeResponse.getStatusCode();
-                      res.status(status_code);
-
-                      // Do not return content on error status codes
-                      if (status_code >= 400) {
-                        if (this.proxy.isMetricsEnabled())
-                          this.proxy.getMetrics().scrapeRequests.labels("path_not_found").inc();
-                        return null;
-                      }
-                      else {
-                        final String accept_encoding = req.headers(ACCEPT_ENCODING);
-                        if (accept_encoding != null && accept_encoding.contains("gzip"))
-                          res.header(CONTENT_ENCODING, "gzip");
-                        res.type(scrapeResponse.getContentType());
-                        if (this.proxy.isMetricsEnabled())
-                          this.proxy.getMetrics().scrapeRequests.labels("success").inc();
-                        return scrapeRequest.getScrapeResponse().getText();
-                      }
                     }
                     finally {
-                      if (rootSpan != null)
-                        rootSpan.finish();
+                      if (span != null)
+                        span.finish();
                     }
                   });
+  }
+
+  private String submitScrapeRequest(final Request req, final Response res, final AgentContext agentContext,
+                                     final String path, final Span span) {
+    final ScrapeRequestWrapper scrapeRequest = new ScrapeRequestWrapper(this.proxy,
+                                                                        agentContext,
+                                                                        span,
+                                                                        path,
+                                                                        req.headers(ACCEPT));
+    try {
+      this.proxy.addToScrapeRequestMap(scrapeRequest);
+      agentContext.addToScrapeRequestQueue(scrapeRequest);
+
+      final int timeoutSecs = this.configVals.internal.scrapeRequestTimeoutSecs;
+      final int checkMillis = this.configVals.internal.scrapeRequestCheckMillis;
+      while (true) {
+        // Returns false if timed out
+        if (scrapeRequest.waitUntilCompleteMillis(checkMillis))
+          break;
+
+        // Check if agent is disconnected or agent is hung
+        if (scrapeRequest.ageInSecs() >= timeoutSecs
+            || !scrapeRequest.getAgentContext().isValid()
+            || this.proxy.isStopped()) {
+          res.status(503);
+          this.updateScrapeRequests("time_out");
+          return null;
+        }
+      }
+    }
+    finally {
+      final ScrapeRequestWrapper prev = this.proxy.removeFromScrapeRequestMap(scrapeRequest.getScrapeId());
+      //System.err.println("After remove size = " + this.proxy.getScrapeMapSize());
+      if (prev == null)
+        logger.error("Scrape request {} missing in map", scrapeRequest.getScrapeId());
+    }
+
+    logger.debug("Results returned from {} for {}", agentContext, scrapeRequest);
+
+    final ScrapeResponse scrapeResponse = scrapeRequest.getScrapeResponse();
+    final int statusCode = scrapeResponse.getStatusCode();
+    res.status(statusCode);
+
+    // Do not return content on error status codes
+    if (statusCode >= 400) {
+      this.updateScrapeRequests("path_not_found");
+      return null;
+    }
+    else {
+      final String acceptEncoding = req.headers(ACCEPT_ENCODING);
+      if (acceptEncoding != null && acceptEncoding.contains("gzip"))
+        res.header(CONTENT_ENCODING, "gzip");
+      res.type(scrapeResponse.getContentType());
+      this.updateScrapeRequests("success");
+      return scrapeRequest.getScrapeResponse().getText();
+    }
+  }
+
+  private void updateScrapeRequests(final String type) {
+    if (this.proxy.isMetricsEnabled())
+      this.proxy.getMetrics().scrapeRequests.labels(type).inc();
   }
 
   public void stop() { this.http.stop(); }

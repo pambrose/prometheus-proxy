@@ -28,7 +28,7 @@ Start an agent with:
 $ java -jar prometheus-agent.jar --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
 ```
 
-If prometheus-proxy were running on proxy.local and the 
+If prometheus-proxy were running on a machine named *proxy.local* and the 
 prometheus-agent had this `agent.pathConfigs` value in the *myapps.conf* config:
 
 ```hocon
@@ -93,7 +93,7 @@ The only required argument is an Agent config value, which should have an `agent
 ### Proxy CLI Options
 
 | Options             | Env Var         | Property               |Default | Description                            |
-|:-------------------:|:----------------|:-----------------------|:-------|:---------------------------------------|
+|:--------------------|:----------------|:-----------------------|:-------|:---------------------------------------|
 | -c --config         | PROXY_CONFIG    |                        |        | Agent config file or url               |
 | -p --port           | PROXY_PORT      | proxy.http.port        | 8080   | Proxy listen port                      |
 | -a --agent_port     | AGENT_PORT      | proxy.agent.port       | 50051  | Grpc listen port                       |
@@ -106,7 +106,7 @@ The only required argument is an Agent config value, which should have an `agent
 ### Agent CLI Options
 
 | Options             | Env Var         | Property               |Default | Description                            |
-|:-------------------:|:----------------|:-----------------------|:-------|:---------------------------------------|
+|:--------------------|:----------------|:-----------------------|:-------|:---------------------------------------|
 | -c --config         | AGENT_CONFIG    |                        |        | Agent config file or url (required)    |
 | -p --proxy          | PROXY_HOSTNAME  | agent.proxy.hostname   |        | Proxy hostname (can include :port)     |
 | -n --name           | AGENT_NAME      | agent.name             |        | Agent name                             |
@@ -116,15 +116,12 @@ The only required argument is an Agent config value, which should have an `agent
 | -u --usage          |                 |                        |        | Print usage message and exit           |
 
 Misc notes:
-* If you want to customize the logging, include the Java arg: `-Dlogback.configurationFile=/path/to/logback.xml`
+* If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
 * JSON config files must have a *.json* suffix
 * Java Properties config files must have a *.properties*  or *.prop* suffix
 * HOCON config files must have a *.conf* suffix
 
 ## Docker
-
-The Proxy docker image is [here](https://hub.docker.com/r/pambrose/prometheus-proxy/)
-The Agent docker image is [here](https://hub.docker.com/r/pambrose/prometheus-agent//)
 
 ```bash
 $ docker run --rm -p 8082:8082 -p 50051:50051 -p 8080:8080 \

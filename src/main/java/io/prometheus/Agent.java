@@ -64,7 +64,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static io.grpc.ClientInterceptors.intercept;
-import static io.prometheus.common.EnvVars.AGENT_CONFIG;
 import static io.prometheus.common.InstrumentedThreadFactory.newInstrumentedThreadFactory;
 import static io.prometheus.common.Utils.sleepForMillis;
 import static io.prometheus.common.Utils.toMillis;
@@ -183,7 +182,7 @@ public class Agent
   public static void main(final String[] argv)
       throws IOException, InterruptedException {
 
-    final AgentOptions options = new AgentOptions(Agent.class.getName(), argv, AGENT_CONFIG.name(), true);
+    final AgentOptions options = new AgentOptions(Agent.class.getName(), argv, true);
 
     logger.info(Utils.getBanner("banners/agent.txt"));
     logger.info(Utils.getVersionDesc());
@@ -225,14 +224,15 @@ public class Agent
               this.connectToProxy();
             }
             catch (RequestFailureException e) {
-              logger.info("Disconnecting after invalid response from {}", e.getMessage());
+              logger.info("Disconnected from proxy at {} after invalid response {}",
+                          this.getProxyHost(), e.getMessage());
             }
             catch (StatusRuntimeException e) {
               logger.info("Disconnected from proxy at {}", this.getProxyHost());
             }
             catch (Exception e) {
               // Catch anything else to avoid exiting retry loop
-              logger.info("Disconnected from proxy at {} {} [{}]",
+              logger.info("Disconnected from proxy at {} - {} [{}]",
                           this.getProxyHost(), e.getClass().getSimpleName(), e.getMessage());
             }
             finally {
@@ -288,8 +288,7 @@ public class Agent
         this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
       }
       catch (InterruptedException e) {
-        // Thread.currentThread().interrupt();
-        // logger.warn("Thread interrupted", e);
+        // Ignore
       }
 
       stoppedLatch.countDown();
@@ -520,8 +519,7 @@ public class Agent
                     scrapeResponseQueue.put(response);
                   }
                   catch (InterruptedException e) {
-                    // logger.warn("Thread interrupted", e);
-                    // Thread.currentThread().interrupt();
+                    // Ignore
                   }
                 });
           }
@@ -573,8 +571,7 @@ public class Agent
         }
       }
       catch (InterruptedException e) {
-        // logger.warn("Thread interrupted", e);
-        // Thread.currentThread().interrupt();
+        // Ignore
       }
     }
 

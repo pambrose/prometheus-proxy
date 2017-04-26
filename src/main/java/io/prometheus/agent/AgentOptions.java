@@ -8,6 +8,7 @@ import io.prometheus.common.EnvVars;
 
 import java.util.List;
 
+import static io.prometheus.common.EnvVars.AGENT_CONFIG;
 import static java.lang.String.format;
 
 public class AgentOptions
@@ -20,22 +21,19 @@ public class AgentOptions
 
   public AgentOptions(final String programName,
                       final List<String> args,
-                      final String envConfig,
                       final boolean exitOnMissingConfig) {
-    this(programName, Iterables.toArray(args, String.class), envConfig, exitOnMissingConfig);
+    this(programName, Iterables.toArray(args, String.class), exitOnMissingConfig);
   }
 
   public AgentOptions(final String programName,
                       final String[] argv,
-                      final String envConfig,
                       final boolean exitOnMissingConfig) {
-    super(programName, argv, envConfig, exitOnMissingConfig);
+    super(programName, argv, AGENT_CONFIG.name(), exitOnMissingConfig);
     this.assignConfigVals(this.getConfigVals());
   }
 
   @Override
   protected void assignConfigVals(final ConfigVals configVals) {
-
     if (this.proxyHostname == null) {
       final String configHostname = configVals.agent.proxy.hostname;
       this.proxyHostname = EnvVars.PROXY_HOSTNAME.getEnv(configHostname.contains(":") ? configHostname
