@@ -157,6 +157,9 @@ Misc notes:
 * Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
 * Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
 
+## Grafana 
+
+[Grafana](https://grafana.com) dashboards for the Proxy and Agent are [here](https://github.com/pambrose/prometheus-proxy/tree/master/grafana).
 
 ## Related Links
 
