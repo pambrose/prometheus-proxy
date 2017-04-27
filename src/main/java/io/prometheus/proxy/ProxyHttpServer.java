@@ -61,7 +61,7 @@ public class ProxyHttpServer {
 
                     final Span span = this.tracer != null ? this.tracer.newTrace()
                                                                        .name("round-trip")
-                                                                       .tag("version", "1.0.0")
+                                                                       .tag("version", "1.1.0")
                                                                        .start()
                                                           : null;
                     try {

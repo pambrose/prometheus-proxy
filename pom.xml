@@ -6,7 +6,7 @@
 
     <groupId>io.prometheus</groupId>
     <artifactId>prometheus-proxy</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
 
     <properties>
         <config.version>1.3.1</config.version>
@@ -354,7 +354,7 @@
                         <phase>package</phase>
 
                         <configuration>
-                            <finalName>proxy-1.0</finalName>
+                            <finalName>proxy</finalName>
                             <descriptorRefs>
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>
@@ -375,7 +375,7 @@
                         <phase>package</phase>
 
                         <configuration>
-                            <finalName>agent-1.0</finalName>
+                            <finalName>agent</finalName>
                             <descriptorRefs>
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>
