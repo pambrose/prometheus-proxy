@@ -93,7 +93,7 @@ Start the proxy and an agent in separate shells on your local machine:
 ```bash
 $ docker run --rm -p 8082:8082 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
-        -e ENABLE_METRICS=true \
+        -e METRICS_ENABLED=true \
         pambrose/prometheus-proxy:1.1.0
 ```
 
@@ -129,7 +129,7 @@ The only required argument is an Agent config value, which should have an `agent
 | -c --config         | PROXY_CONFIG    |                        |        | Agent config file or url               |
 | -p --port           | PROXY_PORT      | proxy.http.port        | 8080   | Proxy listen port                      |
 | -a --agent_port     | AGENT_PORT      | proxy.agent.port       | 50051  | Grpc listen port                       |
-| -e --metrics        | ENABLE_METRICS  | proxy.metrics.enabled  | false  | Enable proxy metrics                   |
+| -e --metrics        | METRICS_ENABLED | proxy.metrics.enabled  | false  | Enable proxy metrics                   |
 | -m --metrics_port   | METRICS_PORT    | proxy.metrics.port     | 8082   | Proxy metrics listen port              |
 | -v --version        |                 |                        |        | Print version info and exit            |
 | -u --usage          |                 |                        |        | Print usage message and exit           |
@@ -143,7 +143,7 @@ The only required argument is an Agent config value, which should have an `agent
 | -c --config         | AGENT_CONFIG    |                        |        | Agent config file or url (required)    |
 | -p --proxy          | PROXY_HOSTNAME  | agent.proxy.hostname   |        | Proxy hostname (can include :port)     |
 | -n --name           | AGENT_NAME      | agent.name             |        | Agent name                             |
-| -e --metrics        | ENABLE_METRICS  | agent.metrics.enabled  | false  | Enable agent metrics                   |
+| -e --metrics        | METRICS_ENABLED | agent.metrics.enabled  | false  | Enable agent metrics                   |
 | -m --metrics_port   | METRICS_PORT    | agent.metrics.port     | 8083   | Agent metrics listen port              |
 | -v --version        |                 |                        |        | Print version info and exit            |
 | -u --usage          |                 |                        |        | Print usage message and exit           |

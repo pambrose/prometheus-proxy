@@ -16,7 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static io.prometheus.common.EnvVars.ENABLE_METRICS;
+import static io.prometheus.common.EnvVars.METRICS_ENABLED;
 import static io.prometheus.common.EnvVars.METRICS_PORT;
 import static java.lang.String.format;
 
@@ -82,7 +82,7 @@ public abstract class BaseOptions {
 
   protected void assignEnableMetrics(final boolean configVal) {
     if (this.enableMetrics == null)
-      this.enableMetrics = ENABLE_METRICS.getEnv(configVal);
+      this.enableMetrics = METRICS_ENABLED.getEnv(configVal);
   }
 
   private void readConfig(final String envConfig, final boolean exitOnMissingConfig) {
