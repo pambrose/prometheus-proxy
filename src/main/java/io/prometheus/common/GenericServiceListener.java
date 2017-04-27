@@ -1,42 +1,47 @@
-package io.prometheus.proxy;
+package io.prometheus.common;
 
 import com.google.common.util.concurrent.Service;
-import io.prometheus.Proxy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ProxyListener
+public class GenericServiceListener
     extends Service.Listener {
 
-  private static final Logger logger = LoggerFactory.getLogger(ProxyListener.class);
+  private static final Logger logger = LoggerFactory.getLogger(GenericServiceListener.class);
+
+  private final String name;
+
+  public GenericServiceListener(Service service) {
+    this.name = service.getClass().getSimpleName();
+  }
 
   @Override
   public void starting() {
     super.starting();
-    logger.info("Starting {}", Proxy.class.getSimpleName());
+    logger.info("Starting {}", this.name);
   }
 
   @Override
   public void running() {
     super.running();
-    logger.info("{} is running", Proxy.class.getSimpleName());
+    logger.info("{} is running", this.name);
   }
 
   @Override
   public void stopping(Service.State from) {
     super.stopping(from);
-    logger.info("{} is stopping", Proxy.class.getSimpleName());
+    logger.info("{} is stopping", this.name);
   }
 
   @Override
   public void terminated(Service.State from) {
     super.terminated(from);
-    logger.info("{} is terminated", Proxy.class.getSimpleName());
+    logger.info("{} is terminated", this.name);
   }
 
   @Override
   public void failed(Service.State from, Throwable t) {
     super.failed(from, t);
-    logger.info("{} failed on {}", Proxy.class.getSimpleName(), from, t);
+    logger.info("{} failed on {}", this.name, from, t);
   }
 }

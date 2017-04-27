@@ -7,6 +7,7 @@ import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Attributes;
 import io.prometheus.common.ConfigVals;
+import io.prometheus.common.GenericServiceListener;
 import io.prometheus.common.MetricsServer;
 import io.prometheus.common.SystemMetrics;
 import io.prometheus.common.Utils;
@@ -15,7 +16,6 @@ import io.prometheus.grpc.UnregisterPathResponse;
 import io.prometheus.proxy.AgentContext;
 import io.prometheus.proxy.ProxyGrpcServer;
 import io.prometheus.proxy.ProxyHttpServer;
-import io.prometheus.proxy.ProxyListener;
 import io.prometheus.proxy.ProxyMetrics;
 import io.prometheus.proxy.ProxyOptions;
 import io.prometheus.proxy.ScrapeRequestWrapper;
@@ -112,8 +112,7 @@ public class Proxy
                                   options.getMetricsPort(),
                                   null,
                                   false);
-
-    proxy.addListener(new ProxyListener(), MoreExecutors.directExecutor());
+    proxy.addListener(new GenericServiceListener(proxy), MoreExecutors.directExecutor());
     proxy.startAsync();
   }
 
@@ -141,16 +140,15 @@ public class Proxy
   @Override
   protected void shutDown() {
     if (this.stopped.compareAndSet(false, true)) {
-      this.cleanupService.shutdownNow();
+      this.grpcServer.shutdown();
       this.httpServer.stop();
+      this.cleanupService.shutdownNow();
 
       if (this.isMetricsEnabled())
         this.metricsServer.stop();
 
       if (this.isZipkinEnabled())
         this.getZipkinReporter().close();
-
-      this.grpcServer.shutdown();
     }
   }
 

@@ -2,8 +2,8 @@ package io.prometheus;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import io.prometheus.agent.AgentOptions;
+import io.prometheus.common.GenericServiceListener;
 import io.prometheus.common.Utils;
-import io.prometheus.proxy.ProxyListener;
 import io.prometheus.proxy.ProxyOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,14 +31,14 @@ public class TestUtils {
                             options.getMetricsPort(),
                             serverName,
                             true);
-    proxy.addListener(new ProxyListener(), MoreExecutors.directExecutor());
+    proxy.addListener(new GenericServiceListener(proxy), MoreExecutors.directExecutor());
     proxy.startAsync();
     proxy.awaitRunning(5, TimeUnit.SECONDS);
     return proxy;
   }
 
   public static Agent startAgent(String serverName, boolean metrics_enabled)
-      throws IOException {
+      throws IOException, TimeoutException {
 
     AgentOptions options = new AgentOptions(Agent.class.getName(), TestConstants.argv, false);
 
@@ -52,8 +52,9 @@ public class TestUtils {
                             metrics_enabled,
                             options.getMetricsPort(),
                             true);
-    agent.start();
-
+    agent.addListener(new GenericServiceListener(agent), MoreExecutors.directExecutor());
+    agent.startAsync();
+    agent.awaitRunning(5, TimeUnit.SECONDS);
     return agent;
   }
 }

@@ -75,9 +75,9 @@ public class AgentContext {
     return MoreObjects.toStringHelper(this)
                       .add("agentId", this.agentId)
                       .add("valid", this.isValid())
+                      .add("remoteAddr", this.remoteAddr)
                       .add("agentName", this.agentName)
                       .add("hostname", this.hostname)
-                      .add("remoteAddr", this.remoteAddr)
                       .add("inactivitySecs", this.inactivitySecs())
                       .toString();
   }

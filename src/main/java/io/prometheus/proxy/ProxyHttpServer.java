@@ -43,13 +43,15 @@ public class ProxyHttpServer {
     if (this.proxy.isZipkinEnabled()) {
       final BraveTracing tracing = BraveTracing.create(this.proxy.getBrave());
       this.http.before(tracing.before());
-      this.http.exception(Exception.class, tracing.exception(new ExceptionHandlerImpl(Exception.class) {
-        @Override
-        public void handle(Exception e, Request request, Response response) {
-          response.status(404);
-          logger.error("Error in ProxyHttpServer", e);
-        }
-      }));
+      this.http.exception(Exception.class,
+                          tracing.exception(
+                              new ExceptionHandlerImpl(Exception.class) {
+                                @Override
+                                public void handle(Exception e, Request request, Response response) {
+                                  response.status(404);
+                                  logger.error("Error in ProxyHttpServer", e);
+                                }
+                              }));
       this.http.afterAfter(tracing.afterAfter());
     }
 

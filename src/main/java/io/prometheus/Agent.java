@@ -5,6 +5,8 @@ import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.AbstractExecutionThreadService;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.Empty;
@@ -22,6 +24,7 @@ import io.prometheus.agent.PathContext;
 import io.prometheus.agent.RequestFailureException;
 import io.prometheus.client.Summary;
 import io.prometheus.common.ConfigVals;
+import io.prometheus.common.GenericServiceListener;
 import io.prometheus.common.MetricsServer;
 import io.prometheus.common.SystemMetrics;
 import io.prometheus.common.Utils;
@@ -73,6 +76,7 @@ import static java.lang.String.format;
 import static java.util.concurrent.Executors.newCachedThreadPool;
 
 public class Agent
+    extends AbstractExecutionThreadService
     implements Closeable {
 
   private static final Logger logger = LoggerFactory.getLogger(Agent.class);
@@ -82,8 +86,6 @@ public class Agent
   private final AtomicReference<String>  agentIdRef             = new AtomicReference<>();
   private final AtomicLong               lastMsgSent            = new AtomicLong();
   private final ExecutorService          heartbeatService       = Executors.newFixedThreadPool(1);
-  private final ExecutorService          runService             = Executors.newFixedThreadPool(1);
-  private final CountDownLatch           stoppedLatch           = new CountDownLatch(1);
   private final CountDownLatch           initialConnectionLatch = new CountDownLatch(1);
   private final OkHttpClient             okHttpClient           = new OkHttpClient();
 
@@ -194,12 +196,14 @@ public class Agent
                                   options.getEnableMetrics(),
                                   options.getMetricsPort(),
                                   false);
-    agent.start();
-    agent.waitUntilShutdown();
+    agent.addListener(new GenericServiceListener(agent), MoreExecutors.directExecutor());
+    agent.startAsync();
   }
 
-  public void start()
-      throws IOException {
+  @Override
+  protected void startUp()
+      throws Exception {
+    super.startUp();
 
     if (this.isMetricsEnabled())
       this.metricsServer.start();
@@ -211,36 +215,58 @@ public class Agent
            .addShutdownHook(
                new Thread(() -> {
                  JCommander.getConsole().println("*** Shutting down Agent ***");
-                 Agent.this.stop();
+                 Agent.this.stopAsync();
                  JCommander.getConsole().println("*** Agent shut down ***");
                }));
 
     this.resetGrpcStubs();
+  }
 
-    this.runService.submit(
-        () -> {
-          while (!this.isStopped()) {
-            try {
-              this.connectToProxy();
-            }
-            catch (RequestFailureException e) {
-              logger.info("Disconnected from proxy at {} after invalid response {}",
-                          this.getProxyHost(), e.getMessage());
-            }
-            catch (StatusRuntimeException e) {
-              logger.info("Disconnected from proxy at {}", this.getProxyHost());
-            }
-            catch (Exception e) {
-              // Catch anything else to avoid exiting retry loop
-              logger.info("Disconnected from proxy at {} - {} [{}]",
-                          this.getProxyHost(), e.getClass().getSimpleName(), e.getMessage());
-            }
-            finally {
-              final double secsWaiting = this.reconnectLimiter.acquire();
-              logger.info("Waited {} secs to reconnect", secsWaiting);
-            }
-          }
-        });
+  @Override
+  protected void shutDown()
+      throws Exception {
+
+    if (this.isMetricsEnabled())
+      this.metricsServer.stop();
+
+    if (this.isZipkinReportingEnabled())
+      this.zipkinReporter.close();
+
+    this.heartbeatService.shutdownNow();
+
+    this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
+
+    super.shutDown();
+  }
+
+  @Override
+  protected void run() {
+    while (this.isRunning()) {
+      try {
+        this.connectToProxy();
+      }
+      catch (RequestFailureException e) {
+        logger.info("Disconnected from proxy at {} after invalid response {}",
+                    this.getProxyHost(), e.getMessage());
+      }
+      catch (StatusRuntimeException e) {
+        logger.info("Disconnected from proxy at {}", this.getProxyHost());
+      }
+      catch (Exception e) {
+        // Catch anything else to avoid exiting retry loop
+        logger.info("Disconnected from proxy at {} - {} [{}]",
+                    this.getProxyHost(), e.getClass().getSimpleName(), e.getMessage());
+      }
+      finally {
+        final double secsWaiting = this.reconnectLimiter.acquire();
+        logger.info("Waited {} secs to reconnect", secsWaiting);
+      }
+    }
+  }
+
+  @Override
+  protected String serviceName() {
+    return format("%s %s", this.getClass().getSimpleName(), this.agentName);
   }
 
   private void connectToProxy()
@@ -269,40 +295,7 @@ public class Agent
   @Override
   public void close()
       throws IOException {
-    this.stop();
-  }
-
-  public void stop() {
-    if (this.stopped.compareAndSet(false, true)) {
-
-      if (this.isMetricsEnabled())
-        this.metricsServer.stop();
-
-      if (this.isZipkinReportingEnabled())
-        this.zipkinReporter.close();
-
-      this.heartbeatService.shutdownNow();
-      this.runService.shutdownNow();
-
-      try {
-        this.channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
-      }
-      catch (InterruptedException e) {
-        // Ignore
-      }
-
-      stoppedLatch.countDown();
-    }
-  }
-
-  public void waitUntilShutdown()
-      throws InterruptedException {
-    this.stoppedLatch.await();
-  }
-
-  public boolean waitUntilShutdown(long timeout, TimeUnit unit)
-      throws InterruptedException {
-    return this.stoppedLatch.await(timeout, unit);
+    this.stopAsync();
   }
 
   private void startHeartBeat(final AtomicBoolean disconnected) {
@@ -622,8 +615,6 @@ public class Agent
   public boolean isMetricsEnabled() { return this.metricsServer != null; }
 
   public boolean isZipkinReportingEnabled() { return this.zipkinReporter != null; }
-
-  private boolean isStopped() { return this.stopped.get(); }
 
   public ManagedChannel getChannel() { return this.channel; }
 

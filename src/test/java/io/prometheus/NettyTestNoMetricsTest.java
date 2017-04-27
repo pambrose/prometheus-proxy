@@ -35,8 +35,8 @@ public class NettyTestNoMetricsTest {
       throws InterruptedException, TimeoutException {
     PROXY.stopAsync();
     PROXY.awaitTerminated(5, SECONDS);
-    AGENT.stop();
-    AGENT.waitUntilShutdown(5, SECONDS);
+    AGENT.stopAsync();
+    AGENT.awaitTerminated(5, SECONDS);
 
     // Give agent a chance to login
     sleepForSecs(5);
