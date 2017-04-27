@@ -93,7 +93,7 @@ Start the proxy and an agent in separate shells on your local machine:
 ```bash
 $ docker run --rm -p 8082:8082 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
-        -e PROXY_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+        -e ENABLE_METRICS=true \
         pambrose/prometheus-proxy:1.0.0
 ```
 
