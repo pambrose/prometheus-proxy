@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.concurrent.TimeoutException;
 
 import static io.prometheus.common.Utils.sleepForSecs;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -21,7 +22,7 @@ public class NettyTestNoMetricsTest {
 
   @BeforeClass
   public static void setUp()
-      throws IOException, InterruptedException {
+      throws IOException, InterruptedException, TimeoutException {
     CollectorRegistry.defaultRegistry.clear();
     PROXY = TestUtils.startProxy(null, false);
     AGENT = TestUtils.startAgent(null, false);
@@ -31,9 +32,9 @@ public class NettyTestNoMetricsTest {
 
   @AfterClass
   public static void takeDown()
-      throws InterruptedException {
-    PROXY.stop();
-    PROXY.waitUntilShutdown(5, SECONDS);
+      throws InterruptedException, TimeoutException {
+    PROXY.stopAsync();
+    PROXY.awaitTerminated(5, SECONDS);
     AGENT.stop();
     AGENT.waitUntilShutdown(5, SECONDS);
 

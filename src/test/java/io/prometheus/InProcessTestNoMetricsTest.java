@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.concurrent.TimeoutException;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -20,7 +21,7 @@ public class InProcessTestNoMetricsTest {
 
   @BeforeClass
   public static void setUp()
-      throws IOException, InterruptedException {
+      throws IOException, InterruptedException, TimeoutException {
     CollectorRegistry.defaultRegistry.clear();
     PROXY = TestUtils.startProxy("nometrics", false);
     AGENT = TestUtils.startAgent("nometrics", false);
@@ -30,9 +31,9 @@ public class InProcessTestNoMetricsTest {
 
   @AfterClass
   public static void takeDown()
-      throws InterruptedException {
-    PROXY.stop();
-    PROXY.waitUntilShutdown(5, SECONDS);
+      throws InterruptedException, TimeoutException {
+    PROXY.stopAsync();
+    PROXY.awaitTerminated(5, SECONDS);
     AGENT.stop();
     AGENT.waitUntilShutdown(5, SECONDS);
   }

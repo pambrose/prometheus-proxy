@@ -3,6 +3,8 @@ package io.prometheus;
 import com.beust.jcommander.JCommander;
 import com.github.kristofa.brave.Brave;
 import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.AbstractIdleService;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Attributes;
 import io.prometheus.common.ConfigVals;
 import io.prometheus.common.MetricsServer;
@@ -13,6 +15,7 @@ import io.prometheus.grpc.UnregisterPathResponse;
 import io.prometheus.proxy.AgentContext;
 import io.prometheus.proxy.ProxyGrpcServer;
 import io.prometheus.proxy.ProxyHttpServer;
+import io.prometheus.proxy.ProxyListener;
 import io.prometheus.proxy.ProxyMetrics;
 import io.prometheus.proxy.ProxyOptions;
 import io.prometheus.proxy.ScrapeRequestWrapper;
@@ -24,13 +27,13 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.String.format;
 
 public class Proxy
+    extends AbstractIdleService
     implements Closeable {
 
   private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
@@ -109,11 +112,13 @@ public class Proxy
                                   options.getMetricsPort(),
                                   null,
                                   false);
-    proxy.start();
-    proxy.waitUntilShutdown();
+
+    proxy.addListener(new ProxyListener(), MoreExecutors.directExecutor());
+    proxy.startAsync();
   }
 
-  public void start()
+  @Override
+  protected void startUp()
       throws IOException {
     this.grpcServer.start();
 
@@ -128,18 +133,13 @@ public class Proxy
            .addShutdownHook(
                new Thread(() -> {
                  JCommander.getConsole().println("*** Shutting down Proxy ***");
-                 Proxy.this.stop();
+                 Proxy.this.stopAsync();
                  JCommander.getConsole().println("*** Proxy shut down ***");
                }));
   }
 
   @Override
-  public void close()
-      throws IOException {
-    this.stop();
-  }
-
-  public void stop() {
+  protected void shutDown() {
     if (this.stopped.compareAndSet(false, true)) {
       this.cleanupService.shutdownNow();
       this.httpServer.stop();
@@ -154,14 +154,10 @@ public class Proxy
     }
   }
 
-  public void waitUntilShutdown()
-      throws InterruptedException {
-    this.grpcServer.awaitTermination();
-  }
-
-  public void waitUntilShutdown(final long timeout, final TimeUnit unit)
-      throws InterruptedException {
-    this.grpcServer.awaitTermination(timeout, unit);
+  @Override
+  public void close()
+      throws IOException {
+    this.stopAsync();
   }
 
   private void startStaleAgentCheck() {
