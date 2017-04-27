@@ -32,6 +32,9 @@ public class ProxyHttpServer {
     this.port = port;
     this.http = Service.ignite();
     this.http.port(this.port);
+    this.http.threadPool(this.proxy.getConfigVals().http.maxThreads,
+                         this.proxy.getConfigVals().http.minThreads,
+                         this.proxy.getConfigVals().http.idleTimeoutMillis);
     this.tracer = this.proxy.isZipkinEnabled()
                   ? this.proxy.getZipkinReporter().newTracer("proxy-http")
                   : null;
