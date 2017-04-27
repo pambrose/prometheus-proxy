@@ -396,6 +396,10 @@ public class Agent
     catch (IOException e) {
       reason = format("%s - %s", e.getClass().getSimpleName(), e.getMessage());
     }
+    catch (Exception e) {
+      logger.warn("fetchUrl()", e);
+      reason = format("%s - %s", e.getClass().getSimpleName(), e.getMessage());
+    }
     finally {
       if (requestTimer != null)
         requestTimer.observeDuration();
