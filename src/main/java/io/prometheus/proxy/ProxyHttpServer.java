@@ -68,7 +68,7 @@ public class ProxyHttpServer {
                                                                        .start()
                                                           : null;
                     try {
-                      if (this.proxy.isStopped()) {
+                      if (!this.proxy.isRunning()) {
                         logger.error("Proxy stopped");
                         res.status(503);
                         this.updateScrapeRequests("proxy_stopped");
@@ -141,7 +141,7 @@ public class ProxyHttpServer {
         // Check if agent is disconnected or agent is hung
         if (scrapeRequest.ageInSecs() >= timeoutSecs
             || !scrapeRequest.getAgentContext().isValid()
-            || this.proxy.isStopped()) {
+            || !this.proxy.isRunning()) {
           res.status(503);
           this.updateScrapeRequests("time_out");
           return null;

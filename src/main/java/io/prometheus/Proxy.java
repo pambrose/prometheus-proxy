@@ -27,7 +27,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.String.format;
@@ -40,7 +39,6 @@ public class Proxy
 
   public static final String                          AGENT_ID         = "agent-id";
   public static final Attributes.Key<String>          ATTRIB_AGENT_ID  = Attributes.Key.of(AGENT_ID);
-  private final       AtomicBoolean                   stopped          = new AtomicBoolean(false);
   private final       Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap(); // Map agent_id to AgentContext
   private final       Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap(); // Map path to AgentContext
   private final       Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap(); // Map scrape_id to agent_id
@@ -139,17 +137,15 @@ public class Proxy
 
   @Override
   protected void shutDown() {
-    if (this.stopped.compareAndSet(false, true)) {
-      this.grpcServer.shutdown();
-      this.httpServer.stop();
-      this.cleanupService.shutdownNow();
+    this.grpcServer.shutdown();
+    this.httpServer.stop();
+    this.cleanupService.shutdownNow();
 
-      if (this.isMetricsEnabled())
-        this.metricsServer.stop();
+    if (this.isMetricsEnabled())
+      this.metricsServer.stop();
 
-      if (this.isZipkinEnabled())
-        this.getZipkinReporter().close();
-    }
+    if (this.isZipkinEnabled())
+      this.getZipkinReporter().close();
   }
 
   @Override
@@ -165,7 +161,7 @@ public class Proxy
       logger.info("Agent eviction thread started ({} secs max inactivity secs with {} secs pause)",
                   maxInactivitySecs, threadPauseSecs);
       this.cleanupService.submit(() -> {
-        while (!this.isStopped()) {
+        while (this.isRunning()) {
           this.agentContextMap
               .forEach((agentId, agentContext) -> {
                 final long inactivitySecs = agentContext.inactivitySecs();
@@ -184,8 +180,6 @@ public class Proxy
       logger.info("Agent eviction thread not started");
     }
   }
-
-  public boolean isStopped() { return this.stopped.get(); }
 
   public void addAgentContext(final AgentContext agentContext) {
     this.agentContextMap.put(agentContext.getAgentId(), agentContext);
