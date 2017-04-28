@@ -1,10 +1,8 @@
 package io.prometheus;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.ServiceManager;
 import io.grpc.Attributes;
 import io.prometheus.common.ConfigVals;
@@ -25,7 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -63,28 +60,8 @@ public class Proxy
     this.httpService = new ProxyHttpService(this, proxyPort);
     this.agentCleanupService = new AgentContextCleanupService(this);
 
-    final List<Service> serviceList = Lists.newArrayList(this, this.httpService, this.agentCleanupService);
-    if (this.isMetricsEnabled())
-      serviceList.add(this.getMetricsService());
-    if (this.isZipkinEnabled())
-      serviceList.add(this.getZipkinReporterService());
-    this.serviceManager = new ServiceManager(serviceList);
-    this.serviceManager.addListener(new ServiceManager.Listener() {
-      @Override
-      public void healthy() {
-        logger.info("All Proxy services healthy");
-      }
-
-      @Override
-      public void stopped() {
-        logger.info("All Proxy services stopped");
-      }
-
-      @Override
-      public void failure(final Service service) {
-        logger.info("Proxy service failed: {}", service);
-      }
-    });
+    this.serviceManager = new ServiceManager(this.newServiceList(this.httpService, this.agentCleanupService));
+    this.serviceManager.addListener(this.newListener());
 
     logger.info("Created {}", this);
   }
@@ -100,12 +77,7 @@ public class Proxy
     logger.info(Utils.getBanner("banners/proxy.txt"));
     logger.info(Utils.getVersionDesc());
 
-    final Proxy proxy = new Proxy(options,
-                                  metricsConfig,
-                                  zipkinConfig,
-                                  options.getProxyPort(),
-                                  null,
-                                  false);
+    final Proxy proxy = new Proxy(options, metricsConfig, zipkinConfig, options.getProxyPort(), null, false);
     proxy.addListener(new GenericServiceListener(proxy), MoreExecutors.directExecutor());
     proxy.startAsync();
   }

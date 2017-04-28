@@ -6,7 +6,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.RateLimiter;
-import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.ServiceManager;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.Empty;
@@ -150,28 +149,8 @@ public class Agent
 
     this.resetGrpcStubs();
 
-    final List<Service> serviceList = Lists.newArrayList(this);
-    if (this.isMetricsEnabled())
-      serviceList.add(this.getMetricsService());
-    if (this.isZipkinEnabled())
-      serviceList.add(this.getZipkinReporterService());
-    this.serviceManager = new ServiceManager(serviceList);
-    this.serviceManager.addListener(new ServiceManager.Listener() {
-      @Override
-      public void healthy() {
-        logger.info("All Proxy services healthy");
-      }
-
-      @Override
-      public void stopped() {
-        logger.info("All Proxy services stopped");
-      }
-
-      @Override
-      public void failure(final Service service) {
-        logger.info("Proxy service failed: {}", service);
-      }
-    });
+    this.serviceManager = new ServiceManager(this.newServiceList());
+    this.serviceManager.addListener(this.newListener());
 
     logger.info("Created {}", this);
   }
@@ -187,11 +166,7 @@ public class Agent
     logger.info(Utils.getBanner("banners/agent.txt"));
     logger.info(Utils.getVersionDesc());
 
-    final Agent agent = new Agent(options,
-                                  metricsConfig,
-                                  zipkinConfig,
-                                  null,
-                                  false);
+    final Agent agent = new Agent(options, metricsConfig, zipkinConfig, null, false);
     agent.addListener(new GenericServiceListener(agent), MoreExecutors.directExecutor());
     agent.startAsync();
   }
@@ -238,11 +213,12 @@ public class Agent
     final AtomicBoolean disconnected = new AtomicBoolean(false);
 
     // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agent id != null
-    if (this.getAgentId() != null)
+    if (this.getAgentId() != null) {
       this.resetGrpcStubs();
+      this.setAgentId(null);
+    }
 
     // Reset values for each connection attempt
-    this.setAgentId(null);
     this.pathContextMap.clear();
     this.scrapeResponseQueue.clear();
     this.lastMsgSent.set(0);
@@ -284,11 +260,11 @@ public class Agent
       this.getChannel().shutdownNow();
 
     this.channelRef.set(isNullOrEmpty(this.inProcessServerName) ? NettyChannelBuilder.forAddress(this.hostname, this.port)
-                                                                                .usePlaintext(true)
-                                                                                .build()
-                                                           : InProcessChannelBuilder.forName(this.inProcessServerName)
-                                                                                    .usePlaintext(true)
-                                                                                    .build());
+                                                                                     .usePlaintext(true)
+                                                                                     .build()
+                                                                : InProcessChannelBuilder.forName(this.inProcessServerName)
+                                                                                         .usePlaintext(true)
+                                                                                         .build());
     final List<ClientInterceptor> interceptors = Lists.newArrayList(new AgentClientInterceptor(this));
 
     /*
@@ -466,21 +442,24 @@ public class Agent
       throw new RequestFailureException(format("unregisterPath() - %s", response.getReason()));
   }
 
+  private Runnable readRequestAction(final ScrapeRequest request) {
+    return () -> {
+      final ScrapeResponse response = fetchUrl(request);
+      try {
+        scrapeResponseQueue.put(response);
+      }
+      catch (InterruptedException e) {
+        // Ignore
+      }
+    };
+  }
+
   private void readRequestsFromProxy(final AtomicBoolean disconnected) {
     final StreamObserver<ScrapeRequest> streamObserver =
         new StreamObserver<ScrapeRequest>() {
           @Override
           public void onNext(final ScrapeRequest request) {
-            readRequestsExecutorService.submit(
-                () -> {
-                  final ScrapeResponse response = fetchUrl(request);
-                  try {
-                    scrapeResponseQueue.put(response);
-                  }
-                  catch (InterruptedException e) {
-                    // Ignore
-                  }
-                });
+            readRequestsExecutorService.submit(readRequestAction(request));
           }
 
           @Override

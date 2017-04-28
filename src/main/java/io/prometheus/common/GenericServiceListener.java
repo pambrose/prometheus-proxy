@@ -36,7 +36,7 @@ public class GenericServiceListener
   @Override
   public void terminated(Service.State from) {
     super.terminated(from);
-    logger.info("{} is terminated", this.name);
+    logger.info("{} terminated", this.name);
   }
 
   @Override

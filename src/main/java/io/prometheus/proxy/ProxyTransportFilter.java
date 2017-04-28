@@ -22,7 +22,7 @@ public class ProxyTransportFilter
   private String getRemoteAddr(Attributes attributes) {
     final Optional<Attributes.Key<?>> keyOptional = attributes.keys()
                                                               .stream()
-                                                              .filter(key -> key.toString().equals("remote-addr"))
+                                                              .filter(key -> "remote-addr".equals(key.toString()))
                                                               .findFirst();
     if (keyOptional.isPresent()) {
       final Attributes.Key<Object> key = (Attributes.Key<Object>) keyOptional.get();

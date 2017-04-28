@@ -1,12 +1,17 @@
 package io.prometheus.common;
 
 import com.github.kristofa.brave.Brave;
+import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
+import com.google.common.util.concurrent.Service;
+import com.google.common.util.concurrent.ServiceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 import static java.lang.String.format;
 
@@ -80,6 +85,35 @@ public abstract class GenericService
   public void close()
       throws IOException {
     this.stopAsync();
+  }
+
+  protected ServiceManager.Listener newListener() {
+    return new ServiceManager.Listener() {
+      @Override
+      public void healthy() {
+        logger.info("All {} services healthy", this.getClass().getSimpleName());
+      }
+
+      @Override
+      public void stopped() {
+        logger.info("All {} services stopped", this.getClass().getSimpleName());
+      }
+
+      @Override
+      public void failure(final Service service) {
+        logger.info("{} service failed: {}", this.getClass().getSimpleName(), service);
+      }
+    };
+  }
+
+  protected List<Service> newServiceList(Service... services) {
+    final List<Service> serviceList = Lists.newArrayList(this);
+    if (this.isMetricsEnabled())
+      serviceList.add(this.getMetricsService());
+    if (this.isZipkinEnabled())
+      serviceList.add(this.getZipkinReporterService());
+    serviceList.addAll(Arrays.asList(services));
+    return serviceList;
   }
 
   public boolean isMetricsEnabled() { return this.metricsService != null; }

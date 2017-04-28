@@ -31,12 +31,7 @@ public class TestUtils {
     logger.info(Utils.getBanner("banners/proxy.txt"));
     logger.info(Utils.getVersionDesc());
 
-    Proxy proxy = new Proxy(options,
-                            metricsConfig,
-                            zipkinConfig,
-                            TestConstants.PROXY_PORT,
-                            serverName,
-                            true);
+    Proxy proxy = new Proxy(options, metricsConfig, zipkinConfig, TestConstants.PROXY_PORT, serverName, true);
     proxy.addListener(new GenericServiceListener(proxy), MoreExecutors.directExecutor());
     proxy.startAsync();
     proxy.awaitRunning(5, TimeUnit.SECONDS);
@@ -55,11 +50,7 @@ public class TestUtils {
     logger.info(Utils.getBanner("banners/agent.txt"));
     logger.info(Utils.getVersionDesc());
 
-    Agent agent = new Agent(options,
-                            metricsConfig,
-                            zipkinConfig,
-                            serverName,
-                            true);
+    Agent agent = new Agent(options, metricsConfig, zipkinConfig, serverName, true);
     agent.addListener(new GenericServiceListener(agent), MoreExecutors.directExecutor());
     agent.startAsync();
     agent.awaitRunning(5, TimeUnit.SECONDS);
