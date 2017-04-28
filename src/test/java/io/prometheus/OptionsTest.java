@@ -49,30 +49,29 @@ public class OptionsTest {
 
 
   public void verifyProxyDefaults() {
-    final ProxyOptions options = new ProxyOptions(Proxy.class.getName(), newArrayList());
+    final ProxyOptions options = new ProxyOptions(newArrayList());
 
     assertThat(options.getProxyPort()).isEqualTo(8080);
     assertThat(options.getAgentPort()).isEqualTo(50021);
   }
 
   public void verifyAgentDefaults() {
-    AgentOptions options = new AgentOptions(Agent.class.getName(),
-                                            newArrayList("--name", "test-name", "--proxy", "host5"),
+    AgentOptions options = new AgentOptions(newArrayList("--name", "test-name", "--proxy", "host5"),
                                             false);
 
-    assertThat(options.getEnableMetrics()).isEqualTo(false);
+    assertThat(options.getMetricsEnabled()).isEqualTo(false);
     assertThat(options.getDynamicParams().size()).isEqualTo(0);
     assertThat(options.getAgentName()).isEqualTo("test-name");
     assertThat(options.getProxyHostname()).isEqualTo("host5");
   }
 
   private ConfigVals readProxyOptions(final List<String> argList) {
-    final ProxyOptions options = new ProxyOptions(Proxy.class.getName(), argList);
+    final ProxyOptions options = new ProxyOptions(argList);
     return options.getConfigVals();
   }
 
   private ConfigVals readAgentOptions(final List<String> argList) {
-    AgentOptions options = new AgentOptions(Agent.class.getName(), argList, false);
+    AgentOptions options = new AgentOptions(argList, false);
     return options.getConfigVals();
   }
 }

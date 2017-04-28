@@ -153,7 +153,7 @@ class ProxyServiceImpl
     final String agentId = agentInfo.getAgentId();
     final AgentContext agentContext = this.proxy.getAgentContext(agentId);
     if (agentContext != null) {
-      while (!this.proxy.isStopped() && agentContext.isValid()) {
+      while (this.proxy.isRunning() && agentContext.isValid()) {
         final ScrapeRequestWrapper scrapeRequest = agentContext.pollScrapeRequestQueue();
         if (scrapeRequest != null) {
           scrapeRequest.annotateSpan("send-to-agent");
@@ -175,10 +175,10 @@ class ProxyServiceImpl
           logger.error("Missing ScrapeRequestWrapper for scrape_id: {}", scrapeId);
         }
         else {
-          scrapeRequest.setScrapeResponse(response);
-          scrapeRequest.markComplete();
-          scrapeRequest.annotateSpan("received-from-agent");
-          scrapeRequest.getAgentContext().markActivity();
+          scrapeRequest.setScrapeResponse(response)
+                       .markComplete()
+                       .annotateSpan("received-from-agent")
+                       .getAgentContext().markActivity();
         }
       }
 

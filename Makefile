@@ -1,4 +1,4 @@
-VERSION=1.0.0
+VERSION=1.1.0
 
 default: build
 
@@ -27,8 +27,8 @@ report-coverage:
 
 distro: build
 	mkdir target/distro
-	mv target/proxy-1.0-jar-with-dependencies.jar target/distro/prometheus-proxy.jar
-	mv target/agent-1.0-jar-with-dependencies.jar target/distro/prometheus-agent.jar
+	mv target/proxy-jar-with-dependencies.jar target/distro/prometheus-proxy.jar
+	mv target/agent-jar-with-dependencies.jar target/distro/prometheus-agent.jar
 
 site:
 	./mvnw site

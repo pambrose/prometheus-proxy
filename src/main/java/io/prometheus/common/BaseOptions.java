@@ -16,7 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static io.prometheus.common.EnvVars.ENABLE_METRICS;
+import static io.prometheus.common.EnvVars.METRICS_ENABLED;
 import static io.prometheus.common.EnvVars.METRICS_PORT;
 import static java.lang.String.format;
 
@@ -32,24 +32,23 @@ public abstract class BaseOptions {
   private final ConfigVals configVals;
 
   @Parameter(names = {"-c", "--conf", "--config"}, description = "Configuration file or url")
-  private String              configName    = null;
+  private String              configName     = null;
   @Parameter(names = {"-m", "--metrics_port"}, description = "Metrics listen port")
-  private Integer             metricsPort   = null;
+  private Integer             metricsPort    = null;
   @Parameter(names = {"-e", "--metrics"}, description = "Metrics enabled")
-  private Boolean             enableMetrics = null;
+  private Boolean             metricsEnabled = null;
   @Parameter(names = {"-v", "--version"}, description = "Print version info and exit", validateWith = Utils.VersionValidator.class)
-  private boolean             version       = false;
+  private boolean             version        = false;
   @Parameter(names = {"-u", "--usage"}, help = true)
-  private boolean             usage         = false;
+  private boolean             usage          = false;
   @DynamicParameter(names = "-D", description = "Dynamic property assignment")
-  private Map<String, String> dynamicParams = new HashMap<>();
+  private Map<String, String> dynamicParams  = new HashMap<>();
 
   protected BaseOptions(final String programName, final String[] argv, final String envConfig,
                         final boolean exitOnMissingConfig) {
     this.programName = programName;
     this.parseArgs(argv);
     this.readConfig(envConfig, exitOnMissingConfig);
-
     this.configVals = new ConfigVals(this.configRef.get());
   }
 
@@ -81,8 +80,8 @@ public abstract class BaseOptions {
   }
 
   protected void assignEnableMetrics(final boolean configVal) {
-    if (this.enableMetrics == null)
-      this.enableMetrics = ENABLE_METRICS.getEnv(configVal);
+    if (this.metricsEnabled == null)
+      this.metricsEnabled = METRICS_ENABLED.getEnv(configVal);
   }
 
   private void readConfig(final String envConfig, final boolean exitOnMissingConfig) {
@@ -92,7 +91,7 @@ public abstract class BaseOptions {
                                            ConfigFactory.load().resolve(),
                                            exitOnMissingConfig)
                                .resolve(ConfigResolveOptions.defaults());
-    this.configRef.set(config);
+    this.configRef.set(config.resolve());
 
     this.dynamicParams.forEach(
         (key, value) -> {
@@ -106,14 +105,9 @@ public abstract class BaseOptions {
         });
   }
 
-
   public int getMetricsPort() { return this.metricsPort; }
 
-  public boolean getEnableMetrics() {
-    return this.enableMetrics;
-  }
+  public boolean getMetricsEnabled() { return this.metricsEnabled; }
 
-  public Map<String, String> getDynamicParams() {
-    return this.dynamicParams;
-  }
+  public Map<String, String> getDynamicParams() { return this.dynamicParams; }
 }

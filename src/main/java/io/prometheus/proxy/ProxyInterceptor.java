@@ -17,10 +17,6 @@ public class ProxyInterceptor
   private static final Logger               logger        = LoggerFactory.getLogger(ProxyInterceptor.class);
   private static final Metadata.Key<String> META_AGENT_ID = Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER);
 
-
-  public ProxyInterceptor() {
-  }
-
   @Override
   public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(final ServerCall<ReqT, RespT> call,
                                                                final Metadata requestHeaders,

@@ -49,9 +49,10 @@ public class ScrapeRequestWrapper {
     this.scrapeRequest = builder.build();
   }
 
-  public void annotateSpan(final String value) {
+  public ScrapeRequestWrapper annotateSpan(final String value) {
     if (this.rootSpan != null)
       this.rootSpan.annotate(value);
+    return this;
   }
 
   public AgentContext getAgentContext() { return this.agentContext; }
@@ -62,14 +63,18 @@ public class ScrapeRequestWrapper {
 
   public ScrapeResponse getScrapeResponse() { return this.scrapeResponseRef.get(); }
 
-  public void setScrapeResponse(final ScrapeResponse scrapeResponse) { this.scrapeResponseRef.set(scrapeResponse);}
+  public ScrapeRequestWrapper setScrapeResponse(final ScrapeResponse scrapeResponse) {
+    this.scrapeResponseRef.set(scrapeResponse);
+    return this;
+  }
 
   public long ageInSecs() { return (System.currentTimeMillis() - this.createTime) / 1000;}
 
-  public void markComplete() {
+  public ScrapeRequestWrapper markComplete() {
     if (this.requestTimer != null)
       this.requestTimer.observeDuration();
     this.complete.countDown();
+    return this;
   }
 
   public boolean waitUntilCompleteMillis(final long waitMillis) {

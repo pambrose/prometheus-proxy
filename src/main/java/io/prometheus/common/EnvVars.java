@@ -17,7 +17,7 @@ public enum EnvVars {
 
   // Common
   METRICS_PORT,
-  ENABLE_METRICS;
+  METRICS_ENABLED;
 
   private String getEnv() { return getenv(this.name()); }
 
