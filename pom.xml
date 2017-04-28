@@ -66,21 +66,10 @@
 
             <dependency>
                 <groupId>io.grpc</groupId>
-                <artifactId>grpc-protobuf</artifactId>
+                <artifactId>grpc-all</artifactId>
                 <version>${grpc.version}</version>
             </dependency>
 
-            <dependency>
-                <groupId>io.grpc</groupId>
-                <artifactId>grpc-stub</artifactId>
-                <version>${grpc.version}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>io.grpc</groupId>
-                <artifactId>grpc-netty</artifactId>
-                <version>${grpc.version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -152,21 +141,10 @@
 
         <dependency>
             <groupId>io.grpc</groupId>
-            <artifactId>grpc-protobuf</artifactId>
+            <artifactId>grpc-all</artifactId>
             <version>${grpc.version}</version>
         </dependency>
 
-        <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-stub</artifactId>
-            <version>${grpc.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-netty</artifactId>
-            <version>${grpc.version}</version>
-        </dependency>
 
         <dependency>
             <groupId>com.google.auto.value</groupId>
