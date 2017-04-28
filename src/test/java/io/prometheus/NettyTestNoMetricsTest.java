@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
-import static io.prometheus.common.Utils.sleepForSecs;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class NettyTestNoMetricsTest {
@@ -37,11 +36,7 @@ public class NettyTestNoMetricsTest {
     PROXY.awaitTerminated(5, SECONDS);
     AGENT.stopAsync();
     AGENT.awaitTerminated(5, SECONDS);
-
-    // Give agent a chance to login
-    sleepForSecs(5);
   }
-
 
   @Test
   public void missingPathTest()

@@ -3,6 +3,7 @@ package io.prometheus.proxy;
 import brave.Span;
 import brave.Tracer;
 import com.github.kristofa.brave.sparkjava.BraveTracing;
+import com.google.common.util.concurrent.AbstractIdleService;
 import io.prometheus.Proxy;
 import io.prometheus.common.ConfigVals;
 import io.prometheus.grpc.ScrapeResponse;
@@ -17,9 +18,10 @@ import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.ACCEPT_ENCODING;
 import static com.google.common.net.HttpHeaders.CONTENT_ENCODING;
 
-public class ProxyHttpServer {
+public class ProxyHttpService
+    extends AbstractIdleService {
 
-  private static final Logger logger = LoggerFactory.getLogger(ProxyHttpServer.class);
+  private static final Logger logger = LoggerFactory.getLogger(ProxyHttpService.class);
 
   private final Proxy             proxy;
   private final int               port;
@@ -27,7 +29,7 @@ public class ProxyHttpServer {
   private final Tracer            tracer;
   private final ConfigVals.Proxy2 configVals;
 
-  public ProxyHttpServer(final Proxy proxy, final int port) {
+  public ProxyHttpService(final Proxy proxy, final int port) {
     this.proxy = proxy;
     this.port = port;
     this.http = Service.ignite();
@@ -36,12 +38,13 @@ public class ProxyHttpServer {
                          this.proxy.getConfigVals().http.minThreads,
                          this.proxy.getConfigVals().http.idleTimeoutMillis);
     this.tracer = this.proxy.isZipkinEnabled()
-                  ? this.proxy.getZipkinReporter().newTracer("proxy-http")
+                  ? this.proxy.getZipkinReporterService().newTracer("proxy-http")
                   : null;
     this.configVals = this.proxy.getConfigVals();
   }
 
-  public void start() {
+  @Override
+  protected void startUp() {
     logger.info("Started proxy listening on {}", this.port);
     if (this.proxy.isZipkinEnabled()) {
       final BraveTracing tracing = BraveTracing.create(this.proxy.getBrave());
@@ -52,7 +55,7 @@ public class ProxyHttpServer {
                                 @Override
                                 public void handle(Exception e, Request request, Response response) {
                                   response.status(404);
-                                  logger.error("Error in ProxyHttpServer", e);
+                                  logger.error("Error in ProxyHttpService", e);
                                 }
                               }));
       this.http.afterAfter(tracing.afterAfter());
@@ -118,6 +121,12 @@ public class ProxyHttpServer {
                         span.finish();
                     }
                   });
+
+  }
+
+  @Override
+  protected void shutDown() {
+    this.http.stop();
   }
 
   private String submitScrapeRequest(final Request req, final Response res, final AgentContext agentContext,
@@ -181,5 +190,5 @@ public class ProxyHttpServer {
       this.proxy.getMetrics().scrapeRequests.labels(type).inc();
   }
 
-  public void stop() { this.http.stop(); }
+  public int getPort() { return this.port; }
 }

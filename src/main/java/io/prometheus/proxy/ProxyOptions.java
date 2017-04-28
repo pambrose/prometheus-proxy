@@ -1,7 +1,9 @@
 package io.prometheus.proxy;
 
 import com.beust.jcommander.Parameter;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import io.prometheus.Proxy;
 import io.prometheus.common.BaseOptions;
 import io.prometheus.common.ConfigVals;
 
@@ -19,12 +21,12 @@ public class ProxyOptions
   @Parameter(names = {"-a", "--agent_port"}, description = "Listen port for agents")
   private Integer agentPort = null;
 
-  public ProxyOptions(final String programName, final List<String> args) {
-    this(programName, Iterables.toArray(args, String.class));
+  public ProxyOptions(final List<String> args) {
+    this(Iterables.toArray(args != null ? args : ImmutableList.of(), String.class));
   }
 
-  public ProxyOptions(final String programName, final String[] argv) {
-    super(programName, argv, PROXY_CONFIG.name(), false);
+  public ProxyOptions(final String[] argv) {
+    super(Proxy.class.getSimpleName(), argv, PROXY_CONFIG.name(), false);
     this.assignConfigVals(this.getConfigVals());
   }
 

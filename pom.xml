@@ -19,6 +19,7 @@
         <jcommander.version>1.69</jcommander.version>
         <spark.version>2.6.0.RC0</spark.version>
         <okhttp.version>3.7.0</okhttp.version>
+        <auto.version>1.2</auto.version>
         <grpc-prom.version>0.3.0</grpc-prom.version>
         <brave.version>4.2.0</brave.version>
         <zipkin-reporter.version>0.7.0</zipkin-reporter.version>
@@ -162,6 +163,13 @@
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty</artifactId>
             <version>${grpc.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.auto.value</groupId>
+            <artifactId>auto-value</artifactId>
+            <version>${auto.version}</version>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>

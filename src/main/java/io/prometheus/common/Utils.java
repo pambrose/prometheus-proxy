@@ -8,6 +8,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.io.CharStreams;
+import com.google.common.util.concurrent.Service;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigParseOptions;
@@ -173,13 +174,17 @@ public class Utils {
     return format("Version: %s Release Date: %s", val.version(), val.date());
   }
 
-  public static long toMillis(final long secs) {
-    return secs * 1000;
+  public static Thread shutDownHookAction(final Service service) {
+    return new Thread(() -> {
+      JCommander.getConsole().println(format("*** Shutting down %s ***", service.getClass().getSimpleName()));
+      service.stopAsync();
+      JCommander.getConsole().println(format("*** %s shut down ***", service.getClass().getSimpleName()));
+    });
   }
 
-  public static long toSecs(final long millis) {
-    return millis / 1000;
-  }
+  public static long toMillis(final long secs) { return secs * 1000; }
+
+  public static long toSecs(final long millis) { return millis / 1000; }
 
   public static class VersionValidator
       implements IParameterValidator {
