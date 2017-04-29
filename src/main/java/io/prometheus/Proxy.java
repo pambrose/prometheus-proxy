@@ -2,12 +2,10 @@ package io.prometheus;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ServiceManager;
 import io.grpc.Attributes;
+import io.prometheus.common.AdminConfig;
 import io.prometheus.common.ConfigVals;
 import io.prometheus.common.GenericService;
-import io.prometheus.common.GenericServiceListener;
 import io.prometheus.common.MetricsConfig;
 import io.prometheus.common.Utils;
 import io.prometheus.common.ZipkinConfig;
@@ -43,42 +41,40 @@ public class Proxy
   private final ProxyGrpcService           grpcService;
   private final ProxyHttpService           httpService;
   private final AgentContextCleanupService agentCleanupService;
-  private final ServiceManager             serviceManager;
 
   public Proxy(final ProxyOptions options,
-               final MetricsConfig metricsConfig,
-               final ZipkinConfig zipkinConfig,
                final int proxyPort,
                final String inProcessServerName,
                final boolean testMode)
       throws IOException {
-    super(options.getConfigVals(), metricsConfig, zipkinConfig, testMode);
+    super(options.getConfigVals(),
+          AdminConfig.create(options.getConfigVals().proxy.admin),
+          MetricsConfig.create(options.getMetricsEnabled(),
+                               options.getMetricsPort(),
+                               options.getConfigVals().proxy.metrics),
+          ZipkinConfig.create(options.getConfigVals().proxy.internal.zipkin),
+          testMode);
 
     this.metrics = this.isMetricsEnabled() ? new ProxyMetrics(this) : null;
     this.grpcService = isNullOrEmpty(inProcessServerName) ? ProxyGrpcService.create(this, options.getAgentPort())
                                                           : ProxyGrpcService.create(this, inProcessServerName);
     this.httpService = new ProxyHttpService(this, proxyPort);
-    this.agentCleanupService = new AgentContextCleanupService(this);
+    this.agentCleanupService = this.getConfigVals().internal.staleAgentCheckEnabled
+                               ? new AgentContextCleanupService(this) : null;
 
-    this.serviceManager = new ServiceManager(this.newServiceList(this.httpService, this.agentCleanupService));
-    this.serviceManager.addListener(this.newListener());
+    this.addServices(this.grpcService, this.httpService, this.agentCleanupService);
 
-    logger.info("Created {}", this);
+    this.init();
   }
 
   public static void main(final String[] argv)
       throws IOException, InterruptedException {
     final ProxyOptions options = new ProxyOptions(argv);
-    final MetricsConfig metricsConfig = MetricsConfig.create(options.getMetricsEnabled(),
-                                                             options.getMetricsPort(),
-                                                             options.getConfigVals().proxy.metrics);
-    final ZipkinConfig zipkinConfig = ZipkinConfig.create(options.getConfigVals().proxy.internal.zipkin);
 
     logger.info(Utils.getBanner("banners/proxy.txt"));
     logger.info(Utils.getVersionDesc());
 
-    final Proxy proxy = new Proxy(options, metricsConfig, zipkinConfig, options.getProxyPort(), null, false);
-    proxy.addListener(new GenericServiceListener(proxy), MoreExecutors.directExecutor());
+    final Proxy proxy = new Proxy(options, options.getProxyPort(), null, false);
     proxy.startAsync();
   }
 
@@ -88,7 +84,11 @@ public class Proxy
     super.startUp();
     this.grpcService.startAsync();
     this.httpService.startAsync();
-    this.agentCleanupService.startAsync();
+
+    if (this.agentCleanupService != null)
+      this.agentCleanupService.startAsync();
+    else
+      logger.info("Agent eviction thread not started");
   }
 
   @Override
@@ -96,7 +96,8 @@ public class Proxy
       throws Exception {
     this.grpcService.stopAsync();
     this.httpService.stopAsync();
-    this.agentCleanupService.stopAsync();
+    if (this.agentCleanupService != null)
+      this.agentCleanupService.stopAsync();
     super.shutDown();
   }
 
@@ -105,6 +106,14 @@ public class Proxy
     while (this.isRunning()) {
       Utils.sleepForMillis(500);
     }
+  }
+
+  @Override
+  protected void registerHealtChecks() {
+    super.registerHealtChecks();
+    this.getHealthCheckRegistry().register("scrape_response_map_check",
+                                           Utils.mapHealthCheck(scrapeRequestMap, 25));
+    this.getHealthCheckRegistry().register("grpc_service", this.grpcService.getHealthCheck());
   }
 
   public void addAgentContext(final AgentContext agentContext) {

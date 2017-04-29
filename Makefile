@@ -1,4 +1,4 @@
-VERSION=1.1.0
+VERSION=1.2.0
 
 default: build
 
@@ -24,6 +24,9 @@ build-coverage:
 
 report-coverage:
 	./mvnw -DrepoToken=${COVERALLS_TOKEN} clean package test jacoco:report coveralls:report
+
+sonar:
+	./mvnw sonar:sonar -Dsonar.host.url=http://localhost:9000
 
 distro: build
 	mkdir target/distro

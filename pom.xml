@@ -21,6 +21,7 @@
         <okhttp.version>3.7.0</okhttp.version>
         <auto.version>1.4.1</auto.version>
         <grpc-prom.version>0.3.0</grpc-prom.version>
+        <metrics.version>3.2.2</metrics.version>
         <brave.version>4.2.0</brave.version>
         <zipkin-reporter.version>0.7.0</zipkin-reporter.version>
 
@@ -115,6 +116,30 @@
                     <artifactId>slf4j-api</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>io.dropwizard.metrics</groupId>
+            <artifactId>metrics-core</artifactId>
+            <version>${metrics.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.dropwizard.metrics</groupId>
+            <artifactId>metrics-healthchecks</artifactId>
+            <version>${metrics.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.dropwizard.metrics</groupId>
+            <artifactId>metrics-servlets</artifactId>
+            <version>${metrics.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.dropwizard.metrics</groupId>
+            <artifactId>metrics-jvm</artifactId>
+            <version>${metrics.version}</version>
         </dependency>
 
         <dependency>

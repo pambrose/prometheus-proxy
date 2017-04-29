@@ -1,8 +1,11 @@
 package io.prometheus.proxy;
 
+import com.codahale.metrics.health.HealthCheck;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.AbstractIdleService;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;
@@ -10,6 +13,7 @@ import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.prometheus.Proxy;
+import io.prometheus.common.GenericServiceListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,10 +28,12 @@ public class ProxyGrpcService
   private static final Logger logger = LoggerFactory.getLogger(ProxyGrpcService.class);
 
   private final String  serverName;
+  private final int     port;
   private final boolean inProcessServer;
   private final Server  grpcServer;
 
-  private ProxyGrpcService(final Proxy proxy, final int grpcPort, final String serverName) {
+  private ProxyGrpcService(final Proxy proxy, final int port, final String serverName) {
+    this.port = port;
     this.serverName = serverName;
     this.inProcessServer = !isNullOrEmpty(serverName);
 
@@ -49,10 +55,11 @@ public class ProxyGrpcService
                                                                    .addService(serviceDef)
                                                                    .addTransportFilter(new ProxyTransportFilter(proxy))
                                                                    .build()
-                                           : ServerBuilder.forPort(grpcPort)
+                                           : ServerBuilder.forPort(this.port)
                                                           .addService(serviceDef)
                                                           .addTransportFilter(new ProxyTransportFilter(proxy))
                                                           .build();
+    this.addListener(new GenericServiceListener(this), MoreExecutors.directExecutor());
   }
 
   public static ProxyGrpcService create(final Proxy proxy, final int grpcPort) {
@@ -67,16 +74,35 @@ public class ProxyGrpcService
   protected void startUp()
       throws IOException {
     this.grpcServer.start();
-    if (this.inProcessServer)
-      logger.info("Started InProcess gRPC server {}", this.serverName);
-    else
-      logger.info("Started gRPC server listening on {}", this.grpcServer.getPort());
   }
 
   @Override
-  protected void shutDown() {
-    this.grpcServer.shutdown();
+  protected void shutDown() { this.grpcServer.shutdown(); }
+
+  public HealthCheck getHealthCheck() {
+    return new HealthCheck() {
+      @Override
+      protected Result check()
+          throws Exception {
+        return grpcServer.isShutdown() || grpcServer.isShutdown() ? Result.unhealthy("gRPC server not runing")
+                                                                  : Result.healthy();
+      }
+    };
   }
 
   public int getPort() { return this.grpcServer.getPort(); }
+
+  @Override
+  public String toString() {
+    final MoreObjects.ToStringHelper helper = MoreObjects.toStringHelper(this);
+    if (this.inProcessServer) {
+      helper.add("serverType", "InProcess");
+      helper.add("serverName", this.serverName);
+    }
+    else {
+      helper.add("serverType", "Netty");
+      helper.add("port", this.port);
+    }
+    return helper.toString();
+  }
 }

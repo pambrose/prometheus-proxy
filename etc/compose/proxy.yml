@@ -1,9 +1,10 @@
 prometheus-proxy:
   autoredeploy: true
-  image: 'pambrose/prometheus-proxy:1.1.0'
+  image: 'pambrose/prometheus-proxy:1.2.0'
   ports:
     - '8080:8080'
     - '8082:8082'
+    - '8092:8092'
     - '50051:50051'
   environment:
     - PROXY_CONFIG=https://dl.dropboxusercontent.com/u/481551/prometheus/cloud-proxy.conf

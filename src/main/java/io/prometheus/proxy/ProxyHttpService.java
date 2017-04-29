@@ -3,9 +3,12 @@ package io.prometheus.proxy;
 import brave.Span;
 import brave.Tracer;
 import com.github.kristofa.brave.sparkjava.BraveTracing;
+import com.google.common.base.MoreObjects;
 import com.google.common.util.concurrent.AbstractIdleService;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.prometheus.Proxy;
 import io.prometheus.common.ConfigVals;
+import io.prometheus.common.GenericServiceListener;
 import io.prometheus.grpc.ScrapeResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,11 +44,12 @@ public class ProxyHttpService
                   ? this.proxy.getZipkinReporterService().newTracer("proxy-http")
                   : null;
     this.configVals = this.proxy.getConfigVals();
+
+    this.addListener(new GenericServiceListener(this), MoreExecutors.directExecutor());
   }
 
   @Override
   protected void startUp() {
-    logger.info("Started proxy listening on {}", this.port);
     if (this.proxy.isZipkinEnabled()) {
       final BraveTracing tracing = BraveTracing.create(this.proxy.getBrave());
       this.http.before(tracing.before());
@@ -63,11 +67,11 @@ public class ProxyHttpService
 
     this.http.get("/*",
                   (req, res) -> {
-                    res.header("cache-control", "no-cache");
+                    res.header("cache-control", "must-revalidate,no-cache,no-store");
 
                     final Span span = this.tracer != null ? this.tracer.newTrace()
                                                                        .name("round-trip")
-                                                                       .tag("version", "1.1.0")
+                                                                       .tag("version", "1.2.0")
                                                                        .start()
                                                           : null;
                     try {
@@ -159,7 +163,6 @@ public class ProxyHttpService
     }
     finally {
       final ScrapeRequestWrapper prev = this.proxy.removeFromScrapeRequestMap(scrapeRequest.getScrapeId());
-      //System.err.println("After remove size = " + this.proxy.getScrapeMapSize());
       if (prev == null)
         logger.error("Scrape request {} missing in map", scrapeRequest.getScrapeId());
     }
@@ -191,4 +194,11 @@ public class ProxyHttpService
   }
 
   public int getPort() { return this.port; }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+                      .add("port", port)
+                      .toString();
+  }
 }

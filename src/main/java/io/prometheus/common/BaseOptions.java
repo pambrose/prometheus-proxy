@@ -31,7 +31,7 @@ public abstract class BaseOptions {
   private final String     programName;
   private final ConfigVals configVals;
 
-  @Parameter(names = {"-c", "--conf", "--config"}, description = "Configuration file or url")
+  @Parameter(names = {"-c", "--conf", "--config"}, description = "Configuration file or pingUrl")
   private String              configName     = null;
   @Parameter(names = {"-m", "--metrics_port"}, description = "Metrics listen port")
   private Integer             metricsPort    = null;

@@ -4,9 +4,7 @@ import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.RateLimiter;
-import com.google.common.util.concurrent.ServiceManager;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.Empty;
 import io.grpc.ClientInterceptor;
@@ -22,9 +20,9 @@ import io.prometheus.agent.AgentOptions;
 import io.prometheus.agent.PathContext;
 import io.prometheus.agent.RequestFailureException;
 import io.prometheus.client.Summary;
+import io.prometheus.common.AdminConfig;
 import io.prometheus.common.ConfigVals;
 import io.prometheus.common.GenericService;
-import io.prometheus.common.GenericServiceListener;
 import io.prometheus.common.MetricsConfig;
 import io.prometheus.common.Utils;
 import io.prometheus.common.ZipkinConfig;
@@ -98,15 +96,16 @@ public class Agent
   private final BlockingQueue<ScrapeResponse> scrapeResponseQueue;
   private final RateLimiter                   reconnectLimiter;
   private final List<Map<String, String>>     pathConfigs;
-  private final ServiceManager                serviceManager;
 
 
-  public Agent(final AgentOptions options,
-               final MetricsConfig metricsConfig,
-               final ZipkinConfig zipkinConfig,
-               final String inProcessServerName,
-               final boolean testMode) {
-    super(options.getConfigVals(), metricsConfig, zipkinConfig, testMode);
+  public Agent(final AgentOptions options, final String inProcessServerName, final boolean testMode) {
+    super(options.getConfigVals(),
+          AdminConfig.create(options.getConfigVals().agent.admin),
+          MetricsConfig.create(options.getMetricsEnabled(),
+                               options.getMetricsPort(),
+                               options.getConfigVals().agent.metrics),
+          ZipkinConfig.create(options.getConfigVals().agent.internal.zipkin),
+          testMode);
 
     this.inProcessServerName = inProcessServerName;
     this.agentName = isNullOrEmpty(options.getAgentName()) ? format("Unnamed-%s", Utils.getHostName())
@@ -131,9 +130,9 @@ public class Agent
     this.pathConfigs = this.getConfigVals().pathConfigs.stream()
                                                        .map(v -> ImmutableMap.of("name", v.name,
                                                                                  "path", v.path,
-                                                                                 "url", v.url))
+                                                                                 "pingUrl", v.url))
                                                        .peek(v -> logger.info("Proxy path /{} will be assigned to {}",
-                                                                              v.get("path"), v.get("url")))
+                                                                              v.get("path"), v.get("pingUrl")))
                                                        .collect(Collectors.toList());
 
 
@@ -149,25 +148,17 @@ public class Agent
 
     this.resetGrpcStubs();
 
-    this.serviceManager = new ServiceManager(this.newServiceList());
-    this.serviceManager.addListener(this.newListener());
-
-    logger.info("Created {}", this);
+    this.init();
   }
 
   public static void main(final String[] argv)
       throws IOException, InterruptedException {
     final AgentOptions options = new AgentOptions(argv, true);
-    final MetricsConfig metricsConfig = MetricsConfig.create(options.getMetricsEnabled(),
-                                                             options.getMetricsPort(),
-                                                             options.getConfigVals().agent.metrics);
-    final ZipkinConfig zipkinConfig = ZipkinConfig.create(options.getConfigVals().agent.internal.zipkin);
 
     logger.info(Utils.getBanner("banners/agent.txt"));
     logger.info(Utils.getVersionDesc());
 
-    final Agent agent = new Agent(options, metricsConfig, zipkinConfig, null, false);
-    agent.addListener(new GenericServiceListener(agent), MoreExecutors.directExecutor());
+    final Agent agent = new Agent(options, null, false);
     agent.startAsync();
   }
 
@@ -203,6 +194,13 @@ public class Agent
         logger.info("Waited {} secs to reconnect", secsWaiting);
       }
     }
+  }
+
+  @Override
+  protected void registerHealtChecks() {
+    super.registerHealtChecks();
+    this.getHealthCheckRegistry().register("scrape_response_queue_check",
+                                           Utils.queueHealthCheck(scrapeResponseQueue, 25));
   }
 
   @Override
@@ -383,7 +381,7 @@ public class Agent
       throws RequestFailureException {
     for (final Map<String, String> agentConfig : this.pathConfigs) {
       final String path = agentConfig.get("path");
-      final String url = agentConfig.get("url");
+      final String url = agentConfig.get("pingUrl");
       this.registerPath(path, url);
     }
   }

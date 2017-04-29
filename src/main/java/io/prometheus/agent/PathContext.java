@@ -55,7 +55,7 @@ public class PathContext {
   public String toString() {
     return MoreObjects.toStringHelper(this)
                       .add("path", "/" + path)
-                      .add("url", url)
+                      .add("pingUrl", url)
                       .toString();
   }
 }
