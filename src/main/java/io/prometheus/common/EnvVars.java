@@ -16,8 +16,10 @@ public enum EnvVars {
   AGENT_NAME,
 
   // Common
+  METRICS_ENABLED,
   METRICS_PORT,
-  METRICS_ENABLED;
+  ADMIN_ENABLED,
+  ADMIN_PORT;
 
   private String getEnv() { return getenv(this.name()); }
 

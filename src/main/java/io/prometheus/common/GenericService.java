@@ -108,19 +108,22 @@ public abstract class GenericService
       this.jmxReporter.start();
     if (this.isMetricsEnabled())
       this.metricsService.startAsync();
-    this.adminService.startAsync();
+    if (adminService != null)
+      this.adminService.startAsync();
     Runtime.getRuntime().addShutdownHook(Utils.shutDownHookAction(this));
   }
 
   @Override
   protected void shutDown()
       throws Exception {
-    this.adminService.shutDown();
-
+    if (adminService != null)
+      this.adminService.shutDown();
     if (this.isMetricsEnabled())
       this.metricsService.stopAsync();
     if (this.isZipkinEnabled())
       this.zipkinReporterService.shutDown();
+    if (this.jmxReporter != null)
+      this.jmxReporter.stop();
     super.shutDown();
   }
 

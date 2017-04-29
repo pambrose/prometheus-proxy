@@ -38,8 +38,10 @@ public class ProxyOptions
     if (this.agentPort == null)
       this.agentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port);
 
+    this.assignAdminEnabled(configVals.proxy.admin.enabled);
+    this.assignAdminPort(configVals.proxy.admin.port);
+    this.assignMetricsEnabled(configVals.proxy.metrics.enabled);
     this.assignMetricsPort(configVals.proxy.metrics.port);
-    this.assignEnableMetrics(configVals.proxy.metrics.enabled);
   }
 
   public int getProxyPort() { return this.proxyPort; }

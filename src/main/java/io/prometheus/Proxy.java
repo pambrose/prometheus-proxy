@@ -48,8 +48,10 @@ public class Proxy
                final boolean testMode)
       throws IOException {
     super(options.getConfigVals(),
-          AdminConfig.create(options.getConfigVals().proxy.admin),
-          MetricsConfig.create(options.getMetricsEnabled(),
+          AdminConfig.create(options.isAdminEnabled(),
+                             options.getAdminPort(),
+                             options.getConfigVals().proxy.admin),
+          MetricsConfig.create(options.isMetricsEnabled(),
                                options.getMetricsPort(),
                                options.getConfigVals().proxy.metrics),
           ZipkinConfig.create(options.getConfigVals().proxy.internal.zipkin),

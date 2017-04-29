@@ -199,9 +199,9 @@ public class Utils {
 
   public static Thread shutDownHookAction(final Service service) {
     return new Thread(() -> {
-      JCommander.getConsole().println(format("*** Shutting down %s ***", service.getClass().getSimpleName()));
+      JCommander.getConsole().println(format("*** %s shutting down ***", service.getClass().getSimpleName()));
       service.stopAsync();
-      JCommander.getConsole().println(format("*** %s shut down ***", service.getClass().getSimpleName()));
+      JCommander.getConsole().println(format("*** %s shut down complete ***", service.getClass().getSimpleName()));
     });
   }
 

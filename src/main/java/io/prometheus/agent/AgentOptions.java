@@ -44,8 +44,10 @@ public class AgentOptions
     if (this.agentName == null)
       this.agentName = EnvVars.AGENT_NAME.getEnv(configVals.agent.name);
 
+    this.assignAdminEnabled(configVals.agent.admin.enabled);
+    this.assignAdminPort(configVals.agent.admin.port);
+    this.assignMetricsEnabled(configVals.agent.metrics.enabled);
     this.assignMetricsPort(configVals.agent.metrics.port);
-    this.assignEnableMetrics(configVals.agent.metrics.enabled);
   }
 
   public String getProxyHostname() { return this.proxyHostname; }

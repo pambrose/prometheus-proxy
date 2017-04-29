@@ -100,8 +100,10 @@ public class Agent
 
   public Agent(final AgentOptions options, final String inProcessServerName, final boolean testMode) {
     super(options.getConfigVals(),
-          AdminConfig.create(options.getConfigVals().agent.admin),
-          MetricsConfig.create(options.getMetricsEnabled(),
+          AdminConfig.create(options.isAdminEnabled(),
+                             options.getAdminPort(),
+                             options.getConfigVals().agent.admin),
+          MetricsConfig.create(options.isMetricsEnabled(),
                                options.getMetricsPort(),
                                options.getConfigVals().agent.metrics),
           ZipkinConfig.create(options.getConfigVals().agent.internal.zipkin),

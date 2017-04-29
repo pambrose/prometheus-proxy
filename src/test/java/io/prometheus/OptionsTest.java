@@ -59,7 +59,7 @@ public class OptionsTest {
     AgentOptions options = new AgentOptions(newArrayList("--name", "test-name", "--proxy", "host5"),
                                             false);
 
-    assertThat(options.getMetricsEnabled()).isEqualTo(false);
+    assertThat(options.isMetricsEnabled()).isEqualTo(false);
     assertThat(options.getDynamicParams().size()).isEqualTo(0);
     assertThat(options.getAgentName()).isEqualTo("test-name");
     assertThat(options.getProxyHostname()).isEqualTo("host5");
