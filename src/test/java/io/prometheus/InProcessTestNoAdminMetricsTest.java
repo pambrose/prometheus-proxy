@@ -12,9 +12,9 @@ import java.util.concurrent.TimeoutException;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class NettyTestNoMetricsTest {
+public class InProcessTestNoAdminMetricsTest {
 
-  private static final Logger logger = LoggerFactory.getLogger(NettyTestNoMetricsTest.class);
+  private static final Logger logger = LoggerFactory.getLogger(InProcessTestNoAdminMetricsTest.class);
 
   private static Proxy PROXY = null;
   private static Agent AGENT = null;
@@ -23,8 +23,8 @@ public class NettyTestNoMetricsTest {
   public static void setUp()
       throws IOException, InterruptedException, TimeoutException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = TestUtils.startProxy(null, false);
-    AGENT = TestUtils.startAgent(null, false);
+    PROXY = TestUtils.startProxy("nometrics", false, false);
+    AGENT = TestUtils.startAgent("nometrics", false, false);
 
     AGENT.awaitInitialConnection(10, SECONDS);
   }
@@ -37,6 +37,7 @@ public class NettyTestNoMetricsTest {
     AGENT.stopAsync();
     AGENT.awaitTerminated(5, SECONDS);
   }
+
 
   @Test
   public void missingPathTest()
@@ -74,5 +75,10 @@ public class NettyTestNoMetricsTest {
     Tests.timeoutTest(AGENT);
   }
 
-  // proxyCallTest() called in InProcess tests
+  @Test
+  public void proxyCallTest()
+      throws Exception {
+    Tests.proxyCallTest(AGENT, 25, 50, 1000, 25);
+  }
+
 }

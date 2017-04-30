@@ -1,12 +1,12 @@
 package io.prometheus.proxy;
 
 import com.beust.jcommander.Parameter;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import io.prometheus.Proxy;
 import io.prometheus.common.BaseOptions;
 import io.prometheus.common.ConfigVals;
 
+import java.util.Collections;
 import java.util.List;
 
 import static io.prometheus.common.EnvVars.AGENT_PORT;
@@ -22,7 +22,7 @@ public class ProxyOptions
   private Integer agentPort = null;
 
   public ProxyOptions(final List<String> args) {
-    this(Iterables.toArray(args != null ? args : ImmutableList.of(), String.class));
+    this(Iterables.toArray(args != null ? args : Collections.emptyList(), String.class));
   }
 
   public ProxyOptions(final String[] argv) {
@@ -38,8 +38,10 @@ public class ProxyOptions
     if (this.agentPort == null)
       this.agentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port);
 
+    this.assignAdminEnabled(configVals.proxy.admin.enabled);
+    this.assignAdminPort(configVals.proxy.admin.port);
+    this.assignMetricsEnabled(configVals.proxy.metrics.enabled);
     this.assignMetricsPort(configVals.proxy.metrics.port);
-    this.assignEnableMetrics(configVals.proxy.metrics.enabled);
   }
 
   public int getProxyPort() { return this.proxyPort; }

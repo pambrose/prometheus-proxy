@@ -3,6 +3,7 @@ package io.prometheus.common;
 import com.beust.jcommander.IParameterValidator;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.internal.Console;
+import com.codahale.metrics.health.HealthCheck;
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
@@ -25,6 +26,8 @@ import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.List;
+import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -87,7 +90,7 @@ public class Utils {
 
     if (Strings.isNullOrEmpty(configName)) {
       if (exitOnMissingConfig) {
-        logger.error("A configuration file or url must be specified with --getConfig or ${}", envConfig);
+        logger.error("A configuration file or pingUrl must be specified with --getConfig or ${}", envConfig);
         System.exit(1);
       }
       return fallback;
@@ -101,7 +104,7 @@ public class Utils {
       }
       catch (Exception e) {
         logger.error(e.getCause() instanceof FileNotFoundException
-                     ? format("Invalid getConfig url: %s", configName)
+                     ? format("Invalid getConfig pingUrl: %s", configName)
                      : format("Exception: %s - %s", e.getClass().getSimpleName(), e.getMessage()), e);
       }
     }
@@ -151,12 +154,32 @@ public class Utils {
     }
   }
 
+  public static HealthCheck queueHealthCheck(final Queue<?> queue, final int size) {
+    return new HealthCheck() {
+      @Override
+      protected Result check()
+          throws Exception {
+        return queue.size() < size ? Result.healthy() : Result.unhealthy("Large size: %d", queue.size());
+      }
+    };
+  }
+
+  public static HealthCheck mapHealthCheck(final Map<?, ?> map, final int size) {
+    return new HealthCheck() {
+      @Override
+      protected Result check()
+          throws Exception {
+        return map.size() < size ? Result.healthy() : Result.unhealthy("Large size: %d", map.size());
+      }
+    };
+  }
+
   public static void sleepForMillis(final long millis) {
     try {
       Thread.sleep(millis);
     }
     catch (InterruptedException e) {
-      // Thread.currentThread().interrupt();
+      // Ignore
     }
   }
 
@@ -165,7 +188,7 @@ public class Utils {
       Thread.sleep(toMillis(secs));
     }
     catch (InterruptedException e) {
-      // Thread.currentThread().interrupt();
+      // Ignore
     }
   }
 
@@ -176,9 +199,9 @@ public class Utils {
 
   public static Thread shutDownHookAction(final Service service) {
     return new Thread(() -> {
-      JCommander.getConsole().println(format("*** Shutting down %s ***", service.getClass().getSimpleName()));
+      JCommander.getConsole().println(format("*** %s shutting down ***", service.getClass().getSimpleName()));
       service.stopAsync();
-      JCommander.getConsole().println(format("*** %s shut down ***", service.getClass().getSimpleName()));
+      JCommander.getConsole().println(format("*** %s shut down complete ***", service.getClass().getSimpleName()));
     });
   }
 

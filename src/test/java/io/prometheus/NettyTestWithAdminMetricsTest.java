@@ -13,9 +13,9 @@ import java.util.concurrent.TimeoutException;
 import static io.prometheus.common.Utils.sleepForSecs;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class NettyTestWithMetricsTest {
+public class NettyTestWithAdminMetricsTest {
 
-  private static final Logger logger = LoggerFactory.getLogger(NettyTestWithMetricsTest.class);
+  private static final Logger logger = LoggerFactory.getLogger(NettyTestWithAdminMetricsTest.class);
 
   private static Proxy PROXY = null;
   private static Agent AGENT = null;
@@ -24,8 +24,8 @@ public class NettyTestWithMetricsTest {
   public static void setUp()
       throws IOException, InterruptedException, TimeoutException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = TestUtils.startProxy(null, true);
-    AGENT = TestUtils.startAgent(null, true);
+    PROXY = TestUtils.startProxy(null, true, true);
+    AGENT = TestUtils.startAgent(null, true, true);
 
     AGENT.awaitInitialConnection(10, SECONDS);
 

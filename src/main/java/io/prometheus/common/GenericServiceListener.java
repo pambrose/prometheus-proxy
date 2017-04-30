@@ -9,39 +9,39 @@ public class GenericServiceListener
 
   private static final Logger logger = LoggerFactory.getLogger(GenericServiceListener.class);
 
-  private final String name;
+  private final Service service;
 
   public GenericServiceListener(Service service) {
-    this.name = service.getClass().getSimpleName();
+    this.service = service;
   }
 
   @Override
   public void starting() {
     super.starting();
-    logger.info("Starting {}", this.name);
+    logger.info("Starting {}", this.service);
   }
 
   @Override
   public void running() {
     super.running();
-    logger.info("{} is running", this.name);
+    logger.info("Running {}", this.service);
   }
 
   @Override
   public void stopping(Service.State from) {
     super.stopping(from);
-    logger.info("{} is stopping", this.name);
+    logger.info("Stopping {}", this.service);
   }
 
   @Override
   public void terminated(Service.State from) {
     super.terminated(from);
-    logger.info("{} terminated", this.name);
+    logger.info("Terminated {}", this.service);
   }
 
   @Override
   public void failed(Service.State from, Throwable t) {
     super.failed(from, t);
-    logger.info("{} failed on {}", this.name, from, t);
+    logger.info("Failed on {} {}", from, this.service, t);
   }
 }

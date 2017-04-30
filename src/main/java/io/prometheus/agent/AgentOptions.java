@@ -1,13 +1,13 @@
 package io.prometheus.agent;
 
 import com.beust.jcommander.Parameter;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import io.prometheus.Agent;
 import io.prometheus.common.BaseOptions;
 import io.prometheus.common.ConfigVals;
 import io.prometheus.common.EnvVars;
 
+import java.util.Collections;
 import java.util.List;
 
 import static io.prometheus.common.EnvVars.AGENT_CONFIG;
@@ -23,7 +23,7 @@ public class AgentOptions
   private String agentName     = null;
 
   public AgentOptions(final List<String> args, final boolean exitOnMissingConfig) {
-    this(Iterables.toArray(args != null ? args : ImmutableList.of(), String.class), exitOnMissingConfig);
+    this(Iterables.toArray(args != null ? args : Collections.emptyList(), String.class), exitOnMissingConfig);
   }
 
   public AgentOptions(final String[] argv, final boolean exitOnMissingConfig) {
@@ -44,8 +44,10 @@ public class AgentOptions
     if (this.agentName == null)
       this.agentName = EnvVars.AGENT_NAME.getEnv(configVals.agent.name);
 
+    this.assignAdminEnabled(configVals.agent.admin.enabled);
+    this.assignAdminPort(configVals.agent.admin.port);
+    this.assignMetricsEnabled(configVals.agent.metrics.enabled);
     this.assignMetricsPort(configVals.agent.metrics.port);
-    this.assignEnableMetrics(configVals.agent.metrics.enabled);
   }
 
   public String getProxyHostname() { return this.proxyHostname; }

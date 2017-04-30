@@ -16,6 +16,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static io.prometheus.common.EnvVars.ADMIN_ENABLED;
+import static io.prometheus.common.EnvVars.ADMIN_PORT;
 import static io.prometheus.common.EnvVars.METRICS_ENABLED;
 import static io.prometheus.common.EnvVars.METRICS_PORT;
 import static java.lang.String.format;
@@ -31,12 +33,16 @@ public abstract class BaseOptions {
   private final String     programName;
   private final ConfigVals configVals;
 
-  @Parameter(names = {"-c", "--conf", "--config"}, description = "Configuration file or url")
+  @Parameter(names = {"-c", "--conf", "--config"}, description = "Configuration file or pingUrl")
   private String              configName     = null;
-  @Parameter(names = {"-m", "--metrics_port"}, description = "Metrics listen port")
-  private Integer             metricsPort    = null;
+  @Parameter(names = {"-r", "--admin"}, description = "Admin servlets enabled")
+  private Boolean             adminEnabled   = null;
+  @Parameter(names = {"-i", "--admin_port"}, description = "Admin servlets port")
+  private Integer             adminPort      = null;
   @Parameter(names = {"-e", "--metrics"}, description = "Metrics enabled")
   private Boolean             metricsEnabled = null;
+  @Parameter(names = {"-m", "--metrics_port"}, description = "Metrics listen port")
+  private Integer             metricsPort    = null;
   @Parameter(names = {"-v", "--version"}, description = "Print version info and exit", validateWith = Utils.VersionValidator.class)
   private boolean             version        = false;
   @Parameter(names = {"-u", "--usage"}, help = true)
@@ -74,14 +80,24 @@ public abstract class BaseOptions {
     }
   }
 
-  protected void assignMetricsPort(final int configVal) {
-    if (this.metricsPort == null)
-      this.metricsPort = METRICS_PORT.getEnv(configVal);
+  protected void assignAdminEnabled(final boolean defaultVal) {
+    if (this.adminEnabled == null)
+      this.adminEnabled = ADMIN_ENABLED.getEnv(defaultVal);
   }
 
-  protected void assignEnableMetrics(final boolean configVal) {
+  protected void assignAdminPort(final int defaultVal) {
+    if (this.adminPort == null)
+      this.adminPort = ADMIN_PORT.getEnv(defaultVal);
+  }
+
+  protected void assignMetricsEnabled(final boolean defaultVal) {
     if (this.metricsEnabled == null)
-      this.metricsEnabled = METRICS_ENABLED.getEnv(configVal);
+      this.metricsEnabled = METRICS_ENABLED.getEnv(defaultVal);
+  }
+
+  protected void assignMetricsPort(final int defaultVal) {
+    if (this.metricsPort == null)
+      this.metricsPort = METRICS_PORT.getEnv(defaultVal);
   }
 
   private void readConfig(final String envConfig, final boolean exitOnMissingConfig) {
@@ -105,9 +121,13 @@ public abstract class BaseOptions {
         });
   }
 
-  public int getMetricsPort() { return this.metricsPort; }
+  public boolean isAdminEnabled() { return this.adminEnabled; }
 
-  public boolean getMetricsEnabled() { return this.metricsEnabled; }
+  public int getAdminPort() { return this.adminPort; }
+
+  public boolean isMetricsEnabled() { return this.metricsEnabled; }
+
+  public int getMetricsPort() { return this.metricsPort; }
 
   public Map<String, String> getDynamicParams() { return this.dynamicParams; }
 }

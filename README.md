@@ -84,24 +84,24 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-$ docker pull pambrose/prometheus-proxy:1.1.0
-$ docker pull pambrose/prometheus-agent:1.1.0
+$ docker pull pambrose/prometheus-proxy:1.2.0
+$ docker pull pambrose/prometheus-agent:1.2.0
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
 
 ```bash
-$ docker run --rm -p 8082:8082 -p 50051:50051 -p 8080:8080 \
+$ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
         -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.1.0
+        pambrose/prometheus-proxy:1.2.0
 ```
 
 ```bash
-$ docker run --rm -p 8083:8083 \
+$ docker run --rm -p 8083:8083 -p 8093:8093 \
         -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.1.0
+        pambrose/prometheus-agent:1.2.0
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
@@ -129,6 +129,8 @@ The only required argument is an Agent config value, which should have an `agent
 | -c --config         | PROXY_CONFIG    |                        |        | Agent config file or url               |
 | -p --port           | PROXY_PORT      | proxy.http.port        | 8080   | Proxy listen port                      |
 | -a --agent_port     | AGENT_PORT      | proxy.agent.port       | 50051  | Grpc listen port                       |
+| -r --admin          | ADMIN_ENABLED   | proxy.admin.enabled    | false  | Enable admin servlets                  |
+| -i --admin_port     | ADMIN_PORT      | proxy.admin.port       | 8092   | Admin servlets port                    |
 | -e --metrics        | METRICS_ENABLED | proxy.metrics.enabled  | false  | Enable proxy metrics                   |
 | -m --metrics_port   | METRICS_PORT    | proxy.metrics.port     | 8082   | Proxy metrics listen port              |
 | -v --version        |                 |                        |        | Print version info and exit            |
@@ -143,6 +145,8 @@ The only required argument is an Agent config value, which should have an `agent
 | -c --config         | AGENT_CONFIG    |                        |        | Agent config file or url (required)    |
 | -p --proxy          | PROXY_HOSTNAME  | agent.proxy.hostname   |        | Proxy hostname (can include :port)     |
 | -n --name           | AGENT_NAME      | agent.name             |        | Agent name                             |
+| -r --admin          | ADMIN_ENABLED   | agent.admin.enabled    | false  | Enable admin servlets                  |
+| -i --admin_port     | ADMIN_PORT      | agent.admin.port       | 8093   | Admin servlets port                    |
 | -e --metrics        | METRICS_ENABLED | agent.metrics.enabled  | false  | Enable agent metrics                   |
 | -m --metrics_port   | METRICS_PORT    | agent.metrics.port     | 8083   | Agent metrics listen port              |
 | -v --version        |                 |                        |        | Print version info and exit            |
@@ -156,6 +160,16 @@ Misc notes:
 * HOCON config files must have a *.conf* suffix
 * Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
 * Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
+
+### Admin Servlets
+
+Three admin servlets are available when the `proxy.admin.enabled` or `agent.admin.enabled` properties are enabled:
+ * /ping 
+ * /threaddump
+ * /healthcheck
+
+Descriptions of the servlets are [here](http://metrics.dropwizard.io/3.2.2/manual/servlets.html).
+The path names can be changed in the configuration file.
 
 ## Grafana 
 
