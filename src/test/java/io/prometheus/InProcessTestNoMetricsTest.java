@@ -23,8 +23,8 @@ public class InProcessTestNoMetricsTest {
   public static void setUp()
       throws IOException, InterruptedException, TimeoutException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = TestUtils.startProxy("nometrics", false);
-    AGENT = TestUtils.startAgent("nometrics", false);
+    PROXY = TestUtils.startProxy("nometrics", false, false);
+    AGENT = TestUtils.startAgent("nometrics", false, false);
 
     AGENT.awaitInitialConnection(10, SECONDS);
   }
