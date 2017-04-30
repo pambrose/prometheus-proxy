@@ -77,7 +77,7 @@ public class InProcessTestWithAdminMetricsTest {
   @Test
   public void proxyCallTest()
       throws Exception {
-    Tests.proxyCallTest(AGENT, 25, 50, 500, 30);
+    Tests.proxyCallTest(AGENT, 25, 50, 500, 25);
   }
 
 }
