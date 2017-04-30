@@ -52,7 +52,7 @@ public abstract class GenericService
 
     if (adminConfig.enabled()) {
       this.adminService = new AdminService(this,
-                                           9002,
+                                           adminConfig.port(),
                                            adminConfig.pingPath(),
                                            adminConfig.healthCheckPath(),
                                            adminConfig.theadtDumpPath());

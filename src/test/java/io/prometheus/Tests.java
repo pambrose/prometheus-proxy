@@ -26,8 +26,8 @@ public class Tests {
       throws Exception {
     String url = format("http://localhost:%d/", TestConstants.PROXY_PORT);
     Request.Builder request = new Request.Builder().url(url);
-    try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
-      assertThat(respone.code()).isEqualTo(404);
+    try (Response response = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+      assertThat(response.code()).isEqualTo(404);
     }
   }
 
@@ -35,8 +35,8 @@ public class Tests {
       throws Exception {
     String url = format("http://localhost:%d/invalid_path", TestConstants.PROXY_PORT);
     Request.Builder request = new Request.Builder().url(url);
-    try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
-      assertThat(respone.code()).isEqualTo(404);
+    try (Response response = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+      assertThat(response.code()).isEqualTo(404);
     }
   }
 
@@ -118,8 +118,8 @@ public class Tests {
 
     String url = format("http://localhost:%d/%s", TestConstants.PROXY_PORT, badPath);
     Request.Builder request = new Request.Builder().url(url);
-    try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
-      assertThat(respone.code()).isEqualTo(404);
+    try (Response response = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+      assertThat(response.code()).isEqualTo(404);
     }
 
     agent.unregisterPath(badPath);
@@ -144,8 +144,8 @@ public class Tests {
 
     String proxyUrl = format("http://localhost:%d/%s", TestConstants.PROXY_PORT, proxyPath);
     Request.Builder request = new Request.Builder().url(proxyUrl);
-    try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
-      assertThat(respone.code()).isEqualTo(404);
+    try (Response response = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+      assertThat(response.code()).isEqualTo(404);
     }
 
     agent.unregisterPath("/" + proxyPath);
@@ -236,8 +236,8 @@ public class Tests {
     int httpVal = pathMap.get(index);
     String url = format("http://localhost:%d/proxy-%d", TestConstants.PROXY_PORT, index);
     Request.Builder request = new Request.Builder().url(url);
-    try (Response respone = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
-      String body = respone.body().string();
+    try (Response response = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+      String body = response.body().string();
       assertThat(body).isEqualTo(format("value: %d", httpVal));
     }
   }

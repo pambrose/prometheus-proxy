@@ -39,9 +39,9 @@ public class TestUtils {
       throws IOException, TimeoutException {
 
     final List<String> args = Lists.newArrayList(TestConstants.args);
-    args.add(format("-Dproxy.admin.enabled=%s", adminEnabled));
+    args.add(format("-Dagent.admin.enabled=%s", adminEnabled));
     args.add(format("-Dagent.metrics.enabled=%s", metricsEnabled));
-    AgentOptions options = new AgentOptions(TestConstants.args, false);
+    AgentOptions options = new AgentOptions(args, false);
 
     logger.info(Utils.getBanner("banners/agent.txt"));
     logger.info(Utils.getVersionDesc());

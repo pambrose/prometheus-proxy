@@ -10,11 +10,12 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
+import static io.prometheus.common.Utils.sleepForSecs;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class InProcessTestWithMetricsTest {
+public class NettyTestWithAdminMetricsTest {
 
-  private static final Logger logger = LoggerFactory.getLogger(InProcessTestWithMetricsTest.class);
+  private static final Logger logger = LoggerFactory.getLogger(NettyTestWithAdminMetricsTest.class);
 
   private static Proxy PROXY = null;
   private static Agent AGENT = null;
@@ -23,10 +24,13 @@ public class InProcessTestWithMetricsTest {
   public static void setUp()
       throws IOException, InterruptedException, TimeoutException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = TestUtils.startProxy("withmetrics", true, true);
-    AGENT = TestUtils.startAgent("withmetrics", true, true);
+    PROXY = TestUtils.startProxy(null, true, true);
+    AGENT = TestUtils.startAgent(null, true, true);
 
     AGENT.awaitInitialConnection(10, SECONDS);
+
+    // Wait long enough to trigger heartbeat for code coverage
+    sleepForSecs(15);
   }
 
   @AfterClass
@@ -74,11 +78,5 @@ public class InProcessTestWithMetricsTest {
     Tests.timeoutTest(AGENT);
   }
 
-
-  @Test
-  public void proxyCallTest()
-      throws Exception {
-    Tests.proxyCallTest(AGENT, 25, 50, 500);
-  }
-
+  // proxyCallTest() called in InProcess tests
 }
