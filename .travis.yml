@@ -8,4 +8,4 @@ notifications:
     - pambrose@mac.com
 
 after_success:
-  - ./mvnw clean test jacoco:report coveralls:report
+  - ./mvnw clean build jacoco:report coveralls:report
