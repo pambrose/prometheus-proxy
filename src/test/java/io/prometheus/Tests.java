@@ -170,6 +170,7 @@ public class Tests {
              .forEach(i -> {
                Service http = Service.ignite();
                http.port(startingPort + i)
+                   .threadPool(30, 10, 1000)
                    .get(format("/agent-%d", i),
                         (req, res) -> {
                           res.type("text/plain");
