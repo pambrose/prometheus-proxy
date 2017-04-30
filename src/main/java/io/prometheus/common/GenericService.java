@@ -183,21 +183,25 @@ public abstract class GenericService
     };
   }
 
+  protected ConfigVals getGenericConfigVals() { return this.configVals; }
+
   public MetricRegistry getMetricRegistry() { return this.metricRegistry; }
 
   public HealthCheckRegistry getHealthCheckRegistry() { return this.healthCheckRegistry; }
 
-  public boolean isMetricsEnabled() { return this.metricsService != null; }
-
   public boolean isTestMode() { return this.testMode; }
 
   public boolean isZipkinEnabled() { return this.zipkinReporterService != null; }
+
+  public boolean isAdminEnabled() { return this.adminService != null; }
+
+  public boolean isMetricsEnabled() { return this.metricsService != null; }
+
+  protected AdminService getAdminService() { return this.adminService; }
 
   protected MetricsService getMetricsService() { return this.metricsService; }
 
   public ZipkinReporterService getZipkinReporterService() { return this.zipkinReporterService; }
 
   public Brave getBrave() { return this.getZipkinReporterService().getBrave(); }
-
-  protected ConfigVals getGenericConfigVals() { return this.configVals; }
 }

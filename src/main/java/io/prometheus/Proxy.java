@@ -31,11 +31,12 @@ public class Proxy
 
   private static final Logger logger = LoggerFactory.getLogger(Proxy.class);
 
-  public static final String                          AGENT_ID         = "agent-id";
-  public static final Attributes.Key<String>          ATTRIB_AGENT_ID  = Attributes.Key.of(AGENT_ID);
-  private final       Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap(); // Map agent_id to AgentContext
-  private final       Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap(); // Map path to AgentContext
-  private final       Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap(); // Map scrape_id to agent_id
+  public static final String                 AGENT_ID        = "agent-id";
+  public static final Attributes.Key<String> ATTRIB_AGENT_ID = Attributes.Key.of(AGENT_ID);
+
+  private final Map<String, AgentContext>       agentContextMap  = Maps.newConcurrentMap(); // Map agent_id to AgentContext
+  private final Map<String, AgentContext>       pathMap          = Maps.newConcurrentMap(); // Map path to AgentContext
+  private final Map<Long, ScrapeRequestWrapper> scrapeRequestMap = Maps.newConcurrentMap(); // Map scrape_id to agent_id
 
   private final ProxyMetrics               metrics;
   private final ProxyGrpcService           grpcService;
@@ -222,11 +223,9 @@ public class Proxy
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
-                      .add("metricsPort",
-                           this.isMetricsEnabled() ? this.getMetricsService().getPort() : "Disabled")
-                      .add("metricsPath",
-                           this.isMetricsEnabled() ? "/" + this.getMetricsService().getPath() : "Disabled")
                       .add("proxyPort", this.httpService.getPort())
+                      .add("adminService", this.isAdminEnabled() ? this.getAdminService() : "Disabled")
+                      .add("metricsService", this.isMetricsEnabled() ? this.getMetricsService() : "Disabled")
                       .toString();
   }
 }

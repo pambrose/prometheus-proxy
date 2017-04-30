@@ -9,16 +9,12 @@ import com.google.common.util.concurrent.MoreExecutors;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.String.format;
 
 public class AdminService
     extends AbstractIdleService {
-
-  private static final Logger logger = LoggerFactory.getLogger(AdminService.class);
 
   private final int    port;
   private final String pingPath;
@@ -65,16 +61,12 @@ public class AdminService
     this.server.stop();
   }
 
-  public int getPort() { return this.port; }
-
-  public String getPingPath() { return this.pingPath; }
-
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
-                      .add("ping", format("http://localhost:%d/%s", this.port, this.pingPath))
-                      .add("healthcheck", format("http://localhost:%d/%s", this.port, this.healthCheckPath))
-                      .add("threaddump", format("http://localhost:%d/%s", this.port, this.threadDumpPath))
+                      .add("ping", format(":%d /%s", this.port, this.pingPath))
+                      .add("healthcheck", format(":%d /%s", this.port, this.healthCheckPath))
+                      .add("threaddump", format(":%d /%s", this.port, this.threadDumpPath))
                       .toString();
   }
 }

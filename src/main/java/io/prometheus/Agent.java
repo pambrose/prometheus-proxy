@@ -569,11 +569,9 @@ public class Agent
     return MoreObjects.toStringHelper(this)
                       .add("agentId", this.getAgentId())
                       .add("agentName", this.agentName)
-                      .add("metricsPort",
-                           this.isMetricsEnabled() ? this.getMetricsService().getPort() : "Disabled")
-                      .add("metricsPath",
-                           this.isMetricsEnabled() ? "/" + this.getMetricsService().getPath() : "Disabled")
                       .add("proxyHost", this.getProxyHost())
+                      .add("adminService", this.isAdminEnabled() ? this.getAdminService() : "Disabled")
+                      .add("metricsService", this.isMetricsEnabled() ? this.getMetricsService() : "Disabled")
                       .toString();
   }
 }

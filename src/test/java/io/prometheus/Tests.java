@@ -241,6 +241,7 @@ public class Tests {
     String url = format("http://localhost:%d/proxy-%d", TestConstants.PROXY_PORT, index);
     Request.Builder request = new Request.Builder().url(url);
     try (Response response = TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute()) {
+      assertThat(response.code()).isEqualTo(200);
       String body = response.body().string();
       assertThat(body).isEqualTo(format("value: %d", httpVal));
     }
