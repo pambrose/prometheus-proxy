@@ -155,7 +155,8 @@ public class Tests {
   public static void proxyCallTest(final Agent agent,
                                    final int httpServerCount,
                                    final int pathCount,
-                                   final int queryCount)
+                                   final int queryCount,
+                                   final long pauseMillis)
       throws Exception {
 
     final int startingPort = 9600;
@@ -190,8 +191,10 @@ public class Tests {
     assertThat(agent.pathMapSize()).isEqualTo(originalSize + pathCount);
 
     // Call the proxy sequentially
-    for (int i = 0; i < queryCount; i++)
+    for (int i = 0; i < queryCount; i++) {
       callProxy(pathMap);
+      Utils.sleepForMillis(pauseMillis);
+    }
 
     // Call the proxy in parallel
     int threadedQueryCount = 100;

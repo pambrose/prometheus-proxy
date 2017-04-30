@@ -75,5 +75,10 @@ public class InProcessTestNoAdminMetricsTest {
     Tests.timeoutTest(AGENT);
   }
 
-  // proxyCallTest() called in InProcess tests
+  @Test
+  public void proxyCallTest()
+      throws Exception {
+    Tests.proxyCallTest(AGENT, 25, 50, 500, 30);
+  }
+
 }
