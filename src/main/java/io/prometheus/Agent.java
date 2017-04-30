@@ -65,6 +65,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static io.grpc.ClientInterceptors.intercept;
 import static io.prometheus.common.InstrumentedThreadFactory.newInstrumentedThreadFactory;
+import static io.prometheus.common.Utils.queueHealthCheck;
 import static io.prometheus.common.Utils.sleepForMillis;
 import static io.prometheus.common.Utils.toMillis;
 import static io.prometheus.grpc.ProxyServiceGrpc.newBlockingStub;
@@ -201,8 +202,10 @@ public class Agent
   @Override
   protected void registerHealtChecks() {
     super.registerHealtChecks();
-    this.getHealthCheckRegistry().register("scrape_response_queue_check",
-                                           Utils.queueHealthCheck(scrapeResponseQueue, 25));
+    this.getHealthCheckRegistry()
+        .register("scrape_response_queue_check",
+                  queueHealthCheck(scrapeResponseQueue,
+                                   this.getConfigVals().internal.scrapeResponseQueueUnhealthySize));
   }
 
   @Override

@@ -18,6 +18,7 @@ public class AdminService
 
   private final int    port;
   private final String pingPath;
+  private final String versionPath;
   private final String healthCheckPath;
   private final String threadDumpPath;
   private final Server server;
@@ -25,10 +26,12 @@ public class AdminService
   public AdminService(final GenericService service,
                       final int port,
                       final String pingPath,
+                      final String versionPath,
                       final String healthCheckPath,
                       final String threadDumpPath) {
     this.port = port;
     this.pingPath = pingPath;
+    this.versionPath = versionPath;
     this.healthCheckPath = healthCheckPath;
     this.threadDumpPath = threadDumpPath;
     this.server = new Server(this.port);
@@ -39,6 +42,8 @@ public class AdminService
 
     if (!isNullOrEmpty(this.pingPath))
       context.addServlet(new ServletHolder(new PingServlet()), "/" + this.pingPath);
+    if (!isNullOrEmpty(this.versionPath))
+      context.addServlet(new ServletHolder(new VersionServlet()), "/" + this.versionPath);
     if (!isNullOrEmpty(this.healthCheckPath))
       context.addServlet(new ServletHolder(new HealthCheckServlet(service.getHealthCheckRegistry())),
                          "/" + this.healthCheckPath);

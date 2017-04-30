@@ -11,8 +11,9 @@ public abstract class AdminConfig {
     return new AutoValue_AdminConfig(enabled,
                                      port,
                                      admin.pingPath,
+                                     admin.versionPath,
                                      admin.healthCheckPath,
-                                     admin.theadtDumpPath);
+                                     admin.threadDumpPath);
   }
 
   public static AdminConfig create(final boolean enabled,
@@ -22,8 +23,9 @@ public abstract class AdminConfig {
     return new AutoValue_AdminConfig(enabled,
                                      port,
                                      admin.pingPath,
+                                     admin.versionPath,
                                      admin.healthCheckPath,
-                                     admin.theadtDumpPath);
+                                     admin.threadDumpPath);
   }
 
   public abstract boolean enabled();
@@ -32,9 +34,11 @@ public abstract class AdminConfig {
 
   public abstract String pingPath();
 
+  public abstract String versionPath();
+
   public abstract String healthCheckPath();
 
-  public abstract String theadtDumpPath();
+  public abstract String threadDumpPath();
 }
 
 

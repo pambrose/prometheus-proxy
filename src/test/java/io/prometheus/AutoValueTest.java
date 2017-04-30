@@ -33,11 +33,14 @@ public class AutoValueTest {
     c = AdminConfig.create(true, 444, configVals("agent.admin.pingPath=a pingpath val").agent.admin);
     assertThat(c.pingPath()).isEqualTo("a pingpath val");
 
+    c = AdminConfig.create(true, 444, configVals("agent.admin.versionPath=a versionpath val").agent.admin);
+    assertThat(c.versionPath()).isEqualTo("a versionpath val");
+
     c = AdminConfig.create(true, 444, configVals("agent.admin.healthCheckPath=a healthCheckPath val").agent.admin);
     assertThat(c.healthCheckPath()).isEqualTo("a healthCheckPath val");
 
-    c = AdminConfig.create(true, 444, configVals("agent.admin.theadtDumpPath=a theadtDumpPath val").agent.admin);
-    assertThat(c.theadtDumpPath()).isEqualTo("a theadtDumpPath val");
+    c = AdminConfig.create(true, 444, configVals("agent.admin.threadDumpPath=a threadDumpPath val").agent.admin);
+    assertThat(c.threadDumpPath()).isEqualTo("a threadDumpPath val");
   }
 
   @Test

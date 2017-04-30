@@ -1,5 +1,7 @@
 package io.prometheus;
 
+import com.codahale.metrics.health.HealthCheck;
+import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
 import io.grpc.Attributes;
@@ -21,9 +23,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static io.prometheus.common.Utils.mapHealthCheck;
 import static java.lang.String.format;
 
 public class Proxy
@@ -114,9 +119,30 @@ public class Proxy
   @Override
   protected void registerHealtChecks() {
     super.registerHealtChecks();
-    this.getHealthCheckRegistry().register("scrape_response_map_check",
-                                           Utils.mapHealthCheck(scrapeRequestMap, 25));
     this.getHealthCheckRegistry().register("grpc_service", this.grpcService.getHealthCheck());
+    this.getHealthCheckRegistry()
+        .register("scrape_response_map_check",
+                  mapHealthCheck(scrapeRequestMap, this.getConfigVals().internal.scrapeRequestMapUnhealthySize));
+    this.getHealthCheckRegistry()
+        .register("agent_scrape_request_queue",
+                  new HealthCheck() {
+                    @Override
+                    protected Result check()
+                        throws Exception {
+                      final int unhealthySize = getConfigVals().internal.scrapeRequestQueueUnhealthySize;
+                      final List<String> vals = getAgentContextMap().entrySet()
+                                                                    .stream()
+                                                                    .filter(kv -> kv.getValue().scrapeRequestQueueSize() >= unhealthySize)
+                                                                    .map(kv -> format("%s %d",
+                                                                                      kv.getValue(),
+                                                                                      kv.getValue().scrapeRequestQueueSize()))
+                                                                    .collect(Collectors.toList());
+                      return vals.isEmpty() ? Result.healthy()
+                                            : Result.unhealthy(format("Large scrapeRequestQueues: %s",
+                                                                      Joiner.on(", ").join(vals)));
+                    }
+                  });
+
   }
 
   public void addAgentContext(final AgentContext agentContext) {

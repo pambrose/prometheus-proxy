@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.concurrent.TimeoutException;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -23,8 +24,8 @@ public class InProcessTestNoAdminMetricsTest {
   public static void setUp()
       throws IOException, InterruptedException, TimeoutException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = TestUtils.startProxy("nometrics", false, false);
-    AGENT = TestUtils.startAgent("nometrics", false, false);
+    PROXY = TestUtils.startProxy("nometrics", false, false, Collections.emptyList());
+    AGENT = TestUtils.startAgent("nometrics", false, false, Collections.emptyList());
 
     AGENT.awaitInitialConnection(10, SECONDS);
   }
