@@ -32,6 +32,7 @@ public abstract class GenericService
   private final MetricRegistry      metricRegistry      = new MetricRegistry();
   private final HealthCheckRegistry healthCheckRegistry = new HealthCheckRegistry();
   private final List<Service>       services            = Lists.newArrayList(this);
+
   private final ConfigVals            configVals;
   private final boolean               testMode;
   private final JmxReporter           jmxReporter;
@@ -54,8 +55,9 @@ public abstract class GenericService
       this.adminService = new AdminService(this,
                                            adminConfig.port(),
                                            adminConfig.pingPath(),
+                                           adminConfig.versionPath(),
                                            adminConfig.healthCheckPath(),
-                                           adminConfig.theadtDumpPath());
+                                           adminConfig.threadDumpPath());
       this.addService(this.adminService);
     }
     else {
@@ -108,7 +110,7 @@ public abstract class GenericService
       this.jmxReporter.start();
     if (this.isMetricsEnabled())
       this.metricsService.startAsync();
-    if (adminService != null)
+    if (this.isAdminEnabled())
       this.adminService.startAsync();
     Runtime.getRuntime().addShutdownHook(Utils.shutDownHookAction(this));
   }
@@ -116,7 +118,7 @@ public abstract class GenericService
   @Override
   protected void shutDown()
       throws Exception {
-    if (adminService != null)
+    if (this.isAdminEnabled())
       this.adminService.shutDown();
     if (this.isMetricsEnabled())
       this.metricsService.stopAsync();
@@ -133,9 +135,7 @@ public abstract class GenericService
     this.stopAsync();
   }
 
-  protected void addService(final Service service) {
-    this.services.add(service);
-  }
+  protected void addService(final Service service) { this.services.add(service); }
 
   protected void addServices(final Service service, final Service... services) {
     this.services.addAll(Lists.asList(service, services));
@@ -156,15 +156,15 @@ public abstract class GenericService
                 final ImmutableMultimap<State, Service> sbs = serviceManager.servicesByState();
                 return sbs.keySet().size() == 1 && sbs.containsKey(State.RUNNING)
                        ? Result.healthy()
-                       : Result.unhealthy("Incorrect state: "
-                                              + Joiner.on(", ")
-                                                      .join(sbs.entries()
-                                                               .stream()
-                                                               .filter(kv -> kv.getKey() != State.RUNNING)
-                                                               .peek(kv -> logger.warn("Incorrect state - {}: {}",
-                                                                                       kv.getKey(), kv.getValue()))
-                                                               .map(kv -> format("%s: %s", kv.getKey(), kv.getValue()))
-                                                               .collect(Collectors.toList())));
+                       : Result.unhealthy(format("Incorrect state: %s",
+                                                 Joiner.on(", ")
+                                                       .join(sbs.entries()
+                                                                .stream()
+                                                                .filter(kv -> kv.getKey() != State.RUNNING)
+                                                                .peek(kv -> logger.warn("Incorrect state - {}: {}",
+                                                                                        kv.getKey(), kv.getValue()))
+                                                                .map(kv -> format("%s: %s", kv.getKey(), kv.getValue()))
+                                                                .collect(Collectors.toList()))));
               }
             });
   }

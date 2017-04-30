@@ -18,10 +18,11 @@ public class TestUtils {
 
   private static final Logger logger = LoggerFactory.getLogger(TestUtils.class);
 
-  public static Proxy startProxy(String serverName, boolean adminEnabled, boolean metricsEnabled)
+  public static Proxy startProxy(String serverName, boolean adminEnabled, boolean metricsEnabled, List<String> argv)
       throws IOException, TimeoutException {
 
     final List<String> args = Lists.newArrayList(TestConstants.args);
+    args.addAll(argv);
     args.add(format("-Dproxy.admin.enabled=%s", adminEnabled));
     args.add(format("-Dproxy.metrics.enabled=%s", metricsEnabled));
     ProxyOptions options = new ProxyOptions(args);
@@ -35,10 +36,11 @@ public class TestUtils {
     return proxy;
   }
 
-  public static Agent startAgent(String serverName, boolean adminEnabled, boolean metricsEnabled)
+  public static Agent startAgent(String serverName, boolean adminEnabled, boolean metricsEnabled, List<String> argv)
       throws IOException, TimeoutException {
 
     final List<String> args = Lists.newArrayList(TestConstants.args);
+    args.addAll(argv);
     args.add(format("-Dagent.admin.enabled=%s", adminEnabled));
     args.add(format("-Dagent.metrics.enabled=%s", metricsEnabled));
     AgentOptions options = new AgentOptions(args, false);

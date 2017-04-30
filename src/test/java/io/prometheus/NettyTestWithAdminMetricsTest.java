@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.concurrent.TimeoutException;
 
 import static io.prometheus.common.Utils.sleepForSecs;
@@ -24,8 +25,8 @@ public class NettyTestWithAdminMetricsTest {
   public static void setUp()
       throws IOException, InterruptedException, TimeoutException {
     CollectorRegistry.defaultRegistry.clear();
-    PROXY = TestUtils.startProxy(null, true, true);
-    AGENT = TestUtils.startAgent(null, true, true);
+    PROXY = TestUtils.startProxy(null, true, true, Collections.emptyList());
+    AGENT = TestUtils.startAgent(null, true, true, Collections.emptyList());
 
     AGENT.awaitInitialConnection(10, SECONDS);
 
