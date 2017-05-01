@@ -74,7 +74,7 @@ public class AdminNonDefaultPathTest {
     Request.Builder request = new Request.Builder().url(url);
     try (Response response = OK_HTTP_CLIENT.newCall(request.build()).execute()) {
       assertThat(response.code()).isEqualTo(200);
-      assertThat(response.body().string()).startsWith("Version:");
+      assertThat(response.body().string()).contains("Version");
     }
   }
 

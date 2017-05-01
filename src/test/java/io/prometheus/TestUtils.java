@@ -28,7 +28,7 @@ public class TestUtils {
     ProxyOptions options = new ProxyOptions(args);
 
     logger.info(Utils.getBanner("banners/proxy.txt"));
-    logger.info(Utils.getVersionDesc());
+    logger.info(Utils.getVersionDesc(false));
 
     Proxy proxy = new Proxy(options, TestConstants.PROXY_PORT, serverName, true);
     proxy.startAsync();
@@ -46,7 +46,7 @@ public class TestUtils {
     AgentOptions options = new AgentOptions(args, false);
 
     logger.info(Utils.getBanner("banners/agent.txt"));
-    logger.info(Utils.getVersionDesc());
+    logger.info(Utils.getVersionDesc(false));
 
     Agent agent = new Agent(options, serverName, true);
     agent.startAsync();

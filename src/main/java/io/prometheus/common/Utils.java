@@ -192,9 +192,10 @@ public class Utils {
     }
   }
 
-  public static String getVersionDesc() {
+  public static String getVersionDesc(final boolean asJson) {
     final VersionAnnotation val = Proxy.class.getPackage().getAnnotation(VersionAnnotation.class);
-    return format("Version: %s Release Date: %s", val.version(), val.date());
+    return asJson ? format("{\"Version\": \"%s\", \"Release Date\": \"%s\"}", val.version(), val.date())
+                  : format("Version: %s Release Date: %s", val.version(), val.date());
   }
 
   public static Thread shutDownHookAction(final Service service) {
@@ -214,7 +215,7 @@ public class Utils {
     @Override
     public void validate(final String name, final String value) {
       final Console console = JCommander.getConsole();
-      console.println(getVersionDesc());
+      console.println(getVersionDesc(false));
       System.exit(0);
     }
   }

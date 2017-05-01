@@ -80,7 +80,7 @@ public class Proxy
     final ProxyOptions options = new ProxyOptions(argv);
 
     logger.info(Utils.getBanner("banners/proxy.txt"));
-    logger.info(Utils.getVersionDesc());
+    logger.info(Utils.getVersionDesc(false));
 
     final Proxy proxy = new Proxy(options, options.getProxyPort(), null, false);
     proxy.startAsync();
