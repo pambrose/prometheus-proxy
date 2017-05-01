@@ -20,7 +20,7 @@ public class VersionServlet
     resp.setHeader("Cache-Control", "must-revalidate,no-cache,no-store");
     resp.setContentType("text/plain");
     try (final PrintWriter writer = resp.getWriter()) {
-      writer.println(Utils.getVersionDesc());
+      writer.println(Utils.getVersionDesc(true));
     }
   }
 }

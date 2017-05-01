@@ -53,10 +53,6 @@ public class MetricsService
 
   public HealthCheck getHealthCheck() { return this.healthCheck; }
 
-  public int getPort() { return this.port; }
-
-  public String getPath() { return this.path; }
-
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)

@@ -159,7 +159,7 @@ public class Agent
     final AgentOptions options = new AgentOptions(argv, true);
 
     logger.info(Utils.getBanner("banners/agent.txt"));
-    logger.info(Utils.getVersionDesc());
+    logger.info(Utils.getVersionDesc(false));
 
     final Agent agent = new Agent(options, null, false);
     agent.startAsync();
