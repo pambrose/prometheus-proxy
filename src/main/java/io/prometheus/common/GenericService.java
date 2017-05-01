@@ -7,7 +7,6 @@ import com.codahale.metrics.health.HealthCheckRegistry;
 import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck;
 import com.github.kristofa.brave.Brave;
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -145,26 +144,25 @@ public abstract class GenericService
     this.getHealthCheckRegistry().register("thread_deadlock", new ThreadDeadlockHealthCheck());
     if (this.isMetricsEnabled())
       this.getHealthCheckRegistry().register("metrics_service", this.metricsService.getHealthCheck());
-
     this.getHealthCheckRegistry()
         .register(
-            "all_services_running",
+            "all_services_healthy",
             new HealthCheck() {
               @Override
               protected Result check()
                   throws Exception {
-                final ImmutableMultimap<State, Service> sbs = serviceManager.servicesByState();
-                return sbs.keySet().size() == 1 && sbs.containsKey(State.RUNNING)
+                return serviceManager.isHealthy()
                        ? Result.healthy()
                        : Result.unhealthy(format("Incorrect state: %s",
                                                  Joiner.on(", ")
-                                                       .join(sbs.entries()
-                                                                .stream()
-                                                                .filter(kv -> kv.getKey() != State.RUNNING)
-                                                                .peek(kv -> logger.warn("Incorrect state - {}: {}",
-                                                                                        kv.getKey(), kv.getValue()))
-                                                                .map(kv -> format("%s: %s", kv.getKey(), kv.getValue()))
-                                                                .collect(Collectors.toList()))));
+                                                       .join(serviceManager.servicesByState()
+                                                                           .entries()
+                                                                           .stream()
+                                                                           .filter(kv -> kv.getKey() != State.RUNNING)
+                                                                           .peek(kv -> logger.warn("Incorrect state - {}: {}",
+                                                                                                   kv.getKey(), kv.getValue()))
+                                                                           .map(kv -> format("%s: %s", kv.getKey(), kv.getValue()))
+                                                                           .collect(Collectors.toList()))));
               }
             });
   }
