@@ -84,8 +84,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-$ docker pull pambrose/prometheus-proxy:1.2.3
-$ docker pull pambrose/prometheus-agent:1.2.3
+$ docker pull pambrose/prometheus-proxy:1.2.4
+$ docker pull pambrose/prometheus-agent:1.2.4
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
@@ -94,14 +94,14 @@ Start the proxy and an agent in separate shells on your local machine:
 $ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
         -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.2.3
+        pambrose/prometheus-proxy:1.2.4
 ```
 
 ```bash
 $ docker run --rm -p 8083:8083 -p 8093:8093 \
         -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.2.3
+        pambrose/prometheus-agent:1.2.4
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),

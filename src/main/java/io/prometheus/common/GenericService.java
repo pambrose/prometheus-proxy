@@ -1,10 +1,26 @@
+/*
+ *  Copyright 2017, Paul Ambrose All rights reserved.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package io.prometheus.common;
 
-import com.codahale.metrics.JmxReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.health.HealthCheck;
 import com.codahale.metrics.health.HealthCheckRegistry;
 import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck;
+import com.codahale.metrics.jmx.JmxReporter;
 import com.github.kristofa.brave.Brave;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
@@ -40,11 +56,11 @@ public abstract class GenericService
   private final AdminService          adminService;
   private ServiceManager serviceManager = null;
 
-  public GenericService(final ConfigVals configVals,
-                        final AdminConfig adminConfig,
-                        final MetricsConfig metricsConfig,
-                        final ZipkinConfig zipkinConfig,
-                        final boolean testMode) {
+  protected GenericService(final ConfigVals configVals,
+                           final AdminConfig adminConfig,
+                           final MetricsConfig metricsConfig,
+                           final ZipkinConfig zipkinConfig,
+                           final boolean testMode) {
     this.configVals = configVals;
     this.testMode = testMode;
 
@@ -98,7 +114,7 @@ public abstract class GenericService
   public void init() {
     this.serviceManager = new ServiceManager(this.services);
     this.serviceManager.addListener(this.newListener());
-    this.registerHealtChecks();
+    this.registerHealthChecks();
   }
 
   @Override
@@ -140,7 +156,7 @@ public abstract class GenericService
     this.services.addAll(Lists.asList(service, services));
   }
 
-  protected void registerHealtChecks() {
+  protected void registerHealthChecks() {
     this.getHealthCheckRegistry().register("thread_deadlock", new ThreadDeadlockHealthCheck());
     if (this.isMetricsEnabled())
       this.getHealthCheckRegistry().register("metrics_service", this.metricsService.getHealthCheck());

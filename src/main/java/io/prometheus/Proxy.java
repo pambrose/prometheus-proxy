@@ -1,3 +1,19 @@
+/*
+ *  Copyright 2017, Paul Ambrose All rights reserved.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package io.prometheus;
 
 import com.codahale.metrics.health.HealthCheck;
@@ -22,7 +38,6 @@ import io.prometheus.proxy.ScrapeRequestWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -51,8 +66,7 @@ public class Proxy
   public Proxy(final ProxyOptions options,
                final int proxyPort,
                final String inProcessServerName,
-               final boolean testMode)
-      throws IOException {
+               final boolean testMode) {
     super(options.getConfigVals(),
           AdminConfig.create(options.isAdminEnabled(),
                              options.getAdminPort(),
@@ -71,12 +85,10 @@ public class Proxy
                                ? new AgentContextCleanupService(this) : null;
 
     this.addServices(this.grpcService, this.httpService, this.agentCleanupService);
-
     this.init();
   }
 
-  public static void main(final String[] argv)
-      throws IOException, InterruptedException {
+  public static void main(final String[] argv) {
     final ProxyOptions options = new ProxyOptions(argv);
 
     logger.info(Utils.getBanner("banners/proxy.txt"));
@@ -117,8 +129,8 @@ public class Proxy
   }
 
   @Override
-  protected void registerHealtChecks() {
-    super.registerHealtChecks();
+  protected void registerHealthChecks() {
+    super.registerHealthChecks();
     this.getHealthCheckRegistry().register("grpc_service", this.grpcService.getHealthCheck());
     this.getHealthCheckRegistry()
         .register("scrape_response_map_check",

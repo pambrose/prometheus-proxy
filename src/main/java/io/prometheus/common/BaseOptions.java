@@ -1,3 +1,19 @@
+/*
+ *  Copyright 2017, Paul Ambrose All rights reserved.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package io.prometheus.common;
 
 import com.beust.jcommander.DynamicParameter;
@@ -33,7 +49,7 @@ public abstract class BaseOptions {
   private final String     programName;
   private final ConfigVals configVals;
 
-  @Parameter(names = {"-c", "--conf", "--config"}, description = "Configuration file or pingUrl")
+  @Parameter(names = {"-c", "--conf", "--config"}, description = "Configuration file or url")
   private String              configName     = null;
   @Parameter(names = {"-r", "--admin"}, description = "Admin servlets enabled")
   private Boolean             adminEnabled   = null;
@@ -50,7 +66,9 @@ public abstract class BaseOptions {
   @DynamicParameter(names = "-D", description = "Dynamic property assignment")
   private Map<String, String> dynamicParams  = new HashMap<>();
 
-  protected BaseOptions(final String programName, final String[] argv, final String envConfig,
+  protected BaseOptions(final String programName,
+                        final String[] argv,
+                        final String envConfig,
                         final boolean exitOnMissingConfig) {
     this.programName = programName;
     this.parseArgs(argv);

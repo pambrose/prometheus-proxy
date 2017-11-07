@@ -1,3 +1,19 @@
+/*
+ *  Copyright 2017, Paul Ambrose All rights reserved.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package io.prometheus;
 
 import com.google.common.base.MoreObjects;
@@ -133,9 +149,9 @@ public class Agent
     this.pathConfigs = this.getConfigVals().pathConfigs.stream()
                                                        .map(v -> ImmutableMap.of("name", v.name,
                                                                                  "path", v.path,
-                                                                                 "pingUrl", v.url))
+                                                                                 "url", v.url))
                                                        .peek(v -> logger.info("Proxy path /{} will be assigned to {}",
-                                                                              v.get("path"), v.get("pingUrl")))
+                                                                              v.get("path"), v.get("url")))
                                                        .collect(Collectors.toList());
 
 
@@ -150,12 +166,10 @@ public class Agent
     }
 
     this.resetGrpcStubs();
-
     this.init();
   }
 
-  public static void main(final String[] argv)
-      throws IOException, InterruptedException {
+  public static void main(final String[] argv) {
     final AgentOptions options = new AgentOptions(argv, true);
 
     logger.info(Utils.getBanner("banners/agent.txt"));
@@ -200,8 +214,8 @@ public class Agent
   }
 
   @Override
-  protected void registerHealtChecks() {
-    super.registerHealtChecks();
+  protected void registerHealthChecks() {
+    super.registerHealthChecks();
     this.getHealthCheckRegistry()
         .register("scrape_response_queue_check",
                   queueHealthCheck(scrapeResponseQueue,
@@ -278,6 +292,7 @@ public class Agent
     if (this.zipkinReporter != null && this.getConfigVals().grpc.zipkinReportingEnabled)
       interceptors.add(BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave()));
     */
+
     this.blockingStubRef.set(newBlockingStub(intercept(this.getChannel(), interceptors)));
     this.asyncStubRef.set(newStub(intercept(this.getChannel(), interceptors)));
   }
@@ -349,7 +364,7 @@ public class Agent
   }
 
   // If successful, this will create an agentContxt on the Proxy and an interceptor will
-  // add an agent_id to the headers
+  // add an agent_id to the headers`
   private boolean connectAgent() {
     try {
       logger.info("Connecting to proxy at {}...", this.getProxyHost());
@@ -386,7 +401,7 @@ public class Agent
       throws RequestFailureException {
     for (final Map<String, String> agentConfig : this.pathConfigs) {
       final String path = agentConfig.get("path");
-      final String url = agentConfig.get("pingUrl");
+      final String url = agentConfig.get("url");
       this.registerPath(path, url);
     }
   }
@@ -458,7 +473,7 @@ public class Agent
   }
 
   private void readRequestsFromProxy(final AtomicBoolean disconnected) {
-    final StreamObserver<ScrapeRequest> streamObserver =
+    final StreamObserver<ScrapeRequest> observer =
         new StreamObserver<ScrapeRequest>() {
           @Override
           public void onNext(final ScrapeRequest request) {
@@ -477,11 +492,13 @@ public class Agent
             disconnected.set(true);
           }
         };
-    this.getAsyncStub().readRequestsFromProxy(AgentInfo.newBuilder().setAgentId(this.getAgentId()).build(), streamObserver);
+    final AgentInfo agentInfo = AgentInfo.newBuilder().setAgentId(this.getAgentId()).build();
+    this.getAsyncStub().readRequestsFromProxy(agentInfo, observer);
   }
 
   private void writeResponsesToProxyUntilDisconnected(final AtomicBoolean disconnected) {
-    final StreamObserver<ScrapeResponse> responseObserver = this.getAsyncStub().writeResponsesToProxy(
+    final long checkMillis = this.getConfigVals().internal.scrapeResponseQueueCheckMillis;
+    final StreamObserver<ScrapeResponse> observer = this.getAsyncStub().writeResponsesToProxy(
         new StreamObserver<Empty>() {
           @Override
           public void onNext(Empty empty) {
@@ -501,13 +518,12 @@ public class Agent
           }
         });
 
-    final long checkMillis = this.getConfigVals().internal.scrapeResponseQueueCheckMillis;
     while (!disconnected.get()) {
       try {
         // Set a short timeout to check if client has disconnected
         final ScrapeResponse response = this.scrapeResponseQueue.poll(checkMillis, TimeUnit.MILLISECONDS);
         if (response != null) {
-          responseObserver.onNext(response);
+          observer.onNext(response);
           this.markMsgSent();
         }
       }
@@ -517,8 +533,7 @@ public class Agent
     }
 
     logger.info("Disconnected from proxy at {}", this.getProxyHost());
-
-    responseObserver.onCompleted();
+    observer.onCompleted();
   }
 
   private void markMsgSent() {
