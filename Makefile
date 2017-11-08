@@ -19,8 +19,8 @@ docker-build:
 	docker build -f ./etc/docker/agent.df -t=pambrose/prometheus-agent:${VERSION} .
 
 docker-push:
-	docker push pambrose/prometheus-proxy:$VERSION
-	docker push pambrose/prometheus-agent:$VERSION
+	docker push pambrose/prometheus-proxy:${VERSION}
+	docker push pambrose/prometheus-agent:${VERSION}
 
 build-coverage:
 	./mvnw clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report
