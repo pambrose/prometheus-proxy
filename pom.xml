@@ -24,6 +24,7 @@
     <artifactId>prometheus-proxy</artifactId>
     <version>1.2.5-SNAPSHOT</version>
 
+    
     <properties>
         <prometheus.version>0.1.0</prometheus.version>
         <jcommander.version>1.72</jcommander.version>
