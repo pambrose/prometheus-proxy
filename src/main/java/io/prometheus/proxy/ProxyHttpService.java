@@ -87,7 +87,7 @@ public class ProxyHttpService
 
                     final Span span = this.tracer != null ? this.tracer.newTrace()
                                                                        .name("round-trip")
-                                                                       .tag("version", "1.2.4")
+                                                                       .tag("version", "1.2.5")
                                                                        .start()
                                                           : null;
                     try {
