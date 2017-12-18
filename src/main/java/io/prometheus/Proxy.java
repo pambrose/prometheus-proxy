@@ -78,8 +78,8 @@ public class Proxy
           testMode);
 
     this.metrics = this.isMetricsEnabled() ? new ProxyMetrics(this) : null;
-    this.grpcService = isNullOrEmpty(inProcessServerName) ? ProxyGrpcService.create(this, options.getAgentPort())
-                                                          : ProxyGrpcService.create(this, inProcessServerName);
+    this.grpcService = isNullOrEmpty(inProcessServerName) ? ProxyGrpcService.Companion.create(this, options.getAgentPort())
+                                                          : ProxyGrpcService.Companion.create(this, inProcessServerName);
     this.httpService = new ProxyHttpService(this, proxyPort);
     this.agentCleanupService = this.getConfigVals().internal.staleAgentCheckEnabled
                                ? new AgentContextCleanupService(this) : null;

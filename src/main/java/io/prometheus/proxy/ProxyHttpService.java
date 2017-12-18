@@ -206,7 +206,7 @@ public class ProxyHttpService
 
   private void updateScrapeRequests(final String type) {
     if (this.proxy.isMetricsEnabled())
-      this.proxy.getMetrics().scrapeRequests.labels(type).inc();
+      this.proxy.getMetrics().getScrapeRequests().labels(type).inc();
   }
 
   public int getPort() { return this.port; }
