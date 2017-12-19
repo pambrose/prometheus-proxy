@@ -41,7 +41,7 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
         val remoteAddr = this.getRemoteAddr(attributes)
         val agentContext = AgentContext(this.proxy, remoteAddr)
         this.proxy.addAgentContext(agentContext)
-        logger.info("Connected to {}", agentContext)
+        logger.info("Connected to $agentContext")
         return Attributes.newBuilder()
                 .set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)
                 .setAll<Any>(attributes)
@@ -53,9 +53,9 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
         this.proxy.removePathByAgentId(agentId)
         val agentContext = this.proxy.removeAgentContext(agentId)
         if (agentContext != null)
-            logger.info("Disconnected from {}", agentContext)
+            logger.info("Disconnected from $agentContext")
         else
-            logger.info("Disconnected with invalid agentId: {}", agentId)
+            logger.info("Disconnected with invalid agentId: $agentId")
         super.transportTerminated(attributes)
     }
 

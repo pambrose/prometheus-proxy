@@ -160,7 +160,7 @@ class Proxy(options: ProxyOptions,
 
         val agentContext = this.agentContextMap.remove(agentId)
         if (agentContext != null) {
-            logger.info("Removed {}", agentContext)
+            logger.info("Removed $agentContext")
             agentContext.markInvalid()
         }
         else
@@ -193,7 +193,7 @@ class Proxy(options: ProxyOptions,
         synchronized(this.pathMap) {
             this.pathMap.put(path, agentContext)
             if (!this.isTestMode)
-                logger.info("Added path /{} for {}", path, agentContext)
+                logger.info("Added path /$path for $agentContext")
         }
     }
 
@@ -202,7 +202,7 @@ class Proxy(options: ProxyOptions,
         synchronized(this.pathMap) {
             val agentContext = this.pathMap[path]
             if (agentContext == null) {
-                val msg = format("Unable to remove path /%s - path not found", path)
+                val msg = "Unable to remove path /$path - path not found"
                 logger.info(msg)
                 responseBuilder.setValid(false).setReason(msg)
             }
@@ -215,7 +215,7 @@ class Proxy(options: ProxyOptions,
             else {
                 this.pathMap.remove(path)
                 if (!this.isTestMode)
-                    logger.info("Removed path /{} for {}", path, agentContext)
+                    logger.info("Removed path /$path for $agentContext")
                 responseBuilder.setValid(true).setReason("")
             }
         }

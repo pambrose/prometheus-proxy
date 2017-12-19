@@ -40,7 +40,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         val agentId = request.agentId
         val agentContext = this.proxy.getAgentContext(agentId)
         if (agentContext == null) {
-            logger.info("registerAgent() missing AgentContext agentId: {}", agentId)
+            logger.info("registerAgent() missing AgentContext agentId: $agentId")
         }
         else {
             agentContext.setAgentName(request.agentName)
@@ -50,7 +50,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
         val response = RegisterAgentResponse.newBuilder()
                 .setValid(agentContext != null)
-                .setReason(format("Invalid agentId: %s", agentId))
+                .setReason("Invalid agentId: $agentId")
                 .setAgentId(agentId)
                 .build()
         responseObserver.onNext(response)
@@ -61,13 +61,13 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                               responseObserver: StreamObserver<RegisterPathResponse>) {
         val path = request.path
         if (this.proxy.containsPath(path))
-            logger.info("Overwriting path /{}", path)
+            logger.info("Overwriting path /$path")
 
         val agentId = request.agentId
         val agentContext = this.proxy.getAgentContext(agentId)
         val response = RegisterPathResponse.newBuilder()
                 .setValid(agentContext != null)
-                .setReason(format("Invalid agentId: %s", agentId))
+                .setReason("Invalid agentId: $agentId")
                 .setPathCount(this.proxy.pathMapSize())
                 .setPathId(if (agentContext != null)
                                PATH_ID_GENERATOR.getAndIncrement()
@@ -75,7 +75,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                                -1)
                 .build()
         if (agentContext == null) {
-            logger.error("Missing AgentContext for agentId: {}", agentId)
+            logger.error("Missing AgentContext for agentId: $agentId")
         }
         else {
             this.proxy.addPath(path, agentContext)
@@ -95,8 +95,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         val responseBuilder = UnregisterPathResponse.newBuilder()
 
         if (agentContext == null) {
-            logger.error("Missing AgentContext for agentId: {}", agentId)
-            responseBuilder.setValid(false).reason = format("Invalid agentId: %s", agentId)
+            logger.error("Missing AgentContext for agentId: $agentId")
+            responseBuilder.setValid(false).reason = "Invalid agentId: $agentId"
         }
         else {
             this.proxy.removePath(path, agentId, responseBuilder)
@@ -122,7 +122,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         val agentId = request.agentId
         val agentContext = this.proxy.getAgentContext(agentId)
         if (agentContext == null)
-            logger.info("sendHeartBeat() missing AgentContext agentId: {}", agentId)
+            logger.info("sendHeartBeat() missing AgentContext agentId: $agentId")
         else
             agentContext.markActivity()
 
@@ -154,7 +154,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                 val scrapeId = response.scrapeId
                 val scrapeRequest = proxy.getFromScrapeRequestMap(scrapeId)
                 if (scrapeRequest == null) {
-                    logger.error("Missing ScrapeRequestWrapper for scrape_id: {}", scrapeId)
+                    logger.error("Missing ScrapeRequestWrapper for scrape_id: $scrapeId")
                 }
                 else {
                     scrapeRequest.setScrapeResponse(response)
@@ -167,7 +167,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             override fun onError(t: Throwable) {
                 val status = Status.fromThrowable(t)
                 if (status !== Status.CANCELLED)
-                    logger.info("Error in writeResponsesToProxy(): {}", status)
+                    logger.info("Error in writeResponsesToProxy(): $status")
                 try {
                     responseObserver.onNext(Empty.getDefaultInstance())
                     responseObserver.onCompleted()

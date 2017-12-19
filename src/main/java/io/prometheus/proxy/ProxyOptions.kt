@@ -29,7 +29,7 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
     @Parameter(names = arrayOf("-a", "--agent_port"), description = "Listen port for agents")
     var agentPort: Int? = null
 
-    constructor(args: List<String>?) : this(Iterables.toArray<String>(args ?: emptyList<String>(), String::class.java)) {}
+    constructor(args: List<String>?) : this(Iterables.toArray<String>(args ?: emptyList<String>(), String::class.java))
 
     init {
         this.parseOptions()

@@ -115,7 +115,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
                                                                            .setDaemon(true)
                                                                            .build())
 
-        logger.info("Assigning proxy reconnect pause time to {} secs", this.configVals.internal.reconectPauseSecs)
+        logger.info("Assigning proxy reconnect pause time to ${this.configVals.internal.reconectPauseSecs} secs")
         this.reconnectLimiter = RateLimiter.create(1.0 / this.configVals.internal.reconectPauseSecs)
         this.reconnectLimiter.acquire()  // Prime the limiter
 
@@ -126,8 +126,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
                                                     "url", v.url)
                 }
                 .peek { v ->
-                    logger.info("Proxy path /{} will be assigned to {}",
-                                v["path"], v["url"])
+                    logger.info("Proxy path /{} will be assigned to {}", v["path"], v["url"])
                 }
                 .collect(Collectors.toList())
 
@@ -159,17 +158,14 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
             try {
                 this.connectToProxy()
             } catch (e: RequestFailureException) {
-                logger.info("Disconnected from proxy at {} after invalid response {}",
-                            this.proxyHost, e.message)
+                logger.info("Disconnected from proxy at ${this.proxyHost} after invalid response ${e.message}")
             } catch (e: StatusRuntimeException) {
-                logger.info("Disconnected from proxy at {}", this.proxyHost)
+                logger.info("Disconnected from proxy at ${this.proxyHost}")
             } catch (e: Exception) {
                 // Catch anything else to avoid exiting retry loop
-                logger.info("Disconnected from proxy at {} - {} [{}]",
-                            this.proxyHost, e.javaClass.simpleName, e.message)
             } finally {
                 val secsWaiting = this.reconnectLimiter.acquire()
-                logger.info("Waited {} secs to reconnect", secsWaiting)
+                logger.info("Waited $secsWaiting secs to reconnect")
             }
         }
     }
@@ -182,9 +178,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
                                                  this.configVals.internal.scrapeResponseQueueUnhealthySize))
     }
 
-    override fun serviceName(): String {
-        return format("%s %s", this.javaClass.simpleName, this.agentName)
-    }
+    override fun serviceName(): String = "${this.javaClass.simpleName} ${this.agentName}"
 
     @Throws(RequestFailureException::class)
     private fun connectToProxy() {
@@ -214,7 +208,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
         if (this.configVals.internal.heartbeatEnabled) {
             val threadPauseMillis = this.configVals.internal.heartbeatCheckPauseMillis.toLong()
             val maxInactivitySecs = this.configVals.internal.heartbeatMaxInactivitySecs
-            logger.info("Heartbeat scheduled to fire after {} secs of inactivity", maxInactivitySecs)
+            logger.info("Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity")
             this.heartbeatService.submit {
                 while (isRunning && !disconnected.get()) {
                     val timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSent.get()
@@ -272,10 +266,10 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
                 .setScrapeId(scrapeRequest.scrapeId)
         val pathContext = this.pathContextMap[path]
         if (pathContext == null) {
-            logger.warn("Invalid path in fetchUrl(): {}", path)
+            logger.warn("Invalid path in fetchUrl(): $path")
             this.updateScrapeCounter("invalid_path")
             return scrapeResponse.setValid(false)
-                    .setReason(format("Invalid path: %s", path))
+                    .setReason("Invalid path: $path")
                     .setStatusCode(statusCode)
                     .setText("")
                     .setContentType("")
@@ -300,7 +294,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
                             .build()
                 }
                 else {
-                    reason = format("Unsucessful response code %d", statusCode)
+                    reason = "Unsucessful response code $statusCode"
                 }
             }
         } catch (e: IOException) {
@@ -326,16 +320,16 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
     // add an agent_id to the headers`
     private fun connectAgent(): Boolean {
         try {
-            logger.info("Connecting to proxy at {}...", this.proxyHost)
+            logger.info("Connecting to proxy at ${this.proxyHost}...")
             this.blockingStub.connectAgent(Empty.getDefaultInstance())
-            logger.info("Connected to proxy at {}", this.proxyHost)
+            logger.info("Connected to proxy at ${this.proxyHost}")
             if (this.metricsEnabled)
                 this.metrics!!.connects.labels("success").inc()
             return true
         } catch (e: StatusRuntimeException) {
             if (this.metricsEnabled)
                 this.metrics!!.connects.labels("failure").inc()
-            logger.info("Cannot connect to proxy at {} [{}]", this.proxyHost, e.message)
+            logger.info("Cannot connect to proxy at ${this.proxyHost} [${e.message}]")
             return false
         }
 
@@ -370,7 +364,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
         val path = if (checkNotNull(pathVal).startsWith("/")) pathVal.substring(1) else pathVal
         val pathId = this.registerPathOnProxy(path)
         if (!this.isTestMode)
-            logger.info("Registered {} as /{}", url, path)
+            logger.info("Registered $url as /$path")
         this.pathContextMap.put(path, PathContext(this.okHttpClient, pathId, path, url))
     }
 
@@ -380,9 +374,9 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
         this.unregisterPathOnProxy(path)
         val pathContext = this.pathContextMap.remove(path)
         if (pathContext == null)
-            logger.info("No path value /{} found in pathContextMap", path)
+            logger.info("No path value /$path found in pathContextMap")
         else if (!this.isTestMode)
-            logger.info("Unregistered /{} for {}", path, pathContext.url)
+            logger.info("Unregistered /$path for ${pathContext.url}")
     }
 
     fun pathMapSize(): Int {
@@ -438,7 +432,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
 
             override fun onError(t: Throwable) {
                 val status = Status.fromThrowable(t)
-                logger.info("Error in readRequestsFromProxy(): {}", status)
+                logger.info("Error in readRequestsFromProxy(): $status")
                 disconnected.set(true)
             }
 
@@ -460,7 +454,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
 
                     override fun onError(t: Throwable) {
                         val s = Status.fromThrowable(t)
-                        logger.info("Error in writeResponsesToProxyUntilDisconnected(): {} {}", s.code, s.description)
+                        logger.info("Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}")
                         disconnected.set(true)
                     }
 
@@ -483,7 +477,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
 
         }
 
-        logger.info("Disconnected from proxy at {}", this.proxyHost)
+        logger.info("Disconnected from proxy at ${this.proxyHost}")
         observer.onCompleted()
     }
 
@@ -498,11 +492,11 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
             val response = this.blockingStub.sendHeartBeat(request)
             this.markMsgSent()
             if (!response.valid) {
-                logger.info("AgentId {} not found on proxy", agentId)
+                logger.info("AgentId $agentId not found on proxy")
                 throw StatusRuntimeException(Status.NOT_FOUND)
             }
         } catch (e: StatusRuntimeException) {
-            logger.info("Hearbeat failed {}", e.status)
+            logger.info("Hearbeat failed ${e.status}")
             disconnected.set(true)
         }
 

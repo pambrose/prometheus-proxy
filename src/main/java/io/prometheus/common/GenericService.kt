@@ -171,10 +171,9 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                             .stream()
                                             .filter { kv -> kv.key !== Service.State.RUNNING }
                                             .peek { kv ->
-                                                logger.warn("Incorrect state - {}: {}",
-                                                            kv.key, kv.value)
+                                                logger.warn("Incorrect state - ${kv.key}: ${kv.value}")
                                             }
-                                            .map { kv -> format("%s: %s", kv.key, kv.value) }
+                                            .map { kv -> "${kv.key}: ${kv.value}" }
                                             .collect(Collectors.toList())
 
                                     HealthCheck.Result.unhealthy(format("Incorrect state: %s",
@@ -189,15 +188,15 @@ abstract class GenericService protected constructor(protected val genericConfigV
         val serviceName = this.javaClass.simpleName
         return object : ServiceManager.Listener() {
             override fun healthy() {
-                logger.info("All {} services healthy", serviceName)
+                logger.info("All $serviceName services healthy")
             }
 
             override fun stopped() {
-                logger.info("All {} services stopped", serviceName)
+                logger.info("All $serviceName services stopped")
             }
 
             override fun failure(service: Service?) {
-                logger.info("{} service failed: {}", serviceName, service)
+                logger.info("$serviceName service failed: $service")
             }
         }
     }

@@ -35,14 +35,14 @@ class PathContext(private val okHttpClient: OkHttpClient,
     @Throws(IOException::class)
     fun fetchUrl(scrapeRequest: ScrapeRequest): Response {
         try {
-            logger.debug("Fetching {}", this)
+            logger.debug("Fetching $this")
             val builder = if (!isNullOrEmpty(scrapeRequest.accept))
                 this.request.header(ACCEPT, scrapeRequest.accept)
             else
                 this.request
             return this.okHttpClient.newCall(builder.build()).execute()
         } catch (e: IOException) {
-            logger.info("Failed HTTP request: {} [{}: {}]", this.url, e.javaClass.simpleName, e.message)
+            logger.info("Failed HTTP request: ${this.url} [${e.javaClass.simpleName}: ${e.message}]")
             throw e
         }
     }

@@ -107,7 +107,7 @@ object Utils {
 
         if (Strings.isNullOrEmpty(configName)) {
             if (exitOnMissingConfig) {
-                logger.error("A configuration file or url must be specified with --getConfig or \${}", envConfig)
+                logger.error("A configuration file or url must be specified with --getConfig or \$${envConfig}")
                 System.exit(1)
             }
             return fallback
