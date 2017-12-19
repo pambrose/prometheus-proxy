@@ -30,7 +30,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
     override fun connectAgent(request: Empty, responseObserver: StreamObserver<Empty>) {
         if (this.proxy.metricsEnabled)
-            this.proxy.metrics.connects.inc()
+            this.proxy.metrics!!.connects.inc()
         responseObserver.onNext(Empty.getDefaultInstance())
         responseObserver.onCompleted()
     }
@@ -117,7 +117,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
     override fun sendHeartBeat(request: HeartBeatRequest, responseObserver: StreamObserver<HeartBeatResponse>) {
         if (this.proxy.metricsEnabled)
-            this.proxy.metrics.heartbeats.inc()
+            this.proxy.metrics!!.heartbeats.inc()
 
         val agentId = request.agentId
         val agentContext = this.proxy.getAgentContext(agentId)

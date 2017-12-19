@@ -33,8 +33,8 @@ import io.prometheus.common.GenericServiceListener
 import org.slf4j.LoggerFactory
 import java.io.IOException
 
-class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, private val serverName: String?) : AbstractIdleService() {
-    private val inProcessServer: Boolean
+class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, private val inProcessServerName: String?) : AbstractIdleService() {
+    private val inProcessServer = !isNullOrEmpty(inProcessServerName)
     private val grpcServer: Server
 
     val healthCheck: HealthCheck
@@ -49,8 +49,6 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
         }
 
     init {
-        this.inProcessServer = !isNullOrEmpty(serverName)
-
         val interceptors = Lists.newArrayList<ServerInterceptor>(ProxyInterceptor())
 
         /*
@@ -66,7 +64,7 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
         val serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors)
 
         this.grpcServer = if (this.inProcessServer)
-            InProcessServerBuilder.forName(this.serverName)
+            InProcessServerBuilder.forName(this.inProcessServerName)
                     .addService(serviceDef)
                     .addTransportFilter(ProxyTransportFilter(proxy))
                     .build()
@@ -95,7 +93,7 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
         val helper = MoreObjects.toStringHelper(this)
         if (this.inProcessServer) {
             helper.add("serverType", "InProcess")
-            helper.add("serverName", this.serverName)
+            helper.add("serverName", this.inProcessServerName)
         }
         else {
             helper.add("serverType", "Netty")

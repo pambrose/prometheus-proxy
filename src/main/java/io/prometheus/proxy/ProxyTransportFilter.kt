@@ -30,9 +30,9 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
                 .findFirst()
         if (keyOptional.isPresent) {
             val key = keyOptional.get() as Attributes.Key<Any>
-            val `val` = attributes.get(key)
-            if (`val` != null)
-                return `val`.toString()
+            val v = attributes.get(key)
+            if (v != null)
+                return v.toString()
         }
         return "Unknown"
     }

@@ -53,7 +53,7 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     init {
         this.agentContext = Preconditions.checkNotNull(agentContext)
-        this.requestTimer = if (proxy.metricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
+        this.requestTimer = if (proxy.metricsEnabled) proxy.metrics!!.scrapeRequestLatency.startTimer() else null
         var builder = ScrapeRequest.newBuilder()
                 .setAgentId(agentContext.agentId)
                 .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
