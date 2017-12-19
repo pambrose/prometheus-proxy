@@ -38,72 +38,72 @@ public class AutoValueTest {
   @Test
   public void adminConfigTest() {
     ConfigVals vals = configVals("agent.admin.enabled=true");
-    AdminConfig c = AdminConfig.create(vals.agent.admin.enabled, -1, vals.agent.admin);
-    assertThat(c.enabled()).isTrue();
+    AdminConfig c = AdminConfig.Companion.create(vals.agent.admin.enabled, -1, vals.agent.admin);
+    assertThat(c.getEnabled()).isTrue();
 
     vals = configVals("agent.admin.port=888");
-    c = AdminConfig.create(vals.agent.admin.enabled, vals.agent.admin.port, vals.agent.admin);
-    assertThat(c.enabled()).isFalse();
-    assertThat(c.port()).isEqualTo(888);
+    c = AdminConfig.Companion.create(vals.agent.admin.enabled, vals.agent.admin.port, vals.agent.admin);
+    assertThat(c.getEnabled()).isFalse();
+    assertThat(c.getPort()).isEqualTo(888);
 
-    c = AdminConfig.create(true, 444, configVals("agent.admin.pingPath=a pingpath val").agent.admin);
-    assertThat(c.pingPath()).isEqualTo("a pingpath val");
+    c = AdminConfig.Companion.create(true, 444, configVals("agent.admin.pingPath=a pingpath val").agent.admin);
+    assertThat(c.getPingPath()).isEqualTo("a pingpath val");
 
-    c = AdminConfig.create(true, 444, configVals("agent.admin.versionPath=a versionpath val").agent.admin);
-    assertThat(c.versionPath()).isEqualTo("a versionpath val");
+    c = AdminConfig.Companion.create(true, 444, configVals("agent.admin.versionPath=a versionpath val").agent.admin);
+    assertThat(c.getVersionPath()).isEqualTo("a versionpath val");
 
-    c = AdminConfig.create(true, 444, configVals("agent.admin.healthCheckPath=a healthCheckPath val").agent.admin);
-    assertThat(c.healthCheckPath()).isEqualTo("a healthCheckPath val");
+    c = AdminConfig.Companion.create(true, 444, configVals("agent.admin.healthCheckPath=a healthCheckPath val").agent.admin);
+    assertThat(c.getHealthCheckPath()).isEqualTo("a healthCheckPath val");
 
-    c = AdminConfig.create(true, 444, configVals("agent.admin.threadDumpPath=a threadDumpPath val").agent.admin);
-    assertThat(c.threadDumpPath()).isEqualTo("a threadDumpPath val");
+    c = AdminConfig.Companion.create(true, 444, configVals("agent.admin.threadDumpPath=a threadDumpPath val").agent.admin);
+    assertThat(c.getThreadDumpPath()).isEqualTo("a threadDumpPath val");
   }
 
   @Test
   public void metricsConfigTest() {
-    MetricsConfig c = MetricsConfig.create(true, 555, configVals("agent.metrics.enabled=true").agent.metrics);
-    assertThat(c.enabled()).isTrue();
+    MetricsConfig c = MetricsConfig.Companion.create(true, 555, configVals("agent.metrics.enabled=true").agent.metrics);
+    assertThat(c.getEnabled()).isTrue();
 
-    c = MetricsConfig.create(true, 555, configVals("agent.metrics.hostname=testval").agent.metrics);
-    assertThat(c.port()).isEqualTo(555);
+    c = MetricsConfig.Companion.create(true, 555, configVals("agent.metrics.hostname=testval").agent.metrics);
+    assertThat(c.getPort()).isEqualTo(555);
 
-    c = MetricsConfig.create(true, 555, configVals("agent.metrics.path=a path val").agent.metrics);
-    assertThat(c.path()).isEqualTo("a path val");
+    c = MetricsConfig.Companion.create(true, 555, configVals("agent.metrics.path=a path val").agent.metrics);
+    assertThat(c.getPath()).isEqualTo("a path val");
 
-    c = MetricsConfig.create(true, 555, configVals("agent.metrics.standardExportsEnabled=true").agent.metrics);
-    assertThat(c.standardExportsEnabled()).isTrue();
+    c = MetricsConfig.Companion.create(true, 555, configVals("agent.metrics.standardExportsEnabled=true").agent.metrics);
+    assertThat(c.getStandardExportsEnabled()).isTrue();
 
-    c = MetricsConfig.create(true, 555, configVals("agent.metrics.memoryPoolsExportsEnabled=true").agent.metrics);
-    assertThat(c.memoryPoolsExportsEnabled()).isTrue();
+    c = MetricsConfig.Companion.create(true, 555, configVals("agent.metrics.memoryPoolsExportsEnabled=true").agent.metrics);
+    assertThat(c.getMemoryPoolsExportsEnabled()).isTrue();
 
-    c = MetricsConfig.create(true, 555, configVals("agent.metrics.garbageCollectorExportsEnabled=true").agent.metrics);
-    assertThat(c.garbageCollectorExportsEnabled()).isTrue();
+    c = MetricsConfig.Companion.create(true, 555, configVals("agent.metrics.garbageCollectorExportsEnabled=true").agent.metrics);
+    assertThat(c.getGarbageCollectorExportsEnabled()).isTrue();
 
-    c = MetricsConfig.create(true, 555, configVals("agent.metrics.threadExportsEnabled=true").agent.metrics);
-    assertThat(c.threadExportsEnabled()).isTrue();
+    c = MetricsConfig.Companion.create(true, 555, configVals("agent.metrics.threadExportsEnabled=true").agent.metrics);
+    assertThat(c.getThreadExportsEnabled()).isTrue();
 
-    c = MetricsConfig.create(true, 555, configVals("agent.metrics.classLoadingExportsEnabled=true").agent.metrics);
-    assertThat(c.classLoadingExportsEnabled()).isTrue();
+    c = MetricsConfig.Companion.create(true, 555, configVals("agent.metrics.classLoadingExportsEnabled=true").agent.metrics);
+    assertThat(c.getClassLoadingExportsEnabled()).isTrue();
 
-    c = MetricsConfig.create(true, 555, configVals("agent.metrics.versionInfoExportsEnabled=true").agent.metrics);
-    assertThat(c.versionInfoExportsEnabled()).isTrue();
+    c = MetricsConfig.Companion.create(true, 555, configVals("agent.metrics.versionInfoExportsEnabled=true").agent.metrics);
+    assertThat(c.getVersionInfoExportsEnabled()).isTrue();
   }
 
   @Test
   public void zipkinConfigTest() {
-    ZipkinConfig c = ZipkinConfig.create(configVals("agent.internal.zipkin.enabled=true").agent.internal.zipkin);
-    assertThat(c.enabled()).isTrue();
+    ZipkinConfig c = ZipkinConfig.Companion.create(configVals("agent.internal.zipkin.enabled=true").agent.internal.zipkin);
+    assertThat(c.getEnabled()).isTrue();
 
-    c = ZipkinConfig.create(configVals("agent.internal.zipkin.hostname=testval").agent.internal.zipkin);
-    assertThat(c.hostname()).isEqualTo("testval");
+    c = ZipkinConfig.Companion.create(configVals("agent.internal.zipkin.hostname=testval").agent.internal.zipkin);
+    assertThat(c.getHostname()).isEqualTo("testval");
 
-    c = ZipkinConfig.create(configVals("agent.internal.zipkin.port=999").agent.internal.zipkin);
-    assertThat(c.port()).isEqualTo(999);
+    c = ZipkinConfig.Companion.create(configVals("agent.internal.zipkin.port=999").agent.internal.zipkin);
+    assertThat(c.getPort()).isEqualTo(999);
 
-    c = ZipkinConfig.create(configVals("agent.internal.zipkin.path=a path val").agent.internal.zipkin);
-    assertThat(c.path()).isEqualTo("a path val");
+    c = ZipkinConfig.Companion.create(configVals("agent.internal.zipkin.path=a path val").agent.internal.zipkin);
+    assertThat(c.getPath()).isEqualTo("a path val");
 
-    c = ZipkinConfig.create(configVals("agent.internal.zipkin.serviceName=a service name").agent.internal.zipkin);
-    assertThat(c.serviceName()).isEqualTo("a service name");
+    c = ZipkinConfig.Companion.create(configVals("agent.internal.zipkin.serviceName=a service name").agent.internal.zipkin);
+    assertThat(c.getServiceName()).isEqualTo("a service name");
   }
 }

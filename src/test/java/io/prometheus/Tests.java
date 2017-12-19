@@ -152,7 +152,7 @@ public class Tests {
         .get(format("/%s", agentPath),
              (req, res) -> {
                res.type("text/plain");
-               Utils.sleepForSecs(10);
+               Utils.INSTANCE.sleepForSecs(10);
                return "I timed out";
              });
     String agentUrl = format("http://localhost:%d/%s", agentPort, agentPath);
@@ -209,7 +209,7 @@ public class Tests {
     // Call the proxy sequentially
     for (int i = 0; i < queryCount; i++) {
       callProxy(pathMap);
-      Utils.sleepForMillis(pauseMillis);
+      Utils.INSTANCE.sleepForMillis(pauseMillis);
     }
 
     // Call the proxy in parallel

@@ -28,6 +28,7 @@ import io.prometheus.common.GenericServiceListener;
 import io.prometheus.grpc.ScrapeResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import spark.ExceptionHandler;
 import spark.ExceptionHandlerImpl;
 import spark.Request;
 import spark.Response;
@@ -56,7 +57,7 @@ public class ProxyHttpService
     this.http.threadPool(this.proxy.getConfigVals().http.maxThreads,
                          this.proxy.getConfigVals().http.minThreads,
                          this.proxy.getConfigVals().http.idleTimeoutMillis);
-    this.tracer = this.proxy.isZipkinEnabled()
+    this.tracer = this.proxy.getZipkinEnabled()
                   ? this.proxy.getZipkinReporterService().newTracer("proxy-http")
                   : null;
     this.configVals = this.proxy.getConfigVals();
@@ -66,18 +67,19 @@ public class ProxyHttpService
 
   @Override
   protected void startUp() {
-    if (this.proxy.isZipkinEnabled()) {
+    if (this.proxy.getZipkinEnabled()) {
       final BraveTracing tracing = BraveTracing.create(this.proxy.getBrave());
       this.http.before(tracing.before());
-      this.http.exception(Exception.class,
-                          tracing.exception(
-                              new ExceptionHandlerImpl(Exception.class) {
-                                @Override
-                                public void handle(Exception e, Request request, Response response) {
-                                  response.status(404);
-                                  logger.error("Error in ProxyHttpService", e);
-                                }
-                              }));
+
+      final ExceptionHandler handler = tracing.exception(
+          new ExceptionHandlerImpl(Exception.class) {
+            @Override
+            public void handle(Exception e, Request request, Response response) {
+              response.status(404);
+              logger.error("Error in ProxyHttpService", e);
+            }
+          });
+      this.http.exception(Exception.class, handler);
       this.http.afterAfter(tracing.afterAfter());
     }
 
@@ -205,7 +207,7 @@ public class ProxyHttpService
   }
 
   private void updateScrapeRequests(final String type) {
-    if (this.proxy.isMetricsEnabled())
+    if (this.proxy.getMetricsEnabled())
       this.proxy.getMetrics().getScrapeRequests().labels(type).inc();
   }
 

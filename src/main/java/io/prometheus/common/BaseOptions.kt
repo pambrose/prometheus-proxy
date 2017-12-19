@@ -25,29 +25,25 @@ import io.prometheus.common.EnvVars.*
 import org.slf4j.LoggerFactory
 import java.lang.String.format
 import java.util.*
-import java.util.concurrent.atomic.AtomicReference
 
 abstract class BaseOptions protected constructor(private val programName: String,
                                                  private val argv: Array<String>,
                                                  private val envConfig: String,
                                                  private val exitOnMissingConfig: Boolean) {
 
-    private val configRef = AtomicReference<Config>()
-    private val _configVals = AtomicReference<ConfigVals>()
-    var configVals
-        get() = this._configVals.get()
-        set(configVals) = this._configVals.set(configVals)
+    private var configRef: Config? = null
+    var configVals: ConfigVals? = null
 
     @Parameter(names = arrayOf("-c", "--conf", "--config"), description = "Configuration file or url")
     private var configName: String? = null
     @Parameter(names = arrayOf("-r", "--admin"), description = "Admin servlets enabled")
-    private var adminEnabled: Boolean? = null
+    private var _adminEnabled: Boolean? = null
     @Parameter(names = arrayOf("-i", "--admin_port"), description = "Admin servlets port")
-    private var adminPort: Int? = null
+    var adminPort: Int? = null
     @Parameter(names = arrayOf("-e", "--metrics"), description = "Metrics enabled")
-    private var metricsEnabled: Boolean? = null
+    private var _metricsEnabled: Boolean? = null
     @Parameter(names = arrayOf("-m", "--metrics_port"), description = "Metrics listen port")
-    private var metricsPort: Int? = null
+    var metricsPort: Int? = null
     @Parameter(names = arrayOf("-v", "--version"), description = "Print version info and exit", validateWith = arrayOf(Utils.VersionValidator::class))
     private var version = false
     @Parameter(names = arrayOf("-u", "--usage"), help = true)
@@ -55,17 +51,17 @@ abstract class BaseOptions protected constructor(private val programName: String
     @DynamicParameter(names = arrayOf("-D"), description = "Dynamic property assignment")
     var dynamicParams: Map<String, String> = HashMap()
 
-    val isAdminEnabled: Boolean
-        get() = this.adminEnabled ?: false
+    val adminEnabled: Boolean
+        get() = this._adminEnabled ?: false
 
-    val isMetricsEnabled: Boolean
-        get() = this.metricsEnabled ?: false
+    val metricsEnabled: Boolean
+        get() = this._metricsEnabled ?: false
 
 
     protected fun parseOptions() {
-        this.parseArgs(argv)
-        this.readConfig(envConfig, exitOnMissingConfig)
-        this.configVals = ConfigVals(this.configRef.get())
+        this.parseArgs(this.argv)
+        this.readConfig(this.envConfig, this.exitOnMissingConfig)
+        this.configVals = ConfigVals(this.configRef)
         this.assignConfigVals()
     }
 
@@ -86,12 +82,11 @@ abstract class BaseOptions protected constructor(private val programName: String
             logger.error(e.message, e)
             System.exit(1)
         }
-
     }
 
     protected fun assignAdminEnabled(defaultVal: Boolean) {
-        if (this.adminEnabled == null)
-            this.adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
+        if (this._adminEnabled == null)
+            this._adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
     }
 
     protected fun assignAdminPort(defaultVal: Int) {
@@ -100,8 +95,8 @@ abstract class BaseOptions protected constructor(private val programName: String
     }
 
     protected fun assignMetricsEnabled(defaultVal: Boolean) {
-        if (this.metricsEnabled == null)
-            this.metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
+        if (this._metricsEnabled == null)
+            this._metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
     }
 
     protected fun assignMetricsPort(defaultVal: Int) {
@@ -116,7 +111,7 @@ abstract class BaseOptions protected constructor(private val programName: String
                                       ConfigFactory.load().resolve(),
                                       exitOnMissingConfig)
                 .resolve(ConfigResolveOptions.defaults())
-        this.configRef.set(config.resolve())
+        this.configRef = config.resolve()
 
         this.dynamicParams.forEach { key, value ->
             // Strip quotes
@@ -126,16 +121,8 @@ abstract class BaseOptions protected constructor(private val programName: String
                 value)
             System.setProperty(key, prop)
             val newConfig = ConfigFactory.parseString(prop, PROPS)
-            configRef.set(newConfig.withFallback(this.configRef.get()).resolve())
+            configRef = newConfig.withFallback(this.configRef).resolve()
         }
-    }
-
-    fun getAdminPort(): Int {
-        return this.adminPort!!
-    }
-
-    fun getMetricsPort(): Int {
-        return this.metricsPort!!
     }
 
     companion object {

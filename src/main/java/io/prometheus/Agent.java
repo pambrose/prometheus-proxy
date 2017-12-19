@@ -39,6 +39,7 @@ import io.prometheus.client.Summary;
 import io.prometheus.common.AdminConfig;
 import io.prometheus.common.ConfigVals;
 import io.prometheus.common.GenericService;
+import io.prometheus.common.InstrumentedThreadFactory;
 import io.prometheus.common.MetricsConfig;
 import io.prometheus.common.Utils;
 import io.prometheus.common.ZipkinConfig;
@@ -80,10 +81,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static io.grpc.ClientInterceptors.intercept;
-import static io.prometheus.common.InstrumentedThreadFactory.newInstrumentedThreadFactory;
-import static io.prometheus.common.Utils.queueHealthCheck;
-import static io.prometheus.common.Utils.sleepForMillis;
-import static io.prometheus.common.Utils.toMillis;
 import static io.prometheus.grpc.ProxyServiceGrpc.newBlockingStub;
 import static io.prometheus.grpc.ProxyServiceGrpc.newStub;
 import static java.lang.String.format;
@@ -117,27 +114,27 @@ public class Agent
 
   public Agent(final AgentOptions options, final String inProcessServerName, final boolean testMode) {
     super(options.getConfigVals(),
-          AdminConfig.create(options.isAdminEnabled(),
-                             options.getAdminPort(),
-                             options.getConfigVals().agent.admin),
-          MetricsConfig.create(options.isMetricsEnabled(),
-                               options.getMetricsPort(),
-                               options.getConfigVals().agent.metrics),
-          ZipkinConfig.create(options.getConfigVals().agent.internal.zipkin),
+          AdminConfig.Companion.create(options.getAdminEnabled(),
+                                       options.getAdminPort(),
+                                       options.getConfigVals().agent.admin),
+          MetricsConfig.Companion.create(options.getMetricsEnabled(),
+                                         options.getMetricsPort(),
+                                         options.getConfigVals().agent.metrics),
+          ZipkinConfig.Companion.create(options.getConfigVals().agent.internal.zipkin),
           testMode);
 
     this.inProcessServerName = inProcessServerName;
-    this.agentName = isNullOrEmpty(options.getAgentName()) ? format("Unnamed-%s", Utils.getHostName())
+    this.agentName = isNullOrEmpty(options.getAgentName()) ? format("Unnamed-%s", Utils.INSTANCE.getHostName())
                                                            : options.getAgentName();
     final int queueSize = this.getConfigVals().internal.scrapeResponseQueueSize;
     this.scrapeResponseQueue = new ArrayBlockingQueue<>(queueSize);
 
-    this.metrics = this.isMetricsEnabled() ? new AgentMetrics(this) : null;
+    this.metrics = this.getMetricsEnabled() ? new AgentMetrics(this) : null;
 
-    this.readRequestsExecutorService = newCachedThreadPool(this.isMetricsEnabled()
-                                                           ? newInstrumentedThreadFactory("agent_fetch",
-                                                                                          "Agent fetch",
-                                                                                          true)
+    this.readRequestsExecutorService = newCachedThreadPool(this.getMetricsEnabled()
+                                                           ? InstrumentedThreadFactory.Companion.newInstrumentedThreadFactory("agent_fetch",
+                                                                                                                              "Agent fetch",
+                                                                                                                              true)
                                                            : new ThreadFactoryBuilder().setNameFormat("agent_fetch-%d")
                                                                                        .setDaemon(true)
                                                                                        .build());
@@ -172,8 +169,8 @@ public class Agent
   public static void main(final String[] argv) {
     final AgentOptions options = new AgentOptions(argv, true);
 
-    logger.info(Utils.getBanner("banners/agent.txt"));
-    logger.info(Utils.getVersionDesc(false));
+    logger.info(Utils.INSTANCE.getBanner("banners/agent.txt"));
+    logger.info(Utils.INSTANCE.getVersionDesc(false));
 
     final Agent agent = new Agent(options, null, false);
     agent.startAsync();
@@ -218,8 +215,8 @@ public class Agent
     super.registerHealthChecks();
     this.getHealthCheckRegistry()
         .register("scrape_response_queue_check",
-                  queueHealthCheck(scrapeResponseQueue,
-                                   this.getConfigVals().internal.scrapeResponseQueueUnhealthySize));
+                  Utils.INSTANCE.queueHealthCheck(scrapeResponseQueue,
+                                                  this.getConfigVals().internal.scrapeResponseQueueUnhealthySize));
   }
 
   @Override
@@ -258,9 +255,9 @@ public class Agent
           () -> {
             while (isRunning() && !disconnected.get()) {
               final long timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSent.get();
-              if (timeSinceLastWriteMillis > toMillis(maxInactivitySecs))
+              if (timeSinceLastWriteMillis > Utils.INSTANCE.toMillis(maxInactivitySecs))
                 this.sendHeartBeat(disconnected);
-              sleepForMillis(threadPauseMillis);
+              Utils.INSTANCE.sleepForMillis(threadPauseMillis);
             }
             logger.info("Heartbeat completed");
           });
@@ -298,8 +295,8 @@ public class Agent
   }
 
   private void updateScrapeCounter(final String type) {
-    if (this.isMetricsEnabled())
-      this.getMetrics().scrapeRequests.labels(type).inc();
+    if (this.getMetricsEnabled())
+      this.getMetrics().getScrapeRequests().labels(type).inc();
   }
 
   private ScrapeResponse fetchUrl(final ScrapeRequest scrapeRequest) {
@@ -320,8 +317,8 @@ public class Agent
                            .build();
     }
 
-    final Summary.Timer requestTimer = this.isMetricsEnabled()
-                                       ? this.getMetrics().scrapeRequestLatency.labels(this.agentName).startTimer()
+    final Summary.Timer requestTimer = this.getMetricsEnabled()
+                                       ? this.getMetrics().getScrapeRequestLatency().labels(this.agentName).startTimer()
                                        : null;
     String reason = "None";
     try {
@@ -370,13 +367,13 @@ public class Agent
       logger.info("Connecting to proxy at {}...", this.getProxyHost());
       this.getBlockingStub().connectAgent(Empty.getDefaultInstance());
       logger.info("Connected to proxy at {}", this.getProxyHost());
-      if (this.isMetricsEnabled())
-        this.getMetrics().connects.labels("success").inc();
+      if (this.getMetricsEnabled())
+        this.getMetrics().getConnects().labels("success").inc();
       return true;
     }
     catch (StatusRuntimeException e) {
-      if (this.isMetricsEnabled())
-        this.getMetrics().connects.labels("failure").inc();
+      if (this.getMetricsEnabled())
+        this.getMetrics().getConnects().labels("failure").inc();
       logger.info("Cannot connect to proxy at {} [{}]", this.getProxyHost(), e.getMessage());
       return false;
     }
@@ -387,7 +384,7 @@ public class Agent
     final RegisterAgentRequest request = RegisterAgentRequest.newBuilder()
                                                              .setAgentId(this.getAgentId())
                                                              .setAgentName(this.agentName)
-                                                             .setHostname(Utils.getHostName())
+                                                             .setHostname(Utils.INSTANCE.getHostName())
                                                              .build();
     final RegisterAgentResponse response = this.getBlockingStub().registerAgent(request);
     this.markMsgSent();
@@ -588,8 +585,8 @@ public class Agent
                       .add("agentId", this.getAgentId())
                       .add("agentName", this.agentName)
                       .add("proxyHost", this.getProxyHost())
-                      .add("adminService", this.isAdminEnabled() ? this.getAdminService() : "Disabled")
-                      .add("metricsService", this.isMetricsEnabled() ? this.getMetricsService() : "Disabled")
+                      .add("adminService", this.getAdminEnabled() ? this.getAdminService() : "Disabled")
+                      .add("metricsService", this.getMetricsEnabled() ? this.getMetricsService() : "Disabled")
                       .toString();
   }
 }

@@ -43,8 +43,8 @@ public class TestUtils {
     args.add(format("-Dproxy.metrics.enabled=%s", metricsEnabled));
     ProxyOptions options = new ProxyOptions(args);
 
-    logger.info(Utils.getBanner("banners/proxy.txt"));
-    logger.info(Utils.getVersionDesc(false));
+    logger.info(Utils.INSTANCE.getBanner("banners/proxy.txt"));
+    logger.info(Utils.INSTANCE.getVersionDesc(false));
 
     Proxy proxy = new Proxy(options, TestConstants.PROXY_PORT, serverName, true);
     proxy.startAsync();
@@ -61,8 +61,8 @@ public class TestUtils {
     args.add(format("-Dagent.metrics.enabled=%s", metricsEnabled));
     AgentOptions options = new AgentOptions(args, false);
 
-    logger.info(Utils.getBanner("banners/agent.txt"));
-    logger.info(Utils.getVersionDesc(false));
+    logger.info(Utils.INSTANCE.getBanner("banners/agent.txt"));
+    logger.info(Utils.INSTANCE.getVersionDesc(false));
 
     Agent agent = new Agent(options, serverName, true);
     agent.startAsync();

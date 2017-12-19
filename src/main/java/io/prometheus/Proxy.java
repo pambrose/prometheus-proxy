@@ -43,7 +43,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static io.prometheus.common.Utils.mapHealthCheck;
 import static java.lang.String.format;
 
 public class Proxy
@@ -68,16 +67,16 @@ public class Proxy
                final String inProcessServerName,
                final boolean testMode) {
     super(options.getConfigVals(),
-          AdminConfig.create(options.isAdminEnabled(),
-                             options.getAdminPort(),
-                             options.getConfigVals().proxy.admin),
-          MetricsConfig.create(options.isMetricsEnabled(),
-                               options.getMetricsPort(),
-                               options.getConfigVals().proxy.metrics),
-          ZipkinConfig.create(options.getConfigVals().proxy.internal.zipkin),
+          AdminConfig.Companion.create(options.getAdminEnabled(),
+                                       options.getAdminPort(),
+                                       options.getConfigVals().proxy.admin),
+          MetricsConfig.Companion.create(options.getMetricsEnabled(),
+                                         options.getMetricsPort(),
+                                         options.getConfigVals().proxy.metrics),
+          ZipkinConfig.Companion.create(options.getConfigVals().proxy.internal.zipkin),
           testMode);
 
-    this.metrics = this.isMetricsEnabled() ? new ProxyMetrics(this) : null;
+    this.metrics = this.getMetricsEnabled() ? new ProxyMetrics(this) : null;
     this.grpcService = isNullOrEmpty(inProcessServerName) ? ProxyGrpcService.Companion.create(this, options.getAgentPort())
                                                           : ProxyGrpcService.Companion.create(this, inProcessServerName);
     this.httpService = new ProxyHttpService(this, proxyPort);
@@ -91,8 +90,8 @@ public class Proxy
   public static void main(final String[] argv) {
     final ProxyOptions options = new ProxyOptions(argv);
 
-    logger.info(Utils.getBanner("banners/proxy.txt"));
-    logger.info(Utils.getVersionDesc(false));
+    logger.info(Utils.INSTANCE.getBanner("banners/proxy.txt"));
+    logger.info(Utils.INSTANCE.getVersionDesc(false));
 
     final Proxy proxy = new Proxy(options, options.getProxyPort(), null, false);
     proxy.startAsync();
@@ -124,7 +123,7 @@ public class Proxy
   @Override
   protected void run() {
     while (this.isRunning()) {
-      Utils.sleepForMillis(500);
+      Utils.INSTANCE.sleepForMillis(500);
     }
   }
 
@@ -134,7 +133,7 @@ public class Proxy
     this.getHealthCheckRegistry().register("grpc_service", this.grpcService.getHealthCheck());
     this.getHealthCheckRegistry()
         .register("scrape_response_map_check",
-                  mapHealthCheck(scrapeRequestMap, this.getConfigVals().internal.scrapeRequestMapUnhealthySize));
+                  Utils.INSTANCE.mapHealthCheck(scrapeRequestMap, this.getConfigVals().internal.scrapeRequestMapUnhealthySize));
     this.getHealthCheckRegistry()
         .register("agent_scrape_request_queue",
                   new HealthCheck() {
@@ -262,8 +261,8 @@ public class Proxy
   public String toString() {
     return MoreObjects.toStringHelper(this)
                       .add("proxyPort", this.httpService.getPort())
-                      .add("adminService", this.isAdminEnabled() ? this.getAdminService() : "Disabled")
-                      .add("metricsService", this.isMetricsEnabled() ? this.getMetricsService() : "Disabled")
+                      .add("adminService", this.getAdminEnabled() ? this.getAdminService() : "Disabled")
+                      .add("metricsService", this.getMetricsEnabled() ? this.getMetricsService() : "Disabled")
                       .toString();
   }
 }

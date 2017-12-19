@@ -17,6 +17,7 @@
 package io.prometheus;
 
 import io.prometheus.client.CollectorRegistry;
+import io.prometheus.common.Utils;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -27,7 +28,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.concurrent.TimeoutException;
 
-import static io.prometheus.common.Utils.sleepForSecs;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class NettyTestWithAdminMetricsTest {
@@ -47,7 +47,7 @@ public class NettyTestWithAdminMetricsTest {
     AGENT.awaitInitialConnection(10, SECONDS);
 
     // Wait long enough to trigger heartbeat for code coverage
-    sleepForSecs(15);
+    Utils.INSTANCE.sleepForSecs(15);
   }
 
   @AfterClass
