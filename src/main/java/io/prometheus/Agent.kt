@@ -109,16 +109,11 @@ class Agent(options: AgentOptions,
         this.reconnectLimiter = RateLimiter.create(1.0 / this.configVals.internal.reconectPauseSecs)
         this.reconnectLimiter.acquire()  // Prime the limiter
 
-        this.pathConfigs = this.configVals.pathConfigs
-                .map {
-                    mapOf("name" to it.name,
-                          "path" to it.path,
-                          "url" to it.url)
-                }
-                .onEach {
-                    logger.info("Proxy path /{} will be assigned to {}", it["path"], it["url"])
-                }
-                .toList()
+        this.pathConfigs =
+                this.configVals.pathConfigs
+                        .map { mapOf("name" to it.name, "path" to it.path, "url" to it.url) }
+                        .onEach { logger.info("Proxy path /{} will be assigned to {}", it["path"], it["url"]) }
+                        .toList()
 
 
         if (options.proxyHostname!!.contains(":")) {
@@ -294,7 +289,8 @@ class Agent(options: AgentOptions,
 
         this.updateScrapeCounter("unsuccessful")
 
-        return scrapeResponse.setValid(false)
+        return scrapeResponse
+                .setValid(false)
                 .setReason(reason)
                 .setStatusCode(statusCode)
                 .setText("")
