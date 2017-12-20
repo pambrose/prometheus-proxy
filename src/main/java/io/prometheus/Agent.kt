@@ -441,9 +441,7 @@ class Agent(options: AgentOptions,
                         disconnected.set(true)
                     }
 
-                    override fun onCompleted() {
-                        disconnected.set(true)
-                    }
+                    override fun onCompleted() = disconnected.set(true)
                 })
 
         while (!disconnected.get()) {
