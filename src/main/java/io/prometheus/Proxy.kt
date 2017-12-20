@@ -25,6 +25,7 @@ import io.prometheus.common.*
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.proxy.*
 import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentMap
 
 class Proxy(options: ProxyOptions,
             proxyPort: Int,
@@ -42,7 +43,7 @@ class Proxy(options: ProxyOptions,
     private val pathMap = Maps.newConcurrentMap<String, AgentContext>() // Map path to AgentContext
     private val scrapeRequestMap = Maps.newConcurrentMap<Long, ScrapeRequestWrapper>() // Map scrape_id to agent_id
 
-    val agentContextMap = Maps.newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
+    val agentContextMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
     val metrics = if (this.metricsEnabled) ProxyMetrics(this) else null
 
     private val httpService = ProxyHttpService(this, proxyPort)

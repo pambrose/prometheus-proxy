@@ -68,10 +68,17 @@ class Agent(options: AgentOptions,
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(this.configVals.internal.scrapeResponseQueueSize)
     private val agentName: String? = if (options.agentName.isNullOrBlank()) "Unnamed-${Utils.hostName}" else options.agentName
     private val metrics: AgentMetrics? = if (this.metricsEnabled) AgentMetrics(this) else null
+    private val readRequestsExecutorService: ExecutorService = newCachedThreadPool(if (this.metricsEnabled)
+                                                                                       InstrumentedThreadFactory.newInstrumentedThreadFactory("agent_fetch",
+                                                                                                                                              "Agent fetch",
+                                                                                                                                              true)
+                                                                                   else
+                                                                                       ThreadFactoryBuilder().setNameFormat("agent_fetch-%d")
+                                                                                               .setDaemon(true)
+                                                                                               .build())
 
     private val hostname: String?
     private val port: Int
-    private val readRequestsExecutorService: ExecutorService
     private val reconnectLimiter: RateLimiter
     private val pathConfigs: List<Map<String, String>>
 
@@ -93,16 +100,6 @@ class Agent(options: AgentOptions,
         get() = this.genericConfigVals.agent
 
     init {
-
-        this.readRequestsExecutorService =
-                newCachedThreadPool(if (this.metricsEnabled)
-                                        InstrumentedThreadFactory.newInstrumentedThreadFactory("agent_fetch",
-                                                                                               "Agent fetch",
-                                                                                               true)
-                                    else
-                                        ThreadFactoryBuilder().setNameFormat("agent_fetch-%d")
-                                                .setDaemon(true)
-                                                .build())
 
         logger.info("Assigning proxy reconnect pause time to ${this.configVals.internal.reconectPauseSecs} secs")
         this.reconnectLimiter = RateLimiter.create(1.0 / this.configVals.internal.reconectPauseSecs)

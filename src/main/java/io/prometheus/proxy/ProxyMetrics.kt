@@ -26,32 +26,32 @@ import io.prometheus.common.SamplerGaugeData
 
 class ProxyMetrics(proxy: Proxy) {
 
-    val scrapeRequests =
+    val scrapeRequests: Counter =
             Counter.build()
                     .name("proxy_scrape_requests")
                     .help("Proxy scrape requests")
                     .labelNames("type")
                     .register()
 
-    val connects =
+    val connects: Counter =
             Counter.build()
                     .name("proxy_connect_count")
                     .help("Proxy connect count")
                     .register()
 
-    val agentEvictions =
+    val agentEvictions: Counter =
             Counter.build()
                     .name("proxy_eviction_count")
                     .help("Proxy eviction count")
                     .register()
 
-    val heartbeats =
+    val heartbeats: Counter =
             Counter.build()
                     .name("proxy_heartbeat_count")
                     .help("Proxy heartbeat count")
                     .register()
 
-    val scrapeRequestLatency =
+    val scrapeRequestLatency: Summary =
             Summary.build()
                     .name("proxy_scrape_request_latency_seconds")
                     .help("Proxy scrape request latency in seconds")
