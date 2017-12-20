@@ -25,7 +25,6 @@ import io.prometheus.common.*
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.proxy.*
 import org.slf4j.LoggerFactory
-import java.util.stream.Collectors
 
 class Proxy(options: ProxyOptions,
             proxyPort: Int,
@@ -62,7 +61,7 @@ class Proxy(options: ProxyOptions,
         get() = this.genericConfigVals.proxy
 
     val totalAgentRequestQueueSize: Int
-        get() = this.agentContextMap.values.stream().mapToInt { it.scrapeRequestQueueSize() }.sum()
+        get() = this.agentContextMap.values.map { it.scrapeRequestQueueSize() }.sum()
 
     init {
         this.metrics = if (this.metricsEnabled) ProxyMetrics(this) else null
@@ -115,10 +114,9 @@ class Proxy(options: ProxyOptions,
                               override fun check(): HealthCheck.Result {
                                   val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
                                   val vals = agentContextMap.entries
-                                          .stream()
                                           .filter { it.value.scrapeRequestQueueSize() >= unhealthySize }
                                           .map { "${it.value} ${it.value.scrapeRequestQueueSize()}" }
-                                          .collect(Collectors.toList())
+                                          .toList()
                                   return if (vals.isEmpty())
                                       HealthCheck.Result.healthy()
                                   else

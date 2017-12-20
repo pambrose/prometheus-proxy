@@ -31,7 +31,6 @@ import com.google.common.util.concurrent.ServiceManager
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
-import java.util.stream.Collectors
 
 abstract class GenericService protected constructor(protected val genericConfigVals: ConfigVals,
                                                     adminConfig: AdminConfig,
@@ -151,11 +150,10 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                 else {
                                     val vals = serviceManager!!.servicesByState()
                                             .entries()
-                                            .stream()
                                             .filter { it.key !== Service.State.RUNNING }
-                                            .peek { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
+                                            .onEach { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
                                             .map { "${it.key}: ${it.value}" }
-                                            .collect(Collectors.toList())
+                                            .toList()
 
                                     HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
                                 }

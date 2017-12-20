@@ -43,7 +43,6 @@ import java.util.concurrent.Executors.newCachedThreadPool
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
-import java.util.stream.Collectors
 
 class Agent(options: AgentOptions,
             private val inProcessServerName: String?,
@@ -110,16 +109,16 @@ class Agent(options: AgentOptions,
         this.reconnectLimiter = RateLimiter.create(1.0 / this.configVals.internal.reconectPauseSecs)
         this.reconnectLimiter.acquire()  // Prime the limiter
 
-        this.pathConfigs = this.configVals.pathConfigs.stream()
+        this.pathConfigs = this.configVals.pathConfigs
                 .map {
                     mapOf("name" to it.name,
                           "path" to it.path,
                           "url" to it.url)
                 }
-                .peek {
+                .onEach {
                     logger.info("Proxy path /{} will be assigned to {}", it["path"], it["url"])
                 }
-                .collect(Collectors.toList())
+                .toList()
 
 
         if (options.proxyHostname!!.contains(":")) {

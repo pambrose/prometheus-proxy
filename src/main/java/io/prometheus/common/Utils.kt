@@ -38,7 +38,6 @@ import java.net.URL
 import java.net.UnknownHostException
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.stream.Collectors
 
 object Utils {
 
@@ -75,13 +74,13 @@ object Utils {
 
                 lineNum.set(0)
 
-                val vals: List<String> = lines.stream()
+                val vals = lines
                         .filter {
                             val currLine = lineNum.getAndIncrement()
                             currLine >= first.get() && currLine <= last.get()
                         }
                         .map { "     " + it }
-                        .collect(Collectors.toList())
+                        .toList()
 
                 val noNulls = Joiner.on("\n")
                         .skipNulls()

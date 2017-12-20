@@ -25,7 +25,6 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
     private fun getRemoteAddr(attributes: Attributes): String {
         val key = attributes.keys()
-                .asSequence()
                 .filter { "remote-addr" == it.toString() }
                 .first()
 
