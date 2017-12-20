@@ -28,6 +28,7 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
                 .stream()
                 .filter { key -> "remote-addr" == key.toString() }
                 .findFirst()
+
         if (keyOptional.isPresent) {
             val key = keyOptional.get() as Attributes.Key<Any>
             val v = attributes.get(key)

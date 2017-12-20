@@ -53,7 +53,6 @@ class ProxyMetrics(proxy: Proxy) {
             .register()
 
     init {
-
         Gauge.build()
                 .name("proxy_start_time_seconds")
                 .help("Proxy start time in seconds")

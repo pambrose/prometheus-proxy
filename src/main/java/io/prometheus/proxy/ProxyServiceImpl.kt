@@ -68,10 +68,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                 .setValid(agentContext != null)
                 .setReason("Invalid agentId: $agentId")
                 .setPathCount(this.proxy.pathMapSize())
-                .setPathId(if (agentContext != null)
-                               PATH_ID_GENERATOR.getAndIncrement()
-                           else
-                               -1)
+                .setPathId(if (agentContext != null) PATH_ID_GENERATOR.getAndIncrement() else -1)
                 .build()
         if (agentContext == null) {
             logger.error("Missing AgentContext for agentId: $agentId")
@@ -156,10 +153,12 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                     logger.error("Missing ScrapeRequestWrapper for scrape_id: $scrapeId")
                 }
                 else {
-                    scrapeRequest.setScrapeResponse(response)
-                            .markComplete()
-                            .annotateSpan("received-from-agent")
-                            .agentContext.markActivity()
+                    with(scrapeRequest) {
+                        setScrapeResponse(response)
+                        markComplete()
+                        annotateSpan("received-from-agent")
+                        agentContext.markActivity()
+                    }
                 }
             }
 

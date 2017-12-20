@@ -26,8 +26,10 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
 
     @Parameter(names = arrayOf("-p", "--port"), description = "Listen port for Prometheus")
     var proxyPort: Int? = null
+        private set
     @Parameter(names = arrayOf("-a", "--agent_port"), description = "Listen port for agents")
     var agentPort: Int? = null
+        private set
 
     constructor(args: List<String>?) : this(Iterables.toArray<String>(args ?: emptyList<String>(), String::class.java))
 

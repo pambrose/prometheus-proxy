@@ -74,7 +74,7 @@ object Tests {
         val originalSize = agent.pathMapSize()
 
         IntStream.range(0, TestConstants.REPS)
-                .forEach { `val` ->
+                .forEach {
                     TestConstants.EXECUTOR_SERVICE.submit(
                             {
                                 val path = "test-${cnt.getAndIncrement()}"
@@ -133,7 +133,7 @@ object Tests {
 
         val http = Service.ignite()
         http.port(agentPort)
-                .get("/$agentPath") { req, res ->
+                .get("/$agentPath") { _, res ->
                     res.type("text/plain")
                     Utils.sleepForSecs(10)
                     "I timed out"
@@ -169,7 +169,7 @@ object Tests {
                     val http = Service.ignite()
                     http.port(startingPort + i)
                             .threadPool(30, 10, 1000)
-                            .get("/agent-$i") { req, res ->
+                            .get("/agent-$i") { _, res ->
                                 res.type("text/plain")
                                 "value: $i"
                             }
@@ -196,24 +196,24 @@ object Tests {
         val threadedQueryCount = 100
         val latch = CountDownLatch(threadedQueryCount)
         IntStream.range(0, threadedQueryCount)
-                .forEach { i ->
-                    TestConstants.EXECUTOR_SERVICE.submit(
-                            {
-                                try {
-                                    callProxy(pathMap)
-                                    latch.countDown()
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            })
+                .forEach {
+                    TestConstants.EXECUTOR_SERVICE
+                            .submit({
+                                        try {
+                                            callProxy(pathMap)
+                                            latch.countDown()
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+                                    })
                 }
 
         assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue()
 
         val errorCnt = AtomicInteger()
-        pathMap.forEach { k, v ->
+        pathMap.forEach {
             try {
-                agent.unregisterPath("proxy-$k")
+                agent.unregisterPath("proxy-${it.key}")
             } catch (e: RequestFailureException) {
                 errorCnt.incrementAndGet()
             }

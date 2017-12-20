@@ -33,7 +33,9 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) : BaseOpti
     var agentName: String? = null
         private set
 
-    constructor(args: List<String>?, exitOnMissingConfig: Boolean) : this(Iterables.toArray<String>(args ?: emptyList<String>(), String::class.java), exitOnMissingConfig)
+    constructor(args: List<String>?, exitOnMissingConfig: Boolean) : this(Iterables.toArray<String>(args ?: emptyList<String>(),
+                                                                                                    String::class.java),
+                                                                          exitOnMissingConfig)
 
     init {
         this.parseOptions()

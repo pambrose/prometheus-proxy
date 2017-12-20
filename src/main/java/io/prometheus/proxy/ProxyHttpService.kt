@@ -40,10 +40,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
         this.http.threadPool(this.proxy.configVals.http.maxThreads,
                              this.proxy.configVals.http.minThreads,
                              this.proxy.configVals.http.idleTimeoutMillis)
-        this.tracer = if (this.proxy.zipkinEnabled)
-            this.proxy.zipkinReporterService!!.newTracer("proxy-http")
-        else
-            null
+        this.tracer = this.proxy.zipkinReporterService?.newTracer("proxy-http")
         this.configVals = this.proxy.configVals
 
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
@@ -69,13 +66,12 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                       Route { req, res ->
                           res.header("cache-control", "must-revalidate,no-cache,no-store")
 
-                          val span = if (this@ProxyHttpService.tracer != null)
-                              this@ProxyHttpService.tracer.newTrace()
-                                      .name("round-trip")
-                                      .tag("version", "1.2.5")
-                                      .start()
-                          else
-                              null
+                          val span =
+                                  tracer?.newTrace()
+                                          ?.name("round-trip")
+                                          ?.tag("version", "1.2.5")
+                                          ?.start()
+
                           try {
                               if (!this@ProxyHttpService.proxy.isRunning) {
                                   logger.error("Proxy stopped")
@@ -133,7 +129,8 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     private fun submitScrapeRequest(req: Request,
                                     res: Response,
                                     agentContext: AgentContext?,
-                                    path: String, span: Span?): String? {
+                                    path: String,
+                                    span: Span?): String? {
         val scrapeRequest = ScrapeRequestWrapper(this.proxy,
                                                  agentContext!!,
                                                  span,

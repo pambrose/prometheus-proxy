@@ -33,26 +33,24 @@ class PathContext(private val okHttpClient: OkHttpClient,
     private val request: Request.Builder = Request.Builder().url(this.url)
 
     @Throws(IOException::class)
-    fun fetchUrl(scrapeRequest: ScrapeRequest): Response {
-        try {
-            logger.debug("Fetching $this")
-            val builder = if (!isNullOrEmpty(scrapeRequest.accept))
-                this.request.header(ACCEPT, scrapeRequest.accept)
-            else
-                this.request
-            return this.okHttpClient.newCall(builder.build()).execute()
-        } catch (e: IOException) {
-            logger.info("Failed HTTP request: ${this.url} [${e.javaClass.simpleName}: ${e.message}]")
-            throw e
-        }
-    }
+    fun fetchUrl(scrapeRequest: ScrapeRequest): Response =
+            try {
+                logger.debug("Fetching $this")
+                val builder = if (!isNullOrEmpty(scrapeRequest.accept))
+                    this.request.header(ACCEPT, scrapeRequest.accept)
+                else
+                    this.request
+                this.okHttpClient.newCall(builder.build()).execute()
+            } catch (e: IOException) {
+                logger.info("Failed HTTP request: ${this.url} [${e.javaClass.simpleName}: ${e.message}]")
+                throw e
+            }
 
-    override fun toString(): String {
-        return MoreObjects.toStringHelper(this)
-                .add("path", "/" + path)
-                .add("url", url)
-                .toString()
-    }
+    override fun toString(): String =
+            MoreObjects.toStringHelper(this)
+                    .add("path", "/" + path)
+                    .add("url", url)
+                    .toString()
 
     companion object {
         private val logger = LoggerFactory.getLogger(PathContext::class.java)

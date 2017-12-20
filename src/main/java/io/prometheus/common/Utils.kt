@@ -52,7 +52,6 @@ object Utils {
             } catch (e: UnknownHostException) {
                 return "Unknown"
             }
-
         }
 
     fun getBanner(filename: String): String {
@@ -111,7 +110,7 @@ object Utils {
             return fallback
         }
 
-        if (isUrlPrefix(configName)) {
+        if (configName.isUrlPrefix()) {
             try {
                 val configSyntax = getConfigSyntax(configName)
                 return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
@@ -136,67 +135,58 @@ object Utils {
                                  "Exception: ${e.javaClass.simpleName} - ${e.message}",
                              e)
             }
-
         }
 
         System.exit(1)
         return fallback // Never reached
     }
 
-    private fun getConfigSyntax(configName: String): ConfigSyntax {
-        return if (isJsonSuffix(configName))
-            ConfigSyntax.JSON
-        else if (isPropertiesSuffix(configName))
-            ConfigSyntax.PROPERTIES
-        else
-            ConfigSyntax.CONF
-    }
+    private fun getConfigSyntax(configName: String): ConfigSyntax =
+            if (configName.isJsonSuffix())
+                ConfigSyntax.JSON
+            else if (configName.isPropertiesSuffix())
+                ConfigSyntax.PROPERTIES
+            else
+                ConfigSyntax.CONF
 
-    private fun isUrlPrefix(str: String): Boolean {
-        return str.toLowerCase().startsWith("http://") || str.toLowerCase().startsWith("https://")
-    }
+    private fun String.isUrlPrefix(): Boolean =
+            this.toLowerCase().startsWith("http://") || this.toLowerCase().startsWith("https://")
 
-    private fun isJsonSuffix(str: String): Boolean {
-        return str.toLowerCase().endsWith(".json") || str.toLowerCase().endsWith(".jsn")
-    }
+    private fun String.isJsonSuffix(): Boolean =
+            this.toLowerCase().endsWith(".json") || this.toLowerCase().endsWith(".jsn")
 
-    private fun isPropertiesSuffix(str: String): Boolean {
-        return str.toLowerCase().endsWith(".properties") || str.toLowerCase().endsWith(".props")
-    }
+    private fun String.isPropertiesSuffix(): Boolean =
+            this.toLowerCase().endsWith(".properties") || this.toLowerCase().endsWith(".props")
 
-    fun queueHealthCheck(queue: Queue<*>, size: Int): HealthCheck {
-        return object : HealthCheck() {
+    fun queueHealthCheck(queue: Queue<*>, size: Int): HealthCheck =
+            object : HealthCheck() {
             @Throws(Exception::class)
             override fun check(): HealthCheck.Result {
                 return if (queue.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", queue.size)
             }
         }
-    }
 
-    fun mapHealthCheck(map: Map<*, *>, size: Int): HealthCheck {
-        return object : HealthCheck() {
+    fun mapHealthCheck(map: Map<*, *>, size: Int): HealthCheck =
+            object : HealthCheck() {
             @Throws(Exception::class)
             override fun check(): HealthCheck.Result {
                 return if (map.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", map.size)
             }
         }
-    }
 
-    fun sleepForMillis(millis: Long) {
+    fun sleepForMillis(millis: Long) =
         try {
             Thread.sleep(millis)
         } catch (e: InterruptedException) {
             // Ignore
         }
-    }
 
-    fun sleepForSecs(secs: Long) {
+    fun sleepForSecs(secs: Long) =
         try {
-            Thread.sleep(toMillis(secs))
+            Thread.sleep(secs.toMillis())
         } catch (e: InterruptedException) {
             // Ignore
         }
-    }
 
     fun getVersionDesc(asJson: Boolean): String {
         val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
@@ -206,20 +196,11 @@ object Utils {
             """Version: ${annotation.version} Release Date: ${annotation.date}"""
     }
 
-    fun shutDownHookAction(service: Service): Thread {
-        return Thread {
+    fun shutDownHookAction(service: Service): Thread =
+            Thread {
             JCommander.getConsole().println("*** ${service.javaClass.simpleName} shutting down ***")
             service.stopAsync()
             JCommander.getConsole().println("*** ${service.javaClass.simpleName} shut down complete ***")
-        }
-    }
-
-    fun toMillis(secs: Long): Long {
-        return secs * 1000
-    }
-
-    fun toSecs(millis: Long): Long {
-        return millis / 1000
     }
 
     class VersionValidator : IParameterValidator {
@@ -230,3 +211,8 @@ object Utils {
         }
     }
 }
+
+fun Long.toMillis(): Long = this * 1000
+
+fun Long.toSecs(): Long = this / 1000
+

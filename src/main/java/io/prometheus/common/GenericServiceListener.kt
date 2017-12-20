@@ -47,7 +47,6 @@ class GenericServiceListener(private val service: Service) : Service.Listener() 
     }
 
     companion object {
-
         private val logger = LoggerFactory.getLogger(GenericServiceListener::class.java)
     }
 }

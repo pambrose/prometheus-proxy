@@ -44,18 +44,13 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
     }
 
     @Throws(Exception::class)
-    override fun startUp() {
-        this.server.start()
-    }
+    override fun startUp() = this.server.start()
 
     @Throws(Exception::class)
-    override fun shutDown() {
-        this.server.stop()
-    }
+    override fun shutDown() = this.server.stop()
 
-    override fun toString(): String {
-        return MoreObjects.toStringHelper(this)
-                .add("url", "http://localhost:${this.port}/${this.path}")
-                .toString()
-    }
+    override fun toString(): String =
+            MoreObjects.toStringHelper(this)
+                    .add("url", "http://localhost:${this.port}/${this.path}")
+                    .toString()
 }

@@ -90,19 +90,15 @@ class Proxy(options: ProxyOptions,
         super.startUp()
         this.grpcService.startAsync()
         this.httpService.startAsync()
+        this.agentCleanupService?.startAsync() ?: logger.info("Agent eviction thread not started")
 
-        if (this.agentCleanupService != null)
-            this.agentCleanupService.startAsync()
-        else
-            logger.info("Agent eviction thread not started")
     }
 
     @Throws(Exception::class)
     override fun shutDown() {
         this.grpcService.stopAsync()
         this.httpService.stopAsync()
-        if (this.agentCleanupService != null)
-            this.agentCleanupService.stopAsync()
+        this.agentCleanupService?.stopAsync()
         super.shutDown()
     }
 

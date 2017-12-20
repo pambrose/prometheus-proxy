@@ -41,7 +41,8 @@ class ScrapeRequestWrapper(proxy: Proxy,
     private val complete = CountDownLatch(1)
     private val scrapeResponseRef = AtomicReference<ScrapeResponse>()
 
-    val agentContext: AgentContext
+    val agentContext: AgentContext = Preconditions.checkNotNull(agentContext)
+
     private val requestTimer: Summary.Timer?
     val scrapeRequest: ScrapeRequest
 
@@ -52,7 +53,6 @@ class ScrapeRequestWrapper(proxy: Proxy,
         get() = this.scrapeResponseRef.get()
 
     init {
-        this.agentContext = Preconditions.checkNotNull(agentContext)
         this.requestTimer = if (proxy.metricsEnabled) proxy.metrics!!.scrapeRequestLatency.startTimer() else null
         var builder = ScrapeRequest.newBuilder()
                 .setAgentId(agentContext.agentId)
@@ -63,26 +63,17 @@ class ScrapeRequestWrapper(proxy: Proxy,
         this.scrapeRequest = builder.build()
     }
 
-    fun annotateSpan(value: String): ScrapeRequestWrapper {
-        if (this.rootSpan != null)
-            this.rootSpan.annotate(value)
-        return this
+    fun annotateSpan(value: String) {
+        this.rootSpan?.annotate(value)
     }
 
-    fun setScrapeResponse(scrapeResponse: ScrapeResponse): ScrapeRequestWrapper {
-        this.scrapeResponseRef.set(scrapeResponse)
-        return this
-    }
+    fun setScrapeResponse(scrapeResponse: ScrapeResponse) = this.scrapeResponseRef.set(scrapeResponse)
 
-    fun ageInSecs(): Long {
-        return (System.currentTimeMillis() - this.createTime) / 1000
-    }
+    fun ageInSecs(): Long = (System.currentTimeMillis() - this.createTime) / 1000
 
-    fun markComplete(): ScrapeRequestWrapper {
-        if (this.requestTimer != null)
-            this.requestTimer.observeDuration()
+    fun markComplete() {
+        this.requestTimer?.observeDuration()
         this.complete.countDown()
-        return this
     }
 
     fun waitUntilCompleteMillis(waitMillis: Long): Boolean {
@@ -95,15 +86,13 @@ class ScrapeRequestWrapper(proxy: Proxy,
         return false
     }
 
-    override fun toString(): String {
-        return MoreObjects.toStringHelper(this)
+    override fun toString(): String =
+            MoreObjects.toStringHelper(this)
                 .add("scrapeId", scrapeRequest.scrapeId)
                 .add("path", scrapeRequest.path)
                 .toString()
-    }
 
     companion object {
-
         private val logger = LoggerFactory.getLogger(ScrapeRequestWrapper::class.java)
         private val SCRAPE_ID_GENERATOR = AtomicLong(0)
     }

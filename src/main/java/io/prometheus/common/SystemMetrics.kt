@@ -45,5 +45,4 @@ object SystemMetrics {
             initialized = true
         }
     }
-
 }

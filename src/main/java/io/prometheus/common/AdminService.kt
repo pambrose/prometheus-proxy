@@ -33,11 +33,9 @@ class AdminService(service: GenericService,
                    private val versionPath: String,
                    private val healthCheckPath: String,
                    private val threadDumpPath: String) : AbstractIdleService() {
-    private val server: Server
+    private val server: Server = Server(this.port)
 
     init {
-        this.server = Server(this.port)
-
         val context = ServletContextHandler()
         context.contextPath = "/"
         this.server.handler = context
@@ -57,14 +55,10 @@ class AdminService(service: GenericService,
     }
 
     @Throws(Exception::class)
-    override fun startUp() {
-        this.server.start()
-    }
+    override fun startUp() = this.server.start()
 
     @Throws(Exception::class)
-    public override fun shutDown() {
-        this.server.stop()
-    }
+    public override fun shutDown() = this.server.stop()
 
     override fun toString(): String {
         return MoreObjects.toStringHelper(this)

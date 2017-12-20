@@ -70,9 +70,7 @@ class InstrumentedThreadFactory(delegate: ThreadFactory, name: String, help: Str
         fun newInstrumentedThreadFactory(name: String,
                                          help: String,
                                          daemon: Boolean): ThreadFactory {
-            val threadFactory = ThreadFactoryBuilder().setNameFormat(name + "-%d")
-                    .setDaemon(daemon)
-                    .build()
+            val threadFactory = ThreadFactoryBuilder().setNameFormat(name + "-%d").setDaemon(daemon).build()
             return InstrumentedThreadFactory(threadFactory, name, help)
         }
     }

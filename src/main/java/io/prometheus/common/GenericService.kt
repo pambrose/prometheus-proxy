@@ -116,25 +116,18 @@ abstract class GenericService protected constructor(protected val genericConfigV
     @Throws(Exception::class)
     override fun startUp() {
         super.startUp()
-        if (this.jmxReporter != null)
-            this.jmxReporter.start()
-        if (this.metricsEnabled)
-            this.metricsService!!.startAsync()
-        if (this.adminEnabled)
-            this.adminService!!.startAsync()
+        this.jmxReporter?.start()
+        this.metricsService?.startAsync()
+        this.adminService?.startAsync()
         Runtime.getRuntime().addShutdownHook(Utils.shutDownHookAction(this))
     }
 
     @Throws(Exception::class)
     override fun shutDown() {
-        if (this.adminEnabled)
-            this.adminService!!.shutDown()
-        if (this.metricsEnabled)
-            this.metricsService!!.stopAsync()
-        if (this.zipkinEnabled)
-            this.zipkinReporterService!!.shutDown()
-        if (this.jmxReporter != null)
-            this.jmxReporter.stop()
+        this.adminService?.shutDown()
+        this.metricsService?.stopAsync()
+        this.zipkinReporterService?.shutDown()
+        this.jmxReporter?.stop()
         super.shutDown()
     }
 
@@ -143,13 +136,9 @@ abstract class GenericService protected constructor(protected val genericConfigV
         this.stopAsync()
     }
 
-    protected fun addService(service: Service) {
-        this.services.add(service)
-    }
+    protected fun addService(service: Service) = this.services.add(service)
 
-    protected fun addServices(service: Service, vararg services: Service) {
-        this.services.addAll(Lists.asList(service, services))
-    }
+    protected fun addServices(service: Service, vararg services: Service) = this.services.addAll(Lists.asList(service, services))
 
     protected open fun registerHealthChecks() {
         this.healthCheckRegistry.register("thread_deadlock", ThreadDeadlockHealthCheck())
@@ -183,22 +172,15 @@ abstract class GenericService protected constructor(protected val genericConfigV
     protected fun newListener(): ServiceManager.Listener {
         val serviceName = this.javaClass.simpleName
         return object : ServiceManager.Listener() {
-            override fun healthy() {
-                logger.info("All $serviceName services healthy")
-            }
+            override fun healthy() = logger.info("All $serviceName services healthy")
 
-            override fun stopped() {
-                logger.info("All $serviceName services stopped")
-            }
+            override fun stopped() = logger.info("All $serviceName services stopped")
 
-            override fun failure(service: Service?) {
-                logger.info("$serviceName service failed: $service")
-            }
+            override fun failure(service: Service?) = logger.info("$serviceName service failed: $service")
         }
     }
 
     companion object {
-
         private val logger = LoggerFactory.getLogger(GenericService::class.java)
     }
 }

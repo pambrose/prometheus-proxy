@@ -143,8 +143,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
 
     @Throws(Exception::class)
     override fun shutDown() {
-        if (this.channel != null)
-            this.channel!!.shutdownNow()
+        this.channel?.shutdownNow()
         this.heartbeatService.shutdownNow()
         super.shutDown()
     }
@@ -208,7 +207,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
             this.heartbeatService.submit {
                 while (isRunning && !disconnected.get()) {
                     val timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSent.get()
-                    if (timeSinceLastWriteMillis > Utils.toMillis(maxInactivitySecs.toLong()))
+                    if (timeSinceLastWriteMillis > maxInactivitySecs.toLong().toMillis())
                         this.sendHeartBeat(disconnected)
                     Utils.sleepForMillis(threadPauseMillis)
                 }
@@ -223,8 +222,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
     private fun resetGrpcStubs() {
         logger.info("Creating gRPC stubs")
 
-        if (this.channel != null)
-            this.channel!!.shutdownNow()
+        this.channel?.shutdownNow()
 
         this.channelRef.set(if (isNullOrEmpty(this.inProcessServerName))
                                 NettyChannelBuilder.forAddress(this.hostname, this.port)

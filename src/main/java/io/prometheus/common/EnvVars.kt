@@ -16,7 +16,6 @@
 
 package io.prometheus.common
 
-import java.lang.Boolean.parseBoolean
 import java.lang.System.getenv
 
 enum class EnvVars {
@@ -40,15 +39,9 @@ enum class EnvVars {
     private val env: String?
         get() = getenv(this.name)
 
-    fun getEnv(defaultVal: String): String? {
-        return if (this.env != null) this.env else defaultVal
-    }
+    fun getEnv(defaultVal: String): String? = this.env ?: defaultVal
 
-    fun getEnv(defaultVal: Boolean): Boolean {
-        return if (this.env != null) parseBoolean(this.env) else defaultVal
-    }
+    fun getEnv(defaultVal: Boolean): Boolean = this.env?.toBoolean() ?: defaultVal
 
-    fun getEnv(defaultVal: Int): Int {
-        return if (this.env != null) Integer.parseInt(this.env!!) else defaultVal
-    }
+    fun getEnv(defaultVal: Int): Int = this.env?.toInt() ?: defaultVal
 }

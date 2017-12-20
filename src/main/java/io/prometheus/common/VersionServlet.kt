@@ -26,10 +26,12 @@ class VersionServlet : HttpServlet() {
 
     @Throws(ServletException::class, IOException::class)
     override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
-        resp.status = HttpServletResponse.SC_OK
-        resp.setHeader("Cache-Control", "must-revalidate,no-cache,no-store")
-        resp.contentType = "text/plain"
-        resp.writer.use { writer -> writer.println(Utils.getVersionDesc(true)) }
+        with(resp) {
+            status = HttpServletResponse.SC_OK
+            setHeader("Cache-Control", "must-revalidate,no-cache,no-store")
+            contentType = "text/plain"
+            writer.use { writer -> writer.println(Utils.getVersionDesc(true)) }
+        }
     }
 
     companion object {

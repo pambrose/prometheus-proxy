@@ -25,32 +25,31 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
     override fun <ReqT, RespT> interceptCall(method: MethodDescriptor<ReqT, RespT>,
                                              callOptions: CallOptions,
-                                             next: Channel): ClientCall<ReqT, RespT> {
-        // final String methodName = method.getFullMethodName();
-        // logger.info("Intercepting {}", methodName);
-        return object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(this.agent.channel!!.newCall(method, callOptions)) {
-            override fun start(responseListener: ClientCall.Listener<RespT>, headers: Metadata) {
-                super.start(
-                        object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
-                            override fun onHeaders(headers: Metadata?) {
-                                // Grab agent_id from headers if not already assigned
-                                if (agent.agentId == null) {
-                                    val agentId = headers!!.get(Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER))
-                                    if (agentId != null) {
-                                        agent.agentId = agentId
-                                        logger.info("Assigned agentId to $agent")
+                                             next: Channel): ClientCall<ReqT, RespT> =
+            // final String methodName = method.getFullMethodName();
+            // logger.info("Intercepting {}", methodName);
+            object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(this.agent.channel!!.newCall(method, callOptions)) {
+                override fun start(responseListener: ClientCall.Listener<RespT>, headers: Metadata) {
+                    super.start(
+                            object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
+                                override fun onHeaders(headers: Metadata?) {
+                                    // Grab agent_id from headers if not already assigned
+                                    if (agent.agentId == null) {
+                                        val agentId = headers!!.get(Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER))
+                                        if (agentId != null) {
+                                            agent.agentId = agentId
+                                            logger.info("Assigned agentId to $agent")
+                                        }
+                                        else {
+                                            logger.error("Headers missing AGENT_ID key")
+                                        }
                                     }
-                                    else {
-                                        logger.error("Headers missing AGENT_ID key")
-                                    }
+                                    super.onHeaders(headers)
                                 }
-                                super.onHeaders(headers)
-                            }
-                        },
-                        headers)
+                            },
+                            headers)
+                }
             }
-        }
-    }
 
     companion object {
         private val logger = LoggerFactory.getLogger(AgentClientInterceptor::class.java)

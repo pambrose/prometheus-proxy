@@ -32,23 +32,32 @@ abstract class BaseOptions protected constructor(private val programName: String
 
     private var configRef: Config? = null
     var configVals: ConfigVals? = null
+        private set
 
     @Parameter(names = arrayOf("-c", "--conf", "--config"), description = "Configuration file or url")
     private var configName: String? = null
+        private set
     @Parameter(names = arrayOf("-r", "--admin"), description = "Admin servlets enabled")
     private var _adminEnabled: Boolean? = null
+        private set
     @Parameter(names = arrayOf("-i", "--admin_port"), description = "Admin servlets port")
     var adminPort: Int? = null
+        private set
     @Parameter(names = arrayOf("-e", "--metrics"), description = "Metrics enabled")
     private var _metricsEnabled: Boolean? = null
+        private set
     @Parameter(names = arrayOf("-m", "--metrics_port"), description = "Metrics listen port")
     var metricsPort: Int? = null
+        private set
     @Parameter(names = arrayOf("-v", "--version"), description = "Print version info and exit", validateWith = arrayOf(Utils.VersionValidator::class))
     private var version = false
+        private set
     @Parameter(names = arrayOf("-u", "--usage"), help = true)
     private var usage = false
+        private set
     @DynamicParameter(names = arrayOf("-D"), description = "Dynamic property assignment")
     var dynamicParams: Map<String, String> = HashMap()
+        private set
 
     val adminEnabled: Boolean
         get() = this._adminEnabled ?: false

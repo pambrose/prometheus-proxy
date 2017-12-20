@@ -39,13 +39,12 @@ class ZipkinReporterService(private val url: String, private val serviceName: St
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
-    fun newTracer(serviceName: String): Tracer {
-        return Tracing.newBuilder()
+    fun newTracer(serviceName: String): Tracer =
+            Tracing.newBuilder()
                 .localServiceName(serviceName)
                 .reporter(this.reporter)
                 .build()
                 .tracer()
-    }
 
     override fun startUp() {
         // Empty
@@ -57,10 +56,9 @@ class ZipkinReporterService(private val url: String, private val serviceName: St
         this.reporter.close()
     }
 
-    override fun toString(): String {
-        return MoreObjects.toStringHelper(this)
-                .add("serviceName", serviceName)
-                .add("url", url)
-                .toString()
-    }
+    override fun toString(): String =
+            MoreObjects.toStringHelper(this)
+                    .add("serviceName", serviceName)
+                    .add("url", url)
+                    .toString()
 }

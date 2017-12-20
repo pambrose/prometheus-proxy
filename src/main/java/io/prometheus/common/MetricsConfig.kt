@@ -26,13 +26,9 @@ data class MetricsConfig(val enabled: Boolean,
                          val classLoadingExportsEnabled: Boolean,
                          val versionInfoExportsEnabled: Boolean) {
 
-
     companion object {
-        fun create(enabled: Boolean,
-                   port: Int,
-                   metrics: ConfigVals.Proxy2.Metrics2): MetricsConfig {
-
-            return MetricsConfig(enabled,
+        fun create(enabled: Boolean, port: Int, metrics: ConfigVals.Proxy2.Metrics2): MetricsConfig =
+                MetricsConfig(enabled,
                                  port,
                                  metrics.path,
                                  metrics.standardExportsEnabled,
@@ -41,13 +37,9 @@ data class MetricsConfig(val enabled: Boolean,
                                  metrics.threadExportsEnabled,
                                  metrics.classLoadingExportsEnabled,
                                  metrics.versionInfoExportsEnabled)
-        }
 
-        fun create(enabled: Boolean,
-                   port: Int,
-                   metrics: ConfigVals.Agent.Metrics): MetricsConfig {
-
-            return MetricsConfig(enabled,
+        fun create(enabled: Boolean, port: Int, metrics: ConfigVals.Agent.Metrics): MetricsConfig =
+                MetricsConfig(enabled,
                                  port,
                                  metrics.path,
                                  metrics.standardExportsEnabled,
@@ -56,7 +48,6 @@ data class MetricsConfig(val enabled: Boolean,
                                  metrics.threadExportsEnabled,
                                  metrics.classLoadingExportsEnabled,
                                  metrics.versionInfoExportsEnabled)
-        }
     }
 }
 
