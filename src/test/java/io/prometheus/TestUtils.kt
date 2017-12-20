@@ -19,7 +19,6 @@ package io.prometheus
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.Utils
 import io.prometheus.proxy.ProxyOptions
-import org.assertj.core.util.Lists
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -31,11 +30,13 @@ object TestUtils {
 
     @Throws(IOException::class, TimeoutException::class)
     fun startProxy(serverName: String?, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Proxy {
-
-        val args = Lists.newArrayList(TestConstants.args)
-        args.addAll(argv)
-        args.add("-Dproxy.admin.enabled=$adminEnabled")
-        args.add("-Dproxy.metrics.enabled=$metricsEnabled")
+        val args =
+                mutableListOf<String>().apply {
+                    addAll(TestConstants.args)
+                    addAll(argv)
+                    add("-Dproxy.admin.enabled=$adminEnabled")
+                    add("-Dproxy.metrics.enabled=$metricsEnabled")
+                }
         val options = ProxyOptions(args)
 
         logger.info(Utils.getBanner("banners/proxy.txt"))
@@ -49,19 +50,22 @@ object TestUtils {
 
     @Throws(IOException::class, TimeoutException::class)
     fun startAgent(serverName: String?, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Agent {
-
-        val args = Lists.newArrayList(TestConstants.args)
-        args.addAll(argv)
-        args.add("-Dagent.admin.enabled=$adminEnabled")
-        args.add("-Dagent.metrics.enabled=$metricsEnabled")
+        val args =
+                with(mutableListOf<String>()) {
+                    addAll(TestConstants.args)
+                    addAll(argv)
+                    add("-Dagent.admin.enabled=$adminEnabled")
+                    add("-Dagent.metrics.enabled=$metricsEnabled")
+                    this
+                }
         val options = AgentOptions(args, false)
 
         logger.info(Utils.getBanner("banners/agent.txt"))
         logger.info(Utils.getVersionDesc(false))
 
-        val agent = Agent(options, serverName, true)
-        agent.startAsync()
-        agent.awaitRunning(5, TimeUnit.SECONDS)
-        return agent
+        return Agent(options, serverName, true).apply {
+            startAsync()
+            awaitRunning(5, TimeUnit.SECONDS)
+        }
     }
 }

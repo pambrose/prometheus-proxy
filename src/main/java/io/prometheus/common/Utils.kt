@@ -148,16 +148,16 @@ object Utils {
             else
                 ConfigSyntax.CONF
 
-    private fun String.isUrlPrefix(): Boolean =
+    private fun String.isUrlPrefix() =
             this.toLowerCase().startsWith("http://") || this.toLowerCase().startsWith("https://")
 
-    private fun String.isJsonSuffix(): Boolean =
+    private fun String.isJsonSuffix() =
             this.toLowerCase().endsWith(".json") || this.toLowerCase().endsWith(".jsn")
 
-    private fun String.isPropertiesSuffix(): Boolean =
+    private fun String.isPropertiesSuffix() =
             this.toLowerCase().endsWith(".properties") || this.toLowerCase().endsWith(".props")
 
-    fun queueHealthCheck(queue: Queue<*>, size: Int): HealthCheck =
+    fun queueHealthCheck(queue: Queue<*>, size: Int) =
             object : HealthCheck() {
                 @Throws(Exception::class)
                 override fun check(): HealthCheck.Result {
@@ -165,7 +165,7 @@ object Utils {
                 }
             }
 
-    fun mapHealthCheck(map: Map<*, *>, size: Int): HealthCheck =
+    fun mapHealthCheck(map: Map<*, *>, size: Int) =
             object : HealthCheck() {
                 @Throws(Exception::class)
                 override fun check(): HealthCheck.Result {

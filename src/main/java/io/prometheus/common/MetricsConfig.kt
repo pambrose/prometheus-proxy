@@ -27,7 +27,7 @@ data class MetricsConfig(val enabled: Boolean,
                          val versionInfoExportsEnabled: Boolean) {
 
     companion object {
-        fun create(enabled: Boolean, port: Int, metrics: ConfigVals.Proxy2.Metrics2): MetricsConfig =
+        fun create(enabled: Boolean, port: Int, metrics: ConfigVals.Proxy2.Metrics2) =
                 MetricsConfig(enabled,
                                  port,
                                  metrics.path,
@@ -38,7 +38,7 @@ data class MetricsConfig(val enabled: Boolean,
                                  metrics.classLoadingExportsEnabled,
                                  metrics.versionInfoExportsEnabled)
 
-        fun create(enabled: Boolean, port: Int, metrics: ConfigVals.Agent.Metrics): MetricsConfig =
+        fun create(enabled: Boolean, port: Int, metrics: ConfigVals.Agent.Metrics) =
                 MetricsConfig(enabled,
                                  port,
                                  metrics.path,

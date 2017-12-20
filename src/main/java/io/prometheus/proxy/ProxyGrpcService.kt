@@ -19,7 +19,6 @@ package io.prometheus.proxy
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions
-import com.google.common.collect.Lists
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.grpc.Server
@@ -48,7 +47,7 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
         }
 
     init {
-        val interceptors = Lists.newArrayList<ServerInterceptor>(ProxyInterceptor())
+        val interceptors = listOf<ServerInterceptor>(ProxyInterceptor())
 
         /*
     if (proxy.getConfigVals().grpc.metricsEnabled)

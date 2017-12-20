@@ -42,7 +42,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
     val metricRegistry = MetricRegistry()
     val healthCheckRegistry = HealthCheckRegistry()
 
-    private val services = Lists.newArrayList<Service>(this)
+    private val services = mutableListOf<Service>(this)
     private val jmxReporter = JmxReporter.forRegistry(this.metricRegistry).build()
     private var serviceManager: ServiceManager? = null
 

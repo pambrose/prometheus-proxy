@@ -37,7 +37,7 @@ class AgentContext(proxy: Proxy, val remoteAddr: String) {
 
     var valid: Boolean
         get() = this.validRef.get()
-        set(v) = this.validRef.set(v)
+        private set(v) = this.validRef.set(v)
 
     var hostname: String?
         get() = this.hostnameRef.get()

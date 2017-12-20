@@ -20,7 +20,6 @@ import io.prometheus.TestConstants.OK_HTTP_CLIENT
 import io.prometheus.client.CollectorRegistry
 import okhttp3.Request
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.util.Lists
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
@@ -90,12 +89,12 @@ class AdminNonDefaultPathTest {
         @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            val args = Lists.newArrayList<String>()
-            args.add("-Dproxy.admin.port=8099")
-            args.add("-Dproxy.admin.pingPath=pingPath2")
-            args.add("-Dproxy.admin.versionPath=versionPath2")
-            args.add("-Dproxy.admin.healthCheckPath=healthCheckPath2")
-            args.add("-Dproxy.admin.threadDumpPath=threadDumpPath2")
+            val args = listOf("-Dproxy.admin.port=8099",
+                              "-Dproxy.admin.pingPath=pingPath2",
+                              "-Dproxy.admin.versionPath=versionPath2",
+                              "-Dproxy.admin.healthCheckPath=healthCheckPath2",
+                              "-Dproxy.admin.threadDumpPath=threadDumpPath2"
+                             )
             PROXY = TestUtils.startProxy(null, true, false, args)
             AGENT = TestUtils.startAgent(null, true, false, emptyList())
 

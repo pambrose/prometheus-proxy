@@ -18,7 +18,6 @@ package io.prometheus
 
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions.checkNotNull
-import com.google.common.collect.Lists
 import com.google.common.collect.Maps
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.util.concurrent.RateLimiter
@@ -229,7 +228,7 @@ class Agent(options: AgentOptions,
                     InProcessChannelBuilder.forName(this.inProcessServerName)
                             .usePlaintext(true)
                             .build()
-        val interceptors = Lists.newArrayList<ClientInterceptor>(AgentClientInterceptor(this))
+        val interceptors = listOf<ClientInterceptor>(AgentClientInterceptor(this))
 
         /*
     if (this.getConfigVals().metrics.grpc.metricsEnabled)
@@ -249,14 +248,16 @@ class Agent(options: AgentOptions,
     private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
         var statusCode = 404
         val path = scrapeRequest.path
-        val scrapeResponse = ScrapeResponse.newBuilder()
-                .setAgentId(scrapeRequest.agentId)
-                .setScrapeId(scrapeRequest.scrapeId)
+        val scrapeResponse =
+                ScrapeResponse.newBuilder()
+                        .setAgentId(scrapeRequest.agentId)
+                        .setScrapeId(scrapeRequest.scrapeId)
         val pathContext = this.pathContextMap[path]
         if (pathContext == null) {
             logger.warn("Invalid path in fetchUrl(): $path")
             this.updateScrapeCounter("invalid_path")
-            return scrapeResponse.setValid(false)
+            return scrapeResponse
+                    .setValid(false)
                     .setReason("Invalid path: $path")
                     .setStatusCode(statusCode)
                     .setText("")
@@ -271,7 +272,8 @@ class Agent(options: AgentOptions,
                 statusCode = response.code()
                 if (response.isSuccessful) {
                     this.updateScrapeCounter("success")
-                    return scrapeResponse.setValid(true)
+                    return scrapeResponse
+                            .setValid(true)
                             .setReason("")
                             .setStatusCode(statusCode)
                             .setText(response.body()!!.string())
@@ -319,11 +321,12 @@ class Agent(options: AgentOptions,
 
     @Throws(RequestFailureException::class)
     private fun registerAgent() {
-        val request = RegisterAgentRequest.newBuilder()
-                .setAgentId(this.agentId)
-                .setAgentName(this.agentName)
-                .setHostname(Utils.hostName)
-                .build()
+        val request =
+                RegisterAgentRequest.newBuilder()
+                        .setAgentId(this.agentId)
+                        .setAgentName(this.agentName)
+                        .setHostname(Utils.hostName)
+                        .build()
         val response = this.blockingStubRef.get().registerAgent(request)
         this.markMsgSent()
         if (!response.valid)
@@ -334,10 +337,8 @@ class Agent(options: AgentOptions,
 
     @Throws(RequestFailureException::class)
     private fun registerPaths() {
-        for (agentConfig in this.pathConfigs) {
-            val path = agentConfig["path"]
-            val url = agentConfig["url"]
-            this.registerPath(path!!, url!!)
+        this.pathConfigs.forEach {
+            this.registerPath(it["path"]!!, it["url"]!!)
         }
     }
 
@@ -362,9 +363,7 @@ class Agent(options: AgentOptions,
     }
 
     fun pathMapSize(): Int {
-        val request = PathMapSizeRequest.newBuilder()
-                .setAgentId(this.agentId)
-                .build()
+        val request = PathMapSizeRequest.newBuilder().setAgentId(this.agentId).build()
         val response = this.blockingStubRef.get().pathMapSize(request)
         this.markMsgSent()
         return response.pathCount
@@ -470,6 +469,7 @@ class Agent(options: AgentOptions,
     private fun sendHeartBeat(disconnected: AtomicBoolean) {
         if (this.agentId == null)
             return
+
         try {
             val request = HeartBeatRequest.newBuilder().setAgentId(this.agentId).build()
             val response = this.blockingStubRef.get().sendHeartBeat(request)
@@ -482,7 +482,6 @@ class Agent(options: AgentOptions,
             logger.info("Hearbeat failed ${e.status}")
             disconnected.set(true)
         }
-
     }
 
     @Throws(InterruptedException::class)

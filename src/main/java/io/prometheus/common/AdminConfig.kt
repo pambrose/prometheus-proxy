@@ -24,7 +24,7 @@ data class AdminConfig(val enabled: Boolean,
                        val threadDumpPath: String) {
 
     companion object {
-        fun create(enabled: Boolean, port: Int, admin: ConfigVals.Proxy2.Admin2): AdminConfig =
+        fun create(enabled: Boolean, port: Int, admin: ConfigVals.Proxy2.Admin2) =
                 AdminConfig(enabled,
                             port,
                             admin.pingPath,
@@ -32,7 +32,7 @@ data class AdminConfig(val enabled: Boolean,
                             admin.healthCheckPath,
                             admin.threadDumpPath)
 
-        fun create(enabled: Boolean, port: Int, admin: ConfigVals.Agent.Admin): AdminConfig =
+        fun create(enabled: Boolean, port: Int, admin: ConfigVals.Agent.Admin) =
                 AdminConfig(enabled,
                             port,
                             admin.pingPath,

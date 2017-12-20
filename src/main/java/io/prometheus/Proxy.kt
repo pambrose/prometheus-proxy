@@ -105,9 +105,9 @@ class Proxy(options: ProxyOptions,
     override fun registerHealthChecks() {
         super.registerHealthChecks()
         this.healthCheckRegistry.register("grpc_service", this.grpcService.healthCheck)
-        this.healthCheckRegistry
-                .register("scrape_response_map_check",
-                          Utils.mapHealthCheck(scrapeRequestMap, this.configVals.internal.scrapeRequestMapUnhealthySize))
+        this.healthCheckRegistry.register("scrape_response_map_check",
+                                          Utils.mapHealthCheck(this.scrapeRequestMap,
+                                                               this.configVals.internal.scrapeRequestMapUnhealthySize))
         this.healthCheckRegistry
                 .register("agent_scrape_request_queue",
                           object : HealthCheck() {
@@ -198,13 +198,13 @@ class Proxy(options: ProxyOptions,
         }
 
         synchronized(this.pathMap) {
-            for ((key, value) in this.pathMap) {
-                if (value.agentId == agentId) {
-                    val agentContext = this.pathMap.remove(key)
+            this.pathMap.forEach { k, v ->
+                if (v.agentId == agentId) {
+                    val agentContext = this.pathMap.remove(k)
                     if (agentContext != null)
-                        logger.info("Removed path /$key for $agentContext")
+                        logger.info("Removed path /$k for $agentContext")
                     else
-                        logger.error("Missing path /$key for agentId: $agentId")
+                        logger.error("Missing path /$k for agentId: $agentId")
                 }
             }
         }

@@ -51,10 +51,11 @@ class ScrapeRequestWrapper(proxy: Proxy,
         get() = this.scrapeResponseRef.get()
 
     init {
-        var builder = ScrapeRequest.newBuilder()
-                .setAgentId(agentContext.agentId)
-                .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
-                .setPath(path)
+        var builder =
+                ScrapeRequest.newBuilder()
+                        .setAgentId(agentContext.agentId)
+                        .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
+                        .setPath(path)
         if (!accept.isNullOrBlank())
             builder = builder.setAccept(accept)
         this.scrapeRequest = builder.build()

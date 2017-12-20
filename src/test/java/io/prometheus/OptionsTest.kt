@@ -20,54 +20,53 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.common.ConfigVals
 import io.prometheus.proxy.ProxyOptions
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.util.Lists.newArrayList
 import org.junit.Test
 
 class OptionsTest {
 
     @Test
     fun verifyDefaultValues() {
-        val configVals = readProxyOptions(newArrayList())
+        val configVals = readProxyOptions(listOf())
         assertThat(configVals!!.proxy.http.port).isEqualTo(8080)
         assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(false)
     }
 
     @Test
     fun verifyConfValues() {
-        val configVals = readProxyOptions(newArrayList("--config", CONFIG))
+        val configVals = readProxyOptions(listOf("--config", CONFIG))
         assertThat(configVals!!.proxy.http.port).isEqualTo(8181)
         assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(true)
     }
 
     @Test
     fun verifyUnquotedPropValue() {
-        val configVals = readProxyOptions(newArrayList("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"))
+        val configVals = readProxyOptions(listOf("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"))
         assertThat(configVals!!.proxy.http.port).isEqualTo(9393)
         assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(true)
     }
 
     @Test
     fun verifyQuotedPropValue() {
-        val configVals = readProxyOptions(newArrayList("-D\"proxy.http.port=9394\""))
+        val configVals = readProxyOptions(listOf("-D\"proxy.http.port=9394\""))
         assertThat(configVals!!.proxy.http.port).isEqualTo(9394)
     }
 
     @Test
     fun verifyPathConfigs() {
-        val configVals = readAgentOptions(newArrayList("--config", CONFIG))
+        val configVals = readAgentOptions(listOf("--config", CONFIG))
         assertThat(configVals!!.agent.pathConfigs.size).isEqualTo(3)
     }
 
 
     fun verifyProxyDefaults() {
-        val options = ProxyOptions(newArrayList())
+        val options = ProxyOptions(listOf())
 
         assertThat(options.proxyPort).isEqualTo(8080)
         assertThat(options.agentPort).isEqualTo(50021)
     }
 
     fun verifyAgentDefaults() {
-        val options = AgentOptions(newArrayList("--name", "test-name", "--proxy", "host5"),
+        val options = AgentOptions(listOf("--name", "test-name", "--proxy", "host5"),
                                    false)
 
         assertThat(options.metricsEnabled).isEqualTo(false)

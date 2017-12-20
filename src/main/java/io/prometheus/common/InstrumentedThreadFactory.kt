@@ -24,7 +24,7 @@ import java.util.concurrent.ThreadFactory
 
 class InstrumentedThreadFactory(delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
 
-    private val delegate: ThreadFactory
+    private val delegate = Preconditions.checkNotNull(delegate)
     private val created: Counter
     private val running: Gauge
     private val terminated: Counter
@@ -32,19 +32,21 @@ class InstrumentedThreadFactory(delegate: ThreadFactory, name: String, help: Str
     init {
         Preconditions.checkNotNull(name)
         Preconditions.checkNotNull(help)
-        this.delegate = Preconditions.checkNotNull(delegate)
-        this.created = Counter.build()
-                .name("${name}_threads_created")
-                .help("$help threads created")
-                .register()
-        this.running = Gauge.build()
-                .name("${name}_threads_running")
-                .help("$help threads running")
-                .register()
-        this.terminated = Counter.build()
-                .name("${name}_threads_terminated")
-                .help("$help threads terminated")
-                .register()
+        this.created =
+                Counter.build()
+                        .name("${name}_threads_created")
+                        .help("$help threads created")
+                        .register()
+        this.running =
+                Gauge.build()
+                        .name("${name}_threads_running")
+                        .help("$help threads running")
+                        .register()
+        this.terminated =
+                Counter.build()
+                        .name("${name}_threads_terminated")
+                        .help("$help threads terminated")
+                        .register()
     }
 
     override fun newThread(runnable: Runnable): Thread {

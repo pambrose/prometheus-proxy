@@ -46,11 +46,12 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             agentContext.markActivity()
         }
 
-        val response = RegisterAgentResponse.newBuilder()
-                .setValid(agentContext != null)
-                .setReason("Invalid agentId: $agentId")
-                .setAgentId(agentId)
-                .build()
+        val response =
+                RegisterAgentResponse.newBuilder()
+                        .setValid(agentContext != null)
+                        .setReason("Invalid agentId: $agentId")
+                        .setAgentId(agentId)
+                        .build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }
@@ -63,12 +64,13 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
         val agentId = request.agentId
         val agentContext = this.proxy.getAgentContext(agentId)
-        val response = RegisterPathResponse.newBuilder()
-                .setValid(agentContext != null)
-                .setReason("Invalid agentId: $agentId")
-                .setPathCount(this.proxy.pathMapSize())
-                .setPathId(if (agentContext != null) PATH_ID_GENERATOR.getAndIncrement() else -1)
-                .build()
+        val response =
+                RegisterPathResponse.newBuilder()
+                        .setValid(agentContext != null)
+                        .setReason("Invalid agentId: $agentId")
+                        .setPathCount(this.proxy.pathMapSize())
+                        .setPathId(if (agentContext != null) PATH_ID_GENERATOR.getAndIncrement() else -1)
+                        .build()
         if (agentContext == null) {
             logger.error("Missing AgentContext for agentId: $agentId")
         }
@@ -103,9 +105,10 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     }
 
     override fun pathMapSize(request: PathMapSizeRequest, responseObserver: StreamObserver<PathMapSizeResponse>) {
-        val response = PathMapSizeResponse.newBuilder()
-                .setPathCount(this.proxy.pathMapSize())
-                .build()
+        val response =
+                PathMapSizeResponse.newBuilder()
+                        .setPathCount(this.proxy.pathMapSize())
+                        .build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }

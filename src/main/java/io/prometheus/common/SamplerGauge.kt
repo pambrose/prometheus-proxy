@@ -16,7 +16,6 @@
 
 package io.prometheus.common
 
-import com.google.common.collect.Lists
 import io.prometheus.client.Collector
 
 class SamplerGauge(private val name: String,
@@ -28,9 +27,9 @@ class SamplerGauge(private val name: String,
                                                 emptyList(),
                                                 emptyList(),
                                                 this.samplerGaugeData.value())
-        return Lists.newArrayList(Collector.MetricFamilySamples(this.name,
-                                                                Collector.Type.GAUGE,
-                                                                this.help,
-                                                                Lists.newArrayList<MetricFamilySamples.Sample>(sample)))
+        return listOf(Collector.MetricFamilySamples(this.name,
+                                                    Collector.Type.GAUGE,
+                                                    this.help,
+                                                    listOf<MetricFamilySamples.Sample>(sample)))
     }
 }

@@ -26,31 +26,36 @@ import io.prometheus.common.SamplerGaugeData
 
 class ProxyMetrics(proxy: Proxy) {
 
-    val scrapeRequests = Counter.build()
-            .name("proxy_scrape_requests")
-            .help("Proxy scrape requests")
-            .labelNames("type")
-            .register()
+    val scrapeRequests =
+            Counter.build()
+                    .name("proxy_scrape_requests")
+                    .help("Proxy scrape requests")
+                    .labelNames("type")
+                    .register()
 
-    val connects = Counter.build()
-            .name("proxy_connect_count")
-            .help("Proxy connect count")
-            .register()
+    val connects =
+            Counter.build()
+                    .name("proxy_connect_count")
+                    .help("Proxy connect count")
+                    .register()
 
-    val agentEvictions = Counter.build()
-            .name("proxy_eviction_count")
-            .help("Proxy eviction count")
-            .register()
+    val agentEvictions =
+            Counter.build()
+                    .name("proxy_eviction_count")
+                    .help("Proxy eviction count")
+                    .register()
 
-    val heartbeats = Counter.build()
-            .name("proxy_heartbeat_count")
-            .help("Proxy heartbeat count")
-            .register()
+    val heartbeats =
+            Counter.build()
+                    .name("proxy_heartbeat_count")
+                    .help("Proxy heartbeat count")
+                    .register()
 
-    val scrapeRequestLatency = Summary.build()
-            .name("proxy_scrape_request_latency_seconds")
-            .help("Proxy scrape request latency in seconds")
-            .register()
+    val scrapeRequestLatency =
+            Summary.build()
+                    .name("proxy_scrape_request_latency_seconds")
+                    .help("Proxy scrape request latency in seconds")
+                    .register()
 
     init {
         Gauge.build()
