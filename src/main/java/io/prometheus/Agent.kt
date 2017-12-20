@@ -420,20 +420,23 @@ class Agent(options: AgentOptions,
 
     private fun writeResponsesToProxyUntilDisconnected(disconnected: AtomicBoolean) {
         val checkMillis = this.configVals.internal.scrapeResponseQueueCheckMillis.toLong()
-        val observer = this.asyncStubRef.get().writeResponsesToProxy(
-                object : StreamObserver<Empty> {
-                    override fun onNext(empty: Empty) {
-                        // Ignore Empty return value
-                    }
+        val observer =
+                this.asyncStubRef
+                        .get()
+                        .writeResponsesToProxy(
+                                object : StreamObserver<Empty> {
+                                    override fun onNext(empty: Empty) {
+                                        // Ignore Empty return value
+                                    }
 
-                    override fun onError(t: Throwable) {
-                        val s = Status.fromThrowable(t)
-                        logger.info("Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}")
-                        disconnected.set(true)
-                    }
+                                    override fun onError(t: Throwable) {
+                                        val s = Status.fromThrowable(t)
+                                        logger.info("Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}")
+                                        disconnected.set(true)
+                                    }
 
-                    override fun onCompleted() = disconnected.set(true)
-                })
+                                    override fun onCompleted() = disconnected.set(true)
+                                })
 
         while (!disconnected.get()) {
             try {
