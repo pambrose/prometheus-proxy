@@ -20,7 +20,6 @@ import com.google.common.base.MoreObjects
 import io.prometheus.Proxy
 import io.prometheus.common.toSecs
 import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.BlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -33,27 +32,23 @@ class AgentContext(proxy: Proxy, val remoteAddr: String) {
     private val lastActivityTime = AtomicLong()
     private val agentNameRef = AtomicReference<String>()
     private val hostnameRef = AtomicReference<String>()
-    private val scrapeRequestQueue: BlockingQueue<ScrapeRequestWrapper>
-    private val waitMillis: Long
+    private val scrapeRequestQueue = ArrayBlockingQueue<ScrapeRequestWrapper>(proxy.configVals.internal.scrapeRequestQueueSize)
+    private val waitMillis = proxy.configVals.internal.scrapeRequestQueueCheckMillis.toLong()
 
     var valid: Boolean
         get() = this.validRef.get()
         set(v) = this.validRef.set(v)
 
-    var hostname: String
+    var hostname: String?
         get() = this.hostnameRef.get()
         set(v) = this.hostnameRef.set(v)
 
 
-    var agentName: String
+    var agentName: String?
         get() = this.agentNameRef.get()
         set(v) = this.agentNameRef.set(v)
 
     init {
-        val queueSize = proxy.configVals.internal.scrapeRequestQueueSize
-        this.scrapeRequestQueue = ArrayBlockingQueue(queueSize)
-        this.waitMillis = proxy.configVals.internal.scrapeRequestQueueCheckMillis.toLong()
-
         this.markActivity()
     }
 
