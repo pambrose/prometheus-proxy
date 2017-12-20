@@ -24,18 +24,12 @@ import org.slf4j.LoggerFactory
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
     private fun getRemoteAddr(attributes: Attributes): String {
-        val keyOptional = attributes.keys()
-                .stream()
-                .filter { key -> "remote-addr" == key.toString() }
-                .findFirst()
+        val key = attributes.keys()
+                .asSequence()
+                .filter { "remote-addr" == it.toString() }
+                .first()
 
-        if (keyOptional.isPresent) {
-            val key = keyOptional.get() as Attributes.Key<Any>
-            val v = attributes.get(key)
-            if (v != null)
-                return v.toString()
-        }
-        return "Unknown"
+        return if (key == null) "Unknown" else attributes.get(key)?.toString() ?: "Unknown"
     }
 
     override fun transportReady(attributes: Attributes): Attributes {

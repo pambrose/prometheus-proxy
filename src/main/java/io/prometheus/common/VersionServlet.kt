@@ -30,7 +30,7 @@ class VersionServlet : HttpServlet() {
             status = HttpServletResponse.SC_OK
             setHeader("Cache-Control", "must-revalidate,no-cache,no-store")
             contentType = "text/plain"
-            writer.use { writer -> writer.println(Utils.getVersionDesc(true)) }
+            writer.use { it.println(Utils.getVersionDesc(true)) }
         }
     }
 

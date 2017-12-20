@@ -116,8 +116,8 @@ class Proxy(options: ProxyOptions,
                                   val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
                                   val vals = agentContextMap.entries
                                           .stream()
-                                          .filter { kv -> kv.value.scrapeRequestQueueSize() >= unhealthySize }
-                                          .map { kv -> "${kv.value} ${kv.value.scrapeRequestQueueSize()}" }
+                                          .filter { it.value.scrapeRequestQueueSize() >= unhealthySize }
+                                          .map { "${it.value} ${it.value.scrapeRequestQueueSize()}" }
                                           .collect(Collectors.toList())
                                   return if (vals.isEmpty())
                                       HealthCheck.Result.healthy()

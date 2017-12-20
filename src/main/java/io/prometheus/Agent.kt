@@ -268,16 +268,16 @@ class Agent(options: AgentOptions,
         val requestTimer = this.metrics?.scrapeRequestLatency?.labels(this.agentName!!)?.startTimer()
         var reason = "None"
         try {
-            pathContext.fetchUrl(scrapeRequest).use { response ->
-                statusCode = response.code()
-                if (response.isSuccessful) {
+            pathContext.fetchUrl(scrapeRequest).use {
+                statusCode = it.code()
+                if (it.isSuccessful) {
                     this.updateScrapeCounter("success")
                     return scrapeResponse
                             .setValid(true)
                             .setReason("")
                             .setStatusCode(statusCode)
-                            .setText(response.body()!!.string())
-                            .setContentType(response.header(CONTENT_TYPE))
+                            .setText(it.body()!!.string())
+                            .setContentType(it.header(CONTENT_TYPE))
                             .build()
                 }
                 else {

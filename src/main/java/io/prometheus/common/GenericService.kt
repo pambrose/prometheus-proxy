@@ -152,11 +152,9 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                     val vals = serviceManager!!.servicesByState()
                                             .entries()
                                             .stream()
-                                            .filter { kv -> kv.key !== Service.State.RUNNING }
-                                            .peek { kv ->
-                                                logger.warn("Incorrect state - ${kv.key}: ${kv.value}")
-                                            }
-                                            .map { kv -> "${kv.key}: ${kv.value}" }
+                                            .filter { it.key !== Service.State.RUNNING }
+                                            .peek { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
+                                            .map { "${it.key}: ${it.value}" }
                                             .collect(Collectors.toList())
 
                                     HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")

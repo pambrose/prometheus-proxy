@@ -55,8 +55,8 @@ object Utils {
 
     fun getBanner(filename: String): String {
         try {
-            logger.javaClass.classLoader.getResourceAsStream(filename).use { `in` ->
-                val banner = CharStreams.toString(InputStreamReader(`in`, Charsets.UTF_8.name()))
+            logger.javaClass.classLoader.getResourceAsStream(filename).use {
+                val banner = CharStreams.toString(InputStreamReader(it, Charsets.UTF_8.name()))
                 val lines: List<String> = Splitter.on("\n").splitToList(banner)
 
                 // Use Atomic values because filter requires finals

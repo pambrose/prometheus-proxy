@@ -37,7 +37,7 @@ class AdminEmptyPathTest {
         assertThat(PROXY!!.configVals.admin.pingPath).isEqualTo("")
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
+        OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
@@ -47,7 +47,7 @@ class AdminEmptyPathTest {
         assertThat(PROXY!!.configVals.admin.versionPath).isEqualTo("")
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
+        OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
@@ -56,7 +56,7 @@ class AdminEmptyPathTest {
         assertThat(PROXY!!.configVals.admin.healthCheckPath).isEqualTo("")
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
+        OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
@@ -65,7 +65,7 @@ class AdminEmptyPathTest {
         assertThat(PROXY!!.configVals.admin.threadDumpPath).isEqualTo("")
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
+        OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     companion object {

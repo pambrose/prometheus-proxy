@@ -125,14 +125,14 @@ abstract class BaseOptions protected constructor(private val programName: String
                 .resolve(ConfigResolveOptions.defaults())
         this.configRef = config.resolve()
 
-        this.dynamicParams.forEach { key, value ->
+        this.dynamicParams.forEach { k, v ->
             // Strip quotes
-            val qval = if (value.startsWith("\"") && value.endsWith("\""))
-                value.substring(1, value.length - 1)
+            val qval = if (v.startsWith("\"") && v.endsWith("\""))
+                v.substring(1, v.length - 1)
             else
-                value
-            val prop = "$key=$qval"
-            System.setProperty(key, prop)
+                v
+            val prop = "$k=$qval"
+            System.setProperty(k, prop)
             val newConfig = ConfigFactory.parseString(prop, PROPS)
             configRef = newConfig.withFallback(this.configRef).resolve()
         }

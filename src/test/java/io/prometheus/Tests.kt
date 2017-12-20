@@ -34,14 +34,14 @@ object Tests {
     fun missingPathTest() {
         val url = "http://localhost:${TestConstants.PROXY_PORT}/"
         val request = Request.Builder().url(url)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
+        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Throws(Exception::class)
     fun invalidPathTest() {
         val url = "http://localhost:${TestConstants.PROXY_PORT}/invalid_path"
         val request = Request.Builder().url(url)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
+        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Throws(Exception::class)
@@ -123,7 +123,7 @@ object Tests {
         val request = Request.Builder().url(url)
         TestConstants
                 .OK_HTTP_CLIENT
-                .newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
+                .newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
 
         agent.unregisterPath(badPath)
     }
@@ -146,7 +146,7 @@ object Tests {
 
         val proxyUrl = "http://localhost:${TestConstants.PROXY_PORT}/$proxyPath"
         val request = Request.Builder().url(proxyUrl)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
+        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
 
         agent.unregisterPath("/$proxyPath")
         http.stop()
@@ -240,9 +240,9 @@ private fun callProxy(pathMap: Map<Int, Int>) {
     TestConstants.OK_HTTP_CLIENT
             .newCall(request.build())
             .execute()
-            .use { response ->
-                assertThat(response.code()).isEqualTo(200)
-                val body = response.body()!!.string()
+            .use {
+                assertThat(it.code()).isEqualTo(200)
+                val body = it.body()!!.string()
                 assertThat(body).isEqualTo("value: $httpVal")
             }
 }

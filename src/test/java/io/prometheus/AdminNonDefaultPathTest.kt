@@ -37,9 +37,9 @@ class AdminNonDefaultPathTest {
         assertThat(PROXY!!.configVals.admin.pingPath).isEqualTo("pingPath2")
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { response ->
-            assertThat(response.code()).isEqualTo(200)
-            assertThat(response.body()!!.string()).startsWith("pong")
+        OK_HTTP_CLIENT.newCall(request.build()).execute().use {
+            assertThat(it.code()).isEqualTo(200)
+            assertThat(it.body()!!.string()).startsWith("pong")
         }
     }
 
@@ -50,9 +50,9 @@ class AdminNonDefaultPathTest {
         assertThat(PROXY!!.configVals.admin.versionPath).isEqualTo("versionPath2")
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { response ->
-            assertThat(response.code()).isEqualTo(200)
-            assertThat(response.body()!!.string()).contains("Version")
+        OK_HTTP_CLIENT.newCall(request.build()).execute().use {
+            assertThat(it.code()).isEqualTo(200)
+            assertThat(it.body()!!.string()).contains("Version")
         }
     }
 
@@ -62,9 +62,9 @@ class AdminNonDefaultPathTest {
         assertThat(PROXY!!.configVals.admin.healthCheckPath).isEqualTo("healthCheckPath2")
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { response ->
-            assertThat(response.code()).isEqualTo(200)
-            assertThat(response.body()!!.string().length).isGreaterThan(10)
+        OK_HTTP_CLIENT.newCall(request.build()).execute().use {
+            assertThat(it.code()).isEqualTo(200)
+            assertThat(it.body()!!.string().length).isGreaterThan(10)
         }
     }
 
@@ -74,7 +74,7 @@ class AdminNonDefaultPathTest {
         assertThat(PROXY!!.configVals.admin.threadDumpPath).isEqualTo("threadDumpPath2")
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.body()!!.string().length).isGreaterThan(10) }
+        OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     companion object {
