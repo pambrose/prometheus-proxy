@@ -51,12 +51,11 @@ object TestUtils {
     @Throws(IOException::class, TimeoutException::class)
     fun startAgent(serverName: String?, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Agent {
         val args =
-                with(mutableListOf<String>()) {
+                mutableListOf<String>().apply {
                     addAll(TestConstants.args)
                     addAll(argv)
                     add("-Dagent.admin.enabled=$adminEnabled")
                     add("-Dagent.metrics.enabled=$metricsEnabled")
-                    this
                 }
         val options = AgentOptions(args, false)
 
