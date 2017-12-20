@@ -23,6 +23,9 @@ import com.beust.jcommander.ParameterException
 import com.typesafe.config.*
 import io.prometheus.common.EnvVars.*
 import org.slf4j.LoggerFactory
+import java.io.File
+import java.io.FileNotFoundException
+import java.net.URL
 
 abstract class BaseOptions protected constructor(private val programName: String,
                                                  private val argv: Array<String>,
@@ -117,12 +120,13 @@ abstract class BaseOptions protected constructor(private val programName: String
     }
 
     private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-        val config = Utils.readConfig(this.configName,
-                                      envConfig,
-                                      ConfigParseOptions.defaults().setAllowMissing(false),
-                                      ConfigFactory.load().resolve(),
-                                      exitOnMissingConfig)
-                .resolve(ConfigResolveOptions.defaults())
+        val config =
+                readConfig(this.configName,
+                           envConfig,
+                           ConfigParseOptions.defaults().setAllowMissing(false),
+                           ConfigFactory.load().resolve(),
+                           exitOnMissingConfig)
+                        .resolve(ConfigResolveOptions.defaults())
         this.configRef = config.resolve()
 
         this.dynamicParams.forEach { k, v ->
@@ -137,6 +141,68 @@ abstract class BaseOptions protected constructor(private val programName: String
             configRef = newConfig.withFallback(this.configRef).resolve()
         }
     }
+
+    private fun readConfig(cliConfig: String?,
+                           envConfig: String,
+                           configParseOptions: ConfigParseOptions,
+                           fallback: Config,
+                           exitOnMissingConfig: Boolean): Config {
+
+        val configName = cliConfig ?: System.getenv(envConfig)
+
+        if (configName.isNullOrBlank()) {
+            if (exitOnMissingConfig) {
+                logger.error("A configuration file or url must be specified with --getConfig or \$${envConfig}")
+                System.exit(1)
+            }
+            return fallback
+        }
+
+        if (configName.isUrlPrefix()) {
+            try {
+                val configSyntax = getConfigSyntax(configName)
+                return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
+                        .withFallback(fallback)
+            } catch (e: Exception) {
+                logger.error(if (e.cause is FileNotFoundException)
+                                 "Invalid getConfig url: $configName"
+                             else
+                                 "Exception: ${e.javaClass.simpleName} - ${e.message}",
+                             e)
+            }
+
+        }
+        else {
+            try {
+                return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions)
+                        .withFallback(fallback)
+            } catch (e: Exception) {
+                logger.error(if (e.cause is FileNotFoundException)
+                                 "Invalid getConfig filename: $configName"
+                             else
+                                 "Exception: ${e.javaClass.simpleName} - ${e.message}", e)
+            }
+        }
+
+        System.exit(1)
+        return fallback // Never reached
+    }
+
+    private fun getConfigSyntax(configName: String): ConfigSyntax =
+            when {
+                configName.isJsonSuffix()       -> ConfigSyntax.JSON
+                configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
+                else                            -> ConfigSyntax.CONF
+            }
+
+    private fun String.isUrlPrefix() =
+            this.toLowerCase().startsWith("http://") || this.toLowerCase().startsWith("https://")
+
+    private fun String.isJsonSuffix() =
+            this.toLowerCase().endsWith(".json") || this.toLowerCase().endsWith(".jsn")
+
+    private fun String.isPropertiesSuffix() =
+            this.toLowerCase().endsWith(".properties") || this.toLowerCase().endsWith(".props")
 
     companion object {
         private val logger = LoggerFactory.getLogger(BaseOptions::class.java)

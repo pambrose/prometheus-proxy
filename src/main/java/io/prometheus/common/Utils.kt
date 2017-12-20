@@ -24,17 +24,10 @@ import com.google.common.base.Joiner
 import com.google.common.base.Splitter
 import com.google.common.io.CharStreams
 import com.google.common.util.concurrent.Service
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import com.typesafe.config.ConfigParseOptions
-import com.typesafe.config.ConfigSyntax
 import io.prometheus.Proxy
 import org.slf4j.LoggerFactory
-import java.io.File
-import java.io.FileNotFoundException
 import java.io.InputStreamReader
 import java.net.InetAddress
-import java.net.URL
 import java.net.UnknownHostException
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
@@ -91,70 +84,6 @@ object Utils {
             return "Banner $filename cannot be found"
         }
     }
-
-    fun readConfig(cliConfig: String?,
-                   envConfig: String,
-                   configParseOptions: ConfigParseOptions,
-                   fallback: Config,
-                   exitOnMissingConfig: Boolean): Config {
-
-        val configName = cliConfig ?: System.getenv(envConfig)
-
-        if (configName.isNullOrBlank()) {
-            if (exitOnMissingConfig) {
-                logger.error("A configuration file or url must be specified with --getConfig or \$${envConfig}")
-                System.exit(1)
-            }
-            return fallback
-        }
-
-        if (configName.isUrlPrefix()) {
-            try {
-                val configSyntax = getConfigSyntax(configName)
-                return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
-                        .withFallback(fallback)
-            } catch (e: Exception) {
-                logger.error(if (e.cause is FileNotFoundException)
-                                 "Invalid getConfig url: $configName"
-                             else
-                                 "Exception: ${e.javaClass.simpleName} - ${e.message}",
-                             e)
-            }
-
-        }
-        else {
-            try {
-                return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions)
-                        .withFallback(fallback)
-            } catch (e: Exception) {
-                logger.error(if (e.cause is FileNotFoundException)
-                                 "Invalid getConfig filename: $configName"
-                             else
-                                 "Exception: ${e.javaClass.simpleName} - ${e.message}",
-                             e)
-            }
-        }
-
-        System.exit(1)
-        return fallback // Never reached
-    }
-
-    private fun getConfigSyntax(configName: String): ConfigSyntax =
-            if (configName.isJsonSuffix())
-                ConfigSyntax.JSON
-            else if (configName.isPropertiesSuffix())
-                ConfigSyntax.PROPERTIES
-            else
-                ConfigSyntax.CONF
-
-    private fun String.isUrlPrefix() =
-            this.toLowerCase().startsWith("http://") || this.toLowerCase().startsWith("https://")
-
-    private fun String.isJsonSuffix() =
-            this.toLowerCase().endsWith(".json") || this.toLowerCase().endsWith(".jsn")
-
-    private fun String.isPropertiesSuffix() =
-            this.toLowerCase().endsWith(".properties") || this.toLowerCase().endsWith(".props")
 
     fun queueHealthCheck(queue: Queue<*>, size: Int) =
             object : HealthCheck() {

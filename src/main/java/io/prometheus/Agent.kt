@@ -351,10 +351,10 @@ class Agent(options: AgentOptions,
         val path = if (checkNotNull(pathVal).startsWith("/")) pathVal.substring(1) else pathVal
         this.unregisterPathOnProxy(path)
         val pathContext = this.pathContextMap.remove(path)
-        if (pathContext == null)
-            logger.info("No path value /$path found in pathContextMap")
-        else if (!this.isTestMode)
-            logger.info("Unregistered /$path for ${pathContext.url}")
+        when {
+            pathContext == null -> logger.info("No path value /$path found in pathContextMap")
+            !this.isTestMode    -> logger.info("Unregistered /$path for ${pathContext.url}")
+        }
     }
 
     fun pathMapSize(): Int {

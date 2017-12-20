@@ -170,21 +170,23 @@ class Proxy(options: ProxyOptions,
     fun removePath(path: String, agentId: String, responseBuilder: UnregisterPathResponse.Builder) {
         synchronized(this.pathMap) {
             val agentContext = this.pathMap[path]
-            if (agentContext == null) {
-                val msg = "Unable to remove path /$path - path not found"
-                logger.info(msg)
-                responseBuilder.setValid(false).setReason(msg)
-            }
-            else if (agentContext.agentId != agentId) {
-                val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
-                logger.info(msg)
-                responseBuilder.setValid(false).setReason(msg)
-            }
-            else {
-                this.pathMap.remove(path)
-                if (!this.isTestMode)
-                    logger.info("Removed path /$path for $agentContext")
-                responseBuilder.setValid(true).setReason("")
+            when {
+                agentContext == null            -> {
+                    val msg = "Unable to remove path /$path - path not found"
+                    logger.info(msg)
+                    responseBuilder.setValid(false).setReason(msg)
+                }
+                agentContext.agentId != agentId -> {
+                    val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
+                    logger.info(msg)
+                    responseBuilder.setValid(false).setReason(msg)
+                }
+                else                            -> {
+                    this.pathMap.remove(path)
+                    if (!this.isTestMode)
+                        logger.info("Removed path /$path for $agentContext")
+                    responseBuilder.setValid(true).setReason("")
+                }
             }
         }
     }
