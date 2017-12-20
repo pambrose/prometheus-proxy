@@ -72,11 +72,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
     val metricsEnabled: Boolean
         get() = this._metricsEnabled ?: false
 
-
     protected fun parseOptions() {
         this.parseArgs(this.argv)
         this.readConfig(this.envConfig, this.exitOnMissingConfig)
-        // this.configVals = ConfigVals(this.config)
         this.configVals = ConfigVals(this.config)
         this.assignConfigVals()
     }
