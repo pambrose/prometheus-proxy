@@ -66,7 +66,7 @@ class Agent(options: AgentOptions,
     private val blockingStubRef = AtomicReference<ProxyServiceBlockingStub>()
     private val asyncStubRef = AtomicReference<ProxyServiceStub>()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(this.configVals.internal.scrapeResponseQueueSize)
-    private val agentName: String? = if (options.agentName.isNullOrBlank()) "Unnamed-${Utils.hostName}" else options.agentName
+    private val agentName: String? = if (options.agentName.isNullOrBlank()) "Unnamed-${hostName}" else options.agentName
     private val metrics: AgentMetrics? = if (this.metricsEnabled) AgentMetrics(this) else null
     private val readRequestsExecutorService: ExecutorService = newCachedThreadPool(if (this.metricsEnabled)
                                                                                        InstrumentedThreadFactory.newInstrumentedThreadFactory("agent_fetch",
@@ -154,8 +154,8 @@ class Agent(options: AgentOptions,
         super.registerHealthChecks()
         this.healthCheckRegistry
                 .register("scrape_response_queue_check",
-                          Utils.queueHealthCheck(scrapeResponseQueue,
-                                                 this.configVals.internal.scrapeResponseQueueUnhealthySize))
+                          queueHealthCheck(scrapeResponseQueue,
+                                           this.configVals.internal.scrapeResponseQueueUnhealthySize))
     }
 
     override fun serviceName() = "${this.javaClass.simpleName} ${this.agentName}"
@@ -194,7 +194,7 @@ class Agent(options: AgentOptions,
                     val timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSentRef.get()
                     if (timeSinceLastWriteMillis > maxInactivitySecs.toLong().toMillis())
                         this.sendHeartBeat(disconnected)
-                    Utils.sleepForMillis(threadPauseMillis)
+                    sleepForMillis(threadPauseMillis)
                 }
                 logger.info("Heartbeat completed")
             }
@@ -316,7 +316,7 @@ class Agent(options: AgentOptions,
                 RegisterAgentRequest.newBuilder()
                         .setAgentId(this.agentId)
                         .setAgentName(this.agentName)
-                        .setHostname(Utils.hostName)
+                        .setHostname(hostName)
                         .build()
         val response = this.blockingStubRef.get().registerAgent(request)
         this.markMsgSent()
@@ -493,8 +493,8 @@ class Agent(options: AgentOptions,
         fun main(argv: Array<String>) {
             val options = AgentOptions(argv, true)
 
-            logger.info(Utils.getBanner("banners/agent.txt"))
-            logger.info(Utils.getVersionDesc(false))
+            logger.info(getBanner("banners/agent.txt"))
+            logger.info(getVersionDesc(false))
 
             val agent = Agent(options, null, false)
             agent.startAsync()

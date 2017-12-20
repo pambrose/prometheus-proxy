@@ -21,7 +21,7 @@ import com.google.common.util.concurrent.AbstractExecutionThreadService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
 import io.prometheus.common.GenericServiceListener
-import io.prometheus.common.Utils
+import io.prometheus.common.sleepForSecs
 import org.slf4j.LoggerFactory
 
 class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionThreadService() {
@@ -45,7 +45,7 @@ class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionTh
                                 this.proxy.metrics!!.agentEvictions.inc()
                         }
                     }
-            Utils.sleepForSecs(threadPauseSecs)
+            sleepForSecs(threadPauseSecs)
         }
     }
 

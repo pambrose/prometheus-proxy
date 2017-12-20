@@ -17,7 +17,8 @@
 package io.prometheus
 
 import io.prometheus.agent.AgentOptions
-import io.prometheus.common.Utils
+import io.prometheus.common.getBanner
+import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -39,8 +40,8 @@ object TestUtils {
                 }
         val options = ProxyOptions(args)
 
-        logger.info(Utils.getBanner("banners/proxy.txt"))
-        logger.info(Utils.getVersionDesc(false))
+        logger.info(getBanner("banners/proxy.txt"))
+        logger.info(getVersionDesc(false))
 
         val proxy = Proxy(options, TestConstants.PROXY_PORT, serverName, true)
         proxy.startAsync()
@@ -59,8 +60,8 @@ object TestUtils {
                 }
         val options = AgentOptions(args, false)
 
-        logger.info(Utils.getBanner("banners/agent.txt"))
-        logger.info(Utils.getVersionDesc(false))
+        logger.info(getBanner("banners/agent.txt"))
+        logger.info(getVersionDesc(false))
 
         return Agent(options, serverName, true).apply {
             startAsync()

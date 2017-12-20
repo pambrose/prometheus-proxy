@@ -114,7 +114,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
         this.jmxReporter?.start()
         this.metricsService?.startAsync()
         this.adminService?.startAsync()
-        Runtime.getRuntime().addShutdownHook(Utils.shutDownHookAction(this))
+        Runtime.getRuntime().addShutdownHook(shutDownHookAction(this))
     }
 
     @Throws(Exception::class)

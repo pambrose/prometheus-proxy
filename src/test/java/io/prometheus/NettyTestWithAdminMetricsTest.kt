@@ -17,7 +17,7 @@
 package io.prometheus
 
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.Utils
+import io.prometheus.common.sleepForSecs
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
@@ -79,7 +79,7 @@ class NettyTestWithAdminMetricsTest {
             AGENT!!.awaitInitialConnection(10, SECONDS)
 
             // Wait long enough to trigger heartbeat for code coverage
-            Utils.sleepForSecs(15)
+            sleepForSecs(15)
         }
 
         @JvmStatic

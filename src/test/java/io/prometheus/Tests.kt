@@ -18,7 +18,8 @@ package io.prometheus
 
 import com.google.common.collect.Maps
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.common.Utils
+import io.prometheus.common.sleepForMillis
+import io.prometheus.common.sleepForSecs
 import okhttp3.Request
 import org.assertj.core.api.Assertions.assertThat
 import spark.Service
@@ -138,7 +139,7 @@ object Tests {
         http.port(agentPort)
                 .get("/$agentPath") { _, res ->
                     res.type("text/plain")
-                    Utils.sleepForSecs(10)
+                    sleepForSecs(10)
                     "I timed out"
                 }
         val agentUrl = "http://localhost:$agentPort/$agentPath"
@@ -193,7 +194,7 @@ object Tests {
         IntStream.range(0, queryCount)
                 .forEach {
                     callProxy(pathMap)
-                    Utils.sleepForMillis(pauseMillis)
+                    sleepForMillis(pauseMillis)
                 }
 
         // Call the proxy in parallel

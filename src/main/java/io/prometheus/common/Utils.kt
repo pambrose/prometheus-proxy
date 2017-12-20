@@ -34,108 +34,109 @@ import java.util.concurrent.atomic.AtomicInteger
 
 object Utils {
 
-    private val logger = LoggerFactory.getLogger(Utils::class.java)
+    val logger = LoggerFactory.getLogger(Utils::class.java)
 
-    val hostName: String
-        get() {
-            return try {
-                InetAddress.getLocalHost().hostName
-            } catch (e: UnknownHostException) {
-                "Unknown"
-            }
+}
+
+val hostName: String
+    get() {
+        return try {
+            InetAddress.getLocalHost().hostName
+        } catch (e: UnknownHostException) {
+            "Unknown"
         }
+    }
 
-    fun getBanner(filename: String): String {
-        try {
-            logger.javaClass.classLoader.getResourceAsStream(filename).use {
-                val banner = CharStreams.toString(InputStreamReader(it, Charsets.UTF_8.name()))
-                val lines: List<String> = Splitter.on("\n").splitToList(banner)
+fun getBanner(filename: String): String {
+    try {
+        Utils.logger.javaClass.classLoader.getResourceAsStream(filename).use {
+            val banner = CharStreams.toString(InputStreamReader(it, Charsets.UTF_8.name()))
+            val lines: List<String> = Splitter.on("\n").splitToList(banner)
 
-                // Use Atomic values because filter requires finals
-                // Trim initial and trailing blank lines, but preserve blank lines in middle;
-                val first = AtomicInteger(-1)
-                val last = AtomicInteger(-1)
-                val lineNum = AtomicInteger(0)
-                lines.forEach {
-                    if (it.trim { it <= ' ' }.isNotEmpty()) {
-                        if (first.get() == -1)
-                            first.set(lineNum.get())
-                        last.set(lineNum.get())
+            // Use Atomic values because filter requires finals
+            // Trim initial and trailing blank lines, but preserve blank lines in middle;
+            val first = AtomicInteger(-1)
+            val last = AtomicInteger(-1)
+            val lineNum = AtomicInteger(0)
+            lines.forEach {
+                if (it.trim { it <= ' ' }.isNotEmpty()) {
+                    if (first.get() == -1)
+                        first.set(lineNum.get())
+                    last.set(lineNum.get())
+                }
+                lineNum.incrementAndGet()
+            }
+
+            lineNum.set(0)
+
+            val vals = lines
+                    .filter {
+                        val currLine = lineNum.getAndIncrement()
+                        currLine >= first.get() && currLine <= last.get()
                     }
-                    lineNum.incrementAndGet()
-                }
+                    .map { "     " + it }
+                    .toList()
 
-                lineNum.set(0)
-
-                val vals = lines
-                        .filter {
-                            val currLine = lineNum.getAndIncrement()
-                            currLine >= first.get() && currLine <= last.get()
-                        }
-                        .map { "     " + it }
-                        .toList()
-
-                val noNulls = Joiner.on("\n")
-                        .skipNulls()
-                        .join(vals)
-                return "\n\n$noNulls\n\n"
-            }
-        } catch (e: Exception) {
-            return "Banner $filename cannot be found"
+            val noNulls = Joiner.on("\n")
+                    .skipNulls()
+                    .join(vals)
+            return "\n\n$noNulls\n\n"
         }
+    } catch (e: Exception) {
+        return "Banner $filename cannot be found"
     }
+}
 
-    fun queueHealthCheck(queue: Queue<*>, size: Int) =
-            object : HealthCheck() {
-                @Throws(Exception::class)
-                override fun check(): HealthCheck.Result {
-                    return if (queue.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", queue.size)
-                }
+fun queueHealthCheck(queue: Queue<*>, size: Int) =
+        object : HealthCheck() {
+            @Throws(Exception::class)
+            override fun check(): HealthCheck.Result {
+                return if (queue.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", queue.size)
             }
-
-    fun mapHealthCheck(map: Map<*, *>, size: Int) =
-            object : HealthCheck() {
-                @Throws(Exception::class)
-                override fun check(): HealthCheck.Result {
-                    return if (map.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", map.size)
-                }
-            }
-
-    fun sleepForMillis(millis: Long) =
-            try {
-                Thread.sleep(millis)
-            } catch (e: InterruptedException) {
-                // Ignore
-            }
-
-    fun sleepForSecs(secs: Long) =
-            try {
-                Thread.sleep(secs.toMillis())
-            } catch (e: InterruptedException) {
-                // Ignore
-            }
-
-    fun getVersionDesc(asJson: Boolean): String {
-        val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
-        return if (asJson)
-            """{"Version": "${annotation.version}", "Release Date": "${annotation.date}"}"""
-        else
-            """Version: ${annotation.version} Release Date: ${annotation.date}"""
-    }
-
-    fun shutDownHookAction(service: Service): Thread =
-            Thread {
-                JCommander.getConsole().println("*** ${service.javaClass.simpleName} shutting down ***")
-                service.stopAsync()
-                JCommander.getConsole().println("*** ${service.javaClass.simpleName} shut down complete ***")
-            }
-
-    class VersionValidator : IParameterValidator {
-        override fun validate(name: String, value: String) {
-            val console = JCommander.getConsole()
-            console.println(getVersionDesc(false))
-            System.exit(0)
         }
+
+fun mapHealthCheck(map: Map<*, *>, size: Int) =
+        object : HealthCheck() {
+            @Throws(Exception::class)
+            override fun check(): HealthCheck.Result {
+                return if (map.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", map.size)
+            }
+        }
+
+fun sleepForMillis(millis: Long) =
+        try {
+            Thread.sleep(millis)
+        } catch (e: InterruptedException) {
+            // Ignore
+        }
+
+fun sleepForSecs(secs: Long) =
+        try {
+            Thread.sleep(secs.toMillis())
+        } catch (e: InterruptedException) {
+            // Ignore
+        }
+
+fun getVersionDesc(asJson: Boolean): String {
+    val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
+    return if (asJson)
+        """{"Version": "${annotation.version}", "Release Date": "${annotation.date}"}"""
+    else
+        """Version: ${annotation.version} Release Date: ${annotation.date}"""
+}
+
+fun shutDownHookAction(service: Service): Thread =
+        Thread {
+            JCommander.getConsole().println("*** ${service.javaClass.simpleName} shutting down ***")
+            service.stopAsync()
+            JCommander.getConsole().println("*** ${service.javaClass.simpleName} shut down complete ***")
+        }
+
+class VersionValidator : IParameterValidator {
+    override fun validate(name: String, value: String) {
+        val console = JCommander.getConsole()
+        console.println(getVersionDesc(false))
+        System.exit(0)
     }
 }
 

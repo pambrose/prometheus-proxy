@@ -98,15 +98,15 @@ class Proxy(options: ProxyOptions,
 
     override fun run() {
         while (this.isRunning)
-            Utils.sleepForMillis(500)
+            sleepForMillis(500)
     }
 
     override fun registerHealthChecks() {
         super.registerHealthChecks()
         this.healthCheckRegistry.register("grpc_service", this.grpcService.healthCheck)
         this.healthCheckRegistry.register("scrape_response_map_check",
-                                          Utils.mapHealthCheck(this.scrapeRequestMap,
-                                                               this.configVals.internal.scrapeRequestMapUnhealthySize))
+                                          mapHealthCheck(this.scrapeRequestMap,
+                                                         this.configVals.internal.scrapeRequestMapUnhealthySize))
         this.healthCheckRegistry
                 .register("agent_scrape_request_queue",
                           object : HealthCheck() {
@@ -227,8 +227,8 @@ class Proxy(options: ProxyOptions,
         fun main(argv: Array<String>) {
             val options = ProxyOptions(argv)
 
-            logger.info(Utils.getBanner("banners/proxy.txt"))
-            logger.info(Utils.getVersionDesc(false))
+            logger.info(getBanner("banners/proxy.txt"))
+            logger.info(getVersionDesc(false))
 
             val proxy = Proxy(options, options.proxyPort!!, null, false)
             proxy.startAsync()
