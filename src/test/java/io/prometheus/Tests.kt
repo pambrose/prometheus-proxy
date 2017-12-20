@@ -35,14 +35,14 @@ object Tests {
     fun missingPathTest() {
         val url = "http://localhost:${TestConstants.PROXY_PORT}/"
         val request = Request.Builder().url(url)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use({ response -> assertThat(response.code()).isEqualTo(404) })
+        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
     }
 
     @Throws(Exception::class)
     fun invalidPathTest() {
         val url = "http://localhost:${TestConstants.PROXY_PORT}/invalid_path"
         val request = Request.Builder().url(url)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use({ response -> assertThat(response.code()).isEqualTo(404) })
+        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
     }
 
     @Throws(Exception::class)
@@ -120,7 +120,7 @@ object Tests {
 
         val url = "http://localhost:${TestConstants.PROXY_PORT}/$badPath"
         val request = Request.Builder().url(url)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use({ response -> assertThat(response.code()).isEqualTo(404) })
+        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
 
         agent.unregisterPath(badPath)
     }
@@ -143,7 +143,7 @@ object Tests {
 
         val proxyUrl = "http://localhost:${TestConstants.PROXY_PORT}/$proxyPath"
         val request = Request.Builder().url(proxyUrl)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use({ response -> assertThat(response.code()).isEqualTo(404) })
+        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
 
         agent.unregisterPath("/$proxyPath")
         http.stop()
@@ -198,14 +198,14 @@ object Tests {
         IntStream.range(0, threadedQueryCount)
                 .forEach {
                     TestConstants.EXECUTOR_SERVICE
-                            .submit({
-                                        try {
-                                            callProxy(pathMap)
-                                            latch.countDown()
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                        }
-                                    })
+                            .submit {
+                                try {
+                                    callProxy(pathMap)
+                                    latch.countDown()
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
                 }
 
         assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue()
@@ -232,10 +232,13 @@ object Tests {
         val httpVal = pathMap[index]
         val url = "http://localhost:${TestConstants.PROXY_PORT}/proxy-$index"
         val request = Request.Builder().url(url)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use({ response ->
-                                                                                assertThat(response.code()).isEqualTo(200)
-                                                                                val body = response.body()!!.string()
-                                                                                assertThat(body).isEqualTo("value: $httpVal")
-                                                                            })
+        TestConstants.OK_HTTP_CLIENT
+                .newCall(request.build())
+                .execute()
+                .use { response ->
+                    assertThat(response.code()).isEqualTo(200)
+                    val body = response.body()!!.string()
+                    assertThat(body).isEqualTo("value: $httpVal")
+                }
     }
 }

@@ -41,13 +41,13 @@ class Proxy(options: ProxyOptions,
                                                 ZipkinConfig.create(options.configVals!!.proxy.internal.zipkin),
                                                 testMode) {
 
-    val agentContextMap = Maps.newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
     private val pathMap = Maps.newConcurrentMap<String, AgentContext>() // Map path to AgentContext
     private val scrapeRequestMap = Maps.newConcurrentMap<Long, ScrapeRequestWrapper>() // Map scrape_id to agent_id
+    val agentContextMap = Maps.newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
 
     val metrics: ProxyMetrics?
     private val grpcService: ProxyGrpcService
-    private val httpService: ProxyHttpService
+    private val httpService = ProxyHttpService(this, proxyPort)
     private val agentCleanupService: AgentContextCleanupService?
 
     val agentContextSize: Int
@@ -63,23 +63,20 @@ class Proxy(options: ProxyOptions,
         get() = this.genericConfigVals.proxy
 
     val totalAgentRequestQueueSize: Int
-        get() = this.agentContextMap.values
-                .stream()
-                .mapToInt({ it.scrapeRequestQueueSize() })
-                .sum()
+        get() = this.agentContextMap.values.stream().mapToInt { it.scrapeRequestQueueSize() }.sum()
 
     init {
-
         this.metrics = if (this.metricsEnabled) ProxyMetrics(this) else null
-        this.grpcService = if (isNullOrEmpty(inProcessServerName))
-            ProxyGrpcService.create(this, options.agentPort!!)
-        else
-            ProxyGrpcService.create(this, inProcessServerName!!)
-        this.httpService = ProxyHttpService(this, proxyPort)
-        this.agentCleanupService = if (this.configVals.internal.staleAgentCheckEnabled)
-            AgentContextCleanupService(this)
-        else
-            null
+        this.grpcService =
+                if (isNullOrEmpty(inProcessServerName))
+                    ProxyGrpcService.create(this, options.agentPort!!)
+                else
+                    ProxyGrpcService.create(this, inProcessServerName!!)
+        this.agentCleanupService =
+                if (this.configVals.internal.staleAgentCheckEnabled)
+                    AgentContextCleanupService(this)
+                else
+                    null
 
         this.addServices(this.grpcService, this.httpService, this.agentCleanupService!!)
         this.init()
@@ -91,7 +88,6 @@ class Proxy(options: ProxyOptions,
         this.grpcService.startAsync()
         this.httpService.startAsync()
         this.agentCleanupService?.startAsync() ?: logger.info("Agent eviction thread not started")
-
     }
 
     @Throws(Exception::class)
@@ -103,9 +99,8 @@ class Proxy(options: ProxyOptions,
     }
 
     override fun run() {
-        while (this.isRunning) {
+        while (this.isRunning)
             Utils.sleepForMillis(500)
-        }
     }
 
     override fun registerHealthChecks() {
@@ -120,7 +115,7 @@ class Proxy(options: ProxyOptions,
                               @Throws(Exception::class)
                               override fun check(): HealthCheck.Result {
                                   val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
-                                  val vals = getAgentContextMap().entries
+                                  val vals = agentContextMap.entries
                                           .stream()
                                           .filter { kv -> kv.value.scrapeRequestQueueSize() >= unhealthySize }
                                           .map { kv -> "${kv.value} ${kv.value.scrapeRequestQueueSize()}" }
@@ -133,13 +128,9 @@ class Proxy(options: ProxyOptions,
                           })
     }
 
-    fun addAgentContext(agentContext: AgentContext) {
-        this.agentContextMap.put(agentContext.agentId, agentContext)
-    }
+    fun addAgentContext(agentContext: AgentContext) = this.agentContextMap.put(agentContext.agentId, agentContext)
 
-    fun getAgentContext(agentId: String): AgentContext? {
-        return this.agentContextMap[agentId]
-    }
+    fun getAgentContext(agentId: String) = this.agentContextMap[agentId]
 
     fun removeAgentContext(agentId: String?): AgentContext? {
         if (agentId == null) {
@@ -158,25 +149,18 @@ class Proxy(options: ProxyOptions,
         return agentContext
     }
 
-    fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) {
-        this.scrapeRequestMap.put(scrapeRequest.scrapeId, scrapeRequest)
-    }
+    fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) = this.scrapeRequestMap.put(scrapeRequest.scrapeId,
+                                                                                               scrapeRequest)
 
-    fun getFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {
-        return this.scrapeRequestMap[scrapeId]
-    }
+    fun getFromScrapeRequestMap(scrapeId: Long) = this.scrapeRequestMap[scrapeId]
 
-    fun removeFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {
-        return this.scrapeRequestMap.remove(scrapeId)
-    }
+    fun removeFromScrapeRequestMap(scrapeId: Long) = this.scrapeRequestMap.remove(scrapeId)
 
-    fun getAgentContextByPath(path: String): AgentContext? {
-        return this.pathMap[path]
-    }
+    fun getAgentContextByPath(path: String) = this.pathMap[path]
 
-    fun containsPath(path: String): Boolean {
-        return this.pathMap.containsKey(path)
-    }
+    fun containsPath(path: String) = this.pathMap.containsKey(path)
+
+    fun pathMapSize() = this.pathMap.size
 
     fun addPath(path: String, agentContext: AgentContext) {
         synchronized(this.pathMap) {
@@ -186,8 +170,7 @@ class Proxy(options: ProxyOptions,
         }
     }
 
-    fun removePath(path: String, agentId: String,
-                   responseBuilder: UnregisterPathResponse.Builder) {
+    fun removePath(path: String, agentId: String, responseBuilder: UnregisterPathResponse.Builder) {
         synchronized(this.pathMap) {
             val agentContext = this.pathMap[path]
             if (agentContext == null) {
@@ -214,6 +197,7 @@ class Proxy(options: ProxyOptions,
             logger.info("Null agentId")
             return
         }
+
         synchronized(this.pathMap) {
             for ((key, value) in this.pathMap) {
                 if (value.agentId == agentId) {
@@ -227,24 +211,14 @@ class Proxy(options: ProxyOptions,
         }
     }
 
-    fun pathMapSize(): Int {
-        return this.pathMap.size
-    }
-
-    fun getAgentContextMap(): Map<String, AgentContext> {
-        return this.agentContextMap
-    }
-
-    override fun toString(): String {
-        return MoreObjects.toStringHelper(this)
-                .add("proxyPort", this.httpService.port)
-                .add("adminService", if (this.adminEnabled) this.adminService else "Disabled")
-                .add("metricsService", if (this.metricsEnabled) this.metricsService else "Disabled")
-                .toString()
-    }
+    override fun toString(): String =
+            MoreObjects.toStringHelper(this)
+                    .add("proxyPort", this.httpService.port)
+                    .add("adminService", this.adminService ?: "Disabled")
+                    .add("metricsService", this.metricsService ?: "Disabled")
+                    .toString()
 
     companion object {
-
         private val logger = LoggerFactory.getLogger(Proxy::class.java)
 
         val AGENT_ID = "agent-id"

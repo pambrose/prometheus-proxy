@@ -19,7 +19,6 @@ package io.prometheus
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions.checkNotNull
 import com.google.common.base.Strings.isNullOrEmpty
-import com.google.common.collect.ImmutableMap
 import com.google.common.collect.Lists
 import com.google.common.collect.Maps
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
@@ -61,24 +60,23 @@ class Agent(options: AgentOptions,
                                                 testMode) {
 
     private val pathContextMap = Maps.newConcurrentMap<String, PathContext>()  // Map path to PathContext
-    private val agentIdRef = AtomicReference<String>()
-    private val lastMsgSentRef = AtomicLong()
     private val heartbeatService = Executors.newFixedThreadPool(1)
     private val initialConnectionLatch = CountDownLatch(1)
     private val okHttpClient = OkHttpClient()
+    private val lastMsgSentRef = AtomicLong()
+    private val agentIdRef = AtomicReference<String>()
     private val channelRef = AtomicReference<ManagedChannel>()
     private val blockingStubRef = AtomicReference<ProxyServiceBlockingStub>()
     private val asyncStubRef = AtomicReference<ProxyServiceStub>()
+    private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(this.configVals.internal.scrapeResponseQueueSize)
+    private val agentName: String? = if (isNullOrEmpty(options.agentName)) "Unnamed-${Utils.hostName}" else options.agentName
+
     private val hostname: String?
     private val port: Int
     private val readRequestsExecutorService: ExecutorService
     private val reconnectLimiter: RateLimiter
     private val pathConfigs: List<Map<String, String>>
-
-    private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(this.configVals.internal.scrapeResponseQueueSize)
-    private val agentName: String? = if (isNullOrEmpty(options.agentName)) "Unnamed-${Utils.hostName}" else options.agentName
-
-    val metrics: AgentMetrics?
+    private val metrics: AgentMetrics?
 
     private val proxyHost: String
         get() = "$hostname:$port"
@@ -97,31 +95,31 @@ class Agent(options: AgentOptions,
     val configVals: ConfigVals.Agent
         get() = this.genericConfigVals.agent
 
-
     init {
         this.metrics = if (this.metricsEnabled) AgentMetrics(this) else null
 
-        this.readRequestsExecutorService = newCachedThreadPool(if (this.metricsEnabled)
-                                                                   InstrumentedThreadFactory.newInstrumentedThreadFactory("agent_fetch",
-                                                                                                                          "Agent fetch",
-                                                                                                                          true)
-                                                               else
-                                                                   ThreadFactoryBuilder().setNameFormat("agent_fetch-%d")
-                                                                           .setDaemon(true)
-                                                                           .build())
+        this.readRequestsExecutorService =
+                newCachedThreadPool(if (this.metricsEnabled)
+                                        InstrumentedThreadFactory.newInstrumentedThreadFactory("agent_fetch",
+                                                                                               "Agent fetch",
+                                                                                               true)
+                                    else
+                                        ThreadFactoryBuilder().setNameFormat("agent_fetch-%d")
+                                                .setDaemon(true)
+                                                .build())
 
         logger.info("Assigning proxy reconnect pause time to ${this.configVals.internal.reconectPauseSecs} secs")
         this.reconnectLimiter = RateLimiter.create(1.0 / this.configVals.internal.reconectPauseSecs)
         this.reconnectLimiter.acquire()  // Prime the limiter
 
         this.pathConfigs = this.configVals.pathConfigs.stream()
-                .map<ImmutableMap<String, String>> { v ->
-                    ImmutableMap.of<String, String>("name", v.name,
-                                                    "path", v.path,
-                                                    "url", v.url)
+                .map {
+                    mapOf("name" to it.name,
+                          "path" to it.path,
+                          "url" to it.url)
                 }
-                .peek { v ->
-                    logger.info("Proxy path /{} will be assigned to {}", v["path"], v["url"])
+                .peek {
+                    logger.info("Proxy path /{} will be assigned to {}", it["path"], it["url"])
                 }
                 .collect(Collectors.toList())
 
@@ -172,7 +170,7 @@ class Agent(options: AgentOptions,
                                                  this.configVals.internal.scrapeResponseQueueUnhealthySize))
     }
 
-    override fun serviceName(): String = "${this.javaClass.simpleName} ${this.agentName}"
+    override fun serviceName() = "${this.javaClass.simpleName} ${this.agentName}"
 
     @Throws(RequestFailureException::class)
     private fun connectToProxy() {
@@ -247,10 +245,7 @@ class Agent(options: AgentOptions,
         this.asyncStubRef.set(newStub(intercept(this.channel, interceptors)))
     }
 
-    private fun updateScrapeCounter(type: String) {
-        if (this.metricsEnabled)
-            this.metrics!!.scrapeRequests.labels(type).inc()
-    }
+    private fun updateScrapeCounter(type: String) = this.metrics?.scrapeRequests?.labels(type)?.inc()
 
     private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
         var statusCode = 404
@@ -270,12 +265,7 @@ class Agent(options: AgentOptions,
                     .build()
         }
 
-        val requestTimer =
-                if (this.metricsEnabled)
-                    this.metrics!!.scrapeRequestLatency.labels(this.agentName!!).startTimer()
-                else
-                    null
-
+        val requestTimer = this.metrics?.scrapeRequestLatency?.labels(this.agentName!!)?.startTimer()
         var reason = "None"
         try {
             pathContext.fetchUrl(scrapeRequest).use { response ->
@@ -319,16 +309,13 @@ class Agent(options: AgentOptions,
             logger.info("Connecting to proxy at ${this.proxyHost}...")
             this.blockingStubRef.get().connectAgent(Empty.getDefaultInstance())
             logger.info("Connected to proxy at ${this.proxyHost}")
-            if (this.metricsEnabled)
-                this.metrics!!.connects.labels("success").inc()
+            this.metrics?.connects?.labels("success")?.inc()
             return true
         } catch (e: StatusRuntimeException) {
-            if (this.metricsEnabled)
-                this.metrics!!.connects.labels("failure").inc()
+            this.metrics?.connects?.labels("failure")?.inc()
             logger.info("Cannot connect to proxy at ${this.proxyHost} [${e.message}]")
             return false
         }
-
     }
 
     @Throws(RequestFailureException::class)
@@ -479,9 +466,7 @@ class Agent(options: AgentOptions,
         observer.onCompleted()
     }
 
-    private fun markMsgSent() {
-        this.lastMsgSentRef.set(System.currentTimeMillis())
-    }
+    private fun markMsgSent() = this.lastMsgSentRef.set(System.currentTimeMillis())
 
     private fun sendHeartBeat(disconnected: AtomicBoolean) {
         if (this.agentId == null)
@@ -502,22 +487,19 @@ class Agent(options: AgentOptions,
     }
 
     @Throws(InterruptedException::class)
-    fun awaitInitialConnection(timeout: Long, unit: TimeUnit): Boolean {
-        return this.initialConnectionLatch.await(timeout, unit)
-    }
+    fun awaitInitialConnection(timeout: Long, unit: TimeUnit) = this.initialConnectionLatch.await(timeout, unit)
 
     override fun toString(): String {
         return MoreObjects.toStringHelper(this)
                 .add("agentId", this.agentId)
                 .add("agentName", this.agentName)
                 .add("proxyHost", this.proxyHost)
-                .add("adminService", if (this.adminEnabled) this.adminService else "Disabled")
-                .add("metricsService", if (this.metricsEnabled) this.metricsService else "Disabled")
+                .add("adminService", this.adminService ?: "Disabled")
+                .add("metricsService", this.metricsService ?: "Disabled")
                 .toString()
     }
 
     companion object {
-
         private val logger = LoggerFactory.getLogger(Agent::class.java)
 
         @JvmStatic
