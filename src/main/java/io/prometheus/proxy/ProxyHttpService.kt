@@ -198,7 +198,6 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     }
 
     companion object {
-
         private val logger = LoggerFactory.getLogger(ProxyHttpService::class.java)
     }
 }

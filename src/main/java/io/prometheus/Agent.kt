@@ -41,7 +41,6 @@ import io.prometheus.grpc.ProxyServiceGrpc.*
 import okhttp3.OkHttpClient
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.lang.String.format
 import java.util.concurrent.*
 import java.util.concurrent.Executors.newCachedThreadPool
 import java.util.concurrent.atomic.AtomicBoolean
@@ -74,7 +73,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
     private val pathConfigs: List<Map<String, String>>
 
     private val proxyHost: String
-        get() = format("%s:%s", hostname, port)
+        get() = "$hostname:$port"
 
     val scrapeResponseQueueSize: Int
         get() = this.scrapeResponseQueue.size
@@ -97,10 +96,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
 
 
     init {
-        this.agentName = if (isNullOrEmpty(options.agentName))
-            format("Unnamed-%s", Utils.hostName)
-        else
-            options.agentName
+        this.agentName = if (isNullOrEmpty(options.agentName)) "Unnamed-${Utils.hostName}" else options.agentName
         val queueSize = this.configVals.internal.scrapeResponseQueueSize
         this.scrapeResponseQueue = ArrayBlockingQueue(queueSize)
 
@@ -298,10 +294,10 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
                 }
             }
         } catch (e: IOException) {
-            reason = format("%s - %s", e.javaClass.simpleName, e.message)
+            reason = "${e.javaClass.simpleName} - ${e.message}"
         } catch (e: Exception) {
             logger.warn("fetchUrl()", e)
-            reason = format("%s - %s", e.javaClass.simpleName, e.message)
+            reason = "${e.javaClass.simpleName} - ${e.message}"
         } finally {
             requestTimer?.observeDuration()
         }
@@ -345,7 +341,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
         val response = this.blockingStub.registerAgent(request)
         this.markMsgSent()
         if (!response.valid)
-            throw RequestFailureException(format("registerAgent() - %s", response.reason))
+            throw RequestFailureException("registerAgent() - ${response.reason}")
 
         this.initialConnectionLatch.countDown()
     }
@@ -397,7 +393,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
         val response = this.blockingStub.registerPath(request)
         this.markMsgSent()
         if (!response.valid)
-            throw RequestFailureException(format("registerPath() - %s", response.reason))
+            throw RequestFailureException("registerPath() - ${response.reason}")
         return response.pathId
     }
 
@@ -410,7 +406,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
         val response = this.blockingStub.unregisterPath(request)
         this.markMsgSent()
         if (!response.valid)
-            throw RequestFailureException(format("unregisterPath() - %s", response.reason))
+            throw RequestFailureException("unregisterPath() - ${response.reason}")
     }
 
     private fun readRequestAction(request: ScrapeRequest): Runnable {

@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import io.prometheus.client.Counter
 import io.prometheus.client.Gauge
-import java.lang.String.format
 import java.util.concurrent.ThreadFactory
 
 class InstrumentedThreadFactory(delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
@@ -35,16 +34,16 @@ class InstrumentedThreadFactory(delegate: ThreadFactory, name: String, help: Str
         Preconditions.checkNotNull(help)
         this.delegate = Preconditions.checkNotNull(delegate)
         this.created = Counter.build()
-                .name(format("%s_threads_created", name))
-                .help(format("%s threads created", help))
+                .name("${name}_threads_created")
+                .help("$help threads created")
                 .register()
         this.running = Gauge.build()
-                .name(format("%s_threads_running", name))
-                .help(format("%s threads running", help))
+                .name("${name}_threads_running")
+                .help("$help threads running")
                 .register()
         this.terminated = Counter.build()
-                .name(format("%s_threads_terminated", name))
-                .help(format("%s threads terminated", help))
+                .name("${name}_threads_terminated")
+                .help("$help threads terminated")
                 .register()
     }
 

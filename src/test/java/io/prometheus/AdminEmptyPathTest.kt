@@ -26,7 +26,6 @@ import org.junit.BeforeClass
 import org.junit.Test
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.lang.String.format
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 
@@ -37,7 +36,7 @@ class AdminEmptyPathTest {
     fun proxyPingPathTest() {
         assertThat(PROXY!!.configVals.admin.port).isEqualTo(8098)
         assertThat(PROXY!!.configVals.admin.pingPath).isEqualTo("")
-        val url = format("http://localhost:%d/%s", PROXY!!.configVals.admin.port, PROXY!!.configVals.admin.pingPath)
+        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
     }
@@ -47,7 +46,7 @@ class AdminEmptyPathTest {
     fun proxyVersionPathTest() {
         assertThat(PROXY!!.configVals.admin.port).isEqualTo(8098)
         assertThat(PROXY!!.configVals.admin.versionPath).isEqualTo("")
-        val url = format("http://localhost:%d/%s", PROXY!!.configVals.admin.port, PROXY!!.configVals.admin.versionPath)
+        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
     }
@@ -56,7 +55,7 @@ class AdminEmptyPathTest {
     @Throws(Exception::class)
     fun proxyHealthCheckPathTest() {
         assertThat(PROXY!!.configVals.admin.healthCheckPath).isEqualTo("")
-        val url = format("http://localhost:%d/%s", PROXY!!.configVals.admin.port, PROXY!!.configVals.admin.healthCheckPath)
+        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
     }
@@ -65,7 +64,7 @@ class AdminEmptyPathTest {
     @Throws(Exception::class)
     fun proxyThreadDumpPathTest() {
         assertThat(PROXY!!.configVals.admin.threadDumpPath).isEqualTo("")
-        val url = format("http://localhost:%d/%s", PROXY!!.configVals.admin.port, PROXY!!.configVals.admin.threadDumpPath)
+        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.code()).isEqualTo(404) }
     }

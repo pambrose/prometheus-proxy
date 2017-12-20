@@ -18,7 +18,6 @@ package io.prometheus.proxy
 
 import com.google.common.base.MoreObjects
 import io.prometheus.Proxy
-import java.lang.String.format
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.TimeUnit
@@ -28,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 class AgentContext(proxy: Proxy, val remoteAddr: String) {
 
-    val agentId = format("%s", AGENT_ID_GENERATOR.incrementAndGet())
+    val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
     private val valid = AtomicBoolean(true)
     private val lastActivityTime = AtomicLong()
     private val agentName = AtomicReference<String>()

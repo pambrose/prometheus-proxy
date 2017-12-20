@@ -23,7 +23,6 @@ import com.beust.jcommander.ParameterException
 import com.typesafe.config.*
 import io.prometheus.common.EnvVars.*
 import org.slf4j.LoggerFactory
-import java.lang.String.format
 import java.util.*
 
 abstract class BaseOptions protected constructor(private val programName: String,
@@ -115,10 +114,11 @@ abstract class BaseOptions protected constructor(private val programName: String
 
         this.dynamicParams.forEach { key, value ->
             // Strip quotes
-            val prop = format("%s=%s", key, if (value.startsWith("\"") && value.endsWith("\""))
+            val qval = if (value.startsWith("\"") && value.endsWith("\""))
                 value.substring(1, value.length - 1)
             else
-                value)
+                value
+            val prop = "$key=$qval"
             System.setProperty(key, prop)
             val newConfig = ConfigFactory.parseString(prop, PROPS)
             configRef = newConfig.withFallback(this.configRef).resolve()

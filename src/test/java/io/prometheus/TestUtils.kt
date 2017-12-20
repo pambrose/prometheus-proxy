@@ -22,7 +22,6 @@ import io.prometheus.proxy.ProxyOptions
 import org.assertj.core.util.Lists
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.lang.String.format
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
@@ -35,8 +34,8 @@ object TestUtils {
 
         val args = Lists.newArrayList(TestConstants.args)
         args.addAll(argv)
-        args.add(format("-Dproxy.admin.enabled=%s", adminEnabled))
-        args.add(format("-Dproxy.metrics.enabled=%s", metricsEnabled))
+        args.add("-Dproxy.admin.enabled=$adminEnabled")
+        args.add("-Dproxy.metrics.enabled=$metricsEnabled")
         val options = ProxyOptions(args)
 
         logger.info(Utils.getBanner("banners/proxy.txt"))
@@ -53,8 +52,8 @@ object TestUtils {
 
         val args = Lists.newArrayList(TestConstants.args)
         args.addAll(argv)
-        args.add(format("-Dagent.admin.enabled=%s", adminEnabled))
-        args.add(format("-Dagent.metrics.enabled=%s", metricsEnabled))
+        args.add("-Dagent.admin.enabled=$adminEnabled")
+        args.add("-Dagent.metrics.enabled=$metricsEnabled")
         val options = AgentOptions(args, false)
 
         logger.info(Utils.getBanner("banners/agent.txt"))

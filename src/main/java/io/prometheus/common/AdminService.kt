@@ -26,7 +26,6 @@ import com.google.common.util.concurrent.MoreExecutors
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
-import java.lang.String.format
 
 class AdminService(service: GenericService,
                    private val port: Int,
@@ -69,9 +68,9 @@ class AdminService(service: GenericService,
 
     override fun toString(): String {
         return MoreObjects.toStringHelper(this)
-                .add("ping", format(":%d /%s", this.port, this.pingPath))
-                .add("healthcheck", format(":%d /%s", this.port, this.healthCheckPath))
-                .add("threaddump", format(":%d /%s", this.port, this.threadDumpPath))
+                .add("ping", ":${this.port} /${this.pingPath}")
+                .add("healthcheck", ":${this.port} /${this.healthCheckPath}")
+                .add("threaddump", ":${this.port} /${this.threadDumpPath}")
                 .toString()
     }
 }

@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStreamReader
-import java.lang.String.format
 import java.net.InetAddress
 import java.net.URL
 import java.net.UnknownHostException
@@ -89,12 +88,11 @@ object Utils {
                 val noNulls = Joiner.on("\n")
                         .skipNulls()
                         .join(vals)
-                return format("%n%n%s%n%n", noNulls)
+                return "\n\n$noNulls\n\n"
             }
         } catch (e: Exception) {
-            return format("Banner %s cannot be found", filename)
+            return "Banner $filename cannot be found"
         }
-
     }
 
     fun readConfig(cliConfig: String?,
@@ -120,9 +118,10 @@ object Utils {
                         .withFallback(fallback)
             } catch (e: Exception) {
                 logger.error(if (e.cause is FileNotFoundException)
-                                 format("Invalid getConfig url: %s", configName)
+                                 "Invalid getConfig url: $configName"
                              else
-                                 format("Exception: %s - %s", e.javaClass.simpleName, e.message), e)
+                                 "Exception: ${e.javaClass.simpleName} - ${e.message}",
+                             e)
             }
 
         }
@@ -132,9 +131,10 @@ object Utils {
                         .withFallback(fallback)
             } catch (e: Exception) {
                 logger.error(if (e.cause is FileNotFoundException)
-                                 format("Invalid getConfig filename: %s", configName)
+                                 "Invalid getConfig filename: $configName"
                              else
-                                 format("Exception: %s - %s", e.javaClass.simpleName, e.message), e)
+                                 "Exception: ${e.javaClass.simpleName} - ${e.message}",
+                             e)
             }
 
         }
@@ -208,9 +208,9 @@ object Utils {
 
     fun shutDownHookAction(service: Service): Thread {
         return Thread {
-            JCommander.getConsole().println(format("*** %s shutting down ***", service.javaClass.simpleName))
+            JCommander.getConsole().println("*** ${service.javaClass.simpleName} shutting down ***")
             service.stopAsync()
-            JCommander.getConsole().println(format("*** %s shut down complete ***", service.javaClass.simpleName))
+            JCommander.getConsole().println("*** ${service.javaClass.simpleName} shut down complete ***")
         }
     }
 

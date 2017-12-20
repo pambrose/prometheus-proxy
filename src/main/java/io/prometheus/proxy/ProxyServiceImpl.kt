@@ -23,7 +23,6 @@ import io.grpc.stub.StreamObserver
 import io.prometheus.Proxy
 import io.prometheus.grpc.*
 import org.slf4j.LoggerFactory
-import java.lang.String.format
 import java.util.concurrent.atomic.AtomicLong
 
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
@@ -128,7 +127,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
         responseObserver.onNext(HeartBeatResponse.newBuilder()
                                         .setValid(agentContext != null)
-                                        .setReason(format("Invalid agentId: %s", agentId))
+                                        .setReason("Invalid agentId: $agentId")
                                         .build())
         responseObserver.onCompleted()
     }

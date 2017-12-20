@@ -25,8 +25,6 @@ import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
 
-import java.lang.String.format
-
 class MetricsService(private val port: Int, private val path: String) : AbstractIdleService() {
     private val server: Server = Server(this.port);
     val healthCheck: HealthCheck = object : HealthCheck() {
@@ -57,7 +55,7 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
 
     override fun toString(): String {
         return MoreObjects.toStringHelper(this)
-                .add("url", format("http://localhost:%d/%s", this.port, this.path))
+                .add("url", "http://localhost:${this.port}/${this.path}")
                 .toString()
     }
 }

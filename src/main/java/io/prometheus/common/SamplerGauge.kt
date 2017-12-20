@@ -19,7 +19,9 @@ package io.prometheus.common
 import com.google.common.collect.Lists
 import io.prometheus.client.Collector
 
-class SamplerGauge(private val name: String, private val help: String, private val samplerGaugeData: SamplerGaugeData) : Collector() {
+class SamplerGauge(private val name: String,
+                   private val help: String,
+                   private val samplerGaugeData: SamplerGaugeData) : Collector() {
 
     override fun collect(): List<Collector.MetricFamilySamples> {
         val sample = MetricFamilySamples.Sample(this.name,

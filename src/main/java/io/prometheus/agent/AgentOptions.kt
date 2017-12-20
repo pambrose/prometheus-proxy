@@ -23,7 +23,6 @@ import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars
 import io.prometheus.common.EnvVars.AGENT_CONFIG
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
-import java.lang.String.format
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) : BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
 
@@ -46,9 +45,7 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) : BaseOpti
             this.proxyHostname = PROXY_HOSTNAME.getEnv(if (configHostname.contains(":"))
                                                            configHostname
                                                        else
-                                                           format("%s:%d",
-                                                                  configHostname,
-                                                                  this.configVals!!.agent.proxy.port))
+                                                           "$configHostname:${this.configVals!!.agent.proxy.port}")
         }
 
         if (this.agentName == null)

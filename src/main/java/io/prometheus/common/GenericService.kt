@@ -31,7 +31,6 @@ import com.google.common.util.concurrent.ServiceManager
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
-import java.lang.String.format
 import java.util.stream.Collectors
 
 abstract class GenericService protected constructor(protected val genericConfigVals: ConfigVals,
@@ -96,8 +95,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
         }
 
         if (zipkinConfig.enabled) {
-            val zipkinUrl = format("http://%s:%d/%s",
-                                   zipkinConfig.hostname, zipkinConfig.port, zipkinConfig.path)
+            val zipkinUrl = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
             this.zipkinReporterService = ZipkinReporterService(zipkinUrl, zipkinConfig.serviceName)
             this.addService(this.zipkinReporterService)
         }
@@ -176,9 +174,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                             .map { kv -> "${kv.key}: ${kv.value}" }
                                             .collect(Collectors.toList())
 
-                                    HealthCheck.Result.unhealthy(format("Incorrect state: %s",
-                                                                        Joiner.on(", ")
-                                                                                .join(vals)))
+                                    HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
                                 }
                             }
                         })

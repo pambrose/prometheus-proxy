@@ -24,7 +24,6 @@ import okhttp3.Request
 import org.assertj.core.api.Assertions.assertThat
 import spark.Service
 import java.lang.Math.abs
-import java.lang.String.format
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -34,14 +33,14 @@ object Tests {
 
     @Throws(Exception::class)
     fun missingPathTest() {
-        val url = format("http://localhost:%d/", TestConstants.PROXY_PORT)
+        val url = "http://localhost:${TestConstants.PROXY_PORT}/"
         val request = Request.Builder().url(url)
         TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use({ response -> assertThat(response.code()).isEqualTo(404) })
     }
 
     @Throws(Exception::class)
     fun invalidPathTest() {
-        val url = format("http://localhost:%d/invalid_path", TestConstants.PROXY_PORT)
+        val url = "http://localhost:${TestConstants.PROXY_PORT}/invalid_path"
         val request = Request.Builder().url(url)
         TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use({ response -> assertThat(response.code()).isEqualTo(404) })
     }
@@ -54,8 +53,8 @@ object Tests {
 
         var cnt = 0
         for (i in 0 until TestConstants.REPS) {
-            val path = format("test-%d", i)
-            agent.registerPath(path, format("http://localhost:%d/%s", TestConstants.PROXY_PORT, path))
+            val path = "test-$i"
+            agent.registerPath(path, "http://localhost:${TestConstants.PROXY_PORT}/$path")
             cnt++
             assertThat(agent.pathMapSize()).isEqualTo(originalSize + cnt)
             agent.unregisterPath(path)
@@ -78,12 +77,12 @@ object Tests {
                 .forEach { `val` ->
                     TestConstants.EXECUTOR_SERVICE.submit(
                             {
-                                val path = format("test-%d", cnt.getAndIncrement())
+                                val path = "test-${cnt.getAndIncrement()}"
                                 synchronized(paths) {
                                     paths.add(path)
                                 }
                                 try {
-                                    val url = format("http://localhost:%d/%s", TestConstants.PROXY_PORT, path)
+                                    val url = "http://localhost:${TestConstants.PROXY_PORT}/$path"
                                     agent.registerPath(path, url)
                                     latch1.countDown()
                                 } catch (e: RequestFailureException) {
@@ -119,7 +118,7 @@ object Tests {
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
 
-        val url = format("http://localhost:%d/%s", TestConstants.PROXY_PORT, badPath)
+        val url = "http://localhost:${TestConstants.PROXY_PORT}/$badPath"
         val request = Request.Builder().url(url)
         TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use({ response -> assertThat(response.code()).isEqualTo(404) })
 
@@ -134,20 +133,19 @@ object Tests {
 
         val http = Service.ignite()
         http.port(agentPort)
-                .get(format("/%s", agentPath)
-                    ) { req, res ->
+                .get("/$agentPath") { req, res ->
                     res.type("text/plain")
                     Utils.sleepForSecs(10)
                     "I timed out"
                 }
-        val agentUrl = format("http://localhost:%d/%s", agentPort, agentPath)
-        agent.registerPath("/" + proxyPath, agentUrl)
+        val agentUrl = "http://localhost:$agentPort/$agentPath"
+        agent.registerPath("/$proxyPath", agentUrl)
 
-        val proxyUrl = format("http://localhost:%d/%s", TestConstants.PROXY_PORT, proxyPath)
+        val proxyUrl = "http://localhost:${TestConstants.PROXY_PORT}/$proxyPath"
         val request = Request.Builder().url(proxyUrl)
         TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use({ response -> assertThat(response.code()).isEqualTo(404) })
 
-        agent.unregisterPath("/" + proxyPath)
+        agent.unregisterPath("/$proxyPath")
         http.stop()
     }
 
@@ -171,10 +169,9 @@ object Tests {
                     val http = Service.ignite()
                     http.port(startingPort + i)
                             .threadPool(30, 10, 1000)
-                            .get(format("/agent-%d", i)
-                                ) { req, res ->
+                            .get("/agent-$i") { req, res ->
                                 res.type("text/plain")
-                                format("value: %d", i)
+                                "value: $i"
                             }
                     httpServers.add(http)
                 }
@@ -182,8 +179,8 @@ object Tests {
         // Create the paths
         for (i in 0 until pathCount) {
             val index = abs(TestConstants.RANDOM.nextInt()) % httpServers.size
-            val url = format("http://localhost:%d/agent-%d", startingPort + index, index)
-            agent.registerPath(format("proxy-%d", i), url)
+            val url = "http://localhost:${startingPort + index}/agent-$index"
+            agent.registerPath("proxy-$i", url)
             pathMap.put(i, index)
         }
 
@@ -216,7 +213,7 @@ object Tests {
         val errorCnt = AtomicInteger()
         pathMap.forEach { k, v ->
             try {
-                agent.unregisterPath(format("proxy-%d", k))
+                agent.unregisterPath("proxy-$k")
             } catch (e: RequestFailureException) {
                 errorCnt.incrementAndGet()
             }
@@ -233,12 +230,12 @@ object Tests {
         // Choose one of the pathMap values
         val index = abs(TestConstants.RANDOM.nextInt() % pathMap.size)
         val httpVal = pathMap[index]
-        val url = format("http://localhost:%d/proxy-%d", TestConstants.PROXY_PORT, index)
+        val url = "http://localhost:${TestConstants.PROXY_PORT}/proxy-$index"
         val request = Request.Builder().url(url)
         TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use({ response ->
                                                                                 assertThat(response.code()).isEqualTo(200)
                                                                                 val body = response.body()!!.string()
-                                                                                assertThat(body).isEqualTo(format("value: %d", httpVal))
+                                                                                assertThat(body).isEqualTo("value: $httpVal")
                                                                             })
     }
 }

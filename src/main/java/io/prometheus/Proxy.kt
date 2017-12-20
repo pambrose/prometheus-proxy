@@ -26,7 +26,6 @@ import io.prometheus.common.*
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.proxy.*
 import org.slf4j.LoggerFactory
-import java.lang.String.format
 import java.util.stream.Collectors
 
 class Proxy(options: ProxyOptions,
@@ -128,20 +127,14 @@ class Proxy(options: ProxyOptions,
                                   val vals = getAgentContextMap().entries
                                           .stream()
                                           .filter { kv -> kv.value.scrapeRequestQueueSize() >= unhealthySize }
-                                          .map { kv ->
-                                              format("%s %d",
-                                                     kv.value,
-                                                     kv.value.scrapeRequestQueueSize())
-                                          }
+                                          .map { kv -> "${kv.value} ${kv.value.scrapeRequestQueueSize()}" }
                                           .collect(Collectors.toList())
                                   return if (vals.isEmpty())
                                       HealthCheck.Result.healthy()
                                   else
-                                      HealthCheck.Result.unhealthy(format("Large scrapeRequestQueues: %s",
-                                                                          Joiner.on(", ").join(vals)))
+                                      HealthCheck.Result.unhealthy("Large scrapeRequestQueues: ${Joiner.on(", ").join(vals)}")
                               }
                           })
-
     }
 
     fun addAgentContext(agentContext: AgentContext) {
@@ -207,8 +200,7 @@ class Proxy(options: ProxyOptions,
                 responseBuilder.setValid(false).setReason(msg)
             }
             else if (agentContext.agentId != agentId) {
-                val msg = format("Unable to remove path /%s - invalid agentId: %s (owner is %s)",
-                                 path, agentId, agentContext.agentId)
+                val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
                 logger.info(msg)
                 responseBuilder.setValid(false).setReason(msg)
             }

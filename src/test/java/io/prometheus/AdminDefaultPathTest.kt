@@ -25,7 +25,6 @@ import org.junit.BeforeClass
 import org.junit.Test
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.lang.String.format
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 
@@ -34,7 +33,7 @@ class AdminDefaultPathTest {
     @Test
     @Throws(Exception::class)
     fun proxyPingPathTest() {
-        val url = format("http://localhost:%d/%s", PROXY!!.configVals.admin.port, PROXY!!.configVals.admin.pingPath)
+        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response ->
             assertThat(response.code()).isEqualTo(200)
@@ -45,7 +44,7 @@ class AdminDefaultPathTest {
     @Test
     @Throws(Exception::class)
     fun agentPingPathTest() {
-        val url = format("http://localhost:%d/%s", AGENT!!.configVals.admin.port, AGENT!!.configVals.admin.pingPath)
+        val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response ->
             assertThat(response.code()).isEqualTo(200)
@@ -56,7 +55,7 @@ class AdminDefaultPathTest {
     @Test
     @Throws(Exception::class)
     fun proxyVersionPathTest() {
-        val url = format("http://localhost:%d/%s", PROXY!!.configVals.admin.port, PROXY!!.configVals.admin.versionPath)
+        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response ->
             assertThat(response.code()).isEqualTo(200)
@@ -67,7 +66,7 @@ class AdminDefaultPathTest {
     @Test
     @Throws(Exception::class)
     fun agentVersionPathTest() {
-        val url = format("http://localhost:%d/%s", AGENT!!.configVals.admin.port, AGENT!!.configVals.admin.versionPath)
+        val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response ->
             assertThat(response.code()).isEqualTo(200)
@@ -78,7 +77,7 @@ class AdminDefaultPathTest {
     @Test
     @Throws(Exception::class)
     fun proxyHealthCheckPathTest() {
-        val url = format("http://localhost:%d/%s", PROXY!!.configVals.admin.port, PROXY!!.configVals.admin.healthCheckPath)
+        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response ->
             assertThat(response.code()).isEqualTo(200)
@@ -89,7 +88,7 @@ class AdminDefaultPathTest {
     @Test
     @Throws(Exception::class)
     fun agentHealthCheckPathTest() {
-        val url = format("http://localhost:%d/%s", AGENT!!.configVals.admin.port, AGENT!!.configVals.admin.healthCheckPath)
+        val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.body()!!.string().length).isGreaterThan(10) }
     }
@@ -97,7 +96,7 @@ class AdminDefaultPathTest {
     @Test
     @Throws(Exception::class)
     fun proxyThreadDumpPathTest() {
-        val url = format("http://localhost:%d/%s", PROXY!!.configVals.admin.port, PROXY!!.configVals.admin.threadDumpPath)
+        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.body()!!.string().length).isGreaterThan(10) }
     }
@@ -105,7 +104,7 @@ class AdminDefaultPathTest {
     @Test
     @Throws(Exception::class)
     fun agentThreadDumpPathTest() {
-        val url = format("http://localhost:%d/%s", AGENT!!.configVals.admin.port, AGENT!!.configVals.admin.threadDumpPath)
+        val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { response -> assertThat(response.body()!!.string().length).isGreaterThan(10) }
     }
