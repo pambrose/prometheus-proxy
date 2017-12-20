@@ -17,7 +17,6 @@
 package io.prometheus.agent
 
 import com.google.common.base.MoreObjects
-import com.google.common.base.Strings.isNullOrEmpty
 import com.google.common.net.HttpHeaders.ACCEPT
 import io.prometheus.grpc.ScrapeRequest
 import okhttp3.OkHttpClient
@@ -36,7 +35,7 @@ class PathContext(private val okHttpClient: OkHttpClient,
     fun fetchUrl(scrapeRequest: ScrapeRequest): Response =
             try {
                 logger.debug("Fetching $this")
-                val builder = if (!isNullOrEmpty(scrapeRequest.accept))
+                val builder = if (!scrapeRequest.accept.isNullOrBlank())
                     this.request.header(ACCEPT, scrapeRequest.accept)
                 else
                     this.request

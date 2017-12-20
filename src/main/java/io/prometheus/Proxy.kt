@@ -19,7 +19,6 @@ package io.prometheus
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.Joiner
 import com.google.common.base.MoreObjects
-import com.google.common.base.Strings.isNullOrEmpty
 import com.google.common.collect.Maps
 import io.grpc.Attributes
 import io.prometheus.common.*
@@ -68,7 +67,7 @@ class Proxy(options: ProxyOptions,
     init {
         this.metrics = if (this.metricsEnabled) ProxyMetrics(this) else null
         this.grpcService =
-                if (isNullOrEmpty(inProcessServerName))
+                if (inProcessServerName.isNullOrBlank())
                     ProxyGrpcService.create(this, options.agentPort!!)
                 else
                     ProxyGrpcService.create(this, inProcessServerName!!)

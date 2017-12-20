@@ -18,7 +18,6 @@ package io.prometheus
 
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions.checkNotNull
-import com.google.common.base.Strings.isNullOrEmpty
 import com.google.common.collect.Lists
 import com.google.common.collect.Maps
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
@@ -69,7 +68,7 @@ class Agent(options: AgentOptions,
     private val blockingStubRef = AtomicReference<ProxyServiceBlockingStub>()
     private val asyncStubRef = AtomicReference<ProxyServiceStub>()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(this.configVals.internal.scrapeResponseQueueSize)
-    private val agentName: String? = if (isNullOrEmpty(options.agentName)) "Unnamed-${Utils.hostName}" else options.agentName
+    private val agentName: String? = if (options.agentName.isNullOrBlank()) "Unnamed-${Utils.hostName}" else options.agentName
 
     private val hostname: String?
     private val port: Int
@@ -222,7 +221,7 @@ class Agent(options: AgentOptions,
         this.channel?.shutdownNow()
 
         this.channel =
-                if (isNullOrEmpty(this.inProcessServerName))
+                if (this.inProcessServerName.isNullOrBlank())
                     NettyChannelBuilder.forAddress(this.hostname, this.port)
                             .usePlaintext(true)
                             .build()

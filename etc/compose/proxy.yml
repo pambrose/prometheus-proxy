@@ -9,7 +9,6 @@ prometheus-proxy:
   environment:
     - PROXY_CONFIG=https://dl.dropboxusercontent.com/u/481551/prometheus/cloud-proxy.conf
 
-
 prometheus-test:
   autoredeploy: true
   image: 'pambrose/prometheus-test:latest'

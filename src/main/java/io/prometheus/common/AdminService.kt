@@ -20,7 +20,6 @@ import com.codahale.metrics.servlets.HealthCheckServlet
 import com.codahale.metrics.servlets.PingServlet
 import com.codahale.metrics.servlets.ThreadDumpServlet
 import com.google.common.base.MoreObjects
-import com.google.common.base.Strings.isNullOrEmpty
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import org.eclipse.jetty.server.Server
@@ -40,16 +39,15 @@ class AdminService(service: GenericService,
         context.contextPath = "/"
         this.server.handler = context
 
-        if (!isNullOrEmpty(this.pingPath))
+        if (this.pingPath.isNotBlank())
             context.addServlet(ServletHolder(PingServlet()), "/" + this.pingPath)
-        if (!isNullOrEmpty(this.versionPath))
+        if (this.versionPath.isNotBlank())
             context.addServlet(ServletHolder(VersionServlet()), "/" + this.versionPath)
-        if (!isNullOrEmpty(this.healthCheckPath))
+        if (this.healthCheckPath.isNotBlank())
             context.addServlet(ServletHolder(HealthCheckServlet(service.healthCheckRegistry)),
                                "/" + this.healthCheckPath)
-        if (!isNullOrEmpty(this.threadDumpPath))
-            context.addServlet(ServletHolder(ThreadDumpServlet()),
-                               "/" + this.threadDumpPath)
+        if (this.threadDumpPath.isNotBlank())
+            context.addServlet(ServletHolder(ThreadDumpServlet()), "/" + this.threadDumpPath)
 
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }

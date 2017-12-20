@@ -20,9 +20,7 @@ package io.prometheus.proxy
 import brave.Span
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions
-import com.google.common.base.Strings.isNullOrEmpty
 import io.prometheus.Proxy
-import io.prometheus.client.Summary
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import org.slf4j.LoggerFactory
@@ -40,10 +38,10 @@ class ScrapeRequestWrapper(proxy: Proxy,
     private val createTime = System.currentTimeMillis()
     private val complete = CountDownLatch(1)
     private val scrapeResponseRef = AtomicReference<ScrapeResponse>()
+    private val requestTimer = proxy.metrics?.scrapeRequestLatency?.startTimer()
 
     val agentContext: AgentContext = Preconditions.checkNotNull(agentContext)
 
-    private val requestTimer: Summary.Timer?
     val scrapeRequest: ScrapeRequest
 
     val scrapeId: Long
@@ -53,12 +51,11 @@ class ScrapeRequestWrapper(proxy: Proxy,
         get() = this.scrapeResponseRef.get()
 
     init {
-        this.requestTimer = if (proxy.metricsEnabled) proxy.metrics!!.scrapeRequestLatency.startTimer() else null
         var builder = ScrapeRequest.newBuilder()
                 .setAgentId(agentContext.agentId)
                 .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
                 .setPath(path)
-        if (!isNullOrEmpty(accept))
+        if (!accept.isNullOrBlank())
             builder = builder.setAccept(accept)
         this.scrapeRequest = builder.build()
     }
@@ -88,9 +85,9 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     override fun toString(): String =
             MoreObjects.toStringHelper(this)
-                .add("scrapeId", scrapeRequest.scrapeId)
-                .add("path", scrapeRequest.path)
-                .toString()
+                    .add("scrapeId", scrapeRequest.scrapeId)
+                    .add("path", scrapeRequest.path)
+                    .toString()
 
     companion object {
         private val logger = LoggerFactory.getLogger(ScrapeRequestWrapper::class.java)

@@ -28,8 +28,7 @@ import java.util.concurrent.atomic.AtomicLong
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
 
     override fun connectAgent(request: Empty, responseObserver: StreamObserver<Empty>) {
-        if (this.proxy.metricsEnabled)
-            this.proxy.metrics!!.connects.inc()
+        this.proxy.metrics?.connects?.inc()
         responseObserver.onNext(Empty.getDefaultInstance())
         responseObserver.onCompleted()
     }
@@ -112,19 +111,12 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     }
 
     override fun sendHeartBeat(request: HeartBeatRequest, responseObserver: StreamObserver<HeartBeatResponse>) {
-        if (this.proxy.metricsEnabled)
-            this.proxy.metrics!!.heartbeats.inc()
-
-        val agentId = request.agentId
-        val agentContext = this.proxy.getAgentContext(agentId)
-        if (agentContext == null)
-            logger.info("sendHeartBeat() missing AgentContext agentId: $agentId")
-        else
-            agentContext.markActivity()
-
+        this.proxy.metrics?.heartbeats?.inc()
+        val agentContext = this.proxy.getAgentContext(request.agentId)
+        agentContext?.markActivity() ?: logger.info("sendHeartBeat() missing AgentContext agentId: ${request.agentId}")
         responseObserver.onNext(HeartBeatResponse.newBuilder()
                                         .setValid(agentContext != null)
-                                        .setReason("Invalid agentId: $agentId")
+                                        .setReason("Invalid agentId: ${request.agentId}")
                                         .build())
         responseObserver.onCompleted()
     }
@@ -147,10 +139,9 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> {
         return object : StreamObserver<ScrapeResponse> {
             override fun onNext(response: ScrapeResponse) {
-                val scrapeId = response.scrapeId
-                val scrapeRequest = proxy.getFromScrapeRequestMap(scrapeId)
+                val scrapeRequest = proxy.getFromScrapeRequestMap(response.scrapeId)
                 if (scrapeRequest == null) {
-                    logger.error("Missing ScrapeRequestWrapper for scrape_id: $scrapeId")
+                    logger.error("Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}")
                 }
                 else {
                     with(scrapeRequest) {

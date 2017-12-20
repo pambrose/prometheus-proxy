@@ -54,9 +54,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
     val zipkinEnabled: Boolean
         get() = this.zipkinReporterService != null
 
-    val adminEnabled: Boolean
-        get() = this.adminService != null
-
     val metricsEnabled: Boolean
         get() = this.metricsService != null
 
@@ -79,9 +76,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
         }
 
         if (metricsConfig.enabled) {
-            val port = metricsConfig.port
-            val path = metricsConfig.path
-            this.metricsService = MetricsService(port, path)
+            this.metricsService = MetricsService(metricsConfig.port, metricsConfig.path)
             this.addService(this.metricsService)
             SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
                                      metricsConfig.memoryPoolsExportsEnabled,

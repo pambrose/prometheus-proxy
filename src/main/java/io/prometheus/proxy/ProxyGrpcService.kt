@@ -19,7 +19,6 @@ package io.prometheus.proxy
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions
-import com.google.common.base.Strings.isNullOrEmpty
 import com.google.common.collect.Lists
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
@@ -34,7 +33,7 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 
 class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, private val inProcessServerName: String?) : AbstractIdleService() {
-    private val inProcessServer = !isNullOrEmpty(inProcessServerName)
+    private val inProcessServer = !inProcessServerName.isNullOrBlank()
     private val grpcServer: Server
 
     val healthCheck: HealthCheck

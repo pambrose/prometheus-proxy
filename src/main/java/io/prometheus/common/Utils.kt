@@ -22,7 +22,6 @@ import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.Charsets
 import com.google.common.base.Joiner
 import com.google.common.base.Splitter
-import com.google.common.base.Strings
 import com.google.common.io.CharStreams
 import com.google.common.util.concurrent.Service
 import com.typesafe.config.Config
@@ -102,7 +101,7 @@ object Utils {
 
         val configName = cliConfig ?: System.getenv(envConfig)
 
-        if (Strings.isNullOrEmpty(configName)) {
+        if (configName.isNullOrBlank()) {
             if (exitOnMissingConfig) {
                 logger.error("A configuration file or url must be specified with --getConfig or \$${envConfig}")
                 System.exit(1)
@@ -160,33 +159,33 @@ object Utils {
 
     fun queueHealthCheck(queue: Queue<*>, size: Int): HealthCheck =
             object : HealthCheck() {
-            @Throws(Exception::class)
-            override fun check(): HealthCheck.Result {
-                return if (queue.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", queue.size)
+                @Throws(Exception::class)
+                override fun check(): HealthCheck.Result {
+                    return if (queue.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", queue.size)
+                }
             }
-        }
 
     fun mapHealthCheck(map: Map<*, *>, size: Int): HealthCheck =
             object : HealthCheck() {
-            @Throws(Exception::class)
-            override fun check(): HealthCheck.Result {
-                return if (map.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", map.size)
+                @Throws(Exception::class)
+                override fun check(): HealthCheck.Result {
+                    return if (map.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", map.size)
+                }
             }
-        }
 
     fun sleepForMillis(millis: Long) =
-        try {
-            Thread.sleep(millis)
-        } catch (e: InterruptedException) {
-            // Ignore
-        }
+            try {
+                Thread.sleep(millis)
+            } catch (e: InterruptedException) {
+                // Ignore
+            }
 
     fun sleepForSecs(secs: Long) =
-        try {
-            Thread.sleep(secs.toMillis())
-        } catch (e: InterruptedException) {
-            // Ignore
-        }
+            try {
+                Thread.sleep(secs.toMillis())
+            } catch (e: InterruptedException) {
+                // Ignore
+            }
 
     fun getVersionDesc(asJson: Boolean): String {
         val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
@@ -198,10 +197,10 @@ object Utils {
 
     fun shutDownHookAction(service: Service): Thread =
             Thread {
-            JCommander.getConsole().println("*** ${service.javaClass.simpleName} shutting down ***")
-            service.stopAsync()
-            JCommander.getConsole().println("*** ${service.javaClass.simpleName} shut down complete ***")
-    }
+                JCommander.getConsole().println("*** ${service.javaClass.simpleName} shutting down ***")
+                service.stopAsync()
+                JCommander.getConsole().println("*** ${service.javaClass.simpleName} shut down complete ***")
+            }
 
     class VersionValidator : IParameterValidator {
         override fun validate(name: String, value: String) {
