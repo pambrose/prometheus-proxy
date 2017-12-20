@@ -66,7 +66,7 @@ class Agent(options: AgentOptions,
     private val blockingStubRef = AtomicReference<ProxyServiceBlockingStub>()
     private val asyncStubRef = AtomicReference<ProxyServiceStub>()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(this.configVals.internal.scrapeResponseQueueSize)
-    private val agentName: String? = if (options.agentName.isNullOrBlank()) "Unnamed-${hostName}" else options.agentName
+    private val agentName: String? = if (options.agentName.isNullOrBlank()) "Unnamed-$hostName" else options.agentName
     private val metrics: AgentMetrics? = if (this.metricsEnabled) AgentMetrics(this) else null
     private val readRequestsExecutorService: ExecutorService = newCachedThreadPool(if (this.metricsEnabled)
                                                                                        InstrumentedThreadFactory.newInstrumentedThreadFactory("agent_fetch",

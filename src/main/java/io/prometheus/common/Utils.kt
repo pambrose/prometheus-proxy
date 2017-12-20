@@ -25,6 +25,7 @@ import com.google.common.base.Splitter
 import com.google.common.io.CharStreams
 import com.google.common.util.concurrent.Service
 import io.prometheus.Proxy
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.InputStreamReader
 import java.net.InetAddress
@@ -33,9 +34,7 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 
 object Utils {
-
-    val logger = LoggerFactory.getLogger(Utils::class.java)
-
+    val logger: Logger = LoggerFactory.getLogger(Utils::class.java)
 }
 
 val hostName: String

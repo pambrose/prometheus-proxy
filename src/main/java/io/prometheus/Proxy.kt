@@ -47,12 +47,16 @@ class Proxy(options: ProxyOptions,
     val metrics = if (this.metricsEnabled) ProxyMetrics(this) else null
 
     private val httpService = ProxyHttpService(this, proxyPort)
-    private val agentCleanupService: AgentContextCleanupService?
     private val grpcService: ProxyGrpcService =
             if (inProcessServerName.isNullOrBlank())
                 ProxyGrpcService.create(this, options.agentPort!!)
             else
                 ProxyGrpcService.create(this, inProcessServerName!!)
+    private val agentCleanupService =
+            if (this.configVals.internal.staleAgentCheckEnabled)
+                AgentContextCleanupService(this)
+            else
+                null
 
     val agentContextSize: Int
         get() = this.agentContextMap.size
@@ -70,12 +74,6 @@ class Proxy(options: ProxyOptions,
         get() = this.agentContextMap.values.map { it.scrapeRequestQueueSize() }.sum()
 
     init {
-        this.agentCleanupService =
-                if (this.configVals.internal.staleAgentCheckEnabled)
-                    AgentContextCleanupService(this)
-                else
-                    null
-
         this.addServices(this.grpcService, this.httpService, this.agentCleanupService!!)
         this.init()
     }
@@ -181,7 +179,8 @@ class Proxy(options: ProxyOptions,
                     logger.info(msg)
                     responseBuilder.setValid(false).setReason(msg)
                 }
-                else                            -> {
+                else
+                                                -> {
                     this.pathMap.remove(path)
                     if (!this.isTestMode)
                         logger.info("Removed path /$path for $agentContext")

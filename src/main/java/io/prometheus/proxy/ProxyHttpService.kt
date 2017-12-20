@@ -68,7 +68,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                           val span =
                                   tracer?.newTrace()
                                           ?.name("round-trip")
-                                          ?.tag("version", "1.2.5")
+                                          ?.tag("version", "1.3.0")
                                           ?.start()
 
                           try {
