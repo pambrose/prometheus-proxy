@@ -150,37 +150,39 @@ abstract class BaseOptions protected constructor(private val programName: String
 
         val configName = cliConfig ?: System.getenv(envConfig)
 
-        if (configName.isNullOrBlank()) {
-            if (exitOnMissingConfig) {
-                logger.error("A configuration file or url must be specified with --getConfig or \$${envConfig}")
-                System.exit(1)
-            }
-            return fallback
-        }
-
-        if (configName.isUrlPrefix()) {
-            try {
-                val configSyntax = getConfigSyntax(configName)
-                return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
-                        .withFallback(fallback)
-            } catch (e: Exception) {
-                logger.error(if (e.cause is FileNotFoundException)
-                                 "Invalid getConfig url: $configName"
-                             else
-                                 "Exception: ${e.javaClass.simpleName} - ${e.message}",
-                             e)
+        when {
+            configName.isNullOrBlank() -> {
+                if (exitOnMissingConfig) {
+                    logger.error("A configuration file or url must be specified with --getConfig or \$${envConfig}")
+                    System.exit(1)
+                }
+                return fallback
             }
 
-        }
-        else {
-            try {
-                return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions)
-                        .withFallback(fallback)
-            } catch (e: Exception) {
-                logger.error(if (e.cause is FileNotFoundException)
-                                 "Invalid getConfig filename: $configName"
-                             else
-                                 "Exception: ${e.javaClass.simpleName} - ${e.message}", e)
+            configName.isUrlPrefix()   -> {
+                try {
+                    val configSyntax = getConfigSyntax(configName)
+                    return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
+                            .withFallback(fallback)
+                } catch (e: Exception) {
+                    logger.error(if (e.cause is FileNotFoundException)
+                                     "Invalid getConfig url: $configName"
+                                 else
+                                     "Exception: ${e.javaClass.simpleName} - ${e.message}",
+                                 e)
+                }
+
+            }
+            else                       -> {
+                try {
+                    return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
+                } catch (e: Exception) {
+                    logger.error(if (e.cause is FileNotFoundException)
+                                     "Invalid getConfig filename: $configName"
+                                 else
+                                     "Exception: ${e.javaClass.simpleName} - ${e.message}",
+                                 e)
+                }
             }
         }
 
