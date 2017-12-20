@@ -27,12 +27,12 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
 
-abstract class BaseOptions protected constructor(private val programName: String,
+abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val argv: Array<String>,
                                                  private val envConfig: String,
                                                  private val exitOnMissingConfig: Boolean) {
 
-    private var configRef: Config? = null
+    private var config: Config? = null
 
     var configVals: ConfigVals? = null
         private set
@@ -74,7 +74,7 @@ abstract class BaseOptions protected constructor(private val programName: String
     protected fun parseOptions() {
         this.parseArgs(this.argv)
         this.readConfig(this.envConfig, this.exitOnMissingConfig)
-        this.configVals = ConfigVals(this.configRef)
+        this.configVals = ConfigVals(this.config)
         this.assignConfigVals()
     }
 
@@ -84,7 +84,7 @@ abstract class BaseOptions protected constructor(private val programName: String
         try {
             val jcom =
                     JCommander(this).apply {
-                        programName = this.programName
+                        programName = progName
                         setCaseSensitiveOptions(false)
                         parse(*argv ?: arrayOf<String>())
                     }
@@ -127,7 +127,7 @@ abstract class BaseOptions protected constructor(private val programName: String
                            ConfigFactory.load().resolve(),
                            exitOnMissingConfig)
                         .resolve(ConfigResolveOptions.defaults())
-        this.configRef = config.resolve()
+        this.config = config.resolve()
 
         this.dynamicParams.forEach { k, v ->
             // Strip quotes
@@ -138,7 +138,7 @@ abstract class BaseOptions protected constructor(private val programName: String
             val prop = "$k=$qval"
             System.setProperty(k, prop)
             val newConfig = ConfigFactory.parseString(prop, PROPS)
-            configRef = newConfig.withFallback(this.configRef).resolve()
+            this.config = newConfig.withFallback(this.config).resolve()
         }
     }
 
