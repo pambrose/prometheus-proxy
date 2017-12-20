@@ -48,29 +48,37 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.util.stream.Collectors
 
-class Agent(options: AgentOptions, private val inProcessServerName: String?, testMode: Boolean) : GenericService(options.configVals!!, AdminConfig.create(options.adminEnabled,
-                                                                                                                                                          options.adminPort!!,
-                                                                                                                                                          options.configVals!!.agent.admin), MetricsConfig.create(options.metricsEnabled,
-                                                                                                                                                                                                                  options.metricsPort!!,
-                                                                                                                                                                                                                  options.configVals!!.agent.metrics), ZipkinConfig.create(options.configVals!!.agent.internal.zipkin), testMode) {
+class Agent(options: AgentOptions,
+            private val inProcessServerName: String?,
+            testMode: Boolean) : GenericService(options.configVals!!,
+                                                AdminConfig.create(options.adminEnabled,
+                                                                   options.adminPort!!,
+                                                                   options.configVals!!.agent.admin),
+                                                MetricsConfig.create(options.metricsEnabled,
+                                                                     options.metricsPort!!,
+                                                                     options.configVals!!.agent.metrics),
+                                                ZipkinConfig.create(options.configVals!!.agent.internal.zipkin),
+                                                testMode) {
 
     private val pathContextMap = Maps.newConcurrentMap<String, PathContext>()  // Map path to PathContext
     private val agentIdRef = AtomicReference<String>()
-    private val lastMsgSent = AtomicLong()
+    private val lastMsgSentRef = AtomicLong()
     private val heartbeatService = Executors.newFixedThreadPool(1)
     private val initialConnectionLatch = CountDownLatch(1)
     private val okHttpClient = OkHttpClient()
     private val channelRef = AtomicReference<ManagedChannel>()
     private val blockingStubRef = AtomicReference<ProxyServiceBlockingStub>()
     private val asyncStubRef = AtomicReference<ProxyServiceStub>()
-    private val agentName: String?
     private val hostname: String?
     private val port: Int
-    val metrics: AgentMetrics?
     private val readRequestsExecutorService: ExecutorService
-    private val scrapeResponseQueue: BlockingQueue<ScrapeResponse>
     private val reconnectLimiter: RateLimiter
     private val pathConfigs: List<Map<String, String>>
+
+    private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(this.configVals.internal.scrapeResponseQueueSize)
+    private val agentName: String? = if (isNullOrEmpty(options.agentName)) "Unnamed-${Utils.hostName}" else options.agentName
+
+    val metrics: AgentMetrics?
 
     private val proxyHost: String
         get() = "$hostname:$port"
@@ -78,28 +86,19 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
     val scrapeResponseQueueSize: Int
         get() = this.scrapeResponseQueue.size
 
-    val channel: ManagedChannel?
+    var channel: ManagedChannel?
         get() = this.channelRef.get()
-
-    private val blockingStub: ProxyServiceBlockingStub
-        get() = this.blockingStubRef.get()
-
-    private val asyncStub: ProxyServiceStub
-        get() = this.asyncStubRef.get()
+        set(v) = this.channelRef.set(v)
 
     var agentId: String?
         get() = this.agentIdRef.get()
-        set(agentId) = this.agentIdRef.set(agentId)
+        set(v) = this.agentIdRef.set(v)
 
     val configVals: ConfigVals.Agent
         get() = this.genericConfigVals.agent
 
 
     init {
-        this.agentName = if (isNullOrEmpty(options.agentName)) "Unnamed-${Utils.hostName}" else options.agentName
-        val queueSize = this.configVals.internal.scrapeResponseQueueSize
-        this.scrapeResponseQueue = ArrayBlockingQueue(queueSize)
-
         this.metrics = if (this.metricsEnabled) AgentMetrics(this) else null
 
         this.readRequestsExecutorService = newCachedThreadPool(if (this.metricsEnabled)
@@ -188,7 +187,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
         // Reset values for each connection attempt
         this.pathContextMap.clear()
         this.scrapeResponseQueue.clear()
-        this.lastMsgSent.set(0)
+        this.lastMsgSentRef.set(0)
 
         if (this.connectAgent()) {
             this.registerAgent()
@@ -206,7 +205,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
             logger.info("Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity")
             this.heartbeatService.submit {
                 while (isRunning && !disconnected.get()) {
-                    val timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSent.get()
+                    val timeSinceLastWriteMillis = System.currentTimeMillis() - this.lastMsgSentRef.get()
                     if (timeSinceLastWriteMillis > maxInactivitySecs.toLong().toMillis())
                         this.sendHeartBeat(disconnected)
                     Utils.sleepForMillis(threadPauseMillis)
@@ -224,14 +223,15 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
 
         this.channel?.shutdownNow()
 
-        this.channelRef.set(if (isNullOrEmpty(this.inProcessServerName))
-                                NettyChannelBuilder.forAddress(this.hostname, this.port)
-                                        .usePlaintext(true)
-                                        .build()
-                            else
-                                InProcessChannelBuilder.forName(this.inProcessServerName)
-                                        .usePlaintext(true)
-                                        .build())
+        this.channel =
+                if (isNullOrEmpty(this.inProcessServerName))
+                    NettyChannelBuilder.forAddress(this.hostname, this.port)
+                            .usePlaintext(true)
+                            .build()
+                else
+                    InProcessChannelBuilder.forName(this.inProcessServerName)
+                            .usePlaintext(true)
+                            .build()
         val interceptors = Lists.newArrayList<ClientInterceptor>(AgentClientInterceptor(this))
 
         /*
@@ -270,10 +270,12 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
                     .build()
         }
 
-        val requestTimer = if (this.metricsEnabled)
-            this.metrics!!.scrapeRequestLatency.labels(this.agentName!!).startTimer()
-        else
-            null
+        val requestTimer =
+                if (this.metricsEnabled)
+                    this.metrics!!.scrapeRequestLatency.labels(this.agentName!!).startTimer()
+                else
+                    null
+
         var reason = "None"
         try {
             pathContext.fetchUrl(scrapeRequest).use { response ->
@@ -315,7 +317,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
     private fun connectAgent(): Boolean {
         try {
             logger.info("Connecting to proxy at ${this.proxyHost}...")
-            this.blockingStub.connectAgent(Empty.getDefaultInstance())
+            this.blockingStubRef.get().connectAgent(Empty.getDefaultInstance())
             logger.info("Connected to proxy at ${this.proxyHost}")
             if (this.metricsEnabled)
                 this.metrics!!.connects.labels("success").inc()
@@ -336,7 +338,7 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
                 .setAgentName(this.agentName)
                 .setHostname(Utils.hostName)
                 .build()
-        val response = this.blockingStub.registerAgent(request)
+        val response = this.blockingStubRef.get().registerAgent(request)
         this.markMsgSent()
         if (!response.valid)
             throw RequestFailureException("registerAgent() - ${response.reason}")
@@ -377,18 +379,19 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
         val request = PathMapSizeRequest.newBuilder()
                 .setAgentId(this.agentId)
                 .build()
-        val response = this.blockingStub.pathMapSize(request)
+        val response = this.blockingStubRef.get().pathMapSize(request)
         this.markMsgSent()
         return response.pathCount
     }
 
     @Throws(RequestFailureException::class)
     private fun registerPathOnProxy(path: String): Long {
-        val request = RegisterPathRequest.newBuilder()
-                .setAgentId(this.agentId)
-                .setPath(path)
-                .build()
-        val response = this.blockingStub.registerPath(request)
+        val request =
+                RegisterPathRequest.newBuilder()
+                        .setAgentId(this.agentId)
+                        .setPath(path)
+                        .build()
+        val response = this.blockingStubRef.get().registerPath(request)
         this.markMsgSent()
         if (!response.valid)
             throw RequestFailureException("registerPath() - ${response.reason}")
@@ -397,11 +400,12 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
 
     @Throws(RequestFailureException::class)
     private fun unregisterPathOnProxy(path: String) {
-        val request = UnregisterPathRequest.newBuilder()
-                .setAgentId(this.agentId)
-                .setPath(path)
-                .build()
-        val response = this.blockingStub.unregisterPath(request)
+        val request =
+                UnregisterPathRequest.newBuilder()
+                        .setAgentId(this.agentId)
+                        .setPath(path)
+                        .build()
+        val response = this.blockingStubRef.get().unregisterPath(request)
         this.markMsgSent()
         if (!response.valid)
             throw RequestFailureException("unregisterPath() - ${response.reason}")
@@ -435,12 +439,12 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
             }
         }
         val agentInfo = AgentInfo.newBuilder().setAgentId(this.agentId).build()
-        this.asyncStub.readRequestsFromProxy(agentInfo, observer)
+        this.asyncStubRef.get().readRequestsFromProxy(agentInfo, observer)
     }
 
     private fun writeResponsesToProxyUntilDisconnected(disconnected: AtomicBoolean) {
         val checkMillis = this.configVals.internal.scrapeResponseQueueCheckMillis.toLong()
-        val observer = this.asyncStub.writeResponsesToProxy(
+        val observer = this.asyncStubRef.get().writeResponsesToProxy(
                 object : StreamObserver<Empty> {
                     override fun onNext(empty: Empty) {
                         // Ignore Empty return value
@@ -476,17 +480,18 @@ class Agent(options: AgentOptions, private val inProcessServerName: String?, tes
     }
 
     private fun markMsgSent() {
-        this.lastMsgSent.set(System.currentTimeMillis())
+        this.lastMsgSentRef.set(System.currentTimeMillis())
     }
 
     private fun sendHeartBeat(disconnected: AtomicBoolean) {
-        val agentId = this.agentId ?: return
+        if (this.agentId == null)
+            return
         try {
-            val request = HeartBeatRequest.newBuilder().setAgentId(agentId).build()
-            val response = this.blockingStub.sendHeartBeat(request)
+            val request = HeartBeatRequest.newBuilder().setAgentId(this.agentId).build()
+            val response = this.blockingStubRef.get().sendHeartBeat(request)
             this.markMsgSent()
             if (!response.valid) {
-                logger.info("AgentId $agentId not found on proxy")
+                logger.info("AgentId ${this.agentId} not found on proxy")
                 throw StatusRuntimeException(Status.NOT_FOUND)
             }
         } catch (e: StatusRuntimeException) {

@@ -42,8 +42,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             logger.info("registerAgent() missing AgentContext agentId: $agentId")
         }
         else {
-            agentContext.setAgentName(request.agentName)
-            agentContext.setHostname(request.hostname)
+            agentContext.agentName = request.agentName
+            agentContext.hostname = request.hostname
             agentContext.markActivity()
         }
 
@@ -133,7 +133,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         val agentId = agentInfo.agentId
         val agentContext = this.proxy.getAgentContext(agentId)
         if (agentContext != null) {
-            while (this.proxy.isRunning && agentContext.isValid) {
+            while (this.proxy.isRunning && agentContext.valid) {
                 val scrapeRequest = agentContext.pollScrapeRequestQueue()
                 if (scrapeRequest != null) {
                     scrapeRequest.annotateSpan("send-to-agent")

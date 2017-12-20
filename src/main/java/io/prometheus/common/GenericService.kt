@@ -48,6 +48,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     protected val adminService: AdminService?
     protected val metricsService: MetricsService?
+
     val zipkinReporterService: ZipkinReporterService?
 
     val zipkinEnabled: Boolean

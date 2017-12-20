@@ -105,7 +105,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                                   return@Route null
                               }
 
-                              if (!agentContext.isValid) {
+                              if (!agentContext.valid) {
                                   logger.error("Invalid AgentContext")
                                   res.status(404)
                                   this@ProxyHttpService.updateScrapeRequests("invalid_agent_context")
@@ -149,7 +149,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
 
                 // Check if agent is disconnected or agent is hung
                 if (scrapeRequest.ageInSecs() >= timeoutSecs
-                    || !scrapeRequest.agentContext.isValid
+                    || !scrapeRequest.agentContext.valid
                     || !this.proxy.isRunning) {
                     res.status(503)
                     this.updateScrapeRequests("time_out")

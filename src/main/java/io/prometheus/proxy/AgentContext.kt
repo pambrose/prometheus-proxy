@@ -18,6 +18,7 @@ package io.prometheus.proxy
 
 import com.google.common.base.MoreObjects
 import io.prometheus.Proxy
+import io.prometheus.common.toSecs
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.TimeUnit
@@ -28,15 +29,25 @@ import java.util.concurrent.atomic.AtomicReference
 class AgentContext(proxy: Proxy, val remoteAddr: String) {
 
     val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
-    private val valid = AtomicBoolean(true)
+    private val validRef = AtomicBoolean(true)
     private val lastActivityTime = AtomicLong()
-    private val agentName = AtomicReference<String>()
-    private val hostname = AtomicReference<String>()
+    private val agentNameRef = AtomicReference<String>()
+    private val hostnameRef = AtomicReference<String>()
     private val scrapeRequestQueue: BlockingQueue<ScrapeRequestWrapper>
     private val waitMillis: Long
 
-    val isValid: Boolean
-        get() = this.valid.get()
+    var valid: Boolean
+        get() = this.validRef.get()
+        set(v) = this.validRef.set(v)
+
+    var hostname: String
+        get() = this.hostnameRef.get()
+        set(v) = this.hostnameRef.set(v)
+
+
+    var agentName: String
+        get() = this.agentNameRef.get()
+        set(v) = this.agentNameRef.set(v)
 
     init {
         val queueSize = proxy.configVals.internal.scrapeRequestQueueSize
@@ -46,63 +57,36 @@ class AgentContext(proxy: Proxy, val remoteAddr: String) {
         this.markActivity()
     }
 
-    fun getHostname(): String {
-        return this.hostname.get()
-    }
+    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) = this.scrapeRequestQueue.add(scrapeRequest)
 
-    fun setHostname(hostname: String) {
-        this.hostname.set(hostname)
-    }
+    fun scrapeRequestQueueSize(): Int = this.scrapeRequestQueue.size
 
-    fun getAgentName(): String {
-        return this.agentName.get()
-    }
+    fun pollScrapeRequestQueue(): ScrapeRequestWrapper? =
+            try {
+                this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS)
+            } catch (e: InterruptedException) {
+                null
+            }
 
-    fun setAgentName(agentName: String) {
-        this.agentName.set(agentName)
-    }
-
-    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) {
-        this.scrapeRequestQueue.add(scrapeRequest)
-    }
-
-    fun scrapeRequestQueueSize(): Int {
-        return this.scrapeRequestQueue.size
-    }
-
-    fun pollScrapeRequestQueue(): ScrapeRequestWrapper? {
-        try {
-            return this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS)
-        } catch (e: InterruptedException) {
-            return null
-        }
-    }
-
-    fun inactivitySecs(): Long {
-        return (System.currentTimeMillis() - this.lastActivityTime.get()) / 1000
-    }
+    fun inactivitySecs(): Long = (System.currentTimeMillis() - this.lastActivityTime.get()).toSecs()
 
     fun markInvalid() {
-        this.valid.set(false)
+        this.valid = false
     }
 
-    fun markActivity() {
-        this.lastActivityTime.set(System.currentTimeMillis())
-    }
+    fun markActivity() = this.lastActivityTime.set(System.currentTimeMillis())
 
-    override fun toString(): String {
-        return MoreObjects.toStringHelper(this)
-                .add("agentId", this.agentId)
-                .add("valid", this.isValid)
-                .add("remoteAddr", this.remoteAddr)
-                .add("agentName", this.agentName)
-                .add("hostname", this.hostname)
-                .add("inactivitySecs", this.inactivitySecs())
-                .toString()
-    }
+    override fun toString(): String =
+            MoreObjects.toStringHelper(this)
+                    .add("agentId", this.agentId)
+                    .add("valid", this.valid)
+                    .add("remoteAddr", this.remoteAddr)
+                    .add("agentName", this.agentName)
+                    .add("hostname", this.hostname)
+                    .add("inactivitySecs", this.inactivitySecs())
+                    .toString()
 
     companion object {
-
         private val AGENT_ID_GENERATOR = AtomicLong(0)
     }
 }
