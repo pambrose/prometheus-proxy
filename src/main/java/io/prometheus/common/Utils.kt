@@ -38,10 +38,10 @@ object Utils {
 
     val hostName: String
         get() {
-            try {
-                return InetAddress.getLocalHost().hostName
+            return try {
+                InetAddress.getLocalHost().hostName
             } catch (e: UnknownHostException) {
-                return "Unknown"
+                "Unknown"
             }
         }
 
@@ -57,7 +57,7 @@ object Utils {
                 val last = AtomicInteger(-1)
                 val lineNum = AtomicInteger(0)
                 lines.forEach {
-                    if (it.trim { it <= ' ' }.length > 0) {
+                    if (it.trim { it <= ' ' }.isNotEmpty()) {
                         if (first.get() == -1)
                             first.set(lineNum.get())
                         last.set(lineNum.get())

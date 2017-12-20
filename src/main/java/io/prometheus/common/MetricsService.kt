@@ -26,7 +26,7 @@ import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
 
 class MetricsService(private val port: Int, private val path: String) : AbstractIdleService() {
-    private val server: Server = Server(this.port);
+    private val server: Server = Server(this.port)
     val healthCheck: HealthCheck = object : HealthCheck() {
         @Throws(Exception::class)
         override fun check(): HealthCheck.Result {

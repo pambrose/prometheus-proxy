@@ -30,12 +30,11 @@ import org.slf4j.LoggerFactory
 import spark.*
 
 class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleService() {
-    private val http: Service
+    private val http: Service = Service.ignite()
     private val tracer: Tracer?
     private val configVals: ConfigVals.Proxy2
 
     init {
-        this.http = Service.ignite()
         this.http.port(this.port)
         this.http.threadPool(this.proxy.configVals.http.maxThreads,
                              this.proxy.configVals.http.minThreads,
@@ -81,7 +80,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                               }
 
                               val vals = req.splat()
-                              if (vals == null || vals.size == 0) {
+                              if (vals == null || vals.isEmpty()) {
                                   logger.info("Request missing path")
                                   res.status(404)
                                   this@ProxyHttpService.updateScrapeRequests("missing_path")
@@ -169,9 +168,9 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
         res.status(statusCode)
 
         // Do not return content on error status codes
-        if (statusCode >= 400) {
+        return if (statusCode >= 400) {
             this.updateScrapeRequests("path_not_found")
-            return null
+            null
         }
         else {
             val acceptEncoding = req.headers(ACCEPT_ENCODING)
@@ -179,7 +178,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                 res.header(CONTENT_ENCODING, "gzip")
             res.type(scrapeResponse.contentType)
             this.updateScrapeRequests("success")
-            return scrapeRequest.scrapeResponse.text
+            scrapeRequest.scrapeResponse.text
         }
     }
 

@@ -24,10 +24,10 @@ import io.prometheus.common.EnvVars.*
 
 class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name, false) {
 
-    @Parameter(names = arrayOf("-p", "--port"), description = "Listen port for Prometheus")
+    @Parameter(names = ["-p", "--port"], description = "Listen port for Prometheus")
     var proxyPort: Int? = null
         private set
-    @Parameter(names = arrayOf("-a", "--agent_port"), description = "Listen port for agents")
+    @Parameter(names = ["-a", "--agent_port"], description = "Listen port for agents")
     var agentPort: Int? = null
         private set
 

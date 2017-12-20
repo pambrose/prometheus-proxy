@@ -38,7 +38,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                                     zipkinConfig: ZipkinConfig,
                                                     val isTestMode: Boolean) : AbstractExecutionThreadService(), Closeable {
 
-    val metricRegistry = MetricRegistry()
+    private val metricRegistry = MetricRegistry()
     val healthCheckRegistry = HealthCheckRegistry()
 
     private val services = mutableListOf<Service>(this)
@@ -131,7 +131,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
         this.stopAsync()
     }
 
-    protected fun addService(service: Service) = this.services.add(service)
+    private fun addService(service: Service) = this.services.add(service)
 
     protected fun addServices(service: Service, vararg services: Service) = this.services.addAll(Lists.asList(service, services))
 
@@ -161,7 +161,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
                         })
     }
 
-    protected fun newListener(): ServiceManager.Listener {
+    private fun newListener(): ServiceManager.Listener {
         val serviceName = this.javaClass.simpleName
         return object : ServiceManager.Listener() {
             override fun healthy() = logger.info("All $serviceName services healthy")

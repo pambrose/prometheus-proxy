@@ -58,13 +58,15 @@ class OptionsTest {
     }
 
 
+    @Test
     fun verifyProxyDefaults() {
         val options = ProxyOptions(listOf())
 
         assertThat(options.proxyPort).isEqualTo(8080)
-        assertThat(options.agentPort).isEqualTo(50021)
+        assertThat(options.agentPort).isEqualTo(50051)
     }
 
+    @Test
     fun verifyAgentDefaults() {
         val options = AgentOptions(listOf("--name", "test-name", "--proxy", "host5"),
                                    false)

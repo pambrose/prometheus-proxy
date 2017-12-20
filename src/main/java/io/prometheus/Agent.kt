@@ -67,13 +67,13 @@ class Agent(options: AgentOptions,
     private val asyncStubRef = AtomicReference<ProxyServiceStub>()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(this.configVals.internal.scrapeResponseQueueSize)
     private val agentName: String? = if (options.agentName.isNullOrBlank()) "Unnamed-${Utils.hostName}" else options.agentName
+    private val metrics: AgentMetrics? = if (this.metricsEnabled) AgentMetrics(this) else null
 
     private val hostname: String?
     private val port: Int
     private val readRequestsExecutorService: ExecutorService
     private val reconnectLimiter: RateLimiter
     private val pathConfigs: List<Map<String, String>>
-    private val metrics: AgentMetrics?
 
     private val proxyHost: String
         get() = "$hostname:$port"
@@ -93,7 +93,6 @@ class Agent(options: AgentOptions,
         get() = this.genericConfigVals.agent
 
     init {
-        this.metrics = if (this.metricsEnabled) AgentMetrics(this) else null
 
         this.readRequestsExecutorService =
                 newCachedThreadPool(if (this.metricsEnabled)
@@ -301,16 +300,16 @@ class Agent(options: AgentOptions,
     // If successful, this will create an agentContxt on the Proxy and an interceptor will
     // add an agent_id to the headers`
     private fun connectAgent(): Boolean {
-        try {
+        return try {
             logger.info("Connecting to proxy at ${this.proxyHost}...")
             this.blockingStubRef.get().connectAgent(Empty.getDefaultInstance())
             logger.info("Connected to proxy at ${this.proxyHost}")
             this.metrics?.connects?.labels("success")?.inc()
-            return true
+            true
         } catch (e: StatusRuntimeException) {
             this.metrics?.connects?.labels("failure")?.inc()
             logger.info("Cannot connect to proxy at ${this.proxyHost} [${e.message}]")
-            return false
+            false
         }
     }
 

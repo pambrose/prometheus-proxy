@@ -28,7 +28,6 @@ import io.grpc.ServerInterceptors
 import io.grpc.inprocess.InProcessServerBuilder
 import io.prometheus.Proxy
 import io.prometheus.common.GenericServiceListener
-import org.slf4j.LoggerFactory
 import java.io.IOException
 
 class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, private val inProcessServerName: String?) : AbstractIdleService() {
@@ -50,13 +49,13 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
         val interceptors = listOf<ServerInterceptor>(ProxyInterceptor())
 
         /*
-    if (proxy.getConfigVals().grpc.metricsEnabled)
-      interceptors.add(MonitoringServerInterceptor.create(proxy.getConfigVals().grpc.allMetricsReported
-                                                          ? Configuration.allMetrics()
-                                                          : Configuration.cheapMetricsOnly()));
-    if (proxy.isZipkinEnabled() && proxy.getConfigVals().grpc.zipkinReportingEnabled)
-      interceptors.add(BraveGrpcServerInterceptor.create(proxy.getZipkinReporterService().getBrave()));
-    */
+        if (proxy.getConfigVals().grpc.metricsEnabled)
+          interceptors.add(MonitoringServerInterceptor.create(proxy.getConfigVals().grpc.allMetricsReported
+                                                              ? Configuration.allMetrics()
+                                                              : Configuration.cheapMetricsOnly()));
+        if (proxy.isZipkinEnabled() && proxy.getConfigVals().grpc.zipkinReportingEnabled)
+          interceptors.add(BraveGrpcServerInterceptor.create(proxy.getZipkinReporterService().getBrave()));
+        */
 
         val proxyService = ProxyServiceImpl(proxy)
         val serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors)
@@ -83,10 +82,6 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
         this.grpcServer.shutdown()
     }
 
-    fun getPort(): Int {
-        return this.grpcServer.port
-    }
-
     override fun toString(): String {
         val helper = MoreObjects.toStringHelper(this)
         if (this.inProcessServer) {
@@ -101,9 +96,6 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
     }
 
     companion object {
-
-        private val logger = LoggerFactory.getLogger(ProxyGrpcService::class.java)
-
         fun create(proxy: Proxy, grpcPort: Int): ProxyGrpcService {
             return ProxyGrpcService(proxy, grpcPort, null)
         }

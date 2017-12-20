@@ -24,10 +24,7 @@ import org.slf4j.LoggerFactory
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
     private fun getRemoteAddr(attributes: Attributes): String {
-        val key = attributes.keys()
-                .filter { "remote-addr" == it.toString() }
-                .first()
-
+        val key = attributes.keys().first { "remote-addr" == it.toString() }
         return if (key == null) "Unknown" else attributes.get(key)?.toString() ?: "Unknown"
     }
 

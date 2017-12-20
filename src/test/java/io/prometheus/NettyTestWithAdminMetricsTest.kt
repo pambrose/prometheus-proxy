@@ -21,7 +21,6 @@ import io.prometheus.common.Utils
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
-import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
@@ -65,8 +64,6 @@ class NettyTestWithAdminMetricsTest {
     }
 
     companion object {
-
-        private val logger = LoggerFactory.getLogger(NettyTestWithAdminMetricsTest::class.java)
 
         private var PROXY: Proxy? = null
         private var AGENT: Agent? = null

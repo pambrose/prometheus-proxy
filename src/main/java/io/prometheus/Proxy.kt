@@ -41,12 +41,17 @@ class Proxy(options: ProxyOptions,
 
     private val pathMap = Maps.newConcurrentMap<String, AgentContext>() // Map path to AgentContext
     private val scrapeRequestMap = Maps.newConcurrentMap<Long, ScrapeRequestWrapper>() // Map scrape_id to agent_id
-    val agentContextMap = Maps.newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
 
-    val metrics: ProxyMetrics?
-    private val grpcService: ProxyGrpcService
+    val agentContextMap = Maps.newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
+    val metrics = if (this.metricsEnabled) ProxyMetrics(this) else null
+
     private val httpService = ProxyHttpService(this, proxyPort)
     private val agentCleanupService: AgentContextCleanupService?
+    private val grpcService: ProxyGrpcService =
+            if (inProcessServerName.isNullOrBlank())
+                ProxyGrpcService.create(this, options.agentPort!!)
+            else
+                ProxyGrpcService.create(this, inProcessServerName!!)
 
     val agentContextSize: Int
         get() = this.agentContextMap.size
@@ -64,12 +69,6 @@ class Proxy(options: ProxyOptions,
         get() = this.agentContextMap.values.map { it.scrapeRequestQueueSize() }.sum()
 
     init {
-        this.metrics = if (this.metricsEnabled) ProxyMetrics(this) else null
-        this.grpcService =
-                if (inProcessServerName.isNullOrBlank())
-                    ProxyGrpcService.create(this, options.agentPort!!)
-                else
-                    ProxyGrpcService.create(this, inProcessServerName!!)
         this.agentCleanupService =
                 if (this.configVals.internal.staleAgentCheckEnabled)
                     AgentContextCleanupService(this)
@@ -141,7 +140,7 @@ class Proxy(options: ProxyOptions,
             agentContext.markInvalid()
         }
         else
-            logger.error("Missing AgentContext for agentId: ${agentId}")
+            logger.error("Missing AgentContext for agentId: $agentId")
 
         return agentContext
     }

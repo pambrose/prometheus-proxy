@@ -37,30 +37,32 @@ abstract class BaseOptions protected constructor(private val progName: String,
     var configVals: ConfigVals? = null
         private set
 
-    @Parameter(names = arrayOf("-c", "--conf", "--config"), description = "Configuration file or url")
+    @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
     private var configName: String? = null
 
-    @Parameter(names = arrayOf("-r", "--admin"), description = "Admin servlets enabled")
+    @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
     private var _adminEnabled: Boolean? = null
 
-    @Parameter(names = arrayOf("-i", "--admin_port"), description = "Admin servlets port")
+    @Parameter(names = ["-i", "--admin_port"], description = "Admin servlets port")
     var adminPort: Int? = null
         private set
 
-    @Parameter(names = arrayOf("-e", "--metrics"), description = "Metrics enabled")
+    @Parameter(names = ["-e", "--metrics"], description = "Metrics enabled")
     private var _metricsEnabled: Boolean? = null
 
-    @Parameter(names = arrayOf("-m", "--metrics_port"), description = "Metrics listen port")
+    @Parameter(names = ["-m", "--metrics_port"], description = "Metrics listen port")
     var metricsPort: Int? = null
         private set
 
-    @Parameter(names = arrayOf("-v", "--version"), description = "Print version info and exit", validateWith = arrayOf(Utils.VersionValidator::class))
+    @Parameter(names = ["-v", "--version"],
+               description = "Print version info and exit",
+               validateWith = [(Utils.VersionValidator::class)])
     private var version = false
 
-    @Parameter(names = arrayOf("-u", "--usage"), help = true)
+    @Parameter(names = ["-u", "--usage"], help = true)
     private var usage = false
 
-    @DynamicParameter(names = arrayOf("-D"), description = "Dynamic property assignment")
+    @DynamicParameter(names = ["-D"], description = "Dynamic property assignment")
     var dynamicParams = mutableMapOf<String, String>()
         private set
 
@@ -74,6 +76,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
     protected fun parseOptions() {
         this.parseArgs(this.argv)
         this.readConfig(this.envConfig, this.exitOnMissingConfig)
+        // this.configVals = ConfigVals(this.config)
         this.configVals = ConfigVals(this.config)
         this.assignConfigVals()
     }
@@ -153,7 +156,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
         when {
             configName.isNullOrBlank() -> {
                 if (exitOnMissingConfig) {
-                    logger.error("A configuration file or url must be specified with --getConfig or \$${envConfig}")
+                    logger.error("A configuration file or url must be specified with --getConfig or \$$envConfig")
                     System.exit(1)
                 }
                 return fallback

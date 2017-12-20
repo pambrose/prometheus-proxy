@@ -26,19 +26,19 @@ import io.prometheus.common.SamplerGaugeData
 
 class AgentMetrics(agent: Agent) {
 
-    val scrapeRequests = Counter.build()
+    val scrapeRequests: Counter = Counter.build()
             .name("agent_scrape_requests")
             .help("Agent scrape requests")
             .labelNames("type")
             .register()
 
-    val connects = Counter.build()
+    val connects: Counter = Counter.build()
             .name("agent_connect_count")
             .help("Agent connect counts")
             .labelNames("type")
             .register()
 
-    val scrapeRequestLatency = Summary.build()
+    val scrapeRequestLatency: Summary = Summary.build()
             .name("agent_scrape_request_latency_seconds")
             .help("Agent scrape request latency in seconds")
             .labelNames("agent_name")

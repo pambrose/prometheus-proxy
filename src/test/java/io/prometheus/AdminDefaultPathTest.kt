@@ -23,7 +23,6 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
-import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
@@ -110,8 +109,6 @@ class AdminDefaultPathTest {
     }
 
     companion object {
-        private val logger = LoggerFactory.getLogger(AdminDefaultPathTest::class.java)
-
         private var PROXY: Proxy? = null
         private var AGENT: Agent? = null
 

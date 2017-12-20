@@ -23,7 +23,6 @@ import com.google.common.base.Preconditions
 import io.prometheus.Proxy
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
-import org.slf4j.LoggerFactory
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -91,7 +90,6 @@ class ScrapeRequestWrapper(proxy: Proxy,
                     .toString()
 
     companion object {
-        private val logger = LoggerFactory.getLogger(ScrapeRequestWrapper::class.java)
         private val SCRAPE_ID_GENERATOR = AtomicLong(0)
     }
 }

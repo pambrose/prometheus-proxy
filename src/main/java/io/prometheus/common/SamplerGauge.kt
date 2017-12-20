@@ -30,6 +30,6 @@ class SamplerGauge(private val name: String,
         return listOf(Collector.MetricFamilySamples(this.name,
                                                     Collector.Type.GAUGE,
                                                     this.help,
-                                                    listOf<MetricFamilySamples.Sample>(sample)))
+                                                    listOf(sample)))
     }
 }

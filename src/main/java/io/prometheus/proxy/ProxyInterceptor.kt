@@ -18,7 +18,6 @@ package io.prometheus.proxy
 
 import io.grpc.*
 import io.prometheus.Proxy
-import org.slf4j.LoggerFactory
 
 class ProxyInterceptor : ServerInterceptor {
 
@@ -44,7 +43,6 @@ class ProxyInterceptor : ServerInterceptor {
     }
 
     companion object {
-        private val logger = LoggerFactory.getLogger(ProxyInterceptor::class.java)
         private val META_AGENT_ID = Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER)
     }
 }
