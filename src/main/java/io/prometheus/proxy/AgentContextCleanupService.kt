@@ -49,15 +49,13 @@ class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionTh
         }
     }
 
-    override fun toString(): String {
-        return MoreObjects.toStringHelper(this)
-                .add("max inactivity secs", this.proxy.configVals.internal.maxAgentInactivitySecs)
-                .add("pause secs", this.proxy.configVals.internal.staleAgentCheckPauseSecs)
-                .toString()
-    }
+    override fun toString() =
+            MoreObjects.toStringHelper(this)
+                    .add("max inactivity secs", this.proxy.configVals.internal.maxAgentInactivitySecs)
+                    .add("pause secs", this.proxy.configVals.internal.staleAgentCheckPauseSecs)
+                    .toString()
 
     companion object {
-
         private val logger = LoggerFactory.getLogger(AgentContextCleanupService::class.java)
     }
 }

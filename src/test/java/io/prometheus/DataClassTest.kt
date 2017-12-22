@@ -26,7 +26,7 @@ import io.prometheus.common.ZipkinConfig
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 
-class AutoValueTest {
+class DataClassTest {
 
     private fun configVals(str: String): ConfigVals {
         val config = ConfigFactory.parseString(str, ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF))

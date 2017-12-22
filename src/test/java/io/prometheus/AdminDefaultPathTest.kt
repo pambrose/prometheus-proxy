@@ -30,7 +30,6 @@ import java.util.concurrent.TimeoutException
 class AdminDefaultPathTest {
 
     @Test
-    @Throws(Exception::class)
     fun proxyPingPathTest() {
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
@@ -41,7 +40,6 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun agentPingPathTest() {
         val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
@@ -52,7 +50,6 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun proxyVersionPathTest() {
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
@@ -63,7 +60,6 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun agentVersionPathTest() {
         val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
@@ -74,7 +70,6 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun proxyHealthCheckPathTest() {
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
@@ -85,7 +80,6 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun agentHealthCheckPathTest() {
         val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
@@ -93,7 +87,6 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun proxyThreadDumpPathTest() {
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)
@@ -101,7 +94,6 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun agentThreadDumpPathTest() {
         val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)

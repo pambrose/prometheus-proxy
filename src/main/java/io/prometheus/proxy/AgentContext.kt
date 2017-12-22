@@ -71,7 +71,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     fun markActivity() = this.lastActivityTime.set(System.currentTimeMillis())
 
-    override fun toString(): String =
+    override fun toString() =
             MoreObjects.toStringHelper(this)
                     .add("agentId", this.agentId)
                     .add("valid", this.valid)

@@ -41,14 +41,16 @@ abstract class BaseOptions protected constructor(private val progName: String,
     private var configName: String? = null
 
     @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
-    private var _adminEnabled: Boolean? = null
+    var adminEnabled: Boolean = false
+        private set
 
     @Parameter(names = ["-i", "--admin_port"], description = "Admin servlets port")
     var adminPort: Int? = null
         private set
 
     @Parameter(names = ["-e", "--metrics"], description = "Metrics enabled")
-    private var _metricsEnabled: Boolean? = null
+    var metricsEnabled: Boolean = false
+        private set
 
     @Parameter(names = ["-m", "--metrics_port"], description = "Metrics listen port")
     var metricsPort: Int? = null
@@ -65,12 +67,6 @@ abstract class BaseOptions protected constructor(private val progName: String,
     @DynamicParameter(names = ["-D"], description = "Dynamic property assignment")
     var dynamicParams = mutableMapOf<String, String>()
         private set
-
-    val adminEnabled: Boolean
-        get() = this._adminEnabled ?: false
-
-    val metricsEnabled: Boolean
-        get() = this._metricsEnabled ?: false
 
     protected fun parseOptions() {
         this.parseArgs(this.argv)
@@ -101,8 +97,8 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     protected fun assignAdminEnabled(defaultVal: Boolean) {
-        if (this._adminEnabled == null)
-            this._adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
+        if (!this.adminEnabled)
+            this.adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
     }
 
     protected fun assignAdminPort(defaultVal: Int) {
@@ -111,8 +107,8 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     protected fun assignMetricsEnabled(defaultVal: Boolean) {
-        if (this._metricsEnabled == null)
-            this._metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
+        if (!this.metricsEnabled)
+            this.metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
     }
 
     protected fun assignMetricsPort(defaultVal: Int) {
@@ -166,11 +162,10 @@ abstract class BaseOptions protected constructor(private val progName: String,
                     return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
                             .withFallback(fallback)
                 } catch (e: Exception) {
-                    logger.error(if (e.cause is FileNotFoundException)
-                                     "Invalid getConfig url: $configName"
+                    if (e.cause is FileNotFoundException)
+                        logger.error("Invalid getConfig url: $configName")
                                  else
-                                     "Exception: ${e.javaClass.simpleName} - ${e.message}",
-                                 e)
+                        logger.error("Exception: ${e.javaClass.simpleName} - ${e.message}", e)
                 }
 
             }

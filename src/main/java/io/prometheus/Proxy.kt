@@ -78,7 +78,6 @@ class Proxy(options: ProxyOptions,
         this.init()
     }
 
-    @Throws(Exception::class)
     override fun startUp() {
         super.startUp()
         this.grpcService.startAsync()
@@ -86,7 +85,6 @@ class Proxy(options: ProxyOptions,
         this.agentCleanupService?.startAsync() ?: logger.info("Agent eviction thread not started")
     }
 
-    @Throws(Exception::class)
     override fun shutDown() {
         this.grpcService.stopAsync()
         this.httpService.stopAsync()
@@ -209,7 +207,7 @@ class Proxy(options: ProxyOptions,
         }
     }
 
-    override fun toString(): String =
+    override fun toString() =
             MoreObjects.toStringHelper(this)
                     .add("proxyPort", this.httpService.port)
                     .add("adminService", this.adminService ?: "Disabled")

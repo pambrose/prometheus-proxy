@@ -35,7 +35,8 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
                                 override fun onHeaders(headers: Metadata?) {
                                     // Grab agent_id from headers if not already assigned
                                     if (agent.agentId == null) {
-                                        val agentId = headers!!.get(Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER))
+                                        val agentId = headers!!.get(Metadata.Key.of(Proxy.AGENT_ID,
+                                                                                    Metadata.ASCII_STRING_MARSHALLER))
                                         if (agentId != null) {
                                             agent.agentId = agentId
                                             logger.info("Assigned agentId to $agent")

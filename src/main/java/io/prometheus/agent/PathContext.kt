@@ -46,7 +46,7 @@ class PathContext(private val okHttpClient: OkHttpClient,
                 throw e
             }
 
-    override fun toString(): String =
+    override fun toString() =
             MoreObjects.toStringHelper(this)
                     .add("path", "/" + path)
                     .add("url", url)

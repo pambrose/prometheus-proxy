@@ -31,23 +31,19 @@ import java.util.stream.IntStream
 
 object Tests {
 
-    @Throws(Exception::class)
     fun missingPathTest() {
         val url = "http://localhost:${TestConstants.PROXY_PORT}/"
         val request = Request.Builder().url(url)
         TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
-    @Throws(Exception::class)
     fun invalidPathTest() {
         val url = "http://localhost:${TestConstants.PROXY_PORT}/invalid_path"
         val request = Request.Builder().url(url)
         TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
-    @Throws(Exception::class)
     fun addRemovePathsTest(agent: Agent) {
-
         // Take into account pre-existing paths already registered
         val originalSize = agent.pathMapSize()
 
@@ -64,7 +60,6 @@ object Tests {
                 }
     }
 
-    @Throws(Exception::class)
     fun threadedAddRemovePathsTest(agent: Agent) {
         val paths = mutableListOf<String>()
         val cnt = AtomicInteger(0)
@@ -114,7 +109,6 @@ object Tests {
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
     }
 
-    @Throws(Exception::class)
     fun invalidAgentUrlTest(agent: Agent) {
         val badPath = "badPath"
 
@@ -129,7 +123,6 @@ object Tests {
         agent.unregisterPath(badPath)
     }
 
-    @Throws(Exception::class)
     fun timeoutTest(agent: Agent) {
         val agentPort = 9700
         val proxyPath = "proxy-timeout"
@@ -153,7 +146,6 @@ object Tests {
         http.stop()
     }
 
-    @Throws(Exception::class)
     fun proxyCallTest(agent: Agent,
                       httpServerCount: Int,
                       pathCount: Int,
@@ -231,7 +223,6 @@ object Tests {
     }
 }
 
-@Throws(Exception::class)
 private fun callProxy(pathMap: Map<Int, Int>) {
     // Choose one of the pathMap values
     val index = abs(TestConstants.RANDOM.nextInt() % pathMap.size)

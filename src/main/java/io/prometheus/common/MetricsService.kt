@@ -43,13 +43,15 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
-    @Throws(Exception::class)
-    override fun startUp() = this.server.start()
+    override fun startUp() {
+        this.server.start()
+    }
 
-    @Throws(Exception::class)
-    override fun shutDown() = this.server.stop()
+    override fun shutDown() {
+        this.server.stop()
+    }
 
-    override fun toString(): String =
+    override fun toString() =
             MoreObjects.toStringHelper(this)
                     .add("url", "http://localhost:${this.port}/${this.path}")
                     .toString()

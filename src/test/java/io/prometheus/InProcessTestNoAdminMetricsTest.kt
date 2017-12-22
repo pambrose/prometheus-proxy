@@ -20,50 +20,41 @@ import io.prometheus.client.CollectorRegistry
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
-import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
-import java.util.concurrent.TimeoutException
 
 class InProcessTestNoAdminMetricsTest {
 
     @Test
-    @Throws(Exception::class)
     fun missingPathTest() {
         Tests.missingPathTest()
     }
 
     @Test
-    @Throws(Exception::class)
     fun invalidPathTest() {
         Tests.invalidPathTest()
     }
 
     @Test
-    @Throws(Exception::class)
     fun addRemovePathsTest() {
         Tests.addRemovePathsTest(AGENT!!)
     }
 
     @Test
-    @Throws(Exception::class)
     fun threadedAddRemovePathsTest() {
         Tests.threadedAddRemovePathsTest(AGENT!!)
     }
 
     @Test
-    @Throws(Exception::class)
     fun invalidAgentUrlTest() {
         Tests.invalidAgentUrlTest(AGENT!!)
     }
 
     @Test
-    @Throws(Exception::class)
     fun timeoutTest() {
         Tests.timeoutTest(AGENT!!)
     }
 
     @Test
-    @Throws(Exception::class)
     fun proxyCallTest() {
         Tests.proxyCallTest(AGENT!!, 25, 50, 1000, 25)
     }
@@ -75,7 +66,6 @@ class InProcessTestNoAdminMetricsTest {
 
         @JvmStatic
         @BeforeClass
-        @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
             PROXY = TestUtils.startProxy("nometrics", false, false, emptyList())
@@ -86,7 +76,6 @@ class InProcessTestNoAdminMetricsTest {
 
         @JvmStatic
         @AfterClass
-        @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
             PROXY!!.stopAsync()
             PROXY!!.awaitTerminated(5, SECONDS)

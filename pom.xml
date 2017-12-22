@@ -39,8 +39,9 @@
         <okhttp.version>3.9.1</okhttp.version>
         <grpc-prom.version>0.3.0</grpc-prom.version>
         <metrics.version>4.0.0-alpha5</metrics.version>
+
         <brave.version>4.13.1</brave.version>
-        <zipkin-reporter.version>1.1.2</zipkin-reporter.version>
+        <sender.version>2.1.4</sender.version>
 
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.7.25</slf4j.version>
@@ -174,20 +175,18 @@
         </dependency>
 
         <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-all</artifactId>
+            <version>${grpc.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
             <version>${okhttp.version}</version>
         </dependency>
 
-        <!--
-        <dependency>
-            <groupId>io.zipkin.brave</groupId>
-            <artifactId>brave-grpc</artifactId>
-            <version>${brave.version}</version>
-        </dependency>
-        -->
-
-        <!-- Add this back when they update their grpc lib
+        <!-- Add back when they update their grpc lib - https://github.com/grpc-ecosystem/java-grpc-prometheus
         <dependency>
             <groupId>me.dinowernli</groupId>
             <artifactId>java-grpc-prometheus</artifactId>
@@ -196,41 +195,21 @@
         -->
 
         <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-all</artifactId>
-            <version>${grpc.version}</version>
+            <groupId>io.zipkin.reporter2</groupId>
+            <artifactId>zipkin-sender-okhttp3</artifactId>
+            <version>${sender.version}</version>
         </dependency>
 
-        <dependency>
-            <groupId>io.zipkin.brave</groupId>
-            <artifactId>brave</artifactId>
-            <version>${brave.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.zipkin.brave</groupId>
-            <artifactId>brave-sparkjava</artifactId>
-            <version>${brave.version}</version>
-        </dependency>
-
-        <!--
         <dependency>
             <groupId>io.zipkin.brave</groupId>
             <artifactId>brave-instrumentation-sparkjava</artifactId>
             <version>${brave.version}</version>
         </dependency>
-        -->
 
         <dependency>
             <groupId>io.zipkin.brave</groupId>
-            <artifactId>brave-okhttp</artifactId>
+            <artifactId>brave-instrumentation-grpc</artifactId>
             <version>${brave.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.zipkin.reporter</groupId>
-            <artifactId>zipkin-sender-okhttp3</artifactId>
-            <version>${zipkin-reporter.version}</version>
         </dependency>
 
         <dependency>

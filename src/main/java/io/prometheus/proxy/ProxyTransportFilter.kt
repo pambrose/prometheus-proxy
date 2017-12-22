@@ -51,7 +51,6 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
     }
 
     companion object {
-
         private val logger = LoggerFactory.getLogger(ProxyTransportFilter::class.java)
     }
 }

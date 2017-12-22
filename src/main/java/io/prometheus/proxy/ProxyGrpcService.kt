@@ -28,6 +28,8 @@ import io.grpc.ServerInterceptors
 import io.grpc.inprocess.InProcessServerBuilder
 import io.prometheus.Proxy
 import io.prometheus.common.GenericServiceListener
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import java.io.IOException
 
 class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, private val inProcessServerName: String?) : AbstractIdleService() {
@@ -39,7 +41,7 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
             @Throws(Exception::class)
             override fun check(): HealthCheck.Result {
                 return if (grpcServer.isShutdown || grpcServer.isShutdown)
-                    HealthCheck.Result.unhealthy("gRPC Server is not runing")
+                    HealthCheck.Result.unhealthy("gRPC server is not running")
                 else
                     HealthCheck.Result.healthy()
             }
@@ -60,16 +62,15 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
         val proxyService = ProxyServiceImpl(proxy)
         val serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors)
 
-        this.grpcServer = if (this.inProcessServer)
-            InProcessServerBuilder.forName(this.inProcessServerName)
-                    .addService(serviceDef)
-                    .addTransportFilter(ProxyTransportFilter(proxy))
-                    .build()
-        else
-            ServerBuilder.forPort(this.port)
-                    .addService(serviceDef)
-                    .addTransportFilter(ProxyTransportFilter(proxy))
-                    .build()
+        this.grpcServer =
+                (if (this.inProcessServer)
+                    InProcessServerBuilder.forName(this.inProcessServerName)
+                else
+                    ServerBuilder.forPort(this.port))
+                        .addService(serviceDef)
+                        .addTransportFilter(ProxyTransportFilter(proxy))
+                        .build()
+
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
@@ -82,26 +83,24 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
         this.grpcServer.shutdown()
     }
 
-    override fun toString(): String {
-        val helper = MoreObjects.toStringHelper(this)
-        if (this.inProcessServer) {
-            helper.add("serverType", "InProcess")
-            helper.add("serverName", this.inProcessServerName)
-        }
-        else {
-            helper.add("serverType", "Netty")
-            helper.add("port", this.port)
-        }
-        return helper.toString()
-    }
+    override fun toString() =
+            with(MoreObjects.toStringHelper(this)) {
+                if (inProcessServer) {
+                    add("serverType", "InProcess")
+                    add("serverName", inProcessServerName)
+                }
+                else {
+                    add("serverType", "Netty")
+                    add("port", port)
+                }
+                toString()
+            }
 
     companion object {
-        fun create(proxy: Proxy, grpcPort: Int): ProxyGrpcService {
-            return ProxyGrpcService(proxy, grpcPort, null)
-        }
+        val logger: Logger = LoggerFactory.getLogger(ProxyGrpcService::class.java)
 
-        fun create(proxy: Proxy, serverName: String): ProxyGrpcService {
-            return ProxyGrpcService(proxy, -1, Preconditions.checkNotNull(serverName))
-        }
+        fun create(proxy: Proxy, grpcPort: Int) = ProxyGrpcService(proxy, grpcPort, null)
+
+        fun create(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy, -1, Preconditions.checkNotNull(serverName))
     }
 }

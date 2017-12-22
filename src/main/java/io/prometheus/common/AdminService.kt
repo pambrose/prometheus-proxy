@@ -52,17 +52,18 @@ class AdminService(service: GenericService,
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
-    @Throws(Exception::class)
-    override fun startUp() = this.server.start()
-
-    @Throws(Exception::class)
-    public override fun shutDown() = this.server.stop()
-
-    override fun toString(): String {
-        return MoreObjects.toStringHelper(this)
-                .add("ping", ":${this.port} /${this.pingPath}")
-                .add("healthcheck", ":${this.port} /${this.healthCheckPath}")
-                .add("threaddump", ":${this.port} /${this.threadDumpPath}")
-                .toString()
+    override fun startUp() {
+        this.server.start()
     }
+
+    public override fun shutDown() {
+        this.server.stop()
+    }
+
+    override fun toString() =
+            MoreObjects.toStringHelper(this)
+                    .add("ping", ":${this.port} /${this.pingPath}")
+                    .add("healthcheck", ":${this.port} /${this.healthCheckPath}")
+                    .add("threaddump", ":${this.port} /${this.threadDumpPath}")
+                    .toString()
 }

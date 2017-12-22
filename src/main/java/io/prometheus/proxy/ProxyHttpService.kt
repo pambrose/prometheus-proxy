@@ -17,37 +17,35 @@
 package io.prometheus.proxy
 
 import brave.Span
-import brave.Tracer
-import com.github.kristofa.brave.sparkjava.BraveTracing
+import brave.sparkjava.SparkTracing
 import com.google.common.base.MoreObjects
 import com.google.common.net.HttpHeaders.*
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
-import io.prometheus.common.ConfigVals
 import io.prometheus.common.GenericServiceListener
 import org.slf4j.LoggerFactory
 import spark.*
 
 class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleService() {
-    private val http: Service = Service.ignite()
-    private val tracer: Tracer?
-    private val configVals: ConfigVals.Proxy2
+    private val configVals = this.proxy.configVals
+    private val tracing = this.proxy.zipkinReporterService?.newTracing("proxy-http")
+    private val http: Service =
+            Service.ignite()
+                    .apply {
+                        port(port)
+                        threadPool(proxy.configVals.http.maxThreads,
+                                   proxy.configVals.http.minThreads,
+                                   proxy.configVals.http.idleTimeoutMillis)
+                    }
 
     init {
-        this.http.port(this.port)
-        this.http.threadPool(this.proxy.configVals.http.maxThreads,
-                             this.proxy.configVals.http.minThreads,
-                             this.proxy.configVals.http.idleTimeoutMillis)
-        this.tracer = this.proxy.zipkinReporterService?.newTracer("proxy-http")
-        this.configVals = this.proxy.configVals
-
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
     override fun startUp() {
         if (this.proxy.zipkinEnabled) {
-            val tracing = BraveTracing.create(this.proxy.brave)
+            val tracing = SparkTracing.create(this.proxy.tracing)
             this.http.before(tracing.before())
 
             val impl = object : ExceptionHandlerImpl<Exception>(Exception::class.java) {
@@ -56,8 +54,8 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                     logger.error("Error in ProxyHttpService", e)
                 }
             }
-            val handler = tracing.exception(impl)
-            this.http.exception(Exception::class.java, handler)
+
+            this.http.exception(Exception::class.java, tracing.exception(impl))
             this.http.afterAfter(tracing.afterAfter())
         }
 
@@ -65,17 +63,13 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                       Route { req, res ->
                           res.header("cache-control", "must-revalidate,no-cache,no-store")
 
-                          val span =
-                                  tracer?.newTrace()
-                                          ?.name("round-trip")
-                                          ?.tag("version", "1.3.0")
-                                          ?.start()
+                          val span = tracing?.tracer()?.newTrace()?.name("round-trip")?.tag("version", "1.3.0")?.start()
 
                           try {
-                              if (!this@ProxyHttpService.proxy.isRunning) {
+                              if (!proxy.isRunning) {
                                   logger.error("Proxy stopped")
                                   res.status(503)
-                                  this@ProxyHttpService.updateScrapeRequests("proxy_stopped")
+                                  updateScrapeRequests("proxy_stopped")
                                   return@Route null
                               }
 
@@ -83,7 +77,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                               if (vals == null || vals.isEmpty()) {
                                   logger.info("Request missing path")
                                   res.status(404)
-                                  this@ProxyHttpService.updateScrapeRequests("missing_path")
+                                  updateScrapeRequests("missing_path")
                                   return@Route null
                               }
 
@@ -95,19 +89,19 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                                   return@Route "42"
                               }
 
-                              val agentContext = this@ProxyHttpService.proxy.getAgentContextByPath(path)
+                              val agentContext = proxy.getAgentContextByPath(path)
 
                               if (agentContext == null) {
                                   logger.debug("Invalid path request /\${path")
                                   res.status(404)
-                                  this@ProxyHttpService.updateScrapeRequests("invalid_path")
+                                  updateScrapeRequests("invalid_path")
                                   return@Route null
                               }
 
                               if (!agentContext.valid) {
                                   logger.error("Invalid AgentContext")
                                   res.status(404)
-                                  this@ProxyHttpService.updateScrapeRequests("invalid_agent_context")
+                                  updateScrapeRequests("invalid_agent_context")
                                   return@Route null
                               }
 
@@ -122,6 +116,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     }
 
     override fun shutDown() {
+        this.tracing?.close()
         this.http.stop()
     }
 
@@ -187,11 +182,10 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
             this.proxy.metrics!!.scrapeRequests.labels(type).inc()
     }
 
-    override fun toString(): String {
-        return MoreObjects.toStringHelper(this)
-                .add("port", port)
-                .toString()
-    }
+    override fun toString() =
+            MoreObjects.toStringHelper(this)
+                    .add("port", port)
+                    .toString()
 
     companion object {
         private val logger = LoggerFactory.getLogger(ProxyHttpService::class.java)

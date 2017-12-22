@@ -16,35 +16,32 @@
 
 package io.prometheus.common
 
-import brave.Tracer
 import brave.Tracing
-import com.github.kristofa.brave.Brave
-import com.github.kristofa.brave.TracerAdapter
 import com.google.common.base.MoreObjects
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
-import zipkin.Span
-import zipkin.reporter.AsyncReporter
-import zipkin.reporter.Sender
-import zipkin.reporter.okhttp3.OkHttpSender
-
+import zipkin2.reporter.AsyncReporter
+import zipkin2.reporter.okhttp3.OkHttpSender
 import java.io.IOException
 
-class ZipkinReporterService(private val url: String, private val serviceName: String) : AbstractIdleService() {
-    private val sender: Sender = OkHttpSender.create(this.url)
-    private val reporter: AsyncReporter<Span> = AsyncReporter.builder(this.sender).build()
-    val brave: Brave = TracerAdapter.newBrave(this.newTracer(this.serviceName))
+class ZipkinReporterService(private val serviceName: String, private val url: String) : AbstractIdleService() {
+    private val sender = OkHttpSender.create(this.url)
+    private val reporter = AsyncReporter.create(this.sender);
+    val tracing: Tracing =
+            Tracing.newBuilder()
+                    .localServiceName(this.serviceName)
+                    .spanReporter(this.reporter)
+                    .build()
 
     init {
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
-    fun newTracer(serviceName: String): Tracer =
+    fun newTracing(serviceName: String): Tracing =
             Tracing.newBuilder()
-                .localServiceName(serviceName)
-                .reporter(this.reporter)
-                .build()
-                .tracer()
+                    .localServiceName(serviceName)
+                    .spanReporter(this.reporter)
+                    .build()
 
     override fun startUp() {
         // Empty
@@ -52,11 +49,12 @@ class ZipkinReporterService(private val url: String, private val serviceName: St
 
     @Throws(IOException::class)
     public override fun shutDown() {
-        this.sender.close()
+        this.tracing.close()
         this.reporter.close()
+        this.sender.close()
     }
 
-    override fun toString(): String =
+    override fun toString() =
             MoreObjects.toStringHelper(this)
                     .add("serviceName", serviceName)
                     .add("url", url)

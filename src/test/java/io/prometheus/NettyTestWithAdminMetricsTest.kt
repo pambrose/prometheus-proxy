@@ -21,44 +21,37 @@ import io.prometheus.common.sleepForSecs
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
-import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 
 class NettyTestWithAdminMetricsTest {
 
     @Test
-    @Throws(Exception::class)
     fun missingPathTest() {
         Tests.missingPathTest()
     }
 
     @Test
-    @Throws(Exception::class)
     fun invalidPathTest() {
         Tests.invalidPathTest()
     }
 
     @Test
-    @Throws(Exception::class)
     fun addRemovePathsTest() {
         Tests.addRemovePathsTest(AGENT!!)
     }
 
     @Test
-    @Throws(Exception::class)
     fun threadedAddRemovePathsTest() {
         Tests.threadedAddRemovePathsTest(AGENT!!)
     }
 
     @Test
-    @Throws(Exception::class)
     fun invalidAgentUrlTest() {
         Tests.invalidAgentUrlTest(AGENT!!)
     }
 
     @Test
-    @Throws(Exception::class)
     fun timeoutTest() {
         Tests.timeoutTest(AGENT!!)
     }
@@ -70,7 +63,6 @@ class NettyTestWithAdminMetricsTest {
 
         @JvmStatic
         @BeforeClass
-        @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
             PROXY = TestUtils.startProxy(null, true, true, emptyList())

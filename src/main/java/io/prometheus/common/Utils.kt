@@ -76,9 +76,7 @@ fun getBanner(filename: String): String {
                     .map { "     " + it }
                     .toList()
 
-            val noNulls = Joiner.on("\n")
-                    .skipNulls()
-                    .join(vals)
+            val noNulls = Joiner.on("\n").skipNulls().join(vals)
             return "\n\n$noNulls\n\n"
         }
     } catch (e: Exception) {

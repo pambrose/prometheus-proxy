@@ -25,7 +25,7 @@ class ProxyInterceptor : ServerInterceptor {
                                              requestHeaders: Metadata,
                                              handler: ServerCallHandler<ReqT, RespT>): ServerCall.Listener<ReqT> {
         val attributes = call.attributes
-        val methodDescriptor = call.methodDescriptor
+        //val methodDescriptor = call.methodDescriptor
         // final String methodName = methodDescriptor.getFullMethodName();
         // logger.info("Intercepting {}", methodName);
 

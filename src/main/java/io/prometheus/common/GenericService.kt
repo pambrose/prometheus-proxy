@@ -16,12 +16,12 @@
 
 package io.prometheus.common
 
+import brave.Tracing
 import com.codahale.metrics.MetricRegistry
 import com.codahale.metrics.health.HealthCheck
 import com.codahale.metrics.health.HealthCheckRegistry
 import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck
 import com.codahale.metrics.jmx.JmxReporter
-import com.github.kristofa.brave.Brave
 import com.google.common.base.Joiner
 import com.google.common.collect.Lists
 import com.google.common.util.concurrent.AbstractExecutionThreadService
@@ -30,7 +30,6 @@ import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
 import org.slf4j.LoggerFactory
 import java.io.Closeable
-import java.io.IOException
 
 abstract class GenericService protected constructor(protected val genericConfigVals: ConfigVals,
                                                     adminConfig: AdminConfig,
@@ -56,8 +55,8 @@ abstract class GenericService protected constructor(protected val genericConfigV
     val metricsEnabled: Boolean
         get() = this.metricsService != null
 
-    val brave: Brave
-        get() = this.zipkinReporterService!!.brave
+    val tracing: Tracing
+        get() = this.zipkinReporterService!!.tracing
 
     init {
         if (adminConfig.enabled) {
@@ -91,7 +90,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
         if (zipkinConfig.enabled) {
             val zipkinUrl = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
-            this.zipkinReporterService = ZipkinReporterService(zipkinUrl, zipkinConfig.serviceName)
+            this.zipkinReporterService = ZipkinReporterService(zipkinConfig.serviceName, zipkinUrl)
             this.addService(this.zipkinReporterService)
         }
         else {
@@ -108,7 +107,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
         this.registerHealthChecks()
     }
 
-    @Throws(Exception::class)
     override fun startUp() {
         super.startUp()
         this.jmxReporter?.start()
@@ -117,7 +115,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
         Runtime.getRuntime().addShutdownHook(shutDownHookAction(this))
     }
 
-    @Throws(Exception::class)
     override fun shutDown() {
         this.adminService?.shutDown()
         this.metricsService?.stopAsync()
@@ -126,7 +123,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
         super.shutDown()
     }
 
-    @Throws(IOException::class)
     override fun close() {
         this.stopAsync()
     }

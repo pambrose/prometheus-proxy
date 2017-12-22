@@ -181,3 +181,11 @@ The path names can be changed in the configuration file. To disable an admin ser
 * [Prometheus.io](http://prometheus.io)
 * [gRPC](http://grpc.io)
 * [Typesafe Config](https://github.com/typesafehub/config)
+* [Zipkin]()
+
+## Zipkin 
+
+* Run a Zipkin server with: `docker run -d -p 9411:9411 openzipkin/zipkin`
+* View Zipkin info at http://localhost:9411
+
+Details on the Zipkin container are [here](https://github.com/openzipkin/docker-zipkin).

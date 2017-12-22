@@ -7,7 +7,7 @@ prometheus-proxy:
     - '8092:8092'
     - '50051:50051'
   environment:
-    - PROXY_CONFIG=https://dl.dropboxusercontent.com/u/481551/prometheus/cloud-proxy.conf
+    - PROXY_CONFIG=https://raw.githubusercontent.com/pambrose/config-data/master/prometheus-proxy/cloud-proxy.conf
 
 prometheus-test:
   autoredeploy: true

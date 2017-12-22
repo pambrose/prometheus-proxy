@@ -73,7 +73,8 @@ class Agent(options: AgentOptions,
                                                                                                                                               "Agent fetch",
                                                                                                                                               true)
                                                                                    else
-                                                                                       ThreadFactoryBuilder().setNameFormat("agent_fetch-%d")
+                                                                                       ThreadFactoryBuilder()
+                                                                                               .setNameFormat("agent_fetch-%d")
                                                                                                .setDaemon(true)
                                                                                                .build())
 
@@ -126,7 +127,6 @@ class Agent(options: AgentOptions,
         this.init()
     }
 
-    @Throws(Exception::class)
     override fun shutDown() {
         this.channel?.shutdownNow()
         this.heartbeatService.shutdownNow()
@@ -210,24 +210,22 @@ class Agent(options: AgentOptions,
         this.channel?.shutdownNow()
 
         this.channel =
-                if (this.inProcessServerName.isNullOrBlank())
+                (if (this.inProcessServerName.isNullOrBlank())
                     NettyChannelBuilder.forAddress(this.hostname, this.port)
-                            .usePlaintext(true)
-                            .build()
                 else
-                    InProcessChannelBuilder.forName(this.inProcessServerName)
-                            .usePlaintext(true)
-                            .build()
+                    InProcessChannelBuilder.forName(this.inProcessServerName))
+                        .usePlaintext(true)
+                        .build()
         val interceptors = listOf<ClientInterceptor>(AgentClientInterceptor(this))
 
         /*
-    if (this.getConfigVals().metrics.grpc.metricsEnabled)
-      interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().grpc.allMetricsReported
-                                                          ? Configuration.allMetrics()
-                                                          : Configuration.cheapMetricsOnly()));
-    if (this.zipkinReporter != null && this.getConfigVals().grpc.zipkinReportingEnabled)
-      interceptors.add(BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave()));
-    */
+        if (this.getConfigVals().metrics.grpc.metricsEnabled)
+          interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().grpc.allMetricsReported
+                                                              ? Configuration.allMetrics()
+                                                              : Configuration.cheapMetricsOnly()));
+        if (this.zipkinReporter != null && this.getConfigVals().grpc.zipkinReportingEnabled)
+          interceptors.add(BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave()));
+        */
 
         this.blockingStubRef.set(newBlockingStub(intercept(this.channel, interceptors)))
         this.asyncStubRef.set(newStub(intercept(this.channel, interceptors)))
@@ -479,15 +477,14 @@ class Agent(options: AgentOptions,
     @Throws(InterruptedException::class)
     fun awaitInitialConnection(timeout: Long, unit: TimeUnit) = this.initialConnectionLatch.await(timeout, unit)
 
-    override fun toString(): String {
-        return MoreObjects.toStringHelper(this)
-                .add("agentId", this.agentId)
-                .add("agentName", this.agentName)
-                .add("proxyHost", this.proxyHost)
-                .add("adminService", this.adminService ?: "Disabled")
-                .add("metricsService", this.metricsService ?: "Disabled")
-                .toString()
-    }
+    override fun toString() =
+            MoreObjects.toStringHelper(this)
+                    .add("agentId", this.agentId)
+                    .add("agentName", this.agentName)
+                    .add("proxyHost", this.proxyHost)
+                    .add("adminService", this.adminService ?: "Disabled")
+                    .add("metricsService", this.metricsService ?: "Disabled")
+                    .toString()
 
     companion object {
         private val logger = LoggerFactory.getLogger(Agent::class.java)

@@ -31,7 +31,7 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
     var agentPort: Int? = null
         private set
 
-    constructor(args: List<String>?) : this(Iterables.toArray<String>(args ?: emptyList<String>(), String::class.java))
+    constructor(args: List<String>) : this(Iterables.toArray<String>(args, String::class.java))
 
     init {
         this.parseOptions()

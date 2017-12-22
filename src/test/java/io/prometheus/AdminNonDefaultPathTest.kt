@@ -30,7 +30,6 @@ import java.util.concurrent.TimeoutException
 class AdminNonDefaultPathTest {
 
     @Test
-    @Throws(Exception::class)
     fun proxyPingPathTest() {
         assertThat(PROXY!!.configVals.admin.port).isEqualTo(8099)
         assertThat(PROXY!!.configVals.admin.pingPath).isEqualTo("pingPath2")
@@ -43,7 +42,6 @@ class AdminNonDefaultPathTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun proxyVersionPathTest() {
         assertThat(PROXY!!.configVals.admin.port).isEqualTo(8099)
         assertThat(PROXY!!.configVals.admin.versionPath).isEqualTo("versionPath2")
@@ -56,7 +54,6 @@ class AdminNonDefaultPathTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun proxyHealthCheckPathTest() {
         assertThat(PROXY!!.configVals.admin.healthCheckPath).isEqualTo("healthCheckPath2")
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.healthCheckPath}"
@@ -68,7 +65,6 @@ class AdminNonDefaultPathTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun proxyThreadDumpPathTest() {
         assertThat(PROXY!!.configVals.admin.threadDumpPath).isEqualTo("threadDumpPath2")
         val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.threadDumpPath}"

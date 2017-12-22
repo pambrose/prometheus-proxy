@@ -83,7 +83,7 @@ class ScrapeRequestWrapper(proxy: Proxy,
         return false
     }
 
-    override fun toString(): String =
+    override fun toString() =
             MoreObjects.toStringHelper(this)
                     .add("scrapeId", scrapeRequest.scrapeId)
                     .add("path", scrapeRequest.path)
