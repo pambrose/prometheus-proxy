@@ -16,7 +16,6 @@
 
 package io.prometheus.proxy
 
-import brave.Span
 import brave.sparkjava.SparkTracing
 import com.google.common.base.MoreObjects
 import com.google.common.net.HttpHeaders.*
@@ -60,75 +59,60 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
             this.http.afterAfter(tracing.afterAfter())
         }
 
-        /*
-        val sparkTracing = SparkTracing.create(this.tracing)
-        Spark.before(sparkTracing.before())
-        Spark.exception(Exception::class.java, sparkTracing.exception { exception, request, response -> response.body("exception") } )
-        Spark.afterAfter(sparkTracing.afterAfter())
-        */
-
-        val tracer = this.tracing?.tracer()
+        if (this.proxy.zipkinEnabled) {
+            val sparkTracing = SparkTracing.create(this.tracing)
+            Spark.before(sparkTracing.before())
+            Spark.exception(Exception::class.java,
+                            sparkTracing.exception { exception, request, response -> response.body("exception") })
+            Spark.afterAfter(sparkTracing.afterAfter())
+        }
 
         this.http.get("/*",
                       Route { req, res ->
                           res.header("cache-control", "must-revalidate,no-cache,no-store")
 
-                          val span = tracer?.newTrace()?.name("scrape-round-trip")?.tag("version", "1.3.0")?.start()
-
-                          try {
-                              if (!proxy.isRunning) {
-                                  logger.error("Proxy stopped")
-                                  res.status(503)
-                                  span?.tag("sent", "false")
-                                  updateScrapeRequests("proxy_stopped")
-                                  return@Route null
-                              }
-
-                              val vals = req.splat()
-
-                              if (vals == null || vals.isEmpty()) {
-                                  logger.info("Request missing path")
-                                  res.status(404)
-                                  span?.tag("sent", "false")
-                                  updateScrapeRequests("missing_path")
-                                  return@Route null
-                              }
-
-                              val path = vals[0]
-
-                              if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
-                                  res.status(200)
-                                  res.type("text/plain")
-                                  span?.tag("sent", "false")
-                                  return@Route "42"
-                              }
-
-                              val agentContext = proxy.getAgentContextByPath(path)
-
-                              if (agentContext == null) {
-                                  logger.debug("Invalid path request /\${path")
-                                  res.status(404)
-                                  span?.tag("sent", "false")
-                                  updateScrapeRequests("invalid_path")
-                                  return@Route null
-                              }
-
-                              if (!agentContext.valid) {
-                                  logger.error("Invalid AgentContext")
-                                  res.status(404)
-                                  span?.tag("sent", "false")
-                                  updateScrapeRequests("invalid_agent_context")
-                                  return@Route null
-                              }
-
-                              span?.tag("path", path)
-                              span?.tag("sent", "true")
-
-                              return@Route submitScrapeRequest(req, res, agentContext, path, span)
-
-                          } finally {
-                              span?.finish()
+                          if (!proxy.isRunning) {
+                              logger.error("Proxy stopped")
+                              res.status(503)
+                              updateScrapeRequests("proxy_stopped")
+                              return@Route null
                           }
+
+                          val vals = req.splat()
+
+                          if (vals == null || vals.isEmpty()) {
+                              logger.info("Request missing path")
+                              res.status(404)
+                              updateScrapeRequests("missing_path")
+                              return@Route null
+                          }
+
+                          val path = vals[0]
+
+                          if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
+                              res.status(200)
+                              res.type("text/plain")
+                              return@Route "42"
+                          }
+
+                          val agentContext = proxy.getAgentContextByPath(path)
+
+                          if (agentContext == null) {
+                              logger.debug("Invalid path request /\${path")
+                              res.status(404)
+                              updateScrapeRequests("invalid_path")
+                              return@Route null
+                          }
+
+                          if (!agentContext.valid) {
+                              logger.error("Invalid AgentContext")
+                              res.status(404)
+                              updateScrapeRequests("invalid_agent_context")
+                              return@Route null
+                          }
+
+                          return@Route submitScrapeRequest(req, res, agentContext, path)
+
                       })
     }
 
@@ -140,11 +124,9 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     private fun submitScrapeRequest(req: Request,
                                     res: Response,
                                     agentContext: AgentContext?,
-                                    path: String,
-                                    span: Span?): String? {
+                                    path: String): String? {
         val scrapeRequest = ScrapeRequestWrapper(this.proxy,
                                                  agentContext!!,
-                                                 span,
                                                  path,
                                                  req.headers(ACCEPT))
         try {

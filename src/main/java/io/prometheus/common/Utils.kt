@@ -124,9 +124,9 @@ fun getVersionDesc(asJson: Boolean): String {
 
 fun shutDownHookAction(service: Service): Thread =
         Thread {
-            JCommander.getConsole().println("*** ${service.javaClass.simpleName} shutting down ***")
+            println("*** ${service.javaClass.simpleName} shutting down ***")
             service.stopAsync()
-            JCommander.getConsole().println("*** ${service.javaClass.simpleName} shut down complete ***")
+            println("*** ${service.javaClass.simpleName} shut down complete ***")
         }
 
 class VersionValidator : IParameterValidator {

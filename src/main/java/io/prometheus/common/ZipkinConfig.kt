@@ -38,5 +38,3 @@ data class ZipkinConfig(val enabled: Boolean,
                              zipkin.serviceName)
     }
 }
-
-

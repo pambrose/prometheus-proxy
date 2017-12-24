@@ -137,7 +137,6 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             while (this.proxy.isRunning && agentContext.valid) {
                 val scrapeRequest = agentContext.pollScrapeRequestQueue()
                 if (scrapeRequest != null) {
-                    scrapeRequest.annotateSpan("send-to-agent")
                     responseObserver.onNext(scrapeRequest.scrapeRequest)
                 }
             }
@@ -155,7 +154,6 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                     scrapeRequest.apply {
                         setScrapeResponse(response)
                         markComplete()
-                        annotateSpan("received-from-agent")
                         agentContext.markActivity()
                     }
             }

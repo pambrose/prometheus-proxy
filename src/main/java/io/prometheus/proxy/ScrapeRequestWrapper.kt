@@ -17,7 +17,6 @@
 package io.prometheus.proxy
 
 
-import brave.Span
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions
 import io.prometheus.Proxy
@@ -30,7 +29,6 @@ import java.util.concurrent.atomic.AtomicReference
 
 class ScrapeRequestWrapper(proxy: Proxy,
                            agentContext: AgentContext,
-                           private val rootSpan: Span?,
                            path: String,
                            accept: String?) {
 
@@ -58,10 +56,6 @@ class ScrapeRequestWrapper(proxy: Proxy,
         if (!accept.isNullOrBlank())
             builder = builder.setAccept(accept)
         this.scrapeRequest = builder.build()
-    }
-
-    fun annotateSpan(value: String) {
-        this.rootSpan?.annotate(value)
     }
 
     fun setScrapeResponse(scrapeResponse: ScrapeResponse) = this.scrapeResponseRef.set(scrapeResponse)

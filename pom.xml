@@ -23,7 +23,7 @@
     <groupId>io.prometheus</groupId>
     <artifactId>prometheus-proxy</artifactId>
     <version>1.3.0-SNAPSHOT</version>
-    
+
     <properties>
         <kotlin.version>1.2.10</kotlin.version>
         <prometheus.version>0.1.0</prometheus.version>
@@ -41,7 +41,7 @@
         <metrics.version>4.0.0-alpha5</metrics.version>
 
         <brave.version>4.13.1</brave.version>
-        <sender.version>2.1.4</sender.version>
+        <zipkin-sender.version>2.2.2</zipkin-sender.version>
 
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.7.25</slf4j.version>
@@ -64,6 +64,10 @@
         <sonar.exclusions>**/grpc/*.java</sonar.exclusions>
         <sonar.language>java</sonar.language>
     </properties>
+
+    <prerequisites>
+        <maven>${maven.version}</maven>
+    </prerequisites>
 
     <dependencyManagement>
         <dependencies>
@@ -197,7 +201,7 @@
         <dependency>
             <groupId>io.zipkin.reporter2</groupId>
             <artifactId>zipkin-sender-okhttp3</artifactId>
-            <version>${sender.version}</version>
+            <version>${zipkin-sender.version}</version>
         </dependency>
 
         <dependency>
