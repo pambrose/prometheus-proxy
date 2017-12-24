@@ -26,7 +26,6 @@ import io.prometheus.common.GenericServiceListener
 import org.slf4j.LoggerFactory
 import spark.*
 
-
 class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleService() {
     private val configVals = this.proxy.configVals
     private val tracing = this.proxy.zipkinReporterService?.newTracing("proxy-http")
@@ -97,7 +96,6 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                           }
 
                           return@Route submitScrapeRequest(req, res, agentContext, path)
-
                       })
     }
 
@@ -141,7 +139,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
         logger.debug("Results returned from $agentContext for $scrapeRequest")
 
         val scrapeResponse = scrapeRequest.scrapeResponse
-        val statusCode = scrapeResponse.statusCode
+        val statusCode = scrapeResponse!!.statusCode
         res.status(statusCode)
 
         // Do not return content on error status codes
@@ -155,7 +153,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                 res.header(CONTENT_ENCODING, "gzip")
             res.type(scrapeResponse.contentType)
             this.updateScrapeRequests("success")
-            scrapeRequest.scrapeResponse.text
+            scrapeRequest.scrapeResponse!!.text
         }
     }
 

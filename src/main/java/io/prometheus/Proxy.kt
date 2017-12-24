@@ -71,7 +71,7 @@ class Proxy(options: ProxyOptions,
         get() = this.genericConfigVals.proxy
 
     val totalAgentRequestQueueSize: Int
-        get() = this.agentContextMap.values.map { it.scrapeRequestQueueSize() }.sum()
+        get() = this.agentContextMap.values.map { it.scrapeRequestQueueSize }.sum()
 
     init {
         this.addServices(this.grpcService, this.httpService, this.agentCleanupService!!)
@@ -110,8 +110,8 @@ class Proxy(options: ProxyOptions,
                               override fun check(): HealthCheck.Result {
                                   val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
                                   val vals = agentContextMap.entries
-                                          .filter { it.value.scrapeRequestQueueSize() >= unhealthySize }
-                                          .map { "${it.value} ${it.value.scrapeRequestQueueSize()}" }
+                                          .filter { it.value.scrapeRequestQueueSize >= unhealthySize }
+                                          .map { "${it.value} ${it.value.scrapeRequestQueueSize}" }
                                           .toList()
                                   return if (vals.isEmpty())
                                       HealthCheck.Result.healthy()

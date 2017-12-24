@@ -152,7 +152,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                     logger.error("Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}")
                 else
                     scrapeRequest.apply {
-                        setScrapeResponse(response)
+                        scrapeResponse = response
                         markComplete()
                         agentContext.markActivity()
                     }

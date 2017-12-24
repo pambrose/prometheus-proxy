@@ -20,12 +20,12 @@ package io.prometheus.proxy
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions
 import io.prometheus.Proxy
+import io.prometheus.common.AtomicReferenceDelegate
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 
 class ScrapeRequestWrapper(proxy: Proxy,
                            agentContext: AgentContext,
@@ -34,7 +34,6 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     private val createTime = System.currentTimeMillis()
     private val complete = CountDownLatch(1)
-    private val scrapeResponseRef = AtomicReference<ScrapeResponse>()
     private val requestTimer = proxy.metrics?.scrapeRequestLatency?.startTimer()
 
     val agentContext: AgentContext = Preconditions.checkNotNull(agentContext)
@@ -44,8 +43,7 @@ class ScrapeRequestWrapper(proxy: Proxy,
     val scrapeId: Long
         get() = this.scrapeRequest.scrapeId
 
-    val scrapeResponse: ScrapeResponse
-        get() = this.scrapeResponseRef.get()
+    var scrapeResponse: ScrapeResponse? by AtomicReferenceDelegate()
 
     init {
         var builder =
@@ -57,8 +55,6 @@ class ScrapeRequestWrapper(proxy: Proxy,
             builder = builder.setAccept(accept)
         this.scrapeRequest = builder.build()
     }
-
-    fun setScrapeResponse(scrapeResponse: ScrapeResponse) = this.scrapeResponseRef.set(scrapeResponse)
 
     fun ageInSecs(): Long = (System.currentTimeMillis() - this.createTime) / 1000
 

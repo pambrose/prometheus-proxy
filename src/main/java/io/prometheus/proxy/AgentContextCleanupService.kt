@@ -37,7 +37,7 @@ class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionTh
         while (this.isRunning) {
             this.proxy.agentContextMap
                     .forEach { agentId, agentContext ->
-                        val inactivitySecs = agentContext.inactivitySecs()
+                        val inactivitySecs = agentContext.inactivitySecs
                         if (inactivitySecs > maxInactivitySecs) {
                             logger.info("Evicting agent after $inactivitySecs secs of inactivty $agentContext")
                             this.proxy.removeAgentContext(agentId)

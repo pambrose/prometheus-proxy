@@ -36,8 +36,7 @@ enum class EnvVars {
     ADMIN_ENABLED,
     ADMIN_PORT;
 
-    private val env: String?
-        get() = getenv(this.name)
+    private val env: String? by lazy { getenv(this.name) }
 
     fun getEnv(defaultVal: String): String? = this.env ?: defaultVal
 
