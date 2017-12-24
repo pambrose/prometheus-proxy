@@ -45,21 +45,6 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
 
     override fun startUp() {
         if (this.proxy.zipkinEnabled) {
-            val tracing = SparkTracing.create(this.proxy.tracing)
-            this.http.before(tracing.before())
-
-            val impl = object : ExceptionHandlerImpl<Exception>(Exception::class.java) {
-                override fun handle(e: Exception, request: Request, response: Response) {
-                    response.status(404)
-                    logger.error("Error in ProxyHttpService", e)
-                }
-            }
-
-            this.http.exception(Exception::class.java, tracing.exception(impl))
-            this.http.afterAfter(tracing.afterAfter())
-        }
-
-        if (this.proxy.zipkinEnabled) {
             val sparkTracing = SparkTracing.create(this.tracing)
             Spark.before(sparkTracing.before())
             Spark.exception(Exception::class.java,
