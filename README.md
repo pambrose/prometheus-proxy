@@ -84,8 +84,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-$ docker pull pambrose/prometheus-proxy:1.2.5
-$ docker pull pambrose/prometheus-agent:1.2.5
+$ docker pull pambrose/prometheus-proxy:1.3.0
+$ docker pull pambrose/prometheus-agent:1.3.0
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
@@ -94,14 +94,14 @@ Start the proxy and an agent in separate shells on your local machine:
 $ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
         -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.2.5
+        pambrose/prometheus-proxy:1.3.0
 ```
 
 ```bash
 $ docker run --rm -p 8083:8083 -p 8093:8093 \
         -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.2.5
+        pambrose/prometheus-agent:1.3.0
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
@@ -181,3 +181,11 @@ The path names can be changed in the configuration file. To disable an admin ser
 * [Prometheus.io](http://prometheus.io)
 * [gRPC](http://grpc.io)
 * [Typesafe Config](https://github.com/typesafehub/config)
+* [Zipkin]()
+
+## Zipkin 
+
+* Run a Zipkin server with: `docker run -d -p 9411:9411 openzipkin/zipkin`
+* View Zipkin info at http://localhost:9411
+
+Details on the Zipkin container are [here](https://github.com/openzipkin/docker-zipkin).

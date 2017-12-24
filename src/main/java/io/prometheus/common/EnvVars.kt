@@ -14,7 +14,34 @@
  *  limitations under the License.
  */
 
-@VersionAnnotation(version = "1.3.0", date = "12/24/17")
-package io.prometheus;
+package io.prometheus.common
 
-import io.prometheus.common.VersionAnnotation;
+import java.lang.System.getenv
+
+enum class EnvVars {
+
+    // Proxy
+    PROXY_CONFIG,
+    PROXY_PORT,
+    AGENT_PORT,
+
+    // Agent
+    AGENT_CONFIG,
+    PROXY_HOSTNAME,
+    AGENT_NAME,
+
+    // Common
+    METRICS_ENABLED,
+    METRICS_PORT,
+    ADMIN_ENABLED,
+    ADMIN_PORT;
+
+    private val env: String?
+        get() = getenv(this.name)
+
+    fun getEnv(defaultVal: String): String? = this.env ?: defaultVal
+
+    fun getEnv(defaultVal: Boolean): Boolean = this.env?.toBoolean() ?: defaultVal
+
+    fun getEnv(defaultVal: Int): Int = this.env?.toInt() ?: defaultVal
+}

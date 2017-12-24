@@ -22,10 +22,10 @@
 
     <groupId>io.prometheus</groupId>
     <artifactId>prometheus-proxy</artifactId>
-    <version>1.2.5-SNAPSHOT</version>
+    <version>1.3.0-SNAPSHOT</version>
 
-    
     <properties>
+        <kotlin.version>1.2.10</kotlin.version>
         <prometheus.version>0.1.0</prometheus.version>
         <jcommander.version>1.72</jcommander.version>
         <config.version>1.3.2</config.version>
@@ -37,11 +37,11 @@
         <spark.version>2.7.1</spark.version>
         <jetty.version>9.4.6.v20170531</jetty.version>
         <okhttp.version>3.9.1</okhttp.version>
-        <auto.version>1.5.2</auto.version>
         <grpc-prom.version>0.3.0</grpc-prom.version>
-        <metrics.version>4.0.0-alpha4</metrics.version>
-        <brave.version>4.11.0</brave.version>
-        <zipkin-reporter.version>1.1.2</zipkin-reporter.version>
+        <metrics.version>4.0.0-alpha5</metrics.version>
+
+        <brave.version>4.13.1</brave.version>
+        <zipkin-sender.version>2.2.2</zipkin-sender.version>
 
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.7.25</slf4j.version>
@@ -61,7 +61,7 @@
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <sonar.exclusions>**/grpc/*.java, **/AutoValue_*</sonar.exclusions>
+        <sonar.exclusions>**/grpc/*.java</sonar.exclusions>
         <sonar.language>java</sonar.language>
     </properties>
 
@@ -179,20 +179,18 @@
         </dependency>
 
         <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-all</artifactId>
+            <version>${grpc.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
             <version>${okhttp.version}</version>
         </dependency>
 
-        <!--
-        <dependency>
-            <groupId>io.zipkin.brave</groupId>
-            <artifactId>brave-grpc</artifactId>
-            <version>${brave.version}</version>
-        </dependency>
-        -->
-
-        <!-- Add this back when they update their grpc lib
+        <!-- Add back when they update their grpc lib - https://github.com/grpc-ecosystem/java-grpc-prometheus
         <dependency>
             <groupId>me.dinowernli</groupId>
             <artifactId>java-grpc-prometheus</artifactId>
@@ -201,49 +199,21 @@
         -->
 
         <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-all</artifactId>
-            <version>${grpc.version}</version>
+            <groupId>io.zipkin.reporter2</groupId>
+            <artifactId>zipkin-sender-okhttp3</artifactId>
+            <version>${zipkin-sender.version}</version>
         </dependency>
 
-
-        <dependency>
-            <groupId>com.google.auto.value</groupId>
-            <artifactId>auto-value</artifactId>
-            <version>${auto.version}</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>io.zipkin.brave</groupId>
-            <artifactId>brave</artifactId>
-            <version>${brave.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.zipkin.brave</groupId>
-            <artifactId>brave-sparkjava</artifactId>
-            <version>${brave.version}</version>
-        </dependency>
-
-        <!--
         <dependency>
             <groupId>io.zipkin.brave</groupId>
             <artifactId>brave-instrumentation-sparkjava</artifactId>
             <version>${brave.version}</version>
         </dependency>
-        -->
 
         <dependency>
             <groupId>io.zipkin.brave</groupId>
-            <artifactId>brave-okhttp</artifactId>
+            <artifactId>brave-instrumentation-grpc</artifactId>
             <version>${brave.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.zipkin.reporter</groupId>
-            <artifactId>zipkin-sender-okhttp3</artifactId>
-            <version>${zipkin-reporter.version}</version>
         </dependency>
 
         <dependency>
@@ -275,6 +245,17 @@
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
             <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-stdlib-jdk8</artifactId>
+            <version>${kotlin.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-test-junit</artifactId>
+            <version>${kotlin.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -315,20 +296,11 @@
         </resources>
 
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>${maven.compiler.version}</version>
-                <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
-                </configuration>
-            </plugin>
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <version>1.4.1</version>
+                <version>3.0.0-M1</version>
                 <executions>
                     <execution>
                         <id>enforce-maven</id>
@@ -344,6 +316,72 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-maven-plugin</artifactId>
+                <version>${kotlin.version}</version>
+                <executions>
+                    <execution>
+                        <id>compile</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirs>
+                                <source>src/main/java</source>
+                                <source>target/generated-sources/protobuf/java</source>
+                                <source>target/generated-sources/annotations</source>
+                            </sourceDirs>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>test-compile</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>test-compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <jvmTarget>1.8</jvmTarget>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.version}</version>
+                <executions>
+                    <execution>
+                        <id>default-compile</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
+                        <id>java-compile</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>java-test-compile</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>testCompile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
             </plugin>
 
             <plugin>
@@ -590,7 +628,6 @@
                         <exclude>**/grpc/*.class</exclude>
                         <exclude>**/ConfigVals*.class</exclude>
                         <exclude>**/ZipkinReporter*.class</exclude>
-                        <exclude>**/AutoValue_*.class</exclude>
                     </excludes>
                 </configuration>
                 <executions>

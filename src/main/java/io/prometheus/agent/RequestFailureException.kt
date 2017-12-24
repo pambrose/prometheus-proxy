@@ -14,7 +14,10 @@
  *  limitations under the License.
  */
 
-@VersionAnnotation(version = "1.3.0", date = "12/24/17")
-package io.prometheus;
+package io.prometheus.agent
 
-import io.prometheus.common.VersionAnnotation;
+class RequestFailureException(message: String) : Exception(message) {
+    companion object {
+        private val serialVersionUID = 8748724180953791199L
+    }
+}
