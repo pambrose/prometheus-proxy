@@ -63,7 +63,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
             val sparkTracing = SparkTracing.create(this.tracing)
             Spark.before(sparkTracing.before())
             Spark.exception(Exception::class.java,
-                            sparkTracing.exception { exception, request, response -> response.body("exception") })
+                            sparkTracing.exception { _, _, response -> response.body("exception") })
             Spark.afterAfter(sparkTracing.afterAfter())
         }
 

@@ -25,7 +25,7 @@ import zipkin2.reporter.okhttp3.OkHttpSender
 
 class ZipkinReporterService(private val url: String) : AbstractIdleService() {
     private val sender = OkHttpSender.create(this.url)
-    private val reporter = AsyncReporter.create(this.sender);
+    private val reporter = AsyncReporter.create(this.sender)
 
     init {
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
