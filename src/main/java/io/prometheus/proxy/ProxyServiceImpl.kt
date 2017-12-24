@@ -39,16 +39,14 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                                responseObserver: StreamObserver<RegisterAgentResponse>) {
         val agentId = request.agentId
         val agentContext = this.proxy.getAgentContext(agentId)
-        if (agentContext == null) {
+        if (agentContext == null)
             logger.info("registerAgent() missing AgentContext agentId: $agentId")
-        }
-        else {
+        else
             agentContext.apply {
                 agentName = request.agentName
                 hostname = request.hostname
                 markActivity()
             }
-        }
 
         responseObserver.apply {
             onNext(RegisterAgentResponse.newBuilder()
@@ -151,17 +149,15 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         return object : StreamObserver<ScrapeResponse> {
             override fun onNext(response: ScrapeResponse) {
                 val scrapeRequest = proxy.getFromScrapeRequestMap(response.scrapeId)
-                if (scrapeRequest == null) {
+                if (scrapeRequest == null)
                     logger.error("Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}")
-                }
-                else {
+                else
                     scrapeRequest.apply {
                         setScrapeResponse(response)
                         markComplete()
                         annotateSpan("received-from-agent")
                         agentContext.markActivity()
                     }
-                }
             }
 
             override fun onError(t: Throwable) {

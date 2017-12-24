@@ -75,7 +75,7 @@ class Proxy(options: ProxyOptions,
 
     init {
         this.addServices(this.grpcService, this.httpService, this.agentCleanupService!!)
-        this.init()
+        this.initService()
     }
 
     override fun startUp() {

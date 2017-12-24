@@ -16,6 +16,8 @@
 
 package io.prometheus.proxy
 
+import brave.Tracing
+import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions
@@ -32,10 +34,10 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
 
-class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, private val inProcessServerName: String?) : AbstractIdleService() {
+class ProxyGrpcService private constructor(proxy: Proxy,
+                                           private val port: Int,
+                                           private val inProcessServerName: String?) : AbstractIdleService() {
     private val inProcessServer = !inProcessServerName.isNullOrBlank()
-    private val grpcServer: Server
-
     val healthCheck: HealthCheck
         get() = object : HealthCheck() {
             @Throws(Exception::class)
@@ -47,26 +49,34 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
             }
         }
 
-    init {
-        val interceptors = listOf<ServerInterceptor>(ProxyInterceptor())
+    private val grpcServer: Server
+    private val _grpcTracing: Tracing?
+    private val grpcTracing: GrpcTracing?
 
-        /*
-        if (proxy.getConfigVals().grpc.metricsEnabled)
-          interceptors.add(MonitoringServerInterceptor.create(proxy.getConfigVals().grpc.allMetricsReported
-                                                              ? Configuration.allMetrics()
-                                                              : Configuration.cheapMetricsOnly()));
-        if (proxy.isZipkinEnabled() && proxy.getConfigVals().grpc.zipkinReportingEnabled)
-          interceptors.add(BraveGrpcServerInterceptor.create(proxy.getZipkinReporterService().getBrave()));
-        */
+    init {
+        if (proxy.zipkinEnabled) {
+            this._grpcTracing = proxy.zipkinReporterService!!.newTracing("grpc_server")
+            this.grpcTracing = GrpcTracing.create(this._grpcTracing)
+        }
+        else {
+            this._grpcTracing = null
+            this.grpcTracing = null
+        }
+
+        val serverBuilder =
+                if (this.inProcessServer)
+                    InProcessServerBuilder.forName(this.inProcessServerName)
+                else
+                    ServerBuilder.forPort(this.port)
 
         val proxyService = ProxyServiceImpl(proxy)
+        val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
+        if (proxy.zipkinEnabled)
+            interceptors.add(this.grpcTracing!!.newServerInterceptor())
         val serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors)
 
         this.grpcServer =
-                (if (this.inProcessServer)
-                    InProcessServerBuilder.forName(this.inProcessServerName)
-                else
-                    ServerBuilder.forPort(this.port))
+                serverBuilder
                         .addService(serviceDef)
                         .addTransportFilter(ProxyTransportFilter(proxy))
                         .build()
@@ -80,6 +90,7 @@ class ProxyGrpcService private constructor(proxy: Proxy, private val port: Int, 
     }
 
     override fun shutDown() {
+        this._grpcTracing?.close()
         this.grpcServer.shutdown()
     }
 

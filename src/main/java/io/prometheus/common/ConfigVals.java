@@ -101,7 +101,7 @@ public class ConfigVals {
           this.enabled = c.hasPathOrNull("enabled") && c.getBoolean("enabled");
           this.grpcReportingEnabled = c.hasPathOrNull("grpcReportingEnabled") && c.getBoolean("grpcReportingEnabled");
           this.hostname = c.hasPathOrNull("hostname") ? c.getString("hostname") : "localhost";
-          this.path = c.hasPathOrNull("path") ? c.getString("path") : "api/v1/spans";
+          this.path = c.hasPathOrNull("path") ? c.getString("path") : "api/v2/spans";
           this.port = c.hasPathOrNull("port") ? c.getInt("port") : 9411;
           this.serviceName = c.hasPathOrNull("serviceName") ? c.getString("serviceName") : "prometheus-agent";
         }
@@ -269,7 +269,7 @@ public class ConfigVals {
           this.enabled = c.hasPathOrNull("enabled") && c.getBoolean("enabled");
           this.grpcReportingEnabled = c.hasPathOrNull("grpcReportingEnabled") && c.getBoolean("grpcReportingEnabled");
           this.hostname = c.hasPathOrNull("hostname") ? c.getString("hostname") : "localhost";
-          this.path = c.hasPathOrNull("path") ? c.getString("path") : "api/v1/spans";
+          this.path = c.hasPathOrNull("path") ? c.getString("path") : "api/v2/spans";
           this.port = c.hasPathOrNull("port") ? c.getInt("port") : 9411;
           this.serviceName = c.hasPathOrNull("serviceName") ? c.getString("serviceName") : "prometheus-proxy";
         }

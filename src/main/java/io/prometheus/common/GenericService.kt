@@ -23,7 +23,6 @@ import com.codahale.metrics.health.HealthCheckRegistry
 import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck
 import com.codahale.metrics.jmx.JmxReporter
 import com.google.common.base.Joiner
-import com.google.common.collect.Lists
 import com.google.common.util.concurrent.AbstractExecutionThreadService
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.Service
@@ -46,6 +45,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     protected val adminService: AdminService?
     protected val metricsService: MetricsService?
+    var tracing: Tracing? = null
 
     val zipkinReporterService: ZipkinReporterService?
 
@@ -54,9 +54,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     val metricsEnabled: Boolean
         get() = this.metricsService != null
-
-    val tracing: Tracing
-        get() = this.zipkinReporterService!!.tracing
 
     init {
         if (adminConfig.enabled) {
@@ -89,8 +86,9 @@ abstract class GenericService protected constructor(protected val genericConfigV
         }
 
         if (zipkinConfig.enabled) {
-            val zipkinUrl = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
-            this.zipkinReporterService = ZipkinReporterService(zipkinConfig.serviceName, zipkinUrl)
+            val url = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
+            this.zipkinReporterService = ZipkinReporterService(url)
+            this.tracing = this.zipkinReporterService.newTracing(zipkinConfig.serviceName)
             this.addService(this.zipkinReporterService)
         }
         else {
@@ -101,7 +99,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
-    fun init() {
+    fun initService() {
         this.serviceManager = ServiceManager(this.services)
         this.serviceManager!!.addListener(this.newListener())
         this.registerHealthChecks()
@@ -109,6 +107,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     override fun startUp() {
         super.startUp()
+        this.zipkinReporterService?.startAsync()
         this.jmxReporter?.start()
         this.metricsService?.startAsync()
         this.adminService?.startAsync()
@@ -116,10 +115,11 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     override fun shutDown() {
-        this.adminService?.shutDown()
+        this.tracing?.close()
+        this.adminService?.stopAsync()
         this.metricsService?.stopAsync()
-        this.zipkinReporterService?.shutDown()
         this.jmxReporter?.stop()
+        this.zipkinReporterService?.stopAsync()
         super.shutDown()
     }
 
@@ -127,9 +127,15 @@ abstract class GenericService protected constructor(protected val genericConfigV
         this.stopAsync()
     }
 
-    private fun addService(service: Service) = this.services.add(service)
+    private fun addService(service: Service) {
+        logger.info("Adding service $service")
+        this.services.add(service)
+    }
 
-    protected fun addServices(service: Service, vararg services: Service) = this.services.addAll(Lists.asList(service, services))
+    protected fun addServices(service: Service, vararg services: Service) {
+        this.addService(service)
+        services.forEach { this.addService(it) }
+    }
 
     protected open fun registerHealthChecks() {
         this.healthCheckRegistry.register("thread_deadlock", ThreadDeadlockHealthCheck())
@@ -150,7 +156,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                             .onEach { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
                                             .map { "${it.key}: ${it.value}" }
                                             .toList()
-
                                     HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
                                 }
                             }
@@ -161,9 +166,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
         val serviceName = this.javaClass.simpleName
         return object : ServiceManager.Listener() {
             override fun healthy() = logger.info("All $serviceName services healthy")
-
             override fun stopped() = logger.info("All $serviceName services stopped")
-
             override fun failure(service: Service?) = logger.info("$serviceName service failed: $service")
         }
     }

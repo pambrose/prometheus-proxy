@@ -22,16 +22,10 @@ import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
-import java.io.IOException
 
-class ZipkinReporterService(private val serviceName: String, private val url: String) : AbstractIdleService() {
+class ZipkinReporterService(private val url: String) : AbstractIdleService() {
     private val sender = OkHttpSender.create(this.url)
     private val reporter = AsyncReporter.create(this.sender);
-    val tracing: Tracing =
-            Tracing.newBuilder()
-                    .localServiceName(this.serviceName)
-                    .spanReporter(this.reporter)
-                    .build()
 
     init {
         this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
@@ -47,16 +41,13 @@ class ZipkinReporterService(private val serviceName: String, private val url: St
         // Empty
     }
 
-    @Throws(IOException::class)
-    public override fun shutDown() {
-        this.tracing.close()
+    override fun shutDown() {
         this.reporter.close()
         this.sender.close()
     }
 
     override fun toString() =
             MoreObjects.toStringHelper(this)
-                    .add("serviceName", serviceName)
                     .add("url", url)
                     .toString()
 }

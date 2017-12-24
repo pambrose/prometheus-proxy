@@ -32,11 +32,6 @@ abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val envConfig: String,
                                                  private val exitOnMissingConfig: Boolean) {
 
-    private var config: Config? = null
-
-    var configVals: ConfigVals? = null
-        private set
-
     @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
     private var configName: String? = null
 
@@ -68,14 +63,19 @@ abstract class BaseOptions protected constructor(private val progName: String,
     var dynamicParams = mutableMapOf<String, String>()
         private set
 
+    private var config: Config? = null
+
+    var configVals: ConfigVals? = null
+        private set
+
+    protected abstract fun assignConfigVals()
+
     protected fun parseOptions() {
         this.parseArgs(this.argv)
         this.readConfig(this.envConfig, this.exitOnMissingConfig)
         this.configVals = ConfigVals(this.config)
         this.assignConfigVals()
     }
-
-    protected abstract fun assignConfigVals()
 
     private fun parseArgs(argv: Array<String>?) {
         try {
@@ -117,21 +117,18 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-        val config =
-                readConfig(this.configName,
-                           envConfig,
-                           ConfigParseOptions.defaults().setAllowMissing(false),
-                           ConfigFactory.load().resolve(),
-                           exitOnMissingConfig)
-                        .resolve(ConfigResolveOptions.defaults())
-        this.config = config.resolve()
+
+        this.config = readConfig(this.configName,
+                                 envConfig,
+                                 ConfigParseOptions.defaults().setAllowMissing(false),
+                                 ConfigFactory.load().resolve(),
+                                 exitOnMissingConfig)
+                .resolve(ConfigResolveOptions.defaults())
+                .resolve()
 
         this.dynamicParams.forEach { k, v ->
             // Strip quotes
-            val qval = if (v.startsWith("\"") && v.endsWith("\""))
-                v.substring(1, v.length - 1)
-            else
-                v
+            val qval = if (v.startsWith("\"") && v.endsWith("\"")) v.substring(1, v.length - 1) else v
             val prop = "$k=$qval"
             System.setProperty(k, prop)
             val newConfig = ConfigFactory.parseString(prop, PROPS)
@@ -164,7 +161,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                 } catch (e: Exception) {
                     if (e.cause is FileNotFoundException)
                         logger.error("Invalid getConfig url: $configName")
-                                 else
+                    else
                         logger.error("Exception: ${e.javaClass.simpleName} - ${e.message}", e)
                 }
 
@@ -173,11 +170,10 @@ abstract class BaseOptions protected constructor(private val progName: String,
                 try {
                     return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
                 } catch (e: Exception) {
-                    logger.error(if (e.cause is FileNotFoundException)
-                                     "Invalid getConfig filename: $configName"
-                                 else
-                                     "Exception: ${e.javaClass.simpleName} - ${e.message}",
-                                 e)
+                    if (e.cause is FileNotFoundException)
+                        logger.error("Invalid getConfig filename: $configName")
+                    else
+                        logger.error("Exception: ${e.javaClass.simpleName} - ${e.message}", e)
                 }
             }
         }

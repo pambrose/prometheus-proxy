@@ -1,7 +1,6 @@
 .idea/
-*.iml
-
-.wercker
-
+.wercker/
 target/
+
+*.iml
 

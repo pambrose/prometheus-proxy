@@ -27,6 +27,7 @@ import io.prometheus.common.GenericServiceListener
 import org.slf4j.LoggerFactory
 import spark.*
 
+
 class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleService() {
     private val configVals = this.proxy.configVals
     private val tracing = this.proxy.zipkinReporterService?.newTracing("proxy-http")
@@ -59,24 +60,36 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
             this.http.afterAfter(tracing.afterAfter())
         }
 
+        /*
+        val sparkTracing = SparkTracing.create(this.tracing)
+        Spark.before(sparkTracing.before())
+        Spark.exception(Exception::class.java, sparkTracing.exception { exception, request, response -> response.body("exception") } )
+        Spark.afterAfter(sparkTracing.afterAfter())
+        */
+
+        val tracer = this.tracing?.tracer()
+
         this.http.get("/*",
                       Route { req, res ->
                           res.header("cache-control", "must-revalidate,no-cache,no-store")
 
-                          val span = tracing?.tracer()?.newTrace()?.name("round-trip")?.tag("version", "1.3.0")?.start()
+                          val span = tracer?.newTrace()?.name("scrape-round-trip")?.tag("version", "1.3.0")?.start()
 
                           try {
                               if (!proxy.isRunning) {
                                   logger.error("Proxy stopped")
                                   res.status(503)
+                                  span?.tag("sent", "false")
                                   updateScrapeRequests("proxy_stopped")
                                   return@Route null
                               }
 
                               val vals = req.splat()
+
                               if (vals == null || vals.isEmpty()) {
                                   logger.info("Request missing path")
                                   res.status(404)
+                                  span?.tag("sent", "false")
                                   updateScrapeRequests("missing_path")
                                   return@Route null
                               }
@@ -86,6 +99,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                               if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
                                   res.status(200)
                                   res.type("text/plain")
+                                  span?.tag("sent", "false")
                                   return@Route "42"
                               }
 
@@ -94,6 +108,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                               if (agentContext == null) {
                                   logger.debug("Invalid path request /\${path")
                                   res.status(404)
+                                  span?.tag("sent", "false")
                                   updateScrapeRequests("invalid_path")
                                   return@Route null
                               }
@@ -101,11 +116,13 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                               if (!agentContext.valid) {
                                   logger.error("Invalid AgentContext")
                                   res.status(404)
+                                  span?.tag("sent", "false")
                                   updateScrapeRequests("invalid_agent_context")
                                   return@Route null
                               }
 
                               span?.tag("path", path)
+                              span?.tag("sent", "true")
 
                               return@Route submitScrapeRequest(req, res, agentContext, path, span)
 
@@ -142,9 +159,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                     break
 
                 // Check if agent is disconnected or agent is hung
-                if (scrapeRequest.ageInSecs() >= timeoutSecs
-                    || !scrapeRequest.agentContext.valid
-                    || !this.proxy.isRunning) {
+                if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.valid || !this.proxy.isRunning) {
                     res.status(503)
                     this.updateScrapeRequests("time_out")
                     return null

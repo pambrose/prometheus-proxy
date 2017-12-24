@@ -16,6 +16,8 @@
 
 package io.prometheus
 
+import brave.Tracing
+import brave.grpc.GrpcTracing
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions.checkNotNull
 import com.google.common.collect.Maps
@@ -68,16 +70,19 @@ class Agent(options: AgentOptions,
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(this.configVals.internal.scrapeResponseQueueSize)
     private val agentName: String? = if (options.agentName.isNullOrBlank()) "Unnamed-$hostName" else options.agentName
     private val metrics: AgentMetrics? = if (this.metricsEnabled) AgentMetrics(this) else null
-    private val readRequestsExecutorService: ExecutorService = newCachedThreadPool(if (this.metricsEnabled)
-                                                                                       InstrumentedThreadFactory.newInstrumentedThreadFactory("agent_fetch",
-                                                                                                                                              "Agent fetch",
-                                                                                                                                              true)
-                                                                                   else
-                                                                                       ThreadFactoryBuilder()
-                                                                                               .setNameFormat("agent_fetch-%d")
-                                                                                               .setDaemon(true)
-                                                                                               .build())
+    private val readRequestsExecutorService: ExecutorService =
+            newCachedThreadPool(if (this.metricsEnabled)
+                                    InstrumentedThreadFactory.newInstrumentedThreadFactory("agent_fetch",
+                                                                                           "Agent fetch",
+                                                                                           true)
+                                else
+                                    ThreadFactoryBuilder()
+                                            .setNameFormat("agent_fetch-%d")
+                                            .setDaemon(true)
+                                            .build())
 
+    private val _grpcTracing: Tracing?
+    private val grpcTracing: GrpcTracing?
     private val hostname: String?
     private val port: Int
     private val reconnectLimiter: RateLimiter
@@ -101,7 +106,6 @@ class Agent(options: AgentOptions,
         get() = this.genericConfigVals.agent
 
     init {
-
         logger.info("Assigning proxy reconnect pause time to ${this.configVals.internal.reconectPauseSecs} secs")
         this.reconnectLimiter = RateLimiter.create(1.0 / this.configVals.internal.reconectPauseSecs)
         this.reconnectLimiter.acquire()  // Prime the limiter
@@ -123,11 +127,21 @@ class Agent(options: AgentOptions,
             this.port = 50051
         }
 
+        if (zipkinEnabled) {
+            this._grpcTracing = this.zipkinReporterService!!.newTracing("grpc_client")
+            this.grpcTracing = GrpcTracing.create(this._grpcTracing)
+        }
+        else {
+            this._grpcTracing = null
+            this.grpcTracing = null
+        }
+
         this.resetGrpcStubs()
-        this.init()
+        this.initService()
     }
 
     override fun shutDown() {
+        this._grpcTracing?.close()
         this.channel?.shutdownNow()
         this.heartbeatService.shutdownNow()
         super.shutDown()
@@ -209,23 +223,17 @@ class Agent(options: AgentOptions,
 
         this.channel?.shutdownNow()
 
-        this.channel =
-                (if (this.inProcessServerName.isNullOrBlank())
+        val channelBuilder =
+                if (this.inProcessServerName.isNullOrBlank())
                     NettyChannelBuilder.forAddress(this.hostname, this.port)
                 else
-                    InProcessChannelBuilder.forName(this.inProcessServerName))
-                        .usePlaintext(true)
-                        .build()
-        val interceptors = listOf<ClientInterceptor>(AgentClientInterceptor(this))
+                    InProcessChannelBuilder.forName(this.inProcessServerName)
 
-        /*
-        if (this.getConfigVals().metrics.grpc.metricsEnabled)
-          interceptors.add(MonitoringClientInterceptor.create(this.getConfigVals().grpc.allMetricsReported
-                                                              ? Configuration.allMetrics()
-                                                              : Configuration.cheapMetricsOnly()));
-        if (this.zipkinReporter != null && this.getConfigVals().grpc.zipkinReportingEnabled)
-          interceptors.add(BraveGrpcClientInterceptor.create(this.zipkinReporter.getBrave()));
-        */
+        if (this.zipkinEnabled)
+            channelBuilder.intercept(this.grpcTracing!!.newClientInterceptor())
+
+        this.channel = channelBuilder.usePlaintext(true).build()
+        val interceptors = listOf<ClientInterceptor>(AgentClientInterceptor(this))
 
         this.blockingStubRef.set(newBlockingStub(intercept(this.channel, interceptors)))
         this.asyncStubRef.set(newStub(intercept(this.channel, interceptors)))
