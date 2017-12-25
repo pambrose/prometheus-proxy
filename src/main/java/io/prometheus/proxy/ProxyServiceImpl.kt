@@ -49,11 +49,13 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             }
 
         responseObserver.apply {
-            onNext(RegisterAgentResponse.newBuilder()
-                           .setValid(agentContext != null)
-                           .setReason("Invalid agentId: $agentId")
-                           .setAgentId(agentId)
-                           .build())
+            val response =
+                    RegisterAgentResponse.newBuilder()
+                            .setValid(agentContext != null)
+                            .setReason("Invalid agentId: $agentId")
+                            .setAgentId(agentId)
+                            .build()
+            onNext(response)
             onCompleted()
         }
     }

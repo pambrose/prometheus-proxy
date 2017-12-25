@@ -3,7 +3,7 @@ package io.prometheus.common
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.reflect.KProperty
 
-class AtomicLongDelegate() {
+class AtomicLongDelegate {
     private val value = AtomicLong()
 
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Long {

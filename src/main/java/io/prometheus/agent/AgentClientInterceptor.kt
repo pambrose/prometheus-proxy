@@ -34,7 +34,7 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
                             object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
                                 override fun onHeaders(headers: Metadata?) {
                                     // Grab agent_id from headers if not already assigned
-                                    if (agent.agentId == null) {
+                                    if (agent.agentId.isNullOrEmpty()) {
                                         val agentId = headers!!.get(Metadata.Key.of(Proxy.AGENT_ID,
                                                                                     Metadata.ASCII_STRING_MARSHALLER))
                                         if (agentId != null) {

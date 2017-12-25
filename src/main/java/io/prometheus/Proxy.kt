@@ -126,7 +126,7 @@ class Proxy(options: ProxyOptions,
     fun getAgentContext(agentId: String) = this.agentContextMap[agentId]
 
     fun removeAgentContext(agentId: String?): AgentContext? {
-        if (agentId == null) {
+        if (agentId.isNullOrBlank()) {
             logger.error("Null agentId")
             return null
         }
@@ -189,7 +189,7 @@ class Proxy(options: ProxyOptions,
     }
 
     fun removePathByAgentId(agentId: String?) {
-        if (agentId == null) {
+        if (agentId.isNullOrEmpty()) {
             logger.info("Null agentId")
             return
         }
