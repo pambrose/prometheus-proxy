@@ -16,7 +16,6 @@
 
 package io.prometheus.common
 
-import brave.Tracing
 import com.codahale.metrics.MetricRegistry
 import com.codahale.metrics.health.HealthCheck
 import com.codahale.metrics.health.HealthCheckRegistry
@@ -45,7 +44,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     protected val adminService: AdminService?
     protected val metricsService: MetricsService?
-    var tracing: Tracing? = null
 
     val zipkinReporterService: ZipkinReporterService?
 
@@ -88,7 +86,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
         if (zipkinConfig.enabled) {
             val url = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
             this.zipkinReporterService = ZipkinReporterService(url)
-            this.tracing = this.zipkinReporterService.newTracing(zipkinConfig.serviceName)
             this.addService(this.zipkinReporterService)
         }
         else {
@@ -115,7 +112,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     override fun shutDown() {
-        this.tracing?.close()
         this.adminService?.stopAsync()
         this.metricsService?.stopAsync()
         this.jmxReporter?.stop()

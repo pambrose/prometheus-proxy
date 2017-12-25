@@ -38,23 +38,20 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     val agentContext: AgentContext = Preconditions.checkNotNull(agentContext)
 
-    val scrapeRequest: ScrapeRequest
+    var scrapeResponse: ScrapeResponse? by AtomicReferenceDelegate()
+
+    val scrapeRequest: ScrapeRequest =
+            with(ScrapeRequest.newBuilder()) {
+                setAgentId(agentContext.agentId)
+                setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
+                setPath(path)
+                if (!accept.isNullOrBlank())
+                    setAccept(accept)
+                build()
+            }
 
     val scrapeId: Long
         get() = this.scrapeRequest.scrapeId
-
-    var scrapeResponse: ScrapeResponse? by AtomicReferenceDelegate()
-
-    init {
-        var builder =
-                ScrapeRequest.newBuilder()
-                        .setAgentId(agentContext.agentId)
-                        .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
-                        .setPath(path)
-        if (!accept.isNullOrBlank())
-            builder = builder.setAccept(accept)
-        this.scrapeRequest = builder.build()
-    }
 
     fun ageInSecs(): Long = (System.currentTimeMillis() - this.createTime) / 1000
 

@@ -50,16 +50,16 @@ class ProxyGrpcService private constructor(proxy: Proxy,
         }
 
     private val grpcServer: Server
-    private val _grpcTracing: Tracing?
+    private val tracing: Tracing?
     private val grpcTracing: GrpcTracing?
 
     init {
         if (proxy.zipkinEnabled) {
-            this._grpcTracing = proxy.zipkinReporterService!!.newTracing("grpc_server")
-            this.grpcTracing = GrpcTracing.create(this._grpcTracing)
+            this.tracing = proxy.zipkinReporterService!!.newTracing("grpc_server")
+            this.grpcTracing = GrpcTracing.create(this.tracing)
         }
         else {
-            this._grpcTracing = null
+            this.tracing = null
             this.grpcTracing = null
         }
 
@@ -90,7 +90,7 @@ class ProxyGrpcService private constructor(proxy: Proxy,
     }
 
     override fun shutDown() {
-        this._grpcTracing?.close()
+        this.tracing?.close()
         this.grpcServer.shutdown()
     }
 

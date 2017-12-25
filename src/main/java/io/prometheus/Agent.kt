@@ -99,6 +99,7 @@ class Agent(options: AgentOptions,
 
     init {
         logger.info("Assigning proxy reconnect pause time to ${this.configVals.internal.reconectPauseSecs} secs")
+
         this.reconnectLimiter = RateLimiter.create(1.0 / this.configVals.internal.reconectPauseSecs)
         this.reconnectLimiter.acquire()  // Prime the limiter
 
