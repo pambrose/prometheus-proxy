@@ -42,7 +42,7 @@ class PathContext(private val okHttpClient: OkHttpClient,
                             request
                 okHttpClient.newCall(builder.build()).execute()
             } catch (e: IOException) {
-                logger.info("Failed HTTP request: ${url} [${e.javaClass.simpleName}: ${e.message}]")
+                logger.info("Failed HTTP request: $url [${e.javaClass.simpleName}: ${e.message}]")
                 throw e
             }
 

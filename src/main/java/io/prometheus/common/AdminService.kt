@@ -61,8 +61,8 @@ class AdminService(service: GenericService,
 
     override fun toString() =
             MoreObjects.toStringHelper(this)
-                    .add("ping", ":${port}/${pingPath}")
-                    .add("healthcheck", ":${port}/${healthCheckPath}")
-                    .add("threaddump", ":${port}/${threadDumpPath}")
+                    .add("ping", ":$port/$pingPath")
+                    .add("healthcheck", ":$port/$healthCheckPath")
+                    .add("threaddump", ":$port/$threadDumpPath")
                     .toString()
 }

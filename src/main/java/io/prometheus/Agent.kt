@@ -365,11 +365,11 @@ class Agent(options: AgentOptions,
     }
 
     @Throws(RequestFailureException::class)
-    private fun registerPathOnProxy(pathVal: String): Long {
+    private fun registerPathOnProxy(path: String): Long {
         val request =
                 with(RegisterPathRequest.newBuilder()) {
                     agentId = this@Agent.agentId
-                    path = pathVal
+                    this.path = path
                     build()
                 }
         val response = blockingStub!!.registerPath(request)
@@ -380,11 +380,11 @@ class Agent(options: AgentOptions,
     }
 
     @Throws(RequestFailureException::class)
-    private fun unregisterPathOnProxy(pathVal: String) {
+    private fun unregisterPathOnProxy(path: String) {
         val request =
                 with(UnregisterPathRequest.newBuilder()) {
                     agentId = this@Agent.agentId
-                    path = pathVal
+                    this.path = path
                     build()
                 }
         val response = blockingStub!!.unregisterPath(request)

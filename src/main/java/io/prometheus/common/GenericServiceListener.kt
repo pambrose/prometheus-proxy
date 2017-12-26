@@ -23,27 +23,27 @@ class GenericServiceListener(private val service: Service) : Service.Listener() 
 
     override fun starting() {
         super.starting()
-        logger.info("Starting ${service}")
+        logger.info("Starting $service")
     }
 
     override fun running() {
         super.running()
-        logger.info("Running ${service}")
+        logger.info("Running $service")
     }
 
     override fun stopping(from: Service.State) {
         super.stopping(from)
-        logger.info("Stopping ${service}")
+        logger.info("Stopping $service")
     }
 
     override fun terminated(from: Service.State) {
         super.terminated(from)
-        logger.info("Terminated ${service}")
+        logger.info("Terminated $service")
     }
 
     override fun failed(from: Service.State, t: Throwable) {
         super.failed(from, t)
-        logger.info("Failed on $from ${service}", t)
+        logger.info("Failed on $from $service", t)
     }
 
     companion object {

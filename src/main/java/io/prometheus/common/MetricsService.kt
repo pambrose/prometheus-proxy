@@ -53,6 +53,6 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
 
     override fun toString() =
             MoreObjects.toStringHelper(this)
-                    .add("url", "http://localhost:${port}/${path}")
+                    .add("url", "http://localhost:$port/$path")
                     .toString()
 }

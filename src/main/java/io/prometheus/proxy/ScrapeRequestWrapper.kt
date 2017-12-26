@@ -42,11 +42,11 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     val scrapeRequest: ScrapeRequest =
             with(ScrapeRequest.newBuilder()) {
-                setAgentId(agentContext.agentId)
-                setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
-                setPath(path)
+                agentId = agentContext.agentId
+                scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
+                this.path = path
                 if (!accept.isNullOrBlank())
-                    setAccept(accept)
+                    this.accept = accept
                 build()
             }
 
