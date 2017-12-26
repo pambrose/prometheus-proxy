@@ -233,42 +233,44 @@ class Agent(options: AgentOptions,
     private fun updateScrapeCounter(type: String) = metrics?.scrapeRequests?.labels(type)?.inc()
 
     private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
-        var statusCode = 404
+        var statusCodeVal = 404
         val path = scrapeRequest.path
         val scrapeResponse =
-                ScrapeResponse.newBuilder()
-                        .setAgentId(scrapeRequest.agentId)
-                        .setScrapeId(scrapeRequest.scrapeId)
+                ScrapeResponse.newBuilder().apply {
+                    agentId = scrapeRequest.agentId
+                    scrapeId = scrapeRequest.scrapeId
+                }
         val pathContext = pathContextMap[path]
         if (pathContext == null) {
             logger.warn("Invalid path in fetchUrl(): $path")
             updateScrapeCounter("invalid_path")
-            return scrapeResponse
-                    .setValid(false)
-                    .setReason("Invalid path: $path")
-                    .setStatusCode(statusCode)
-                    .setText("")
-                    .setContentType("")
-                    .build()
+            return with(scrapeResponse) {
+                valid = false
+                reason = "Invalid path: $path"
+                statusCode = statusCodeVal
+                text = ""
+                contentType = ""
+                build()
+            }
         }
 
         val requestTimer = metrics?.scrapeRequestLatency?.labels(agentName)?.startTimer()
         var reason = "None"
         try {
             pathContext.fetchUrl(scrapeRequest).use {
-                statusCode = it.code()
+                statusCodeVal = it.code()
                 if (it.isSuccessful) {
                     updateScrapeCounter("success")
                     return scrapeResponse
                             .setValid(true)
                             .setReason("")
-                            .setStatusCode(statusCode)
+                            .setStatusCode(statusCodeVal)
                             .setText(it.body()!!.string())
                             .setContentType(it.header(CONTENT_TYPE))
                             .build()
                 }
                 else {
-                    reason = "Unsucessful response code $statusCode"
+                    reason = "Unsucessful response code $statusCodeVal"
                 }
             }
         } catch (e: IOException) {
@@ -285,7 +287,7 @@ class Agent(options: AgentOptions,
         return scrapeResponse
                 .setValid(false)
                 .setReason(reason)
-                .setStatusCode(statusCode)
+                .setStatusCode(statusCodeVal)
                 .setText("")
                 .setContentType("")
                 .build()
@@ -310,11 +312,12 @@ class Agent(options: AgentOptions,
     @Throws(RequestFailureException::class)
     private fun registerAgent() {
         val request =
-                RegisterAgentRequest.newBuilder()
-                        .setAgentId(agentId)
-                        .setAgentName(agentName)
-                        .setHostname(hostName)
-                        .build()
+                with(RegisterAgentRequest.newBuilder()) {
+                    agentId = this@Agent.agentId
+                    agentName = this@Agent.agentName
+                    hostname = hostName
+                    build()
+                }
         val response = blockingStub!!.registerAgent(request)
         markMsgSent()
         if (!response.valid)
@@ -351,19 +354,24 @@ class Agent(options: AgentOptions,
     }
 
     fun pathMapSize(): Int {
-        val request = PathMapSizeRequest.newBuilder().setAgentId(agentId).build()
+        val request =
+                with(PathMapSizeRequest.newBuilder()) {
+                    agentId = this@Agent.agentId
+                    build()
+                }
         val response = blockingStub!!.pathMapSize(request)
         markMsgSent()
         return response.pathCount
     }
 
     @Throws(RequestFailureException::class)
-    private fun registerPathOnProxy(path: String): Long {
+    private fun registerPathOnProxy(pathVal: String): Long {
         val request =
-                RegisterPathRequest.newBuilder()
-                        .setAgentId(agentId)
-                        .setPath(path)
-                        .build()
+                with(RegisterPathRequest.newBuilder()) {
+                    agentId = this@Agent.agentId
+                    path = pathVal
+                    build()
+                }
         val response = blockingStub!!.registerPath(request)
         markMsgSent()
         if (!response.valid)
@@ -372,12 +380,13 @@ class Agent(options: AgentOptions,
     }
 
     @Throws(RequestFailureException::class)
-    private fun unregisterPathOnProxy(path: String) {
+    private fun unregisterPathOnProxy(pathVal: String) {
         val request =
-                UnregisterPathRequest.newBuilder()
-                        .setAgentId(agentId)
-                        .setPath(path)
-                        .build()
+                with(UnregisterPathRequest.newBuilder()) {
+                    agentId = this@Agent.agentId
+                    path = pathVal
+                    build()
+                }
         val response = blockingStub!!.unregisterPath(request)
         markMsgSent()
         if (!response.valid)
@@ -411,7 +420,11 @@ class Agent(options: AgentOptions,
                 disconnected.set(true)
             }
         }
-        val agentInfo = AgentInfo.newBuilder().setAgentId(agentId).build()
+        val agentInfo =
+                with(AgentInfo.newBuilder()) {
+                    agentId = this@Agent.agentId
+                    build()
+                }
         asyncStub!!.readRequestsFromProxy(agentInfo, observer)
     }
 
@@ -460,7 +473,11 @@ class Agent(options: AgentOptions,
             return
 
         try {
-            val request = HeartBeatRequest.newBuilder().setAgentId(agentId).build()
+            val request =
+                    with(HeartBeatRequest.newBuilder()) {
+                        agentId = this@Agent.agentId
+                        build()
+                    }
             val response = blockingStub!!.sendHeartBeat(request)
             markMsgSent()
             if (!response.valid) {

@@ -38,24 +38,24 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) : BaseOpti
                                                                          exitOnMissingConfig)
 
     init {
-        this.parseOptions()
+        parseOptions()
     }
 
     override fun assignConfigVals() {
-        if (this.proxyHostname.isNullOrEmpty()) {
-            val configHostname = this.configVals!!.agent.proxy.hostname
-            this.proxyHostname = PROXY_HOSTNAME.getEnv(if (configHostname.contains(":"))
+        if (proxyHostname.isNullOrEmpty()) {
+            val configHostname = configVals!!.agent.proxy.hostname
+            proxyHostname = PROXY_HOSTNAME.getEnv(if (configHostname.contains(":"))
                                                            configHostname
                                                        else
-                                                           "$configHostname:${this.configVals!!.agent.proxy.port}")
+                                                      "$configHostname:${configVals!!.agent.proxy.port}")
         }
 
-        if (this.agentName.isNullOrEmpty())
-            this.agentName = EnvVars.AGENT_NAME.getEnv(this.configVals!!.agent.name)
+        if (agentName.isNullOrEmpty())
+            agentName = EnvVars.AGENT_NAME.getEnv(configVals!!.agent.name)
 
-        this.assignAdminEnabled(this.configVals!!.agent.admin.enabled)
-        this.assignAdminPort(this.configVals!!.agent.admin.port)
-        this.assignMetricsEnabled(this.configVals!!.agent.metrics.enabled)
-        this.assignMetricsPort(this.configVals!!.agent.metrics.port)
+        assignAdminEnabled(configVals!!.agent.admin.enabled)
+        assignAdminPort(configVals!!.agent.admin.port)
+        assignMetricsEnabled(configVals!!.agent.metrics.enabled)
+        assignMetricsPort(configVals!!.agent.metrics.port)
     }
 }

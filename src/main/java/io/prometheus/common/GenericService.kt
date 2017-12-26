@@ -39,7 +39,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
     val healthCheckRegistry = HealthCheckRegistry()
 
     private val services = mutableListOf<Service>(this)
-    private val jmxReporter = JmxReporter.forRegistry(this.metricRegistry).build()
+    private val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
     private var serviceManager: ServiceManager? = null
 
     protected val adminService: AdminService?
@@ -48,29 +48,29 @@ abstract class GenericService protected constructor(protected val genericConfigV
     val zipkinReporterService: ZipkinReporterService?
 
     val zipkinEnabled: Boolean
-        get() = this.zipkinReporterService != null
+        get() = zipkinReporterService != null
 
     val metricsEnabled: Boolean
-        get() = this.metricsService != null
+        get() = metricsService != null
 
     init {
         if (adminConfig.enabled) {
-            this.adminService = AdminService(this,
-                                             adminConfig.port,
-                                             adminConfig.pingPath,
-                                             adminConfig.versionPath,
-                                             adminConfig.healthCheckPath,
-                                             adminConfig.threadDumpPath)
-            this.addService(this.adminService)
+            adminService = AdminService(this,
+                                        adminConfig.port,
+                                        adminConfig.pingPath,
+                                        adminConfig.versionPath,
+                                        adminConfig.healthCheckPath,
+                                        adminConfig.threadDumpPath)
+            addService(adminService)
         }
         else {
             logger.info("Admin service disabled")
-            this.adminService = null
+            adminService = null
         }
 
         if (metricsConfig.enabled) {
-            this.metricsService = MetricsService(metricsConfig.port, metricsConfig.path)
-            this.addService(this.metricsService)
+            metricsService = MetricsService(metricsConfig.port, metricsConfig.path)
+            addService(metricsService)
             SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
                                      metricsConfig.memoryPoolsExportsEnabled,
                                      metricsConfig.garbageCollectorExportsEnabled,
@@ -80,64 +80,64 @@ abstract class GenericService protected constructor(protected val genericConfigV
         }
         else {
             logger.info("Metrics service disabled")
-            this.metricsService = null
+            metricsService = null
         }
 
         if (zipkinConfig.enabled) {
             val url = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
-            this.zipkinReporterService = ZipkinReporterService(url)
-            this.addService(this.zipkinReporterService)
+            zipkinReporterService = ZipkinReporterService(url)
+            addService(zipkinReporterService)
         }
         else {
             logger.info("Zipkin reporter service disabled")
-            this.zipkinReporterService = null
+            zipkinReporterService = null
         }
 
-        this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
     fun initService() {
-        this.serviceManager = ServiceManager(this.services)
-        this.serviceManager!!.addListener(this.newListener())
-        this.registerHealthChecks()
+        serviceManager = ServiceManager(services)
+        serviceManager!!.addListener(newListener())
+        registerHealthChecks()
     }
 
     override fun startUp() {
         super.startUp()
-        this.zipkinReporterService?.startAsync()
-        this.jmxReporter?.start()
-        this.metricsService?.startAsync()
-        this.adminService?.startAsync()
+        zipkinReporterService?.startAsync()
+        jmxReporter?.start()
+        metricsService?.startAsync()
+        adminService?.startAsync()
         Runtime.getRuntime().addShutdownHook(shutDownHookAction(this))
     }
 
     override fun shutDown() {
-        this.adminService?.stopAsync()
-        this.metricsService?.stopAsync()
-        this.jmxReporter?.stop()
-        this.zipkinReporterService?.stopAsync()
+        adminService?.stopAsync()
+        metricsService?.stopAsync()
+        jmxReporter?.stop()
+        zipkinReporterService?.stopAsync()
         super.shutDown()
     }
 
     override fun close() {
-        this.stopAsync()
+        stopAsync()
     }
 
     private fun addService(service: Service) {
         logger.info("Adding service $service")
-        this.services.add(service)
+        services.add(service)
     }
 
     protected fun addServices(service: Service, vararg services: Service) {
-        this.addService(service)
-        services.forEach { this.addService(it) }
+        addService(service)
+        services.forEach { addService(it) }
     }
 
     protected open fun registerHealthChecks() {
-        this.healthCheckRegistry.register("thread_deadlock", ThreadDeadlockHealthCheck())
-        if (this.metricsEnabled)
-            this.healthCheckRegistry.register("metrics_service", this.metricsService!!.healthCheck)
-        this.healthCheckRegistry
+        healthCheckRegistry.register("thread_deadlock", ThreadDeadlockHealthCheck())
+        if (metricsEnabled)
+            healthCheckRegistry.register("metrics_service", metricsService!!.healthCheck)
+        healthCheckRegistry
                 .register(
                         "all_services_healthy",
                         object : HealthCheck() {
@@ -159,7 +159,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     private fun newListener(): ServiceManager.Listener {
-        val serviceName = this.javaClass.simpleName
+        val serviceName = javaClass.simpleName
         return object : ServiceManager.Listener() {
             override fun healthy() = logger.info("All $serviceName services healthy")
             override fun stopped() = logger.info("All $serviceName services stopped")

@@ -24,17 +24,17 @@ import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
 
 class ZipkinReporterService(private val url: String) : AbstractIdleService() {
-    private val sender = OkHttpSender.create(this.url)
-    private val reporter = AsyncReporter.create(this.sender)
+    private val sender = OkHttpSender.create(url)
+    private val reporter = AsyncReporter.create(sender)
 
     init {
-        this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
     fun newTracing(serviceName: String): Tracing =
             Tracing.newBuilder()
                     .localServiceName(serviceName)
-                    .spanReporter(this.reporter)
+                    .spanReporter(reporter)
                     .build()
 
     override fun startUp() {
@@ -42,8 +42,8 @@ class ZipkinReporterService(private val url: String) : AbstractIdleService() {
     }
 
     override fun shutDown() {
-        this.reporter.close()
-        this.sender.close()
+        reporter.close()
+        sender.close()
     }
 
     override fun toString() =

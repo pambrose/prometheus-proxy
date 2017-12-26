@@ -32,17 +32,17 @@ class InstrumentedThreadFactory(delegate: ThreadFactory, name: String, help: Str
     init {
         Preconditions.checkNotNull(name)
         Preconditions.checkNotNull(help)
-        this.created =
+        created =
                 Counter.build()
                         .name("${name}_threads_created")
                         .help("$help threads created")
                         .register()
-        this.running =
+        running =
                 Gauge.build()
                         .name("${name}_threads_running")
                         .help("$help threads running")
                         .register()
-        this.terminated =
+        terminated =
                 Counter.build()
                         .name("${name}_threads_terminated")
                         .help("$help threads terminated")
@@ -51,8 +51,8 @@ class InstrumentedThreadFactory(delegate: ThreadFactory, name: String, help: Str
 
     override fun newThread(runnable: Runnable): Thread {
         val wrappedRunnable = InstrumentedRunnable(runnable)
-        val thread = this.delegate.newThread(wrappedRunnable)
-        this.created.inc()
+        val thread = delegate.newThread(wrappedRunnable)
+        created.inc()
         return thread
     }
 

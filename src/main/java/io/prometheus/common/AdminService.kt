@@ -32,38 +32,37 @@ class AdminService(service: GenericService,
                    private val versionPath: String,
                    private val healthCheckPath: String,
                    private val threadDumpPath: String) : AbstractIdleService() {
-    private val server: Server = Server(this.port)
+    private val server: Server = Server(port)
 
     init {
         val context = ServletContextHandler()
         context.contextPath = "/"
-        this.server.handler = context
+        server.handler = context
 
-        if (this.pingPath.isNotBlank())
-            context.addServlet(ServletHolder(PingServlet()), "/" + this.pingPath)
-        if (this.versionPath.isNotBlank())
-            context.addServlet(ServletHolder(VersionServlet()), "/" + this.versionPath)
-        if (this.healthCheckPath.isNotBlank())
-            context.addServlet(ServletHolder(HealthCheckServlet(service.healthCheckRegistry)),
-                               "/" + this.healthCheckPath)
-        if (this.threadDumpPath.isNotBlank())
-            context.addServlet(ServletHolder(ThreadDumpServlet()), "/" + this.threadDumpPath)
+        if (pingPath.isNotBlank())
+            context.addServlet(ServletHolder(PingServlet()), "/$pingPath")
+        if (versionPath.isNotBlank())
+            context.addServlet(ServletHolder(VersionServlet()), "/$versionPath")
+        if (healthCheckPath.isNotBlank())
+            context.addServlet(ServletHolder(HealthCheckServlet(service.healthCheckRegistry)), "/$healthCheckPath")
+        if (threadDumpPath.isNotBlank())
+            context.addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
 
-        this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
     override fun startUp() {
-        this.server.start()
+        server.start()
     }
 
     override fun shutDown() {
-        this.server.stop()
+        server.stop()
     }
 
     override fun toString() =
             MoreObjects.toStringHelper(this)
-                    .add("ping", ":${this.port}/${this.pingPath}")
-                    .add("healthcheck", ":${this.port}/${this.healthCheckPath}")
-                    .add("threaddump", ":${this.port}/${this.threadDumpPath}")
+                    .add("ping", ":${port}/${pingPath}")
+                    .add("healthcheck", ":${port}/${healthCheckPath}")
+                    .add("threaddump", ":${port}/${threadDumpPath}")
                     .toString()
 }

@@ -71,10 +71,10 @@ abstract class BaseOptions protected constructor(private val progName: String,
     protected abstract fun assignConfigVals()
 
     protected fun parseOptions() {
-        this.parseArgs(this.argv)
-        this.readConfig(this.envConfig, this.exitOnMissingConfig)
-        this.configVals = ConfigVals(this.config)
-        this.assignConfigVals()
+        parseArgs(argv)
+        readConfig(envConfig, exitOnMissingConfig)
+        configVals = ConfigVals(config)
+        assignConfigVals()
     }
 
     private fun parseArgs(argv: Array<String>?) {
@@ -86,7 +86,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                         parse(*argv ?: arrayOf<String>())
                     }
 
-            if (this.usage) {
+            if (usage) {
                 jcom.usage()
                 System.exit(0)
             }
@@ -97,42 +97,42 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     protected fun assignAdminEnabled(defaultVal: Boolean) {
-        if (!this.adminEnabled)
-            this.adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
+        if (!adminEnabled)
+            adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
     }
 
     protected fun assignAdminPort(defaultVal: Int) {
-        if (this.adminPort == null)
-            this.adminPort = ADMIN_PORT.getEnv(defaultVal)
+        if (adminPort == null)
+            adminPort = ADMIN_PORT.getEnv(defaultVal)
     }
 
     protected fun assignMetricsEnabled(defaultVal: Boolean) {
-        if (!this.metricsEnabled)
-            this.metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
+        if (!metricsEnabled)
+            metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
     }
 
     protected fun assignMetricsPort(defaultVal: Int) {
-        if (this.metricsPort == null)
-            this.metricsPort = METRICS_PORT.getEnv(defaultVal)
+        if (metricsPort == null)
+            metricsPort = METRICS_PORT.getEnv(defaultVal)
     }
 
     private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
 
-        this.config = readConfig(this.configName,
-                                 envConfig,
-                                 ConfigParseOptions.defaults().setAllowMissing(false),
-                                 ConfigFactory.load().resolve(),
-                                 exitOnMissingConfig)
+        config = readConfig(configName,
+                            envConfig,
+                            ConfigParseOptions.defaults().setAllowMissing(false),
+                            ConfigFactory.load().resolve(),
+                            exitOnMissingConfig)
                 .resolve(ConfigResolveOptions.defaults())
                 .resolve()
 
-        this.dynamicParams.forEach { k, v ->
+        dynamicParams.forEach { k, v ->
             // Strip quotes
             val qval = if (v.startsWith("\"") && v.endsWith("\"")) v.substring(1, v.length - 1) else v
             val prop = "$k=$qval"
             System.setProperty(k, prop)
             val newConfig = ConfigFactory.parseString(prop, PROPS)
-            this.config = newConfig.withFallback(this.config).resolve()
+            config = newConfig.withFallback(config).resolve()
         }
     }
 
@@ -189,14 +189,11 @@ abstract class BaseOptions protected constructor(private val progName: String,
                 else                            -> ConfigSyntax.CONF
             }
 
-    private fun String.isUrlPrefix() =
-            this.toLowerCase().startsWith("http://") || this.toLowerCase().startsWith("https://")
+    private fun String.isUrlPrefix() = toLowerCase().startsWith("http://") || toLowerCase().startsWith("https://")
 
-    private fun String.isJsonSuffix() =
-            this.toLowerCase().endsWith(".json") || this.toLowerCase().endsWith(".jsn")
+    private fun String.isJsonSuffix() = toLowerCase().endsWith(".json") || toLowerCase().endsWith(".jsn")
 
-    private fun String.isPropertiesSuffix() =
-            this.toLowerCase().endsWith(".properties") || this.toLowerCase().endsWith(".props")
+    private fun String.isPropertiesSuffix() = toLowerCase().endsWith(".properties") || toLowerCase().endsWith(".props")
 
     companion object {
         private val logger = LoggerFactory.getLogger(BaseOptions::class.java)

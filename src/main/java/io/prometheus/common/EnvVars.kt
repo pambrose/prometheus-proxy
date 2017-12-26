@@ -36,11 +36,11 @@ enum class EnvVars {
     ADMIN_ENABLED,
     ADMIN_PORT;
 
-    private val env: String? by lazy { getenv(this.name) }
+    private val env: String? by lazy { getenv(name) }
 
-    fun getEnv(defaultVal: String): String? = this.env ?: defaultVal
+    fun getEnv(defaultVal: String): String? = env ?: defaultVal
 
-    fun getEnv(defaultVal: Boolean): Boolean = this.env?.toBoolean() ?: defaultVal
+    fun getEnv(defaultVal: Boolean): Boolean = env?.toBoolean() ?: defaultVal
 
-    fun getEnv(defaultVal: Int): Int = this.env?.toInt() ?: defaultVal
+    fun getEnv(defaultVal: Int): Int = env?.toInt() ?: defaultVal
 }

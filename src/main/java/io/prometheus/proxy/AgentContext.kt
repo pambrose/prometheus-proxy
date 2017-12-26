@@ -38,40 +38,40 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     var agentName: String? by AtomicReferenceDelegate()
 
     val inactivitySecs: Long
-        get() = (System.currentTimeMillis() - this.lastActivityTime).toSecs()
+        get() = (System.currentTimeMillis() - lastActivityTime).toSecs()
 
     val scrapeRequestQueueSize: Int
-        get() = this.scrapeRequestQueue.size
+        get() = scrapeRequestQueue.size
 
     init {
-        this.markActivity()
+        markActivity()
     }
 
-    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) = this.scrapeRequestQueue.add(scrapeRequest)
+    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) = scrapeRequestQueue.add(scrapeRequest)
 
     fun pollScrapeRequestQueue(): ScrapeRequestWrapper? =
             try {
-                this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS)
+                scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS)
             } catch (e: InterruptedException) {
                 null
             }
 
     fun markInvalid() {
-        this.valid = false
+        valid = false
     }
 
     fun markActivity() {
-        this.lastActivityTime = System.currentTimeMillis()
+        lastActivityTime = System.currentTimeMillis()
     }
 
     override fun toString() =
             MoreObjects.toStringHelper(this)
-                    .add("agentId", this.agentId)
-                    .add("valid", this.valid)
-                    .add("remoteAddr", this.remoteAddr)
-                    .add("agentName", this.agentName)
-                    .add("hostname", this.hostname)
-                    .add("inactivitySecs", this.inactivitySecs)
+                    .add("agentId", agentId)
+                    .add("valid", valid)
+                    .add("remoteAddr", remoteAddr)
+                    .add("agentName", agentName)
+                    .add("hostname", hostname)
+                    .add("inactivitySecs", inactivitySecs)
                     .toString()
 
     companion object {

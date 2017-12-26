@@ -26,7 +26,7 @@ import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
 
 class MetricsService(private val port: Int, private val path: String) : AbstractIdleService() {
-    private val server: Server = Server(this.port)
+    private val server: Server = Server(port)
     val healthCheck: HealthCheck = object : HealthCheck() {
         @Throws(Exception::class)
         override fun check(): HealthCheck.Result {
@@ -37,22 +37,22 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
     init {
         val context = ServletContextHandler()
         context.contextPath = "/"
-        this.server.handler = context
-        context.addServlet(ServletHolder(MetricsServlet()), "/" + this.path)
+        server.handler = context
+        context.addServlet(ServletHolder(MetricsServlet()), "/$path")
 
-        this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
     override fun startUp() {
-        this.server.start()
+        server.start()
     }
 
     override fun shutDown() {
-        this.server.stop()
+        server.stop()
     }
 
     override fun toString() =
             MoreObjects.toStringHelper(this)
-                    .add("url", "http://localhost:${this.port}/${this.path}")
+                    .add("url", "http://localhost:${port}/${path}")
                     .toString()
 }

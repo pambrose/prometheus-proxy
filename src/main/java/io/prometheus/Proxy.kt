@@ -44,7 +44,7 @@ class Proxy(options: ProxyOptions,
     private val scrapeRequestMap = Maps.newConcurrentMap<Long, ScrapeRequestWrapper>() // Map scrape_id to agent_id
 
     val agentContextMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
-    val metrics = if (this.metricsEnabled) ProxyMetrics(this) else null
+    val metrics = if (metricsEnabled) ProxyMetrics(this) else null
 
     private val httpService = ProxyHttpService(this, proxyPort)
     private val grpcService: ProxyGrpcService =
@@ -53,57 +53,57 @@ class Proxy(options: ProxyOptions,
             else
                 ProxyGrpcService.create(this, inProcessServerName!!)
     private val agentCleanupService =
-            if (this.configVals.internal.staleAgentCheckEnabled)
+            if (configVals.internal.staleAgentCheckEnabled)
                 AgentContextCleanupService(this)
             else
                 null
 
     val agentContextSize: Int
-        get() = this.agentContextMap.size
+        get() = agentContextMap.size
 
     val pathMapSize: Int
-        get() = this.pathMap.size
+        get() = pathMap.size
 
     val scrapeMapSize: Int
-        get() = this.scrapeRequestMap.size
+        get() = scrapeRequestMap.size
 
     val configVals: ConfigVals.Proxy2
-        get() = this.genericConfigVals.proxy
+        get() = genericConfigVals.proxy
 
     val totalAgentRequestQueueSize: Int
-        get() = this.agentContextMap.values.map { it.scrapeRequestQueueSize }.sum()
+        get() = agentContextMap.values.map { it.scrapeRequestQueueSize }.sum()
 
     init {
-        this.addServices(this.grpcService, this.httpService, this.agentCleanupService!!)
-        this.initService()
+        addServices(grpcService, httpService, agentCleanupService!!)
+        initService()
     }
 
     override fun startUp() {
         super.startUp()
-        this.grpcService.startAsync()
-        this.httpService.startAsync()
-        this.agentCleanupService?.startAsync() ?: logger.info("Agent eviction thread not started")
+        grpcService.startAsync()
+        httpService.startAsync()
+        agentCleanupService?.startAsync() ?: logger.info("Agent eviction thread not started")
     }
 
     override fun shutDown() {
-        this.grpcService.stopAsync()
-        this.httpService.stopAsync()
-        this.agentCleanupService?.stopAsync()
+        grpcService.stopAsync()
+        httpService.stopAsync()
+        agentCleanupService?.stopAsync()
         super.shutDown()
     }
 
     override fun run() {
-        while (this.isRunning)
+        while (isRunning)
             sleepForMillis(500)
     }
 
     override fun registerHealthChecks() {
         super.registerHealthChecks()
-        this.healthCheckRegistry.register("grpc_service", this.grpcService.healthCheck)
-        this.healthCheckRegistry.register("scrape_response_map_check",
-                                          mapHealthCheck(this.scrapeRequestMap,
-                                                         this.configVals.internal.scrapeRequestMapUnhealthySize))
-        this.healthCheckRegistry
+        healthCheckRegistry.register("grpc_service", grpcService.healthCheck)
+        healthCheckRegistry.register("scrape_response_map_check",
+                                     mapHealthCheck(scrapeRequestMap,
+                                                    configVals.internal.scrapeRequestMapUnhealthySize))
+        healthCheckRegistry
                 .register("agent_scrape_request_queue",
                           object : HealthCheck() {
                               @Throws(Exception::class)
@@ -121,9 +121,9 @@ class Proxy(options: ProxyOptions,
                           })
     }
 
-    fun addAgentContext(agentContext: AgentContext) = this.agentContextMap.put(agentContext.agentId, agentContext)
+    fun addAgentContext(agentContext: AgentContext) = agentContextMap.put(agentContext.agentId, agentContext)
 
-    fun getAgentContext(agentId: String) = this.agentContextMap[agentId]
+    fun getAgentContext(agentId: String) = agentContextMap[agentId]
 
     fun removeAgentContext(agentId: String?): AgentContext? {
         if (agentId.isNullOrBlank()) {
@@ -131,7 +131,7 @@ class Proxy(options: ProxyOptions,
             return null
         }
 
-        val agentContext = this.agentContextMap.remove(agentId)
+        val agentContext = agentContextMap.remove(agentId)
         if (agentContext != null) {
             logger.info("Removed $agentContext")
             agentContext.markInvalid()
@@ -142,30 +142,30 @@ class Proxy(options: ProxyOptions,
         return agentContext
     }
 
-    fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) = this.scrapeRequestMap.put(scrapeRequest.scrapeId,
-                                                                                               scrapeRequest)
+    fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) = scrapeRequestMap.put(scrapeRequest.scrapeId,
+                                                                                          scrapeRequest)
 
-    fun getFromScrapeRequestMap(scrapeId: Long) = this.scrapeRequestMap[scrapeId]
+    fun getFromScrapeRequestMap(scrapeId: Long) = scrapeRequestMap[scrapeId]
 
-    fun removeFromScrapeRequestMap(scrapeId: Long) = this.scrapeRequestMap.remove(scrapeId)
+    fun removeFromScrapeRequestMap(scrapeId: Long) = scrapeRequestMap.remove(scrapeId)
 
-    fun getAgentContextByPath(path: String) = this.pathMap[path]
+    fun getAgentContextByPath(path: String) = pathMap[path]
 
-    fun containsPath(path: String) = this.pathMap.containsKey(path)
+    fun containsPath(path: String) = pathMap.containsKey(path)
 
-    fun pathMapSize() = this.pathMap.size
+    fun pathMapSize() = pathMap.size
 
     fun addPath(path: String, agentContext: AgentContext) {
-        synchronized(this.pathMap) {
-            this.pathMap.put(path, agentContext)
-            if (!this.isTestMode)
+        synchronized(pathMap) {
+            pathMap.put(path, agentContext)
+            if (!isTestMode)
                 logger.info("Added path /$path for $agentContext")
         }
     }
 
     fun removePath(path: String, agentId: String, responseBuilder: UnregisterPathResponse.Builder) {
-        synchronized(this.pathMap) {
-            val agentContext = this.pathMap[path]
+        synchronized(pathMap) {
+            val agentContext = pathMap[path]
             when {
                 agentContext == null            -> {
                     val msg = "Unable to remove path /$path - path not found"
@@ -179,8 +179,8 @@ class Proxy(options: ProxyOptions,
                 }
                 else
                                                 -> {
-                    this.pathMap.remove(path)
-                    if (!this.isTestMode)
+                    pathMap.remove(path)
+                    if (!isTestMode)
                         logger.info("Removed path /$path for $agentContext")
                     responseBuilder.setValid(true).setReason("")
                 }
@@ -194,10 +194,10 @@ class Proxy(options: ProxyOptions,
             return
         }
 
-        synchronized(this.pathMap) {
-            this.pathMap.forEach { k, v ->
+        synchronized(pathMap) {
+            pathMap.forEach { k, v ->
                 if (v.agentId == agentId) {
-                    val agentContext = this.pathMap.remove(k)
+                    val agentContext = pathMap.remove(k)
                     if (agentContext != null)
                         logger.info("Removed path /$k for $agentContext")
                     else
@@ -209,9 +209,9 @@ class Proxy(options: ProxyOptions,
 
     override fun toString() =
             MoreObjects.toStringHelper(this)
-                    .add("proxyPort", this.httpService.port)
-                    .add("adminService", this.adminService ?: "Disabled")
-                    .add("metricsService", this.metricsService ?: "Disabled")
+                    .add("proxyPort", httpService.port)
+                    .add("adminService", adminService ?: "Disabled")
+                    .add("metricsService", metricsService ?: "Disabled")
                     .toString()
 
     companion object {

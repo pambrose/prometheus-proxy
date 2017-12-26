@@ -51,18 +51,18 @@ class ScrapeRequestWrapper(proxy: Proxy,
             }
 
     val scrapeId: Long
-        get() = this.scrapeRequest.scrapeId
+        get() = scrapeRequest.scrapeId
 
-    fun ageInSecs(): Long = (System.currentTimeMillis() - this.createTime) / 1000
+    fun ageInSecs(): Long = (System.currentTimeMillis() - createTime) / 1000
 
     fun markComplete() {
-        this.requestTimer?.observeDuration()
-        this.complete.countDown()
+        requestTimer?.observeDuration()
+        complete.countDown()
     }
 
     fun waitUntilCompleteMillis(waitMillis: Long): Boolean {
         try {
-            return this.complete.await(waitMillis, TimeUnit.MILLISECONDS)
+            return complete.await(waitMillis, TimeUnit.MILLISECONDS)
         } catch (e: InterruptedException) {
             // Ignore
         }

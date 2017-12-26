@@ -4,13 +4,13 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.reflect.KProperty
 
 class AtomicLongDelegate {
-    private val value = AtomicLong()
+    private val atomicVal = AtomicLong()
 
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Long {
-        return this.value.get()
+        return atomicVal.get()
     }
 
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) {
-        this.value.set(value)
+        atomicVal.set(value)
     }
 }

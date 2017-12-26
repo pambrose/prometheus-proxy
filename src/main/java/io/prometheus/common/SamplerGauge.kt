@@ -23,13 +23,13 @@ class SamplerGauge(private val name: String,
                    private val samplerGaugeData: SamplerGaugeData) : Collector() {
 
     override fun collect(): List<Collector.MetricFamilySamples> {
-        val sample = MetricFamilySamples.Sample(this.name,
+        val sample = MetricFamilySamples.Sample(name,
                                                 emptyList(),
                                                 emptyList(),
-                                                this.samplerGaugeData.value())
-        return listOf(Collector.MetricFamilySamples(this.name,
+                                                samplerGaugeData.value())
+        return listOf(Collector.MetricFamilySamples(name,
                                                     Collector.Type.GAUGE,
-                                                    this.help,
+                                                    help,
                                                     listOf(sample)))
     }
 }

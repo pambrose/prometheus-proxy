@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicLong
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
 
     override fun connectAgent(request: Empty, responseObserver: StreamObserver<Empty>) {
-        this.proxy.metrics?.connects?.inc()
+        proxy.metrics?.connects?.inc()
         responseObserver.apply {
             onNext(Empty.getDefaultInstance())
             onCompleted()
@@ -38,7 +38,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     override fun registerAgent(request: RegisterAgentRequest,
                                responseObserver: StreamObserver<RegisterAgentResponse>) {
         val agentId = request.agentId
-        val agentContext = this.proxy.getAgentContext(agentId)
+        val agentContext = proxy.getAgentContext(agentId)
         if (agentContext == null)
             logger.info("registerAgent() missing AgentContext agentId: $agentId")
         else
@@ -50,11 +50,12 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
         responseObserver.apply {
             val response =
-                    RegisterAgentResponse.newBuilder()
-                            .setValid(agentContext != null)
-                            .setReason("Invalid agentId: $agentId")
-                            .setAgentId(agentId)
-                            .build()
+                    with(RegisterAgentResponse.newBuilder()) {
+                        valid = agentContext != null
+                        reason = "Invalid agentId: $agentId"
+                        this.agentId = agentId
+                        build()
+                    }
             onNext(response)
             onCompleted()
         }
@@ -63,23 +64,23 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     override fun registerPath(request: RegisterPathRequest,
                               responseObserver: StreamObserver<RegisterPathResponse>) {
         val path = request.path
-        if (this.proxy.containsPath(path))
+        if (proxy.containsPath(path))
             logger.info("Overwriting path /$path")
 
         val agentId = request.agentId
-        val agentContext = this.proxy.getAgentContext(agentId)
+        val agentContext = proxy.getAgentContext(agentId)
         val response =
                 RegisterPathResponse.newBuilder()
                         .setValid(agentContext != null)
                         .setReason("Invalid agentId: $agentId")
-                        .setPathCount(this.proxy.pathMapSize())
+                        .setPathCount(proxy.pathMapSize())
                         .setPathId(if (agentContext != null) PATH_ID_GENERATOR.getAndIncrement() else -1)
                         .build()
         if (agentContext == null) {
             logger.error("Missing AgentContext for agentId: $agentId")
         }
         else {
-            this.proxy.addPath(path, agentContext)
+            proxy.addPath(path, agentContext)
             agentContext.markActivity()
         }
 
@@ -93,7 +94,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                                 responseObserver: StreamObserver<UnregisterPathResponse>) {
         val path = request.path
         val agentId = request.agentId
-        val agentContext = this.proxy.getAgentContext(agentId)
+        val agentContext = proxy.getAgentContext(agentId)
 
         val responseBuilder = UnregisterPathResponse.newBuilder()
 
@@ -102,7 +103,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             responseBuilder.setValid(false).reason = "Invalid agentId: $agentId"
         }
         else {
-            this.proxy.removePath(path, agentId, responseBuilder)
+            proxy.removePath(path, agentId, responseBuilder)
             agentContext.markActivity()
         }
 
@@ -120,8 +121,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     }
 
     override fun sendHeartBeat(request: HeartBeatRequest, responseObserver: StreamObserver<HeartBeatResponse>) {
-        this.proxy.metrics?.heartbeats?.inc()
-        val agentContext = this.proxy.getAgentContext(request.agentId)
+        proxy.metrics?.heartbeats?.inc()
+        val agentContext = proxy.getAgentContext(request.agentId)
         agentContext?.markActivity() ?: logger.info("sendHeartBeat() missing AgentContext agentId: ${request.agentId}")
         responseObserver.apply {
             onNext(HeartBeatResponse.newBuilder()
@@ -134,9 +135,9 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
     override fun readRequestsFromProxy(agentInfo: AgentInfo, responseObserver: StreamObserver<ScrapeRequest>) {
         val agentId = agentInfo.agentId
-        val agentContext = this.proxy.getAgentContext(agentId)
+        val agentContext = proxy.getAgentContext(agentId)
         if (agentContext != null) {
-            while (this.proxy.isRunning && agentContext.valid) {
+            while (proxy.isRunning && agentContext.valid) {
                 val scrapeRequest = agentContext.pollScrapeRequestQueue()
                 if (scrapeRequest != null) {
                     responseObserver.onNext(scrapeRequest.scrapeRequest)

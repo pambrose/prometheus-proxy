@@ -55,43 +55,43 @@ class ProxyGrpcService private constructor(proxy: Proxy,
 
     init {
         if (proxy.zipkinEnabled) {
-            this.tracing = proxy.zipkinReporterService!!.newTracing("grpc_server")
-            this.grpcTracing = GrpcTracing.create(this.tracing)
+            tracing = proxy.zipkinReporterService!!.newTracing("grpc_server")
+            grpcTracing = GrpcTracing.create(tracing)
         }
         else {
-            this.tracing = null
-            this.grpcTracing = null
+            tracing = null
+            grpcTracing = null
         }
 
         val serverBuilder =
-                if (this.inProcessServer)
-                    InProcessServerBuilder.forName(this.inProcessServerName)
+                if (inProcessServer)
+                    InProcessServerBuilder.forName(inProcessServerName)
                 else
-                    ServerBuilder.forPort(this.port)
+                    ServerBuilder.forPort(port)
 
         val proxyService = ProxyServiceImpl(proxy)
         val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
         if (proxy.zipkinEnabled)
-            interceptors.add(this.grpcTracing!!.newServerInterceptor())
+            interceptors.add(grpcTracing!!.newServerInterceptor())
         val serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors)
 
-        this.grpcServer =
+        grpcServer =
                 serverBuilder
                         .addService(serviceDef)
                         .addTransportFilter(ProxyTransportFilter(proxy))
                         .build()
 
-        this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
     @Throws(IOException::class)
     override fun startUp() {
-        this.grpcServer.start()
+        grpcServer.start()
     }
 
     override fun shutDown() {
-        this.tracing?.close()
-        this.grpcServer.shutdown()
+        tracing?.close()
+        grpcServer.shutdown()
     }
 
     override fun toString() =
