@@ -20,7 +20,7 @@ import okhttp3.OkHttpClient
 import java.util.*
 import java.util.concurrent.Executors
 
-object TestConstants {
+object ConstantsTest {
     internal val EXECUTOR_SERVICE = Executors.newCachedThreadPool()
     internal val OK_HTTP_CLIENT = OkHttpClient()
     internal val RANDOM = Random()

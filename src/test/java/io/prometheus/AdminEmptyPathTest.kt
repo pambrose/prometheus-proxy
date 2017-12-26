@@ -16,7 +16,7 @@
 
 package io.prometheus
 
-import io.prometheus.TestConstants.OK_HTTP_CLIENT
+import io.prometheus.ConstantsTest.OK_HTTP_CLIENT
 import io.prometheus.client.CollectorRegistry
 import okhttp3.Request
 import org.assertj.core.api.Assertions.assertThat

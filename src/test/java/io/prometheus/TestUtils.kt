@@ -33,7 +33,7 @@ object TestUtils {
     fun startProxy(serverName: String?, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Proxy {
         val args =
                 mutableListOf<String>().apply {
-                    addAll(TestConstants.args)
+                    addAll(ConstantsTest.args)
                     addAll(argv)
                     add("-Dproxy.admin.enabled=$adminEnabled")
                     add("-Dproxy.metrics.enabled=$metricsEnabled")
@@ -43,7 +43,7 @@ object TestUtils {
         logger.info(getBanner("banners/proxy.txt"))
         logger.info(getVersionDesc(false))
 
-        val proxy = Proxy(options, TestConstants.PROXY_PORT, serverName, true)
+        val proxy = Proxy(options, ConstantsTest.PROXY_PORT, serverName, true)
         proxy.startAsync()
         proxy.awaitRunning(5, TimeUnit.SECONDS)
         return proxy
@@ -53,7 +53,7 @@ object TestUtils {
     fun startAgent(serverName: String?, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Agent {
         val args =
                 mutableListOf<String>().apply {
-                    addAll(TestConstants.args)
+                    addAll(ConstantsTest.args)
                     addAll(argv)
                     add("-Dagent.admin.enabled=$adminEnabled")
                     add("-Dagent.metrics.enabled=$metricsEnabled")

@@ -32,15 +32,15 @@ import java.util.stream.IntStream
 object Tests {
 
     fun missingPathTest() {
-        val url = "http://localhost:${TestConstants.PROXY_PORT}/"
+        val url = "http://localhost:${ConstantsTest.PROXY_PORT}/"
         val request = Request.Builder().url(url)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        ConstantsTest.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     fun invalidPathTest() {
-        val url = "http://localhost:${TestConstants.PROXY_PORT}/invalid_path"
+        val url = "http://localhost:${ConstantsTest.PROXY_PORT}/invalid_path"
         val request = Request.Builder().url(url)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        ConstantsTest.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     fun addRemovePathsTest(agent: Agent) {
@@ -48,10 +48,10 @@ object Tests {
         val originalSize = agent.pathMapSize()
 
         var cnt = 0
-        IntStream.range(0, TestConstants.REPS)
+        IntStream.range(0, ConstantsTest.REPS)
                 .forEach {
                     val path = "test-$it"
-                    agent.registerPath(path, "http://localhost:${TestConstants.PROXY_PORT}/$path")
+                    agent.registerPath(path, "http://localhost:${ConstantsTest.PROXY_PORT}/$path")
                     cnt++
                     assertThat(agent.pathMapSize()).isEqualTo(originalSize + cnt)
                     agent.unregisterPath(path)
@@ -63,22 +63,22 @@ object Tests {
     fun threadedAddRemovePathsTest(agent: Agent) {
         val paths = mutableListOf<String>()
         val cnt = AtomicInteger(0)
-        val latch1 = CountDownLatch(TestConstants.REPS)
-        val latch2 = CountDownLatch(TestConstants.REPS)
+        val latch1 = CountDownLatch(ConstantsTest.REPS)
+        val latch2 = CountDownLatch(ConstantsTest.REPS)
 
         // Take into account pre-existing paths already registered
         val originalSize = agent.pathMapSize()
 
-        IntStream.range(0, TestConstants.REPS)
+        IntStream.range(0, ConstantsTest.REPS)
                 .forEach {
-                    TestConstants.EXECUTOR_SERVICE.submit(
+                    ConstantsTest.EXECUTOR_SERVICE.submit(
                             {
                                 val path = "test-${cnt.getAndIncrement()}"
                                 synchronized(paths) {
                                     paths.add(path)
                                 }
                                 try {
-                                    val url = "http://localhost:${TestConstants.PROXY_PORT}/$path"
+                                    val url = "http://localhost:${ConstantsTest.PROXY_PORT}/$path"
                                     agent.registerPath(path, url)
                                     latch1.countDown()
                                 } catch (e: RequestFailureException) {
@@ -88,11 +88,11 @@ object Tests {
                 }
 
         assertThat(latch1.await(5, TimeUnit.SECONDS)).isTrue()
-        assertThat(paths.size).isEqualTo(TestConstants.REPS)
-        assertThat(agent.pathMapSize()).isEqualTo(originalSize + TestConstants.REPS)
+        assertThat(paths.size).isEqualTo(ConstantsTest.REPS)
+        assertThat(agent.pathMapSize()).isEqualTo(originalSize + ConstantsTest.REPS)
 
         paths.forEach {
-            TestConstants
+            ConstantsTest
                     .EXECUTOR_SERVICE
                     .submit({
                                 try {
@@ -114,9 +114,9 @@ object Tests {
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
 
-        val url = "http://localhost:${TestConstants.PROXY_PORT}/$badPath"
+        val url = "http://localhost:${ConstantsTest.PROXY_PORT}/$badPath"
         val request = Request.Builder().url(url)
-        TestConstants
+        ConstantsTest
                 .OK_HTTP_CLIENT
                 .newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
 
@@ -128,19 +128,21 @@ object Tests {
         val proxyPath = "proxy-timeout"
         val agentPath = "agent-timeout"
 
-        val http = Service.ignite()
-        http.port(agentPort)
-                .get("/$agentPath") { _, res ->
-                    res.type("text/plain")
-                    sleepForSecs(10)
-                    "I timed out"
+        val http =
+                Service.ignite().apply {
+                    port(agentPort)
+                    get("/$agentPath") { _, res ->
+                        res.type("text/plain")
+                        sleepForSecs(10)
+                        "I timed out"
+                    }
                 }
         val agentUrl = "http://localhost:$agentPort/$agentPath"
         agent.registerPath("/$proxyPath", agentUrl)
 
-        val proxyUrl = "http://localhost:${TestConstants.PROXY_PORT}/$proxyPath"
+        val proxyUrl = "http://localhost:${ConstantsTest.PROXY_PORT}/$proxyPath"
         val request = Request.Builder().url(proxyUrl)
-        TestConstants.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        ConstantsTest.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
 
         agent.unregisterPath("/$proxyPath")
         http.stop()
@@ -162,12 +164,14 @@ object Tests {
         // Create the endpoints
         IntStream.range(0, httpServerCount)
                 .forEach { i ->
-                    val http = Service.ignite()
-                    http.port(startingPort + i)
-                            .threadPool(30, 10, 1000)
-                            .get("/agent-$i") { _, res ->
-                                res.type("text/plain")
-                                "value: $i"
+                    val http =
+                            Service.ignite().apply {
+                                port(startingPort + i)
+                                threadPool(30, 10, 1000)
+                                get("/agent-$i") { _, res ->
+                                    res.type("text/plain")
+                                    "value: $i"
+                                }
                             }
                     httpServers.add(http)
                 }
@@ -175,7 +179,7 @@ object Tests {
         // Create the paths
         IntStream.range(0, pathCount)
                 .forEach {
-                    val index = abs(TestConstants.RANDOM.nextInt()) % httpServers.size
+                    val index = abs(ConstantsTest.RANDOM.nextInt()) % httpServers.size
                     agent.registerPath("proxy-$it", "http://localhost:${startingPort + index}/agent-$index")
                     pathMap.put(it, index)
                 }
@@ -194,7 +198,7 @@ object Tests {
         val latch = CountDownLatch(threadedQueryCount)
         IntStream.range(0, threadedQueryCount)
                 .forEach {
-                    TestConstants.EXECUTOR_SERVICE
+                    ConstantsTest.EXECUTOR_SERVICE
                             .submit {
                                 try {
                                     callProxy(pathMap)
@@ -225,11 +229,11 @@ object Tests {
 
 private fun callProxy(pathMap: Map<Int, Int>) {
     // Choose one of the pathMap values
-    val index = abs(TestConstants.RANDOM.nextInt() % pathMap.size)
+    val index = abs(ConstantsTest.RANDOM.nextInt() % pathMap.size)
     val httpVal = pathMap[index]
-    val url = "http://localhost:${TestConstants.PROXY_PORT}/proxy-$index"
+    val url = "http://localhost:${ConstantsTest.PROXY_PORT}/proxy-$index"
     val request = Request.Builder().url(url)
-    TestConstants.OK_HTTP_CLIENT
+    ConstantsTest.OK_HTTP_CLIENT
             .newCall(request.build())
             .execute()
             .use {

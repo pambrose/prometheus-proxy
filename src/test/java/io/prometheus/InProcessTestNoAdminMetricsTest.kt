@@ -56,7 +56,7 @@ class InProcessTestNoAdminMetricsTest {
 
     @Test
     fun proxyCallTest() {
-        Tests.proxyCallTest(AGENT!!, 25, 50, 500, 50)
+        Tests.proxyCallTest(AGENT!!, 25, 50, 200, 100)
     }
 
     companion object {
