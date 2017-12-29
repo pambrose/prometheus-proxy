@@ -27,37 +27,37 @@ class InProcessTestNoAdminMetricsTest {
 
     @Test
     fun missingPathTest() {
-        Tests.missingPathTest()
+        MiscTests.missingPathTest()
     }
 
     @Test
     fun invalidPathTest() {
-        Tests.invalidPathTest()
+        MiscTests.invalidPathTest()
     }
 
     @Test
     fun addRemovePathsTest() {
-        Tests.addRemovePathsTest(AGENT)
+        MiscTests.addRemovePathsTest(AGENT)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        Tests.threadedAddRemovePathsTest(AGENT)
+        MiscTests.threadedAddRemovePathsTest(AGENT)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        Tests.invalidAgentUrlTest(AGENT)
+        MiscTests.invalidAgentUrlTest(AGENT)
     }
 
     @Test
     fun timeoutTest() {
-        Tests.timeoutTest(AGENT)
+        MiscTests.timeoutTest(AGENT)
     }
 
     @Test
     fun proxyCallTest() {
-        Tests.proxyCallTest(AGENT, 25, 50, 200, 100)
+        MiscTests.proxyCallTest(AGENT, 25, 50, 200, 100)
     }
 
     companion object {

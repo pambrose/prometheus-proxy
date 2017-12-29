@@ -16,6 +16,7 @@
 
 package io.prometheus
 
+import io.prometheus.ConstantsTest.PROXY_PORT
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
@@ -43,7 +44,7 @@ object TestUtils {
         logger.info(getBanner("banners/proxy.txt"))
         logger.info(getVersionDesc(false))
 
-        val proxy = Proxy(options, ConstantsTest.PROXY_PORT, serverName, true)
+        val proxy = Proxy(options, PROXY_PORT, serverName, true)
         proxy.startAsync()
         proxy.awaitRunning(5, TimeUnit.SECONDS)
         return proxy

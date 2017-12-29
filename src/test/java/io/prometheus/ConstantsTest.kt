@@ -25,6 +25,6 @@ object ConstantsTest {
     internal val OK_HTTP_CLIENT = OkHttpClient()
     internal val RANDOM = Random()
     internal val REPS = 1000
-    internal val PROXY_PORT = 9500
+    internal val PROXY_PORT = 9505
     internal val args = listOf("--config", "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/travis.conf")
 }
