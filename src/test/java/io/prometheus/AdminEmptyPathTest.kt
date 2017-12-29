@@ -26,47 +26,48 @@ import org.junit.Test
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
+import kotlin.properties.Delegates
 
 class AdminEmptyPathTest {
 
     @Test
     fun proxyPingPathTest() {
-        assertThat(PROXY!!.configVals.admin.port).isEqualTo(8098)
-        assertThat(PROXY!!.configVals.admin.pingPath).isEqualTo("")
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.pingPath}"
+        assertThat(PROXY.configVals.admin.port).isEqualTo(8098)
+        assertThat(PROXY.configVals.admin.pingPath).isEqualTo("")
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
     fun proxyVersionPathTest() {
-        assertThat(PROXY!!.configVals.admin.port).isEqualTo(8098)
-        assertThat(PROXY!!.configVals.admin.versionPath).isEqualTo("")
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.versionPath}"
+        assertThat(PROXY.configVals.admin.port).isEqualTo(8098)
+        assertThat(PROXY.configVals.admin.versionPath).isEqualTo("")
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
     fun proxyHealthCheckPathTest() {
-        assertThat(PROXY!!.configVals.admin.healthCheckPath).isEqualTo("")
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.healthCheckPath}"
+        assertThat(PROXY.configVals.admin.healthCheckPath).isEqualTo("")
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
     fun proxyThreadDumpPathTest() {
-        assertThat(PROXY!!.configVals.admin.threadDumpPath).isEqualTo("")
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.threadDumpPath}"
+        assertThat(PROXY.configVals.admin.threadDumpPath).isEqualTo("")
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
     companion object {
 
-        private var PROXY: Proxy? = null
-        private var AGENT: Agent? = null
+        private var PROXY: Proxy by Delegates.notNull()
+        private var AGENT: Agent by Delegates.notNull()
 
         @JvmStatic
         @BeforeClass
@@ -78,20 +79,20 @@ class AdminEmptyPathTest {
                               "-Dproxy.admin.versionPath=\"\"",
                               "-Dproxy.admin.healthCheckPath=\"\"",
                               "-Dproxy.admin.threadDumpPath=\"\"")
-            PROXY = TestUtils.startProxy(null, true, false, args)
-            AGENT = TestUtils.startAgent(null, true, false, emptyList())
+            PROXY = TestUtils.startProxy("", true, false, args)
+            AGENT = TestUtils.startAgent("", true, false, emptyList())
 
-            AGENT!!.awaitInitialConnection(5, SECONDS)
+            AGENT.awaitInitialConnection(5, SECONDS)
         }
 
         @JvmStatic
         @AfterClass
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
-            PROXY!!.stopAsync()
-            PROXY!!.awaitTerminated(5, SECONDS)
-            AGENT!!.stopAsync()
-            AGENT!!.awaitTerminated(5, SECONDS)
+            PROXY.stopAsync()
+            PROXY.awaitTerminated(5, SECONDS)
+            AGENT.stopAsync()
+            AGENT.awaitTerminated(5, SECONDS)
         }
     }
 }

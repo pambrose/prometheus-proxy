@@ -18,9 +18,7 @@ package io.prometheus.proxy
 
 import com.google.common.base.MoreObjects
 import io.prometheus.Proxy
-import io.prometheus.common.AtomicBooleanDelegate
-import io.prometheus.common.AtomicLongDelegate
-import io.prometheus.common.AtomicReferenceDelegate
+import io.prometheus.common.AtomicDelegates
 import io.prometheus.common.toSecs
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -32,10 +30,10 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     private val scrapeRequestQueue = ArrayBlockingQueue<ScrapeRequestWrapper>(proxy.configVals.internal.scrapeRequestQueueSize)
     private val waitMillis = proxy.configVals.internal.scrapeRequestQueueCheckMillis.toLong()
 
-    private var lastActivityTime: Long by AtomicLongDelegate()
-    var valid: Boolean by AtomicBooleanDelegate(true)
-    var hostname: String? by AtomicReferenceDelegate()
-    var agentName: String? by AtomicReferenceDelegate()
+    private var lastActivityTime: Long by AtomicDelegates.long()
+    var valid: Boolean by AtomicDelegates.boolean(true)
+    var hostName: String by AtomicDelegates.notNullReference()
+    var agentName: String by AtomicDelegates.notNullReference()
 
     val inactivitySecs: Long
         get() = (System.currentTimeMillis() - lastActivityTime).toSecs()
@@ -44,6 +42,8 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
         get() = scrapeRequestQueue.size
 
     init {
+        hostName = "Unassigned"
+        agentName = "Unassigned"
         markActivity()
     }
 
@@ -70,7 +70,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
                     .add("valid", valid)
                     .add("remoteAddr", remoteAddr)
                     .add("agentName", agentName)
-                    .add("hostname", hostname)
+                    .add("hostName", hostName)
                     .add("inactivitySecs", inactivitySecs)
                     .toString()
 

@@ -30,7 +30,7 @@ object TestUtils {
     private val logger = LoggerFactory.getLogger(TestUtils::class.java)
 
     @Throws(IOException::class, TimeoutException::class)
-    fun startProxy(serverName: String?, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Proxy {
+    fun startProxy(serverName: String, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Proxy {
         val args =
                 mutableListOf<String>().apply {
                     addAll(ConstantsTest.args)
@@ -50,7 +50,7 @@ object TestUtils {
     }
 
     @Throws(IOException::class, TimeoutException::class)
-    fun startAgent(serverName: String?, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Agent {
+    fun startAgent(serverName: String, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Agent {
         val args =
                 mutableListOf<String>().apply {
                     addAll(ConstantsTest.args)

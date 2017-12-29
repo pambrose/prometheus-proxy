@@ -29,8 +29,8 @@ import java.util.concurrent.ConcurrentMap
 
 class Proxy(options: ProxyOptions,
             proxyPort: Int,
-            inProcessServerName: String?,
-            testMode: Boolean) : GenericService(options.configVals!!,
+            inProcessServerName: String = "",
+            testMode: Boolean = false) : GenericService(options.configVals!!,
                                                 AdminConfig.create(options.adminEnabled,
                                                                    options.adminPort!!,
                                                                    options.configVals!!.proxy.admin),
@@ -48,10 +48,10 @@ class Proxy(options: ProxyOptions,
 
     private val httpService = ProxyHttpService(this, proxyPort)
     private val grpcService: ProxyGrpcService =
-            if (inProcessServerName.isNullOrBlank())
+            if (inProcessServerName.isEmpty())
                 ProxyGrpcService.create(this, options.agentPort!!)
             else
-                ProxyGrpcService.create(this, inProcessServerName!!)
+                ProxyGrpcService.create(this, inProcessServerName)
     private val agentCleanupService =
             if (configVals.internal.staleAgentCheckEnabled)
                 AgentContextCleanupService(this)
@@ -126,8 +126,8 @@ class Proxy(options: ProxyOptions,
     fun getAgentContext(agentId: String) = agentContextMap[agentId]
 
     fun removeAgentContext(agentId: String?): AgentContext? {
-        if (agentId.isNullOrBlank()) {
-            logger.error("Null agentId")
+        if (agentId.isNullOrEmpty()) {
+            logger.error("Missing agentId")
             return null
         }
 
@@ -190,7 +190,7 @@ class Proxy(options: ProxyOptions,
 
     fun removePathByAgentId(agentId: String?) {
         if (agentId.isNullOrEmpty()) {
-            logger.info("Null agentId")
+            logger.info("Missing agentId")
             return
         }
 
@@ -227,7 +227,7 @@ class Proxy(options: ProxyOptions,
             logger.info(getBanner("banners/proxy.txt"))
             logger.info(getVersionDesc(false))
 
-            val proxy = Proxy(options, options.proxyPort!!, null, false)
+            val proxy = Proxy(options, options.proxyPort!!)
             proxy.startAsync()
         }
     }

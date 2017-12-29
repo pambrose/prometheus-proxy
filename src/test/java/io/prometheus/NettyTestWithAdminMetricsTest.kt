@@ -23,6 +23,7 @@ import org.junit.BeforeClass
 import org.junit.Test
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
+import kotlin.properties.Delegates
 
 class NettyTestWithAdminMetricsTest {
 
@@ -38,37 +39,37 @@ class NettyTestWithAdminMetricsTest {
 
     @Test
     fun addRemovePathsTest() {
-        Tests.addRemovePathsTest(AGENT!!)
+        Tests.addRemovePathsTest(AGENT)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        Tests.threadedAddRemovePathsTest(AGENT!!)
+        Tests.threadedAddRemovePathsTest(AGENT)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        Tests.invalidAgentUrlTest(AGENT!!)
+        Tests.invalidAgentUrlTest(AGENT)
     }
 
     @Test
     fun timeoutTest() {
-        Tests.timeoutTest(AGENT!!)
+        Tests.timeoutTest(AGENT)
     }
 
     companion object {
 
-        private var PROXY: Proxy? = null
-        private var AGENT: Agent? = null
+        private var PROXY: Proxy by Delegates.notNull()
+        private var AGENT: Agent by Delegates.notNull()
 
         @JvmStatic
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy(null, true, true, emptyList())
-            AGENT = TestUtils.startAgent(null, true, true, emptyList())
+            PROXY = TestUtils.startProxy("", true, true, emptyList())
+            AGENT = TestUtils.startAgent("", true, true, emptyList())
 
-            AGENT!!.awaitInitialConnection(10, SECONDS)
+            AGENT.awaitInitialConnection(10, SECONDS)
 
             // Wait long enough to trigger heartbeat for code coverage
             sleepForSecs(15)
@@ -78,10 +79,10 @@ class NettyTestWithAdminMetricsTest {
         @AfterClass
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
-            PROXY!!.stopAsync()
-            PROXY!!.awaitTerminated(5, SECONDS)
-            AGENT!!.stopAsync()
-            AGENT!!.awaitTerminated(5, SECONDS)
+            PROXY.stopAsync()
+            PROXY.awaitTerminated(5, SECONDS)
+            AGENT.stopAsync()
+            AGENT.awaitTerminated(5, SECONDS)
         }
     }
 

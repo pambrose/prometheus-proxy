@@ -44,7 +44,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         else
             agentContext.apply {
                 agentName = request.agentName
-                hostname = request.hostname
+                hostName = request.hostName
                 markActivity()
             }
 

@@ -30,13 +30,12 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     private val configVals = proxy.configVals
     private val tracing = proxy.zipkinReporterService?.newTracing("proxy-http")
     private val http: Service =
-            Service.ignite()
-                    .apply {
-                        port(port)
-                        threadPool(proxy.configVals.http.maxThreads,
-                                   proxy.configVals.http.minThreads,
-                                   proxy.configVals.http.idleTimeoutMillis)
-                    }
+            Service.ignite().apply {
+                port(port)
+                threadPool(proxy.configVals.http.maxThreads,
+                           proxy.configVals.http.minThreads,
+                           proxy.configVals.http.idleTimeoutMillis)
+            }
 
     init {
         addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
@@ -53,50 +52,50 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
 
         http.get("/*",
                  Route { req, res ->
-                          res.header("cache-control", "must-revalidate,no-cache,no-store")
+                     res.header("cache-control", "must-revalidate,no-cache,no-store")
 
-                          if (!proxy.isRunning) {
-                              logger.error("Proxy stopped")
-                              res.status(503)
-                              updateScrapeRequests("proxy_stopped")
-                              return@Route null
-                          }
+                     if (!proxy.isRunning) {
+                         logger.error("Proxy stopped")
+                         res.status(503)
+                         updateScrapeRequests("proxy_stopped")
+                         return@Route null
+                     }
 
-                          val vals = req.splat()
+                     val vals = req.splat()
 
-                          if (vals == null || vals.isEmpty()) {
-                              logger.info("Request missing path")
-                              res.status(404)
-                              updateScrapeRequests("missing_path")
-                              return@Route null
-                          }
+                     if (vals == null || vals.isEmpty()) {
+                         logger.info("Request missing path")
+                         res.status(404)
+                         updateScrapeRequests("missing_path")
+                         return@Route null
+                     }
 
-                          val path = vals[0]
+                     val path = vals[0]
 
-                          if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
-                              res.status(200)
-                              res.type("text/plain")
-                              return@Route "42"
-                          }
+                     if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
+                         res.status(200)
+                         res.type("text/plain")
+                         return@Route "42"
+                     }
 
-                          val agentContext = proxy.getAgentContextByPath(path)
+                     val agentContext = proxy.getAgentContextByPath(path)
 
-                          if (agentContext == null) {
-                              logger.debug("Invalid path request /\${path")
-                              res.status(404)
-                              updateScrapeRequests("invalid_path")
-                              return@Route null
-                          }
+                     if (agentContext == null) {
+                         logger.debug("Invalid path request /\${path")
+                         res.status(404)
+                         updateScrapeRequests("invalid_path")
+                         return@Route null
+                     }
 
-                          if (!agentContext.valid) {
-                              logger.error("Invalid AgentContext")
-                              res.status(404)
-                              updateScrapeRequests("invalid_agent_context")
-                              return@Route null
-                          }
+                     if (!agentContext.valid) {
+                         logger.error("Invalid AgentContext")
+                         res.status(404)
+                         updateScrapeRequests("invalid_agent_context")
+                         return@Route null
+                     }
 
-                          return@Route submitScrapeRequest(req, res, agentContext, path)
-                      })
+                     return@Route submitScrapeRequest(req, res, agentContext, path)
+                 })
     }
 
     override fun shutDown() {
@@ -106,9 +105,9 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
 
     private fun submitScrapeRequest(req: Request,
                                     res: Response,
-                                    agentContext: AgentContext?,
+                                    agentContext: AgentContext,
                                     path: String): String? {
-        val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext!!, path, req.headers(ACCEPT))
+        val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext, path, req.headers(ACCEPT))
         try {
             proxy.addToScrapeRequestMap(scrapeRequest)
             agentContext.addToScrapeRequestQueue(scrapeRequest)
@@ -136,7 +135,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
         logger.debug("Results returned from $agentContext for $scrapeRequest")
 
         val scrapeResponse = scrapeRequest.scrapeResponse
-        val statusCode = scrapeResponse!!.statusCode
+        val statusCode = scrapeResponse.statusCode
         res.status(statusCode)
 
         // Do not return content on error status codes
@@ -150,7 +149,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                 res.header(CONTENT_ENCODING, "gzip")
             res.type(scrapeResponse.contentType)
             updateScrapeRequests("success")
-            scrapeRequest.scrapeResponse!!.text
+            scrapeRequest.scrapeResponse.text
         }
     }
 

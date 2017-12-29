@@ -36,7 +36,7 @@ class PathContext(private val okHttpClient: OkHttpClient,
             try {
                 logger.debug("Fetching $this")
                 val builder =
-                        if (!scrapeRequest.accept.isNullOrBlank())
+                        if (!scrapeRequest.accept.isNullOrEmpty())
                             request.header(ACCEPT, scrapeRequest.accept)
                         else
                             request

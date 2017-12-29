@@ -68,7 +68,7 @@ fun getBanner(filename: String): String {
             val vals = lines
                     .filter {
                         val currLine = lineNum++
-                        currLine >= first && currLine <= last
+                        currLine in first..last
                     }
                     .map { "     " + it }
                     .toList()

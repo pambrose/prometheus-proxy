@@ -21,6 +21,7 @@ import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
 import java.util.concurrent.TimeUnit.SECONDS
+import kotlin.properties.Delegates
 
 class InProcessTestNoAdminMetricsTest {
 
@@ -36,33 +37,33 @@ class InProcessTestNoAdminMetricsTest {
 
     @Test
     fun addRemovePathsTest() {
-        Tests.addRemovePathsTest(AGENT!!)
+        Tests.addRemovePathsTest(AGENT)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        Tests.threadedAddRemovePathsTest(AGENT!!)
+        Tests.threadedAddRemovePathsTest(AGENT)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        Tests.invalidAgentUrlTest(AGENT!!)
+        Tests.invalidAgentUrlTest(AGENT)
     }
 
     @Test
     fun timeoutTest() {
-        Tests.timeoutTest(AGENT!!)
+        Tests.timeoutTest(AGENT)
     }
 
     @Test
     fun proxyCallTest() {
-        Tests.proxyCallTest(AGENT!!, 25, 50, 200, 100)
+        Tests.proxyCallTest(AGENT, 25, 50, 200, 100)
     }
 
     companion object {
 
-        private var PROXY: Proxy? = null
-        private var AGENT: Agent? = null
+        private var PROXY: Proxy by Delegates.notNull()
+        private var AGENT: Agent by Delegates.notNull()
 
         @JvmStatic
         @BeforeClass
@@ -71,16 +72,16 @@ class InProcessTestNoAdminMetricsTest {
             PROXY = TestUtils.startProxy("nometrics", false, false, emptyList())
             AGENT = TestUtils.startAgent("nometrics", false, false, emptyList())
 
-            AGENT!!.awaitInitialConnection(10, SECONDS)
+            AGENT.awaitInitialConnection(10, SECONDS)
         }
 
         @JvmStatic
         @AfterClass
         fun takeDown() {
-            PROXY!!.stopAsync()
-            PROXY!!.awaitTerminated(5, SECONDS)
-            AGENT!!.stopAsync()
-            AGENT!!.awaitTerminated(5, SECONDS)
+            PROXY.stopAsync()
+            PROXY.awaitTerminated(5, SECONDS)
+            AGENT.stopAsync()
+            AGENT.awaitTerminated(5, SECONDS)
         }
     }
 

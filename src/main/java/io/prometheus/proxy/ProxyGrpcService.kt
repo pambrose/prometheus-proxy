@@ -36,8 +36,7 @@ import java.io.IOException
 
 class ProxyGrpcService private constructor(proxy: Proxy,
                                            private val port: Int,
-                                           private val inProcessServerName: String?) : AbstractIdleService() {
-    private val inProcessServer = !inProcessServerName.isNullOrBlank()
+                                           private val inProcessServerName: String) : AbstractIdleService() {
     val healthCheck: HealthCheck
         get() = object : HealthCheck() {
             @Throws(Exception::class)
@@ -64,7 +63,7 @@ class ProxyGrpcService private constructor(proxy: Proxy,
         }
 
         val serverBuilder =
-                if (inProcessServer)
+                if (inProcessServerName.isNotEmpty())
                     InProcessServerBuilder.forName(inProcessServerName)
                 else
                     ServerBuilder.forPort(port)
@@ -96,7 +95,7 @@ class ProxyGrpcService private constructor(proxy: Proxy,
 
     override fun toString() =
             with(MoreObjects.toStringHelper(this)) {
-                if (inProcessServer) {
+                if (inProcessServerName.isNotEmpty()) {
                     add("serverType", "InProcess")
                     add("serverName", inProcessServerName)
                 }
@@ -110,7 +109,7 @@ class ProxyGrpcService private constructor(proxy: Proxy,
     companion object {
         val logger: Logger = LoggerFactory.getLogger(ProxyGrpcService::class.java)
 
-        fun create(proxy: Proxy, grpcPort: Int) = ProxyGrpcService(proxy, grpcPort, null)
+        fun create(proxy: Proxy, grpcPort: Int) = ProxyGrpcService(proxy, grpcPort, "")
 
         fun create(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy, -1, Preconditions.checkNotNull(serverName))
     }

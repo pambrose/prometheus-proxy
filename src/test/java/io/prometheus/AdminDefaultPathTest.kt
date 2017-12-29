@@ -26,12 +26,13 @@ import org.junit.Test
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
+import kotlin.properties.Delegates
 
 class AdminDefaultPathTest {
 
     @Test
     fun proxyPingPathTest() {
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.pingPath}"
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use {
             assertThat(it.code()).isEqualTo(200)
@@ -41,7 +42,7 @@ class AdminDefaultPathTest {
 
     @Test
     fun agentPingPathTest() {
-        val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.pingPath}"
+        val url = "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use {
             assertThat(it.code()).isEqualTo(200)
@@ -51,7 +52,7 @@ class AdminDefaultPathTest {
 
     @Test
     fun proxyVersionPathTest() {
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.versionPath}"
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use {
             assertThat(it.code()).isEqualTo(200)
@@ -61,7 +62,7 @@ class AdminDefaultPathTest {
 
     @Test
     fun agentVersionPathTest() {
-        val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.versionPath}"
+        val url = "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use {
             assertThat(it.code()).isEqualTo(200)
@@ -71,7 +72,7 @@ class AdminDefaultPathTest {
 
     @Test
     fun proxyHealthCheckPathTest() {
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.healthCheckPath}"
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use {
             assertThat(it.code()).isEqualTo(200)
@@ -81,48 +82,48 @@ class AdminDefaultPathTest {
 
     @Test
     fun agentHealthCheckPathTest() {
-        val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.healthCheckPath}"
+        val url = "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     @Test
     fun proxyThreadDumpPathTest() {
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.threadDumpPath}"
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     @Test
     fun agentThreadDumpPathTest() {
-        val url = "http://localhost:${AGENT!!.configVals.admin.port}/${AGENT!!.configVals.admin.threadDumpPath}"
+        val url = "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     companion object {
-        private var PROXY: Proxy? = null
-        private var AGENT: Agent? = null
+        private var PROXY: Proxy by Delegates.notNull()
+        private var AGENT: Agent by Delegates.notNull()
 
         @JvmStatic
         @BeforeClass
         @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy(null, true, false, emptyList())
-            AGENT = TestUtils.startAgent(null, true, false, emptyList())
+            PROXY = TestUtils.startProxy("", true, false, emptyList())
+            AGENT = TestUtils.startAgent("", true, false, emptyList())
 
-            AGENT!!.awaitInitialConnection(5, SECONDS)
+            AGENT.awaitInitialConnection(5, SECONDS)
         }
 
         @JvmStatic
         @AfterClass
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
-            PROXY!!.stopAsync()
-            PROXY!!.awaitTerminated(5, SECONDS)
-            AGENT!!.stopAsync()
-            AGENT!!.awaitTerminated(5, SECONDS)
+            PROXY.stopAsync()
+            PROXY.awaitTerminated(5, SECONDS)
+            AGENT.stopAsync()
+            AGENT.awaitTerminated(5, SECONDS)
         }
     }
 }

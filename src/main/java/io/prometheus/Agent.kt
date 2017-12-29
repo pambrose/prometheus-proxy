@@ -45,8 +45,8 @@ import java.util.concurrent.Executors.newCachedThreadPool
 import java.util.concurrent.atomic.AtomicBoolean
 
 class Agent(options: AgentOptions,
-            private val inProcessServerName: String?,
-            testMode: Boolean) : GenericService(options.configVals!!,
+            private val inProcessServerName: String = "",
+            testMode: Boolean = false) : GenericService(options.configVals!!,
                                                 AdminConfig.create(options.adminEnabled,
                                                                    options.adminPort!!,
                                                                    options.configVals!!.agent.admin),
@@ -61,10 +61,10 @@ class Agent(options: AgentOptions,
     private val initialConnectionLatch = CountDownLatch(1)
     private val okHttpClient = OkHttpClient()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
-    private val agentName: String? = if (options.agentName.isNullOrBlank()) "Unnamed-$hostName" else options.agentName
+    private val agentName: String = if (options.agentName.isNullOrBlank()) "Unnamed-${io.prometheus.common.hostName}" else options.agentName!!
     private val metrics: AgentMetrics? = if (metricsEnabled) AgentMetrics(this) else null
-    private var blockingStub: ProxyServiceBlockingStub? by AtomicReferenceDelegate()
-    private var asyncStub: ProxyServiceStub? by AtomicReferenceDelegate()
+    private var blockingStub: ProxyServiceBlockingStub by AtomicDelegates.notNullReference()
+    private var asyncStub: ProxyServiceStub by AtomicDelegates.notNullReference()
     private val readRequestsExecutorService: ExecutorService =
             newCachedThreadPool(if (metricsEnabled)
                                     InstrumentedThreadFactory.newInstrumentedThreadFactory("agent_fetch",
@@ -78,18 +78,18 @@ class Agent(options: AgentOptions,
 
     private val tracing: Tracing?
     private val grpcTracing: GrpcTracing?
-    private val hostname: String?
+    private val hostName: String
     private val port: Int
     private val reconnectLimiter: RateLimiter
     private val pathConfigs: List<Map<String, String>>
 
-    private var lastMsgSent: Long by AtomicLongDelegate()
+    private var lastMsgSent: Long by AtomicDelegates.long()
 
     private val proxyHost: String
-        get() = "$hostname:$port"
+        get() = "$hostName:$port"
 
-    var channel: ManagedChannel? by AtomicReferenceDelegate()
-    var agentId: String? by AtomicReferenceDelegate()
+    var channel: ManagedChannel? by AtomicDelegates.nullableReference()
+    var agentId: String by AtomicDelegates.notNullReference()
 
     val scrapeResponseQueueSize: Int
         get() = scrapeResponseQueue.size
@@ -100,6 +100,7 @@ class Agent(options: AgentOptions,
     init {
         logger.info("Assigning proxy reconnect pause time to ${configVals.internal.reconectPauseSecs} secs")
 
+        agentId = ""
         reconnectLimiter = RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs)
         reconnectLimiter.acquire()  // Prime the limiter
 
@@ -111,11 +112,11 @@ class Agent(options: AgentOptions,
 
         if (options.proxyHostname!!.contains(":")) {
             val vals = options.proxyHostname!!.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-            hostname = vals[0]
+            hostName = vals[0]
             port = Integer.valueOf(vals[1])
         }
         else {
-            hostname = options.proxyHostname
+            hostName = options.proxyHostname!!
             port = 50051
         }
 
@@ -169,10 +170,10 @@ class Agent(options: AgentOptions,
     private fun connectToProxy() {
         val disconnected = AtomicBoolean(false)
 
-        // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agent id != null
-        if (agentId.isNullOrEmpty()) {
+        // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != null
+        if (agentId.isNotEmpty()) {
             resetGrpcStubs()
-            agentId = null
+            agentId = ""
         }
 
         // Reset values for each connection attempt
@@ -215,8 +216,8 @@ class Agent(options: AgentOptions,
         channel?.shutdownNow()
 
         val channelBuilder =
-                if (inProcessServerName.isNullOrBlank())
-                    NettyChannelBuilder.forAddress(hostname, port)
+                if (inProcessServerName.isEmpty())
+                    NettyChannelBuilder.forAddress(hostName, port)
                 else
                     InProcessChannelBuilder.forName(inProcessServerName)
 
@@ -298,7 +299,7 @@ class Agent(options: AgentOptions,
     private fun connectAgent(): Boolean {
         return try {
             logger.info("Connecting to proxy at $proxyHost...")
-            blockingStub!!.connectAgent(Empty.getDefaultInstance())
+            blockingStub.connectAgent(Empty.getDefaultInstance())
             logger.info("Connected to proxy at $proxyHost")
             metrics?.connects?.labels("success")?.inc()
             true
@@ -315,10 +316,10 @@ class Agent(options: AgentOptions,
                 with(RegisterAgentRequest.newBuilder()) {
                     agentId = this@Agent.agentId
                     agentName = this@Agent.agentName
-                    hostname = hostName
+                    hostName = this@Agent.hostName
                     build()
                 }
-        val response = blockingStub!!.registerAgent(request)
+        val response = blockingStub.registerAgent(request)
         markMsgSent()
         if (!response.valid)
             throw RequestFailureException("registerAgent() - ${response.reason}")
@@ -359,7 +360,7 @@ class Agent(options: AgentOptions,
                     agentId = this@Agent.agentId
                     build()
                 }
-        val response = blockingStub!!.pathMapSize(request)
+        val response = blockingStub.pathMapSize(request)
         markMsgSent()
         return response.pathCount
     }
@@ -372,7 +373,7 @@ class Agent(options: AgentOptions,
                     this.path = path
                     build()
                 }
-        val response = blockingStub!!.registerPath(request)
+        val response = blockingStub.registerPath(request)
         markMsgSent()
         if (!response.valid)
             throw RequestFailureException("registerPath() - ${response.reason}")
@@ -387,7 +388,7 @@ class Agent(options: AgentOptions,
                     this.path = path
                     build()
                 }
-        val response = blockingStub!!.unregisterPath(request)
+        val response = blockingStub.unregisterPath(request)
         markMsgSent()
         if (!response.valid)
             throw RequestFailureException("unregisterPath() - ${response.reason}")
@@ -425,13 +426,13 @@ class Agent(options: AgentOptions,
                     agentId = this@Agent.agentId
                     build()
                 }
-        asyncStub!!.readRequestsFromProxy(agentInfo, observer)
+        asyncStub.readRequestsFromProxy(agentInfo, observer)
     }
 
     private fun writeResponsesToProxyUntilDisconnected(disconnected: AtomicBoolean) {
         val checkMillis = configVals.internal.scrapeResponseQueueCheckMillis.toLong()
         val observer =
-                asyncStub!!.writeResponsesToProxy(
+                asyncStub.writeResponsesToProxy(
                         object : StreamObserver<Empty> {
                             override fun onNext(empty: Empty) {
                                 // Ignore Empty return value
@@ -469,7 +470,7 @@ class Agent(options: AgentOptions,
     }
 
     private fun sendHeartBeat(disconnected: AtomicBoolean) {
-        if (agentId.isNullOrEmpty())
+        if (agentId.isEmpty())
             return
 
         try {
@@ -478,7 +479,7 @@ class Agent(options: AgentOptions,
                         agentId = this@Agent.agentId
                         build()
                     }
-            val response = blockingStub!!.sendHeartBeat(request)
+            val response = blockingStub.sendHeartBeat(request)
             markMsgSent()
             if (!response.valid) {
                 logger.info("AgentId $agentId not found on proxy")
@@ -512,7 +513,7 @@ class Agent(options: AgentOptions,
             logger.info(getBanner("banners/agent.txt"))
             logger.info(getVersionDesc(false))
 
-            val agent = Agent(options, null, false)
+            val agent = Agent(options)
             agent.startAsync()
         }
     }

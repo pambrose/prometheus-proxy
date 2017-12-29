@@ -26,14 +26,15 @@ import org.junit.Test
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
+import kotlin.properties.Delegates
 
 class AdminNonDefaultPathTest {
 
     @Test
     fun proxyPingPathTest() {
-        assertThat(PROXY!!.configVals.admin.port).isEqualTo(8099)
-        assertThat(PROXY!!.configVals.admin.pingPath).isEqualTo("pingPath2")
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.pingPath}"
+        assertThat(PROXY.configVals.admin.port).isEqualTo(8099)
+        assertThat(PROXY.configVals.admin.pingPath).isEqualTo("pingPath2")
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use {
             assertThat(it.code()).isEqualTo(200)
@@ -43,9 +44,9 @@ class AdminNonDefaultPathTest {
 
     @Test
     fun proxyVersionPathTest() {
-        assertThat(PROXY!!.configVals.admin.port).isEqualTo(8099)
-        assertThat(PROXY!!.configVals.admin.versionPath).isEqualTo("versionPath2")
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.versionPath}"
+        assertThat(PROXY.configVals.admin.port).isEqualTo(8099)
+        assertThat(PROXY.configVals.admin.versionPath).isEqualTo("versionPath2")
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use {
             assertThat(it.code()).isEqualTo(200)
@@ -55,8 +56,8 @@ class AdminNonDefaultPathTest {
 
     @Test
     fun proxyHealthCheckPathTest() {
-        assertThat(PROXY!!.configVals.admin.healthCheckPath).isEqualTo("healthCheckPath2")
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.healthCheckPath}"
+        assertThat(PROXY.configVals.admin.healthCheckPath).isEqualTo("healthCheckPath2")
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use {
             assertThat(it.code()).isEqualTo(200)
@@ -66,16 +67,16 @@ class AdminNonDefaultPathTest {
 
     @Test
     fun proxyThreadDumpPathTest() {
-        assertThat(PROXY!!.configVals.admin.threadDumpPath).isEqualTo("threadDumpPath2")
-        val url = "http://localhost:${PROXY!!.configVals.admin.port}/${PROXY!!.configVals.admin.threadDumpPath}"
+        assertThat(PROXY.configVals.admin.threadDumpPath).isEqualTo("threadDumpPath2")
+        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
         val request = Request.Builder().url(url)
         OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     companion object {
 
-        private var PROXY: Proxy? = null
-        private var AGENT: Agent? = null
+        private var PROXY: Proxy by Delegates.notNull()
+        private var AGENT: Agent by Delegates.notNull()
 
         @JvmStatic
         @BeforeClass
@@ -88,20 +89,20 @@ class AdminNonDefaultPathTest {
                               "-Dproxy.admin.healthCheckPath=healthCheckPath2",
                               "-Dproxy.admin.threadDumpPath=threadDumpPath2"
                              )
-            PROXY = TestUtils.startProxy(null, true, false, args)
-            AGENT = TestUtils.startAgent(null, true, false, emptyList())
+            PROXY = TestUtils.startProxy("", true, false, args)
+            AGENT = TestUtils.startAgent("", true, false, emptyList())
 
-            AGENT!!.awaitInitialConnection(5, SECONDS)
+            AGENT.awaitInitialConnection(5, SECONDS)
         }
 
         @JvmStatic
         @AfterClass
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
-            PROXY!!.stopAsync()
-            PROXY!!.awaitTerminated(5, SECONDS)
-            AGENT!!.stopAsync()
-            AGENT!!.awaitTerminated(5, SECONDS)
+            PROXY.stopAsync()
+            PROXY.awaitTerminated(5, SECONDS)
+            AGENT.stopAsync()
+            AGENT.awaitTerminated(5, SECONDS)
         }
     }
 }
