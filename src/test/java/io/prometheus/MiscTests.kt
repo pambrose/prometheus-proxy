@@ -234,7 +234,7 @@ object MiscTests {
 
     private fun callProxy(pathMap: Map<Int, Int>, msg: String) {
         // Choose one of the pathMap values
-        //logger.info("Calling proxy for ${msg}")
+        logger.info("Calling proxy for ${msg}")
         val index = abs(ConstantsTest.RANDOM.nextInt() % pathMap.size)
         val httpVal = pathMap[index]
         val url = "http://localhost:$PROXY_PORT/proxy-$index"
@@ -244,7 +244,7 @@ object MiscTests {
                 .execute()
                 .use {
                     if (it.code() != 200)
-                        logger.info("Failed on $msg")
+                        logger.error("Proxy failed on $msg")
                     assertThat(it.code()).isEqualTo(200)
                     val body = it.body()!!.string()
                     assertThat(body).isEqualTo("value: $httpVal")
