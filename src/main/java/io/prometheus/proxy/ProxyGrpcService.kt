@@ -20,7 +20,6 @@ import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.MoreObjects
-import com.google.common.base.Preconditions
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.grpc.Server
@@ -35,8 +34,8 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 
 class ProxyGrpcService private constructor(proxy: Proxy,
-                                           private val port: Int,
-                                           private val inProcessServerName: String) : AbstractIdleService() {
+                                           private val port: Int = -1,
+                                           private val inProcessServerName: String = "") : AbstractIdleService() {
     val healthCheck: HealthCheck
         get() = object : HealthCheck() {
             @Throws(Exception::class)
@@ -109,8 +108,8 @@ class ProxyGrpcService private constructor(proxy: Proxy,
     companion object {
         val logger: Logger = LoggerFactory.getLogger(ProxyGrpcService::class.java)
 
-        fun create(proxy: Proxy, grpcPort: Int) = ProxyGrpcService(proxy, grpcPort, "")
+        fun create(proxy: Proxy, grpcPort: Int) = ProxyGrpcService(proxy = proxy, port = grpcPort)
 
-        fun create(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy, -1, Preconditions.checkNotNull(serverName))
+        fun create(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
     }
 }
