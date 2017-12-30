@@ -145,6 +145,7 @@ object MiscTests {
         val request = Request.Builder().url(proxyUrl)
         ConstantsTest.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
 
+        Thread.sleep(5000)
         agent.unregisterPath("/$proxyPath")
         http.stop()
     }
@@ -224,6 +225,7 @@ object MiscTests {
         assertThat(errorCnt.get()).isEqualTo(0)
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
 
+        Thread.sleep(5000)
         httpServers.forEach(Service::stop)
     }
 }
