@@ -16,67 +16,74 @@
 
 package io.prometheus
 
+import io.prometheus.TestUtils.startAgent
+import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
+import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
+import kotlin.properties.Delegates
 
 class NettyTestNoAdminMetricsTest {
 
     @Test
     fun missingPathTest() {
-        Tests.missingPathTest()
+        MiscTests.missingPathTest(this.javaClass.simpleName)
     }
 
     @Test
     fun invalidPathTest() {
-        Tests.invalidPathTest()
+        MiscTests.invalidPathTest(this.javaClass.simpleName)
     }
 
     @Test
     fun addRemovePathsTest() {
-        Tests.addRemovePathsTest(AGENT!!)
+        MiscTests.addRemovePathsTest(AGENT, this.javaClass.simpleName)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        Tests.threadedAddRemovePathsTest(AGENT!!)
+        MiscTests.threadedAddRemovePathsTest(AGENT, this.javaClass.simpleName)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        Tests.invalidAgentUrlTest(AGENT!!)
+        MiscTests.invalidAgentUrlTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun timeoutTest() {
-        Tests.timeoutTest(AGENT!!)
+        MiscTests.timeoutTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     companion object {
-        private var PROXY: Proxy? = null
-        private var AGENT: Agent? = null
+        private val logger = LoggerFactory.getLogger(NettyTestNoAdminMetricsTest::class.java)
+
+        private var PROXY: Proxy by Delegates.notNull()
+        private var AGENT: Agent by Delegates.notNull()
 
         @JvmStatic
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy(null, false, false, emptyList())
-            AGENT = TestUtils.startAgent(null, false, false, emptyList())
+            PROXY = startProxy()
+            AGENT = startAgent()
 
-            AGENT!!.awaitInitialConnection(10, SECONDS)
+            AGENT.awaitInitialConnection(10, SECONDS)
         }
 
         @JvmStatic
         @AfterClass
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
-            PROXY!!.stopAsync()
-            PROXY!!.awaitTerminated(5, SECONDS)
-            AGENT!!.stopAsync()
-            AGENT!!.awaitTerminated(5, SECONDS)
+            logger.info("Stopping Proxy and Agent")
+            PROXY.stopAsync()
+            PROXY.awaitTerminated(5, SECONDS)
+            AGENT.stopAsync()
+            AGENT.awaitTerminated(5, SECONDS)
         }
     }
 

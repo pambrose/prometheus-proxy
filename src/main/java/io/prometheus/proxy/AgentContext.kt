@@ -18,67 +18,60 @@ package io.prometheus.proxy
 
 import com.google.common.base.MoreObjects
 import io.prometheus.Proxy
+import io.prometheus.common.AtomicDelegates
 import io.prometheus.common.toSecs
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
-    private val validRef = AtomicBoolean(true)
-    private val lastActivityTime = AtomicLong()
-    private val agentNameRef = AtomicReference<String>()
-    private val hostnameRef = AtomicReference<String>()
     private val scrapeRequestQueue = ArrayBlockingQueue<ScrapeRequestWrapper>(proxy.configVals.internal.scrapeRequestQueueSize)
     private val waitMillis = proxy.configVals.internal.scrapeRequestQueueCheckMillis.toLong()
 
-    var valid: Boolean
-        get() = this.validRef.get()
-        private set(v) = this.validRef.set(v)
+    private var lastActivityTime: Long by AtomicDelegates.long()
+    var valid: Boolean by AtomicDelegates.boolean(true)
+    var hostName: String by AtomicDelegates.notNullReference()
+    var agentName: String by AtomicDelegates.notNullReference()
 
-    var hostname: String?
-        get() = this.hostnameRef.get()
-        set(v) = this.hostnameRef.set(v)
+    val inactivitySecs: Long
+        get() = (System.currentTimeMillis() - lastActivityTime).toSecs()
 
-
-    var agentName: String?
-        get() = this.agentNameRef.get()
-        set(v) = this.agentNameRef.set(v)
+    val scrapeRequestQueueSize: Int
+        get() = scrapeRequestQueue.size
 
     init {
-        this.markActivity()
+        hostName = "Unassigned"
+        agentName = "Unassigned"
+        markActivity()
     }
 
-    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) = this.scrapeRequestQueue.add(scrapeRequest)
-
-    fun scrapeRequestQueueSize(): Int = this.scrapeRequestQueue.size
+    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) = scrapeRequestQueue.add(scrapeRequest)
 
     fun pollScrapeRequestQueue(): ScrapeRequestWrapper? =
             try {
-                this.scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS)
+                scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS)
             } catch (e: InterruptedException) {
                 null
             }
 
-    fun inactivitySecs(): Long = (System.currentTimeMillis() - this.lastActivityTime.get()).toSecs()
-
     fun markInvalid() {
-        this.valid = false
+        valid = false
     }
 
-    fun markActivity() = this.lastActivityTime.set(System.currentTimeMillis())
+    fun markActivity() {
+        lastActivityTime = System.currentTimeMillis()
+    }
 
     override fun toString() =
             MoreObjects.toStringHelper(this)
-                    .add("agentId", this.agentId)
-                    .add("valid", this.valid)
-                    .add("remoteAddr", this.remoteAddr)
-                    .add("agentName", this.agentName)
-                    .add("hostname", this.hostname)
-                    .add("inactivitySecs", this.inactivitySecs())
+                    .add("agentId", agentId)
+                    .add("valid", valid)
+                    .add("remoteAddr", remoteAddr)
+                    .add("agentName", agentName)
+                    .add("hostName", hostName)
+                    .add("inactivitySecs", inactivitySecs)
                     .toString()
 
     companion object {

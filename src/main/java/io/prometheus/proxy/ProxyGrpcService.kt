@@ -20,7 +20,6 @@ import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.MoreObjects
-import com.google.common.base.Preconditions
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.grpc.Server
@@ -35,9 +34,8 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 
 class ProxyGrpcService private constructor(proxy: Proxy,
-                                           private val port: Int,
-                                           private val inProcessServerName: String?) : AbstractIdleService() {
-    private val inProcessServer = !inProcessServerName.isNullOrBlank()
+                                           private val port: Int = -1,
+                                           private val inProcessServerName: String = "") : AbstractIdleService() {
     val healthCheck: HealthCheck
         get() = object : HealthCheck() {
             @Throws(Exception::class)
@@ -50,53 +48,53 @@ class ProxyGrpcService private constructor(proxy: Proxy,
         }
 
     private val grpcServer: Server
-    private val _grpcTracing: Tracing?
+    private val tracing: Tracing?
     private val grpcTracing: GrpcTracing?
 
     init {
         if (proxy.zipkinEnabled) {
-            this._grpcTracing = proxy.zipkinReporterService!!.newTracing("grpc_server")
-            this.grpcTracing = GrpcTracing.create(this._grpcTracing)
+            tracing = proxy.zipkinReporterService!!.newTracing("grpc_server")
+            grpcTracing = GrpcTracing.create(tracing)
         }
         else {
-            this._grpcTracing = null
-            this.grpcTracing = null
+            tracing = null
+            grpcTracing = null
         }
 
         val serverBuilder =
-                if (this.inProcessServer)
-                    InProcessServerBuilder.forName(this.inProcessServerName)
+                if (inProcessServerName.isNotEmpty())
+                    InProcessServerBuilder.forName(inProcessServerName)
                 else
-                    ServerBuilder.forPort(this.port)
+                    ServerBuilder.forPort(port)
 
         val proxyService = ProxyServiceImpl(proxy)
         val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
         if (proxy.zipkinEnabled)
-            interceptors.add(this.grpcTracing!!.newServerInterceptor())
+            interceptors.add(grpcTracing!!.newServerInterceptor())
         val serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors)
 
-        this.grpcServer =
+        grpcServer =
                 serverBuilder
                         .addService(serviceDef)
                         .addTransportFilter(ProxyTransportFilter(proxy))
                         .build()
 
-        this.addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
     @Throws(IOException::class)
     override fun startUp() {
-        this.grpcServer.start()
+        grpcServer.start()
     }
 
     override fun shutDown() {
-        this._grpcTracing?.close()
-        this.grpcServer.shutdown()
+        tracing?.close()
+        grpcServer.shutdown()
     }
 
     override fun toString() =
             with(MoreObjects.toStringHelper(this)) {
-                if (inProcessServer) {
+                if (inProcessServerName.isNotEmpty()) {
                     add("serverType", "InProcess")
                     add("serverName", inProcessServerName)
                 }
@@ -110,8 +108,8 @@ class ProxyGrpcService private constructor(proxy: Proxy,
     companion object {
         val logger: Logger = LoggerFactory.getLogger(ProxyGrpcService::class.java)
 
-        fun create(proxy: Proxy, grpcPort: Int) = ProxyGrpcService(proxy, grpcPort, null)
+        fun create(proxy: Proxy, grpcPort: Int) = ProxyGrpcService(proxy = proxy, port = grpcPort)
 
-        fun create(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy, -1, Preconditions.checkNotNull(serverName))
+        fun create(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
     }
 }

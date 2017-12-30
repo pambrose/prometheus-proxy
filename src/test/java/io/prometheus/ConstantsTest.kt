@@ -20,11 +20,11 @@ import okhttp3.OkHttpClient
 import java.util.*
 import java.util.concurrent.Executors
 
-object TestConstants {
+object ConstantsTest {
     internal val EXECUTOR_SERVICE = Executors.newCachedThreadPool()
     internal val OK_HTTP_CLIENT = OkHttpClient()
     internal val RANDOM = Random()
     internal val REPS = 1000
-    internal val PROXY_PORT = 9500
+    internal val PROXY_PORT = 9505
     internal val args = listOf("--config", "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/travis.conf")
 }

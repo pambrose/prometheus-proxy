@@ -20,12 +20,12 @@ package io.prometheus.proxy
 import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions
 import io.prometheus.Proxy
+import io.prometheus.common.AtomicDelegates
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 
 class ScrapeRequestWrapper(proxy: Proxy,
                            agentContext: AgentContext,
@@ -34,42 +34,35 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     private val createTime = System.currentTimeMillis()
     private val complete = CountDownLatch(1)
-    private val scrapeResponseRef = AtomicReference<ScrapeResponse>()
     private val requestTimer = proxy.metrics?.scrapeRequestLatency?.startTimer()
 
     val agentContext: AgentContext = Preconditions.checkNotNull(agentContext)
 
-    val scrapeRequest: ScrapeRequest
+    var scrapeResponse: ScrapeResponse by AtomicDelegates.notNullReference()
+
+    val scrapeRequest: ScrapeRequest =
+            with(ScrapeRequest.newBuilder()) {
+                agentId = agentContext.agentId
+                scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
+                this.path = path
+                if (!accept.isNullOrBlank())
+                    this.accept = accept
+                build()
+            }
 
     val scrapeId: Long
-        get() = this.scrapeRequest.scrapeId
+        get() = scrapeRequest.scrapeId
 
-    val scrapeResponse: ScrapeResponse
-        get() = this.scrapeResponseRef.get()
-
-    init {
-        var builder =
-                ScrapeRequest.newBuilder()
-                        .setAgentId(agentContext.agentId)
-                        .setScrapeId(SCRAPE_ID_GENERATOR.getAndIncrement())
-                        .setPath(path)
-        if (!accept.isNullOrBlank())
-            builder = builder.setAccept(accept)
-        this.scrapeRequest = builder.build()
-    }
-
-    fun setScrapeResponse(scrapeResponse: ScrapeResponse) = this.scrapeResponseRef.set(scrapeResponse)
-
-    fun ageInSecs(): Long = (System.currentTimeMillis() - this.createTime) / 1000
+    fun ageInSecs(): Long = (System.currentTimeMillis() - createTime) / 1000
 
     fun markComplete() {
-        this.requestTimer?.observeDuration()
-        this.complete.countDown()
+        requestTimer?.observeDuration()
+        complete.countDown()
     }
 
     fun waitUntilCompleteMillis(waitMillis: Long): Boolean {
         try {
-            return this.complete.await(waitMillis, TimeUnit.MILLISECONDS)
+            return complete.await(waitMillis, TimeUnit.MILLISECONDS)
         } catch (e: InterruptedException) {
             // Ignore
         }

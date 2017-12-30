@@ -31,20 +31,18 @@ import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.*
-import java.util.concurrent.atomic.AtomicInteger
 
 object Utils {
     val logger: Logger = LoggerFactory.getLogger(Utils::class.java)
 }
 
-val hostName: String
-    get() {
-        return try {
-            InetAddress.getLocalHost().hostName
-        } catch (e: UnknownHostException) {
-            "Unknown"
-        }
+val hostName: String by lazy {
+    try {
+        InetAddress.getLocalHost().hostName
+    } catch (e: UnknownHostException) {
+        "Unknown"
     }
+}
 
 fun getBanner(filename: String): String {
     try {
@@ -52,26 +50,25 @@ fun getBanner(filename: String): String {
             val banner = CharStreams.toString(InputStreamReader(it, Charsets.UTF_8.name()))
             val lines: List<String> = Splitter.on("\n").splitToList(banner)
 
-            // Use Atomic values because filter requires finals
             // Trim initial and trailing blank lines, but preserve blank lines in middle;
-            val first = AtomicInteger(-1)
-            val last = AtomicInteger(-1)
-            val lineNum = AtomicInteger(0)
+            var first = -1
+            var last = -1
+            var lineNum = 0
             lines.forEach {
                 if (it.trim { it <= ' ' }.isNotEmpty()) {
-                    if (first.get() == -1)
-                        first.set(lineNum.get())
-                    last.set(lineNum.get())
+                    if (first == -1)
+                        first = lineNum
+                    last = lineNum
                 }
-                lineNum.incrementAndGet()
+                lineNum++
             }
 
-            lineNum.set(0)
+            lineNum = 0
 
             val vals = lines
                     .filter {
-                        val currLine = lineNum.getAndIncrement()
-                        currLine >= first.get() && currLine <= last.get()
+                        val currLine = lineNum++
+                        currLine in first..last
                     }
                     .map { "     " + it }
                     .toList()

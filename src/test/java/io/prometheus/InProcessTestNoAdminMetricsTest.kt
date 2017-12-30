@@ -16,71 +16,83 @@
 
 package io.prometheus
 
+import io.prometheus.TestUtils.startAgent
+import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
+import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit.SECONDS
+import kotlin.properties.Delegates
 
 class InProcessTestNoAdminMetricsTest {
 
     @Test
     fun missingPathTest() {
-        Tests.missingPathTest()
+        MiscTests.missingPathTest(this.javaClass.simpleName)
     }
 
     @Test
     fun invalidPathTest() {
-        Tests.invalidPathTest()
+        MiscTests.invalidPathTest(this.javaClass.simpleName)
     }
 
     @Test
     fun addRemovePathsTest() {
-        Tests.addRemovePathsTest(AGENT!!)
+        MiscTests.addRemovePathsTest(AGENT, this.javaClass.simpleName)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        Tests.threadedAddRemovePathsTest(AGENT!!)
+        MiscTests.threadedAddRemovePathsTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        Tests.invalidAgentUrlTest(AGENT!!)
+        MiscTests.invalidAgentUrlTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun timeoutTest() {
-        Tests.timeoutTest(AGENT!!)
+        MiscTests.timeoutTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun proxyCallTest() {
-        Tests.proxyCallTest(AGENT!!, 25, 50, 1000, 25)
+        MiscTests.proxyCallTest(AGENT,
+                                httpServerCount = 25,
+                                pathCount = 50,
+                                sequentialQueryCount = 500,
+                                sequentialPauseMillis = 25,
+                                parallelQueryCount = 100,
+                                caller = this.javaClass.simpleName)
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(InProcessTestNoAdminMetricsTest::class.java)
 
-        private var PROXY: Proxy? = null
-        private var AGENT: Agent? = null
+        private var PROXY: Proxy by Delegates.notNull()
+        private var AGENT: Agent by Delegates.notNull()
 
         @JvmStatic
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy("nometrics", false, false, emptyList())
-            AGENT = TestUtils.startAgent("nometrics", false, false, emptyList())
+            PROXY = startProxy("nometrics")
+            AGENT = startAgent("nometrics")
 
-            AGENT!!.awaitInitialConnection(10, SECONDS)
+            AGENT.awaitInitialConnection(10, SECONDS)
         }
 
         @JvmStatic
         @AfterClass
         fun takeDown() {
-            PROXY!!.stopAsync()
-            PROXY!!.awaitTerminated(5, SECONDS)
-            AGENT!!.stopAsync()
-            AGENT!!.awaitTerminated(5, SECONDS)
+            logger.info("Stopping Proxy and Agent")
+            PROXY.stopAsync()
+            PROXY.awaitTerminated(5, SECONDS)
+            AGENT.stopAsync()
+            AGENT.awaitTerminated(5, SECONDS)
         }
     }
 

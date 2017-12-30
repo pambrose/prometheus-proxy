@@ -12,7 +12,7 @@
 
 6) Check in branch and merge 
 
-7) Create release on github and upload target/prometheus-proxy.jar and  target/prometheus-agent.jar
+7) Create release on github and upload target/distro/prometheus-proxy.jar and  target/distro/prometheus-agent.jar
 
 8) Build and push docker images: `make docker-build docker-push`
 

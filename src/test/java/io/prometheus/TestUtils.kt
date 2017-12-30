@@ -16,6 +16,7 @@
 
 package io.prometheus
 
+import io.prometheus.ConstantsTest.PROXY_PORT
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
@@ -30,10 +31,13 @@ object TestUtils {
     private val logger = LoggerFactory.getLogger(TestUtils::class.java)
 
     @Throws(IOException::class, TimeoutException::class)
-    fun startProxy(serverName: String?, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Proxy {
+    fun startProxy(serverName: String = "",
+                   adminEnabled: Boolean = false,
+                   metricsEnabled: Boolean = false,
+                   argv: List<String> = emptyList()): Proxy {
         val args =
                 mutableListOf<String>().apply {
-                    addAll(TestConstants.args)
+                    addAll(ConstantsTest.args)
                     addAll(argv)
                     add("-Dproxy.admin.enabled=$adminEnabled")
                     add("-Dproxy.metrics.enabled=$metricsEnabled")
@@ -43,17 +47,20 @@ object TestUtils {
         logger.info(getBanner("banners/proxy.txt"))
         logger.info(getVersionDesc(false))
 
-        val proxy = Proxy(options, TestConstants.PROXY_PORT, serverName, true)
+        val proxy = Proxy(options = options, proxyPort = PROXY_PORT, inProcessServerName = serverName, testMode = true)
         proxy.startAsync()
         proxy.awaitRunning(5, TimeUnit.SECONDS)
         return proxy
     }
 
     @Throws(IOException::class, TimeoutException::class)
-    fun startAgent(serverName: String?, adminEnabled: Boolean, metricsEnabled: Boolean, argv: List<String>): Agent {
+    fun startAgent(serverName: String = "",
+                   adminEnabled: Boolean = false,
+                   metricsEnabled: Boolean = false,
+                   argv: List<String> = emptyList()): Agent {
         val args =
                 mutableListOf<String>().apply {
-                    addAll(TestConstants.args)
+                    addAll(ConstantsTest.args)
                     addAll(argv)
                     add("-Dagent.admin.enabled=$adminEnabled")
                     add("-Dagent.metrics.enabled=$metricsEnabled")
@@ -63,7 +70,7 @@ object TestUtils {
         logger.info(getBanner("banners/agent.txt"))
         logger.info(getVersionDesc(false))
 
-        return Agent(options, serverName, true).apply {
+        return Agent(options = options, inProcessServerName = serverName, testMode = true).apply {
             startAsync()
             awaitRunning(5, TimeUnit.SECONDS)
         }
