@@ -254,8 +254,8 @@ object MiscTests {
     }
 
     private fun callProxy(pathMap: Map<Int, Int>, msg: String) {
+        //logger.info("Calling proxy for ${msg}")
         // Choose one of the pathMap values
-        logger.info("Calling proxy for ${msg}")
         val index = abs(ConstantsTest.RANDOM.nextInt() % pathMap.size)
         val httpVal = pathMap[index]
         val url = "http://localhost:$PROXY_PORT/proxy-$index"

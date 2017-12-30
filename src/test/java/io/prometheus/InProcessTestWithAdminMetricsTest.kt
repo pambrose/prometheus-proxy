@@ -66,8 +66,8 @@ class InProcessTestWithAdminMetricsTest {
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy("withmetrics", true, true)
-            AGENT = TestUtils.startAgent("withmetrics", true, true)
+            PROXY = TestUtils.startProxy("withmetrics", adminEnabled = true, metricsEnabled = true)
+            AGENT = TestUtils.startAgent("withmetrics", adminEnabled = true, metricsEnabled = true)
 
             AGENT.awaitInitialConnection(10, SECONDS)
         }

@@ -77,8 +77,8 @@ class InProcessTestNoAdminMetricsTest {
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy("nometrics", false, false)
-            AGENT = TestUtils.startAgent("nometrics", false, false)
+            PROXY = TestUtils.startProxy("nometrics")
+            AGENT = TestUtils.startAgent("nometrics")
 
             AGENT.awaitInitialConnection(10, SECONDS)
         }

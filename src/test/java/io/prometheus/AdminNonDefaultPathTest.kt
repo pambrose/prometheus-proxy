@@ -91,8 +91,8 @@ class AdminNonDefaultPathTest {
                               "-Dproxy.admin.healthCheckPath=healthCheckPath2",
                               "-Dproxy.admin.threadDumpPath=threadDumpPath2"
                              )
-            PROXY = TestUtils.startProxy("", true, false, args)
-            AGENT = TestUtils.startAgent("", true, false, emptyList())
+            PROXY = TestUtils.startProxy(adminEnabled = true, argv = args)
+            AGENT = TestUtils.startAgent(adminEnabled = true)
 
             AGENT.awaitInitialConnection(5, SECONDS)
         }

@@ -67,8 +67,8 @@ class NettyTestNoAdminMetricsTest {
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy("", false, false)
-            AGENT = TestUtils.startAgent("", false, false)
+            PROXY = TestUtils.startProxy()
+            AGENT = TestUtils.startAgent()
 
             AGENT.awaitInitialConnection(10, SECONDS)
         }

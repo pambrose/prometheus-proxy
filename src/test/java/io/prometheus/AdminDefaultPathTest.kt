@@ -113,8 +113,8 @@ class AdminDefaultPathTest {
         @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy("", true, false)
-            AGENT = TestUtils.startAgent("", true, false)
+            PROXY = TestUtils.startProxy(adminEnabled = true)
+            AGENT = TestUtils.startAgent(adminEnabled = true)
 
             AGENT.awaitInitialConnection(5, SECONDS)
         }
