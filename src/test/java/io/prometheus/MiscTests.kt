@@ -149,6 +149,10 @@ object MiscTests {
                         "I timed out"
                     }
                 }
+
+        // Give http server chance to start
+        sleepForSecs(5)
+
         val agentUrl = "http://localhost:$agentPort/$agentPath"
         agent.registerPath("/$proxyPath", agentUrl)
 
@@ -197,6 +201,7 @@ object MiscTests {
                     httpServers.add(http)
                 }
 
+        // Give http server chance to start
         sleepForSecs(5)
 
         // Create the paths
