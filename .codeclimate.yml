@@ -7,3 +7,5 @@ ratings:
   paths:
   - "**.java"
 
+exclude_patterns:
+- "src/main/java/io/prometheus/common/ConfigVals.java"
