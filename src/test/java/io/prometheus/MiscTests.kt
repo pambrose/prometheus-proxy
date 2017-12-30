@@ -113,8 +113,7 @@ object MiscTests {
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
     }
 
-    fun invalidAgentUrlTest(agent: Agent) {
-        val badPath = "badPath"
+    fun invalidAgentUrlTest(agent: Agent, badPath: String = "badPath") {
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
 
@@ -127,10 +126,10 @@ object MiscTests {
         agent.unregisterPath(badPath)
     }
 
-    fun timeoutTest(agent: Agent) {
-        val agentPort = 9700
-        val proxyPath = "proxy-timeout"
-        val agentPath = "agent-timeout"
+    fun timeoutTest(agent: Agent,
+                    agentPort: Int = 9700,
+                    proxyPath: String = "proxy-timeout",
+                    agentPath: String = "agent-timeout") {
 
         val http =
                 Service.ignite().apply {
@@ -146,9 +145,15 @@ object MiscTests {
 
         val proxyUrl = "http://localhost:$PROXY_PORT/$proxyPath"
         val request = Request.Builder().url(proxyUrl)
-        ConstantsTest.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        ConstantsTest
+                .OK_HTTP_CLIENT
+                .newCall(request.build())
+                .execute()
+                .use {
+                    assertThat(it.code()).isEqualTo(404)
+                }
 
-        //Thread.sleep(5000)
+        Thread.sleep(5000)
         agent.unregisterPath("/$proxyPath")
         http.stop()
     }
@@ -249,7 +254,6 @@ object MiscTests {
                     val body = it.body()!!.string()
                     assertThat(body).isEqualTo("value: $httpVal")
                 }
-
     }
 }
 
