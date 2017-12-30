@@ -162,7 +162,6 @@ object MiscTests {
                     assertThat(it.code()).isEqualTo(404)
                 }
 
-        //Thread.sleep(1000)
         agent.unregisterPath("/$proxyPath")
         http.stop()
     }
@@ -197,6 +196,8 @@ object MiscTests {
                             }
                     httpServers.add(http)
                 }
+
+        sleepForSecs(5)
 
         // Create the paths
         IntStream.range(0, pathCount)
@@ -244,7 +245,6 @@ object MiscTests {
         assertThat(errorCnt.get()).isEqualTo(0)
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
 
-        //Thread.sleep(5000)
         httpServers.forEach(Service::stop)
     }
 
