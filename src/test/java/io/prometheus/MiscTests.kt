@@ -148,7 +148,7 @@ object MiscTests {
         val request = Request.Builder().url(proxyUrl)
         ConstantsTest.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
 
-        Thread.sleep(5000)
+        //Thread.sleep(5000)
         agent.unregisterPath("/$proxyPath")
         http.stop()
     }
@@ -156,8 +156,9 @@ object MiscTests {
     fun proxyCallTest(agent: Agent,
                       httpServerCount: Int,
                       pathCount: Int,
-                      queryCount: Int,
-                      pauseMillis: Long) {
+                      sequentialQueryCount: Int,
+                      sequentialPauseMillis: Long,
+                      parallelQueryCount: Int) {
 
         val startingPort = 9600
         val httpServers = mutableListOf<Service>()
@@ -192,16 +193,15 @@ object MiscTests {
         assertThat(agent.pathMapSize()).isEqualTo(originalSize + pathCount)
 
         // Call the proxy sequentially
-        IntStream.range(0, queryCount)
+        IntStream.range(0, sequentialQueryCount)
                 .forEach {
                     callProxy(pathMap, "Sequential $it")
-                    sleepForMillis(pauseMillis)
+                    sleepForMillis(sequentialPauseMillis)
                 }
 
         // Call the proxy in parallel
-        val threadedQueryCount = 100
-        val latch = CountDownLatch(threadedQueryCount)
-        IntStream.range(0, threadedQueryCount)
+        val latch = CountDownLatch(parallelQueryCount)
+        IntStream.range(0, parallelQueryCount)
                 .forEach {
                     ConstantsTest.EXECUTOR_SERVICE
                             .submit {
@@ -228,13 +228,13 @@ object MiscTests {
         assertThat(errorCnt.get()).isEqualTo(0)
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
 
-        Thread.sleep(5000)
+        //Thread.sleep(5000)
         httpServers.forEach(Service::stop)
     }
 
     private fun callProxy(pathMap: Map<Int, Int>, msg: String) {
         // Choose one of the pathMap values
-        logger.info("Calling proxy for ${msg}")
+        //logger.info("Calling proxy for ${msg}")
         val index = abs(ConstantsTest.RANDOM.nextInt() % pathMap.size)
         val httpVal = pathMap[index]
         val url = "http://localhost:$PROXY_PORT/proxy-$index"

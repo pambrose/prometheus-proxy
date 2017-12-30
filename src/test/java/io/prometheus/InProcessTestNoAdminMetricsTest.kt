@@ -57,7 +57,12 @@ class InProcessTestNoAdminMetricsTest {
 
     @Test
     fun proxyCallTest() {
-        MiscTests.proxyCallTest(AGENT, 25, 50, 200, 100)
+        MiscTests.proxyCallTest(AGENT,
+                                httpServerCount = 25,
+                                pathCount = 50,
+                                sequentialQueryCount = 200,
+                                sequentialPauseMillis = 100,
+                                parallelQueryCount = 100)
     }
 
     companion object {
