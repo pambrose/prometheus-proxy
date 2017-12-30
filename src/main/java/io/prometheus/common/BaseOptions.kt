@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
+import kotlin.properties.Delegates
 
 abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val argv: Array<String>,
@@ -63,9 +64,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
     var dynamicParams = mutableMapOf<String, String>()
         private set
 
-    private var config: Config? = null
+    private var config: Config by Delegates.notNull()
 
-    var configVals: ConfigVals? = null
+    var configVals: ConfigVals by Delegates.notNull()
         private set
 
     protected abstract fun assignConfigVals()
@@ -117,7 +118,6 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-
         config = readConfig(configName,
                             envConfig,
                             ConfigParseOptions.defaults().setAllowMissing(false),

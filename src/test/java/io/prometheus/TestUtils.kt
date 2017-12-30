@@ -70,7 +70,7 @@ object TestUtils {
         logger.info(getBanner("banners/agent.txt"))
         logger.info(getVersionDesc(false))
 
-        return Agent(options, serverName, true).apply {
+        return Agent(options = options, inProcessServerName = serverName, testMode = true).apply {
             startAsync()
             awaitRunning(5, TimeUnit.SECONDS)
         }

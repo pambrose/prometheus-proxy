@@ -43,19 +43,19 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) : BaseOpti
 
     override fun assignConfigVals() {
         if (proxyHostname.isNullOrEmpty()) {
-            val configHostname = configVals!!.agent.proxy.hostname
+            val configHostname = configVals.agent.proxy.hostname
             proxyHostname = PROXY_HOSTNAME.getEnv(if (configHostname.contains(":"))
                                                            configHostname
                                                        else
-                                                      "$configHostname:${configVals!!.agent.proxy.port}")
+                                                      "$configHostname:${configVals.agent.proxy.port}")
         }
 
         if (agentName.isNullOrEmpty())
-            agentName = EnvVars.AGENT_NAME.getEnv(configVals!!.agent.name)
+            agentName = EnvVars.AGENT_NAME.getEnv(configVals.agent.name)
 
-        assignAdminEnabled(configVals!!.agent.admin.enabled)
-        assignAdminPort(configVals!!.agent.admin.port)
-        assignMetricsEnabled(configVals!!.agent.metrics.enabled)
-        assignMetricsPort(configVals!!.agent.metrics.port)
+        assignAdminEnabled(configVals.agent.admin.enabled)
+        assignAdminPort(configVals.agent.admin.port)
+        assignMetricsEnabled(configVals.agent.metrics.enabled)
+        assignMetricsPort(configVals.agent.metrics.port)
     }
 }

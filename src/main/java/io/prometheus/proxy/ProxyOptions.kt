@@ -39,14 +39,14 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
 
     override fun assignConfigVals() {
         if (proxyPort == null)
-            proxyPort = PROXY_PORT.getEnv(configVals!!.proxy.http.port)
+            proxyPort = PROXY_PORT.getEnv(configVals.proxy.http.port)
 
         if (agentPort == null)
-            agentPort = AGENT_PORT.getEnv(configVals!!.proxy.agent.port)
+            agentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port)
 
-        assignAdminEnabled(configVals!!.proxy.admin.enabled)
-        assignAdminPort(configVals!!.proxy.admin.port)
-        assignMetricsEnabled(configVals!!.proxy.metrics.enabled)
-        assignMetricsPort(configVals!!.proxy.metrics.port)
+        assignAdminEnabled(configVals.proxy.admin.enabled)
+        assignAdminPort(configVals.proxy.admin.port)
+        assignMetricsEnabled(configVals.proxy.metrics.enabled)
+        assignMetricsPort(configVals.proxy.metrics.port)
     }
 }

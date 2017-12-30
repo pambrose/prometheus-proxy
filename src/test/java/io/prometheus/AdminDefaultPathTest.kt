@@ -17,6 +17,8 @@
 package io.prometheus
 
 import io.prometheus.ConstantsTest.OK_HTTP_CLIENT
+import io.prometheus.TestUtils.startAgent
+import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import okhttp3.Request
 import org.assertj.core.api.Assertions.assertThat
@@ -113,8 +115,8 @@ class AdminDefaultPathTest {
         @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy(adminEnabled = true)
-            AGENT = TestUtils.startAgent(adminEnabled = true)
+            PROXY = startProxy(adminEnabled = true)
+            AGENT = startAgent(adminEnabled = true)
 
             AGENT.awaitInitialConnection(5, SECONDS)
         }

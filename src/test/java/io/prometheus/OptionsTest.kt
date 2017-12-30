@@ -27,34 +27,34 @@ class OptionsTest {
     @Test
     fun verifyDefaultValues() {
         val configVals = readProxyOptions(listOf())
-        assertThat(configVals!!.proxy.http.port).isEqualTo(8080)
+        assertThat(configVals.proxy.http.port).isEqualTo(8080)
         assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(false)
     }
 
     @Test
     fun verifyConfValues() {
         val configVals = readProxyOptions(listOf("--config", CONFIG))
-        assertThat(configVals!!.proxy.http.port).isEqualTo(8181)
+        assertThat(configVals.proxy.http.port).isEqualTo(8181)
         assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(true)
     }
 
     @Test
     fun verifyUnquotedPropValue() {
         val configVals = readProxyOptions(listOf("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"))
-        assertThat(configVals!!.proxy.http.port).isEqualTo(9393)
+        assertThat(configVals.proxy.http.port).isEqualTo(9393)
         assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(true)
     }
 
     @Test
     fun verifyQuotedPropValue() {
         val configVals = readProxyOptions(listOf("-D\"proxy.http.port=9394\""))
-        assertThat(configVals!!.proxy.http.port).isEqualTo(9394)
+        assertThat(configVals.proxy.http.port).isEqualTo(9394)
     }
 
     @Test
     fun verifyPathConfigs() {
         val configVals = readAgentOptions(listOf("--config", CONFIG))
-        assertThat(configVals!!.agent.pathConfigs.size).isEqualTo(3)
+        assertThat(configVals.agent.pathConfigs.size).isEqualTo(3)
     }
 
 
@@ -77,18 +77,17 @@ class OptionsTest {
         assertThat(options.proxyHostname).isEqualTo("host5")
     }
 
-    private fun readProxyOptions(argList: List<String>): ConfigVals? {
+    private fun readProxyOptions(argList: List<String>): ConfigVals {
         val options = ProxyOptions(argList)
         return options.configVals
     }
 
-    private fun readAgentOptions(argList: List<String>): ConfigVals? {
+    private fun readAgentOptions(argList: List<String>): ConfigVals {
         val options = AgentOptions(argList, false)
         return options.configVals
     }
 
     companion object {
-
         private val CONFIG = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/junit-test.conf"
     }
 }

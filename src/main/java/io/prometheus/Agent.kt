@@ -46,15 +46,15 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class Agent(options: AgentOptions,
             private val inProcessServerName: String = "",
-            testMode: Boolean = false) : GenericService(options.configVals!!,
-                                                AdminConfig.create(options.adminEnabled,
-                                                                   options.adminPort!!,
-                                                                   options.configVals!!.agent.admin),
-                                                MetricsConfig.create(options.metricsEnabled,
-                                                                     options.metricsPort!!,
-                                                                     options.configVals!!.agent.metrics),
-                                                ZipkinConfig.create(options.configVals!!.agent.internal.zipkin),
-                                                testMode) {
+            testMode: Boolean = false) : GenericService(options.configVals,
+                                                        AdminConfig.create(options.adminEnabled,
+                                                                           options.adminPort!!,
+                                                                           options.configVals.agent.admin),
+                                                        MetricsConfig.create(options.metricsEnabled,
+                                                                             options.metricsPort!!,
+                                                                             options.configVals.agent.metrics),
+                                                        ZipkinConfig.create(options.configVals.agent.internal.zipkin),
+                                                        testMode) {
 
     private val pathContextMap = Maps.newConcurrentMap<String, PathContext>()  // Map path to PathContext
     private val heartbeatService = Executors.newFixedThreadPool(1)
@@ -513,7 +513,7 @@ class Agent(options: AgentOptions,
             logger.info(getBanner("banners/agent.txt"))
             logger.info(getVersionDesc(false))
 
-            val agent = Agent(options)
+            val agent = Agent(options = options)
             agent.startAsync()
         }
     }

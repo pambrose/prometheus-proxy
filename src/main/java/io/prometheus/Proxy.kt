@@ -30,15 +30,15 @@ import java.util.concurrent.ConcurrentMap
 class Proxy(options: ProxyOptions,
             proxyPort: Int,
             inProcessServerName: String = "",
-            testMode: Boolean = false) : GenericService(options.configVals!!,
-                                                AdminConfig.create(options.adminEnabled,
-                                                                   options.adminPort!!,
-                                                                   options.configVals!!.proxy.admin),
-                                                MetricsConfig.create(options.metricsEnabled,
-                                                                     options.metricsPort!!,
-                                                                     options.configVals!!.proxy.metrics),
-                                                ZipkinConfig.create(options.configVals!!.proxy.internal.zipkin),
-                                                testMode) {
+            testMode: Boolean = false) : GenericService(options.configVals,
+                                                        AdminConfig.create(options.adminEnabled,
+                                                                           options.adminPort!!,
+                                                                           options.configVals.proxy.admin),
+                                                        MetricsConfig.create(options.metricsEnabled,
+                                                                             options.metricsPort!!,
+                                                                             options.configVals.proxy.metrics),
+                                                        ZipkinConfig.create(options.configVals.proxy.internal.zipkin),
+                                                        testMode) {
 
     private val pathMap = Maps.newConcurrentMap<String, AgentContext>() // Map path to AgentContext
     private val scrapeRequestMap = Maps.newConcurrentMap<Long, ScrapeRequestWrapper>() // Map scrape_id to agent_id
@@ -227,7 +227,7 @@ class Proxy(options: ProxyOptions,
             logger.info(getBanner("banners/proxy.txt"))
             logger.info(getVersionDesc(false))
 
-            val proxy = Proxy(options, options.proxyPort!!)
+            val proxy = Proxy(options = options, proxyPort = options.proxyPort!!)
             proxy.startAsync()
         }
     }

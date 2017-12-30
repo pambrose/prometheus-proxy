@@ -17,6 +17,8 @@
 package io.prometheus
 
 import io.prometheus.ConstantsTest.OK_HTTP_CLIENT
+import io.prometheus.TestUtils.startAgent
+import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import okhttp3.Request
 import org.assertj.core.api.Assertions.assertThat
@@ -91,8 +93,8 @@ class AdminNonDefaultPathTest {
                               "-Dproxy.admin.healthCheckPath=healthCheckPath2",
                               "-Dproxy.admin.threadDumpPath=threadDumpPath2"
                              )
-            PROXY = TestUtils.startProxy(adminEnabled = true, argv = args)
-            AGENT = TestUtils.startAgent(adminEnabled = true)
+            PROXY = startProxy(adminEnabled = true, argv = args)
+            AGENT = startAgent(adminEnabled = true)
 
             AGENT.awaitInitialConnection(5, SECONDS)
         }

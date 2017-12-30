@@ -16,6 +16,8 @@
 
 package io.prometheus
 
+import io.prometheus.TestUtils.startAgent
+import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -28,41 +30,41 @@ class InProcessTestNoAdminMetricsTest {
 
     @Test
     fun missingPathTest() {
-        MiscTests.missingPathTest(caller = this.javaClass.simpleName)
+        MiscTests.missingPathTest(this.javaClass.simpleName)
     }
 
     @Test
     fun invalidPathTest() {
-        MiscTests.invalidPathTest(caller = this.javaClass.simpleName)
+        MiscTests.invalidPathTest(this.javaClass.simpleName)
     }
 
     @Test
     fun addRemovePathsTest() {
-        MiscTests.addRemovePathsTest(agent = AGENT, caller = this.javaClass.simpleName)
+        MiscTests.addRemovePathsTest(AGENT, this.javaClass.simpleName)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        MiscTests.threadedAddRemovePathsTest(agent = AGENT, caller = this.javaClass.simpleName)
+        MiscTests.threadedAddRemovePathsTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        MiscTests.invalidAgentUrlTest(agent = AGENT, caller = this.javaClass.simpleName)
+        MiscTests.invalidAgentUrlTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun timeoutTest() {
-        MiscTests.timeoutTest(agent = AGENT, caller = this.javaClass.simpleName)
+        MiscTests.timeoutTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun proxyCallTest() {
-        MiscTests.proxyCallTest(agent = AGENT,
+        MiscTests.proxyCallTest(AGENT,
                                 httpServerCount = 25,
                                 pathCount = 50,
-                                sequentialQueryCount = 200,
-                                sequentialPauseMillis = 100,
+                                sequentialQueryCount = 500,
+                                sequentialPauseMillis = 25,
                                 parallelQueryCount = 100,
                                 caller = this.javaClass.simpleName)
     }
@@ -77,8 +79,8 @@ class InProcessTestNoAdminMetricsTest {
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy("nometrics")
-            AGENT = TestUtils.startAgent("nometrics")
+            PROXY = startProxy("nometrics")
+            AGENT = startAgent("nometrics")
 
             AGENT.awaitInitialConnection(10, SECONDS)
         }

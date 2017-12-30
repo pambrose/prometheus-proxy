@@ -16,6 +16,8 @@
 
 package io.prometheus
 
+import io.prometheus.TestUtils.startAgent
+import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -28,32 +30,32 @@ class InProcessTestWithAdminMetricsTest {
 
     @Test
     fun missingPathTest() {
-        MiscTests.missingPathTest(caller = this.javaClass.simpleName)
+        MiscTests.missingPathTest(this.javaClass.simpleName)
     }
 
     @Test
     fun invalidPathTest() {
-        MiscTests.invalidPathTest(caller = this.javaClass.simpleName)
+        MiscTests.invalidPathTest(this.javaClass.simpleName)
     }
 
     @Test
     fun addRemovePathsTest() {
-        MiscTests.addRemovePathsTest(agent = AGENT, caller = this.javaClass.simpleName)
+        MiscTests.addRemovePathsTest(AGENT, this.javaClass.simpleName)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        MiscTests.threadedAddRemovePathsTest(agent = AGENT, caller = this.javaClass.simpleName)
+        MiscTests.threadedAddRemovePathsTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        MiscTests.invalidAgentUrlTest(agent = AGENT, caller = this.javaClass.simpleName)
+        MiscTests.invalidAgentUrlTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun timeoutTest() {
-        MiscTests.timeoutTest(agent = AGENT, caller = this.javaClass.simpleName)
+        MiscTests.timeoutTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     companion object {
@@ -66,8 +68,8 @@ class InProcessTestWithAdminMetricsTest {
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy("withmetrics", adminEnabled = true, metricsEnabled = true)
-            AGENT = TestUtils.startAgent("withmetrics", adminEnabled = true, metricsEnabled = true)
+            PROXY = startProxy("withmetrics", adminEnabled = true, metricsEnabled = true)
+            AGENT = startAgent("withmetrics", adminEnabled = true, metricsEnabled = true)
 
             AGENT.awaitInitialConnection(10, SECONDS)
         }

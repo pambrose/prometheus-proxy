@@ -28,6 +28,7 @@ import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
 import org.slf4j.LoggerFactory
 import java.io.Closeable
+import kotlin.properties.Delegates
 
 abstract class GenericService protected constructor(protected val genericConfigVals: ConfigVals,
                                                     adminConfig: AdminConfig,
@@ -40,7 +41,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     private val services = mutableListOf<Service>(this)
     private val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
-    private var serviceManager: ServiceManager? = null
+    private var serviceManager: ServiceManager by Delegates.notNull()
 
     protected val adminService: AdminService?
     protected val metricsService: MetricsService?
@@ -98,7 +99,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     fun initService() {
         serviceManager = ServiceManager(services)
-        serviceManager!!.addListener(newListener())
+        serviceManager.addListener(newListener())
         registerHealthChecks()
     }
 
@@ -143,10 +144,10 @@ abstract class GenericService protected constructor(protected val genericConfigV
                         object : HealthCheck() {
                             @Throws(Exception::class)
                             override fun check(): HealthCheck.Result {
-                                return if (serviceManager!!.isHealthy)
+                                return if (serviceManager.isHealthy)
                                     HealthCheck.Result.healthy()
                                 else {
-                                    val vals = serviceManager!!.servicesByState()
+                                    val vals = serviceManager.servicesByState()
                                             .entries()
                                             .filter { it.key !== Service.State.RUNNING }
                                             .onEach { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
