@@ -23,6 +23,7 @@ import io.prometheus.common.sleepForMillis
 import io.prometheus.common.sleepForSecs
 import okhttp3.Request
 import org.assertj.core.api.Assertions.assertThat
+import org.slf4j.LoggerFactory
 import spark.Service
 import java.lang.Math.abs
 import java.util.concurrent.CountDownLatch
@@ -31,6 +32,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.IntStream
 
 object MiscTests {
+
+    private val logger = LoggerFactory.getLogger(MiscTests::class.java)
 
     fun missingPathTest() {
         val url = "http://localhost:$PROXY_PORT/"
@@ -191,7 +194,7 @@ object MiscTests {
         // Call the proxy sequentially
         IntStream.range(0, queryCount)
                 .forEach {
-                    callProxy(pathMap)
+                    callProxy(pathMap, "Sequential $it")
                     sleepForMillis(pauseMillis)
                 }
 
@@ -203,7 +206,7 @@ object MiscTests {
                     ConstantsTest.EXECUTOR_SERVICE
                             .submit {
                                 try {
-                                    callProxy(pathMap)
+                                    callProxy(pathMap, "Parallel $it")
                                     latch.countDown()
                                 } catch (e: Exception) {
                                     e.printStackTrace()
@@ -228,20 +231,26 @@ object MiscTests {
         Thread.sleep(5000)
         httpServers.forEach(Service::stop)
     }
+
+    private fun callProxy(pathMap: Map<Int, Int>, msg: String) {
+        // Choose one of the pathMap values
+        logger.info("Calling proxy for ${msg}")
+        val index = abs(ConstantsTest.RANDOM.nextInt() % pathMap.size)
+        val httpVal = pathMap[index]
+        val url = "http://localhost:$PROXY_PORT/proxy-$index"
+        val request = Request.Builder().url(url)
+        ConstantsTest.OK_HTTP_CLIENT
+                .newCall(request.build())
+                .execute()
+                .use {
+                    if (it.code() != 200)
+                        logger.info("Failed on $msg")
+                    assertThat(it.code()).isEqualTo(200)
+                    val body = it.body()!!.string()
+                    assertThat(body).isEqualTo("value: $httpVal")
+                }
+
+    }
 }
 
-private fun callProxy(pathMap: Map<Int, Int>) {
-    // Choose one of the pathMap values
-    val index = abs(ConstantsTest.RANDOM.nextInt() % pathMap.size)
-    val httpVal = pathMap[index]
-    val url = "http://localhost:$PROXY_PORT/proxy-$index"
-    val request = Request.Builder().url(url)
-    ConstantsTest.OK_HTTP_CLIENT
-            .newCall(request.build())
-            .execute()
-            .use {
-                assertThat(it.code()).isEqualTo(200)
-                val body = it.body()!!.string()
-                assertThat(body).isEqualTo("value: $httpVal")
-            }
-}
+
