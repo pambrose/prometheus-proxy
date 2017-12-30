@@ -20,6 +20,7 @@ import io.prometheus.client.CollectorRegistry
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
+import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.properties.Delegates
 
@@ -27,32 +28,32 @@ class InProcessTestNoAdminMetricsTest {
 
     @Test
     fun missingPathTest() {
-        MiscTests.missingPathTest()
+        MiscTests.missingPathTest(caller = this.javaClass.simpleName)
     }
 
     @Test
     fun invalidPathTest() {
-        MiscTests.invalidPathTest()
+        MiscTests.invalidPathTest(caller = this.javaClass.simpleName)
     }
 
     @Test
     fun addRemovePathsTest() {
-        MiscTests.addRemovePathsTest(AGENT)
+        MiscTests.addRemovePathsTest(agent = AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        MiscTests.threadedAddRemovePathsTest(AGENT)
+        MiscTests.threadedAddRemovePathsTest(agent = AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        MiscTests.invalidAgentUrlTest(AGENT)
+        MiscTests.invalidAgentUrlTest(agent = AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun timeoutTest() {
-        MiscTests.timeoutTest(AGENT)
+        MiscTests.timeoutTest(agent = AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
@@ -62,10 +63,12 @@ class InProcessTestNoAdminMetricsTest {
                                 pathCount = 50,
                                 sequentialQueryCount = 200,
                                 sequentialPauseMillis = 100,
-                                parallelQueryCount = 100)
+                                parallelQueryCount = 100,
+                                caller = this.javaClass.simpleName)
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(InProcessTestNoAdminMetricsTest::class.java)
 
         private var PROXY: Proxy by Delegates.notNull()
         private var AGENT: Agent by Delegates.notNull()
@@ -74,8 +77,8 @@ class InProcessTestNoAdminMetricsTest {
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy("nometrics", false, false, emptyList())
-            AGENT = TestUtils.startAgent("nometrics", false, false, emptyList())
+            PROXY = TestUtils.startProxy("nometrics", false, false)
+            AGENT = TestUtils.startAgent("nometrics", false, false)
 
             AGENT.awaitInitialConnection(10, SECONDS)
         }
@@ -83,6 +86,7 @@ class InProcessTestNoAdminMetricsTest {
         @JvmStatic
         @AfterClass
         fun takeDown() {
+            logger.info("Stopping Proxy and Agent")
             PROXY.stopAsync()
             PROXY.awaitTerminated(5, SECONDS)
             AGENT.stopAsync()

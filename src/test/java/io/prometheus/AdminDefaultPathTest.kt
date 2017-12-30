@@ -23,6 +23,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
+import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
@@ -102,6 +103,8 @@ class AdminDefaultPathTest {
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(AdminDefaultPathTest::class.java)
+
         private var PROXY: Proxy by Delegates.notNull()
         private var AGENT: Agent by Delegates.notNull()
 
@@ -110,8 +113,8 @@ class AdminDefaultPathTest {
         @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy("", true, false, emptyList())
-            AGENT = TestUtils.startAgent("", true, false, emptyList())
+            PROXY = TestUtils.startProxy("", true, false)
+            AGENT = TestUtils.startAgent("", true, false)
 
             AGENT.awaitInitialConnection(5, SECONDS)
         }
@@ -120,6 +123,7 @@ class AdminDefaultPathTest {
         @AfterClass
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
+            logger.info("Stopping Proxy and Agent")
             PROXY.stopAsync()
             PROXY.awaitTerminated(5, SECONDS)
             AGENT.stopAsync()

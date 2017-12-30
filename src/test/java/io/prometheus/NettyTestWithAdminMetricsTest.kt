@@ -21,6 +21,7 @@ import io.prometheus.common.sleepForSecs
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
+import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 import kotlin.properties.Delegates
@@ -29,35 +30,36 @@ class NettyTestWithAdminMetricsTest {
 
     @Test
     fun missingPathTest() {
-        MiscTests.missingPathTest()
+        MiscTests.missingPathTest(caller = this.javaClass.simpleName)
     }
 
     @Test
     fun invalidPathTest() {
-        MiscTests.invalidPathTest()
+        MiscTests.invalidPathTest(caller = this.javaClass.simpleName)
     }
 
     @Test
     fun addRemovePathsTest() {
-        MiscTests.addRemovePathsTest(AGENT)
+        MiscTests.addRemovePathsTest(agent = AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        MiscTests.threadedAddRemovePathsTest(AGENT)
+        MiscTests.threadedAddRemovePathsTest(agent = AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        MiscTests.invalidAgentUrlTest(AGENT)
+        MiscTests.invalidAgentUrlTest(agent = AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun timeoutTest() {
-        MiscTests.timeoutTest(AGENT)
+        MiscTests.timeoutTest(agent = AGENT, caller = this.javaClass.simpleName)
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(NettyTestWithAdminMetricsTest::class.java)
 
         private var PROXY: Proxy by Delegates.notNull()
         private var AGENT: Agent by Delegates.notNull()
@@ -66,8 +68,8 @@ class NettyTestWithAdminMetricsTest {
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = TestUtils.startProxy("", true, true, emptyList())
-            AGENT = TestUtils.startAgent("", true, true, emptyList())
+            PROXY = TestUtils.startProxy("", true, true)
+            AGENT = TestUtils.startAgent("", true, true)
 
             AGENT.awaitInitialConnection(10, SECONDS)
 
@@ -79,6 +81,7 @@ class NettyTestWithAdminMetricsTest {
         @AfterClass
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
+            logger.info("Stopping Proxy and Agent")
             PROXY.stopAsync()
             PROXY.awaitTerminated(5, SECONDS)
             AGENT.stopAsync()

@@ -35,19 +35,23 @@ object MiscTests {
 
     private val logger = LoggerFactory.getLogger(MiscTests::class.java)
 
-    fun missingPathTest() {
+    fun missingPathTest(caller: String) {
+        logger.info("Calling missingPathTest() from $caller")
         val url = "http://localhost:$PROXY_PORT/"
         val request = Request.Builder().url(url)
         ConstantsTest.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
-    fun invalidPathTest() {
+    fun invalidPathTest(caller: String) {
+        logger.info("Calling invalidPathTest() from $caller")
         val url = "http://localhost:$PROXY_PORT/invalid_path"
         val request = Request.Builder().url(url)
         ConstantsTest.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
     }
 
-    fun addRemovePathsTest(agent: Agent) {
+    fun addRemovePathsTest(agent: Agent, caller: String) {
+        logger.info("Calling addRemovePathsTest() from $caller")
+
         // Take into account pre-existing paths already registered
         val originalSize = agent.pathMapSize()
 
@@ -64,7 +68,8 @@ object MiscTests {
                 }
     }
 
-    fun threadedAddRemovePathsTest(agent: Agent) {
+    fun threadedAddRemovePathsTest(agent: Agent, caller: String) {
+        logger.info("Calling threadedAddRemovePathsTest() from $caller")
         val paths = mutableListOf<String>()
         val cnt = AtomicInteger(0)
         val latch1 = CountDownLatch(ConstantsTest.REPS)
@@ -113,7 +118,9 @@ object MiscTests {
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
     }
 
-    fun invalidAgentUrlTest(agent: Agent, badPath: String = "badPath") {
+    fun invalidAgentUrlTest(agent: Agent, badPath: String = "badPath", caller: String) {
+
+        logger.info("Calling invalidAgentUrlTest() from $caller")
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
 
@@ -129,8 +136,10 @@ object MiscTests {
     fun timeoutTest(agent: Agent,
                     agentPort: Int = 9700,
                     proxyPath: String = "proxy-timeout",
-                    agentPath: String = "agent-timeout") {
+                    agentPath: String = "agent-timeout",
+                    caller: String) {
 
+        logger.info("Calling timeoutTest() from $caller")
         val http =
                 Service.ignite().apply {
                     port(agentPort)
@@ -153,7 +162,7 @@ object MiscTests {
                     assertThat(it.code()).isEqualTo(404)
                 }
 
-        Thread.sleep(5000)
+        //Thread.sleep(1000)
         agent.unregisterPath("/$proxyPath")
         http.stop()
     }
@@ -163,9 +172,11 @@ object MiscTests {
                       pathCount: Int,
                       sequentialQueryCount: Int,
                       sequentialPauseMillis: Long,
-                      parallelQueryCount: Int) {
+                      parallelQueryCount: Int,
+                      startingPort: Int = 9600,
+                      caller: String) {
 
-        val startingPort = 9600
+        logger.info("Calling proxyCallTest() from $caller")
         val httpServers = mutableListOf<Service>()
         val pathMap = Maps.newConcurrentMap<Int, Int>()
 
