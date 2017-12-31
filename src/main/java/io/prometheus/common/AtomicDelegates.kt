@@ -12,8 +12,8 @@ object AtomicDelegates {
     fun <T : Any> notNullReference(initValue: T? = null): AtomicReferenceReadWriteProperty<Any?, T> = NotNullAtomicReferenceDelegate(initValue)
     fun <T : Any?> nullableReference(initValue: T? = null): AtomicNullableReadWriteProperty<Any?, T> = NullableAtomicReferenceDelegate(initValue)
     fun boolean(initValue: Boolean = false): AtomicReadWriteProperty<Any?, Boolean> = AtomicBooleanDelegate(initValue)
-    fun long(initValue: Long = 0): AtomicLongReadWriteProperty<Any?> = AtomicLongDelegate(initValue)
     fun integer(initValue: Int = 0): AtomicIntReadWriteProperty<Any?> = AtomicIntDelegate(initValue)
+    fun long(initValue: Long = 0): AtomicLongReadWriteProperty<Any?> = AtomicLongDelegate(initValue)
 }
 
 interface AtomicReadWriteProperty<in R, T> : ReadWriteProperty<R, T> {

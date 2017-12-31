@@ -28,7 +28,6 @@ import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
 import org.slf4j.LoggerFactory
 import java.io.Closeable
-import kotlin.properties.Delegates
 
 abstract class GenericService protected constructor(protected val genericConfigVals: ConfigVals,
                                                     adminConfig: AdminConfig,
@@ -40,7 +39,8 @@ abstract class GenericService protected constructor(protected val genericConfigV
     private val metricRegistry = MetricRegistry()
     private val services = mutableListOf<Service>(this)
     private val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
-    private var serviceManager: ServiceManager by Delegates.notNull()
+
+    private lateinit var serviceManager: ServiceManager
 
     val isZipkinEnabled: Boolean
         get() = zipkinReporterService != null
@@ -98,8 +98,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     fun initService() {
-        serviceManager = ServiceManager(services)
-        serviceManager.addListener(newListener())
+        serviceManager = ServiceManager(services).apply { addListener(newListener()) }
         registerHealthChecks()
     }
 

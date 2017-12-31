@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
-import kotlin.properties.Delegates
 
 class AdminNonDefaultPathTest {
 
@@ -79,8 +78,8 @@ class AdminNonDefaultPathTest {
     companion object {
         private val logger = LoggerFactory.getLogger(AdminNonDefaultPathTest::class.java)
 
-        private var PROXY: Proxy by Delegates.notNull()
-        private var AGENT: Agent by Delegates.notNull()
+        private lateinit var PROXY: Proxy
+        private lateinit var AGENT: Agent
 
         @JvmStatic
         @BeforeClass
