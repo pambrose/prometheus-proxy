@@ -16,11 +16,10 @@
 
 package io.prometheus
 
-import io.prometheus.ConstantsTest.OK_HTTP_CLIENT
+import io.prometheus.TestUtils.http
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import okhttp3.Request
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -34,12 +33,8 @@ class AdminDefaultPathTest {
 
     @Test
     fun proxyPingPathTest() {
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT
-                .newCall(request.build())
-                .execute()
-                .use {
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
+                .http {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string()).startsWith("pong")
                 }
@@ -47,12 +42,8 @@ class AdminDefaultPathTest {
 
     @Test
     fun agentPingPathTest() {
-        val url = "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.pingPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT
-                .newCall(request.build())
-                .execute()
-                .use {
+        "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.pingPath}"
+                .http {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string()).startsWith("pong")
                 }
@@ -60,12 +51,8 @@ class AdminDefaultPathTest {
 
     @Test
     fun proxyVersionPathTest() {
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT
-                .newCall(request.build())
-                .execute()
-                .use {
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
+                .http {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string()).contains("Version")
                 }
@@ -73,12 +60,8 @@ class AdminDefaultPathTest {
 
     @Test
     fun agentVersionPathTest() {
-        val url = "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.versionPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT
-                .newCall(request.build())
-                .execute()
-                .use {
+        "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.versionPath}"
+                .http {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string()).contains("Version")
                 }
@@ -86,12 +69,8 @@ class AdminDefaultPathTest {
 
     @Test
     fun proxyHealthCheckPathTest() {
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT
-                .newCall(request.build())
-                .execute()
-                .use {
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
+                .http {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string().length).isGreaterThan(10)
                 }
@@ -99,32 +78,20 @@ class AdminDefaultPathTest {
 
     @Test
     fun agentHealthCheckPathTest() {
-        val url = "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.healthCheckPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT
-                .newCall(request.build())
-                .execute()
-                .use { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+        "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.healthCheckPath}"
+                .http { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     @Test
     fun proxyThreadDumpPathTest() {
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT
-                .newCall(request.build())
-                .execute()
-                .use { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
+                .http { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     @Test
     fun agentThreadDumpPathTest() {
-        val url = "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.threadDumpPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT
-                .newCall(request.build())
-                .execute()
-                .use { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+        "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.threadDumpPath}"
+                .http { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     companion object {

@@ -235,7 +235,7 @@ class Agent(options: AgentOptions,
     private fun updateScrapeCounter(type: String) = metrics?.scrapeRequests?.labels(type)?.inc()
 
     private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
-        var statusCodeVal = 404
+        var statusCode = 404
         val path = scrapeRequest.path
         val scrapeResponse =
                 ScrapeResponse.newBuilder().apply {
@@ -249,7 +249,7 @@ class Agent(options: AgentOptions,
             return with(scrapeResponse) {
                 valid = false
                 reason = "Invalid path: $path"
-                statusCode = statusCodeVal
+                this.statusCode = statusCode
                 text = ""
                 contentType = ""
                 build()
@@ -260,19 +260,20 @@ class Agent(options: AgentOptions,
         var reason = "None"
         try {
             pathContext.fetchUrl(scrapeRequest).use {
-                statusCodeVal = it.code()
+                statusCode = it.code()
                 if (it.isSuccessful) {
                     updateScrapeCounter("success")
-                    return scrapeResponse
-                            .setValid(true)
-                            .setReason("")
-                            .setStatusCode(statusCodeVal)
-                            .setText(it.body()!!.string())
-                            .setContentType(it.header(CONTENT_TYPE))
-                            .build()
+                    return with(scrapeResponse) {
+                        valid = true
+                        reason = ""
+                        this.statusCode = statusCode
+                        text = it.body()!!.string()
+                        contentType = it.header(CONTENT_TYPE)
+                        build()
+                    }
                 }
                 else {
-                    reason = "Unsucessful response code $statusCodeVal"
+                    reason = "Unsucessful response code $statusCode"
                 }
             }
         } catch (e: IOException) {
@@ -286,17 +287,17 @@ class Agent(options: AgentOptions,
 
         updateScrapeCounter("unsuccessful")
 
-        return scrapeResponse
-                .setValid(false)
-                .setReason(reason)
-                .setStatusCode(statusCodeVal)
-                .setText("")
-                .setContentType("")
-                .build()
+        return with(scrapeResponse) {
+            valid = false
+            this.reason = reason
+            this.statusCode = statusCode
+            text = ""
+            contentType = ""
+            build()
+        }
     }
 
-    // If successful, this will create an agentContxt on the Proxy and an interceptor will
-// add an agent_id to the headers`
+    // If successful, this will create an agentContxt on the Proxy and an interceptor will add an agent_id to the headers`
     private fun connectAgent(): Boolean {
         return try {
             logger.info("Connecting to proxy at $proxyHost...")

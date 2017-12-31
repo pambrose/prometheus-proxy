@@ -18,10 +18,10 @@ package io.prometheus
 
 import com.google.common.collect.Maps
 import io.prometheus.ConstantsTest.PROXY_PORT
+import io.prometheus.TestUtils.http
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.sleepForMillis
 import io.prometheus.common.sleepForSecs
-import okhttp3.Request
 import org.assertj.core.api.Assertions.assertThat
 import org.slf4j.LoggerFactory
 import spark.Service
@@ -37,16 +37,12 @@ object MiscTests {
 
     fun missingPathTest(caller: String) {
         logger.info("Calling missingPathTest() from $caller")
-        val url = "http://localhost:$PROXY_PORT/"
-        val request = Request.Builder().url(url)
-        ConstantsTest.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:$PROXY_PORT/".http { assertThat(it.code()).isEqualTo(404) }
     }
 
     fun invalidPathTest(caller: String) {
         logger.info("Calling invalidPathTest() from $caller")
-        val url = "http://localhost:$PROXY_PORT/invalid_path"
-        val request = Request.Builder().url(url)
-        ConstantsTest.OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:$PROXY_PORT/invalid_path".http { assertThat(it.code()).isEqualTo(404) }
     }
 
     fun addRemovePathsTest(agent: Agent, caller: String) {
@@ -124,11 +120,7 @@ object MiscTests {
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
 
-        val url = "http://localhost:$PROXY_PORT/$badPath"
-        val request = Request.Builder().url(url)
-        ConstantsTest
-                .OK_HTTP_CLIENT
-                .newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:$PROXY_PORT/$badPath".http { assertThat(it.code()).isEqualTo(404) }
 
         agent.unregisterPath(badPath)
     }
@@ -153,19 +145,8 @@ object MiscTests {
         // Give http server chance to start
         sleepForSecs(5)
 
-        val agentUrl = "http://localhost:$agentPort/$agentPath"
-        agent.registerPath("/$proxyPath", agentUrl)
-
-        val proxyUrl = "http://localhost:$PROXY_PORT/$proxyPath"
-        val request = Request.Builder().url(proxyUrl)
-        ConstantsTest
-                .OK_HTTP_CLIENT
-                .newCall(request.build())
-                .execute()
-                .use {
-                    assertThat(it.code()).isEqualTo(404)
-                }
-
+        agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
+        "http://localhost:$PROXY_PORT/$proxyPath".http { assertThat(it.code()).isEqualTo(404) }
         agent.unregisterPath("/$proxyPath")
         http.stop()
     }
@@ -258,12 +239,8 @@ object MiscTests {
         // Choose one of the pathMap values
         val index = abs(ConstantsTest.RANDOM.nextInt() % pathMap.size)
         val httpVal = pathMap[index]
-        val url = "http://localhost:$PROXY_PORT/proxy-$index"
-        val request = Request.Builder().url(url)
-        ConstantsTest.OK_HTTP_CLIENT
-                .newCall(request.build())
-                .execute()
-                .use {
+        "http://localhost:$PROXY_PORT/proxy-$index"
+                .http {
                     if (it.code() != 200)
                         logger.error("Proxy failed on $msg")
                     assertThat(it.code()).isEqualTo(200)

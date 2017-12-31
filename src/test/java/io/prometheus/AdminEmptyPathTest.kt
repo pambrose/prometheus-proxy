@@ -16,11 +16,10 @@
 
 package io.prometheus
 
-import io.prometheus.ConstantsTest.OK_HTTP_CLIENT
+import io.prometheus.TestUtils.http
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import okhttp3.Request
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -36,34 +35,30 @@ class AdminEmptyPathTest {
     fun proxyPingPathTest() {
         assertThat(PROXY.configVals.admin.port).isEqualTo(8098)
         assertThat(PROXY.configVals.admin.pingPath).isEqualTo("")
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
+                .http { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
     fun proxyVersionPathTest() {
         assertThat(PROXY.configVals.admin.port).isEqualTo(8098)
         assertThat(PROXY.configVals.admin.versionPath).isEqualTo("")
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
+                .http { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
     fun proxyHealthCheckPathTest() {
         assertThat(PROXY.configVals.admin.healthCheckPath).isEqualTo("")
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
+                .http { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
     fun proxyThreadDumpPathTest() {
         assertThat(PROXY.configVals.admin.threadDumpPath).isEqualTo("")
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
+                .http { assertThat(it.code()).isEqualTo(404) }
     }
 
     companion object {

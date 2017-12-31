@@ -21,8 +21,8 @@ import java.util.*
 import java.util.concurrent.Executors
 
 object ConstantsTest {
-    internal val EXECUTOR_SERVICE = Executors.newCachedThreadPool()
     internal val OK_HTTP_CLIENT = OkHttpClient()
+    internal val EXECUTOR_SERVICE = Executors.newCachedThreadPool()
     internal val RANDOM = Random()
     internal val REPS = 1000
     internal val PROXY_PORT = 9505
