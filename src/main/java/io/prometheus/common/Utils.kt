@@ -85,7 +85,10 @@ fun queueHealthCheck(queue: Queue<*>, size: Int) =
         object : HealthCheck() {
             @Throws(Exception::class)
             override fun check(): HealthCheck.Result {
-                return if (queue.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", queue.size)
+                return if (queue.size < size)
+                    HealthCheck.Result.healthy()
+                else
+                    HealthCheck.Result.unhealthy("Large size: %d", queue.size)
             }
         }
 
@@ -93,7 +96,10 @@ fun mapHealthCheck(map: Map<*, *>, size: Int) =
         object : HealthCheck() {
             @Throws(Exception::class)
             override fun check(): HealthCheck.Result {
-                return if (map.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", map.size)
+                return if (map.size < size)
+                    HealthCheck.Result.healthy()
+                else
+                    HealthCheck.Result.unhealthy("Large size: %d", map.size)
             }
         }
 

@@ -178,8 +178,7 @@ class Proxy(options: ProxyOptions,
                     logger.error(msg)
                     responseBuilder.setValid(false).setReason(msg)
                 }
-                else
-                                                -> {
+                else                            -> {
                     pathMap.remove(path)
                     if (!isTestMode)
                         logger.info("Removed path /$path for $agentContext")

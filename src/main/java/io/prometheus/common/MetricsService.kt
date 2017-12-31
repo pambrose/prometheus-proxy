@@ -37,7 +37,10 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
     val healthCheck: HealthCheck = object : HealthCheck() {
         @Throws(Exception::class)
         override fun check(): HealthCheck.Result {
-            return if (server.isRunning) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Jetty server not running")
+            return if (server.isRunning)
+                HealthCheck.Result.healthy()
+            else
+                HealthCheck.Result.unhealthy("Jetty server not running")
         }
     }
 
