@@ -86,7 +86,6 @@ class Agent(options: AgentOptions,
                 acquire()  // Prime the limiter
             }
 
-
     private val pathConfigs =
             configVals.pathConfigs
                     .map { mapOf("name" to it.name, "path" to it.path, "url" to it.url) }
@@ -415,7 +414,7 @@ class Agent(options: AgentOptions,
 
             override fun onError(t: Throwable) {
                 val status = Status.fromThrowable(t)
-                logger.info("Error in readRequestsFromProxy(): $status")
+                logger.error("Error in readRequestsFromProxy(): $status")
                 disconnected.set(true)
             }
 
@@ -442,7 +441,7 @@ class Agent(options: AgentOptions,
 
                             override fun onError(t: Throwable) {
                                 val s = Status.fromThrowable(t)
-                                logger.info("Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}")
+                                logger.error("Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}")
                                 disconnected.set(true)
                             }
 
@@ -484,11 +483,11 @@ class Agent(options: AgentOptions,
             val response = blockingStub.sendHeartBeat(request)
             markMsgSent()
             if (!response.valid) {
-                logger.info("AgentId $agentId not found on proxy")
+                logger.error("AgentId $agentId not found on proxy")
                 throw StatusRuntimeException(Status.NOT_FOUND)
             }
         } catch (e: StatusRuntimeException) {
-            logger.info("Hearbeat failed ${e.status}")
+            logger.error("Hearbeat failed ${e.status}")
             disconnected.set(true)
         }
     }
