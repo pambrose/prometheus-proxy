@@ -74,13 +74,12 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                     pathId = if (agentContext != null) PATH_ID_GENERATOR.getAndIncrement() else -1
                     build()
                 }
-        if (agentContext == null) {
-            logger.error("Missing AgentContext for agentId: $agentId")
-        }
-        else {
-            proxy.addPath(path, agentContext)
-            agentContext.markActivity()
-        }
+
+        agentContext?.let {
+            proxy.addPath(path, it)
+            it.markActivity()
+
+        } ?: logger.error("Missing AgentContext for agentId: $agentId")
 
         responseObserver.apply {
             onNext(response)
@@ -158,15 +157,14 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> {
         return object : StreamObserver<ScrapeResponse> {
             override fun onNext(response: ScrapeResponse) {
-                val scrapeRequest = proxy.getFromScrapeRequestMap(response.scrapeId)
-                if (scrapeRequest == null)
-                    logger.error("Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}")
-                else
-                    scrapeRequest.apply {
+                proxy.getFromScrapeRequestMap(response.scrapeId)?.let {
+                    it.apply {
                         scrapeResponse = response
                         markComplete()
                         agentContext.markActivity()
                     }
+
+                } ?: logger.error("Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}")
             }
 
             override fun onError(t: Throwable) {
