@@ -132,12 +132,13 @@ class Proxy(options: ProxyOptions,
         }
 
         val agentContext = agentContextMap.remove(agentId)
-        if (agentContext != null) {
+        if (agentContext == null) {
+            logger.error("Missing AgentContext for agentId: $agentId")
+        }
+        else {
             logger.info("Removed $agentContext")
             agentContext.markInvalid()
         }
-        else
-            logger.error("Missing AgentContext for agentId: $agentId")
 
         return agentContext
     }
@@ -169,12 +170,12 @@ class Proxy(options: ProxyOptions,
             when {
                 agentContext == null            -> {
                     val msg = "Unable to remove path /$path - path not found"
-                    logger.info(msg)
+                    logger.error(msg)
                     responseBuilder.setValid(false).setReason(msg)
                 }
                 agentContext.agentId != agentId -> {
                     val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
-                    logger.info(msg)
+                    logger.error(msg)
                     responseBuilder.setValid(false).setReason(msg)
                 }
                 else
@@ -189,22 +190,20 @@ class Proxy(options: ProxyOptions,
     }
 
     fun removePathByAgentId(agentId: String?) {
-        if (agentId.isNullOrEmpty()) {
-            logger.info("Missing agentId")
-            return
-        }
-
-        synchronized(pathMap) {
-            pathMap.forEach { k, v ->
-                if (v.agentId == agentId) {
-                    val agentContext = pathMap.remove(k)
-                    if (agentContext != null)
-                        logger.info("Removed path /$k for $agentContext")
-                    else
-                        logger.error("Missing path /$k for agentId: $agentId")
+        if (agentId.isNullOrEmpty())
+            logger.error("Missing agentId")
+        else
+            synchronized(pathMap) {
+                pathMap.forEach { k, v ->
+                    if (v.agentId == agentId) {
+                        val agentContext = pathMap.remove(k)
+                        if (agentContext != null)
+                            logger.info("Removed path /$k for $agentContext")
+                        else
+                            logger.error("Missing path /$k for agentId: $agentId")
+                    }
                 }
             }
-        }
     }
 
     override fun toString() =
