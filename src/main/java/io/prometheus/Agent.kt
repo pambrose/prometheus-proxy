@@ -63,11 +63,11 @@ class Agent(options: AgentOptions,
     private val okHttpClient = OkHttpClient()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
     private val agentName: String = if (options.agentName.isNullOrBlank()) "Unnamed-${io.prometheus.common.hostName}" else options.agentName!!
-    private val metrics: AgentMetrics? = if (metricsEnabled) AgentMetrics(this) else null
+    private val metrics: AgentMetrics? = if (isMetricsEnabled) AgentMetrics(this) else null
     private var blockingStub: ProxyServiceBlockingStub by AtomicDelegates.notNullReference()
     private var asyncStub: ProxyServiceStub by AtomicDelegates.notNullReference()
     private val readRequestsExecutorService: ExecutorService =
-            newCachedThreadPool(if (metricsEnabled)
+            newCachedThreadPool(if (isMetricsEnabled)
                                     newInstrumentedThreadFactory("agent_fetch",
                                                                  "Agent fetch",
                                                                  true)
@@ -95,11 +95,11 @@ class Agent(options: AgentOptions,
 
     private var lastMsgSent: Long by AtomicDelegates.long()
 
-    private val proxyHost: String
-        get() = "$hostName:$port"
-
     var channel: ManagedChannel? by AtomicDelegates.nullableReference()
     var agentId: String by AtomicDelegates.notNullReference()
+
+    private val proxyHost: String
+        get() = "$hostName:$port"
 
     val scrapeResponseQueueSize: Int
         get() = scrapeResponseQueue.size
@@ -122,7 +122,7 @@ class Agent(options: AgentOptions,
             port = 50051
         }
 
-        if (zipkinEnabled) {
+        if (isZipkinEnabled) {
             tracing = zipkinReporterService!!.newTracing("grpc_client")
             grpcTracing = GrpcTracing.create(tracing)
         }
@@ -223,7 +223,7 @@ class Agent(options: AgentOptions,
                 else
                     InProcessChannelBuilder.forName(inProcessServerName)
 
-        if (zipkinEnabled)
+        if (isZipkinEnabled)
             channelBuilder.intercept(grpcTracing!!.newClientInterceptor())
 
         channel = channelBuilder.usePlaintext(true).build()

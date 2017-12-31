@@ -42,7 +42,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     }
 
     override fun startUp() {
-        if (proxy.zipkinEnabled) {
+        if (proxy.isZipkinEnabled) {
             val sparkTracing = SparkTracing.create(tracing)
             Spark.before(sparkTracing.before())
             Spark.exception(Exception::class.java,
@@ -127,9 +127,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                 }
             }
         } finally {
-            val prev = proxy.removeFromScrapeRequestMap(scrapeRequest.scrapeId)
-            if (prev == null)
-                logger.error("Scrape request ${scrapeRequest.scrapeId} missing in map")
+            proxy.removeFromScrapeRequestMap(scrapeRequest.scrapeId) ?: logger.error("Scrape request ${scrapeRequest.scrapeId} missing in map")
         }
 
         logger.debug("Results returned from $agentContext for $scrapeRequest")
@@ -154,7 +152,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     }
 
     private fun updateScrapeRequests(type: String) {
-        if (proxy.metricsEnabled)
+        if (proxy.isMetricsEnabled)
             proxy.metrics!!.scrapeRequests.labels(type).inc()
     }
 

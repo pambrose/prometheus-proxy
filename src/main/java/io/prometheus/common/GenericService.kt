@@ -42,6 +42,12 @@ abstract class GenericService protected constructor(protected val genericConfigV
     private val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
     private var serviceManager: ServiceManager by Delegates.notNull()
 
+    val isZipkinEnabled: Boolean
+        get() = zipkinReporterService != null
+
+    val isMetricsEnabled: Boolean
+        get() = metricsService != null
+
     protected val adminService: AdminService? =
             if (adminConfig.enabled) {
                 val service = AdminService(healthCheckRegistry,
@@ -87,12 +93,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
                 null
             }
 
-    val zipkinEnabled: Boolean
-        get() = zipkinReporterService != null
-
-    val metricsEnabled: Boolean
-        get() = metricsService != null
-
     init {
         addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
@@ -136,7 +136,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     protected open fun registerHealthChecks() {
         healthCheckRegistry.register("thread_deadlock", ThreadDeadlockHealthCheck())
-        if (metricsEnabled)
+        if (isMetricsEnabled)
             healthCheckRegistry.register("metrics_service", metricsService!!.healthCheck)
         healthCheckRegistry
                 .register(

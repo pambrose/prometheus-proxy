@@ -39,14 +39,11 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                                responseObserver: StreamObserver<RegisterAgentResponse>) {
         val agentId = request.agentId
         val agentContext = proxy.getAgentContext(agentId)
-        if (agentContext == null)
-            logger.info("registerAgent() missing AgentContext agentId: $agentId")
-        else
-            agentContext.apply {
-                agentName = request.agentName
-                hostName = request.hostName
-                markActivity()
-            }
+        agentContext?.apply {
+            agentName = request.agentName
+            hostName = request.hostName
+            markActivity()
+        } ?: logger.info("registerAgent() missing AgentContext agentId: $agentId")
 
         responseObserver.apply {
             val response =

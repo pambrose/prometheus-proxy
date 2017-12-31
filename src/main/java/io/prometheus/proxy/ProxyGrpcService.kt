@@ -52,7 +52,7 @@ class ProxyGrpcService private constructor(proxy: Proxy,
     private val grpcServer: Server
 
     init {
-        if (proxy.zipkinEnabled) {
+        if (proxy.isZipkinEnabled) {
             tracing = proxy.zipkinReporterService!!.newTracing("grpc_server")
             grpcTracing = GrpcTracing.create(tracing)
         }
@@ -69,7 +69,7 @@ class ProxyGrpcService private constructor(proxy: Proxy,
 
         val proxyService = ProxyServiceImpl(proxy)
         val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
-        if (proxy.zipkinEnabled)
+        if (proxy.isZipkinEnabled)
             interceptors.add(grpcTracing!!.newServerInterceptor())
         val serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors)
 

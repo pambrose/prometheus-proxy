@@ -41,7 +41,7 @@ class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionTh
                         if (inactivitySecs > maxInactivitySecs) {
                             logger.info("Evicting agent after $inactivitySecs secs of inactivty $agentContext")
                             proxy.removeAgentContext(agentId)
-                            if (proxy.metricsEnabled)
+                            if (proxy.isMetricsEnabled)
                                 proxy.metrics!!.agentEvictions.inc()
                         }
                     }

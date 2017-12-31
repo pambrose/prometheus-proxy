@@ -44,7 +44,7 @@ class Proxy(options: ProxyOptions,
     private val scrapeRequestMap = Maps.newConcurrentMap<Long, ScrapeRequestWrapper>() // Map scrape_id to agent_id
 
     val agentContextMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
-    val metrics = if (metricsEnabled) ProxyMetrics(this) else null
+    val metrics = if (isMetricsEnabled) ProxyMetrics(this) else null
 
     private val httpService = ProxyHttpService(this, proxyPort)
     private val grpcService: ProxyGrpcService =
@@ -123,7 +123,7 @@ class Proxy(options: ProxyOptions,
 
     fun addAgentContext(agentContext: AgentContext) = agentContextMap.put(agentContext.agentId, agentContext)
 
-    fun getAgentContext(agentId: String) = agentContextMap[agentId]
+    fun getAgentContext(agentId: String): AgentContext? = agentContextMap[agentId]
 
     fun removeAgentContext(agentId: String?): AgentContext? {
         if (agentId.isNullOrEmpty()) {
