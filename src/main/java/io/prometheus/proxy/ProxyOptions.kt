@@ -22,7 +22,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.*
 
-class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name, false) {
+class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
 
     constructor(args: List<String>) : this(Iterables.toArray<String>(args, String::class.java))
 

@@ -35,18 +35,57 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                                     metricsConfig: MetricsConfig,
                                                     zipkinConfig: ZipkinConfig,
                                                     val isTestMode: Boolean) : AbstractExecutionThreadService(), Closeable {
-
-    private val metricRegistry = MetricRegistry()
     val healthCheckRegistry = HealthCheckRegistry()
 
+    private val metricRegistry = MetricRegistry()
     private val services = mutableListOf<Service>(this)
     private val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
     private var serviceManager: ServiceManager by Delegates.notNull()
 
-    protected val adminService: AdminService?
-    protected val metricsService: MetricsService?
+    protected val adminService: AdminService? =
+            if (adminConfig.enabled) {
+                val service = AdminService(healthCheckRegistry,
+                                           adminConfig.port,
+                                           adminConfig.pingPath,
+                                           adminConfig.versionPath,
+                                           adminConfig.healthCheckPath,
+                                           adminConfig.threadDumpPath)
+                addService(service)
+                service
+            }
+            else {
+                logger.info("Admin service disabled")
+                null
+            }
 
-    val zipkinReporterService: ZipkinReporterService?
+    protected val metricsService: MetricsService? =
+            if (metricsConfig.enabled) {
+                val service = MetricsService(metricsConfig.port, metricsConfig.path)
+                addService(service)
+                SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
+                                         metricsConfig.memoryPoolsExportsEnabled,
+                                         metricsConfig.garbageCollectorExportsEnabled,
+                                         metricsConfig.threadExportsEnabled,
+                                         metricsConfig.classLoadingExportsEnabled,
+                                         metricsConfig.versionInfoExportsEnabled)
+                service
+            }
+            else {
+                logger.info("Metrics service disabled")
+                null
+            }
+
+    val zipkinReporterService: ZipkinReporterService? =
+            if (zipkinConfig.enabled) {
+                val url = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
+                val service = ZipkinReporterService(url)
+                addService(service)
+                service
+            }
+            else {
+                logger.info("Zipkin reporter service disabled")
+                null
+            }
 
     val zipkinEnabled: Boolean
         get() = zipkinReporterService != null
@@ -55,45 +94,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
         get() = metricsService != null
 
     init {
-        if (adminConfig.enabled) {
-            adminService = AdminService(this,
-                                        adminConfig.port,
-                                        adminConfig.pingPath,
-                                        adminConfig.versionPath,
-                                        adminConfig.healthCheckPath,
-                                        adminConfig.threadDumpPath)
-            addService(adminService)
-        }
-        else {
-            logger.info("Admin service disabled")
-            adminService = null
-        }
-
-        if (metricsConfig.enabled) {
-            metricsService = MetricsService(metricsConfig.port, metricsConfig.path)
-            addService(metricsService)
-            SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
-                                     metricsConfig.memoryPoolsExportsEnabled,
-                                     metricsConfig.garbageCollectorExportsEnabled,
-                                     metricsConfig.threadExportsEnabled,
-                                     metricsConfig.classLoadingExportsEnabled,
-                                     metricsConfig.versionInfoExportsEnabled)
-        }
-        else {
-            logger.info("Metrics service disabled")
-            metricsService = null
-        }
-
-        if (zipkinConfig.enabled) {
-            val url = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
-            zipkinReporterService = ZipkinReporterService(url)
-            addService(zipkinReporterService)
-        }
-        else {
-            logger.info("Zipkin reporter service disabled")
-            zipkinReporterService = null
-        }
-
         addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 

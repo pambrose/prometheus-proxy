@@ -35,6 +35,7 @@ import io.grpc.netty.NettyChannelBuilder
 import io.grpc.stub.StreamObserver
 import io.prometheus.agent.*
 import io.prometheus.common.*
+import io.prometheus.common.InstrumentedThreadFactory.Companion.newInstrumentedThreadFactory
 import io.prometheus.grpc.*
 import io.prometheus.grpc.ProxyServiceGrpc.*
 import okhttp3.OkHttpClient
@@ -67,9 +68,9 @@ class Agent(options: AgentOptions,
     private var asyncStub: ProxyServiceStub by AtomicDelegates.notNullReference()
     private val readRequestsExecutorService: ExecutorService =
             newCachedThreadPool(if (metricsEnabled)
-                                    InstrumentedThreadFactory.newInstrumentedThreadFactory("agent_fetch",
-                                                                                           "Agent fetch",
-                                                                                           true)
+                                    newInstrumentedThreadFactory("agent_fetch",
+                                                                 "Agent fetch",
+                                                                 true)
                                 else
                                     ThreadFactoryBuilder()
                                             .setNameFormat("agent_fetch-%d")
@@ -80,8 +81,17 @@ class Agent(options: AgentOptions,
     private val grpcTracing: GrpcTracing?
     private val hostName: String
     private val port: Int
-    private val reconnectLimiter: RateLimiter
-    private val pathConfigs: List<Map<String, String>>
+    private val reconnectLimiter =
+            RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs).apply {
+                acquire()  // Prime the limiter
+            }
+
+
+    private val pathConfigs =
+            configVals.pathConfigs
+                    .map { mapOf("name" to it.name, "path" to it.path, "url" to it.url) }
+                    .onEach { logger.info("Proxy path /{} will be assigned to {}", it["path"], it["url"]) }
+                    .toList()
 
     private var lastMsgSent: Long by AtomicDelegates.long()
 
@@ -101,14 +111,6 @@ class Agent(options: AgentOptions,
         logger.info("Assigning proxy reconnect pause time to ${configVals.internal.reconectPauseSecs} secs")
 
         agentId = ""
-        reconnectLimiter = RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs)
-        reconnectLimiter.acquire()  // Prime the limiter
-
-        pathConfigs =
-                configVals.pathConfigs
-                        .map { mapOf("name" to it.name, "path" to it.path, "url" to it.url) }
-                        .onEach { logger.info("Proxy path /{} will be assigned to {}", it["path"], it["url"]) }
-                        .toList()
 
         if (options.proxyHostname!!.contains(":")) {
             val vals = options.proxyHostname!!.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
@@ -295,7 +297,7 @@ class Agent(options: AgentOptions,
     }
 
     // If successful, this will create an agentContxt on the Proxy and an interceptor will
-    // add an agent_id to the headers`
+// add an agent_id to the headers`
     private fun connectAgent(): Boolean {
         return try {
             logger.info("Connecting to proxy at $proxyHost...")

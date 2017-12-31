@@ -47,9 +47,9 @@ class ProxyGrpcService private constructor(proxy: Proxy,
             }
         }
 
-    private val grpcServer: Server
     private val tracing: Tracing?
     private val grpcTracing: GrpcTracing?
+    private val grpcServer: Server
 
     init {
         if (proxy.zipkinEnabled) {

@@ -31,7 +31,7 @@ import kotlin.properties.Delegates
 abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val argv: Array<String>,
                                                  private val envConfig: String,
-                                                 private val exitOnMissingConfig: Boolean) {
+                                                 private val exitOnMissingConfig: Boolean = false) {
 
     @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
     private var configName: String? = null
@@ -54,7 +54,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
     @Parameter(names = ["-v", "--version"],
                description = "Print version info and exit",
-               validateWith = [(VersionValidator::class)])
+               validateWith = [VersionValidator::class])
     private var version = false
 
     @Parameter(names = ["-u", "--usage"], help = true)

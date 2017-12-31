@@ -16,6 +16,7 @@
 
 package io.prometheus.common
 
+import com.codahale.metrics.health.HealthCheckRegistry
 import com.codahale.metrics.servlets.HealthCheckServlet
 import com.codahale.metrics.servlets.PingServlet
 import com.codahale.metrics.servlets.ThreadDumpServlet
@@ -26,28 +27,29 @@ import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
 
-class AdminService(service: GenericService,
+class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val port: Int,
                    private val pingPath: String,
                    private val versionPath: String,
                    private val healthCheckPath: String,
                    private val threadDumpPath: String) : AbstractIdleService() {
-    private val server: Server = Server(port)
+    private val server =
+            Server(port).apply {
+                handler =
+                        ServletContextHandler().apply {
+                            contextPath = "/"
+                            if (pingPath.isNotBlank())
+                                addServlet(ServletHolder(PingServlet()), "/$pingPath")
+                            if (versionPath.isNotBlank())
+                                addServlet(ServletHolder(VersionServlet()), "/$versionPath")
+                            if (healthCheckPath.isNotBlank())
+                                addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
+                            if (threadDumpPath.isNotBlank())
+                                addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
+                        }
+            }
 
     init {
-        val context = ServletContextHandler()
-        context.contextPath = "/"
-        server.handler = context
-
-        if (pingPath.isNotBlank())
-            context.addServlet(ServletHolder(PingServlet()), "/$pingPath")
-        if (versionPath.isNotBlank())
-            context.addServlet(ServletHolder(VersionServlet()), "/$versionPath")
-        if (healthCheckPath.isNotBlank())
-            context.addServlet(ServletHolder(HealthCheckServlet(service.healthCheckRegistry)), "/$healthCheckPath")
-        if (threadDumpPath.isNotBlank())
-            context.addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
-
         addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 

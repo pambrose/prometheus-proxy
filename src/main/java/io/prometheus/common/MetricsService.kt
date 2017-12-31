@@ -26,7 +26,14 @@ import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
 
 class MetricsService(private val port: Int, private val path: String) : AbstractIdleService() {
-    private val server: Server = Server(port)
+    private val server =
+            Server(port).apply {
+                handler =
+                        ServletContextHandler().apply {
+                            contextPath = "/"
+                            addServlet(ServletHolder(MetricsServlet()), "/$path")
+                        }
+            }
     val healthCheck: HealthCheck = object : HealthCheck() {
         @Throws(Exception::class)
         override fun check(): HealthCheck.Result {
@@ -35,11 +42,6 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
     }
 
     init {
-        val context = ServletContextHandler()
-        context.contextPath = "/"
-        server.handler = context
-        context.addServlet(ServletHolder(MetricsServlet()), "/$path")
-
         addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 

@@ -16,38 +16,31 @@
 
 package io.prometheus.common
 
-import com.google.common.base.Preconditions
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import io.prometheus.client.Counter
 import io.prometheus.client.Gauge
 import java.util.concurrent.ThreadFactory
 
-class InstrumentedThreadFactory(delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
+class InstrumentedThreadFactory(val delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
 
-    private val delegate = Preconditions.checkNotNull(delegate)
-    private val created: Counter
-    private val running: Gauge
-    private val terminated: Counter
-
-    init {
-        Preconditions.checkNotNull(name)
-        Preconditions.checkNotNull(help)
-        created =
-                Counter.build()
-                        .name("${name}_threads_created")
-                        .help("$help threads created")
-                        .register()
-        running =
-                Gauge.build()
-                        .name("${name}_threads_running")
-                        .help("$help threads running")
-                        .register()
-        terminated =
-                Counter.build()
-                        .name("${name}_threads_terminated")
-                        .help("$help threads terminated")
-                        .register()
-    }
+    private val created =
+            with(Counter.build()) {
+                name("${name}_threads_created")
+                help("$help threads created")
+                register()
+            }
+    private val running =
+            with(Gauge.build()) {
+                name("${name}_threads_running")
+                help("$help threads running")
+                register()
+            }
+    private val terminated =
+            with(Counter.build()) {
+                name("${name}_threads_terminated")
+                help("$help threads terminated")
+                register()
+            }
 
     override fun newThread(runnable: Runnable): Thread {
         val wrappedRunnable = InstrumentedRunnable(runnable)
