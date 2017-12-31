@@ -123,24 +123,24 @@ class Proxy(options: ProxyOptions,
 
     fun addAgentContext(agentContext: AgentContext) = agentContextMap.put(agentContext.agentId, agentContext)
 
-    fun getAgentContext(agentId: String): AgentContext? = agentContextMap[agentId]
+    fun getAgentContext(agentId: String) = agentContextMap[agentId]
 
     fun removeAgentContext(agentId: String?): AgentContext? {
-        if (agentId.isNullOrEmpty()) {
+        return if (agentId.isNullOrEmpty()) {
             logger.error("Missing agentId")
-            return null
-        }
-
-        val agentContext = agentContextMap.remove(agentId)
-        if (agentContext == null) {
-            logger.error("Missing AgentContext for agentId: $agentId")
+            null
         }
         else {
-            logger.info("Removed $agentContext")
-            agentContext.markInvalid()
+            val agentContext = agentContextMap.remove(agentId)
+            if (agentContext == null) {
+                logger.error("Missing AgentContext for agentId: $agentId")
+            }
+            else {
+                logger.info("Removed $agentContext")
+                agentContext.markInvalid()
+            }
+            agentContext
         }
-
-        return agentContext
     }
 
     fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) = scrapeRequestMap.put(scrapeRequest.scrapeId,
