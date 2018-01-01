@@ -62,7 +62,7 @@ class Agent(options: AgentOptions,
     private val okHttpClient = OkHttpClient()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
     private val agentName: String = if (options.agentName.isBlank()) "Unnamed-${io.prometheus.common.hostName}" else options.agentName
-    private val metrics: AgentMetrics? = if (isMetricsEnabled) AgentMetrics(this) else null
+    private var metrics: AgentMetrics by Delegates.notNull()
     private var blockingStub: ProxyServiceBlockingStub by AtomicDelegates.notNullReference()
     private var asyncStub: ProxyServiceStub by AtomicDelegates.notNullReference()
     private val readRequestsExecutorService: ExecutorService =
@@ -122,6 +122,9 @@ class Agent(options: AgentOptions,
             hostName = options.proxyHostname
             port = 50051
         }
+
+        if (isMetricsEnabled)
+            metrics = AgentMetrics(this)
 
         if (isZipkinEnabled) {
             tracing = zipkinReporterService.newTracing("grpc_client")
@@ -229,7 +232,11 @@ class Agent(options: AgentOptions,
         asyncStub = newStub(intercept(channel, interceptors))
     }
 
-    private fun updateScrapeCounter(type: String) = metrics?.scrapeRequests?.labels(type)?.inc()
+    private fun updateScrapeCounter(type: String) {
+        if (isMetricsEnabled)
+            metrics.scrapeRequests.labels(type).inc()
+    }
+
 
     private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
         var statusCode = 404
@@ -253,7 +260,7 @@ class Agent(options: AgentOptions,
             }
         }
 
-        val requestTimer = metrics?.scrapeRequestLatency?.labels(agentName)?.startTimer()
+        val requestTimer = if (isMetricsEnabled) metrics.scrapeRequestLatency.labels(agentName).startTimer() else null
         var reason = "None"
         try {
             pathContext.fetchUrl(scrapeRequest).use {
@@ -300,10 +307,12 @@ class Agent(options: AgentOptions,
             logger.info("Connecting to proxy at $proxyHost...")
             blockingStub.connectAgent(Empty.getDefaultInstance())
             logger.info("Connected to proxy at $proxyHost")
-            metrics?.connects?.labels("success")?.inc()
+            if (isMetricsEnabled)
+                metrics.connects.labels("success")?.inc()
             true
         } catch (e: StatusRuntimeException) {
-            metrics?.connects?.labels("failure")?.inc()
+            if (isMetricsEnabled)
+                metrics.connects.labels("failure")?.inc()
             logger.info("Cannot connect to proxy at $proxyHost [${e.message}]")
             false
         }

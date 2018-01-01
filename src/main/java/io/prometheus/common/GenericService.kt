@@ -35,7 +35,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                                     private val metricsConfig: MetricsConfig,
                                                     private val zipkinConfig: ZipkinConfig,
                                                     val isTestMode: Boolean) : AbstractExecutionThreadService(), Closeable {
-    val healthCheckRegistry = HealthCheckRegistry()
+    protected val healthCheckRegistry = HealthCheckRegistry()
 
     private val services = mutableListOf<Service>()
     private var jmxReporter: JmxReporter by Delegates.notNull()

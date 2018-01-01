@@ -24,7 +24,10 @@ import io.prometheus.common.EnvVars
 import io.prometheus.common.EnvVars.AGENT_CONFIG
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
 
-class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) : BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
+class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) : BaseOptions(Agent::class.java.name,
+                                                                                    argv,
+                                                                                    AGENT_CONFIG.name,
+                                                                                    exitOnMissingConfig) {
 
     constructor(args: List<String>, exitOnMissingConfig: Boolean) : this(Iterables.toArray<String>(args,
                                                                                                    String::class.java),

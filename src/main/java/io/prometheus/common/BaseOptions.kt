@@ -34,7 +34,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val exitOnMissingConfig: Boolean = false) {
 
     @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
-    private var configName: String? = null
+    private var configName: String = ""
 
     @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
     var adminEnabled: Boolean = false
@@ -118,7 +118,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-        config = readConfig(configName,
+        config = readConfig(if (configName.isNotEmpty()) configName else System.getenv(envConfig),
                             envConfig,
                             ConfigParseOptions.defaults().setAllowMissing(false),
                             ConfigFactory.load().resolve(),
@@ -136,24 +136,22 @@ abstract class BaseOptions protected constructor(private val progName: String,
         }
     }
 
-    private fun readConfig(cliConfig: String?,
+    private fun readConfig(configName: String,
                            envConfig: String,
                            configParseOptions: ConfigParseOptions,
                            fallback: Config,
                            exitOnMissingConfig: Boolean): Config {
 
-        val configName = cliConfig ?: System.getenv(envConfig)
-
         when {
-            configName.isNullOrBlank() -> {
+            configName.isBlank()     -> {
                 if (exitOnMissingConfig) {
-                    logger.error("A configuration file or url must be specified with --getConfig or \$$envConfig")
+                    logger.error("A configuration file or url must be specified with --config or \$$envConfig")
                     System.exit(1)
                 }
                 return fallback
             }
 
-            configName.isUrlPrefix()   -> {
+            configName.isUrlPrefix() -> {
                 try {
                     val configSyntax = getConfigSyntax(configName)
                     return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
@@ -166,7 +164,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                 }
 
             }
-            else                       -> {
+            else                     -> {
                 try {
                     return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
                 } catch (e: Exception) {
