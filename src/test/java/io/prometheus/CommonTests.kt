@@ -28,7 +28,6 @@ import spark.Service
 import java.lang.Math.abs
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MINUTES
-import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.IntStream
 
@@ -81,8 +80,7 @@ object CommonTests {
                             .EXECUTOR_SERVICE
                             .submit(
                                     {
-                                        val cntval = cnt.getAndIncrement()
-                                        val path = "test-$cntval"
+                                        val path = "test-${cnt.getAndIncrement()}"
 
                                         synchronized(paths) {
                                             paths.add(path)
@@ -91,10 +89,9 @@ object CommonTests {
                                         try {
                                             val url = "http://localhost:$PROXY_PORT/$path"
                                             agent.registerPath(path, url)
+                                            latch1.countDown()
                                         } catch (e: RequestFailureException) {
                                             e.printStackTrace()
-                                        } finally {
-                                            latch1.countDown()
                                         }
                                     })
                 }
@@ -109,10 +106,9 @@ object CommonTests {
                     .submit({
                                 try {
                                     agent.unregisterPath(it)
+                                    latch2.countDown()
                                 } catch (e: RequestFailureException) {
                                     e.printStackTrace()
-                                } finally {
-                                    latch2.countDown()
                                 }
                             })
         }
@@ -123,13 +119,9 @@ object CommonTests {
     }
 
     fun invalidAgentUrlTest(agent: Agent, badPath: String = "badPath", caller: String) {
-
         logger.info("Calling invalidAgentUrlTest() from $caller")
-
         agent.registerPath(badPath, "http://localhost:33/metrics")
-
         "http://localhost:$PROXY_PORT/$badPath".get { assertThat(it.code()).isEqualTo(404) }
-
         agent.unregisterPath(badPath)
     }
 
@@ -226,7 +218,7 @@ object CommonTests {
                             }
                 }
 
-        assertThat(latch.await(10, SECONDS)).isTrue()
+        assertThat(latch.await(1, MINUTES)).isTrue()
 
         val errorCnt = AtomicInteger()
         pathMap.forEach {

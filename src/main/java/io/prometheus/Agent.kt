@@ -513,8 +513,7 @@ class Agent(options: AgentOptions,
             logger.info(getBanner("banners/agent.txt"))
             logger.info(getVersionDesc(false))
 
-            val agent = Agent(options = options)
-            agent.startAsync()
+            Agent(options = options).startAsync()
         }
     }
 }

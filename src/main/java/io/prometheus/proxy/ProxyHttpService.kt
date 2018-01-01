@@ -32,9 +32,9 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     private val http: Service =
             Service.ignite().apply {
                 port(port)
-                threadPool(proxy.configVals.http.maxThreads,
-                           proxy.configVals.http.minThreads,
-                           proxy.configVals.http.idleTimeoutMillis)
+                threadPool(configVals.http.maxThreads,
+                           configVals.http.minThreads,
+                           configVals.http.idleTimeoutMillis)
             }
 
     init {

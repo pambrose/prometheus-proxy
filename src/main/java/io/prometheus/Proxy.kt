@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentMap
 
 class Proxy(options: ProxyOptions,
-            proxyPort: Int,
+            proxyPort: Int = options.agentPort!!,
             inProcessServerName: String = "",
             testMode: Boolean = false) : GenericService(options.configVals,
                                                         AdminConfig.create(options.adminEnabled,
@@ -225,8 +225,7 @@ class Proxy(options: ProxyOptions,
             logger.info(getBanner("banners/proxy.txt"))
             logger.info(getVersionDesc(false))
 
-            val proxy = Proxy(options = options, proxyPort = options.proxyPort!!)
-            proxy.startAsync()
+            Proxy(options = options).startAsync()
         }
     }
 }
