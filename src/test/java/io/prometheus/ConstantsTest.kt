@@ -16,12 +16,10 @@
 
 package io.prometheus
 
-import okhttp3.OkHttpClient
 import java.util.*
 import java.util.concurrent.Executors
 
 object ConstantsTest {
-    val OK_HTTP_CLIENT = OkHttpClient()
     internal val EXECUTOR_SERVICE = Executors.newCachedThreadPool()
     internal val RANDOM = Random()
     internal val REPS = 1000

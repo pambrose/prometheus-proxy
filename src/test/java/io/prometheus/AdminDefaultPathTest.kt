@@ -16,10 +16,10 @@
 
 package io.prometheus
 
-import io.prometheus.TestUtils.http
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.dsl.OkHttpDsl.http
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass

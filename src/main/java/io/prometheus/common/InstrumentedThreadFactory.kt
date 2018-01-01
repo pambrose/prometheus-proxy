@@ -16,9 +16,8 @@
 
 package io.prometheus.common
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder
-import io.prometheus.common.MetricsUtils.counter
-import io.prometheus.common.MetricsUtils.gauge
+import io.prometheus.dsl.MetricsDsl.counter
+import io.prometheus.dsl.MetricsDsl.gauge
 import java.util.concurrent.ThreadFactory
 
 class InstrumentedThreadFactory(val delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
@@ -55,13 +54,6 @@ class InstrumentedThreadFactory(val delegate: ThreadFactory, name: String, help:
                 running.dec()
                 terminated.inc()
             }
-        }
-    }
-
-    companion object {
-        fun newInstrumentedThreadFactory(name: String, help: String, daemon: Boolean): ThreadFactory {
-            val threadFactory = ThreadFactoryBuilder().setNameFormat(name + "-%d").setDaemon(daemon).build()
-            return InstrumentedThreadFactory(threadFactory, name, help)
         }
     }
 

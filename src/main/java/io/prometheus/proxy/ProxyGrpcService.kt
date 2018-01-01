@@ -23,12 +23,11 @@ import com.google.common.base.MoreObjects
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.grpc.Server
-import io.grpc.ServerBuilder
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
-import io.grpc.inprocess.InProcessServerBuilder
 import io.prometheus.Proxy
 import io.prometheus.common.GenericServiceListener
+import io.prometheus.dsl.GrpcDsl.server
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -61,23 +60,14 @@ class ProxyGrpcService private constructor(proxy: Proxy,
             grpcTracing = null
         }
 
-        val serverBuilder =
-                if (inProcessServerName.isNotEmpty())
-                    InProcessServerBuilder.forName(inProcessServerName)
-                else
-                    ServerBuilder.forPort(port)
-
-        val proxyService = ProxyServiceImpl(proxy)
-        val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
-        if (proxy.isZipkinEnabled)
-            interceptors.add(grpcTracing!!.newServerInterceptor())
-        val serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors)
-
-        grpcServer =
-                serverBuilder
-                        .addService(serviceDef)
-                        .addTransportFilter(ProxyTransportFilter(proxy))
-                        .build()
+        grpcServer = server(inProcessServerName = inProcessServerName, port = port) {
+            val proxyService = ProxyServiceImpl(proxy)
+            val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
+            if (proxy.isZipkinEnabled)
+                interceptors.add(grpcTracing!!.newServerInterceptor())
+            addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
+            addTransportFilter(ProxyTransportFilter(proxy))
+        }
 
         addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
@@ -109,7 +99,6 @@ class ProxyGrpcService private constructor(proxy: Proxy,
         val logger: Logger = LoggerFactory.getLogger(ProxyGrpcService::class.java)
 
         fun create(proxy: Proxy, grpcPort: Int) = ProxyGrpcService(proxy = proxy, port = grpcPort)
-
         fun create(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
     }
 }

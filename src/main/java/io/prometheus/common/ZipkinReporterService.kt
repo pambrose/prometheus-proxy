@@ -20,6 +20,7 @@ import brave.Tracing
 import com.google.common.base.MoreObjects
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
+import io.prometheus.dsl.ZipkinDsl.tracing
 import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
 
@@ -32,10 +33,10 @@ class ZipkinReporterService(private val url: String) : AbstractIdleService() {
     }
 
     fun newTracing(serviceName: String): Tracing =
-            Tracing.newBuilder()
-                    .localServiceName(serviceName)
-                    .spanReporter(reporter)
-                    .build()
+            tracing {
+                localServiceName(serviceName)
+                spanReporter(reporter)
+            }
 
     override fun startUp() {
         // Empty

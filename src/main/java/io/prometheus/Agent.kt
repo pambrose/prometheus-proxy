@@ -23,19 +23,17 @@ import com.google.common.base.Preconditions.checkNotNull
 import com.google.common.collect.Maps
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.util.concurrent.RateLimiter
-import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.google.protobuf.Empty
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors.intercept
 import io.grpc.ManagedChannel
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
-import io.grpc.inprocess.InProcessChannelBuilder
-import io.grpc.netty.NettyChannelBuilder
 import io.grpc.stub.StreamObserver
 import io.prometheus.agent.*
 import io.prometheus.common.*
-import io.prometheus.common.InstrumentedThreadFactory.Companion.newInstrumentedThreadFactory
+import io.prometheus.dsl.GrpcDsl.channel
+import io.prometheus.dsl.ThreadDsl.threadFactory
 import io.prometheus.grpc.*
 import io.prometheus.grpc.ProxyServiceGrpc.*
 import okhttp3.OkHttpClient
@@ -68,14 +66,16 @@ class Agent(options: AgentOptions,
     private var asyncStub: ProxyServiceStub by AtomicDelegates.notNullReference()
     private val readRequestsExecutorService: ExecutorService =
             newCachedThreadPool(if (isMetricsEnabled)
-                                    newInstrumentedThreadFactory("agent_fetch",
-                                                                 "Agent fetch",
-                                                                 true)
+                                    InstrumentedThreadFactory(
+                                            threadFactory {
+                                                setNameFormat("agent_fetch" + "-%d")
+                                                setDaemon(true)
+                                            }, "agent_fetch", "Agent fetch")
                                 else
-                                    ThreadFactoryBuilder()
-                                            .setNameFormat("agent_fetch-%d")
-                                            .setDaemon(true)
-                                            .build())
+                                    threadFactory {
+                                        setNameFormat("agent_fetch-%d")
+                                        setDaemon(true)
+                                    })
 
     private val tracing: Tracing?
     private val grpcTracing: GrpcTracing?
@@ -216,16 +216,14 @@ class Agent(options: AgentOptions,
 
         channel?.shutdownNow()
 
-        val channelBuilder =
-                if (inProcessServerName.isEmpty())
-                    NettyChannelBuilder.forAddress(hostName, port)
-                else
-                    InProcessChannelBuilder.forName(inProcessServerName)
+        channel = channel(inProcessServerName = inProcessServerName,
+                          hostName = hostName,
+                          port = port) {
+            if (isZipkinEnabled)
+                intercept(grpcTracing!!.newClientInterceptor())
+            usePlaintext(true)
+        }
 
-        if (isZipkinEnabled)
-            channelBuilder.intercept(grpcTracing!!.newClientInterceptor())
-
-        channel = channelBuilder.usePlaintext(true).build()
         val interceptors = listOf<ClientInterceptor>(AgentClientInterceptor(this))
 
         blockingStub = newBlockingStub(intercept(channel, interceptors))

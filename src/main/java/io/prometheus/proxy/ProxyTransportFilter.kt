@@ -19,6 +19,7 @@ package io.prometheus.proxy
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
+import io.prometheus.dsl.GrpcDsl.attributes
 import org.slf4j.LoggerFactory
 
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
@@ -30,14 +31,13 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
     }
 
     override fun transportReady(attributes: Attributes): Attributes {
-        val remoteAddr = getRemoteAddr(attributes)
-        val agentContext = AgentContext(proxy, remoteAddr)
+        val agentContext = AgentContext(proxy, getRemoteAddr(attributes))
         proxy.addAgentContext(agentContext)
         logger.info("Connected to $agentContext")
-        return Attributes.newBuilder()
-                .set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)
-                .setAll<Any>(attributes)
-                .build()
+        return attributes {
+            set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)
+            setAll<Any>(attributes)
+        }
     }
 
     override fun transportTerminated(attributes: Attributes?) {

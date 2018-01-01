@@ -21,8 +21,6 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
-import okhttp3.Request
-import okhttp3.Response
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -31,13 +29,6 @@ import java.util.concurrent.TimeoutException
 object TestUtils {
 
     private val logger = LoggerFactory.getLogger(TestUtils::class.java)
-
-    inline fun String.http(block: (Response) -> Unit) {
-        ConstantsTest.OK_HTTP_CLIENT
-                .newCall(Request.Builder().url(this).build())
-                .execute()
-                .use(block)
-    }
 
     @Throws(IOException::class, TimeoutException::class)
     fun startProxy(serverName: String = "",

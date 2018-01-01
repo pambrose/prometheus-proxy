@@ -18,10 +18,10 @@ package io.prometheus
 
 import com.google.common.collect.Maps
 import io.prometheus.ConstantsTest.PROXY_PORT
-import io.prometheus.TestUtils.http
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.sleepForMillis
 import io.prometheus.common.sleepForSecs
+import io.prometheus.dsl.OkHttpDsl.http
 import org.assertj.core.api.Assertions.assertThat
 import org.slf4j.LoggerFactory
 import spark.Service
