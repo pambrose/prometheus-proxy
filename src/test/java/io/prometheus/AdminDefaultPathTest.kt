@@ -19,7 +19,7 @@ package io.prometheus
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.dsl.OkHttpDsl.http
+import io.prometheus.dsl.OkHttpDsl.get
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -34,7 +34,7 @@ class AdminDefaultPathTest {
     @Test
     fun proxyPingPathTest() {
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
-                .http {
+                .get {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string()).startsWith("pong")
                 }
@@ -43,7 +43,7 @@ class AdminDefaultPathTest {
     @Test
     fun agentPingPathTest() {
         "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.pingPath}"
-                .http {
+                .get {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string()).startsWith("pong")
                 }
@@ -52,7 +52,7 @@ class AdminDefaultPathTest {
     @Test
     fun proxyVersionPathTest() {
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
-                .http {
+                .get {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string()).contains("Version")
                 }
@@ -61,7 +61,7 @@ class AdminDefaultPathTest {
     @Test
     fun agentVersionPathTest() {
         "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.versionPath}"
-                .http {
+                .get {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string()).contains("Version")
                 }
@@ -70,7 +70,7 @@ class AdminDefaultPathTest {
     @Test
     fun proxyHealthCheckPathTest() {
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
-                .http {
+                .get {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string().length).isGreaterThan(10)
                 }
@@ -79,19 +79,19 @@ class AdminDefaultPathTest {
     @Test
     fun agentHealthCheckPathTest() {
         "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.healthCheckPath}"
-                .http { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+                .get { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     @Test
     fun proxyThreadDumpPathTest() {
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
-                .http { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+                .get { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     @Test
     fun agentThreadDumpPathTest() {
         "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.threadDumpPath}"
-                .http { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+                .get { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     companion object {

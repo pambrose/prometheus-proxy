@@ -19,7 +19,7 @@ package io.prometheus
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.dsl.OkHttpDsl.http
+import io.prometheus.dsl.OkHttpDsl.get
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -36,7 +36,7 @@ class AdminEmptyPathTest {
         assertThat(PROXY.configVals.admin.port).isEqualTo(8098)
         assertThat(PROXY.configVals.admin.pingPath).isEqualTo("")
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
-                .http { assertThat(it.code()).isEqualTo(404) }
+                .get { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
@@ -44,21 +44,21 @@ class AdminEmptyPathTest {
         assertThat(PROXY.configVals.admin.port).isEqualTo(8098)
         assertThat(PROXY.configVals.admin.versionPath).isEqualTo("")
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
-                .http { assertThat(it.code()).isEqualTo(404) }
+                .get { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
     fun proxyHealthCheckPathTest() {
         assertThat(PROXY.configVals.admin.healthCheckPath).isEqualTo("")
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
-                .http { assertThat(it.code()).isEqualTo(404) }
+                .get { assertThat(it.code()).isEqualTo(404) }
     }
 
     @Test
     fun proxyThreadDumpPathTest() {
         assertThat(PROXY.configVals.admin.threadDumpPath).isEqualTo("")
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
-                .http { assertThat(it.code()).isEqualTo(404) }
+                .get { assertThat(it.code()).isEqualTo(404) }
     }
 
     companion object {

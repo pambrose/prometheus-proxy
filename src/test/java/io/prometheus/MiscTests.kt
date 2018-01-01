@@ -21,7 +21,7 @@ import io.prometheus.ConstantsTest.PROXY_PORT
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.sleepForMillis
 import io.prometheus.common.sleepForSecs
-import io.prometheus.dsl.OkHttpDsl.http
+import io.prometheus.dsl.OkHttpDsl.get
 import org.assertj.core.api.Assertions.assertThat
 import org.slf4j.LoggerFactory
 import spark.Service
@@ -37,12 +37,12 @@ object MiscTests {
 
     fun missingPathTest(caller: String) {
         logger.info("Calling missingPathTest() from $caller")
-        "http://localhost:$PROXY_PORT/".http { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:$PROXY_PORT/".get { assertThat(it.code()).isEqualTo(404) }
     }
 
     fun invalidPathTest(caller: String) {
         logger.info("Calling invalidPathTest() from $caller")
-        "http://localhost:$PROXY_PORT/invalid_path".http { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:$PROXY_PORT/invalid_path".get { assertThat(it.code()).isEqualTo(404) }
     }
 
     fun addRemovePathsTest(agent: Agent, caller: String) {
@@ -120,7 +120,7 @@ object MiscTests {
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
 
-        "http://localhost:$PROXY_PORT/$badPath".http { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:$PROXY_PORT/$badPath".get { assertThat(it.code()).isEqualTo(404) }
 
         agent.unregisterPath(badPath)
     }
@@ -146,7 +146,7 @@ object MiscTests {
         sleepForSecs(5)
 
         agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
-        "http://localhost:$PROXY_PORT/$proxyPath".http { assertThat(it.code()).isEqualTo(404) }
+        "http://localhost:$PROXY_PORT/$proxyPath".get { assertThat(it.code()).isEqualTo(404) }
         agent.unregisterPath("/$proxyPath")
         http.stop()
     }
@@ -240,7 +240,7 @@ object MiscTests {
         val index = abs(ConstantsTest.RANDOM.nextInt() % pathMap.size)
         val httpVal = pathMap[index]
         "http://localhost:$PROXY_PORT/proxy-$index"
-                .http {
+                .get {
                     if (it.code() != 200)
                         logger.error("Proxy failed on $msg")
                     assertThat(it.code()).isEqualTo(200)

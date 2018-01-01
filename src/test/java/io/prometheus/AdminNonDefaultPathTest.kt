@@ -19,7 +19,7 @@ package io.prometheus
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.dsl.OkHttpDsl.http
+import io.prometheus.dsl.OkHttpDsl.get
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -36,7 +36,7 @@ class AdminNonDefaultPathTest {
         assertThat(PROXY.configVals.admin.port).isEqualTo(8099)
         assertThat(PROXY.configVals.admin.pingPath).isEqualTo("pingPath2")
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
-                .http {
+                .get {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string()).startsWith("pong")
                 }
@@ -47,7 +47,7 @@ class AdminNonDefaultPathTest {
         assertThat(PROXY.configVals.admin.port).isEqualTo(8099)
         assertThat(PROXY.configVals.admin.versionPath).isEqualTo("versionPath2")
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
-                .http {
+                .get {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string()).contains("Version")
                 }
@@ -57,7 +57,7 @@ class AdminNonDefaultPathTest {
     fun proxyHealthCheckPathTest() {
         assertThat(PROXY.configVals.admin.healthCheckPath).isEqualTo("healthCheckPath2")
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
-                .http {
+                .get {
                     assertThat(it.code()).isEqualTo(200)
                     assertThat(it.body()!!.string().length).isGreaterThan(10)
                 }
@@ -67,7 +67,7 @@ class AdminNonDefaultPathTest {
     fun proxyThreadDumpPathTest() {
         assertThat(PROXY.configVals.admin.threadDumpPath).isEqualTo("threadDumpPath2")
         "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
-                .http { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+                .get { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     companion object {

@@ -50,14 +50,14 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     protected val adminService: AdminService? =
             if (adminConfig.enabled) {
-                val service = AdminService(healthCheckRegistry,
-                                           adminConfig.port,
-                                           adminConfig.pingPath,
-                                           adminConfig.versionPath,
-                                           adminConfig.healthCheckPath,
-                                           adminConfig.threadDumpPath)
-                addService(service)
-                service
+                AdminService(healthCheckRegistry,
+                             adminConfig.port,
+                             adminConfig.pingPath,
+                             adminConfig.versionPath,
+                             adminConfig.healthCheckPath,
+                             adminConfig.threadDumpPath).apply {
+                    addService(this)
+                }
             }
             else {
                 logger.info("Admin service disabled")
