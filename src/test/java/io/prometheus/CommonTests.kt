@@ -17,7 +17,7 @@
 package io.prometheus
 
 import com.google.common.collect.Maps
-import io.prometheus.ConstantsTest.PROXY_PORT
+import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.sleepForMillis
 import io.prometheus.common.sleepForSecs
@@ -27,13 +27,14 @@ import org.slf4j.LoggerFactory
 import spark.Service
 import java.lang.Math.abs
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit.MINUTES
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.IntStream
 
-object MiscTests {
+object CommonTests {
 
-    private val logger = LoggerFactory.getLogger(MiscTests::class.java)
+    private val logger = LoggerFactory.getLogger(CommonTests::class.java)
 
     fun missingPathTest(caller: String) {
         logger.info("Calling missingPathTest() from $caller")
@@ -52,7 +53,7 @@ object MiscTests {
         val originalSize = agent.pathMapSize()
 
         var cnt = 0
-        IntStream.range(0, ConstantsTest.REPS)
+        IntStream.range(0, TestConstants.REPS)
                 .forEach {
                     val path = "test-$it"
                     agent.registerPath(path, "http://localhost:$PROXY_PORT/$path")
@@ -68,49 +69,56 @@ object MiscTests {
         logger.info("Calling threadedAddRemovePathsTest() from $caller")
         val paths = mutableListOf<String>()
         val cnt = AtomicInteger(0)
-        val latch1 = CountDownLatch(ConstantsTest.REPS)
-        val latch2 = CountDownLatch(ConstantsTest.REPS)
+        val latch1 = CountDownLatch(TestConstants.REPS)
+        val latch2 = CountDownLatch(TestConstants.REPS)
 
         // Take into account pre-existing paths already registered
         val originalSize = agent.pathMapSize()
 
-        IntStream.range(0, ConstantsTest.REPS)
+        IntStream.range(0, TestConstants.REPS)
                 .forEach {
-                    ConstantsTest.EXECUTOR_SERVICE.submit(
-                            {
-                                val path = "test-${cnt.getAndIncrement()}"
-                                synchronized(paths) {
-                                    paths.add(path)
-                                }
-                                try {
-                                    val url = "http://localhost:$PROXY_PORT/$path"
-                                    agent.registerPath(path, url)
-                                    latch1.countDown()
-                                } catch (e: RequestFailureException) {
-                                    e.printStackTrace()
-                                }
-                            })
+                    TestConstants
+                            .EXECUTOR_SERVICE
+                            .submit(
+                                    {
+                                        val cntval = cnt.getAndIncrement()
+                                        val path = "test-$cntval"
+
+                                        synchronized(paths) {
+                                            paths.add(path)
+                                        }
+
+                                        try {
+                                            val url = "http://localhost:$PROXY_PORT/$path"
+                                            agent.registerPath(path, url)
+                                        } catch (e: RequestFailureException) {
+                                            e.printStackTrace()
+                                        } finally {
+                                            latch1.countDown()
+                                        }
+                                    })
                 }
 
-        assertThat(latch1.await(5, SECONDS)).isTrue()
-        assertThat(paths.size).isEqualTo(ConstantsTest.REPS)
-        assertThat(agent.pathMapSize()).isEqualTo(originalSize + ConstantsTest.REPS)
+        assertThat(latch1.await(1, MINUTES)).isTrue()
+        assertThat(paths.size).isEqualTo(TestConstants.REPS)
+        assertThat(agent.pathMapSize()).isEqualTo(originalSize + TestConstants.REPS)
 
         paths.forEach {
-            ConstantsTest
+            TestConstants
                     .EXECUTOR_SERVICE
                     .submit({
                                 try {
                                     agent.unregisterPath(it)
-                                    latch2.countDown()
                                 } catch (e: RequestFailureException) {
                                     e.printStackTrace()
+                                } finally {
+                                    latch2.countDown()
                                 }
                             })
         }
 
         // Wait for all unregistrations to complete
-        assertThat(latch2.await(5, SECONDS)).isTrue()
+        assertThat(latch2.await(1, MINUTES)).isTrue()
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
     }
 
@@ -188,7 +196,7 @@ object MiscTests {
         // Create the paths
         IntStream.range(0, pathCount)
                 .forEach {
-                    val index = abs(ConstantsTest.RANDOM.nextInt()) % httpServers.size
+                    val index = abs(TestConstants.RANDOM.nextInt()) % httpServers.size
                     agent.registerPath("proxy-$it", "http://localhost:${startingPort + index}/agent-$index")
                     pathMap.put(it, index)
                 }
@@ -206,7 +214,8 @@ object MiscTests {
         val latch = CountDownLatch(parallelQueryCount)
         IntStream.range(0, parallelQueryCount)
                 .forEach {
-                    ConstantsTest.EXECUTOR_SERVICE
+                    TestConstants
+                            .EXECUTOR_SERVICE
                             .submit {
                                 try {
                                     callProxy(pathMap, "Parallel $it")
@@ -237,7 +246,7 @@ object MiscTests {
     private fun callProxy(pathMap: Map<Int, Int>, msg: String) {
         //logger.info("Calling proxy for ${msg}")
         // Choose one of the pathMap values
-        val index = abs(ConstantsTest.RANDOM.nextInt() % pathMap.size)
+        val index = abs(TestConstants.RANDOM.nextInt() % pathMap.size)
         val httpVal = pathMap[index]
         "http://localhost:$PROXY_PORT/proxy-$index"
                 .get {

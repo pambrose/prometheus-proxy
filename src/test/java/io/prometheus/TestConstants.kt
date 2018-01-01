@@ -19,7 +19,7 @@ package io.prometheus
 import java.util.*
 import java.util.concurrent.Executors
 
-object ConstantsTest {
+object TestConstants {
     internal val EXECUTOR_SERVICE = Executors.newCachedThreadPool()
     internal val RANDOM = Random()
     internal val REPS = 1000

@@ -16,7 +16,7 @@
 
 package io.prometheus
 
-import io.prometheus.ConstantsTest.PROXY_PORT
+import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
@@ -37,7 +37,7 @@ object TestUtils {
                    argv: List<String> = emptyList()): Proxy {
         val args =
                 mutableListOf<String>().apply {
-                    addAll(ConstantsTest.args)
+                    addAll(TestConstants.args)
                     addAll(argv)
                     add("-Dproxy.admin.enabled=$adminEnabled")
                     add("-Dproxy.metrics.enabled=$metricsEnabled")
@@ -60,7 +60,7 @@ object TestUtils {
                    argv: List<String> = emptyList()): Agent {
         val args =
                 mutableListOf<String>().apply {
-                    addAll(ConstantsTest.args)
+                    addAll(TestConstants.args)
                     addAll(argv)
                     add("-Dagent.admin.enabled=$adminEnabled")
                     add("-Dagent.metrics.enabled=$metricsEnabled")

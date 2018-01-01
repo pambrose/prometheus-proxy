@@ -30,32 +30,32 @@ class NettyTestNoAdminMetricsTest {
 
     @Test
     fun missingPathTest() {
-        MiscTests.missingPathTest(this.javaClass.simpleName)
+        CommonTests.missingPathTest(this.javaClass.simpleName)
     }
 
     @Test
     fun invalidPathTest() {
-        MiscTests.invalidPathTest(this.javaClass.simpleName)
+        CommonTests.invalidPathTest(this.javaClass.simpleName)
     }
 
     @Test
     fun addRemovePathsTest() {
-        MiscTests.addRemovePathsTest(AGENT, this.javaClass.simpleName)
+        CommonTests.addRemovePathsTest(AGENT, this.javaClass.simpleName)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        MiscTests.threadedAddRemovePathsTest(AGENT, this.javaClass.simpleName)
+        CommonTests.threadedAddRemovePathsTest(AGENT, this.javaClass.simpleName)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        MiscTests.invalidAgentUrlTest(AGENT, caller = this.javaClass.simpleName)
+        CommonTests.invalidAgentUrlTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     @Test
     fun timeoutTest() {
-        MiscTests.timeoutTest(AGENT, caller = this.javaClass.simpleName)
+        CommonTests.timeoutTest(AGENT, caller = this.javaClass.simpleName)
     }
 
     companion object {
