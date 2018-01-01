@@ -28,6 +28,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.GenericServiceListener
 import io.prometheus.dsl.GrpcDsl.server
 import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.MetricsDsl.newHealthCheck
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -36,16 +37,13 @@ import kotlin.properties.Delegates
 class ProxyGrpcService private constructor(private val proxy: Proxy,
                                            private val port: Int = -1,
                                            private val inProcessServerName: String = "") : AbstractIdleService() {
-    val healthCheck: HealthCheck
-        get() = object : HealthCheck() {
-            @Throws(Exception::class)
-            override fun check(): HealthCheck.Result {
-                return if (grpcServer.isShutdown || grpcServer.isShutdown)
+    val healthCheck =
+            newHealthCheck {
+                if (grpcServer.isShutdown || grpcServer.isShutdown)
                     HealthCheck.Result.unhealthy("gRPC server is not running")
                 else
                     HealthCheck.Result.healthy()
             }
-        }
 
     private var tracing: Tracing by Delegates.notNull()
     private var grpcTracing: GrpcTracing by Delegates.notNull()

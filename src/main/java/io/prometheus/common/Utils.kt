@@ -25,6 +25,7 @@ import com.google.common.base.Splitter
 import com.google.common.io.CharStreams
 import com.google.common.util.concurrent.Service
 import io.prometheus.Proxy
+import io.prometheus.dsl.MetricsDsl.newHealthCheck
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.InputStreamReader
@@ -81,26 +82,20 @@ fun getBanner(filename: String): String {
     }
 }
 
-fun queueHealthCheck(queue: Queue<*>, size: Int) =
-        object : HealthCheck() {
-            @Throws(Exception::class)
-            override fun check(): HealthCheck.Result {
-                return if (queue.size < size)
-                    HealthCheck.Result.healthy()
-                else
-                    HealthCheck.Result.unhealthy("Large size: %d", queue.size)
-            }
+fun newQueueHealthCheck(queue: Queue<*>, size: Int) =
+        newHealthCheck {
+            if (queue.size < size)
+                HealthCheck.Result.healthy()
+            else
+                HealthCheck.Result.unhealthy("Large size: %d", queue.size)
         }
 
-fun mapHealthCheck(map: Map<*, *>, size: Int) =
-        object : HealthCheck() {
-            @Throws(Exception::class)
-            override fun check(): HealthCheck.Result {
-                return if (map.size < size)
-                    HealthCheck.Result.healthy()
-                else
-                    HealthCheck.Result.unhealthy("Large size: %d", map.size)
-            }
+fun newMapHealthCheck(map: Map<*, *>, size: Int) =
+        newHealthCheck {
+            if (map.size < size)
+                HealthCheck.Result.healthy()
+            else
+                HealthCheck.Result.unhealthy("Large size: %d", map.size)
         }
 
 fun sleepForMillis(millis: Long) =

@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.client.exporter.MetricsServlet
 import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.MetricsDsl.newHealthCheck
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
@@ -35,15 +36,14 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
                             addServlet(ServletHolder(MetricsServlet()), "/$path")
                         }
             }
-    val healthCheck: HealthCheck = object : HealthCheck() {
-        @Throws(Exception::class)
-        override fun check(): HealthCheck.Result {
-            return if (server.isRunning)
-                HealthCheck.Result.healthy()
-            else
-                HealthCheck.Result.unhealthy("Jetty server not running")
-        }
-    }
+    val healthCheck =
+            newHealthCheck {
+                if (server.isRunning)
+                    HealthCheck.Result.healthy()
+                else
+                    HealthCheck.Result.unhealthy("Jetty server not running")
+            }
+
 
     init {
         addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())

@@ -22,6 +22,7 @@ import com.google.common.collect.Maps
 import io.grpc.Attributes
 import io.prometheus.common.*
 import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.MetricsDsl.newHealthCheck
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.proxy.*
 import org.slf4j.LoggerFactory
@@ -107,26 +108,24 @@ class Proxy(options: ProxyOptions,
 
     override fun registerHealthChecks() {
         super.registerHealthChecks()
-        healthCheckRegistry.register("grpc_service", grpcService.healthCheck)
-        healthCheckRegistry.register("scrape_response_map_check",
-                                     mapHealthCheck(scrapeRequestMap,
-                                                    configVals.internal.scrapeRequestMapUnhealthySize))
-        healthCheckRegistry
-                .register("agent_scrape_request_queue",
-                          object : HealthCheck() {
-                              @Throws(Exception::class)
-                              override fun check(): HealthCheck.Result {
-                                  val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
-                                  val vals = agentContextMap.entries
-                                          .filter { it.value.scrapeRequestQueueSize >= unhealthySize }
-                                          .map { "${it.value} ${it.value.scrapeRequestQueueSize}" }
-                                          .toList()
-                                  return if (vals.isEmpty())
-                                      HealthCheck.Result.healthy()
-                                  else
-                                      HealthCheck.Result.unhealthy("Large scrapeRequestQueues: ${Joiner.on(", ").join(vals)}")
-                              }
-                          })
+        healthCheckRegistry.apply {
+            register("grpc_service", grpcService.healthCheck)
+            register("scrape_response_map_check",
+                     newMapHealthCheck(scrapeRequestMap, configVals.internal.scrapeRequestMapUnhealthySize))
+            register("agent_scrape_request_queue",
+                     newHealthCheck {
+                         val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
+                         val vals =
+                                 agentContextMap.entries
+                                         .filter { it.value.scrapeRequestQueueSize >= unhealthySize }
+                                         .map { "${it.value} ${it.value.scrapeRequestQueueSize}" }
+                                         .toList()
+                         if (vals.isEmpty())
+                             HealthCheck.Result.healthy()
+                         else
+                             HealthCheck.Result.unhealthy("Large scrapeRequestQueues: ${Joiner.on(", ").join(vals)}")
+                     })
+        }
     }
 
     fun addAgentContext(agentContext: AgentContext) = agentContextMap.put(agentContext.agentId, agentContext)

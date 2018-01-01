@@ -27,6 +27,7 @@ import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
 import io.prometheus.dsl.GuavaDsl.newServiceManagerListener
+import io.prometheus.dsl.MetricsDsl.newHealthCheck
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import kotlin.properties.Delegates
@@ -150,28 +151,27 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     protected open fun registerHealthChecks() {
-        healthCheckRegistry.register("thread_deadlock", ThreadDeadlockHealthCheck())
-        if (isMetricsEnabled)
-            healthCheckRegistry.register("metrics_service", metricsService.healthCheck)
-        healthCheckRegistry
-                .register(
-                        "all_services_healthy",
-                        object : HealthCheck() {
-                            @Throws(Exception::class)
-                            override fun check(): HealthCheck.Result {
-                                return if (serviceManager.isHealthy)
-                                    HealthCheck.Result.healthy()
-                                else {
-                                    val vals = serviceManager.servicesByState()
+        healthCheckRegistry.apply {
+            register("thread_deadlock", ThreadDeadlockHealthCheck())
+            if (isMetricsEnabled)
+                register("metrics_service", metricsService.healthCheck)
+            register(
+                    "all_services_healthy",
+                    newHealthCheck {
+                        if (serviceManager.isHealthy)
+                            HealthCheck.Result.healthy()
+                        else {
+                            val vals =
+                                    serviceManager.servicesByState()
                                             .entries()
                                             .filter { it.key !== Service.State.RUNNING }
                                             .onEach { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
                                             .map { "${it.key}: ${it.value}" }
                                             .toList()
-                                    HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
-                                }
-                            }
-                        })
+                            HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
+                        }
+                    })
+        }
     }
 
     companion object {

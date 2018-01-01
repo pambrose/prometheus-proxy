@@ -164,7 +164,7 @@ class Agent(options: AgentOptions,
         super.registerHealthChecks()
         healthCheckRegistry
                 .register("scrape_response_queue_check",
-                          queueHealthCheck(scrapeResponseQueue, configVals.internal.scrapeResponseQueueUnhealthySize))
+                          newQueueHealthCheck(scrapeResponseQueue, configVals.internal.scrapeResponseQueueUnhealthySize))
     }
 
     override fun serviceName() = "${javaClass.simpleName} $agentName"
