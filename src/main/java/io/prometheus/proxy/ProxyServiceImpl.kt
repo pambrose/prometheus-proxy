@@ -28,7 +28,8 @@ import java.util.concurrent.atomic.AtomicLong
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
 
     override fun connectAgent(request: Empty, responseObserver: StreamObserver<Empty>) {
-        proxy.metrics?.connects?.inc()
+        if (proxy.isMetricsEnabled)
+            proxy.metrics.connects.inc()
         responseObserver.apply {
             onNext(Empty.getDefaultInstance())
             onCompleted()
@@ -125,7 +126,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     }
 
     override fun sendHeartBeat(request: HeartBeatRequest, responseObserver: StreamObserver<HeartBeatResponse>) {
-        proxy.metrics?.heartbeats?.inc()
+        if (proxy.isZipkinEnabled)
+            proxy.metrics.heartbeats.inc()
         val agentContext = proxy.getAgentContext(request.agentId)
         agentContext?.markActivity() ?: logger.info("sendHeartBeat() missing AgentContext agentId: ${request.agentId}")
         responseObserver.apply {

@@ -41,7 +41,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
         private set
 
     @Parameter(names = ["-i", "--admin_port"], description = "Admin servlets port")
-    var adminPort: Int? = null
+    var adminPort: Int = -1
         private set
 
     @Parameter(names = ["-e", "--metrics"], description = "Metrics enabled")
@@ -49,7 +49,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
         private set
 
     @Parameter(names = ["-m", "--metrics_port"], description = "Metrics listen port")
-    var metricsPort: Int? = null
+    var metricsPort: Int = -1
         private set
 
     @Parameter(names = ["-v", "--version"],
@@ -103,7 +103,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     protected fun assignAdminPort(defaultVal: Int) {
-        if (adminPort == null)
+        if (adminPort == -1)
             adminPort = ADMIN_PORT.getEnv(defaultVal)
     }
 
@@ -113,7 +113,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     protected fun assignMetricsPort(defaultVal: Int) {
-        if (metricsPort == null)
+        if (metricsPort == -1)
             metricsPort = METRICS_PORT.getEnv(defaultVal)
     }
 

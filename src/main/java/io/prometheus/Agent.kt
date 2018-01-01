@@ -42,15 +42,16 @@ import java.io.IOException
 import java.util.concurrent.*
 import java.util.concurrent.Executors.newCachedThreadPool
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.properties.Delegates
 
 class Agent(options: AgentOptions,
             private val inProcessServerName: String = "",
             testMode: Boolean = false) : GenericService(options.configVals,
                                                         AdminConfig.create(options.adminEnabled,
-                                                                           options.adminPort!!,
+                                                                           options.adminPort,
                                                                            options.configVals.agent.admin),
                                                         MetricsConfig.create(options.metricsEnabled,
-                                                                             options.metricsPort!!,
+                                                                             options.metricsPort,
                                                                              options.configVals.agent.metrics),
                                                         ZipkinConfig.create(options.configVals.agent.internal.zipkin),
                                                         testMode) {
@@ -60,7 +61,7 @@ class Agent(options: AgentOptions,
     private val initialConnectionLatch = CountDownLatch(1)
     private val okHttpClient = OkHttpClient()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
-    private val agentName: String = if (options.agentName.isNullOrBlank()) "Unnamed-${io.prometheus.common.hostName}" else options.agentName!!
+    private val agentName: String = if (options.agentName.isBlank()) "Unnamed-${io.prometheus.common.hostName}" else options.agentName
     private val metrics: AgentMetrics? = if (isMetricsEnabled) AgentMetrics(this) else null
     private var blockingStub: ProxyServiceBlockingStub by AtomicDelegates.notNullReference()
     private var asyncStub: ProxyServiceStub by AtomicDelegates.notNullReference()
@@ -77,8 +78,9 @@ class Agent(options: AgentOptions,
                                         setDaemon(true)
                                     })
 
-    private val tracing: Tracing?
-    private val grpcTracing: GrpcTracing?
+    private var tracing: Tracing by Delegates.notNull()
+    private var grpcTracing: GrpcTracing by Delegates.notNull()
+
     private val hostName: String
     private val port: Int
     private val reconnectLimiter =
@@ -111,23 +113,19 @@ class Agent(options: AgentOptions,
 
         agentId = ""
 
-        if (options.proxyHostname!!.contains(":")) {
-            val vals = options.proxyHostname!!.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+        if (options.proxyHostname.contains(":")) {
+            val vals = options.proxyHostname.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
             hostName = vals[0]
             port = Integer.valueOf(vals[1])
         }
         else {
-            hostName = options.proxyHostname!!
+            hostName = options.proxyHostname
             port = 50051
         }
 
         if (isZipkinEnabled) {
-            tracing = zipkinReporterService!!.newTracing("grpc_client")
+            tracing = zipkinReporterService.newTracing("grpc_client")
             grpcTracing = GrpcTracing.create(tracing)
-        }
-        else {
-            tracing = null
-            grpcTracing = null
         }
 
         resetGrpcStubs()
@@ -135,7 +133,8 @@ class Agent(options: AgentOptions,
     }
 
     override fun shutDown() {
-        tracing?.close()
+        if (isZipkinEnabled)
+            tracing.close()
         channel?.shutdownNow()
         heartbeatService.shutdownNow()
         super.shutDown()
@@ -220,7 +219,7 @@ class Agent(options: AgentOptions,
                           hostName = hostName,
                           port = port) {
             if (isZipkinEnabled)
-                intercept(grpcTracing!!.newClientInterceptor())
+                intercept(grpcTracing.newClientInterceptor())
             usePlaintext(true)
         }
 
@@ -265,7 +264,7 @@ class Agent(options: AgentOptions,
                         valid = true
                         reason = ""
                         this.statusCode = statusCode
-                        text = it.body()!!.string()
+                        text = it.body()?.string() ?: ""
                         contentType = it.header(CONTENT_TYPE)
                         build()
                     }
@@ -499,8 +498,8 @@ class Agent(options: AgentOptions,
                 add("agentId", agentId)
                 add("agentName", agentName)
                 add("proxyHost", proxyHost)
-                add("adminService", adminService ?: "Disabled")
-                add("metricsService", metricsService ?: "Disabled")
+                add("adminService", if (isAdminEnabled) adminService else "Disabled")
+                add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
             }
 
     companion object {

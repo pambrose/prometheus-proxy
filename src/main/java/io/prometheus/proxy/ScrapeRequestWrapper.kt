@@ -34,7 +34,7 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     private val createTime = System.currentTimeMillis()
     private val complete = CountDownLatch(1)
-    private val requestTimer = proxy.metrics?.scrapeRequestLatency?.startTimer()
+    private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
     val agentContext: AgentContext = Preconditions.checkNotNull(agentContext)
 

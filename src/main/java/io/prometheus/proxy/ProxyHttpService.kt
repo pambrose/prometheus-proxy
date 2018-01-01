@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy
 
+import brave.Tracing
 import brave.sparkjava.SparkTracing
 import com.google.common.net.HttpHeaders.*
 import com.google.common.util.concurrent.AbstractIdleService
@@ -25,10 +26,11 @@ import io.prometheus.common.GenericServiceListener
 import io.prometheus.dsl.ClassDsl.toStringElements
 import org.slf4j.LoggerFactory
 import spark.*
+import kotlin.properties.Delegates
 
 class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleService() {
     private val configVals = proxy.configVals
-    private val tracing = proxy.zipkinReporterService?.newTracing("proxy-http")
+    private var tracing: Tracing by Delegates.notNull()
     private val http: Service =
             Service.ignite().apply {
                 port(port)
@@ -38,6 +40,8 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
             }
 
     init {
+        if (proxy.isZipkinEnabled)
+            tracing = proxy.zipkinReporterService.newTracing("proxy-http")
         addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
@@ -99,7 +103,8 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     }
 
     override fun shutDown() {
-        tracing?.close()
+        if (proxy.isZipkinEnabled)
+            tracing.close()
         http.stop()
     }
 
@@ -153,7 +158,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
 
     private fun updateScrapeRequests(type: String) {
         if (proxy.isMetricsEnabled)
-            proxy.metrics!!.scrapeRequests.labels(type).inc()
+            proxy.metrics.scrapeRequests.labels(type).inc()
     }
 
     override fun toString() =

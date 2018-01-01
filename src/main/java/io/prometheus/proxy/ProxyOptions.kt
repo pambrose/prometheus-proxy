@@ -27,10 +27,10 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
     constructor(args: List<String>) : this(Iterables.toArray<String>(args, String::class.java))
 
     @Parameter(names = ["-p", "--port"], description = "Listen port for Prometheus")
-    var proxyPort: Int? = null
+    var proxyPort: Int = -1
         private set
     @Parameter(names = ["-a", "--agent_port"], description = "Listen port for agents")
-    var agentPort: Int? = null
+    var agentPort: Int = -1
         private set
 
     init {
@@ -38,10 +38,10 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
     }
 
     override fun assignConfigVals() {
-        if (proxyPort == null)
+        if (proxyPort == -1)
             proxyPort = PROXY_PORT.getEnv(configVals.proxy.http.port)
 
-        if (agentPort == null)
+        if (agentPort == -1)
             agentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port)
 
         assignAdminEnabled(configVals.proxy.admin.enabled)

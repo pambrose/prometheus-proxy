@@ -31,8 +31,9 @@ import io.prometheus.dsl.GrpcDsl.server
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import kotlin.properties.Delegates
 
-class ProxyGrpcService private constructor(proxy: Proxy,
+class ProxyGrpcService private constructor(private val proxy: Proxy,
                                            private val port: Int = -1,
                                            private val inProcessServerName: String = "") : AbstractIdleService() {
     val healthCheck: HealthCheck
@@ -46,25 +47,21 @@ class ProxyGrpcService private constructor(proxy: Proxy,
             }
         }
 
-    private val tracing: Tracing?
-    private val grpcTracing: GrpcTracing?
+    private var tracing: Tracing by Delegates.notNull()
+    private var grpcTracing: GrpcTracing by Delegates.notNull()
     private val grpcServer: Server
 
     init {
         if (proxy.isZipkinEnabled) {
-            tracing = proxy.zipkinReporterService!!.newTracing("grpc_server")
+            tracing = proxy.zipkinReporterService.newTracing("grpc_server")
             grpcTracing = GrpcTracing.create(tracing)
-        }
-        else {
-            tracing = null
-            grpcTracing = null
         }
 
         grpcServer = server(inProcessServerName = inProcessServerName, port = port) {
             val proxyService = ProxyServiceImpl(proxy)
             val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
             if (proxy.isZipkinEnabled)
-                interceptors.add(grpcTracing!!.newServerInterceptor())
+                interceptors.add(grpcTracing.newServerInterceptor())
             addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
             addTransportFilter(ProxyTransportFilter(proxy))
         }
@@ -78,7 +75,8 @@ class ProxyGrpcService private constructor(proxy: Proxy,
     }
 
     override fun shutDown() {
-        tracing?.close()
+        if (proxy.isZipkinEnabled)
+            tracing.close()
         grpcServer.shutdown()
     }
 

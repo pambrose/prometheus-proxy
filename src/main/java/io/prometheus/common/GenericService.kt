@@ -28,94 +28,106 @@ import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
 import org.slf4j.LoggerFactory
 import java.io.Closeable
+import kotlin.properties.Delegates
 
 abstract class GenericService protected constructor(protected val genericConfigVals: ConfigVals,
-                                                    adminConfig: AdminConfig,
-                                                    metricsConfig: MetricsConfig,
-                                                    zipkinConfig: ZipkinConfig,
+                                                    private val adminConfig: AdminConfig,
+                                                    private val metricsConfig: MetricsConfig,
+                                                    private val zipkinConfig: ZipkinConfig,
                                                     val isTestMode: Boolean) : AbstractExecutionThreadService(), Closeable {
     val healthCheckRegistry = HealthCheckRegistry()
 
-    private val metricRegistry = MetricRegistry()
-    private val services = mutableListOf<Service>(this)
-    private val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
+    private val services = mutableListOf<Service>()
+    private var jmxReporter: JmxReporter by Delegates.notNull()
 
     private lateinit var serviceManager: ServiceManager
 
-    val isZipkinEnabled: Boolean
-        get() = zipkinReporterService != null
+    val isAdminEnabled: Boolean
+        get() = adminConfig.enabled
 
     val isMetricsEnabled: Boolean
-        get() = metricsService != null
+        get() = metricsConfig.enabled
 
-    protected val adminService: AdminService? =
-            if (adminConfig.enabled) {
-                AdminService(healthCheckRegistry,
-                             adminConfig.port,
-                             adminConfig.pingPath,
-                             adminConfig.versionPath,
-                             adminConfig.healthCheckPath,
-                             adminConfig.threadDumpPath).apply {
-                    addService(this)
-                }
-            }
-            else {
-                logger.info("Admin service disabled")
-                null
-            }
+    val isZipkinEnabled: Boolean
+        get() = zipkinConfig.enabled
 
-    protected val metricsService: MetricsService? =
-            if (metricsConfig.enabled) {
-                val service = MetricsService(metricsConfig.port, metricsConfig.path)
-                addService(service)
-                SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
-                                         metricsConfig.memoryPoolsExportsEnabled,
-                                         metricsConfig.garbageCollectorExportsEnabled,
-                                         metricsConfig.threadExportsEnabled,
-                                         metricsConfig.classLoadingExportsEnabled,
-                                         metricsConfig.versionInfoExportsEnabled)
-                service
-            }
-            else {
-                logger.info("Metrics service disabled")
-                null
-            }
+    protected var adminService: AdminService by Delegates.notNull()
 
-    val zipkinReporterService: ZipkinReporterService? =
-            if (zipkinConfig.enabled) {
-                val url = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
-                val service = ZipkinReporterService(url)
-                addService(service)
-                service
-            }
-            else {
-                logger.info("Zipkin reporter service disabled")
-                null
-            }
+    protected var metricsService: MetricsService by Delegates.notNull()
+
+    var zipkinReporterService: ZipkinReporterService by Delegates.notNull()
 
     init {
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        if (isAdminEnabled) {
+            adminService = AdminService(healthCheckRegistry,
+                                        adminConfig.port,
+                                        adminConfig.pingPath,
+                                        adminConfig.versionPath,
+                                        adminConfig.healthCheckPath,
+                                        adminConfig.threadDumpPath).apply {
+                addService(this)
+            }
+        }
+        else {
+            logger.info("Admin service disabled")
+        }
+
+        if (isMetricsEnabled) {
+            metricsService = MetricsService(metricsConfig.port, metricsConfig.path).apply {
+                addService(this)
+            }
+            SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
+                                     metricsConfig.memoryPoolsExportsEnabled,
+                                     metricsConfig.garbageCollectorExportsEnabled,
+                                     metricsConfig.threadExportsEnabled,
+                                     metricsConfig.classLoadingExportsEnabled,
+                                     metricsConfig.versionInfoExportsEnabled)
+            jmxReporter = JmxReporter.forRegistry(MetricRegistry()).build()
+        }
+        else {
+            logger.info("Metrics service disabled")
+        }
+
+        if (isZipkinEnabled) {
+            val url = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
+            zipkinReporterService = ZipkinReporterService(url).apply {
+                addService(this)
+            }
+        }
+        else {
+            logger.info("Zipkin reporter service disabled")
+        }
     }
 
     fun initService() {
+        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addService(this)
         serviceManager = ServiceManager(services).apply { addListener(newListener()) }
         registerHealthChecks()
     }
 
     override fun startUp() {
         super.startUp()
-        zipkinReporterService?.startAsync()
-        jmxReporter?.start()
-        metricsService?.startAsync()
-        adminService?.startAsync()
+        if (isZipkinEnabled)
+            zipkinReporterService.startAsync()
+        if (isMetricsEnabled) {
+            metricsService.startAsync()
+            jmxReporter.start()
+        }
+        if (isAdminEnabled)
+            adminService.startAsync()
         Runtime.getRuntime().addShutdownHook(shutDownHookAction(this))
     }
 
     override fun shutDown() {
-        adminService?.stopAsync()
-        metricsService?.stopAsync()
-        jmxReporter?.stop()
-        zipkinReporterService?.stopAsync()
+        if (isAdminEnabled)
+            adminService.stopAsync()
+        if (isMetricsEnabled) {
+            metricsService.stopAsync()
+            jmxReporter.stop()
+        }
+        if (isZipkinEnabled)
+            zipkinReporterService.stopAsync()
         super.shutDown()
     }
 
@@ -136,7 +148,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
     protected open fun registerHealthChecks() {
         healthCheckRegistry.register("thread_deadlock", ThreadDeadlockHealthCheck())
         if (isMetricsEnabled)
-            healthCheckRegistry.register("metrics_service", metricsService!!.healthCheck)
+            healthCheckRegistry.register("metrics_service", metricsService.healthCheck)
         healthCheckRegistry
                 .register(
                         "all_services_healthy",

@@ -26,16 +26,17 @@ import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.proxy.*
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentMap
+import kotlin.properties.Delegates
 
 class Proxy(options: ProxyOptions,
-            proxyPort: Int = options.agentPort!!,
+            proxyPort: Int = options.agentPort,
             inProcessServerName: String = "",
             testMode: Boolean = false) : GenericService(options.configVals,
                                                         AdminConfig.create(options.adminEnabled,
-                                                                           options.adminPort!!,
+                                                                           options.adminPort,
                                                                            options.configVals.proxy.admin),
                                                         MetricsConfig.create(options.metricsEnabled,
-                                                                             options.metricsPort!!,
+                                                                             options.metricsPort,
                                                                              options.configVals.proxy.metrics),
                                                         ZipkinConfig.create(options.configVals.proxy.internal.zipkin),
                                                         testMode) {
@@ -44,19 +45,16 @@ class Proxy(options: ProxyOptions,
     private val scrapeRequestMap = Maps.newConcurrentMap<Long, ScrapeRequestWrapper>() // Map scrape_id to agent_id
 
     val agentContextMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
-    val metrics = if (isMetricsEnabled) ProxyMetrics(this) else null
+    var metrics: ProxyMetrics by Delegates.notNull()
 
     private val httpService = ProxyHttpService(this, proxyPort)
     private val grpcService: ProxyGrpcService =
             if (inProcessServerName.isEmpty())
-                ProxyGrpcService.create(this, options.agentPort!!)
+                ProxyGrpcService.create(this, options.agentPort)
             else
                 ProxyGrpcService.create(this, inProcessServerName)
-    private val agentCleanupService =
-            if (configVals.internal.staleAgentCheckEnabled)
-                AgentContextCleanupService(this)
-            else
-                null
+
+    private var agentCleanupService: AgentContextCleanupService by Delegates.notNull()
 
     val agentContextSize: Int
         get() = agentContextMap.size
@@ -74,7 +72,13 @@ class Proxy(options: ProxyOptions,
         get() = agentContextMap.values.map { it.scrapeRequestQueueSize }.sum()
 
     init {
-        addServices(grpcService, httpService, agentCleanupService!!)
+        if (isMetricsEnabled)
+            metrics = ProxyMetrics(this)
+        if (configVals.internal.staleAgentCheckEnabled)
+            agentCleanupService = AgentContextCleanupService(this).apply {
+                addServices(this)
+            }
+        addServices(grpcService, httpService)
         initService()
     }
 
@@ -82,13 +86,17 @@ class Proxy(options: ProxyOptions,
         super.startUp()
         grpcService.startAsync()
         httpService.startAsync()
-        agentCleanupService?.startAsync() ?: logger.info("Agent eviction thread not started")
+        if (configVals.internal.staleAgentCheckEnabled)
+            agentCleanupService.startAsync()
+        else
+            logger.info("Agent eviction thread not started")
     }
 
     override fun shutDown() {
         grpcService.stopAsync()
         httpService.stopAsync()
-        agentCleanupService?.stopAsync()
+        if (configVals.internal.staleAgentCheckEnabled)
+            agentCleanupService.stopAsync()
         super.shutDown()
     }
 
@@ -208,8 +216,8 @@ class Proxy(options: ProxyOptions,
     override fun toString() =
             toStringElements {
                 add("proxyPort", httpService.port)
-                add("adminService", adminService ?: "Disabled")
-                add("metricsService", metricsService ?: "Disabled")
+                add("adminService", if (isAdminEnabled) adminService else "Disabled")
+                add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
             }
 
     companion object {

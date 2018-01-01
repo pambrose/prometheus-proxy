@@ -75,31 +75,31 @@ private class NotNullAtomicReferenceDelegate<T : Any>(initValue: T? = null) : At
     override operator fun setValue(thisRef: Any?, property: KProperty<*>, value: T) = atomicVal.set(value)
 
     override fun lazySet(newValue: T) = atomicVal.lazySet(newValue)
-    override fun getAndSet(newValue: T) = atomicVal.getAndSet(newValue)
+    override fun getAndSet(newValue: T): T = atomicVal.getAndSet(newValue)
     override fun compareAndSet(expect: T, update: T) = atomicVal.compareAndSet(expect, update)
     override fun weakCompareAndSet(expect: T, update: T) = atomicVal.weakCompareAndSet(expect, update)
 
-    override fun getAndUpdate(updateFunction: UnaryOperator<T>) = atomicVal.getAndUpdate(updateFunction)
-    override fun updateAndGet(updateFunction: UnaryOperator<T>) = atomicVal.updateAndGet(updateFunction)
-    override fun getAndAccumulate(x: T, accumulatorFunction: BinaryOperator<T>) = atomicVal.getAndAccumulate(x, accumulatorFunction)
-    override fun accumulateAndGet(x: T, accumulatorFunction: BinaryOperator<T>) = atomicVal.accumulateAndGet(x, accumulatorFunction)
+    override fun getAndUpdate(updateFunction: UnaryOperator<T>): T = atomicVal.getAndUpdate(updateFunction)
+    override fun updateAndGet(updateFunction: UnaryOperator<T>): T = atomicVal.updateAndGet(updateFunction)
+    override fun getAndAccumulate(x: T, accumulatorFunction: BinaryOperator<T>): T = atomicVal.getAndAccumulate(x, accumulatorFunction)
+    override fun accumulateAndGet(x: T, accumulatorFunction: BinaryOperator<T>): T = atomicVal.accumulateAndGet(x, accumulatorFunction)
 }
 
 private class NullableAtomicReferenceDelegate<T : Any?>(initValue: T? = null) : AtomicNullableReadWriteProperty<Any?, T> {
     private val atomicVal = AtomicReference<T>(initValue)
 
-    override operator fun getValue(thisRef: Any?, property: KProperty<*>) = atomicVal.get()
+    override operator fun getValue(thisRef: Any?, property: KProperty<*>): T = atomicVal.get()
     override operator fun setValue(thisRef: Any?, property: KProperty<*>, value: T) = atomicVal.set(value)
 
     override fun lazySet(newValue: T) = atomicVal.lazySet(newValue)
-    override fun getAndSet(newValue: T) = atomicVal.getAndSet(newValue)
+    override fun getAndSet(newValue: T): T = atomicVal.getAndSet(newValue)
     override fun compareAndSet(expect: T, update: T) = atomicVal.compareAndSet(expect, update)
     override fun weakCompareAndSet(expect: T, update: T) = atomicVal.weakCompareAndSet(expect, update)
 
-    override fun getAndUpdate(updateFunction: UnaryOperator<T>) = atomicVal.getAndUpdate(updateFunction)
-    override fun updateAndGet(updateFunction: UnaryOperator<T>) = atomicVal.updateAndGet(updateFunction)
-    override fun getAndAccumulate(x: T, accumulatorFunction: BinaryOperator<T>) = atomicVal.getAndAccumulate(x, accumulatorFunction)
-    override fun accumulateAndGet(x: T, accumulatorFunction: BinaryOperator<T>) = atomicVal.accumulateAndGet(x, accumulatorFunction)
+    override fun getAndUpdate(updateFunction: UnaryOperator<T>): T = atomicVal.getAndUpdate(updateFunction)
+    override fun updateAndGet(updateFunction: UnaryOperator<T>): T = atomicVal.updateAndGet(updateFunction)
+    override fun getAndAccumulate(x: T, accumulatorFunction: BinaryOperator<T>): T = atomicVal.getAndAccumulate(x, accumulatorFunction)
+    override fun accumulateAndGet(x: T, accumulatorFunction: BinaryOperator<T>): T = atomicVal.accumulateAndGet(x, accumulatorFunction)
 }
 
 private class AtomicBooleanDelegate(initValue: Boolean) : AtomicReadWriteProperty<Any?, Boolean> {
