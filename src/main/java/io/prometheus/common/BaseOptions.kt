@@ -118,7 +118,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-        config = readConfig(if (configName.isNotEmpty()) configName else System.getenv(envConfig),
+        config = readConfig(if (configName.isNotEmpty()) configName else System.getenv(envConfig) ?: "",
                             envConfig,
                             ConfigParseOptions.defaults().setAllowMissing(false),
                             ConfigFactory.load().resolve(),
