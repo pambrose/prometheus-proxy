@@ -19,7 +19,7 @@ package io.prometheus.common
 import brave.Tracing
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
-import io.prometheus.dsl.ClassDsl.toStringElements
+import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ZipkinDsl.tracing
 import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender

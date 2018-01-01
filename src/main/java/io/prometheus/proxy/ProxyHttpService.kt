@@ -23,7 +23,7 @@ import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
 import io.prometheus.common.GenericServiceListener
-import io.prometheus.dsl.ClassDsl.toStringElements
+import io.prometheus.dsl.GuavaDsl.toStringElements
 import org.slf4j.LoggerFactory
 import spark.*
 import kotlin.properties.Delegates

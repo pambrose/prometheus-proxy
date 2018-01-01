@@ -31,8 +31,8 @@ import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
 import io.prometheus.agent.*
 import io.prometheus.common.*
-import io.prometheus.dsl.ClassDsl.toStringElements
 import io.prometheus.dsl.GrpcDsl.channel
+import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ThreadDsl.threadFactory
 import io.prometheus.grpc.*
 import io.prometheus.grpc.ProxyServiceGrpc.*

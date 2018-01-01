@@ -26,8 +26,8 @@ import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
 import io.prometheus.common.GenericServiceListener
-import io.prometheus.dsl.ClassDsl.toStringElements
 import io.prometheus.dsl.GrpcDsl.server
+import io.prometheus.dsl.GuavaDsl.toStringElements
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException

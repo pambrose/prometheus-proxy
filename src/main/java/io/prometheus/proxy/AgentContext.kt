@@ -19,7 +19,7 @@ package io.prometheus.proxy
 import io.prometheus.Proxy
 import io.prometheus.common.AtomicDelegates
 import io.prometheus.common.toSecs
-import io.prometheus.dsl.ClassDsl.toStringElements
+import io.prometheus.dsl.GuavaDsl.toStringElements
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong

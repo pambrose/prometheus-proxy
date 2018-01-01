@@ -21,7 +21,7 @@ import com.google.common.base.Joiner
 import com.google.common.collect.Maps
 import io.grpc.Attributes
 import io.prometheus.common.*
-import io.prometheus.dsl.ClassDsl.toStringElements
+import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.proxy.*
 import org.slf4j.LoggerFactory

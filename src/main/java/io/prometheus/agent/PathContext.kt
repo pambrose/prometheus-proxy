@@ -17,7 +17,7 @@
 package io.prometheus.agent
 
 import com.google.common.net.HttpHeaders.ACCEPT
-import io.prometheus.dsl.ClassDsl.toStringElements
+import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeRequest
 import okhttp3.OkHttpClient
 import okhttp3.Request
