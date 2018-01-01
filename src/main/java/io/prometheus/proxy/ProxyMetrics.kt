@@ -19,50 +19,51 @@ package io.prometheus.proxy
 import io.prometheus.Proxy
 import io.prometheus.client.Collector
 import io.prometheus.client.Counter
-import io.prometheus.client.Gauge
 import io.prometheus.client.Summary
+import io.prometheus.common.MetricsUtils.counter
+import io.prometheus.common.MetricsUtils.gauge
+import io.prometheus.common.MetricsUtils.summary
 import io.prometheus.common.SamplerGauge
 import io.prometheus.common.SamplerGaugeData
 
 class ProxyMetrics(proxy: Proxy) {
 
     val scrapeRequests: Counter =
-            Counter.build()
-                    .name("proxy_scrape_requests")
-                    .help("Proxy scrape requests")
-                    .labelNames("type")
-                    .register()
+            counter {
+                name("proxy_scrape_requests")
+                help("Proxy scrape requests")
+                labelNames("type")
+            }
 
     val connects: Counter =
-            Counter.build()
-                    .name("proxy_connect_count")
-                    .help("Proxy connect count")
-                    .register()
+            counter {
+                name("proxy_connect_count")
+                help("Proxy connect count")
+            }
 
     val agentEvictions: Counter =
-            Counter.build()
-                    .name("proxy_eviction_count")
-                    .help("Proxy eviction count")
-                    .register()
+            counter {
+                name("proxy_eviction_count")
+                help("Proxy eviction count")
+            }
 
     val heartbeats: Counter =
-            Counter.build()
-                    .name("proxy_heartbeat_count")
-                    .help("Proxy heartbeat count")
-                    .register()
+            counter {
+                name("proxy_heartbeat_count")
+                help("Proxy heartbeat count")
+            }
 
     val scrapeRequestLatency: Summary =
-            Summary.build()
-                    .name("proxy_scrape_request_latency_seconds")
-                    .help("Proxy scrape request latency in seconds")
-                    .register()
+            summary {
+                name("proxy_scrape_request_latency_seconds")
+                help("Proxy scrape request latency in seconds")
+            }
 
     init {
-        Gauge.build()
-                .name("proxy_start_time_seconds")
-                .help("Proxy start time in seconds")
-                .register()
-                .setToCurrentTime()
+        gauge {
+            name("proxy_start_time_seconds")
+            help("Proxy start time in seconds")
+        }.setToCurrentTime()
 
         SamplerGauge("proxy_agent_map_size",
                      "Proxy connected agents",

@@ -32,7 +32,7 @@ object TestUtils {
 
     private val logger = LoggerFactory.getLogger(TestUtils::class.java)
 
-    internal inline fun String.http(block: (Response) -> Unit): Unit {
+    inline fun String.http(block: (Response) -> Unit) {
         ConstantsTest.OK_HTTP_CLIENT
                 .newCall(Request.Builder().url(this).build())
                 .execute()

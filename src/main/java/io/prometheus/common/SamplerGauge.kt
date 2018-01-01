@@ -27,9 +27,6 @@ class SamplerGauge(private val name: String,
                                                 emptyList(),
                                                 emptyList(),
                                                 samplerGaugeData.value())
-        return listOf(Collector.MetricFamilySamples(name,
-                                                    Collector.Type.GAUGE,
-                                                    help,
-                                                    listOf(sample)))
+        return listOf(Collector.MetricFamilySamples(name, Collector.Type.GAUGE, help, listOf(sample)))
     }
 }
