@@ -17,10 +17,10 @@
 package io.prometheus.common
 
 import com.codahale.metrics.health.HealthCheck
-import com.google.common.base.MoreObjects
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.client.exporter.MetricsServlet
+import io.prometheus.dsl.ClassDsl.toStringElements
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
@@ -48,16 +48,12 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
         addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
-    override fun startUp() {
-        server.start()
-    }
+    override fun startUp() = server.start()
 
-    override fun shutDown() {
-        server.stop()
-    }
+    override fun shutDown() = server.stop()
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("url", "http://localhost:$port/$path")
-                    .toString()
+            toStringElements {
+                add("url", "http://localhost:$port/$path")
+            }
 }

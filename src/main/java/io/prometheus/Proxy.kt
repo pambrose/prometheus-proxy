@@ -18,10 +18,10 @@ package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.Joiner
-import com.google.common.base.MoreObjects
 import com.google.common.collect.Maps
 import io.grpc.Attributes
 import io.prometheus.common.*
+import io.prometheus.dsl.ClassDsl.toStringElements
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.proxy.*
 import org.slf4j.LoggerFactory
@@ -206,11 +206,11 @@ class Proxy(options: ProxyOptions,
     }
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("proxyPort", httpService.port)
-                    .add("adminService", adminService ?: "Disabled")
-                    .add("metricsService", metricsService ?: "Disabled")
-                    .toString()
+            toStringElements {
+                add("proxyPort", httpService.port)
+                add("adminService", adminService ?: "Disabled")
+                add("metricsService", metricsService ?: "Disabled")
+            }
 
     companion object {
         private val logger = LoggerFactory.getLogger(Proxy::class.java)

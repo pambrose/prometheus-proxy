@@ -17,10 +17,10 @@
 package io.prometheus.proxy
 
 
-import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions
 import io.prometheus.Proxy
 import io.prometheus.common.AtomicDelegates
+import io.prometheus.dsl.ClassDsl.toStringElements
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import java.util.concurrent.CountDownLatch
@@ -71,10 +71,10 @@ class ScrapeRequestWrapper(proxy: Proxy,
     }
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("scrapeId", scrapeRequest.scrapeId)
-                    .add("path", scrapeRequest.path)
-                    .toString()
+            toStringElements {
+                add("scrapeId", scrapeRequest.scrapeId)
+                add("path", scrapeRequest.path)
+            }
 
     companion object {
         private val SCRAPE_ID_GENERATOR = AtomicLong(0)

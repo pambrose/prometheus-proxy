@@ -16,10 +16,10 @@
 
 package io.prometheus.proxy
 
-import com.google.common.base.MoreObjects
 import io.prometheus.Proxy
 import io.prometheus.common.AtomicDelegates
 import io.prometheus.common.toSecs
+import io.prometheus.dsl.ClassDsl.toStringElements
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -65,14 +65,14 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     }
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("agentId", agentId)
-                    .add("valid", valid)
-                    .add("remoteAddr", remoteAddr)
-                    .add("agentName", agentName)
-                    .add("hostName", hostName)
-                    .add("inactivitySecs", inactivitySecs)
-                    .toString()
+            toStringElements {
+                add("agentId", agentId)
+                add("valid", valid)
+                add("remoteAddr", remoteAddr)
+                add("agentName", agentName)
+                add("hostName", hostName)
+                add("inactivitySecs", inactivitySecs)
+            }
 
     companion object {
         private val AGENT_ID_GENERATOR = AtomicLong(0)

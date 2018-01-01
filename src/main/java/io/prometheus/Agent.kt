@@ -18,7 +18,6 @@ package io.prometheus
 
 import brave.Tracing
 import brave.grpc.GrpcTracing
-import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions.checkNotNull
 import com.google.common.collect.Maps
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
@@ -32,6 +31,7 @@ import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
 import io.prometheus.agent.*
 import io.prometheus.common.*
+import io.prometheus.dsl.ClassDsl.toStringElements
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.ThreadDsl.threadFactory
 import io.prometheus.grpc.*
@@ -495,13 +495,13 @@ class Agent(options: AgentOptions,
     fun awaitInitialConnection(timeout: Long, unit: TimeUnit) = initialConnectionLatch.await(timeout, unit)
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("agentId", agentId)
-                    .add("agentName", agentName)
-                    .add("proxyHost", proxyHost)
-                    .add("adminService", adminService ?: "Disabled")
-                    .add("metricsService", metricsService ?: "Disabled")
-                    .toString()
+            toStringElements {
+                add("agentId", agentId)
+                add("agentName", agentName)
+                add("proxyHost", proxyHost)
+                add("adminService", adminService ?: "Disabled")
+                add("metricsService", metricsService ?: "Disabled")
+            }
 
     companion object {
         private val logger = LoggerFactory.getLogger(Agent::class.java)

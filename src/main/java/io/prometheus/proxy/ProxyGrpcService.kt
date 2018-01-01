@@ -19,7 +19,6 @@ package io.prometheus.proxy
 import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
-import com.google.common.base.MoreObjects
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.grpc.Server
@@ -27,6 +26,7 @@ import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
 import io.prometheus.common.GenericServiceListener
+import io.prometheus.dsl.ClassDsl.toStringElements
 import io.prometheus.dsl.GrpcDsl.server
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -83,7 +83,7 @@ class ProxyGrpcService private constructor(proxy: Proxy,
     }
 
     override fun toString() =
-            with(MoreObjects.toStringHelper(this)) {
+            toStringElements {
                 if (inProcessServerName.isNotEmpty()) {
                     add("serverType", "InProcess")
                     add("serverName", inProcessServerName)
@@ -92,7 +92,6 @@ class ProxyGrpcService private constructor(proxy: Proxy,
                     add("serverType", "Netty")
                     add("port", port)
                 }
-                toString()
             }
 
     companion object {

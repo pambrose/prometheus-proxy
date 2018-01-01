@@ -16,8 +16,8 @@
 
 package io.prometheus.agent
 
-import com.google.common.base.MoreObjects
 import com.google.common.net.HttpHeaders.ACCEPT
+import io.prometheus.dsl.ClassDsl.toStringElements
 import io.prometheus.grpc.ScrapeRequest
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -49,10 +49,10 @@ class PathContext(private val okHttpClient: OkHttpClient,
             }
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("path", "/" + path)
-                    .add("url", url)
-                    .toString()
+            toStringElements {
+                add("path", "/" + path)
+                add("url", url)
+            }
 
     companion object {
         private val logger = LoggerFactory.getLogger(PathContext::class.java)

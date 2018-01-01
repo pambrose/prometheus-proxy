@@ -16,12 +16,12 @@
 
 package io.prometheus.proxy
 
-import com.google.common.base.MoreObjects
 import com.google.common.util.concurrent.AbstractExecutionThreadService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
 import io.prometheus.common.GenericServiceListener
 import io.prometheus.common.sleepForSecs
+import io.prometheus.dsl.ClassDsl.toStringElements
 import org.slf4j.LoggerFactory
 
 class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionThreadService() {
@@ -50,10 +50,10 @@ class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionTh
     }
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("max inactivity secs", proxy.configVals.internal.maxAgentInactivitySecs)
-                    .add("pause secs", proxy.configVals.internal.staleAgentCheckPauseSecs)
-                    .toString()
+            toStringElements {
+                add("max inactivity secs", proxy.configVals.internal.maxAgentInactivitySecs)
+                add("pause secs", proxy.configVals.internal.staleAgentCheckPauseSecs)
+            }
 
     companion object {
         private val logger = LoggerFactory.getLogger(AgentContextCleanupService::class.java)
