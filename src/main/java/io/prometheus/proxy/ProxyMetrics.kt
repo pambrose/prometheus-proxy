@@ -17,7 +17,6 @@
 package io.prometheus.proxy
 
 import io.prometheus.Proxy
-import io.prometheus.client.Collector
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
 import io.prometheus.common.SamplerGauge
@@ -67,18 +66,18 @@ class ProxyMetrics(proxy: Proxy) {
 
         SamplerGauge("proxy_agent_map_size",
                      "Proxy connected agents",
-                     SamplerGaugeData { proxy.agentContextSize.toDouble() }).register<Collector>()
+                     SamplerGaugeData { proxy.agentContextSize.toDouble() })
 
         SamplerGauge("proxy_path_map_size",
                      "Proxy path map size",
-                     SamplerGaugeData { proxy.pathMapSize.toDouble() }).register<Collector>()
+                     SamplerGaugeData { proxy.pathMapSize.toDouble() })
 
         SamplerGauge("proxy_scrape_map_size",
                      "Proxy scrape map size",
-                     SamplerGaugeData { proxy.scrapeMapSize.toDouble() }).register<Collector>()
+                     SamplerGaugeData { proxy.scrapeMapSize.toDouble() })
 
         SamplerGauge("proxy_cummulative_agent_queue_size",
                      "Proxy cummulative agent queue size",
-                     SamplerGaugeData { proxy.totalAgentRequestQueueSize.toDouble() }).register<Collector>()
+                     SamplerGaugeData { proxy.totalAgentRequestQueueSize.toDouble() })
     }
 }
