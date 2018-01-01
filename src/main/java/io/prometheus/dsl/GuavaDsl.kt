@@ -3,6 +3,8 @@ package io.prometheus.dsl
 import com.google.common.base.MoreObjects
 import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
+import io.prometheus.delegate.singleAssign
+import kotlin.properties.Delegates
 
 private typealias NoArgs = () -> Unit
 
@@ -22,9 +24,9 @@ object GuavaDsl {
     }
 
     class ServiceManagerListenerHelper : ServiceManager.Listener() {
-        private var healthyBlock: NoArgs? = null
-        private var stoppedBlock: NoArgs? = null
-        private var failureBlock: ((service: Service) -> Unit)? = null
+        private var healthyBlock: NoArgs? by Delegates.singleAssign()
+        private var stoppedBlock: NoArgs? by Delegates.singleAssign()
+        private var failureBlock: ((service: Service) -> Unit)? by Delegates.singleAssign()
 
         override fun healthy() {
             super.healthy()
@@ -61,11 +63,11 @@ object GuavaDsl {
     }
 
     class ServiceListenerHelper : Service.Listener() {
-        private var startingBlock: NoArgs? = null
-        private var runningBlock: NoArgs? = null
-        private var stoppingBlock: ((from: Service.State) -> Unit)? = null
-        private var terminatedBlock: ((Service.State) -> Unit)? = null
-        private var failedBlock: ((Service.State, Throwable) -> Unit)? = null
+        private var startingBlock: NoArgs? by Delegates.singleAssign()
+        private var runningBlock: NoArgs? by Delegates.singleAssign()
+        private var stoppingBlock: ((from: Service.State) -> Unit)? by Delegates.singleAssign()
+        private var terminatedBlock: ((Service.State) -> Unit)? by Delegates.singleAssign()
+        private var failedBlock: ((Service.State, Throwable) -> Unit)? by Delegates.singleAssign()
 
         override fun starting() {
             super.starting()
