@@ -36,7 +36,7 @@ object Utils {
     val logger: Logger = LoggerFactory.getLogger(Utils::class.java)
 }
 
-val hostName: String by lazy {
+val localHostName: String by lazy {
     try {
         InetAddress.getLocalHost().hostName
     } catch (e: UnknownHostException) {

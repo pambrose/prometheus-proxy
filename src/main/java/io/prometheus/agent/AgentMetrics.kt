@@ -20,7 +20,6 @@ import io.prometheus.Agent
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
 import io.prometheus.common.SamplerGauge
-import io.prometheus.common.SamplerGaugeData
 import io.prometheus.dsl.MetricsDsl.counter
 import io.prometheus.dsl.MetricsDsl.gauge
 import io.prometheus.dsl.MetricsDsl.summary
@@ -56,6 +55,6 @@ class AgentMetrics(agent: Agent) {
 
         SamplerGauge("agent_scrape_queue_size",
                      "Agent scrape response queue size",
-                     SamplerGaugeData { agent.scrapeResponseQueueSize.toDouble() })
+                     { agent.scrapeResponseQueueSize.toDouble() })
     }
 }

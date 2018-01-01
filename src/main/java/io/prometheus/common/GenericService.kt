@@ -38,7 +38,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
     protected val healthCheckRegistry = HealthCheckRegistry()
 
     private val services = mutableListOf<Service>()
-    private var jmxReporter: JmxReporter by Delegates.notNull()
 
     private lateinit var serviceManager: ServiceManager
 
@@ -51,10 +50,9 @@ abstract class GenericService protected constructor(protected val genericConfigV
     val isZipkinEnabled: Boolean
         get() = zipkinConfig.enabled
 
-    protected var adminService: AdminService by Delegates.notNull()
-
-    protected var metricsService: MetricsService by Delegates.notNull()
-
+    private var jmxReporter: JmxReporter by Delegates.notNull()
+    var adminService: AdminService by Delegates.notNull()
+    var metricsService: MetricsService by Delegates.notNull()
     var zipkinReporterService: ZipkinReporterService by Delegates.notNull()
 
     init {
@@ -73,9 +71,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
         }
 
         if (isMetricsEnabled) {
-            metricsService = MetricsService(metricsConfig.port, metricsConfig.path).apply {
-                addService(this)
-            }
+            metricsService = MetricsService(metricsConfig.port, metricsConfig.path).apply { addService(this) }
             SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
                                      metricsConfig.memoryPoolsExportsEnabled,
                                      metricsConfig.garbageCollectorExportsEnabled,
@@ -90,9 +86,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
         if (isZipkinEnabled) {
             val url = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
-            zipkinReporterService = ZipkinReporterService(url).apply {
-                addService(this)
-            }
+            zipkinReporterService = ZipkinReporterService(url).apply { addService(this) }
         }
         else {
             logger.info("Zipkin reporter service disabled")

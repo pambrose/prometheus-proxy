@@ -31,6 +31,7 @@ import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
 import io.prometheus.agent.*
 import io.prometheus.common.*
+import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ThreadDsl.threadFactory
@@ -55,13 +56,12 @@ class Agent(options: AgentOptions,
                                                                              options.configVals.agent.metrics),
                                                         ZipkinConfig.create(options.configVals.agent.internal.zipkin),
                                                         testMode) {
-
     private val pathContextMap = Maps.newConcurrentMap<String, PathContext>()  // Map path to PathContext
     private val heartbeatService = Executors.newFixedThreadPool(1)
     private val initialConnectionLatch = CountDownLatch(1)
     private val okHttpClient = OkHttpClient()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
-    private val agentName: String = if (options.agentName.isBlank()) "Unnamed-${io.prometheus.common.hostName}" else options.agentName
+    private val agentName: String = if (options.agentName.isBlank()) "Unnamed-${localHostName}" else options.agentName
     private var metrics: AgentMetrics by Delegates.notNull()
     private var blockingStub: ProxyServiceBlockingStub by AtomicDelegates.notNullReference()
     private var asyncStub: ProxyServiceStub by AtomicDelegates.notNullReference()

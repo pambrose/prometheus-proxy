@@ -1,4 +1,4 @@
-package io.prometheus.common
+package io.prometheus.delegate
 
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger

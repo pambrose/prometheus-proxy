@@ -17,8 +17,8 @@
 package io.prometheus.proxy
 
 import io.prometheus.Proxy
-import io.prometheus.common.AtomicDelegates
 import io.prometheus.common.toSecs
+import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
