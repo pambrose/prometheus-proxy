@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ZipkinDsl.tracing
+import org.slf4j.LoggerFactory
 import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
 
@@ -29,7 +30,7 @@ class ZipkinReporterService(private val url: String) : AbstractIdleService() {
     private val reporter = AsyncReporter.create(sender)
 
     init {
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
     }
 
     fun newTracing(serviceName: String): Tracing =
@@ -51,4 +52,8 @@ class ZipkinReporterService(private val url: String) : AbstractIdleService() {
             toStringElements {
                 add("url", url)
             }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(ZipkinReporterService::class.java)
+    }
 }

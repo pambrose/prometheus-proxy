@@ -42,7 +42,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     init {
         if (proxy.isZipkinEnabled)
             tracing = proxy.zipkinReporterService.newTracing("proxy-http")
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
     }
 
     override fun startUp() {

@@ -31,7 +31,7 @@ class SamplerGauge(private val name: String,
         val sample = MetricFamilySamples.Sample(name,
                                                 labelNames,
                                                 labelValues,
-                                                samplerGaugeData.invoke())
+                                                samplerGaugeData())
         return listOf(Collector.MetricFamilySamples(name, Collector.Type.GAUGE, help, listOf(sample)))
     }
 }

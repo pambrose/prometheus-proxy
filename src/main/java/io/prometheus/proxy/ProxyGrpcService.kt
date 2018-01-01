@@ -66,7 +66,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
             addTransportFilter(ProxyTransportFilter(proxy))
         }
 
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
     }
 
     @Throws(IOException::class)

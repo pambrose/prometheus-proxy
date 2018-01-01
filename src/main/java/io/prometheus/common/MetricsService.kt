@@ -24,6 +24,7 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
+import org.slf4j.LoggerFactory
 
 class MetricsService(private val port: Int, private val path: String) : AbstractIdleService() {
     private val server =
@@ -45,7 +46,7 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
     }
 
     init {
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
     }
 
     override fun startUp() = server.start()
@@ -56,4 +57,9 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
             toStringElements {
                 add("url", "http://localhost:$port/$path")
             }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(MetricsService::class.java)
+    }
+
 }

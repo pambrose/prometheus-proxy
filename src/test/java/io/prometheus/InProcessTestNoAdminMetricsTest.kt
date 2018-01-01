@@ -29,32 +29,32 @@ class InProcessTestNoAdminMetricsTest {
 
     @Test
     fun missingPathTest() {
-        CommonTests.missingPathTest(this.javaClass.simpleName)
+        CommonTests.missingPathTest(javaClass.simpleName)
     }
 
     @Test
     fun invalidPathTest() {
-        CommonTests.invalidPathTest(this.javaClass.simpleName)
+        CommonTests.invalidPathTest(javaClass.simpleName)
     }
 
     @Test
     fun addRemovePathsTest() {
-        CommonTests.addRemovePathsTest(AGENT, this.javaClass.simpleName)
+        CommonTests.addRemovePathsTest(AGENT, javaClass.simpleName)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        CommonTests.threadedAddRemovePathsTest(AGENT, caller = this.javaClass.simpleName)
+        CommonTests.threadedAddRemovePathsTest(AGENT, caller = javaClass.simpleName)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        CommonTests.invalidAgentUrlTest(AGENT, caller = this.javaClass.simpleName)
+        CommonTests.invalidAgentUrlTest(AGENT, caller = javaClass.simpleName)
     }
 
     @Test
     fun timeoutTest() {
-        CommonTests.timeoutTest(AGENT, caller = this.javaClass.simpleName)
+        CommonTests.timeoutTest(AGENT, caller = javaClass.simpleName)
     }
 
     @Test
@@ -65,7 +65,7 @@ class InProcessTestNoAdminMetricsTest {
                                   sequentialQueryCount = 500,
                                   sequentialPauseMillis = 25,
                                   parallelQueryCount = 100,
-                                  caller = this.javaClass.simpleName)
+                                  caller = javaClass.simpleName)
     }
 
     companion object {

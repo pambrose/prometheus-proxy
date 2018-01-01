@@ -148,7 +148,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         if (agentContext != null) {
             while (proxy.isRunning && agentContext.valid) {
                 agentContext.pollScrapeRequestQueue()?.apply {
-                    responseObserver.onNext(this.scrapeRequest)
+                    responseObserver.onNext(scrapeRequest)
                 }
             }
         }

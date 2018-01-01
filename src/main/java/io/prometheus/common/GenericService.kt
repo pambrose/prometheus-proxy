@@ -26,6 +26,7 @@ import com.google.common.util.concurrent.AbstractExecutionThreadService
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
+import io.prometheus.dsl.GuavaDsl.newServiceManagerListener
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import kotlin.properties.Delegates
@@ -94,9 +95,18 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     fun initService() {
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
         addService(this)
-        serviceManager = ServiceManager(services).apply { addListener(newListener()) }
+        val clazzName = javaClass.simpleName
+        serviceManager =
+                ServiceManager(services).apply {
+                    addListener(
+                            newServiceManagerListener {
+                                healthy { logger.info("All $clazzName services healthy") }
+                                stopped { logger.info("All $clazzName services stopped") }
+                                failure { service -> logger.info("$clazzName service failed: $service") }
+                            })
+                }
         registerHealthChecks()
     }
 
@@ -162,15 +172,6 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                 }
                             }
                         })
-    }
-
-    private fun newListener(): ServiceManager.Listener {
-        val serviceName = javaClass.simpleName
-        return object : ServiceManager.Listener() {
-            override fun healthy() = logger.info("All $serviceName services healthy")
-            override fun stopped() = logger.info("All $serviceName services stopped")
-            override fun failure(service: Service?) = logger.info("$serviceName service failed: $service")
-        }
     }
 
     companion object {

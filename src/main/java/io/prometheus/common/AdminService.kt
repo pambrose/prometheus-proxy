@@ -26,6 +26,7 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
+import org.slf4j.LoggerFactory
 
 class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val port: Int,
@@ -50,7 +51,7 @@ class AdminService(healthCheckRegistry: HealthCheckRegistry,
             }
 
     init {
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
     }
 
     override fun startUp() = server.start()
@@ -63,4 +64,9 @@ class AdminService(healthCheckRegistry: HealthCheckRegistry,
                 add("healthcheck", ":$port/$healthCheckPath")
                 add("threaddump", ":$port/$threadDumpPath")
             }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(AdminService::class.java)
+    }
+
 }

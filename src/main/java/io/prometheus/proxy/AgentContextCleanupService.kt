@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory
 class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionThreadService() {
 
     init {
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
     }
 
     @Throws(Exception::class)
