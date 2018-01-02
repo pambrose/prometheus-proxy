@@ -132,15 +132,16 @@ object CommonTests {
                     caller: String) {
 
         logger.info("Calling timeoutTest() from $caller")
-        val http =
-                Service.ignite().apply {
-                    port(agentPort)
-                    get("/$agentPath") { _, res ->
-                        res.type("text/plain")
-                        sleepForSecs(10)
-                        "I timed out"
-                    }
-                }
+        val httpService =
+                Service.ignite()
+                        .apply {
+                            port(agentPort)
+                            get("/$agentPath") { _, res ->
+                                res.type("text/plain")
+                                sleepForSecs(10)
+                                "I timed out"
+                            }
+                        }
 
         // Give http server chance to start
         sleepForSecs(5)
@@ -148,7 +149,9 @@ object CommonTests {
         agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
         "http://localhost:$PROXY_PORT/$proxyPath".get { assertThat(it.code()).isEqualTo(404) }
         agent.unregisterPath("/$proxyPath")
-        http.stop()
+
+        httpService.stop()
+        sleepForSecs(5)
     }
 
     fun proxyCallTest(agent: Agent,
@@ -170,16 +173,17 @@ object CommonTests {
         // Create the endpoints
         IntStream.range(0, httpServerCount)
                 .forEach { i ->
-                    val http =
-                            Service.ignite().apply {
-                                port(startingPort + i)
-                                threadPool(30, 10, 1000)
-                                get("/agent-$i") { _, res ->
-                                    res.type("text/plain")
-                                    "value: $i"
-                                }
-                            }
-                    httpServers.add(http)
+                    val httpServer =
+                            Service.ignite()
+                                    .apply {
+                                        port(startingPort + i)
+                                        threadPool(30, 10, 1000)
+                                        get("/agent-$i") { _, res ->
+                                            res.type("text/plain")
+                                            "value: $i"
+                                        }
+                                    }
+                    httpServers.add(httpServer)
                 }
 
         // Give http server chance to start
@@ -233,6 +237,7 @@ object CommonTests {
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
 
         httpServers.forEach(Service::stop)
+        sleepForSecs(5)
     }
 
     private fun callProxy(pathMap: Map<Int, Int>, msg: String) {

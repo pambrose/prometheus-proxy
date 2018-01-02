@@ -23,6 +23,7 @@ import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
 import io.prometheus.common.genericServiceListener
+import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import org.slf4j.LoggerFactory
 import spark.*
@@ -31,13 +32,14 @@ import kotlin.properties.Delegates
 class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleService() {
     private val configVals = proxy.configVals
     private var tracing: Tracing by Delegates.notNull()
-    private val http: Service =
-            Service.ignite().apply {
-                port(port)
-                threadPool(configVals.http.maxThreads,
-                           configVals.http.minThreads,
-                           configVals.http.idleTimeoutMillis)
-            }
+    private val httpServer =
+            Service.ignite()
+                    .apply {
+                        port(port)
+                        threadPool(configVals.http.maxThreads,
+                                   configVals.http.minThreads,
+                                   configVals.http.idleTimeoutMillis)
+                    }
 
     init {
         if (proxy.isZipkinEnabled)
@@ -54,8 +56,8 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
             Spark.afterAfter(sparkTracing.afterAfter())
         }
 
-        http.get("/*",
-                 Route { req, res ->
+        httpServer.get("/*",
+                       Route { req, res ->
                      res.header("cache-control", "must-revalidate,no-cache,no-store")
 
                      if (!proxy.isRunning) {
@@ -105,7 +107,9 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     override fun shutDown() {
         if (proxy.isZipkinEnabled)
             tracing.close()
-        http.stop()
+
+        httpServer.stop()
+        sleepForSecs(3)
     }
 
     private fun submitScrapeRequest(req: Request,

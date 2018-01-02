@@ -60,11 +60,11 @@ class InProcessTestNoAdminMetricsTest {
     @Test
     fun proxyCallTest() {
         CommonTests.proxyCallTest(AGENT,
-                                  httpServerCount = 25,
-                                  pathCount = 50,
-                                  sequentialQueryCount = 500,
+                                  httpServerCount = 10,
+                                  pathCount = 25,
+                                  sequentialQueryCount = 100,
                                   sequentialPauseMillis = 25,
-                                  parallelQueryCount = 100,
+                                  parallelQueryCount = 25,
                                   caller = javaClass.simpleName)
     }
 
