@@ -58,6 +58,17 @@ class NettyTestNoAdminMetricsTest {
         CommonTests.timeoutTest(AGENT, caller = javaClass.simpleName)
     }
 
+    @Test
+    fun proxyCallTest() {
+        CommonTests.proxyCallTest(AGENT,
+                                  httpServerCount = 25,
+                                  pathCount = 50,
+                                  sequentialQueryCount = 500,
+                                  sequentialPauseMillis = 25,
+                                  parallelQueryCount = 100,
+                                  caller = javaClass.simpleName)
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(NettyTestNoAdminMetricsTest::class.java)
 
