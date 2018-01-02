@@ -3,7 +3,7 @@ package io.prometheus.dsl
 import com.google.common.base.MoreObjects
 import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
-import io.prometheus.delegate.singleAssign
+import io.prometheus.delegate.DelegatesExtensions.singleAssign
 
 object GuavaDsl {
 

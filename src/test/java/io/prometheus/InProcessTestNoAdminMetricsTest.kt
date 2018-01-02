@@ -94,5 +94,4 @@ class InProcessTestNoAdminMetricsTest {
             AGENT.awaitTerminated(5, SECONDS)
         }
     }
-
 }

@@ -85,6 +85,4 @@ class NettyTestNoAdminMetricsTest {
             AGENT.awaitTerminated(5, SECONDS)
         }
     }
-
-    // proxyCallTest() called in InProcess tests
 }

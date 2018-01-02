@@ -9,7 +9,7 @@ import io.grpc.inprocess.InProcessServerBuilder
 import io.grpc.internal.AbstractManagedChannelImplBuilder
 import io.grpc.netty.NettyChannelBuilder
 import io.grpc.stub.StreamObserver
-import io.prometheus.delegate.singleAssign
+import io.prometheus.delegate.DelegatesExtensions.singleAssign
 
 object GrpcDsl {
     fun channel(inProcessServerName: String = "",
