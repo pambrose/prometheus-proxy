@@ -51,7 +51,7 @@ class AdminService(healthCheckRegistry: HealthCheckRegistry,
             }
 
     init {
-        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
     }
 
     override fun startUp() = server.start()

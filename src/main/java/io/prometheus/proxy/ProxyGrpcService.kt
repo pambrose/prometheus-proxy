@@ -25,10 +25,10 @@ import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
-import io.prometheus.common.GenericServiceListener
+import io.prometheus.common.genericServiceListener
 import io.prometheus.dsl.GrpcDsl.server
 import io.prometheus.dsl.GuavaDsl.toStringElements
-import io.prometheus.dsl.MetricsDsl.newHealthCheck
+import io.prometheus.dsl.MetricsDsl.healthCheck
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -38,7 +38,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
                                            private val port: Int = -1,
                                            private val inProcessServerName: String = "") : AbstractIdleService() {
     val healthCheck =
-            newHealthCheck {
+            healthCheck {
                 if (grpcServer.isShutdown || grpcServer.isShutdown)
                     HealthCheck.Result.unhealthy("gRPC server is not running")
                 else
@@ -55,16 +55,17 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
             grpcTracing = GrpcTracing.create(tracing)
         }
 
-        grpcServer = server(inProcessServerName = inProcessServerName, port = port) {
-            val proxyService = ProxyServiceImpl(proxy)
-            val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
-            if (proxy.isZipkinEnabled)
-                interceptors.add(grpcTracing.newServerInterceptor())
-            addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
-            addTransportFilter(ProxyTransportFilter(proxy))
-        }
+        grpcServer =
+                server(inProcessServerName = inProcessServerName, port = port) {
+                    val proxyService = ProxyServiceImpl(proxy)
+                    val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
+                    if (proxy.isZipkinEnabled)
+                        interceptors.add(grpcTracing.newServerInterceptor())
+                    addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
+                    addTransportFilter(ProxyTransportFilter(proxy))
+                }
 
-        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
     }
 
     @Throws(IOException::class)

@@ -48,7 +48,7 @@ object GrpcDsl {
         }
     }
 
-    fun <T> newStreamObserver(init: StreamObserverHelper<T>.() -> Unit): StreamObserver<T> {
+    fun <T> streamObserver(init: StreamObserverHelper<T>.() -> Unit): StreamObserver<T> {
         val observer = StreamObserverHelper<T>()
         observer.init()
         return observer

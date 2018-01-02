@@ -21,7 +21,7 @@ import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
 import io.prometheus.Proxy
-import io.prometheus.dsl.GrpcDsl.newStreamObserver
+import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.grpc.*
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicLong
@@ -159,7 +159,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     }
 
     override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> {
-        return newStreamObserver {
+        return streamObserver {
             onNext { response ->
                 proxy.getFromScrapeRequestMap(response.scrapeId)?.apply {
                     scrapeResponse = response

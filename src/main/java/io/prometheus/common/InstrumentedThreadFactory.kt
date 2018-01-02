@@ -20,7 +20,7 @@ import io.prometheus.dsl.MetricsDsl.counter
 import io.prometheus.dsl.MetricsDsl.gauge
 import java.util.concurrent.ThreadFactory
 
-class InstrumentedThreadFactory(val delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
+class InstrumentedThreadFactory(private val delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
 
     private val created =
             counter {

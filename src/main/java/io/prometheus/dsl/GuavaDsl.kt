@@ -14,7 +14,7 @@ object GuavaDsl {
         }
     }
 
-    fun newServiceManagerListener(init: ServiceManagerListenerHelper.() -> Unit): ServiceManager.Listener {
+    fun serviceManagerListener(init: ServiceManagerListenerHelper.() -> Unit): ServiceManager.Listener {
         val listener = ServiceManagerListenerHelper()
         listener.init()
         return listener
@@ -53,7 +53,7 @@ object GuavaDsl {
         }
     }
 
-    fun newServiceListener(init: ServiceListenerHelper.() -> Unit): Service.Listener {
+    fun serviceListener(init: ServiceListenerHelper.() -> Unit): Service.Listener {
         val listener = ServiceListenerHelper()
         listener.init()
         return listener

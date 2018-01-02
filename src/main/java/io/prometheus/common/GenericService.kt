@@ -26,8 +26,8 @@ import com.google.common.util.concurrent.AbstractExecutionThreadService
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
-import io.prometheus.dsl.GuavaDsl.newServiceManagerListener
-import io.prometheus.dsl.MetricsDsl.newHealthCheck
+import io.prometheus.dsl.GuavaDsl.serviceManagerListener
+import io.prometheus.dsl.MetricsDsl.healthCheck
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import kotlin.properties.Delegates
@@ -96,13 +96,13 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     fun initService() {
-        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
         addService(this)
         val clazzName = javaClass.simpleName
         serviceManager =
                 ServiceManager(services).apply {
                     addListener(
-                            newServiceManagerListener {
+                            serviceManagerListener {
                                 healthy { logger.info("All $clazzName services healthy") }
                                 stopped { logger.info("All $clazzName services stopped") }
                                 failure { service -> logger.info("$clazzName service failed: $service") }
@@ -157,7 +157,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
                 register("metrics_service", metricsService.healthCheck)
             register(
                     "all_services_healthy",
-                    newHealthCheck {
+                    healthCheck {
                         if (serviceManager.isHealthy)
                             HealthCheck.Result.healthy()
                         else {

@@ -30,7 +30,7 @@ class ZipkinReporterService(private val url: String) : AbstractIdleService() {
     private val reporter = AsyncReporter.create(sender)
 
     init {
-        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
     }
 
     fun newTracing(serviceName: String): Tracing =
@@ -48,10 +48,7 @@ class ZipkinReporterService(private val url: String) : AbstractIdleService() {
         sender.close()
     }
 
-    override fun toString() =
-            toStringElements {
-                add("url", url)
-            }
+    override fun toString() = toStringElements { add("url", url) }
 
     companion object {
         private val logger = LoggerFactory.getLogger(ZipkinReporterService::class.java)

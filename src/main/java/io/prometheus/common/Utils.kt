@@ -25,17 +25,12 @@ import com.google.common.base.Splitter
 import com.google.common.io.CharStreams
 import com.google.common.util.concurrent.Service
 import io.prometheus.Proxy
-import io.prometheus.dsl.MetricsDsl.newHealthCheck
+import io.prometheus.dsl.MetricsDsl.healthCheck
 import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.*
-
-object Utils {
-    val logger: Logger = LoggerFactory.getLogger(Utils::class.java)
-}
 
 val localHostName: String by lazy {
     try {
@@ -45,9 +40,9 @@ val localHostName: String by lazy {
     }
 }
 
-fun getBanner(filename: String): String {
+fun getBanner(filename: String, logger: Logger): String {
     try {
-        Utils.logger.javaClass.classLoader.getResourceAsStream(filename).use {
+        logger.javaClass.classLoader.getResourceAsStream(filename).use {
             val banner = CharStreams.toString(InputStreamReader(it, Charsets.UTF_8.name()))
             val lines: List<String> = Splitter.on("\n").splitToList(banner)
 
@@ -83,7 +78,7 @@ fun getBanner(filename: String): String {
 }
 
 fun newQueueHealthCheck(queue: Queue<*>, size: Int) =
-        newHealthCheck {
+        healthCheck {
             if (queue.size < size)
                 HealthCheck.Result.healthy()
             else
@@ -91,7 +86,7 @@ fun newQueueHealthCheck(queue: Queue<*>, size: Int) =
         }
 
 fun newMapHealthCheck(map: Map<*, *>, size: Int) =
-        newHealthCheck {
+        healthCheck {
             if (map.size < size)
                 HealthCheck.Result.healthy()
             else

@@ -32,7 +32,7 @@ import io.prometheus.agent.*
 import io.prometheus.common.*
 import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.dsl.GrpcDsl.channel
-import io.prometheus.dsl.GrpcDsl.newStreamObserver
+import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ThreadDsl.threadFactory
 import io.prometheus.grpc.*
@@ -94,7 +94,7 @@ class Agent(options: AgentOptions,
 
     private var lastMsgSent: Long by AtomicDelegates.long()
 
-    var grpcStarted: Boolean by AtomicDelegates.boolean(false)
+    private var grpcStarted: Boolean by AtomicDelegates.boolean(false)
     var channel: ManagedChannel by AtomicDelegates.notNullReference()
     var agentId: String by AtomicDelegates.notNullReference()
 
@@ -424,7 +424,7 @@ class Agent(options: AgentOptions,
                 }
 
         val observer =
-                newStreamObserver<ScrapeRequest> {
+                streamObserver<ScrapeRequest> {
                     onNext { request ->
                         readRequestsExecutorService.submit(readRequestAction(request))
                     }
@@ -447,7 +447,7 @@ class Agent(options: AgentOptions,
         val checkMillis = configVals.internal.scrapeResponseQueueCheckMillis.toLong()
         val observer =
                 asyncStub.writeResponsesToProxy(
-                        newStreamObserver<Empty> {
+                        streamObserver<Empty> {
                             onNext { _ ->
                                 // Ignore Empty return value
                             }
@@ -522,7 +522,7 @@ class Agent(options: AgentOptions,
         fun main(argv: Array<String>) {
             val options = AgentOptions(argv, true)
 
-            logger.info(getBanner("banners/agent.txt"))
+            logger.info(getBanner("banners/agent.txt", logger))
             logger.info(getVersionDesc(false))
 
             Agent(options = options).startAsync()

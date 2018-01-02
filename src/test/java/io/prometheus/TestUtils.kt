@@ -44,13 +44,14 @@ object TestUtils {
                 }
         val options = ProxyOptions(args)
 
-        logger.info(getBanner("banners/proxy.txt"))
+        logger.info(getBanner("banners/proxy.txt", logger))
         logger.info(getVersionDesc(false))
 
-        val proxy = Proxy(options = options, proxyPort = PROXY_PORT, inProcessServerName = serverName, testMode = true)
-        proxy.startAsync()
-        proxy.awaitRunning(5, TimeUnit.SECONDS)
-        return proxy
+        return Proxy(options = options, proxyPort = PROXY_PORT, inProcessServerName = serverName, testMode = true)
+                .apply {
+                    startAsync()
+                    awaitRunning(5, TimeUnit.SECONDS)
+                }
     }
 
     @Throws(IOException::class, TimeoutException::class)
@@ -67,12 +68,13 @@ object TestUtils {
                 }
         val options = AgentOptions(args, false)
 
-        logger.info(getBanner("banners/agent.txt"))
+        logger.info(getBanner("banners/agent.txt", logger))
         logger.info(getVersionDesc(false))
 
-        return Agent(options = options, inProcessServerName = serverName, testMode = true).apply {
-            startAsync()
-            awaitRunning(5, TimeUnit.SECONDS)
-        }
+        return Agent(options = options, inProcessServerName = serverName, testMode = true)
+                .apply {
+                    startAsync()
+                    awaitRunning(5, TimeUnit.SECONDS)
+                }
     }
 }

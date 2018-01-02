@@ -17,17 +17,15 @@
 package io.prometheus.common
 
 import com.google.common.util.concurrent.Service
-import io.prometheus.dsl.GuavaDsl.newServiceListener
+import io.prometheus.dsl.GuavaDsl.serviceListener
 import org.slf4j.Logger
 
-object GenericServiceListener {
-    fun newListener(service: Service, logger: Logger): Service.Listener {
-        return newServiceListener {
-            starting { logger.info("Starting $service") }
-            running { logger.info("Running $service") }
-            stopping { logger.info("Stopping $service") }
-            terminated { logger.info("Terminated $service") }
-            failed { from, t -> logger.info("Failed on $from $service", t) }
-        }
+fun genericServiceListener(service: Service, logger: Logger): Service.Listener {
+    return serviceListener {
+        starting { logger.info("Starting $service") }
+        running { logger.info("Running $service") }
+        stopping { logger.info("Stopping $service") }
+        terminated { logger.info("Terminated $service") }
+        failed { from, t -> logger.info("Failed on $from $service", t) }
     }
 }

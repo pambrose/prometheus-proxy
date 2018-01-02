@@ -22,7 +22,7 @@ import com.google.common.net.HttpHeaders.*
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
-import io.prometheus.common.GenericServiceListener
+import io.prometheus.common.genericServiceListener
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import org.slf4j.LoggerFactory
 import spark.*
@@ -42,7 +42,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     init {
         if (proxy.isZipkinEnabled)
             tracing = proxy.zipkinReporterService.newTracing("proxy-http")
-        addListener(GenericServiceListener.newListener(this, logger), MoreExecutors.directExecutor())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
     }
 
     override fun startUp() {
@@ -161,10 +161,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
             proxy.metrics.scrapeRequests.labels(type).inc()
     }
 
-    override fun toString() =
-            toStringElements {
-                add("port", port)
-            }
+    override fun toString() = toStringElements { add("port", port) }
 
     companion object {
         private val logger = LoggerFactory.getLogger(ProxyHttpService::class.java)

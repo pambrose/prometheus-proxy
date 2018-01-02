@@ -27,7 +27,7 @@ object MetricsDsl {
         }
     }
 
-    fun newHealthCheck(block: HealthCheck.() -> HealthCheck.Result): HealthCheck {
+    fun healthCheck(block: HealthCheck.() -> HealthCheck.Result): HealthCheck {
         return object : HealthCheck() {
             @Throws(Exception::class)
             override fun check(): Result {
