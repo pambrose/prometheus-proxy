@@ -5,8 +5,6 @@ import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
 import io.prometheus.delegate.singleAssign
 
-private typealias NoArgs = () -> Unit
-
 object GuavaDsl {
 
     fun Any.toStringElements(block: MoreObjects.ToStringHelper.() -> Unit): String {
@@ -23,8 +21,8 @@ object GuavaDsl {
     }
 
     class ServiceManagerListenerHelper : ServiceManager.Listener() {
-        private var healthyBlock: NoArgs? by singleAssign()
-        private var stoppedBlock: NoArgs? by singleAssign()
+        private var healthyBlock: (() -> Unit)? by singleAssign()
+        private var stoppedBlock: (() -> Unit)? by singleAssign()
         private var failureBlock: ((Service) -> Unit)? by singleAssign()
 
         override fun healthy() {
@@ -42,11 +40,11 @@ object GuavaDsl {
             failureBlock?.invoke(service)
         }
 
-        fun healthy(block: NoArgs) {
+        fun healthy(block: () -> Unit) {
             healthyBlock = block
         }
 
-        fun stopped(block: NoArgs) {
+        fun stopped(block: () -> Unit) {
             stoppedBlock = block
         }
 
@@ -62,8 +60,8 @@ object GuavaDsl {
     }
 
     class ServiceListenerHelper : Service.Listener() {
-        private var startingBlock: NoArgs? by singleAssign()
-        private var runningBlock: NoArgs? by singleAssign()
+        private var startingBlock: (() -> Unit)? by singleAssign()
+        private var runningBlock: (() -> Unit)? by singleAssign()
         private var stoppingBlock: ((Service.State) -> Unit)? by singleAssign()
         private var terminatedBlock: ((Service.State) -> Unit)? by singleAssign()
         private var failedBlock: ((Service.State, Throwable) -> Unit)? by singleAssign()
@@ -93,11 +91,11 @@ object GuavaDsl {
             failedBlock?.invoke(from, failure)
         }
 
-        fun starting(block: NoArgs?) {
+        fun starting(block: (() -> Unit)?) {
             startingBlock = block
         }
 
-        fun running(block: NoArgs) {
+        fun running(block: () -> Unit) {
             runningBlock = block
         }
 

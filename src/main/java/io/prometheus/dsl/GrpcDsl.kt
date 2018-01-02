@@ -83,5 +83,4 @@ object GrpcDsl {
             completedBlock = block
         }
     }
-
 }

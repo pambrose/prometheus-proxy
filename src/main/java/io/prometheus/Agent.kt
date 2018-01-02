@@ -248,6 +248,7 @@ class Agent(options: AgentOptions,
                     scrapeId = scrapeRequest.scrapeId
                 }
         val pathContext = pathContextMap[path]
+
         if (pathContext == null) {
             logger.warn("Invalid path in fetchUrl(): $path")
             updateScrapeCounter("invalid_path")
@@ -263,6 +264,7 @@ class Agent(options: AgentOptions,
 
         val requestTimer = if (isMetricsEnabled) metrics.scrapeRequestLatency.labels(agentName).startTimer() else null
         var reason = "None"
+
         try {
             pathContext.fetchUrl(scrapeRequest).use {
                 statusCode = it.code()
