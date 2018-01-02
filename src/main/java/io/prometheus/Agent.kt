@@ -61,7 +61,7 @@ class Agent(options: AgentOptions,
     private val initialConnectionLatch = CountDownLatch(1)
     private val okHttpClient = OkHttpClient()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
-    private val agentName: String = if (options.agentName.isBlank()) "Unnamed-${localHostName}" else options.agentName
+    private val agentName: String = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
     private var metrics: AgentMetrics by Delegates.notNull()
     private var blockingStub: ProxyServiceBlockingStub by AtomicDelegates.notNullReference()
     private var asyncStub: ProxyServiceStub by AtomicDelegates.notNullReference()
@@ -84,9 +84,7 @@ class Agent(options: AgentOptions,
     private val hostName: String
     private val port: Int
     private val reconnectLimiter =
-            RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs).apply {
-                acquire()  // Prime the limiter
-            }
+            RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs).apply { acquire()  /* Prime the limiter*/ }
 
     private val pathConfigs =
             configVals.pathConfigs
@@ -96,7 +94,8 @@ class Agent(options: AgentOptions,
 
     private var lastMsgSent: Long by AtomicDelegates.long()
 
-    var channel: ManagedChannel? by AtomicDelegates.nullableReference()
+    var grpcStarted: Boolean by AtomicDelegates.boolean(false)
+    var channel: ManagedChannel by AtomicDelegates.notNullReference()
     var agentId: String by AtomicDelegates.notNullReference()
 
     private val proxyHost: String
@@ -138,7 +137,8 @@ class Agent(options: AgentOptions,
     override fun shutDown() {
         if (isZipkinEnabled)
             tracing.close()
-        channel?.shutdownNow()
+        if (grpcStarted)
+            channel.shutdownNow()
         heartbeatService.shutdownNow()
         super.shutDown()
     }
@@ -216,15 +216,17 @@ class Agent(options: AgentOptions,
     private fun resetGrpcStubs() {
         logger.info("Creating gRPC stubs")
 
-        channel?.shutdownNow()
+        if (grpcStarted)
+            channel.shutdownNow()
+        else
+            grpcStarted = true
 
-        channel = channel(inProcessServerName = inProcessServerName,
-                          hostName = hostName,
-                          port = port) {
-            if (isZipkinEnabled)
-                intercept(grpcTracing.newClientInterceptor())
-            usePlaintext(true)
-        }
+        channel =
+                channel(inProcessServerName = inProcessServerName, hostName = hostName, port = port) {
+                    if (isZipkinEnabled)
+                        intercept(grpcTracing.newClientInterceptor())
+                    usePlaintext(true)
+                }
 
         val interceptors = listOf<ClientInterceptor>(AgentClientInterceptor(this))
 
@@ -236,7 +238,6 @@ class Agent(options: AgentOptions,
         if (isMetricsEnabled)
             metrics.scrapeRequests.labels(type).inc()
     }
-
 
     private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
         var statusCode = 404
