@@ -31,7 +31,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     private val waitMillis = proxy.configVals.internal.scrapeRequestQueueCheckMillis.toLong()
 
     private var lastActivityTime: Long by AtomicDelegates.long()
-    var valid: Boolean by AtomicDelegates.boolean(true)
+    var isValid: Boolean by AtomicDelegates.boolean(true)
     var hostName: String by AtomicDelegates.notNullReference()
     var agentName: String by AtomicDelegates.notNullReference()
 
@@ -57,7 +57,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
             }
 
     fun markInvalid() {
-        valid = false
+        isValid = false
     }
 
     fun markActivity() {
@@ -67,7 +67,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     override fun toString() =
             toStringElements {
                 add("agentId", agentId)
-                add("valid", valid)
+                add("valid", isValid)
                 add("remoteAddr", remoteAddr)
                 add("agentName", agentName)
                 add("hostName", hostName)

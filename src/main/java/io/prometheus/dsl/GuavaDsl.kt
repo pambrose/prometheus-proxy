@@ -25,7 +25,7 @@ object GuavaDsl {
     class ServiceManagerListenerHelper : ServiceManager.Listener() {
         private var healthyBlock: NoArgs? by singleAssign()
         private var stoppedBlock: NoArgs? by singleAssign()
-        private var failureBlock: ((service: Service) -> Unit)? by singleAssign()
+        private var failureBlock: ((Service) -> Unit)? by singleAssign()
 
         override fun healthy() {
             super.healthy()
@@ -64,7 +64,7 @@ object GuavaDsl {
     class ServiceListenerHelper : Service.Listener() {
         private var startingBlock: NoArgs? by singleAssign()
         private var runningBlock: NoArgs? by singleAssign()
-        private var stoppingBlock: ((from: Service.State) -> Unit)? by singleAssign()
+        private var stoppingBlock: ((Service.State) -> Unit)? by singleAssign()
         private var terminatedBlock: ((Service.State) -> Unit)? by singleAssign()
         private var failedBlock: ((Service.State, Throwable) -> Unit)? by singleAssign()
 

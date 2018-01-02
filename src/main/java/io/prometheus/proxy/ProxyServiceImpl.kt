@@ -21,6 +21,7 @@ import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
 import io.prometheus.Proxy
+import io.prometheus.dsl.GrpcDsl.newStreamObserver
 import io.prometheus.grpc.*
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicLong
@@ -30,10 +31,11 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     override fun connectAgent(request: Empty, responseObserver: StreamObserver<Empty>) {
         if (proxy.isMetricsEnabled)
             proxy.metrics.connects.inc()
-        responseObserver.apply {
-            onNext(Empty.getDefaultInstance())
-            onCompleted()
-        }
+        responseObserver
+                .apply {
+                    onNext(Empty.getDefaultInstance())
+                    onCompleted()
+                }
     }
 
     override fun registerAgent(request: RegisterAgentRequest,
@@ -46,17 +48,17 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             markActivity()
         } ?: logger.info("registerAgent() missing AgentContext agentId: $agentId")
 
-        responseObserver.apply {
-            val response =
-                    with(RegisterAgentResponse.newBuilder()) {
-                        valid = agentContext != null
-                        reason = "Invalid agentId: $agentId"
-                        this.agentId = agentId
-                        build()
-                    }
-            onNext(response)
-            onCompleted()
-        }
+        responseObserver
+                .apply {
+                    onNext(
+                            with(RegisterAgentResponse.newBuilder()) {
+                                valid = agentContext != null
+                                reason = "Invalid agentId: $agentId"
+                                this.agentId = agentId
+                                build()
+                            })
+                    onCompleted()
+                }
     }
 
     override fun registerPath(request: RegisterPathRequest,
@@ -82,10 +84,11 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
         } ?: logger.error("Missing AgentContext for agentId: $agentId")
 
-        responseObserver.apply {
-            onNext(response)
-            onCompleted()
-        }
+        responseObserver
+                .apply {
+                    onNext(response)
+                    onCompleted()
+                }
     }
 
     override fun unregisterPath(request: UnregisterPathRequest,
@@ -108,21 +111,23 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             agentContext.markActivity()
         }
 
-        responseObserver.apply {
-            onNext(responseBuilder.build())
-            onCompleted()
-        }
+        responseObserver
+                .apply {
+                    onNext(responseBuilder.build())
+                    onCompleted()
+                }
     }
 
     override fun pathMapSize(request: PathMapSizeRequest, responseObserver: StreamObserver<PathMapSizeResponse>) {
-        responseObserver.apply {
-            val response = with(PathMapSizeResponse.newBuilder()) {
-                pathCount = proxy.pathMapSize()
-                build()
-            }
-            onNext(response)
-            onCompleted()
-        }
+        responseObserver
+                .apply {
+                    onNext(
+                            with(PathMapSizeResponse.newBuilder()) {
+                                pathCount = proxy.pathMapSize()
+                                build()
+                            })
+                    onCompleted()
+                }
     }
 
     override fun sendHeartBeat(request: HeartBeatRequest, responseObserver: StreamObserver<HeartBeatResponse>) {
@@ -131,23 +136,21 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         val agentContext = proxy.getAgentContext(request.agentId)
         agentContext?.markActivity() ?: logger.info("sendHeartBeat() missing AgentContext agentId: ${request.agentId}")
         responseObserver.apply {
-            val response =
+            onNext(
                     with(HeartBeatResponse.newBuilder()) {
                         valid = agentContext != null
                         reason = "Invalid agentId: ${request.agentId}"
                         build()
-                    }
-            onNext(response)
+                    })
             onCompleted()
         }
     }
 
     override fun readRequestsFromProxy(agentInfo: AgentInfo, responseObserver: StreamObserver<ScrapeRequest>) {
         val agentId = agentInfo.agentId
-        val agentContext = proxy.getAgentContext(agentId)
-        if (agentContext != null) {
-            while (proxy.isRunning && agentContext.valid) {
-                agentContext.pollScrapeRequestQueue()?.apply {
+        proxy.getAgentContext(agentId)?.let {
+            while (proxy.isRunning && it.isValid) {
+                it.pollScrapeRequestQueue()?.apply {
                     responseObserver.onNext(scrapeRequest)
                 }
             }
@@ -156,8 +159,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     }
 
     override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> {
-        return object : StreamObserver<ScrapeResponse> {
-            override fun onNext(response: ScrapeResponse) {
+        return newStreamObserver {
+            onNext { response ->
                 proxy.getFromScrapeRequestMap(response.scrapeId)?.apply {
                     scrapeResponse = response
                     markComplete()
@@ -165,27 +168,30 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                 } ?: logger.error("Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}")
             }
 
-            override fun onError(t: Throwable) {
-                val status = Status.fromThrowable(t)
-                if (status !== Status.CANCELLED)
-                    logger.info("Error in writeResponsesToProxy(): $status")
+            onError { t ->
+                Status.fromThrowable(t).let {
+                    if (it !== Status.CANCELLED)
+                        logger.info("Error in writeResponsesToProxy(): $it")
+                }
+
                 try {
-                    responseObserver.apply {
-                        onNext(Empty.getDefaultInstance())
-                        onCompleted()
-                    }
+                    responseObserver
+                            .apply {
+                                onNext(Empty.getDefaultInstance())
+                                onCompleted()
+                            }
                 } catch (e: StatusRuntimeException) {
                     // logger.warn("StatusRuntimeException", e);
                     // Ignore
                 }
-
             }
 
-            override fun onCompleted() {
-                responseObserver.apply {
-                    onNext(Empty.getDefaultInstance())
-                    onCompleted()
-                }
+            onCompleted {
+                responseObserver
+                        .apply {
+                            onNext(Empty.getDefaultInstance())
+                            onCompleted()
+                        }
             }
         }
     }

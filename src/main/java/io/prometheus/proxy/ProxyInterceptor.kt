@@ -33,9 +33,7 @@ class ProxyInterceptor : ServerInterceptor {
                 object : ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(call) {
                     override fun sendHeaders(headers: Metadata) {
                         // agent_id was assigned in ServerTransportFilter
-                        val agentId = attributes.get(Proxy.ATTRIB_AGENT_ID)
-                        if (agentId != null)
-                            headers.put(META_AGENT_ID, agentId)
+                        attributes.get(Proxy.ATTRIB_AGENT_ID)?.let { headers.put(META_AGENT_ID, it) }
                         super.sendHeaders(headers)
                     }
                 },

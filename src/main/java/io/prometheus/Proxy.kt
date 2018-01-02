@@ -201,13 +201,8 @@ class Proxy(options: ProxyOptions,
         else
             synchronized(pathMap) {
                 pathMap.forEach { k, v ->
-                    if (v.agentId == agentId) {
-                        val agentContext = pathMap.remove(k)
-                        if (agentContext != null)
-                            logger.info("Removed path /$k for $agentContext")
-                        else
-                            logger.error("Missing path /$k for agentId: $agentId")
-                    }
+                    if (v.agentId == agentId)
+                        pathMap.remove(k)?.let { logger.info("Removed path /$k for $it") } ?: logger.error("Missing path /$k for agentId: $agentId")
                 }
             }
     }

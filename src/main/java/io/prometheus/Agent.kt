@@ -28,11 +28,11 @@ import io.grpc.ClientInterceptors.intercept
 import io.grpc.ManagedChannel
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
-import io.grpc.stub.StreamObserver
 import io.prometheus.agent.*
 import io.prometheus.common.*
 import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.dsl.GrpcDsl.channel
+import io.prometheus.dsl.GrpcDsl.newStreamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ThreadDsl.threadFactory
 import io.prometheus.grpc.*
@@ -415,26 +415,29 @@ class Agent(options: AgentOptions,
     }
 
     private fun readRequestsFromProxy(disconnected: AtomicBoolean) {
-        val observer = object : StreamObserver<ScrapeRequest> {
-            override fun onNext(request: ScrapeRequest) {
-                readRequestsExecutorService.submit(readRequestAction(request))
-            }
-
-            override fun onError(t: Throwable) {
-                val status = Status.fromThrowable(t)
-                logger.error("Error in readRequestsFromProxy(): $status")
-                disconnected.set(true)
-            }
-
-            override fun onCompleted() {
-                disconnected.set(true)
-            }
-        }
         val agentInfo =
                 with(AgentInfo.newBuilder()) {
                     agentId = this@Agent.agentId
                     build()
                 }
+
+        val observer =
+                newStreamObserver<ScrapeRequest> {
+                    onNext { request ->
+                        readRequestsExecutorService.submit(readRequestAction(request))
+                    }
+
+                    onError { t ->
+                        val status = Status.fromThrowable(t)
+                        logger.error("Error in readRequestsFromProxy(): $status")
+                        disconnected.set(true)
+                    }
+
+                    onCompleted {
+                        disconnected.set(true)
+                    }
+                }
+
         asyncStub.readRequestsFromProxy(agentInfo, observer)
     }
 
@@ -442,32 +445,30 @@ class Agent(options: AgentOptions,
         val checkMillis = configVals.internal.scrapeResponseQueueCheckMillis.toLong()
         val observer =
                 asyncStub.writeResponsesToProxy(
-                        object : StreamObserver<Empty> {
-                            override fun onNext(empty: Empty) {
+                        newStreamObserver<Empty> {
+                            onNext { _ ->
                                 // Ignore Empty return value
                             }
 
-                            override fun onError(t: Throwable) {
+                            onError { t ->
                                 val s = Status.fromThrowable(t)
                                 logger.error("Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}")
                                 disconnected.set(true)
                             }
 
-                            override fun onCompleted() = disconnected.set(true)
+                            onCompleted { disconnected.set(true) }
                         })
 
         while (!disconnected.get()) {
             try {
                 // Set a short timeout to check if client has disconnected
-                val response = scrapeResponseQueue.poll(checkMillis, TimeUnit.MILLISECONDS)
-                if (response != null) {
-                    observer.onNext(response)
+                scrapeResponseQueue.poll(checkMillis, TimeUnit.MILLISECONDS)?.let {
+                    observer.onNext(it)
                     markMsgSent()
                 }
             } catch (e: InterruptedException) {
                 // Ignore
             }
-
         }
 
         logger.info("Disconnected from proxy at $proxyHost")
