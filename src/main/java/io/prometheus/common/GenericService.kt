@@ -115,24 +115,30 @@ abstract class GenericService protected constructor(protected val genericConfigV
         super.startUp()
         if (isZipkinEnabled)
             zipkinReporterService.startAsync()
+
         if (isMetricsEnabled) {
             metricsService.startAsync()
             jmxReporter.start()
         }
+
         if (isAdminEnabled)
             adminService.startAsync()
+
         Runtime.getRuntime().addShutdownHook(shutDownHookAction(this))
     }
 
     override fun shutDown() {
         if (isAdminEnabled)
             adminService.stopAsync()
+
         if (isMetricsEnabled) {
             metricsService.stopAsync()
             jmxReporter.stop()
         }
+
         if (isZipkinEnabled)
             zipkinReporterService.stopAsync()
+
         super.shutDown()
     }
 

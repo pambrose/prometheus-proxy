@@ -21,6 +21,7 @@ import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
+import com.salesforce.grpc.contrib.Servers
 import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
@@ -64,6 +65,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
                     addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
                     addTransportFilter(ProxyTransportFilter(proxy))
                 }
+        Servers.shutdownWithJvm(grpcServer, 2000)
 
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
     }
@@ -76,7 +78,8 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
     override fun shutDown() {
         if (proxy.isZipkinEnabled)
             tracing.close()
-        grpcServer.shutdown()
+
+        Servers.shutdownGracefully(grpcServer, 2000)
     }
 
     override fun toString() =
@@ -94,7 +97,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
     companion object {
         val logger: Logger = LoggerFactory.getLogger(ProxyGrpcService::class.java)
 
-        fun create(proxy: Proxy, grpcPort: Int) = ProxyGrpcService(proxy = proxy, port = grpcPort)
+        fun create(proxy: Proxy, port: Int) = ProxyGrpcService(proxy = proxy, port = port)
         fun create(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
     }
 }

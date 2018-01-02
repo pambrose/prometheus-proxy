@@ -51,9 +51,9 @@ class Proxy(options: ProxyOptions,
     private val httpService = ProxyHttpService(this, proxyPort)
     private val grpcService: ProxyGrpcService =
             if (inProcessServerName.isEmpty())
-                ProxyGrpcService.create(this, options.agentPort)
+                ProxyGrpcService.create(proxy = this, port = options.agentPort)
             else
-                ProxyGrpcService.create(this, inProcessServerName)
+                ProxyGrpcService.create(proxy = this, serverName = inProcessServerName)
 
     private var agentCleanupService: AgentContextCleanupService by Delegates.notNull()
 
