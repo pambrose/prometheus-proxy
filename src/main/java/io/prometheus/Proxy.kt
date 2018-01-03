@@ -95,7 +95,7 @@ class Proxy(options: ProxyOptions,
         if (configVals.internal.staleAgentCheckEnabled)
             agentCleanupService.apply { startSync() }
         else
-            logger.info("Agent eviction thread not started")
+            logger.info { "Agent eviction thread not started" }
     }
 
     override fun shutDown() {
@@ -140,16 +140,16 @@ class Proxy(options: ProxyOptions,
 
     fun removeAgentContext(agentId: String?): AgentContext? {
         return if (agentId.isNullOrEmpty()) {
-            logger.error("Missing agentId")
+            logger.error { "Missing agentId" }
             null
         }
         else {
             val agentContext = agentContextMap.remove(agentId)
             if (agentContext == null) {
-                logger.error("Missing AgentContext for agentId: $agentId")
+                logger.error { "Missing AgentContext for agentId: $agentId" }
             }
             else {
-                logger.info("Removed $agentContext")
+                logger.info { "Removed $agentContext" }
                 agentContext.markInvalid()
             }
             agentContext
@@ -173,7 +173,7 @@ class Proxy(options: ProxyOptions,
         synchronized(pathMap) {
             pathMap.put(path, agentContext)
             if (!isTestMode)
-                logger.info("Added path /$path for $agentContext")
+                logger.info { "Added path /$path for $agentContext" }
         }
     }
 
@@ -183,7 +183,7 @@ class Proxy(options: ProxyOptions,
             when {
                 agentContext == null            -> {
                     val msg = "Unable to remove path /$path - path not found"
-                    logger.error(msg)
+                    logger.error { msg }
                     responseBuilder
                             .apply {
                                 valid = false
@@ -192,7 +192,7 @@ class Proxy(options: ProxyOptions,
                 }
                 agentContext.agentId != agentId -> {
                     val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
-                    logger.error(msg)
+                    logger.error { msg }
                     responseBuilder
                             .apply {
                                 valid = false
@@ -202,7 +202,7 @@ class Proxy(options: ProxyOptions,
                 else                            -> {
                     pathMap.remove(path)
                     if (!isTestMode)
-                        logger.info("Removed path /$path for $agentContext")
+                        logger.info { "Removed path /$path for $agentContext" }
                     responseBuilder
                             .apply {
                                 valid = true
@@ -215,13 +215,13 @@ class Proxy(options: ProxyOptions,
 
     fun removePathByAgentId(agentId: String?) {
         if (agentId.isNullOrEmpty())
-            logger.error("Missing agentId")
+            logger.error { "Missing agentId" }
         else
             synchronized(pathMap) {
                 pathMap.forEach { k, v ->
                     if (v.agentId == agentId)
                         pathMap.remove(k)
-                                ?.let { logger.info("Removed path /$k for $it") } ?: logger.error("Missing path /$k for agentId: $agentId")
+                                ?.let { logger.info { "Removed path /$k for $it" } } ?: logger.error { "Missing path /$k for agentId: $agentId" }
                 }
             }
     }
@@ -241,8 +241,8 @@ class Proxy(options: ProxyOptions,
         fun main(argv: Array<String>) {
             val options = ProxyOptions(argv)
 
-            logger.info(getBanner("banners/proxy.txt", logger))
-            logger.info(getVersionDesc(false))
+            logger.info { getBanner("banners/proxy.txt", logger) }
+            logger.info { getVersionDesc(false) }
 
             Proxy(options = options) { startSync() }
         }

@@ -85,7 +85,7 @@ class InProcessTestNoAdminMetricsTest {
         @JvmStatic
         @AfterClass
         fun takeDown() {
-            logger.info("Stopping Proxy and Agent")
+            logger.info { "Stopping Proxy and Agent" }
             PROXY.stopSync()
             AGENT.stopSync()
         }

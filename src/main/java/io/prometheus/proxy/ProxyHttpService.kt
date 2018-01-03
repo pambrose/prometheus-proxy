@@ -68,7 +68,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                             res.header("cache-control", "must-revalidate,no-cache,no-store")
 
                             if (!proxy.isRunning) {
-                                logger.error("Proxy stopped")
+                                logger.error { "Proxy stopped" }
                                 res.status(503)
                                 updateScrapeRequests("proxy_stopped")
                                 return@Route null
@@ -77,7 +77,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                             val vals = req.splat()
 
                             if (vals == null || vals.isEmpty()) {
-                                logger.info("Request missing path")
+                                logger.info { "Request missing path" }
                                 res.status(404)
                                 updateScrapeRequests("missing_path")
                                 return@Route null
@@ -94,14 +94,14 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                             val agentContext = proxy.getAgentContextByPath(path)
 
                             if (agentContext == null) {
-                                logger.debug("Invalid path request /\${path")
+                                logger.debug { "Invalid path request /\${path" }
                                 res.status(404)
                                 updateScrapeRequests("invalid_path")
                                 return@Route null
                             }
 
                             if (!agentContext.isValid) {
-                                logger.error("Invalid AgentContext")
+                                logger.error { "Invalid AgentContext" }
                                 res.status(404)
                                 updateScrapeRequests("invalid_agent_context")
                                 return@Route null
@@ -146,10 +146,10 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                 }
             }
         } finally {
-            proxy.removeFromScrapeRequestMap(scrapeRequest.scrapeId) ?: logger.error("Scrape request ${scrapeRequest.scrapeId} missing in map")
+            proxy.removeFromScrapeRequestMap(scrapeRequest.scrapeId) ?: logger.error { "Scrape request ${scrapeRequest.scrapeId} missing in map" }
         }
 
-        logger.debug("Results returned from $agentContext for $scrapeRequest")
+        logger.debug { "Results returned from $agentContext for $scrapeRequest" }
 
         val scrapeResponse = scrapeRequest.scrapeResponse
         val statusCode = scrapeResponse.statusCode
@@ -180,9 +180,9 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
     companion object : KLogging() {
         fun sparkExceptionHandler(e: Exception, port: Int) {
             if (e is BindException)
-                logger.error("ignite failed to bind to port $port", e)
+                logger.error(e) { "ignite failed to bind to port $port" }
             else
-                logger.error("ignite failed", e)
+                logger.error(e) { "ignite failed" }
             System.exit(100)
         }
 

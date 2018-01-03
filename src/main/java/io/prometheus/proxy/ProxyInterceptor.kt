@@ -27,7 +27,7 @@ class ProxyInterceptor : ServerInterceptor {
         val attributes = call.attributes
         //val methodDescriptor = call.methodDescriptor
         // final String methodName = methodDescriptor.getFullMethodName();
-        // logger.info("Intercepting {}", methodName);
+        // logger.info {"Intercepting {}", methodName);
 
         return handler.startCall(
                 object : ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(call) {

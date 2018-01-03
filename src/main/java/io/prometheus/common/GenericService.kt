@@ -69,7 +69,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                         adminConfig.threadDumpPath) { addService(this) }
         }
         else {
-            logger.info("Admin service disabled")
+            logger.info { "Admin service disabled" }
         }
 
         if (isMetricsEnabled) {
@@ -83,7 +83,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
             jmxReporter = JmxReporter.forRegistry(MetricRegistry()).build()
         }
         else {
-            logger.info("Metrics service disabled")
+            logger.info { "Metrics service disabled" }
         }
 
         if (isZipkinEnabled) {
@@ -91,7 +91,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
             zipkinReporterService = ZipkinReporterService(url) { addService(this) }
         }
         else {
-            logger.info("Zipkin reporter service disabled")
+            logger.info { "Zipkin reporter service disabled" }
         }
     }
 
@@ -103,9 +103,9 @@ abstract class GenericService protected constructor(protected val genericConfigV
                 serviceManager(services) {
                     addListener(
                             serviceManagerListener {
-                                healthy { logger.info("All $clazzName services healthy") }
-                                stopped { logger.info("All $clazzName services stopped") }
-                                failure { service -> logger.info("$clazzName service failed: $service") }
+                                healthy { logger.info { "All $clazzName services healthy" } }
+                                stopped { logger.info { "All $clazzName services stopped" } }
+                                failure { service -> logger.info { "$clazzName service failed: $service" } }
                             })
                 }
         registerHealthChecks()
@@ -147,7 +147,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     private fun addService(service: Service) {
-        logger.info("Adding service $service")
+        logger.info { "Adding service $service" }
         services.add(service)
     }
 
@@ -173,7 +173,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                                     .servicesByState()
                                                     .entries()
                                                     .filter { it.key !== Service.State.RUNNING }
-                                                    .onEach { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
+                                                    .onEach { logger.warn { "Incorrect state - ${it.key}: ${it.value}" } }
                                                     .map { "${it.key}: ${it.value}" }
                                                     .toList()
                                     HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")

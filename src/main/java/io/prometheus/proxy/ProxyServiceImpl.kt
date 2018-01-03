@@ -48,7 +48,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                     agentName = request.agentName
                     hostName = request.hostName
                     markActivity()
-                } ?: logger.info("registerAgent() missing AgentContext agentId: $agentId")
+                } ?: logger.info { "registerAgent() missing AgentContext agentId: $agentId" }
 
         responseObserver
                 .apply {
@@ -68,7 +68,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                               responseObserver: StreamObserver<RegisterPathResponse>) {
         val path = request.path
         if (proxy.containsPath(path))
-            logger.info("Overwriting path /$path")
+            logger.info { "Overwriting path /$path" }
 
         val agentId = request.agentId
         var valid = false
@@ -78,7 +78,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                     valid = true
                     proxy.addPath(path, this)
                     markActivity()
-                } ?: logger.error("Missing AgentContext for agentId: $agentId")
+                } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
 
         responseObserver
                 .apply {
@@ -103,7 +103,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         val responseBuilder = UnregisterPathResponse.newBuilder()
 
         if (agentContext == null) {
-            logger.error("Missing AgentContext for agentId: $agentId")
+            logger.error { "Missing AgentContext for agentId: $agentId" }
             responseBuilder
                     .apply {
                         valid = false
@@ -139,7 +139,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         if (proxy.isZipkinEnabled)
             proxy.metrics.heartbeats.inc()
         val agentContext = proxy.getAgentContext(request.agentId)
-        agentContext?.markActivity() ?: logger.info("sendHeartBeat() missing AgentContext agentId: ${request.agentId}")
+        agentContext?.markActivity() ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
         responseObserver
                 .apply {
                     onNext(
@@ -173,14 +173,14 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                             scrapeResponse = response
                             markComplete()
                             agentContext.markActivity()
-                        } ?: logger.error("Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}")
+                        } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}" }
             }
 
             onError { t ->
                 Status.fromThrowable(t)
                         .let {
                             if (it !== Status.CANCELLED)
-                                logger.info("Error in writeResponsesToProxy(): $it")
+                                logger.info { "Error in writeResponsesToProxy(): $it" }
                         }
 
                 try {
@@ -190,7 +190,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                                 onCompleted()
                             }
                 } catch (e: StatusRuntimeException) {
-                    // logger.warn("StatusRuntimeException", e);
+                    // logger.warn(e) {"StatusRuntimeException"};
                     // Ignore
                 }
             }

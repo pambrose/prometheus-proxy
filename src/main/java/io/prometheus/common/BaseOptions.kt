@@ -93,7 +93,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                 System.exit(0)
             }
         } catch (e: ParameterException) {
-            logger.error(e.message, e)
+            logger.error(e) { e.message }
             System.exit(1)
         }
     }
@@ -146,7 +146,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
         when {
             configName.isBlank()     -> {
                 if (exitOnMissingConfig) {
-                    logger.error("A configuration file or url must be specified with --config or \$$envConfig")
+                    logger.error { "A configuration file or url must be specified with --config or \$$envConfig" }
                     System.exit(1)
                 }
                 return fallback
@@ -159,9 +159,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
                             .withFallback(fallback)
                 } catch (e: Exception) {
                     if (e.cause is FileNotFoundException)
-                        logger.error("Invalid getConfig url: $configName")
+                        logger.error { "Invalid getConfig url: $configName" }
                     else
-                        logger.error("Exception: ${e.javaClass.simpleName} - ${e.message}", e)
+                        logger.error(e) { "Exception: ${e.javaClass.simpleName} - ${e.message}" }
                 }
 
             }
@@ -170,9 +170,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
                     return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
                 } catch (e: Exception) {
                     if (e.cause is FileNotFoundException)
-                        logger.error("Invalid getConfig filename: $configName")
+                        logger.error { "Invalid getConfig filename: $configName" }
                     else
-                        logger.error("Exception: ${e.javaClass.simpleName} - ${e.message}", e)
+                        logger.error(e) { "Exception: ${e.javaClass.simpleName} - ${e.message}" }
                 }
             }
         }

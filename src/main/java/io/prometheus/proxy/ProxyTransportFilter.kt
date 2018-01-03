@@ -34,7 +34,7 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
     override fun transportReady(attributes: Attributes): Attributes {
         val agentContext = AgentContext(proxy, getRemoteAddr(attributes))
         proxy.addAgentContext(agentContext)
-        logger.info("Connected to $agentContext")
+        logger.info { "Connected to $agentContext" }
         return attributes {
             set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)
             setAll<Any>(attributes)
@@ -45,11 +45,13 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
         val agentId = attributes!!.get(Proxy.ATTRIB_AGENT_ID)
         proxy.removePathByAgentId(agentId)
         val agentContext = proxy.removeAgentContext(agentId)
-        logger.info("Disconnected " +
-                    if (agentContext != null)
+        logger.info {
+            "Disconnected " +
+            if (agentContext != null)
                         "from $agentContext"
                     else
-                        "with invalid agentId: $agentId")
+                "with invalid agentId: $agentId"
+        }
         super.transportTerminated(attributes)
     }
 

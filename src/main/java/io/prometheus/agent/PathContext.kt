@@ -34,7 +34,7 @@ class PathContext(private val okHttpClient: OkHttpClient,
     @Throws(IOException::class)
     fun fetchUrl(scrapeRequest: ScrapeRequest): Response =
             try {
-                logger.debug("Fetching $this")
+                logger.debug { "Fetching $this" }
                 val request =
                         request
                                 .run {
@@ -45,7 +45,7 @@ class PathContext(private val okHttpClient: OkHttpClient,
 
                 okHttpClient.newCall(request).execute()
             } catch (e: IOException) {
-                logger.info("Failed HTTP request: $url [${e.javaClass.simpleName}: ${e.message}]")
+                logger.info { "Failed HTTP request: $url [${e.javaClass.simpleName}: ${e.message}]" }
                 throw e
             }
 

@@ -36,17 +36,17 @@ import java.util.stream.IntStream
 object CommonTests : KLogging() {
 
     fun missingPathTest(caller: String) {
-        logger.info("Calling missingPathTest() from $caller")
+        logger.info { "Calling missingPathTest() from $caller" }
         "http://localhost:$PROXY_PORT/".get { assertThat(it.code()).isEqualTo(404) }
     }
 
     fun invalidPathTest(caller: String) {
-        logger.info("Calling invalidPathTest() from $caller")
+        logger.info { "Calling invalidPathTest() from $caller" }
         "http://localhost:$PROXY_PORT/invalid_path".get { assertThat(it.code()).isEqualTo(404) }
     }
 
     fun addRemovePathsTest(agent: Agent, caller: String) {
-        logger.info("Calling addRemovePathsTest() from $caller")
+        logger.info { "Calling addRemovePathsTest() from $caller" }
 
         // Take into account pre-existing paths already registered
         val originalSize = agent.pathMapSize()
@@ -65,7 +65,7 @@ object CommonTests : KLogging() {
     }
 
     fun threadedAddRemovePathsTest(agent: Agent, caller: String) {
-        logger.info("Calling threadedAddRemovePathsTest() from $caller")
+        logger.info { "Calling threadedAddRemovePathsTest() from $caller" }
         val paths = mutableListOf<String>()
         val cnt = AtomicInteger(0)
         val latch1 = CountDownLatch(TestConstants.REPS)
@@ -119,7 +119,7 @@ object CommonTests : KLogging() {
     }
 
     fun invalidAgentUrlTest(agent: Agent, badPath: String = "badPath", caller: String) {
-        logger.info("Calling invalidAgentUrlTest() from $caller")
+        logger.info { "Calling invalidAgentUrlTest() from $caller" }
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
         "http://localhost:$PROXY_PORT/$badPath".get { assertThat(it.code()).isEqualTo(404) }
@@ -132,7 +132,7 @@ object CommonTests : KLogging() {
                     agentPath: String = "agent-timeout",
                     caller: String) {
 
-        logger.info("Calling timeoutTest() from $caller")
+        logger.info { "Calling timeoutTest() from $caller" }
 
         val httpServer =
                 httpServer {
@@ -163,7 +163,7 @@ object CommonTests : KLogging() {
                       startingPort: Int = 9600,
                       caller: String) {
 
-        logger.info("Calling proxyCallTest() from $caller")
+        logger.info { "Calling proxyCallTest() from $caller" }
         val httpServers = mutableListOf<Service>()
         val pathMap = newConcurrentMap<Int, Int>()
 
@@ -239,14 +239,14 @@ object CommonTests : KLogging() {
     }
 
     private fun callProxy(pathMap: Map<Int, Int>, msg: String) {
-        //logger.info("Calling proxy for ${msg}")
+        //logger.info {"Calling proxy for ${msg}")
         // Choose one of the pathMap values
         val index = abs(TestConstants.RANDOM.nextInt() % pathMap.size)
         val httpVal = pathMap[index]
         "http://localhost:$PROXY_PORT/proxy-$index"
                 .get {
                     if (it.code() != 200)
-                        logger.error("Proxy failed on $msg")
+                        logger.error { "Proxy failed on $msg" }
                     assertThat(it.code()).isEqualTo(200)
                     val body = it.body()!!.string()
                     assertThat(body).isEqualTo("value: $httpVal")

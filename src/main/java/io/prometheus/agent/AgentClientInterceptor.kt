@@ -27,7 +27,7 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
                                              callOptions: CallOptions,
                                              next: Channel): ClientCall<ReqT, RespT> =
             // final String methodName = method.getFullMethodName();
-            // logger.info("Intercepting {}", methodName);
+            // logger.info {"Intercepting {}", methodName);
             object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(agent.channel.newCall(method, callOptions)) {
                 override fun start(responseListener: ClientCall.Listener<RespT>, metadata: Metadata) {
                     super.start(
@@ -38,8 +38,8 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
                                         headers!!.get(Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER))
                                                 ?.let {
                                                     agent.agentId = it
-                                                    logger.info("Assigned agentId to $agent")
-                                                } ?: logger.error("Headers missing AGENT_ID key")
+                                                    logger.info { "Assigned agentId to $agent" }
+                                                } ?: logger.error { "Headers missing AGENT_ID key" }
                                     }
                                     super.onHeaders(headers)
                                 }

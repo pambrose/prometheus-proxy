@@ -26,15 +26,14 @@ import java.io.IOException
 import java.util.concurrent.TimeoutException
 
 object TestUtils : KLogging() {
-
     @Throws(IOException::class, TimeoutException::class)
     fun startProxy(serverName: String = "",
                    adminEnabled: Boolean = false,
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Proxy {
 
-        logger.info(getBanner("banners/proxy.txt", logger))
-        logger.info(getVersionDesc(false))
+        logger.info { getBanner("banners/proxy.txt", logger) }
+        logger.info { getVersionDesc(false) }
 
         return Proxy(options =
                      ProxyOptions(
@@ -56,8 +55,8 @@ object TestUtils : KLogging() {
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Agent {
 
-        logger.info(getBanner("banners/agent.txt", logger))
-        logger.info(getVersionDesc(false))
+        logger.info { getBanner("banners/agent.txt", logger) }
+        logger.info { getVersionDesc(false) }
 
         return Agent(options =
                      AgentOptions(
