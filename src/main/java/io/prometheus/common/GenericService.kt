@@ -22,106 +22,128 @@ import com.codahale.metrics.health.HealthCheckRegistry
 import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck
 import com.codahale.metrics.jmx.JmxReporter
 import com.google.common.base.Joiner
-import com.google.common.util.concurrent.AbstractExecutionThreadService
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
+import io.prometheus.dsl.GuavaDsl.serviceManager
+import io.prometheus.dsl.GuavaDsl.serviceManagerListener
+import io.prometheus.dsl.MetricsDsl.healthCheck
+import io.prometheus.guava.GenericExecutionThreadService
+import io.prometheus.guava.genericServiceListener
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import kotlin.properties.Delegates
 
 abstract class GenericService protected constructor(protected val genericConfigVals: ConfigVals,
-                                                    adminConfig: AdminConfig,
-                                                    metricsConfig: MetricsConfig,
-                                                    zipkinConfig: ZipkinConfig,
-                                                    val isTestMode: Boolean) : AbstractExecutionThreadService(), Closeable {
+                                                    private val adminConfig: AdminConfig,
+                                                    private val metricsConfig: MetricsConfig,
+                                                    private val zipkinConfig: ZipkinConfig,
+                                                    val isTestMode: Boolean) : GenericExecutionThreadService(), Closeable {
+    protected val healthCheckRegistry = HealthCheckRegistry()
 
-    private val metricRegistry = MetricRegistry()
-    val healthCheckRegistry = HealthCheckRegistry()
+    private val services = mutableListOf<Service>()
 
-    private val services = mutableListOf<Service>(this)
-    private val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
-    private var serviceManager: ServiceManager by Delegates.notNull()
+    private lateinit var serviceManager: ServiceManager
 
-    protected val adminService: AdminService?
-    protected val metricsService: MetricsService?
+    val isAdminEnabled: Boolean
+        get() = adminConfig.enabled
 
-    val zipkinReporterService: ZipkinReporterService?
+    val isMetricsEnabled: Boolean
+        get() = metricsConfig.enabled
 
-    val zipkinEnabled: Boolean
-        get() = zipkinReporterService != null
+    val isZipkinEnabled: Boolean
+        get() = zipkinConfig.enabled
 
-    val metricsEnabled: Boolean
-        get() = metricsService != null
+    private var jmxReporter: JmxReporter by Delegates.notNull()
+    var adminService: AdminService by Delegates.notNull()
+    var metricsService: MetricsService by Delegates.notNull()
+    var zipkinReporterService: ZipkinReporterService by Delegates.notNull()
 
     init {
-        if (adminConfig.enabled) {
-            adminService = AdminService(this,
+        if (isAdminEnabled) {
+            adminService = AdminService(healthCheckRegistry,
                                         adminConfig.port,
                                         adminConfig.pingPath,
                                         adminConfig.versionPath,
                                         adminConfig.healthCheckPath,
-                                        adminConfig.threadDumpPath)
-            addService(adminService)
+                                        adminConfig.threadDumpPath) { addService(this) }
         }
         else {
             logger.info("Admin service disabled")
-            adminService = null
         }
 
-        if (metricsConfig.enabled) {
-            metricsService = MetricsService(metricsConfig.port, metricsConfig.path)
-            addService(metricsService)
+        if (isMetricsEnabled) {
+            metricsService = MetricsService(metricsConfig.port, metricsConfig.path) { addService(this) }
             SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
                                      metricsConfig.memoryPoolsExportsEnabled,
                                      metricsConfig.garbageCollectorExportsEnabled,
                                      metricsConfig.threadExportsEnabled,
                                      metricsConfig.classLoadingExportsEnabled,
                                      metricsConfig.versionInfoExportsEnabled)
+            jmxReporter = JmxReporter.forRegistry(MetricRegistry()).build()
         }
         else {
             logger.info("Metrics service disabled")
-            metricsService = null
         }
 
-        if (zipkinConfig.enabled) {
+        if (isZipkinEnabled) {
             val url = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
-            zipkinReporterService = ZipkinReporterService(url)
-            addService(zipkinReporterService)
+            zipkinReporterService = ZipkinReporterService(url) { addService(this) }
         }
         else {
             logger.info("Zipkin reporter service disabled")
-            zipkinReporterService = null
         }
-
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
     }
 
     fun initService() {
-        serviceManager = ServiceManager(services)
-        serviceManager.addListener(newListener())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+        addService(this)
+        val clazzName = javaClass.simpleName
+        serviceManager =
+                serviceManager(services) {
+                    addListener(
+                            serviceManagerListener {
+                                healthy { logger.info("All $clazzName services healthy") }
+                                stopped { logger.info("All $clazzName services stopped") }
+                                failure { service -> logger.info("$clazzName service failed: $service") }
+                            })
+                }
         registerHealthChecks()
     }
 
     override fun startUp() {
         super.startUp()
-        zipkinReporterService?.startAsync()
-        jmxReporter?.start()
-        metricsService?.startAsync()
-        adminService?.startAsync()
+        if (isZipkinEnabled)
+            zipkinReporterService.startSync()
+
+        if (isMetricsEnabled) {
+            metricsService.startSync()
+            jmxReporter.start()
+        }
+
+        if (isAdminEnabled)
+            adminService.startSync()
+
         Runtime.getRuntime().addShutdownHook(shutDownHookAction(this))
     }
 
     override fun shutDown() {
-        adminService?.stopAsync()
-        metricsService?.stopAsync()
-        jmxReporter?.stop()
-        zipkinReporterService?.stopAsync()
+        if (isAdminEnabled)
+            adminService.stopSync()
+
+        if (isMetricsEnabled) {
+            metricsService.stopSync()
+            jmxReporter.stop()
+        }
+
+        if (isZipkinEnabled)
+            zipkinReporterService.stopSync()
+
         super.shutDown()
     }
 
     override fun close() {
-        stopAsync()
+        stopSync()
     }
 
     private fun addService(service: Service) {
@@ -135,37 +157,29 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     protected open fun registerHealthChecks() {
-        healthCheckRegistry.register("thread_deadlock", ThreadDeadlockHealthCheck())
-        if (metricsEnabled)
-            healthCheckRegistry.register("metrics_service", metricsService!!.healthCheck)
         healthCheckRegistry
-                .register(
-                        "all_services_healthy",
-                        object : HealthCheck() {
-                            @Throws(Exception::class)
-                            override fun check(): HealthCheck.Result {
-                                return if (serviceManager.isHealthy)
+                .apply {
+                    register("thread_deadlock", ThreadDeadlockHealthCheck())
+                    if (isMetricsEnabled)
+                        register("metrics_service", metricsService.healthCheck)
+                    register(
+                            "all_services_healthy",
+                            healthCheck {
+                                if (serviceManager.isHealthy)
                                     HealthCheck.Result.healthy()
                                 else {
-                                    val vals = serviceManager.servicesByState()
-                                            .entries()
-                                            .filter { it.key !== Service.State.RUNNING }
-                                            .onEach { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
-                                            .map { "${it.key}: ${it.value}" }
-                                            .toList()
+                                    val vals =
+                                            serviceManager
+                                                    .servicesByState()
+                                                    .entries()
+                                                    .filter { it.key !== Service.State.RUNNING }
+                                                    .onEach { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
+                                                    .map { "${it.key}: ${it.value}" }
+                                                    .toList()
                                     HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
                                 }
-                            }
-                        })
-    }
-
-    private fun newListener(): ServiceManager.Listener {
-        val serviceName = javaClass.simpleName
-        return object : ServiceManager.Listener() {
-            override fun healthy() = logger.info("All $serviceName services healthy")
-            override fun stopped() = logger.info("All $serviceName services stopped")
-            override fun failure(service: Service?) = logger.info("$serviceName service failed: $service")
-        }
+                            })
+                }
     }
 
     companion object {

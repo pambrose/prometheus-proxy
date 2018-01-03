@@ -16,33 +16,44 @@
 
 package io.prometheus.proxy
 
+import brave.Tracing
 import brave.sparkjava.SparkTracing
-import com.google.common.base.MoreObjects
 import com.google.common.net.HttpHeaders.*
-import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
-import io.prometheus.common.GenericServiceListener
+import io.prometheus.common.sleepForSecs
+import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.SparkDsl.httpServer
+import io.prometheus.guava.GenericIdleService
+import io.prometheus.guava.genericServiceListener
 import org.slf4j.LoggerFactory
-import spark.*
+import spark.Request
+import spark.Response
+import spark.Route
+import spark.Spark
+import java.net.BindException
+import kotlin.properties.Delegates
 
-class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleService() {
+class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleService() {
     private val configVals = proxy.configVals
-    private val tracing = proxy.zipkinReporterService?.newTracing("proxy-http")
-    private val http: Service =
-            Service.ignite().apply {
+    private var tracing: Tracing by Delegates.notNull()
+    private val httpServer =
+            httpServer {
+                initExceptionHandler { e -> sparkExceptionHandler(e, port) }
                 port(port)
-                threadPool(proxy.configVals.http.maxThreads,
-                           proxy.configVals.http.minThreads,
-                           proxy.configVals.http.idleTimeoutMillis)
+                threadPool(configVals.http.maxThreads,
+                           configVals.http.minThreads,
+                           configVals.http.idleTimeoutMillis)
             }
 
     init {
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        if (proxy.isZipkinEnabled)
+            tracing = proxy.zipkinReporterService.newTracing("proxy-http")
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
     }
 
     override fun startUp() {
-        if (proxy.zipkinEnabled) {
+        if (proxy.isZipkinEnabled) {
             val sparkTracing = SparkTracing.create(tracing)
             Spark.before(sparkTracing.before())
             Spark.exception(Exception::class.java,
@@ -50,57 +61,65 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
             Spark.afterAfter(sparkTracing.afterAfter())
         }
 
-        http.get("/*",
-                 Route { req, res ->
-                     res.header("cache-control", "must-revalidate,no-cache,no-store")
+        httpServer
+                .apply {
+                    get("/*",
+                        Route { req, res ->
+                            res.header("cache-control", "must-revalidate,no-cache,no-store")
 
-                     if (!proxy.isRunning) {
-                         logger.error("Proxy stopped")
-                         res.status(503)
-                         updateScrapeRequests("proxy_stopped")
-                         return@Route null
-                     }
+                            if (!proxy.isRunning) {
+                                logger.error("Proxy stopped")
+                                res.status(503)
+                                updateScrapeRequests("proxy_stopped")
+                                return@Route null
+                            }
 
-                     val vals = req.splat()
+                            val vals = req.splat()
 
-                     if (vals == null || vals.isEmpty()) {
-                         logger.info("Request missing path")
-                         res.status(404)
-                         updateScrapeRequests("missing_path")
-                         return@Route null
-                     }
+                            if (vals == null || vals.isEmpty()) {
+                                logger.info("Request missing path")
+                                res.status(404)
+                                updateScrapeRequests("missing_path")
+                                return@Route null
+                            }
 
-                     val path = vals[0]
+                            val path = vals[0]
 
-                     if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
-                         res.status(200)
-                         res.type("text/plain")
-                         return@Route "42"
-                     }
+                            if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
+                                res.status(200)
+                                res.type("text/plain")
+                                return@Route "42"
+                            }
 
-                     val agentContext = proxy.getAgentContextByPath(path)
+                            val agentContext = proxy.getAgentContextByPath(path)
 
-                     if (agentContext == null) {
-                         logger.debug("Invalid path request /\${path")
-                         res.status(404)
-                         updateScrapeRequests("invalid_path")
-                         return@Route null
-                     }
+                            if (agentContext == null) {
+                                logger.debug("Invalid path request /\${path")
+                                res.status(404)
+                                updateScrapeRequests("invalid_path")
+                                return@Route null
+                            }
 
-                     if (!agentContext.valid) {
-                         logger.error("Invalid AgentContext")
-                         res.status(404)
-                         updateScrapeRequests("invalid_agent_context")
-                         return@Route null
-                     }
+                            if (!agentContext.isValid) {
+                                logger.error("Invalid AgentContext")
+                                res.status(404)
+                                updateScrapeRequests("invalid_agent_context")
+                                return@Route null
+                            }
 
-                     return@Route submitScrapeRequest(req, res, agentContext, path)
-                 })
+                            return@Route submitScrapeRequest(req, res, agentContext, path)
+                        })
+                    awaitInitialization()
+                }
+
     }
 
     override fun shutDown() {
-        tracing?.close()
-        http.stop()
+        if (proxy.isZipkinEnabled)
+            tracing.close()
+
+        httpServer.stop()
+        sleepForSecs(3)
     }
 
     private fun submitScrapeRequest(req: Request,
@@ -120,16 +139,14 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
                     break
 
                 // Check if agent is disconnected or agent is hung
-                if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.valid || !proxy.isRunning) {
+                if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.isValid || !proxy.isRunning) {
                     res.status(503)
                     updateScrapeRequests("time_out")
                     return null
                 }
             }
         } finally {
-            val prev = proxy.removeFromScrapeRequestMap(scrapeRequest.scrapeId)
-            if (prev == null)
-                logger.error("Scrape request ${scrapeRequest.scrapeId} missing in map")
+            proxy.removeFromScrapeRequestMap(scrapeRequest.scrapeId) ?: logger.error("Scrape request ${scrapeRequest.scrapeId} missing in map")
         }
 
         logger.debug("Results returned from $agentContext for $scrapeRequest")
@@ -154,16 +171,22 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
     }
 
     private fun updateScrapeRequests(type: String) {
-        if (proxy.metricsEnabled)
-            proxy.metrics!!.scrapeRequests.labels(type).inc()
+        if (proxy.isMetricsEnabled)
+            proxy.metrics.scrapeRequests.labels(type).inc()
     }
 
-    override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("port", port)
-                    .toString()
+    override fun toString() = toStringElements { add("port", port) }
 
     companion object {
         private val logger = LoggerFactory.getLogger(ProxyHttpService::class.java)
+
+        fun sparkExceptionHandler(e: Exception, port: Int) {
+            if (e is BindException)
+                logger.error("ignite failed to bind to port $port", e)
+            else
+                logger.error("ignite failed", e)
+            System.exit(100)
+        }
+
     }
 }

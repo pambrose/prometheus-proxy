@@ -16,18 +16,19 @@
 
 package io.prometheus.proxy
 
-import com.google.common.base.MoreObjects
-import com.google.common.util.concurrent.AbstractExecutionThreadService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
-import io.prometheus.common.GenericServiceListener
 import io.prometheus.common.sleepForSecs
+import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.guava.GenericExecutionThreadService
+import io.prometheus.guava.genericServiceListener
 import org.slf4j.LoggerFactory
 
-class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionThreadService() {
+class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) : GenericExecutionThreadService() {
 
     init {
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+        initBlock?.invoke(this)
     }
 
     @Throws(Exception::class)
@@ -41,8 +42,8 @@ class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionTh
                         if (inactivitySecs > maxInactivitySecs) {
                             logger.info("Evicting agent after $inactivitySecs secs of inactivty $agentContext")
                             proxy.removeAgentContext(agentId)
-                            if (proxy.metricsEnabled)
-                                proxy.metrics!!.agentEvictions.inc()
+                            if (proxy.isMetricsEnabled)
+                                proxy.metrics.agentEvictions.inc()
                         }
                     }
             sleepForSecs(threadPauseSecs)
@@ -50,10 +51,10 @@ class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionTh
     }
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("max inactivity secs", proxy.configVals.internal.maxAgentInactivitySecs)
-                    .add("pause secs", proxy.configVals.internal.staleAgentCheckPauseSecs)
-                    .toString()
+            toStringElements {
+                add("max inactivity secs", proxy.configVals.internal.maxAgentInactivitySecs)
+                add("pause secs", proxy.configVals.internal.staleAgentCheckPauseSecs)
+            }
 
     companion object {
         private val logger = LoggerFactory.getLogger(AgentContextCleanupService::class.java)

@@ -19,67 +19,55 @@ package io.prometheus.proxy
 import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
-import com.google.common.base.MoreObjects
-import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
+import com.salesforce.grpc.contrib.Servers
 import io.grpc.Server
-import io.grpc.ServerBuilder
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
-import io.grpc.inprocess.InProcessServerBuilder
 import io.prometheus.Proxy
-import io.prometheus.common.GenericServiceListener
+import io.prometheus.dsl.GrpcDsl.server
+import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.MetricsDsl.healthCheck
+import io.prometheus.guava.GenericIdleService
+import io.prometheus.guava.genericServiceListener
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import kotlin.properties.Delegates
 
-class ProxyGrpcService private constructor(proxy: Proxy,
+class ProxyGrpcService private constructor(private val proxy: Proxy,
                                            private val port: Int = -1,
-                                           private val inProcessServerName: String = "") : AbstractIdleService() {
-    val healthCheck: HealthCheck
-        get() = object : HealthCheck() {
-            @Throws(Exception::class)
-            override fun check(): HealthCheck.Result {
-                return if (grpcServer.isShutdown || grpcServer.isShutdown)
+                                           private val inProcessServerName: String = "") : GenericIdleService() {
+    val healthCheck =
+            healthCheck {
+                if (grpcServer.isShutdown || grpcServer.isShutdown)
                     HealthCheck.Result.unhealthy("gRPC server is not running")
                 else
                     HealthCheck.Result.healthy()
             }
-        }
 
+    private var tracing: Tracing by Delegates.notNull()
+    private var grpcTracing: GrpcTracing by Delegates.notNull()
     private val grpcServer: Server
-    private val tracing: Tracing?
-    private val grpcTracing: GrpcTracing?
 
     init {
-        if (proxy.zipkinEnabled) {
-            tracing = proxy.zipkinReporterService!!.newTracing("grpc_server")
+        if (proxy.isZipkinEnabled) {
+            tracing = proxy.zipkinReporterService.newTracing("grpc_server")
             grpcTracing = GrpcTracing.create(tracing)
         }
-        else {
-            tracing = null
-            grpcTracing = null
-        }
-
-        val serverBuilder =
-                if (inProcessServerName.isNotEmpty())
-                    InProcessServerBuilder.forName(inProcessServerName)
-                else
-                    ServerBuilder.forPort(port)
-
-        val proxyService = ProxyServiceImpl(proxy)
-        val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
-        if (proxy.zipkinEnabled)
-            interceptors.add(grpcTracing!!.newServerInterceptor())
-        val serviceDef = ServerInterceptors.intercept(proxyService.bindService(), interceptors)
 
         grpcServer =
-                serverBuilder
-                        .addService(serviceDef)
-                        .addTransportFilter(ProxyTransportFilter(proxy))
-                        .build()
+                server(inProcessServerName = inProcessServerName, port = port) {
+                    val proxyService = ProxyServiceImpl(proxy)
+                    val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
+                    if (proxy.isZipkinEnabled)
+                        interceptors.add(grpcTracing.newServerInterceptor())
+                    addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
+                    addTransportFilter(ProxyTransportFilter(proxy))
+                }
+        Servers.shutdownWithJvm(grpcServer, 2000)
 
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
     }
 
     @Throws(IOException::class)
@@ -88,12 +76,13 @@ class ProxyGrpcService private constructor(proxy: Proxy,
     }
 
     override fun shutDown() {
-        tracing?.close()
-        grpcServer.shutdown()
+        if (proxy.isZipkinEnabled)
+            tracing.close()
+        Servers.shutdownGracefully(grpcServer, 2000)
     }
 
     override fun toString() =
-            with(MoreObjects.toStringHelper(this)) {
+            toStringElements {
                 if (inProcessServerName.isNotEmpty()) {
                     add("serverType", "InProcess")
                     add("serverName", inProcessServerName)
@@ -102,14 +91,12 @@ class ProxyGrpcService private constructor(proxy: Proxy,
                     add("serverType", "Netty")
                     add("port", port)
                 }
-                toString()
             }
 
     companion object {
         val logger: Logger = LoggerFactory.getLogger(ProxyGrpcService::class.java)
 
-        fun create(proxy: Proxy, grpcPort: Int) = ProxyGrpcService(proxy = proxy, port = grpcPort)
-
-        fun create(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
+        fun newProxyGrpcService(proxy: Proxy, port: Int) = ProxyGrpcService(proxy = proxy, port = port)
+        fun newProxyGrpcService(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
     }
 }

@@ -22,7 +22,7 @@
 
     <groupId>io.prometheus</groupId>
     <artifactId>prometheus-proxy</artifactId>
-    <version>1.3.1-SNAPSHOT</version>
+    <version>1.3.2-SNAPSHOT</version>
 
     <properties>
         <kotlin.version>1.2.10</kotlin.version>
@@ -31,8 +31,9 @@
         <config.version>1.3.2</config.version>
         <grpc.version>1.8.0</grpc.version>
         <grpc.plugin.version>1.8.0</grpc.plugin.version>
+        <grpc.contrib.version>0.7.0</grpc.contrib.version>
         <protobuf.version>3.4.0</protobuf.version>
-        <protobuf.plugin.version>0.5.0</protobuf.plugin.version>
+        <protobuf.plugin.version>0.5.1</protobuf.plugin.version>
         <guava.version>19.0</guava.version>
         <spark.version>2.7.1</spark.version>
         <jetty.version>9.4.6.v20170531</jetty.version>
@@ -47,12 +48,12 @@
         <slf4j.version>1.7.25</slf4j.version>
 
         <junit.version>4.12</junit.version>
-        <assertj.version>3.8.0</assertj.version>
+        <assertj.version>3.9.0</assertj.version>
         <assertj.maven.version>2.0.0</assertj.maven.version>
 
-        <assembly.version>2.6</assembly.version>
-        <maven.compiler.version>3.6.1</maven.compiler.version>
-        <maven-jar-plugin.version>3.0.2</maven-jar-plugin.version>
+        <maven.assembly.version>2.6</maven.assembly.version>
+        <maven.compiler.version>3.7.0</maven.compiler.version>
+        <maven.jar.plugin.version>3.0.2</maven.jar.plugin.version>
         <appassembler.version>1.10</appassembler.version>
 
         <maven.version>3.5.0</maven.version>
@@ -183,6 +184,12 @@
             <groupId>io.grpc</groupId>
             <artifactId>grpc-all</artifactId>
             <version>${grpc.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.salesforce.servicelibs</groupId>
+            <artifactId>grpc-contrib</artifactId>
+            <version>${grpc.contrib.version}</version>
         </dependency>
 
         <dependency>
@@ -387,7 +394,7 @@
 
             <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>${maven-jar-plugin.version}</version>
+                <version>${maven.jar.plugin.version}</version>
                 <configuration>
                     <archive>
                         <manifest>
@@ -439,7 +446,7 @@
 
             <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>${assembly.version}</version>
+                <version>${maven.assembly.version}</version>
                 <executions>
                     <execution>
                         <id>proxy</id>
@@ -449,7 +456,7 @@
                         <phase>package</phase>
 
                         <configuration>
-                            <finalName>proxy</finalName>
+                            <finalName>prometheus-proxy</finalName>
                             <descriptorRefs>
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>
@@ -470,7 +477,7 @@
                         <phase>package</phase>
 
                         <configuration>
-                            <finalName>agent</finalName>
+                            <finalName>prometheus-agent</finalName>
                             <descriptorRefs>
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>

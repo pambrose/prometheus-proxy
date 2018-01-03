@@ -16,11 +16,10 @@
 
 package io.prometheus
 
-import io.prometheus.ConstantsTest.OK_HTTP_CLIENT
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import okhttp3.Request
+import io.prometheus.dsl.OkHttpDsl.get
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -29,7 +28,6 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
-import kotlin.properties.Delegates
 
 class AdminNonDefaultPathTest {
 
@@ -37,50 +35,46 @@ class AdminNonDefaultPathTest {
     fun proxyPingPathTest() {
         assertThat(PROXY.configVals.admin.port).isEqualTo(8099)
         assertThat(PROXY.configVals.admin.pingPath).isEqualTo("pingPath2")
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use {
-            assertThat(it.code()).isEqualTo(200)
-            assertThat(it.body()!!.string()).startsWith("pong")
-        }
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
+                .get {
+                    assertThat(it.code()).isEqualTo(200)
+                    assertThat(it.body()!!.string()).startsWith("pong")
+                }
     }
 
     @Test
     fun proxyVersionPathTest() {
         assertThat(PROXY.configVals.admin.port).isEqualTo(8099)
         assertThat(PROXY.configVals.admin.versionPath).isEqualTo("versionPath2")
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use {
-            assertThat(it.code()).isEqualTo(200)
-            assertThat(it.body()!!.string()).contains("Version")
-        }
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
+                .get {
+                    assertThat(it.code()).isEqualTo(200)
+                    assertThat(it.body()!!.string()).contains("Version")
+                }
     }
 
     @Test
     fun proxyHealthCheckPathTest() {
         assertThat(PROXY.configVals.admin.healthCheckPath).isEqualTo("healthCheckPath2")
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use {
-            assertThat(it.code()).isEqualTo(200)
-            assertThat(it.body()!!.string().length).isGreaterThan(10)
-        }
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
+                .get {
+                    assertThat(it.code()).isEqualTo(200)
+                    assertThat(it.body()!!.string().length).isGreaterThan(10)
+                }
     }
 
     @Test
     fun proxyThreadDumpPathTest() {
         assertThat(PROXY.configVals.admin.threadDumpPath).isEqualTo("threadDumpPath2")
-        val url = "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
-        val request = Request.Builder().url(url)
-        OK_HTTP_CLIENT.newCall(request.build()).execute().use { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
+                .get { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(AdminNonDefaultPathTest::class.java)
 
-        private var PROXY: Proxy by Delegates.notNull()
-        private var AGENT: Agent by Delegates.notNull()
+        private lateinit var PROXY: Proxy
+        private lateinit var AGENT: Agent
 
         @JvmStatic
         @BeforeClass
@@ -104,10 +98,8 @@ class AdminNonDefaultPathTest {
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
             logger.info("Stopping Proxy and Agent")
-            PROXY.stopAsync()
-            PROXY.awaitTerminated(5, SECONDS)
-            AGENT.stopAsync()
-            AGENT.awaitTerminated(5, SECONDS)
+            PROXY.stopSync()
+            AGENT.stopSync()
         }
     }
 }

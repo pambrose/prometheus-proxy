@@ -31,17 +31,17 @@ import kotlin.properties.Delegates
 abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val argv: Array<String>,
                                                  private val envConfig: String,
-                                                 private val exitOnMissingConfig: Boolean) {
+                                                 private val exitOnMissingConfig: Boolean = false) {
 
     @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
-    private var configName: String? = null
+    private var configName: String = ""
 
     @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
     var adminEnabled: Boolean = false
         private set
 
     @Parameter(names = ["-i", "--admin_port"], description = "Admin servlets port")
-    var adminPort: Int? = null
+    var adminPort: Int = -1
         private set
 
     @Parameter(names = ["-e", "--metrics"], description = "Metrics enabled")
@@ -49,12 +49,12 @@ abstract class BaseOptions protected constructor(private val progName: String,
         private set
 
     @Parameter(names = ["-m", "--metrics_port"], description = "Metrics listen port")
-    var metricsPort: Int? = null
+    var metricsPort: Int = -1
         private set
 
     @Parameter(names = ["-v", "--version"],
                description = "Print version info and exit",
-               validateWith = [(VersionValidator::class)])
+               validateWith = [VersionValidator::class])
     private var version = false
 
     @Parameter(names = ["-u", "--usage"], help = true)
@@ -81,11 +81,12 @@ abstract class BaseOptions protected constructor(private val progName: String,
     private fun parseArgs(argv: Array<String>?) {
         try {
             val jcom =
-                    JCommander(this).apply {
-                        programName = progName
-                        setCaseSensitiveOptions(false)
-                        parse(*argv ?: arrayOf<String>())
-                    }
+                    JCommander(this)
+                            .apply {
+                                programName = progName
+                                setCaseSensitiveOptions(false)
+                                parse(*argv ?: arrayOf<String>())
+                            }
 
             if (usage) {
                 jcom.usage()
@@ -103,7 +104,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     protected fun assignAdminPort(defaultVal: Int) {
-        if (adminPort == null)
+        if (adminPort == -1)
             adminPort = ADMIN_PORT.getEnv(defaultVal)
     }
 
@@ -113,12 +114,12 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     protected fun assignMetricsPort(defaultVal: Int) {
-        if (metricsPort == null)
+        if (metricsPort == -1)
             metricsPort = METRICS_PORT.getEnv(defaultVal)
     }
 
     private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-        config = readConfig(configName,
+        config = readConfig(if (configName.isNotEmpty()) configName else System.getenv(envConfig) ?: "",
                             envConfig,
                             ConfigParseOptions.defaults().setAllowMissing(false),
                             ConfigFactory.load().resolve(),
@@ -136,24 +137,22 @@ abstract class BaseOptions protected constructor(private val progName: String,
         }
     }
 
-    private fun readConfig(cliConfig: String?,
+    private fun readConfig(configName: String,
                            envConfig: String,
                            configParseOptions: ConfigParseOptions,
                            fallback: Config,
                            exitOnMissingConfig: Boolean): Config {
 
-        val configName = cliConfig ?: System.getenv(envConfig)
-
         when {
-            configName.isNullOrBlank() -> {
+            configName.isBlank()     -> {
                 if (exitOnMissingConfig) {
-                    logger.error("A configuration file or url must be specified with --getConfig or \$$envConfig")
+                    logger.error("A configuration file or url must be specified with --config or \$$envConfig")
                     System.exit(1)
                 }
                 return fallback
             }
 
-            configName.isUrlPrefix()   -> {
+            configName.isUrlPrefix() -> {
                 try {
                     val configSyntax = getConfigSyntax(configName)
                     return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
@@ -166,7 +165,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                 }
 
             }
-            else                       -> {
+            else                     -> {
                 try {
                     return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
                 } catch (e: Exception) {

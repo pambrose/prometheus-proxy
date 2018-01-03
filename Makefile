@@ -1,4 +1,4 @@
-VERSION=1.3.1
+VERSION=1.3.2
 
 default: build
 
@@ -33,8 +33,8 @@ sonar:
 
 distro: build
 	mkdir target/distro
-	mv target/proxy-jar-with-dependencies.jar target/distro/prometheus-proxy.jar
-	mv target/agent-jar-with-dependencies.jar target/distro/prometheus-agent.jar
+	mv target/prometheus-proxy-jar-with-dependencies.jar target/distro/prometheus-proxy.jar
+	mv target/prometheus-agent-jar-with-dependencies.jar target/distro/prometheus-agent.jar
 
 site:
 	./mvnw site

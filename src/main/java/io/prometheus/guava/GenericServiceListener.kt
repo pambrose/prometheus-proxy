@@ -14,9 +14,18 @@
  *  limitations under the License.
  */
 
-package io.prometheus.common;
+package io.prometheus.guava
 
-@FunctionalInterface
-public interface SamplerGaugeData {
-  double value();
+import com.google.common.util.concurrent.Service
+import io.prometheus.dsl.GuavaDsl.serviceListener
+import org.slf4j.Logger
+
+fun genericServiceListener(service: Service, logger: Logger): Service.Listener {
+    return serviceListener {
+        starting { logger.info("Starting $service") }
+        running { logger.info("Running $service") }
+        stopping { logger.info("Stopping $service") }
+        terminated { logger.info("Terminated $service") }
+        failed { from, t -> logger.info("Failed on $from $service", t) }
+    }
 }

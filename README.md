@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/pambrose/prometheus-proxy.svg?branch=master)](https://travis-ci.org/pambrose/prometheus-proxy)
 [![Coverage Status](https://coveralls.io/repos/github/pambrose/prometheus-proxy/badge.svg?branch=master)](https://coveralls.io/github/pambrose/prometheus-proxy?branch=master)
 [![Code Climate](https://codeclimate.com/github/pambrose/prometheus-proxy/badges/gpa.svg)](https://codeclimate.com/github/pambrose/prometheus-proxy)
-
+[![Dependency Status](https://www.versioneye.com/user/projects/5a4c7a110fb24f0536e5b92f/badge.svg?style=flat-square)](https://www.versioneye.com/user/projects/5a4c7a110fb24f0536e5b92f)
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for 
 collecting metrics. The pull model is problematic when a Prometheus server and its metrics endpoints are separated 
@@ -84,8 +84,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-$ docker pull pambrose/prometheus-proxy:1.3.1
-$ docker pull pambrose/prometheus-agent:1.3.1
+$ docker pull pambrose/prometheus-proxy:1.3.2
+$ docker pull pambrose/prometheus-agent:1.3.2
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
@@ -94,14 +94,14 @@ Start the proxy and an agent in separate shells on your local machine:
 $ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
         -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.3.1
+        pambrose/prometheus-proxy:1.3.2
 ```
 
 ```bash
 $ docker run --rm -p 8083:8083 -p 8093:8093 \
         -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.3.1
+        pambrose/prometheus-agent:1.3.2
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),

@@ -16,14 +16,13 @@
 
 package io.prometheus
 
-import io.prometheus.ConstantsTest.PROXY_PORT
+import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 object TestUtils {
@@ -35,22 +34,22 @@ object TestUtils {
                    adminEnabled: Boolean = false,
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Proxy {
-        val args =
-                mutableListOf<String>().apply {
-                    addAll(ConstantsTest.args)
-                    addAll(argv)
-                    add("-Dproxy.admin.enabled=$adminEnabled")
-                    add("-Dproxy.metrics.enabled=$metricsEnabled")
-                }
-        val options = ProxyOptions(args)
 
-        logger.info(getBanner("banners/proxy.txt"))
+        logger.info(getBanner("banners/proxy.txt", logger))
         logger.info(getVersionDesc(false))
 
-        val proxy = Proxy(options = options, proxyPort = PROXY_PORT, inProcessServerName = serverName, testMode = true)
-        proxy.startAsync()
-        proxy.awaitRunning(5, TimeUnit.SECONDS)
-        return proxy
+        return Proxy(options =
+                     ProxyOptions(
+                             mutableListOf<String>()
+                                     .apply {
+                                         addAll(TestConstants.args)
+                                         addAll(argv)
+                                         add("-Dproxy.admin.enabled=$adminEnabled")
+                                         add("-Dproxy.metrics.enabled=$metricsEnabled")
+                                     }),
+                     proxyPort = PROXY_PORT,
+                     inProcessServerName = serverName,
+                     testMode = true) { startSync() }
     }
 
     @Throws(IOException::class, TimeoutException::class)
@@ -58,21 +57,21 @@ object TestUtils {
                    adminEnabled: Boolean = false,
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Agent {
-        val args =
-                mutableListOf<String>().apply {
-                    addAll(ConstantsTest.args)
-                    addAll(argv)
-                    add("-Dagent.admin.enabled=$adminEnabled")
-                    add("-Dagent.metrics.enabled=$metricsEnabled")
-                }
-        val options = AgentOptions(args, false)
 
-        logger.info(getBanner("banners/agent.txt"))
+        logger.info(getBanner("banners/agent.txt", logger))
         logger.info(getVersionDesc(false))
 
-        return Agent(options = options, inProcessServerName = serverName, testMode = true).apply {
-            startAsync()
-            awaitRunning(5, TimeUnit.SECONDS)
-        }
+        return Agent(options =
+                     AgentOptions(
+                             mutableListOf<String>()
+                                     .apply {
+                                         addAll(TestConstants.args)
+                                         addAll(argv)
+                                         add("-Dagent.admin.enabled=$adminEnabled")
+                                         add("-Dagent.metrics.enabled=$metricsEnabled")
+                                     },
+                             false),
+                     inProcessServerName = serverName,
+                     testMode = true) { startSync() }
     }
 }

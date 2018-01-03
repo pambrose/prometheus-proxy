@@ -24,45 +24,55 @@ import org.junit.BeforeClass
 import org.junit.Test
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit.SECONDS
-import kotlin.properties.Delegates
 
 class InProcessTestWithAdminMetricsTest {
 
     @Test
     fun missingPathTest() {
-        MiscTests.missingPathTest(this.javaClass.simpleName)
+        CommonTests.missingPathTest(javaClass.simpleName)
     }
 
     @Test
     fun invalidPathTest() {
-        MiscTests.invalidPathTest(this.javaClass.simpleName)
+        CommonTests.invalidPathTest(javaClass.simpleName)
     }
 
     @Test
     fun addRemovePathsTest() {
-        MiscTests.addRemovePathsTest(AGENT, this.javaClass.simpleName)
+        CommonTests.addRemovePathsTest(AGENT, javaClass.simpleName)
     }
 
     @Test
     fun threadedAddRemovePathsTest() {
-        MiscTests.threadedAddRemovePathsTest(AGENT, caller = this.javaClass.simpleName)
+        CommonTests.threadedAddRemovePathsTest(AGENT, caller = javaClass.simpleName)
     }
 
     @Test
     fun invalidAgentUrlTest() {
-        MiscTests.invalidAgentUrlTest(AGENT, caller = this.javaClass.simpleName)
+        CommonTests.invalidAgentUrlTest(AGENT, caller = javaClass.simpleName)
     }
 
     @Test
     fun timeoutTest() {
-        MiscTests.timeoutTest(AGENT, caller = this.javaClass.simpleName)
+        CommonTests.timeoutTest(AGENT, caller = javaClass.simpleName)
+    }
+
+    @Test
+    fun proxyCallTest() {
+        CommonTests.proxyCallTest(AGENT,
+                                  httpServerCount = 25,
+                                  pathCount = 50,
+                                  sequentialQueryCount = 500,
+                                  sequentialPauseMillis = 25,
+                                  parallelQueryCount = 100,
+                                  caller = javaClass.simpleName)
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(InProcessTestWithAdminMetricsTest::class.java)
 
-        private var PROXY: Proxy by Delegates.notNull()
-        private var AGENT: Agent by Delegates.notNull()
+        private lateinit var PROXY: Proxy
+        private lateinit var AGENT: Agent
 
         @JvmStatic
         @BeforeClass
@@ -78,12 +88,8 @@ class InProcessTestWithAdminMetricsTest {
         @AfterClass
         fun takeDown() {
             logger.info("Stopping Proxy and Agent")
-            PROXY.stopAsync()
-            PROXY.awaitTerminated(5, SECONDS)
-            AGENT.stopAsync()
-            AGENT.awaitTerminated(5, SECONDS)
+            PROXY.stopSync()
+            AGENT.stopSync()
         }
     }
-
-    // proxyCallTest() called in InProcess tests
 }

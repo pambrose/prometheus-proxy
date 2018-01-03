@@ -19,10 +19,10 @@ package io.prometheus
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigSyntax
-import io.prometheus.common.AdminConfig
+import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.ConfigVals
-import io.prometheus.common.MetricsConfig
-import io.prometheus.common.ZipkinConfig
+import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
+import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 
@@ -36,72 +36,112 @@ class DataClassTest {
     @Test
     fun adminConfigTest() {
         var vals = configVals("agent.admin.enabled=true")
-        var c = AdminConfig.create(vals.agent.admin.enabled, -1, vals.agent.admin)
-        assertThat(c.enabled).isTrue()
+        newAdminConfig(vals.agent.admin.enabled, -1, vals.agent.admin)
+                .let {
+                    assertThat(it.enabled).isTrue()
+                }
 
         vals = configVals("agent.admin.port=888")
-        c = AdminConfig.create(vals.agent.admin.enabled, vals.agent.admin.port, vals.agent.admin)
-        assertThat(c.enabled).isFalse()
-        assertThat(c.port).isEqualTo(888)
+        newAdminConfig(vals.agent.admin.enabled, vals.agent.admin.port, vals.agent.admin)
+                .let {
+                    assertThat(it.enabled).isFalse()
+                    assertThat(it.port).isEqualTo(888)
+                }
 
-        c = AdminConfig.create(true, 444, configVals("agent.admin.pingPath=a pingpath val").agent.admin)
-        assertThat(c.pingPath).isEqualTo("a pingpath val")
+        newAdminConfig(true, 444, configVals("agent.admin.pingPath=a pingpath val").agent.admin)
+                .let {
+                    assertThat(it.pingPath).isEqualTo("a pingpath val")
+                }
 
-        c = AdminConfig.create(true, 444, configVals("agent.admin.versionPath=a versionpath val").agent.admin)
-        assertThat(c.versionPath).isEqualTo("a versionpath val")
+        newAdminConfig(true, 444, configVals("agent.admin.versionPath=a versionpath val").agent.admin)
+                .let {
+                    assertThat(it.versionPath).isEqualTo("a versionpath val")
+                }
 
-        c = AdminConfig.create(true, 444, configVals("agent.admin.healthCheckPath=a healthCheckPath val").agent.admin)
-        assertThat(c.healthCheckPath).isEqualTo("a healthCheckPath val")
+        newAdminConfig(true, 444, configVals("agent.admin.healthCheckPath=a healthCheckPath val").agent.admin)
+                .let {
+                    assertThat(it.healthCheckPath).isEqualTo("a healthCheckPath val")
+                }
 
-        c = AdminConfig.create(true, 444, configVals("agent.admin.threadDumpPath=a threadDumpPath val").agent.admin)
-        assertThat(c.threadDumpPath).isEqualTo("a threadDumpPath val")
+        newAdminConfig(true, 444, configVals("agent.admin.threadDumpPath=a threadDumpPath val").agent.admin)
+                .let {
+                    assertThat(it.threadDumpPath).isEqualTo("a threadDumpPath val")
+                }
     }
 
     @Test
     fun metricsConfigTest() {
-        var c = MetricsConfig.create(true, 555, configVals("agent.metrics.enabled=true").agent.metrics)
-        assertThat(c.enabled).isTrue()
+        newMetricsConfig(true, 555, configVals("agent.metrics.enabled=true").agent.metrics)
+                .let {
+                    assertThat(it.enabled).isTrue()
+                }
 
-        c = MetricsConfig.create(true, 555, configVals("agent.metrics.hostname=testval").agent.metrics)
-        assertThat(c.port).isEqualTo(555)
+        newMetricsConfig(true, 555, configVals("agent.metrics.hostname=testval").agent.metrics)
+                .let {
+                    assertThat(it.port).isEqualTo(555)
+                }
 
-        c = MetricsConfig.create(true, 555, configVals("agent.metrics.path=a path val").agent.metrics)
-        assertThat(c.path).isEqualTo("a path val")
+        newMetricsConfig(true, 555, configVals("agent.metrics.path=a path val").agent.metrics)
+                .let {
+                    assertThat(it.path).isEqualTo("a path val")
+                }
 
-        c = MetricsConfig.create(true, 555, configVals("agent.metrics.standardExportsEnabled=true").agent.metrics)
-        assertThat(c.standardExportsEnabled).isTrue()
+        newMetricsConfig(true, 555, configVals("agent.metrics.standardExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.standardExportsEnabled).isTrue()
+                }
 
-        c = MetricsConfig.create(true, 555, configVals("agent.metrics.memoryPoolsExportsEnabled=true").agent.metrics)
-        assertThat(c.memoryPoolsExportsEnabled).isTrue()
+        newMetricsConfig(true, 555, configVals("agent.metrics.memoryPoolsExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.memoryPoolsExportsEnabled).isTrue()
+                }
 
-        c = MetricsConfig.create(true, 555, configVals("agent.metrics.garbageCollectorExportsEnabled=true").agent.metrics)
-        assertThat(c.garbageCollectorExportsEnabled).isTrue()
+        newMetricsConfig(true, 555, configVals("agent.metrics.garbageCollectorExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.garbageCollectorExportsEnabled).isTrue()
+                }
 
-        c = MetricsConfig.create(true, 555, configVals("agent.metrics.threadExportsEnabled=true").agent.metrics)
-        assertThat(c.threadExportsEnabled).isTrue()
+        newMetricsConfig(true, 555, configVals("agent.metrics.threadExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.threadExportsEnabled).isTrue()
+                }
 
-        c = MetricsConfig.create(true, 555, configVals("agent.metrics.classLoadingExportsEnabled=true").agent.metrics)
-        assertThat(c.classLoadingExportsEnabled).isTrue()
+        newMetricsConfig(true, 555, configVals("agent.metrics.classLoadingExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.classLoadingExportsEnabled).isTrue()
+                }
 
-        c = MetricsConfig.create(true, 555, configVals("agent.metrics.versionInfoExportsEnabled=true").agent.metrics)
-        assertThat(c.versionInfoExportsEnabled).isTrue()
+        newMetricsConfig(true, 555, configVals("agent.metrics.versionInfoExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.versionInfoExportsEnabled).isTrue()
+                }
     }
 
     @Test
     fun zipkinConfigTest() {
-        var c = ZipkinConfig.create(configVals("agent.internal.zipkin.enabled=true").agent.internal.zipkin)
-        assertThat(c.enabled).isTrue()
+        newZipkinConfig(configVals("agent.internal.zipkin.enabled=true").agent.internal.zipkin)
+                .let {
+                    assertThat(it.enabled).isTrue()
+                }
 
-        c = ZipkinConfig.create(configVals("agent.internal.zipkin.hostname=testval").agent.internal.zipkin)
-        assertThat(c.hostname).isEqualTo("testval")
+        newZipkinConfig(configVals("agent.internal.zipkin.hostname=testval").agent.internal.zipkin)
+                .let {
+                    assertThat(it.hostname).isEqualTo("testval")
+                }
 
-        c = ZipkinConfig.create(configVals("agent.internal.zipkin.port=999").agent.internal.zipkin)
-        assertThat(c.port).isEqualTo(999)
+        newZipkinConfig(configVals("agent.internal.zipkin.port=999").agent.internal.zipkin)
+                .let {
+                    assertThat(it.port).isEqualTo(999)
+                }
 
-        c = ZipkinConfig.create(configVals("agent.internal.zipkin.path=a path val").agent.internal.zipkin)
-        assertThat(c.path).isEqualTo("a path val")
+        newZipkinConfig(configVals("agent.internal.zipkin.path=a path val").agent.internal.zipkin)
+                .let {
+                    assertThat(it.path).isEqualTo("a path val")
+                }
 
-        c = ZipkinConfig.create(configVals("agent.internal.zipkin.serviceName=a service name").agent.internal.zipkin)
-        assertThat(c.serviceName).isEqualTo("a service name")
+        newZipkinConfig(configVals("agent.internal.zipkin.serviceName=a service name").agent.internal.zipkin)
+                .let {
+                    assertThat(it.serviceName).isEqualTo("a service name")
+                }
     }
 }

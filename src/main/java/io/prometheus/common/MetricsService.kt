@@ -17,42 +17,52 @@
 package io.prometheus.common
 
 import com.codahale.metrics.health.HealthCheck
-import com.google.common.base.MoreObjects
-import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.client.exporter.MetricsServlet
-import org.eclipse.jetty.server.Server
-import org.eclipse.jetty.servlet.ServletContextHandler
+import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.JettyDsl.server
+import io.prometheus.dsl.JettyDsl.servletContextHandler
+import io.prometheus.dsl.MetricsDsl.healthCheck
+import io.prometheus.guava.GenericIdleService
+import io.prometheus.guava.genericServiceListener
 import org.eclipse.jetty.servlet.ServletHolder
+import org.slf4j.LoggerFactory
 
-class MetricsService(private val port: Int, private val path: String) : AbstractIdleService() {
-    private val server: Server = Server(port)
-    val healthCheck: HealthCheck = object : HealthCheck() {
-        @Throws(Exception::class)
-        override fun check(): HealthCheck.Result {
-            return if (server.isRunning) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Jetty server not running")
-        }
-    }
+class MetricsService(private val port: Int,
+                     private val path: String,
+                     initBlock: (MetricsService.() -> Unit)? = null) : GenericIdleService() {
+    private val server =
+            server(port) {
+                handler =
+                        servletContextHandler {
+                            contextPath = "/"
+                            addServlet(ServletHolder(MetricsServlet()), "/$path")
+                        }
+            }
+    val healthCheck =
+            healthCheck {
+                if (server.isRunning)
+                    HealthCheck.Result.healthy()
+                else
+                    HealthCheck.Result.unhealthy("Jetty server not running")
+            }
+
 
     init {
-        val context = ServletContextHandler()
-        context.contextPath = "/"
-        server.handler = context
-        context.addServlet(ServletHolder(MetricsServlet()), "/$path")
-
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+        initBlock?.invoke(this)
     }
 
-    override fun startUp() {
-        server.start()
-    }
+    override fun startUp() = server.start()
 
-    override fun shutDown() {
-        server.stop()
-    }
+    override fun shutDown() = server.stop()
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("url", "http://localhost:$port/$path")
-                    .toString()
+            toStringElements {
+                add("url", "http://localhost:$port/$path")
+            }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(MetricsService::class.java)
+    }
 }

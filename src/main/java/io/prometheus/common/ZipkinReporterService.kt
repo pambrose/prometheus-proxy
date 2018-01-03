@@ -17,25 +17,29 @@
 package io.prometheus.common
 
 import brave.Tracing
-import com.google.common.base.MoreObjects
-import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
+import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.ZipkinDsl.tracing
+import io.prometheus.guava.GenericIdleService
+import io.prometheus.guava.genericServiceListener
+import org.slf4j.LoggerFactory
 import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
 
-class ZipkinReporterService(private val url: String) : AbstractIdleService() {
+class ZipkinReporterService(private val url: String, protected val initBlock: (ZipkinReporterService.() -> Unit)? = null) : GenericIdleService() {
     private val sender = OkHttpSender.create(url)
     private val reporter = AsyncReporter.create(sender)
 
     init {
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+        initBlock?.invoke(this)
     }
 
     fun newTracing(serviceName: String): Tracing =
-            Tracing.newBuilder()
-                    .localServiceName(serviceName)
-                    .spanReporter(reporter)
-                    .build()
+            tracing {
+                localServiceName(serviceName)
+                spanReporter(reporter)
+            }
 
     override fun startUp() {
         // Empty
@@ -46,8 +50,9 @@ class ZipkinReporterService(private val url: String) : AbstractIdleService() {
         sender.close()
     }
 
-    override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("url", url)
-                    .toString()
+    override fun toString() = toStringElements { add("url", url) }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(ZipkinReporterService::class.java)
+    }
 }

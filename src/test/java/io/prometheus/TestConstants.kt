@@ -16,13 +16,11 @@
 
 package io.prometheus
 
-import okhttp3.OkHttpClient
 import java.util.*
-import java.util.concurrent.Executors
+import java.util.concurrent.Executors.newCachedThreadPool
 
-object ConstantsTest {
-    internal val EXECUTOR_SERVICE = Executors.newCachedThreadPool()
-    internal val OK_HTTP_CLIENT = OkHttpClient()
+object TestConstants {
+    internal val EXECUTOR_SERVICE = newCachedThreadPool()
     internal val RANDOM = Random()
     internal val REPS = 1000
     internal val PROXY_PORT = 9505

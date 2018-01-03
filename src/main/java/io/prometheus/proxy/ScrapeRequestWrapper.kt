@@ -17,10 +17,10 @@
 package io.prometheus.proxy
 
 
-import com.google.common.base.MoreObjects
 import com.google.common.base.Preconditions
 import io.prometheus.Proxy
-import io.prometheus.common.AtomicDelegates
+import io.prometheus.delegate.AtomicDelegates
+import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import java.util.concurrent.CountDownLatch
@@ -34,21 +34,22 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     private val createTime = System.currentTimeMillis()
     private val complete = CountDownLatch(1)
-    private val requestTimer = proxy.metrics?.scrapeRequestLatency?.startTimer()
+    private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
     val agentContext: AgentContext = Preconditions.checkNotNull(agentContext)
 
     var scrapeResponse: ScrapeResponse by AtomicDelegates.notNullReference()
 
     val scrapeRequest: ScrapeRequest =
-            with(ScrapeRequest.newBuilder()) {
-                agentId = agentContext.agentId
-                scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
-                this.path = path
-                if (!accept.isNullOrBlank())
-                    this.accept = accept
-                build()
-            }
+            ScrapeRequest.newBuilder()
+                    .run {
+                        agentId = agentContext.agentId
+                        scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
+                        this.path = path
+                        if (!accept.isNullOrBlank())
+                            this.accept = accept
+                        build()
+                    }
 
     val scrapeId: Long
         get() = scrapeRequest.scrapeId
@@ -71,10 +72,10 @@ class ScrapeRequestWrapper(proxy: Proxy,
     }
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("scrapeId", scrapeRequest.scrapeId)
-                    .add("path", scrapeRequest.path)
-                    .toString()
+            toStringElements {
+                add("scrapeId", scrapeRequest.scrapeId)
+                add("path", scrapeRequest.path)
+            }
 
     companion object {
         private val SCRAPE_ID_GENERATOR = AtomicLong(0)

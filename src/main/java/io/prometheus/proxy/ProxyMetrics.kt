@@ -17,67 +17,66 @@
 package io.prometheus.proxy
 
 import io.prometheus.Proxy
-import io.prometheus.client.Collector
 import io.prometheus.client.Counter
-import io.prometheus.client.Gauge
 import io.prometheus.client.Summary
-import io.prometheus.common.SamplerGauge
-import io.prometheus.common.SamplerGaugeData
+import io.prometheus.common.SamplerGaugeCollector
+import io.prometheus.dsl.MetricsDsl.counter
+import io.prometheus.dsl.MetricsDsl.gauge
+import io.prometheus.dsl.MetricsDsl.summary
 
 class ProxyMetrics(proxy: Proxy) {
 
     val scrapeRequests: Counter =
-            Counter.build()
-                    .name("proxy_scrape_requests")
-                    .help("Proxy scrape requests")
-                    .labelNames("type")
-                    .register()
+            counter {
+                name("proxy_scrape_requests")
+                help("Proxy scrape requests")
+                labelNames("type")
+            }
 
     val connects: Counter =
-            Counter.build()
-                    .name("proxy_connect_count")
-                    .help("Proxy connect count")
-                    .register()
+            counter {
+                name("proxy_connect_count")
+                help("Proxy connect count")
+            }
 
     val agentEvictions: Counter =
-            Counter.build()
-                    .name("proxy_eviction_count")
-                    .help("Proxy eviction count")
-                    .register()
+            counter {
+                name("proxy_eviction_count")
+                help("Proxy eviction count")
+            }
 
     val heartbeats: Counter =
-            Counter.build()
-                    .name("proxy_heartbeat_count")
-                    .help("Proxy heartbeat count")
-                    .register()
+            counter {
+                name("proxy_heartbeat_count")
+                help("Proxy heartbeat count")
+            }
 
     val scrapeRequestLatency: Summary =
-            Summary.build()
-                    .name("proxy_scrape_request_latency_seconds")
-                    .help("Proxy scrape request latency in seconds")
-                    .register()
+            summary {
+                name("proxy_scrape_request_latency_seconds")
+                help("Proxy scrape request latency in seconds")
+            }
 
     init {
-        Gauge.build()
-                .name("proxy_start_time_seconds")
-                .help("Proxy start time in seconds")
-                .register()
-                .setToCurrentTime()
+        gauge {
+            name("proxy_start_time_seconds")
+            help("Proxy start time in seconds")
+        }.setToCurrentTime()
 
-        SamplerGauge("proxy_agent_map_size",
-                     "Proxy connected agents",
-                     SamplerGaugeData { proxy.agentContextSize.toDouble() }).register<Collector>()
+        SamplerGaugeCollector(name = "proxy_agent_map_size",
+                              help = "Proxy connected agents",
+                              data = { proxy.agentContextSize.toDouble() })
 
-        SamplerGauge("proxy_path_map_size",
-                     "Proxy path map size",
-                     SamplerGaugeData { proxy.pathMapSize.toDouble() }).register<Collector>()
+        SamplerGaugeCollector(name = "proxy_path_map_size",
+                              help = "Proxy path map size",
+                              data = { proxy.pathMapSize.toDouble() })
 
-        SamplerGauge("proxy_scrape_map_size",
-                     "Proxy scrape map size",
-                     SamplerGaugeData { proxy.scrapeMapSize.toDouble() }).register<Collector>()
+        SamplerGaugeCollector(name = "proxy_scrape_map_size",
+                              help = "Proxy scrape map size",
+                              data = { proxy.scrapeMapSize.toDouble() })
 
-        SamplerGauge("proxy_cummulative_agent_queue_size",
-                     "Proxy cummulative agent queue size",
-                     SamplerGaugeData { proxy.totalAgentRequestQueueSize.toDouble() }).register<Collector>()
+        SamplerGaugeCollector(name = "proxy_cummulative_agent_queue_size",
+                              help = "Proxy cummulative agent queue size",
+                              data = { proxy.totalAgentRequestQueueSize.toDouble() })
     }
 }

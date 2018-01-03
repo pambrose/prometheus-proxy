@@ -25,18 +25,14 @@ import com.google.common.base.Splitter
 import com.google.common.io.CharStreams
 import com.google.common.util.concurrent.Service
 import io.prometheus.Proxy
+import io.prometheus.dsl.MetricsDsl.healthCheck
 import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.*
 
-object Utils {
-    val logger: Logger = LoggerFactory.getLogger(Utils::class.java)
-}
-
-val hostName: String by lazy {
+val localHostName: String by lazy {
     try {
         InetAddress.getLocalHost().hostName
     } catch (e: UnknownHostException) {
@@ -44,9 +40,9 @@ val hostName: String by lazy {
     }
 }
 
-fun getBanner(filename: String): String {
+fun getBanner(filename: String, logger: Logger): String {
     try {
-        Utils.logger.javaClass.classLoader.getResourceAsStream(filename).use {
+        logger.javaClass.classLoader.getResourceAsStream(filename).use {
             val banner = CharStreams.toString(InputStreamReader(it, Charsets.UTF_8.name()))
             val lines: List<String> = Splitter.on("\n").splitToList(banner)
 
@@ -81,20 +77,20 @@ fun getBanner(filename: String): String {
     }
 }
 
-fun queueHealthCheck(queue: Queue<*>, size: Int) =
-        object : HealthCheck() {
-            @Throws(Exception::class)
-            override fun check(): HealthCheck.Result {
-                return if (queue.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", queue.size)
-            }
+fun newQueueHealthCheck(queue: Queue<*>, size: Int) =
+        healthCheck {
+            if (queue.size < size)
+                HealthCheck.Result.healthy()
+            else
+                HealthCheck.Result.unhealthy("Large size: %d", queue.size)
         }
 
-fun mapHealthCheck(map: Map<*, *>, size: Int) =
-        object : HealthCheck() {
-            @Throws(Exception::class)
-            override fun check(): HealthCheck.Result {
-                return if (map.size < size) HealthCheck.Result.healthy() else HealthCheck.Result.unhealthy("Large size: %d", map.size)
-            }
+fun newMapHealthCheck(map: Map<*, *>, size: Int) =
+        healthCheck {
+            if (map.size < size)
+                HealthCheck.Result.healthy()
+            else
+                HealthCheck.Result.unhealthy("Large size: %d", map.size)
         }
 
 fun sleepForMillis(millis: Long) =

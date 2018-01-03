@@ -16,8 +16,8 @@
 
 package io.prometheus.agent
 
-import com.google.common.base.MoreObjects
 import com.google.common.net.HttpHeaders.ACCEPT
+import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeRequest
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,22 +35,25 @@ class PathContext(private val okHttpClient: OkHttpClient,
     fun fetchUrl(scrapeRequest: ScrapeRequest): Response =
             try {
                 logger.debug("Fetching $this")
-                val builder =
-                        if (!scrapeRequest.accept.isNullOrEmpty())
-                            request.header(ACCEPT, scrapeRequest.accept)
-                        else
-                            request
-                okHttpClient.newCall(builder.build()).execute()
+                val request =
+                        request
+                                .run {
+                                    if (!scrapeRequest.accept.isNullOrEmpty())
+                                        header(ACCEPT, scrapeRequest.accept)
+                                    build()
+                                }
+
+                okHttpClient.newCall(request).execute()
             } catch (e: IOException) {
                 logger.info("Failed HTTP request: $url [${e.javaClass.simpleName}: ${e.message}]")
                 throw e
             }
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("path", "/" + path)
-                    .add("url", url)
-                    .toString()
+            toStringElements {
+                add("path", "/" + path)
+                add("url", url)
+            }
 
     companion object {
         private val logger = LoggerFactory.getLogger(PathContext::class.java)

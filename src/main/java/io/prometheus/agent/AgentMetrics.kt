@@ -17,45 +17,44 @@
 package io.prometheus.agent
 
 import io.prometheus.Agent
-import io.prometheus.client.Collector
 import io.prometheus.client.Counter
-import io.prometheus.client.Gauge
 import io.prometheus.client.Summary
-import io.prometheus.common.SamplerGauge
-import io.prometheus.common.SamplerGaugeData
+import io.prometheus.common.SamplerGaugeCollector
+import io.prometheus.dsl.MetricsDsl.counter
+import io.prometheus.dsl.MetricsDsl.gauge
+import io.prometheus.dsl.MetricsDsl.summary
 
 class AgentMetrics(agent: Agent) {
 
     val scrapeRequests: Counter =
-            Counter.build()
-                    .name("agent_scrape_requests")
-                    .help("Agent scrape requests")
-                    .labelNames("type")
-                    .register()
+            counter {
+                name("agent_scrape_requests")
+                help("Agent scrape requests")
+                labelNames("type")
+            }
 
     val connects: Counter =
-            Counter.build()
-                    .name("agent_connect_count")
-                    .help("Agent connect counts")
-                    .labelNames("type")
-                    .register()
+            counter {
+                name("agent_connect_count")
+                help("Agent connect counts")
+                labelNames("type")
+            }
 
     val scrapeRequestLatency: Summary =
-            Summary.build()
-                    .name("agent_scrape_request_latency_seconds")
-                    .help("Agent scrape request latency in seconds")
-                    .labelNames("agent_name")
-                    .register()
+            summary {
+                name("agent_scrape_request_latency_seconds")
+                help("Agent scrape request latency in seconds")
+                labelNames("agent_name")
+            }
 
     init {
-        Gauge.build()
-                .name("agent_start_time_seconds")
-                .help("Agent start time in seconds")
-                .register()
-                .setToCurrentTime()
+        gauge {
+            name("agent_start_time_seconds")
+            help("Agent start time in seconds")
+        }.setToCurrentTime()
 
-        SamplerGauge("agent_scrape_queue_size",
-                     "Agent scrape response queue size",
-                     SamplerGaugeData { agent.scrapeResponseQueueSize.toDouble() }).register<Collector>()
+        SamplerGaugeCollector("agent_scrape_queue_size",
+                              "Agent scrape response queue size",
+                              data = { agent.scrapeResponseQueueSize.toDouble() })
     }
 }

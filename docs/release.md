@@ -12,9 +12,10 @@
 
 6) Check in branch and merge 
 
-7) Create release on github and upload target/distro/prometheus-proxy.jar and  target/distro/prometheus-agent.jar
+7) Create release on github (https://github.com/pambrose/prometheus-proxy/releases) and 
+upload the *target/distro/prometheus-proxy.jar* and  *target/distro/prometheus-agent.jar* files.
 
 8) Build and push docker images: `make docker-build docker-push`
 
-9) Update the *prometheus-proxy* and *prometheus-agent* repository descriptions on 
-the Docker hub with the latest version of *README.md*.
+9) Update the *prometheus-proxy* and *prometheus-agent* repository descriptions 
+on Docker hub (https://hub.docker.com) with the latest version of *README.md*.

@@ -16,38 +16,27 @@
 
 package io.prometheus.common
 
-import com.google.common.base.Preconditions
-import com.google.common.util.concurrent.ThreadFactoryBuilder
-import io.prometheus.client.Counter
-import io.prometheus.client.Gauge
+import io.prometheus.dsl.MetricsDsl.counter
+import io.prometheus.dsl.MetricsDsl.gauge
 import java.util.concurrent.ThreadFactory
 
-class InstrumentedThreadFactory(delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
+class InstrumentedThreadFactory(private val delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
 
-    private val delegate = Preconditions.checkNotNull(delegate)
-    private val created: Counter
-    private val running: Gauge
-    private val terminated: Counter
-
-    init {
-        Preconditions.checkNotNull(name)
-        Preconditions.checkNotNull(help)
-        created =
-                Counter.build()
-                        .name("${name}_threads_created")
-                        .help("$help threads created")
-                        .register()
-        running =
-                Gauge.build()
-                        .name("${name}_threads_running")
-                        .help("$help threads running")
-                        .register()
-        terminated =
-                Counter.build()
-                        .name("${name}_threads_terminated")
-                        .help("$help threads terminated")
-                        .register()
-    }
+    private val created =
+            counter {
+                name("${name}_threads_created")
+                help("$help threads created")
+            }
+    private val running =
+            gauge {
+                name("${name}_threads_running")
+                help("$help threads running")
+            }
+    private val terminated =
+            counter {
+                name("${name}_threads_terminated")
+                help("$help threads terminated")
+            }
 
     override fun newThread(runnable: Runnable): Thread {
         val wrappedRunnable = InstrumentedRunnable(runnable)
@@ -65,13 +54,6 @@ class InstrumentedThreadFactory(delegate: ThreadFactory, name: String, help: Str
                 running.dec()
                 terminated.inc()
             }
-        }
-    }
-
-    companion object {
-        fun newInstrumentedThreadFactory(name: String, help: String, daemon: Boolean): ThreadFactory {
-            val threadFactory = ThreadFactoryBuilder().setNameFormat(name + "-%d").setDaemon(daemon).build()
-            return InstrumentedThreadFactory(threadFactory, name, help)
         }
     }
 

@@ -16,53 +16,61 @@
 
 package io.prometheus.common
 
+import com.codahale.metrics.health.HealthCheckRegistry
 import com.codahale.metrics.servlets.HealthCheckServlet
 import com.codahale.metrics.servlets.PingServlet
 import com.codahale.metrics.servlets.ThreadDumpServlet
-import com.google.common.base.MoreObjects
-import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
+import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.SparkDsl.servletContextHandler
+import io.prometheus.guava.GenericIdleService
+import io.prometheus.guava.genericServiceListener
 import org.eclipse.jetty.server.Server
-import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
+import org.slf4j.LoggerFactory
 
-class AdminService(service: GenericService,
+class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val port: Int,
                    private val pingPath: String,
                    private val versionPath: String,
                    private val healthCheckPath: String,
-                   private val threadDumpPath: String) : AbstractIdleService() {
-    private val server: Server = Server(port)
+                   private val threadDumpPath: String,
+                   initBlock: (AdminService.() -> Unit)? = null) : GenericIdleService() {
+    private val server =
+            Server(port)
+                    .apply {
+                        handler =
+                                servletContextHandler {
+                                    contextPath = "/"
+                                    if (pingPath.isNotBlank())
+                                        addServlet(ServletHolder(PingServlet()), "/$pingPath")
+                                    if (versionPath.isNotBlank())
+                                        addServlet(ServletHolder(VersionServlet()), "/$versionPath")
+                                    if (healthCheckPath.isNotBlank())
+                                        addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
+                                    if (threadDumpPath.isNotBlank())
+                                        addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
+                                }
+                    }
 
     init {
-        val context = ServletContextHandler()
-        context.contextPath = "/"
-        server.handler = context
-
-        if (pingPath.isNotBlank())
-            context.addServlet(ServletHolder(PingServlet()), "/$pingPath")
-        if (versionPath.isNotBlank())
-            context.addServlet(ServletHolder(VersionServlet()), "/$versionPath")
-        if (healthCheckPath.isNotBlank())
-            context.addServlet(ServletHolder(HealthCheckServlet(service.healthCheckRegistry)), "/$healthCheckPath")
-        if (threadDumpPath.isNotBlank())
-            context.addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
-
-        addListener(GenericServiceListener(this), MoreExecutors.directExecutor())
+        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+        initBlock?.invoke(this)
     }
 
-    override fun startUp() {
-        server.start()
-    }
+    override fun startUp() = server.start()
 
-    override fun shutDown() {
-        server.stop()
-    }
+    override fun shutDown() = server.stop()
 
     override fun toString() =
-            MoreObjects.toStringHelper(this)
-                    .add("ping", ":$port/$pingPath")
-                    .add("healthcheck", ":$port/$healthCheckPath")
-                    .add("threaddump", ":$port/$threadDumpPath")
-                    .toString()
+            toStringElements {
+                add("ping", ":$port/$pingPath")
+                add("healthcheck", ":$port/$healthCheckPath")
+                add("threaddump", ":$port/$threadDumpPath")
+            }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(AdminService::class.java)
+    }
+
 }
