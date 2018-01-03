@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/pambrose/prometheus-proxy.svg?branch=master)](https://travis-ci.org/pambrose/prometheus-proxy)
 [![Coverage Status](https://coveralls.io/repos/github/pambrose/prometheus-proxy/badge.svg?branch=master)](https://coveralls.io/github/pambrose/prometheus-proxy?branch=master)
 [![Code Climate](https://codeclimate.com/github/pambrose/prometheus-proxy/badges/gpa.svg)](https://codeclimate.com/github/pambrose/prometheus-proxy)
-
+[![Dependency Status](https://www.versioneye.com/user/projects/5a4c7a110fb24f0536e5b92f/badge.svg?style=flat-square)](https://www.versioneye.com/user/projects/5a4c7a110fb24f0536e5b92f)
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for 
 collecting metrics. The pull model is problematic when a Prometheus server and its metrics endpoints are separated 
