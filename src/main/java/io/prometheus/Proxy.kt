@@ -18,13 +18,17 @@ package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.Joiner
-import com.google.common.collect.Maps
+import com.google.common.collect.Maps.newConcurrentMap
 import io.grpc.Attributes
 import io.prometheus.common.*
+import io.prometheus.common.AdminConfig.Companion.newAdminConfig
+import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
+import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.proxy.*
+import io.prometheus.proxy.ProxyGrpcService.Companion.newProxyGrpcService
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentMap
 import kotlin.properties.Delegates
@@ -34,27 +38,27 @@ class Proxy(options: ProxyOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,
             initBlock: (Proxy.() -> Unit)? = null) : GenericService(options.configVals,
-                                                                    AdminConfig.create(options.adminEnabled,
-                                                                                       options.adminPort,
-                                                                                       options.configVals.proxy.admin),
-                                                                    MetricsConfig.create(options.metricsEnabled,
-                                                                                         options.metricsPort,
-                                                                                         options.configVals.proxy.metrics),
-                                                                    ZipkinConfig.create(options.configVals.proxy.internal.zipkin),
+                                                                    newAdminConfig(options.adminEnabled,
+                                                                                   options.adminPort,
+                                                                                   options.configVals.proxy.admin),
+                                                                    newMetricsConfig(options.metricsEnabled,
+                                                                                     options.metricsPort,
+                                                                                     options.configVals.proxy.metrics),
+                                                                    newZipkinConfig(options.configVals.proxy.internal.zipkin),
                                                                     testMode) {
 
-    private val pathMap = Maps.newConcurrentMap<String, AgentContext>() // Map path to AgentContext
-    private val scrapeRequestMap = Maps.newConcurrentMap<Long, ScrapeRequestWrapper>() // Map scrape_id to agent_id
+    private val pathMap = newConcurrentMap<String, AgentContext>() // Map path to AgentContext
+    private val scrapeRequestMap = newConcurrentMap<Long, ScrapeRequestWrapper>() // Map scrape_id to agent_id
 
-    val agentContextMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
+    val agentContextMap: ConcurrentMap<String, AgentContext> = newConcurrentMap<String, AgentContext>() // Map agent_id to AgentContext
     var metrics: ProxyMetrics by Delegates.notNull()
 
     private val httpService = ProxyHttpService(this, proxyPort)
     private val grpcService: ProxyGrpcService =
             if (inProcessServerName.isEmpty())
-                ProxyGrpcService.create(proxy = this, port = options.agentPort)
+                newProxyGrpcService(proxy = this, port = options.agentPort)
             else
-                ProxyGrpcService.create(proxy = this, serverName = inProcessServerName)
+                newProxyGrpcService(proxy = this, serverName = inProcessServerName)
 
     private var agentCleanupService: AgentContextCleanupService by Delegates.notNull()
 

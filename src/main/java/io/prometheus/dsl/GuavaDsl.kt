@@ -6,7 +6,6 @@ import com.google.common.util.concurrent.ServiceManager
 import io.prometheus.delegate.DelegatesExtensions.singleAssign
 
 object GuavaDsl {
-
     fun Any.toStringElements(block: MoreObjects.ToStringHelper.() -> Unit): String {
         return MoreObjects.toStringHelper(this)
                 .run {
@@ -20,9 +19,7 @@ object GuavaDsl {
     }
 
     fun serviceManagerListener(init: ServiceManagerListenerHelper.() -> Unit): ServiceManager.Listener {
-        val listener = ServiceManagerListenerHelper()
-        listener.init()
-        return listener
+        return ServiceManagerListenerHelper().apply { init() }
     }
 
     class ServiceManagerListenerHelper : ServiceManager.Listener() {
@@ -59,9 +56,7 @@ object GuavaDsl {
     }
 
     fun serviceListener(init: ServiceListenerHelper.() -> Unit): Service.Listener {
-        val listener = ServiceListenerHelper()
-        listener.init()
-        return listener
+        return ServiceListenerHelper().apply { init() }
     }
 
     class ServiceListenerHelper : Service.Listener() {

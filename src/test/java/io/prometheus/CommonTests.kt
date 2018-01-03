@@ -16,7 +16,7 @@
 
 package io.prometheus
 
-import com.google.common.collect.Maps
+import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.sleepForMillis
@@ -167,7 +167,7 @@ object CommonTests {
 
         logger.info("Calling proxyCallTest() from $caller")
         val httpServers = mutableListOf<Service>()
-        val pathMap = Maps.newConcurrentMap<Int, Int>()
+        val pathMap = newConcurrentMap<Int, Int>()
 
         // Take into account pre-existing paths already registered
         val originalSize = agent.pathMapSize()

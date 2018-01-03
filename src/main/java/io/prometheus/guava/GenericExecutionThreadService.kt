@@ -1,11 +1,10 @@
-package io.prometheus.common
+package io.prometheus.guava
 
-import com.google.common.util.concurrent.AbstractIdleService
+import com.google.common.util.concurrent.AbstractExecutionThreadService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.SECONDS
 
-abstract class GenericIdleService : AbstractIdleService() {
-
+abstract class GenericExecutionThreadService : AbstractExecutionThreadService() {
     fun startSync(maxWaitSecs: Long = 15, timeUnit: TimeUnit = SECONDS) {
         startAsync()
         awaitRunning(maxWaitSecs, timeUnit)

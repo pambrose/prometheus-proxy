@@ -23,6 +23,8 @@ import com.codahale.metrics.servlets.ThreadDumpServlet
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.SparkDsl.servletContextHandler
+import io.prometheus.guava.GenericIdleService
+import io.prometheus.guava.genericServiceListener
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletHolder
 import org.slf4j.LoggerFactory

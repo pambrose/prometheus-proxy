@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package io.prometheus.common
+package io.prometheus.guava
 
 import com.google.common.util.concurrent.Service
 import io.prometheus.dsl.GuavaDsl.serviceListener

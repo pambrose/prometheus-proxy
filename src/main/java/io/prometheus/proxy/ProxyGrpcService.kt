@@ -25,11 +25,11 @@ import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
-import io.prometheus.common.GenericIdleService
-import io.prometheus.common.genericServiceListener
 import io.prometheus.dsl.GrpcDsl.server
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
+import io.prometheus.guava.GenericIdleService
+import io.prometheus.guava.genericServiceListener
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -96,7 +96,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
     companion object {
         val logger: Logger = LoggerFactory.getLogger(ProxyGrpcService::class.java)
 
-        fun create(proxy: Proxy, port: Int) = ProxyGrpcService(proxy = proxy, port = port)
-        fun create(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
+        fun newProxyGrpcService(proxy: Proxy, port: Int) = ProxyGrpcService(proxy = proxy, port = port)
+        fun newProxyGrpcService(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
     }
 }

@@ -17,10 +17,10 @@
 package io.prometheus
 
 import java.util.*
-import java.util.concurrent.Executors
+import java.util.concurrent.Executors.newCachedThreadPool
 
 object TestConstants {
-    internal val EXECUTOR_SERVICE = Executors.newCachedThreadPool()
+    internal val EXECUTOR_SERVICE = newCachedThreadPool()
     internal val RANDOM = Random()
     internal val REPS = 1000
     internal val PROXY_PORT = 9505

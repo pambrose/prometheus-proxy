@@ -19,7 +19,7 @@ package io.prometheus
 import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.google.common.base.Preconditions.checkNotNull
-import com.google.common.collect.Maps
+import com.google.common.collect.Maps.newConcurrentMap
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.util.concurrent.RateLimiter
 import com.google.protobuf.Empty
@@ -30,7 +30,11 @@ import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.prometheus.agent.*
 import io.prometheus.common.*
+import io.prometheus.common.AdminConfig.Companion.newAdminConfig
+import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
+import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.delegate.AtomicDelegates
+import io.prometheus.delegate.AtomicDelegates.notNullReference
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
@@ -40,32 +44,36 @@ import io.prometheus.grpc.ProxyServiceGrpc.*
 import okhttp3.OkHttpClient
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.concurrent.*
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors.newCachedThreadPool
+import java.util.concurrent.Executors.newFixedThreadPool
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.properties.Delegates
+import kotlin.properties.Delegates.notNull
 
 class Agent(options: AgentOptions,
             private val inProcessServerName: String = "",
             testMode: Boolean = false,
             initBlock: (Agent.() -> Unit)? = null) : GenericService(options.configVals,
-                                                                    AdminConfig.create(options.adminEnabled,
-                                                                                       options.adminPort,
-                                                                                       options.configVals.agent.admin),
-                                                                    MetricsConfig.create(options.metricsEnabled,
-                                                                                         options.metricsPort,
-                                                                                         options.configVals.agent.metrics),
-                                                                    ZipkinConfig.create(options.configVals.agent.internal.zipkin),
+                                                                    newAdminConfig(options.adminEnabled,
+                                                                                   options.adminPort,
+                                                                                   options.configVals.agent.admin),
+                                                                    newMetricsConfig(options.metricsEnabled,
+                                                                                     options.metricsPort,
+                                                                                     options.configVals.agent.metrics),
+                                                                    newZipkinConfig(options.configVals.agent.internal.zipkin),
                                                                     testMode) {
-    private val pathContextMap = Maps.newConcurrentMap<String, PathContext>()  // Map path to PathContext
-    private val heartbeatService = Executors.newFixedThreadPool(1)
+    private val pathContextMap = newConcurrentMap<String, PathContext>()  // Map path to PathContext
+    private val heartbeatService = newFixedThreadPool(1)
     private val initialConnectionLatch = CountDownLatch(1)
     private val okHttpClient = OkHttpClient()
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
     private val agentName: String = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
-    private var metrics: AgentMetrics by Delegates.notNull()
-    private var blockingStub: ProxyServiceBlockingStub by AtomicDelegates.notNullReference()
-    private var asyncStub: ProxyServiceStub by AtomicDelegates.notNullReference()
+    private var metrics: AgentMetrics by notNull()
+    private var blockingStub: ProxyServiceBlockingStub by notNullReference()
+    private var asyncStub: ProxyServiceStub by notNullReference()
     private val readRequestsExecutorService: ExecutorService =
             newCachedThreadPool(if (isMetricsEnabled)
                                     InstrumentedThreadFactory(
@@ -79,8 +87,8 @@ class Agent(options: AgentOptions,
                                         setDaemon(true)
                                     })
 
-    private var tracing: Tracing by Delegates.notNull()
-    private var grpcTracing: GrpcTracing by Delegates.notNull()
+    private var tracing: Tracing by notNull()
+    private var grpcTracing: GrpcTracing by notNull()
 
     private val hostName: String
     private val port: Int
@@ -96,8 +104,8 @@ class Agent(options: AgentOptions,
     private var lastMsgSent: Long by AtomicDelegates.long()
 
     private var grpcStarted: Boolean by AtomicDelegates.boolean(false)
-    var channel: ManagedChannel by AtomicDelegates.notNullReference()
-    var agentId: String by AtomicDelegates.notNullReference()
+    var channel: ManagedChannel by notNullReference()
+    var agentId: String by notNullReference()
 
     private val proxyHost: String
         get() = "$hostName:$port"
@@ -175,7 +183,7 @@ class Agent(options: AgentOptions,
     private fun connectToProxy() {
         val disconnected = AtomicBoolean(false)
 
-        // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != null
+        // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != ""
         if (agentId.isNotEmpty()) {
             resetGrpcStubs()
             agentId = ""

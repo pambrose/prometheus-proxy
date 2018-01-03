@@ -16,7 +16,6 @@ object GrpcDsl {
                 hostName: String = "",
                 port: Int = -1,
                 block: AbstractManagedChannelImplBuilder<*>.() -> Unit): ManagedChannel {
-
         return (if (inProcessServerName.isEmpty())
             NettyChannelBuilder.forAddress(hostName, port)
         else
@@ -28,7 +27,6 @@ object GrpcDsl {
     }
 
     fun server(inProcessServerName: String = "", port: Int = -1, block: ServerBuilder<*>.() -> Unit): Server {
-
         return (if (inProcessServerName.isEmpty())
             ServerBuilder.forPort(port)
         else
@@ -48,9 +46,7 @@ object GrpcDsl {
     }
 
     fun <T> streamObserver(init: StreamObserverHelper<T>.() -> Unit): StreamObserver<T> {
-        val observer = StreamObserverHelper<T>()
-        observer.init()
-        return observer
+        return StreamObserverHelper<T>().apply { init() }
     }
 
     class StreamObserverHelper<T> : StreamObserver<T> {

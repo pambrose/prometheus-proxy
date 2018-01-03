@@ -21,11 +21,11 @@ import brave.sparkjava.SparkTracing
 import com.google.common.net.HttpHeaders.*
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
-import io.prometheus.common.GenericIdleService
-import io.prometheus.common.genericServiceListener
 import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.SparkDsl.httpServer
+import io.prometheus.guava.GenericIdleService
+import io.prometheus.guava.genericServiceListener
 import org.slf4j.LoggerFactory
 import spark.Request
 import spark.Response

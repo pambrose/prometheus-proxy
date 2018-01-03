@@ -23,6 +23,8 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.JettyDsl.server
 import io.prometheus.dsl.JettyDsl.servletContextHandler
 import io.prometheus.dsl.MetricsDsl.healthCheck
+import io.prometheus.guava.GenericIdleService
+import io.prometheus.guava.genericServiceListener
 import org.eclipse.jetty.servlet.ServletHolder
 import org.slf4j.LoggerFactory
 

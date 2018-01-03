@@ -28,6 +28,8 @@ import com.google.common.util.concurrent.ServiceManager
 import io.prometheus.dsl.GuavaDsl.serviceManager
 import io.prometheus.dsl.GuavaDsl.serviceManagerListener
 import io.prometheus.dsl.MetricsDsl.healthCheck
+import io.prometheus.guava.GenericExecutionThreadService
+import io.prometheus.guava.genericServiceListener
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import kotlin.properties.Delegates
