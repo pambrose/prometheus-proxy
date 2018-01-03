@@ -20,9 +20,9 @@ import io.prometheus.Agent
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
 import io.prometheus.common.SamplerGaugeCollector
-import io.prometheus.dsl.MetricsDsl.counter
-import io.prometheus.dsl.MetricsDsl.gauge
-import io.prometheus.dsl.MetricsDsl.summary
+import io.prometheus.dsl.PrometheusDsl.counter
+import io.prometheus.dsl.PrometheusDsl.gauge
+import io.prometheus.dsl.PrometheusDsl.summary
 
 class AgentMetrics(agent: Agent) {
 

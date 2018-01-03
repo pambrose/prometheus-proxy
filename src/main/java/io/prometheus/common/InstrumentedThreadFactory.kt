@@ -16,8 +16,8 @@
 
 package io.prometheus.common
 
-import io.prometheus.dsl.MetricsDsl.counter
-import io.prometheus.dsl.MetricsDsl.gauge
+import io.prometheus.dsl.PrometheusDsl.counter
+import io.prometheus.dsl.PrometheusDsl.gauge
 import java.util.concurrent.ThreadFactory
 
 class InstrumentedThreadFactory(private val delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
