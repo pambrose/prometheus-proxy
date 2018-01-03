@@ -19,13 +19,13 @@ package io.prometheus.proxy
 import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
-import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import com.salesforce.grpc.contrib.Servers
 import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
+import io.prometheus.common.GenericIdleService
 import io.prometheus.common.genericServiceListener
 import io.prometheus.dsl.GrpcDsl.server
 import io.prometheus.dsl.GuavaDsl.toStringElements
@@ -37,7 +37,7 @@ import kotlin.properties.Delegates
 
 class ProxyGrpcService private constructor(private val proxy: Proxy,
                                            private val port: Int = -1,
-                                           private val inProcessServerName: String = "") : AbstractIdleService() {
+                                           private val inProcessServerName: String = "") : GenericIdleService() {
     val healthCheck =
             healthCheck {
                 if (grpcServer.isShutdown || grpcServer.isShutdown)
@@ -78,7 +78,6 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
     override fun shutDown() {
         if (proxy.isZipkinEnabled)
             tracing.close()
-
         Servers.shutdownGracefully(grpcServer, 2000)
     }
 

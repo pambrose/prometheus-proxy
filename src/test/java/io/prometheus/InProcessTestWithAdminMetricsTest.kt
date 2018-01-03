@@ -88,12 +88,8 @@ class InProcessTestWithAdminMetricsTest {
         @AfterClass
         fun takeDown() {
             logger.info("Stopping Proxy and Agent")
-            PROXY.stopAsync()
-            PROXY.awaitTerminated(5, SECONDS)
-            AGENT.stopAsync()
-            AGENT.awaitTerminated(5, SECONDS)
+            PROXY.stopSync()
+            AGENT.stopSync()
         }
     }
-
-    // proxyCallTest() called in InProcess tests
 }

@@ -19,33 +19,31 @@ package io.prometheus.proxy
 import brave.Tracing
 import brave.sparkjava.SparkTracing
 import com.google.common.net.HttpHeaders.*
-import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
+import io.prometheus.common.GenericIdleService
 import io.prometheus.common.genericServiceListener
 import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.SparkDsl.httpServer
 import org.slf4j.LoggerFactory
-import spark.*
+import spark.Request
+import spark.Response
+import spark.Route
+import spark.Spark
 import java.net.BindException
 import kotlin.properties.Delegates
 
-class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleService() {
+class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleService() {
     private val configVals = proxy.configVals
     private var tracing: Tracing by Delegates.notNull()
     private val httpServer =
-            try {
-                Service.ignite()
-                        .apply {
-                            initExceptionHandler { e -> sparkExceptionHandler(e, port) }
-                            port(port)
-                            threadPool(configVals.http.maxThreads,
-                                       configVals.http.minThreads,
-                                       configVals.http.idleTimeoutMillis)
-                        }
-            } catch (e: BindException) {
-                logger.error("Failed to bind to port $port", e)
-                throw e
+            httpServer {
+                initExceptionHandler { e -> sparkExceptionHandler(e, port) }
+                port(port)
+                threadPool(configVals.http.maxThreads,
+                           configVals.http.minThreads,
+                           configVals.http.idleTimeoutMillis)
             }
 
     init {

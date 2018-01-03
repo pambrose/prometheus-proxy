@@ -20,11 +20,10 @@ import com.codahale.metrics.health.HealthCheckRegistry
 import com.codahale.metrics.servlets.HealthCheckServlet
 import com.codahale.metrics.servlets.PingServlet
 import com.codahale.metrics.servlets.ThreadDumpServlet
-import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.SparkDsl.servletContextHandler
 import org.eclipse.jetty.server.Server
-import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
 import org.slf4j.LoggerFactory
 
@@ -33,25 +32,28 @@ class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val pingPath: String,
                    private val versionPath: String,
                    private val healthCheckPath: String,
-                   private val threadDumpPath: String) : AbstractIdleService() {
+                   private val threadDumpPath: String,
+                   initBlock: (AdminService.() -> Unit)? = null) : GenericIdleService() {
     private val server =
-            Server(port).apply {
-                handler =
-                        ServletContextHandler().apply {
-                            contextPath = "/"
-                            if (pingPath.isNotBlank())
-                                addServlet(ServletHolder(PingServlet()), "/$pingPath")
-                            if (versionPath.isNotBlank())
-                                addServlet(ServletHolder(VersionServlet()), "/$versionPath")
-                            if (healthCheckPath.isNotBlank())
-                                addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
-                            if (threadDumpPath.isNotBlank())
-                                addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
-                        }
-            }
+            Server(port)
+                    .apply {
+                        handler =
+                                servletContextHandler {
+                                    contextPath = "/"
+                                    if (pingPath.isNotBlank())
+                                        addServlet(ServletHolder(PingServlet()), "/$pingPath")
+                                    if (versionPath.isNotBlank())
+                                        addServlet(ServletHolder(VersionServlet()), "/$versionPath")
+                                    if (healthCheckPath.isNotBlank())
+                                        addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
+                                    if (threadDumpPath.isNotBlank())
+                                        addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
+                                }
+                    }
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+        initBlock?.invoke(this)
     }
 
     override fun startUp() = server.start()

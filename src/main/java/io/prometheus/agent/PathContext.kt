@@ -36,11 +36,12 @@ class PathContext(private val okHttpClient: OkHttpClient,
             try {
                 logger.debug("Fetching $this")
                 val request =
-                        with(request) {
-                            if (!scrapeRequest.accept.isNullOrEmpty())
-                                header(ACCEPT, scrapeRequest.accept)
-                            build()
-                        }
+                        request
+                                .run {
+                                    if (!scrapeRequest.accept.isNullOrEmpty())
+                                        header(ACCEPT, scrapeRequest.accept)
+                                    build()
+                                }
 
                 okHttpClient.newCall(request).execute()
             } catch (e: IOException) {

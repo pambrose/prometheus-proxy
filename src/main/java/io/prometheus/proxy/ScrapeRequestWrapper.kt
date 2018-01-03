@@ -41,14 +41,15 @@ class ScrapeRequestWrapper(proxy: Proxy,
     var scrapeResponse: ScrapeResponse by AtomicDelegates.notNullReference()
 
     val scrapeRequest: ScrapeRequest =
-            with(ScrapeRequest.newBuilder()) {
-                agentId = agentContext.agentId
-                scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
-                this.path = path
-                if (!accept.isNullOrBlank())
-                    this.accept = accept
-                build()
-            }
+            ScrapeRequest.newBuilder()
+                    .run {
+                        agentId = agentContext.agentId
+                        scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
+                        this.path = path
+                        if (!accept.isNullOrBlank())
+                            this.accept = accept
+                        build()
+                    }
 
     val scrapeId: Long
         get() = scrapeRequest.scrapeId

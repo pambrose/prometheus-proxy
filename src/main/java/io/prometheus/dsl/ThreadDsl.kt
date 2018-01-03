@@ -5,9 +5,10 @@ import java.util.concurrent.ThreadFactory
 
 object ThreadDsl {
     fun threadFactory(block: ThreadFactoryBuilder.() -> Unit): ThreadFactory {
-        return with(ThreadFactoryBuilder()) {
-            block(this)
-            build()
-        }
+        return ThreadFactoryBuilder()
+                .run {
+                    block(this)
+                    build()
+                }
     }
 }

@@ -17,21 +17,22 @@
 package io.prometheus.common
 
 import com.codahale.metrics.health.HealthCheck
-import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.client.exporter.MetricsServlet
 import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.JettyDsl.server
+import io.prometheus.dsl.JettyDsl.servletContextHandler
 import io.prometheus.dsl.MetricsDsl.healthCheck
-import org.eclipse.jetty.server.Server
-import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.servlet.ServletHolder
 import org.slf4j.LoggerFactory
 
-class MetricsService(private val port: Int, private val path: String) : AbstractIdleService() {
+class MetricsService(private val port: Int,
+                     private val path: String,
+                     initBlock: (MetricsService.() -> Unit)? = null) : GenericIdleService() {
     private val server =
-            Server(port).apply {
+            server(port) {
                 handler =
-                        ServletContextHandler().apply {
+                        servletContextHandler {
                             contextPath = "/"
                             addServlet(ServletHolder(MetricsServlet()), "/$path")
                         }
@@ -47,6 +48,7 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+        initBlock?.invoke(this)
     }
 
     override fun startUp() = server.start()
@@ -61,5 +63,4 @@ class MetricsService(private val port: Int, private val path: String) : Abstract
     companion object {
         private val logger = LoggerFactory.getLogger(MetricsService::class.java)
     }
-
 }

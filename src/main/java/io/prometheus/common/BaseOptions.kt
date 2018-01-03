@@ -81,11 +81,12 @@ abstract class BaseOptions protected constructor(private val progName: String,
     private fun parseArgs(argv: Array<String>?) {
         try {
             val jcom =
-                    JCommander(this).apply {
-                        programName = progName
-                        setCaseSensitiveOptions(false)
-                        parse(*argv ?: arrayOf<String>())
-                    }
+                    JCommander(this)
+                            .apply {
+                                programName = progName
+                                setCaseSensitiveOptions(false)
+                                parse(*argv ?: arrayOf<String>())
+                            }
 
             if (usage) {
                 jcom.usage()

@@ -22,6 +22,7 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.sleepForMillis
 import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.OkHttpDsl.get
+import io.prometheus.dsl.SparkDsl.httpServer
 import io.prometheus.proxy.ProxyHttpService.Companion.sparkExceptionHandler
 import org.assertj.core.api.Assertions.assertThat
 import org.slf4j.LoggerFactory
@@ -136,17 +137,16 @@ object CommonTests {
         logger.info("Calling timeoutTest() from $caller")
 
         val httpServer =
-                Service.ignite()
-                        .apply {
-                            initExceptionHandler { e -> sparkExceptionHandler(e, agentPort) }
-                            port(agentPort)
-                            get("/$agentPath") { _, res ->
-                                res.type("text/plain")
-                                sleepForSecs(10)
-                                "I timed out"
-                            }
-                            awaitInitialization()
-                        }
+                httpServer {
+                    initExceptionHandler { e -> sparkExceptionHandler(e, agentPort) }
+                    port(agentPort)
+                    get("/$agentPath") { _, res ->
+                        res.type("text/plain")
+                        sleepForSecs(10)
+                        "I timed out"
+                    }
+                    awaitInitialization()
+                }
 
         agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
         "http://localhost:$PROXY_PORT/$proxyPath".get { assertThat(it.code()).isEqualTo(404) }
@@ -176,19 +176,17 @@ object CommonTests {
         IntStream.range(0, httpServerCount)
                 .forEach { i ->
                     val port = startingPort + i
-                    val httpServer =
-                            Service.ignite()
-                                    .apply {
-                                        initExceptionHandler { e -> sparkExceptionHandler(e, port) }
-                                        port(port)
-                                        threadPool(30, 10, 1000)
-                                        get("/agent-$i") { _, res ->
-                                            res.type("text/plain")
-                                            "value: $i"
-                                        }
-                                        awaitInitialization()
-                                    }
-                    httpServers.add(httpServer)
+                    httpServers.add(
+                            httpServer {
+                                initExceptionHandler { e -> sparkExceptionHandler(e, port) }
+                                port(port)
+                                threadPool(30, 10, 1000)
+                                get("/agent-$i") { _, res ->
+                                    res.type("text/plain")
+                                    "value: $i"
+                                }
+                                awaitInitialization()
+                            })
                 }
 
         // Create the paths

@@ -32,15 +32,16 @@ import kotlin.properties.Delegates
 class Proxy(options: ProxyOptions,
             proxyPort: Int = options.agentPort,
             inProcessServerName: String = "",
-            testMode: Boolean = false) : GenericService(options.configVals,
-                                                        AdminConfig.create(options.adminEnabled,
-                                                                           options.adminPort,
-                                                                           options.configVals.proxy.admin),
-                                                        MetricsConfig.create(options.metricsEnabled,
-                                                                             options.metricsPort,
-                                                                             options.configVals.proxy.metrics),
-                                                        ZipkinConfig.create(options.configVals.proxy.internal.zipkin),
-                                                        testMode) {
+            testMode: Boolean = false,
+            initBlock: (Proxy.() -> Unit)? = null) : GenericService(options.configVals,
+                                                                    AdminConfig.create(options.adminEnabled,
+                                                                                       options.adminPort,
+                                                                                       options.configVals.proxy.admin),
+                                                                    MetricsConfig.create(options.metricsEnabled,
+                                                                                         options.metricsPort,
+                                                                                         options.configVals.proxy.metrics),
+                                                                    ZipkinConfig.create(options.configVals.proxy.internal.zipkin),
+                                                                    testMode) {
 
     private val pathMap = Maps.newConcurrentMap<String, AgentContext>() // Map path to AgentContext
     private val scrapeRequestMap = Maps.newConcurrentMap<Long, ScrapeRequestWrapper>() // Map scrape_id to agent_id
@@ -76,28 +77,28 @@ class Proxy(options: ProxyOptions,
         if (isMetricsEnabled)
             metrics = ProxyMetrics(this)
         if (configVals.internal.staleAgentCheckEnabled)
-            agentCleanupService = AgentContextCleanupService(this).apply {
-                addServices(this)
-            }
+            agentCleanupService = AgentContextCleanupService(this) { addServices(this) }
         addServices(grpcService, httpService)
         initService()
+        initBlock?.invoke(this)
     }
 
     override fun startUp() {
         super.startUp()
-        grpcService.startAsync()
-        httpService.startAsync()
+        grpcService.apply { startSync() }
+        httpService.apply { startSync() }
+
         if (configVals.internal.staleAgentCheckEnabled)
-            agentCleanupService.startAsync()
+            agentCleanupService.apply { startSync() }
         else
             logger.info("Agent eviction thread not started")
     }
 
     override fun shutDown() {
-        grpcService.stopAsync()
-        httpService.stopAsync()
+        grpcService.stopSync()
+        httpService.stopSync()
         if (configVals.internal.staleAgentCheckEnabled)
-            agentCleanupService.stopAsync()
+            agentCleanupService.stopSync()
         super.shutDown()
     }
 
@@ -179,18 +180,30 @@ class Proxy(options: ProxyOptions,
                 agentContext == null            -> {
                     val msg = "Unable to remove path /$path - path not found"
                     logger.error(msg)
-                    responseBuilder.setValid(false).setReason(msg)
+                    responseBuilder
+                            .apply {
+                                valid = false
+                                reason = msg
+                            }
                 }
                 agentContext.agentId != agentId -> {
                     val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
                     logger.error(msg)
-                    responseBuilder.setValid(false).setReason(msg)
+                    responseBuilder
+                            .apply {
+                                valid = false
+                                reason = msg
+                            }
                 }
                 else                            -> {
                     pathMap.remove(path)
                     if (!isTestMode)
                         logger.info("Removed path /$path for $agentContext")
-                    responseBuilder.setValid(true).setReason("")
+                    responseBuilder
+                            .apply {
+                                valid = true
+                                reason = ""
+                            }
                 }
             }
         }
@@ -203,7 +216,8 @@ class Proxy(options: ProxyOptions,
             synchronized(pathMap) {
                 pathMap.forEach { k, v ->
                     if (v.agentId == agentId)
-                        pathMap.remove(k)?.let { logger.info("Removed path /$k for $it") } ?: logger.error("Missing path /$k for agentId: $agentId")
+                        pathMap.remove(k)
+                                ?.let { logger.info("Removed path /$k for $it") } ?: logger.error("Missing path /$k for agentId: $agentId")
                 }
             }
     }
@@ -228,7 +242,7 @@ class Proxy(options: ProxyOptions,
             logger.info(getBanner("banners/proxy.txt", logger))
             logger.info(getVersionDesc(false))
 
-            Proxy(options = options).startAsync()
+            Proxy(options = options) { startSync() }
         }
     }
 }

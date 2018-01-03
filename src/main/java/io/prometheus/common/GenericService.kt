@@ -22,10 +22,10 @@ import com.codahale.metrics.health.HealthCheckRegistry
 import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck
 import com.codahale.metrics.jmx.JmxReporter
 import com.google.common.base.Joiner
-import com.google.common.util.concurrent.AbstractExecutionThreadService
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
+import io.prometheus.dsl.GuavaDsl.serviceManager
 import io.prometheus.dsl.GuavaDsl.serviceManagerListener
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import org.slf4j.LoggerFactory
@@ -36,7 +36,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                                     private val adminConfig: AdminConfig,
                                                     private val metricsConfig: MetricsConfig,
                                                     private val zipkinConfig: ZipkinConfig,
-                                                    val isTestMode: Boolean) : AbstractExecutionThreadService(), Closeable {
+                                                    val isTestMode: Boolean) : GenericExecutionThreadService(), Closeable {
     protected val healthCheckRegistry = HealthCheckRegistry()
 
     private val services = mutableListOf<Service>()
@@ -64,16 +64,14 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                         adminConfig.pingPath,
                                         adminConfig.versionPath,
                                         adminConfig.healthCheckPath,
-                                        adminConfig.threadDumpPath).apply {
-                addService(this)
-            }
+                                        adminConfig.threadDumpPath) { addService(this) }
         }
         else {
             logger.info("Admin service disabled")
         }
 
         if (isMetricsEnabled) {
-            metricsService = MetricsService(metricsConfig.port, metricsConfig.path).apply { addService(this) }
+            metricsService = MetricsService(metricsConfig.port, metricsConfig.path) { addService(this) }
             SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
                                      metricsConfig.memoryPoolsExportsEnabled,
                                      metricsConfig.garbageCollectorExportsEnabled,
@@ -88,7 +86,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
         if (isZipkinEnabled) {
             val url = "http://${zipkinConfig.hostname}:${zipkinConfig.port}/${zipkinConfig.path}"
-            zipkinReporterService = ZipkinReporterService(url).apply { addService(this) }
+            zipkinReporterService = ZipkinReporterService(url) { addService(this) }
         }
         else {
             logger.info("Zipkin reporter service disabled")
@@ -100,7 +98,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
         addService(this)
         val clazzName = javaClass.simpleName
         serviceManager =
-                ServiceManager(services).apply {
+                serviceManager(services) {
                     addListener(
                             serviceManagerListener {
                                 healthy { logger.info("All $clazzName services healthy") }
@@ -114,36 +112,36 @@ abstract class GenericService protected constructor(protected val genericConfigV
     override fun startUp() {
         super.startUp()
         if (isZipkinEnabled)
-            zipkinReporterService.startAsync()
+            zipkinReporterService.startSync()
 
         if (isMetricsEnabled) {
-            metricsService.startAsync()
+            metricsService.startSync()
             jmxReporter.start()
         }
 
         if (isAdminEnabled)
-            adminService.startAsync()
+            adminService.startSync()
 
         Runtime.getRuntime().addShutdownHook(shutDownHookAction(this))
     }
 
     override fun shutDown() {
         if (isAdminEnabled)
-            adminService.stopAsync()
+            adminService.stopSync()
 
         if (isMetricsEnabled) {
-            metricsService.stopAsync()
+            metricsService.stopSync()
             jmxReporter.stop()
         }
 
         if (isZipkinEnabled)
-            zipkinReporterService.stopAsync()
+            zipkinReporterService.stopSync()
 
         super.shutDown()
     }
 
     override fun close() {
-        stopAsync()
+        stopSync()
     }
 
     private fun addService(service: Service) {
@@ -157,27 +155,29 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     protected open fun registerHealthChecks() {
-        healthCheckRegistry.apply {
-            register("thread_deadlock", ThreadDeadlockHealthCheck())
-            if (isMetricsEnabled)
-                register("metrics_service", metricsService.healthCheck)
-            register(
-                    "all_services_healthy",
-                    healthCheck {
-                        if (serviceManager.isHealthy)
-                            HealthCheck.Result.healthy()
-                        else {
-                            val vals =
-                                    serviceManager.servicesByState()
-                                            .entries()
-                                            .filter { it.key !== Service.State.RUNNING }
-                                            .onEach { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
-                                            .map { "${it.key}: ${it.value}" }
-                                            .toList()
-                            HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
-                        }
-                    })
-        }
+        healthCheckRegistry
+                .apply {
+                    register("thread_deadlock", ThreadDeadlockHealthCheck())
+                    if (isMetricsEnabled)
+                        register("metrics_service", metricsService.healthCheck)
+                    register(
+                            "all_services_healthy",
+                            healthCheck {
+                                if (serviceManager.isHealthy)
+                                    HealthCheck.Result.healthy()
+                                else {
+                                    val vals =
+                                            serviceManager
+                                                    .servicesByState()
+                                                    .entries()
+                                                    .filter { it.key !== Service.State.RUNNING }
+                                                    .onEach { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
+                                                    .map { "${it.key}: ${it.value}" }
+                                                    .toList()
+                                    HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
+                                }
+                            })
+                }
     }
 
     companion object {

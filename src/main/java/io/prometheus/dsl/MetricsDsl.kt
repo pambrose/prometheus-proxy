@@ -7,24 +7,27 @@ import io.prometheus.client.Summary
 
 object MetricsDsl {
     fun counter(builder: Counter.Builder.() -> Unit): Counter {
-        return with(Counter.build()) {
-            builder(this)
-            register()
-        }
+        return Counter.build()
+                .run {
+                    builder(this)
+                    register()
+                }
     }
 
     fun summary(builder: Summary.Builder.() -> Unit): Summary {
-        return with(Summary.build()) {
-            builder(this)
-            register()
-        }
+        return Summary.build()
+                .run {
+                    builder(this)
+                    register()
+                }
     }
 
     fun gauge(builder: Gauge.Builder.() -> Unit): Gauge {
-        return with(Gauge.build()) {
-            builder(this)
-            register()
-        }
+        return Gauge.build()
+                .run {
+                    builder(this)
+                    register()
+                }
     }
 
     fun healthCheck(block: HealthCheck.() -> HealthCheck.Result): HealthCheck {

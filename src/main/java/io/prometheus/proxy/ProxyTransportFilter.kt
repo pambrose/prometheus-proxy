@@ -25,9 +25,10 @@ import org.slf4j.LoggerFactory
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
     private fun getRemoteAddr(attributes: Attributes): String {
-        return attributes.keys().first { "remote-addr" == it.toString() }?.let {
-            attributes.get(it)?.toString() ?: "Unknown"
-        } ?: "Unknown"
+        return attributes.keys().first { "remote-addr" == it.toString() }
+                       ?.let {
+                           attributes.get(it)?.toString() ?: "Unknown"
+                       } ?: "Unknown"
     }
 
     override fun transportReady(attributes: Attributes): Attributes {

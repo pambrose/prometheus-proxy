@@ -16,18 +16,19 @@
 
 package io.prometheus.proxy
 
-import com.google.common.util.concurrent.AbstractExecutionThreadService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
+import io.prometheus.common.GenericExecutionThreadService
 import io.prometheus.common.genericServiceListener
 import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import org.slf4j.LoggerFactory
 
-class AgentContextCleanupService(private val proxy: Proxy) : AbstractExecutionThreadService() {
+class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) : GenericExecutionThreadService() {
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+        initBlock?.invoke(this)
     }
 
     @Throws(Exception::class)

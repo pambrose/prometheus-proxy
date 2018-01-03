@@ -17,7 +17,6 @@
 package io.prometheus.common
 
 import brave.Tracing
-import com.google.common.util.concurrent.AbstractIdleService
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ZipkinDsl.tracing
@@ -25,12 +24,13 @@ import org.slf4j.LoggerFactory
 import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
 
-class ZipkinReporterService(private val url: String) : AbstractIdleService() {
+class ZipkinReporterService(private val url: String, protected val initBlock: (ZipkinReporterService.() -> Unit)? = null) : GenericIdleService() {
     private val sender = OkHttpSender.create(url)
     private val reporter = AsyncReporter.create(sender)
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+        initBlock?.invoke(this)
     }
 
     fun newTracing(serviceName: String): Tracing =

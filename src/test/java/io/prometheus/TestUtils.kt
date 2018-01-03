@@ -23,7 +23,6 @@ import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 object TestUtils {
@@ -36,22 +35,22 @@ object TestUtils {
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Proxy {
         val args =
-                mutableListOf<String>().apply {
-                    addAll(TestConstants.args)
-                    addAll(argv)
-                    add("-Dproxy.admin.enabled=$adminEnabled")
-                    add("-Dproxy.metrics.enabled=$metricsEnabled")
-                }
+                mutableListOf<String>()
+                        .apply {
+                            addAll(TestConstants.args)
+                            addAll(argv)
+                            add("-Dproxy.admin.enabled=$adminEnabled")
+                            add("-Dproxy.metrics.enabled=$metricsEnabled")
+                        }
         val options = ProxyOptions(args)
 
         logger.info(getBanner("banners/proxy.txt", logger))
         logger.info(getVersionDesc(false))
 
-        return Proxy(options = options, proxyPort = PROXY_PORT, inProcessServerName = serverName, testMode = true)
-                .apply {
-                    startAsync()
-                    awaitRunning(5, TimeUnit.SECONDS)
-                }
+        return Proxy(options = options,
+                     proxyPort = PROXY_PORT,
+                     inProcessServerName = serverName,
+                     testMode = true) { startSync() }
     }
 
     @Throws(IOException::class, TimeoutException::class)
@@ -60,21 +59,20 @@ object TestUtils {
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Agent {
         val args =
-                mutableListOf<String>().apply {
-                    addAll(TestConstants.args)
-                    addAll(argv)
-                    add("-Dagent.admin.enabled=$adminEnabled")
-                    add("-Dagent.metrics.enabled=$metricsEnabled")
-                }
+                mutableListOf<String>()
+                        .apply {
+                            addAll(TestConstants.args)
+                            addAll(argv)
+                            add("-Dagent.admin.enabled=$adminEnabled")
+                            add("-Dagent.metrics.enabled=$metricsEnabled")
+                        }
         val options = AgentOptions(args, false)
 
         logger.info(getBanner("banners/agent.txt", logger))
         logger.info(getVersionDesc(false))
 
-        return Agent(options = options, inProcessServerName = serverName, testMode = true)
-                .apply {
-                    startAsync()
-                    awaitRunning(5, TimeUnit.SECONDS)
-                }
+        return Agent(options = options,
+                     inProcessServerName = serverName,
+                     testMode = true) { startSync() }
     }
 }

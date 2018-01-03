@@ -8,10 +8,15 @@ import io.prometheus.delegate.DelegatesExtensions.singleAssign
 object GuavaDsl {
 
     fun Any.toStringElements(block: MoreObjects.ToStringHelper.() -> Unit): String {
-        return with(MoreObjects.toStringHelper(this)) {
-            block(this)
-            toString()
-        }
+        return MoreObjects.toStringHelper(this)
+                .run {
+                    block(this)
+                    toString()
+                }
+    }
+
+    fun serviceManager(services: List<Service>, block: ServiceManager.() -> Unit): ServiceManager {
+        return ServiceManager(services).apply { block.invoke(this) }
     }
 
     fun serviceManagerListener(init: ServiceManagerListenerHelper.() -> Unit): ServiceManager.Listener {

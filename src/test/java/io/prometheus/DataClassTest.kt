@@ -36,92 +36,112 @@ class DataClassTest {
     @Test
     fun adminConfigTest() {
         var vals = configVals("agent.admin.enabled=true")
-        AdminConfig.create(vals.agent.admin.enabled, -1, vals.agent.admin).let {
-            assertThat(it.enabled).isTrue()
-        }
+        AdminConfig.create(vals.agent.admin.enabled, -1, vals.agent.admin)
+                .let {
+                    assertThat(it.enabled).isTrue()
+                }
 
         vals = configVals("agent.admin.port=888")
-        AdminConfig.create(vals.agent.admin.enabled, vals.agent.admin.port, vals.agent.admin).let {
-            assertThat(it.enabled).isFalse()
-            assertThat(it.port).isEqualTo(888)
-        }
+        AdminConfig.create(vals.agent.admin.enabled, vals.agent.admin.port, vals.agent.admin)
+                .let {
+                    assertThat(it.enabled).isFalse()
+                    assertThat(it.port).isEqualTo(888)
+                }
 
-        AdminConfig.create(true, 444, configVals("agent.admin.pingPath=a pingpath val").agent.admin).let {
-            assertThat(it.pingPath).isEqualTo("a pingpath val")
-        }
+        AdminConfig.create(true, 444, configVals("agent.admin.pingPath=a pingpath val").agent.admin)
+                .let {
+                    assertThat(it.pingPath).isEqualTo("a pingpath val")
+                }
 
-        AdminConfig.create(true, 444, configVals("agent.admin.versionPath=a versionpath val").agent.admin).let {
-            assertThat(it.versionPath).isEqualTo("a versionpath val")
-        }
+        AdminConfig.create(true, 444, configVals("agent.admin.versionPath=a versionpath val").agent.admin)
+                .let {
+                    assertThat(it.versionPath).isEqualTo("a versionpath val")
+                }
 
-        AdminConfig.create(true, 444, configVals("agent.admin.healthCheckPath=a healthCheckPath val").agent.admin).let {
-            assertThat(it.healthCheckPath).isEqualTo("a healthCheckPath val")
-        }
+        AdminConfig.create(true, 444, configVals("agent.admin.healthCheckPath=a healthCheckPath val").agent.admin)
+                .let {
+                    assertThat(it.healthCheckPath).isEqualTo("a healthCheckPath val")
+                }
 
-        AdminConfig.create(true, 444, configVals("agent.admin.threadDumpPath=a threadDumpPath val").agent.admin).let {
-            assertThat(it.threadDumpPath).isEqualTo("a threadDumpPath val")
-        }
+        AdminConfig.create(true, 444, configVals("agent.admin.threadDumpPath=a threadDumpPath val").agent.admin)
+                .let {
+                    assertThat(it.threadDumpPath).isEqualTo("a threadDumpPath val")
+                }
     }
 
     @Test
     fun metricsConfigTest() {
-        MetricsConfig.create(true, 555, configVals("agent.metrics.enabled=true").agent.metrics).let {
-            assertThat(it.enabled).isTrue()
-        }
+        MetricsConfig.create(true, 555, configVals("agent.metrics.enabled=true").agent.metrics)
+                .let {
+                    assertThat(it.enabled).isTrue()
+                }
 
-        MetricsConfig.create(true, 555, configVals("agent.metrics.hostname=testval").agent.metrics).let {
-            assertThat(it.port).isEqualTo(555)
-        }
+        MetricsConfig.create(true, 555, configVals("agent.metrics.hostname=testval").agent.metrics)
+                .let {
+                    assertThat(it.port).isEqualTo(555)
+                }
 
-        MetricsConfig.create(true, 555, configVals("agent.metrics.path=a path val").agent.metrics).let {
-            assertThat(it.path).isEqualTo("a path val")
-        }
+        MetricsConfig.create(true, 555, configVals("agent.metrics.path=a path val").agent.metrics)
+                .let {
+                    assertThat(it.path).isEqualTo("a path val")
+                }
 
-        MetricsConfig.create(true, 555, configVals("agent.metrics.standardExportsEnabled=true").agent.metrics).let {
-            assertThat(it.standardExportsEnabled).isTrue()
-        }
+        MetricsConfig.create(true, 555, configVals("agent.metrics.standardExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.standardExportsEnabled).isTrue()
+                }
 
-        MetricsConfig.create(true, 555, configVals("agent.metrics.memoryPoolsExportsEnabled=true").agent.metrics).let {
-            assertThat(it.memoryPoolsExportsEnabled).isTrue()
-        }
+        MetricsConfig.create(true, 555, configVals("agent.metrics.memoryPoolsExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.memoryPoolsExportsEnabled).isTrue()
+                }
 
-        MetricsConfig.create(true, 555, configVals("agent.metrics.garbageCollectorExportsEnabled=true").agent.metrics).let {
-            assertThat(it.garbageCollectorExportsEnabled).isTrue()
-        }
+        MetricsConfig.create(true, 555, configVals("agent.metrics.garbageCollectorExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.garbageCollectorExportsEnabled).isTrue()
+                }
 
-        MetricsConfig.create(true, 555, configVals("agent.metrics.threadExportsEnabled=true").agent.metrics).let {
-            assertThat(it.threadExportsEnabled).isTrue()
-        }
+        MetricsConfig.create(true, 555, configVals("agent.metrics.threadExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.threadExportsEnabled).isTrue()
+                }
 
-        MetricsConfig.create(true, 555, configVals("agent.metrics.classLoadingExportsEnabled=true").agent.metrics).let {
-            assertThat(it.classLoadingExportsEnabled).isTrue()
-        }
+        MetricsConfig.create(true, 555, configVals("agent.metrics.classLoadingExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.classLoadingExportsEnabled).isTrue()
+                }
 
-        MetricsConfig.create(true, 555, configVals("agent.metrics.versionInfoExportsEnabled=true").agent.metrics).let {
-            assertThat(it.versionInfoExportsEnabled).isTrue()
-        }
+        MetricsConfig.create(true, 555, configVals("agent.metrics.versionInfoExportsEnabled=true").agent.metrics)
+                .let {
+                    assertThat(it.versionInfoExportsEnabled).isTrue()
+                }
     }
 
     @Test
     fun zipkinConfigTest() {
-        ZipkinConfig.create(configVals("agent.internal.zipkin.enabled=true").agent.internal.zipkin).let {
-            assertThat(it.enabled).isTrue()
-        }
+        ZipkinConfig.create(configVals("agent.internal.zipkin.enabled=true").agent.internal.zipkin)
+                .let {
+                    assertThat(it.enabled).isTrue()
+                }
 
-        ZipkinConfig.create(configVals("agent.internal.zipkin.hostname=testval").agent.internal.zipkin).let {
-            assertThat(it.hostname).isEqualTo("testval")
-        }
+        ZipkinConfig.create(configVals("agent.internal.zipkin.hostname=testval").agent.internal.zipkin)
+                .let {
+                    assertThat(it.hostname).isEqualTo("testval")
+                }
 
-        ZipkinConfig.create(configVals("agent.internal.zipkin.port=999").agent.internal.zipkin).let {
-            assertThat(it.port).isEqualTo(999)
-        }
+        ZipkinConfig.create(configVals("agent.internal.zipkin.port=999").agent.internal.zipkin)
+                .let {
+                    assertThat(it.port).isEqualTo(999)
+                }
 
-        ZipkinConfig.create(configVals("agent.internal.zipkin.path=a path val").agent.internal.zipkin).let {
-            assertThat(it.path).isEqualTo("a path val")
-        }
+        ZipkinConfig.create(configVals("agent.internal.zipkin.path=a path val").agent.internal.zipkin)
+                .let {
+                    assertThat(it.path).isEqualTo("a path val")
+                }
 
-        ZipkinConfig.create(configVals("agent.internal.zipkin.serviceName=a service name").agent.internal.zipkin).let {
-            assertThat(it.serviceName).isEqualTo("a service name")
-        }
+        ZipkinConfig.create(configVals("agent.internal.zipkin.serviceName=a service name").agent.internal.zipkin)
+                .let {
+                    assertThat(it.serviceName).isEqualTo("a service name")
+                }
     }
 }
