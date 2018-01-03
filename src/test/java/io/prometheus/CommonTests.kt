@@ -24,8 +24,8 @@ import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.OkHttpDsl.get
 import io.prometheus.dsl.SparkDsl.httpServer
 import io.prometheus.proxy.ProxyHttpService.Companion.sparkExceptionHandler
+import mu.KLogging
 import org.assertj.core.api.Assertions.assertThat
-import org.slf4j.LoggerFactory
 import spark.Service
 import java.lang.Math.abs
 import java.util.concurrent.CountDownLatch
@@ -33,9 +33,7 @@ import java.util.concurrent.TimeUnit.MINUTES
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.IntStream
 
-object CommonTests {
-
-    private val logger = LoggerFactory.getLogger(CommonTests::class.java)
+object CommonTests : KLogging() {
 
     fun missingPathTest(caller: String) {
         logger.info("Calling missingPathTest() from $caller")

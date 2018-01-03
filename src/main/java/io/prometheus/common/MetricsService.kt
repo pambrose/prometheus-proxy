@@ -25,8 +25,8 @@ import io.prometheus.dsl.JettyDsl.servletContextHandler
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
+import mu.KLogging
 import org.eclipse.jetty.servlet.ServletHolder
-import org.slf4j.LoggerFactory
 
 class MetricsService(private val port: Int,
                      private val path: String,
@@ -62,7 +62,5 @@ class MetricsService(private val port: Int,
                 add("url", "http://localhost:$port/$path")
             }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(MetricsService::class.java)
-    }
+    companion object : KLogging()
 }

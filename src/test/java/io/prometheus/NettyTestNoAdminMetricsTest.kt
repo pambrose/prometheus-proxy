@@ -19,10 +19,10 @@ package io.prometheus
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
+import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
-import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 
@@ -69,9 +69,7 @@ class NettyTestNoAdminMetricsTest {
                                   caller = javaClass.simpleName)
     }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(NettyTestNoAdminMetricsTest::class.java)
-
+    companion object : KLogging() {
         private lateinit var PROXY: Proxy
         private lateinit var AGENT: Agent
 

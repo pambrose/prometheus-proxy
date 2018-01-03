@@ -22,7 +22,7 @@ import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
-import org.slf4j.LoggerFactory
+import mu.KLogging
 
 class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) : GenericExecutionThreadService() {
 
@@ -56,7 +56,5 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
                 add("pause secs", proxy.configVals.internal.staleAgentCheckPauseSecs)
             }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(AgentContextCleanupService::class.java)
-    }
+    companion object : KLogging()
 }

@@ -19,7 +19,7 @@ package io.prometheus.agent
 import io.grpc.*
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import org.slf4j.LoggerFactory
+import mu.KLogging
 
 class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
@@ -48,7 +48,5 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
                 }
             }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(AgentClientInterceptor::class.java)
-    }
+    companion object : KLogging()
 }

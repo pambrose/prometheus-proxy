@@ -30,7 +30,7 @@ import io.prometheus.dsl.GuavaDsl.serviceManagerListener
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import java.io.Closeable
 import kotlin.properties.Delegates
 
@@ -182,7 +182,5 @@ abstract class GenericService protected constructor(protected val genericConfigV
                 }
     }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(GenericService::class.java)
-    }
+    companion object : KLogging()
 }

@@ -22,7 +22,7 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ZipkinDsl.tracing
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
 
@@ -52,7 +52,5 @@ class ZipkinReporterService(private val url: String, protected val initBlock: (Z
 
     override fun toString() = toStringElements { add("url", url) }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(ZipkinReporterService::class.java)
-    }
+    companion object : KLogging()
 }

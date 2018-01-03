@@ -20,7 +20,7 @@ import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
 import io.prometheus.dsl.GrpcDsl.attributes
-import org.slf4j.LoggerFactory
+import mu.KLogging
 
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
@@ -53,7 +53,5 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
         super.transportTerminated(attributes)
     }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(ProxyTransportFilter::class.java)
-    }
+    companion object : KLogging()
 }

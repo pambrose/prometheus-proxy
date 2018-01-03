@@ -20,11 +20,11 @@ import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.dsl.OkHttpDsl.get
+import mu.KLogging
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
-import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
@@ -61,9 +61,7 @@ class AdminEmptyPathTest {
                 .get { assertThat(it.code()).isEqualTo(404) }
     }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(AdminEmptyPathTest::class.java)
-
+    companion object : KLogging() {
         private lateinit var PROXY: Proxy
         private lateinit var AGENT: Agent
 

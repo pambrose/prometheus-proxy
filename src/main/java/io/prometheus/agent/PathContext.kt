@@ -19,10 +19,10 @@ package io.prometheus.agent
 import com.google.common.net.HttpHeaders.ACCEPT
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeRequest
+import mu.KLogging
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.slf4j.LoggerFactory
 import java.io.IOException
 
 class PathContext(private val okHttpClient: OkHttpClient,
@@ -55,7 +55,5 @@ class PathContext(private val okHttpClient: OkHttpClient,
                 add("url", url)
             }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(PathContext::class.java)
-    }
+    companion object : KLogging()
 }

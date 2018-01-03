@@ -29,7 +29,7 @@ import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.proxy.*
 import io.prometheus.proxy.ProxyGrpcService.Companion.newProxyGrpcService
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import java.util.concurrent.ConcurrentMap
 import kotlin.properties.Delegates
 
@@ -233,9 +233,7 @@ class Proxy(options: ProxyOptions,
                 add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
             }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(Proxy::class.java)
-
+    companion object : KLogging() {
         val AGENT_ID = "agent-id"
         val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.of(AGENT_ID)
 

@@ -22,7 +22,7 @@ import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
 import com.typesafe.config.*
 import io.prometheus.common.EnvVars.*
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
@@ -194,8 +194,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
     private fun String.isPropertiesSuffix() = toLowerCase().endsWith(".properties") || toLowerCase().endsWith(".props")
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(BaseOptions::class.java)
+    companion object : KLogging() {
         private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
     }
 }

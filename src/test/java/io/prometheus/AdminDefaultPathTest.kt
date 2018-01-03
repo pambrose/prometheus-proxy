@@ -20,11 +20,11 @@ import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.dsl.OkHttpDsl.get
+import mu.KLogging
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
-import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
@@ -94,9 +94,7 @@ class AdminDefaultPathTest {
                 .get { assertThat(it.body()!!.string().length).isGreaterThan(10) }
     }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(AdminDefaultPathTest::class.java)
-
+    companion object : KLogging() {
         private lateinit var PROXY: Proxy
         private lateinit var AGENT: Agent
 
@@ -115,7 +113,7 @@ class AdminDefaultPathTest {
         @AfterClass
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
-            logger.info("Stopping Proxy and Agent")
+            logger.info { "Stopping Proxy and Agent" }
             PROXY.stopSync()
             AGENT.stopSync()
         }

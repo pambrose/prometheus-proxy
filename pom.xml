@@ -40,6 +40,7 @@
         <okhttp.version>3.9.1</okhttp.version>
         <grpc-prom.version>0.3.0</grpc-prom.version>
         <metrics.version>4.0.0</metrics.version>
+        <kotlin.logging.version>1.4.9</kotlin.logging.version>
 
         <brave.version>4.13.1</brave.version>
         <zipkin-sender.version>2.2.2</zipkin-sender.version>
@@ -255,16 +256,24 @@
             <version>${assertj.version}</version>
             <scope>test</scope>
         </dependency>
+
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib-jdk8</artifactId>
             <version>${kotlin.version}</version>
         </dependency>
+
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-test-junit</artifactId>
             <version>${kotlin.version}</version>
             <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.microutils</groupId>
+            <artifactId>kotlin-logging</artifactId>
+            <version>${kotlin.logging.version}</version>
         </dependency>
 
     </dependencies>

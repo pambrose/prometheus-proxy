@@ -25,9 +25,9 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.SparkDsl.servletContextHandler
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
+import mu.KLogging
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletHolder
-import org.slf4j.LoggerFactory
 
 class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val port: Int,
@@ -69,8 +69,5 @@ class AdminService(healthCheckRegistry: HealthCheckRegistry,
                 add("threaddump", ":$port/$threadDumpPath")
             }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(AdminService::class.java)
-    }
-
+    companion object : KLogging()
 }

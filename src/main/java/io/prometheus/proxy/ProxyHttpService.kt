@@ -26,7 +26,7 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.SparkDsl.httpServer
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import spark.Request
 import spark.Response
 import spark.Route
@@ -177,9 +177,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
 
     override fun toString() = toStringElements { add("port", port) }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(ProxyHttpService::class.java)
-
+    companion object : KLogging() {
         fun sparkExceptionHandler(e: Exception, port: Int) {
             if (e is BindException)
                 logger.error("ignite failed to bind to port $port", e)

@@ -21,13 +21,11 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import java.io.IOException
 import java.util.concurrent.TimeoutException
 
-object TestUtils {
-
-    private val logger = LoggerFactory.getLogger(TestUtils::class.java)
+object TestUtils : KLogging() {
 
     @Throws(IOException::class, TimeoutException::class)
     fun startProxy(serverName: String = "",

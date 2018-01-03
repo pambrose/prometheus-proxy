@@ -41,8 +41,8 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ThreadDsl.threadFactory
 import io.prometheus.grpc.*
 import io.prometheus.grpc.ProxyServiceGrpc.*
+import mu.KLogging
 import okhttp3.OkHttpClient
-import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
@@ -546,9 +546,7 @@ class Agent(options: AgentOptions,
                 add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
             }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(Agent::class.java)
-
+    companion object : KLogging() {
         @JvmStatic
         fun main(argv: Array<String>) {
             val options = AgentOptions(argv, true)

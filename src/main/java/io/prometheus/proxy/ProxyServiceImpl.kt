@@ -23,7 +23,7 @@ import io.grpc.stub.StreamObserver
 import io.prometheus.Proxy
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.grpc.*
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import java.util.concurrent.atomic.AtomicLong
 
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
@@ -205,8 +205,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         }
     }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(ProxyServiceImpl::class.java)
+    companion object : KLogging() {
         private val PATH_ID_GENERATOR = AtomicLong(0)
     }
 }
