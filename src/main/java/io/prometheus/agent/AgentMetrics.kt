@@ -19,7 +19,7 @@ package io.prometheus.agent
 import io.prometheus.Agent
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
-import io.prometheus.common.SamplerGauge
+import io.prometheus.common.SamplerGaugeCollector
 import io.prometheus.dsl.MetricsDsl.counter
 import io.prometheus.dsl.MetricsDsl.gauge
 import io.prometheus.dsl.MetricsDsl.summary
@@ -53,8 +53,8 @@ class AgentMetrics(agent: Agent) {
             help("Agent start time in seconds")
         }.setToCurrentTime()
 
-        SamplerGauge("agent_scrape_queue_size",
-                     "Agent scrape response queue size",
-                     { agent.scrapeResponseQueueSize.toDouble() })
+        SamplerGaugeCollector("agent_scrape_queue_size",
+                              "Agent scrape response queue size",
+                              data = { agent.scrapeResponseQueueSize.toDouble() })
     }
 }

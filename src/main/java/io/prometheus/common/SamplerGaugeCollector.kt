@@ -18,11 +18,11 @@ package io.prometheus.common
 
 import io.prometheus.client.Collector
 
-class SamplerGauge(private val name: String,
-                   private val help: String,
-                   private val samplerGaugeData: () -> Double,
-                   private val labelNames: List<String> = emptyList(),
-                   private val labelValues: List<String> = emptyList()) : Collector() {
+class SamplerGaugeCollector(private val name: String,
+                            private val help: String,
+                            private val labelNames: List<String> = emptyList(),
+                            private val labelValues: List<String> = emptyList(),
+                            private val data: () -> Double) : Collector() {
     init {
         register<Collector>()
     }
@@ -31,7 +31,7 @@ class SamplerGauge(private val name: String,
         val sample = MetricFamilySamples.Sample(name,
                                                 labelNames,
                                                 labelValues,
-                                                samplerGaugeData())
+                                                data())
         return listOf(Collector.MetricFamilySamples(name, Collector.Type.GAUGE, help, listOf(sample)))
     }
 }

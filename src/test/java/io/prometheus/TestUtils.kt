@@ -34,20 +34,19 @@ object TestUtils {
                    adminEnabled: Boolean = false,
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Proxy {
-        val args =
-                mutableListOf<String>()
-                        .apply {
-                            addAll(TestConstants.args)
-                            addAll(argv)
-                            add("-Dproxy.admin.enabled=$adminEnabled")
-                            add("-Dproxy.metrics.enabled=$metricsEnabled")
-                        }
-        val options = ProxyOptions(args)
 
         logger.info(getBanner("banners/proxy.txt", logger))
         logger.info(getVersionDesc(false))
 
-        return Proxy(options = options,
+        return Proxy(options =
+                     ProxyOptions(
+                             mutableListOf<String>()
+                                     .apply {
+                                         addAll(TestConstants.args)
+                                         addAll(argv)
+                                         add("-Dproxy.admin.enabled=$adminEnabled")
+                                         add("-Dproxy.metrics.enabled=$metricsEnabled")
+                                     }),
                      proxyPort = PROXY_PORT,
                      inProcessServerName = serverName,
                      testMode = true) { startSync() }
@@ -58,20 +57,20 @@ object TestUtils {
                    adminEnabled: Boolean = false,
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Agent {
-        val args =
-                mutableListOf<String>()
-                        .apply {
-                            addAll(TestConstants.args)
-                            addAll(argv)
-                            add("-Dagent.admin.enabled=$adminEnabled")
-                            add("-Dagent.metrics.enabled=$metricsEnabled")
-                        }
-        val options = AgentOptions(args, false)
 
         logger.info(getBanner("banners/agent.txt", logger))
         logger.info(getVersionDesc(false))
 
-        return Agent(options = options,
+        return Agent(options =
+                     AgentOptions(
+                             mutableListOf<String>()
+                                     .apply {
+                                         addAll(TestConstants.args)
+                                         addAll(argv)
+                                         add("-Dagent.admin.enabled=$adminEnabled")
+                                         add("-Dagent.metrics.enabled=$metricsEnabled")
+                                     },
+                             false),
                      inProcessServerName = serverName,
                      testMode = true) { startSync() }
     }

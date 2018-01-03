@@ -19,7 +19,7 @@ package io.prometheus.proxy
 import io.prometheus.Proxy
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
-import io.prometheus.common.SamplerGauge
+import io.prometheus.common.SamplerGaugeCollector
 import io.prometheus.dsl.MetricsDsl.counter
 import io.prometheus.dsl.MetricsDsl.gauge
 import io.prometheus.dsl.MetricsDsl.summary
@@ -63,20 +63,20 @@ class ProxyMetrics(proxy: Proxy) {
             help("Proxy start time in seconds")
         }.setToCurrentTime()
 
-        SamplerGauge("proxy_agent_map_size",
-                     "Proxy connected agents",
-                     { proxy.agentContextSize.toDouble() })
+        SamplerGaugeCollector(name = "proxy_agent_map_size",
+                              help = "Proxy connected agents",
+                              data = { proxy.agentContextSize.toDouble() })
 
-        SamplerGauge("proxy_path_map_size",
-                     "Proxy path map size",
-                     { proxy.pathMapSize.toDouble() })
+        SamplerGaugeCollector(name = "proxy_path_map_size",
+                              help = "Proxy path map size",
+                              data = { proxy.pathMapSize.toDouble() })
 
-        SamplerGauge("proxy_scrape_map_size",
-                     "Proxy scrape map size",
-                     { proxy.scrapeMapSize.toDouble() })
+        SamplerGaugeCollector(name = "proxy_scrape_map_size",
+                              help = "Proxy scrape map size",
+                              data = { proxy.scrapeMapSize.toDouble() })
 
-        SamplerGauge("proxy_cummulative_agent_queue_size",
-                     "Proxy cummulative agent queue size",
-                     { proxy.totalAgentRequestQueueSize.toDouble() })
+        SamplerGaugeCollector(name = "proxy_cummulative_agent_queue_size",
+                              help = "Proxy cummulative agent queue size",
+                              data = { proxy.totalAgentRequestQueueSize.toDouble() })
     }
 }
