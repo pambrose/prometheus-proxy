@@ -36,7 +36,7 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
         val maxInactivitySecs = proxy.configVals.internal.maxAgentInactivitySecs.toLong()
         val threadPauseSecs = proxy.configVals.internal.staleAgentCheckPauseSecs.toLong()
         while (isRunning) {
-            proxy.agentContextMap
+            proxy.agentContextManager.agentContextMap
                     .forEach { agentId, agentContext ->
                         val inactivitySecs = agentContext.inactivitySecs
                         if (inactivitySecs > maxInactivitySecs) {

@@ -61,12 +61,12 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     init {
         if (isAdminEnabled) {
-            adminService = AdminService(healthCheckRegistry,
-                                        adminConfig.port,
-                                        adminConfig.pingPath,
-                                        adminConfig.versionPath,
-                                        adminConfig.healthCheckPath,
-                                        adminConfig.threadDumpPath) { addService(this) }
+            adminService = AdminService(healthCheckRegistry = healthCheckRegistry,
+                                        port = adminConfig.port,
+                                        pingPath = adminConfig.pingPath,
+                                        versionPath = adminConfig.versionPath,
+                                        healthCheckPath = adminConfig.healthCheckPath,
+                                        threadDumpPath = adminConfig.threadDumpPath) { addService(this) }
         }
         else {
             logger.info { "Admin service disabled" }
@@ -74,12 +74,12 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
         if (isMetricsEnabled) {
             metricsService = MetricsService(metricsConfig.port, metricsConfig.path) { addService(this) }
-            SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
-                                     metricsConfig.memoryPoolsExportsEnabled,
-                                     metricsConfig.garbageCollectorExportsEnabled,
-                                     metricsConfig.threadExportsEnabled,
-                                     metricsConfig.classLoadingExportsEnabled,
-                                     metricsConfig.versionInfoExportsEnabled)
+            SystemMetrics.initialize(enableStandardExports = metricsConfig.standardExportsEnabled,
+                                     enableMemoryPoolsExports = metricsConfig.memoryPoolsExportsEnabled,
+                                     enableGarbageCollectorExports = metricsConfig.garbageCollectorExportsEnabled,
+                                     enableThreadExports = metricsConfig.threadExportsEnabled,
+                                     enableClassLoadingExports = metricsConfig.classLoadingExportsEnabled,
+                                     enableVersionInfoExports = metricsConfig.versionInfoExportsEnabled)
             jmxReporter = JmxReporter.forRegistry(MetricRegistry()).build()
         }
         else {

@@ -23,12 +23,12 @@ object SystemMetrics {
     private var initialized = false
 
     @Synchronized
-    fun initialize(enableStandardExports: Boolean,
-                   enableMemoryPoolsExports: Boolean,
-                   enableGarbageCollectorExports: Boolean,
-                   enableThreadExports: Boolean,
-                   enableClassLoadingExports: Boolean,
-                   enableVersionInfoExports: Boolean) {
+    fun initialize(enableStandardExports: Boolean = false,
+                   enableMemoryPoolsExports: Boolean = false,
+                   enableGarbageCollectorExports: Boolean = false,
+                   enableThreadExports: Boolean = false,
+                   enableClassLoadingExports: Boolean = false,
+                   enableVersionInfoExports: Boolean = false) {
         if (!initialized) {
             if (enableStandardExports)
                 StandardExports().register<Collector>()

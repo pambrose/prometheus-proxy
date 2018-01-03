@@ -91,7 +91,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                                 return@Route "42"
                             }
 
-                            val agentContext = proxy.getAgentContextByPath(path)
+                            val agentContext = proxy.pathManager.getAgentContextByPath(path)
 
                             if (agentContext == null) {
                                 logger.debug { "Invalid path request /\${path" }
@@ -128,7 +128,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                                     path: String): String? {
         val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext, path, req.headers(ACCEPT))
         try {
-            proxy.addToScrapeRequestMap(scrapeRequest)
+            proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
             agentContext.addToScrapeRequestQueue(scrapeRequest)
 
             val timeoutSecs = configVals.internal.scrapeRequestTimeoutSecs
@@ -146,7 +146,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                 }
             }
         } finally {
-            proxy.removeFromScrapeRequestMap(scrapeRequest.scrapeId) ?: logger.error { "Scrape request ${scrapeRequest.scrapeId} missing in map" }
+            proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeRequest.scrapeId) ?: logger.error { "Scrape request ${scrapeRequest.scrapeId} missing in map" }
         }
 
         logger.debug { "Results returned from $agentContext for $scrapeRequest" }
