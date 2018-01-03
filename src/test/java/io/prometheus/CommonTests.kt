@@ -22,6 +22,7 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.sleepForMillis
 import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.OkHttpDsl.get
+import io.prometheus.proxy.ProxyHttpService.Companion.sparkExceptionHandler
 import org.assertj.core.api.Assertions.assertThat
 import org.slf4j.LoggerFactory
 import spark.Service
@@ -120,6 +121,7 @@ object CommonTests {
 
     fun invalidAgentUrlTest(agent: Agent, badPath: String = "badPath", caller: String) {
         logger.info("Calling invalidAgentUrlTest() from $caller")
+
         agent.registerPath(badPath, "http://localhost:33/metrics")
         "http://localhost:$PROXY_PORT/$badPath".get { assertThat(it.code()).isEqualTo(404) }
         agent.unregisterPath(badPath)
@@ -132,25 +134,25 @@ object CommonTests {
                     caller: String) {
 
         logger.info("Calling timeoutTest() from $caller")
-        val httpService =
+
+        val httpServer =
                 Service.ignite()
                         .apply {
+                            initExceptionHandler { e -> sparkExceptionHandler(e, agentPort) }
                             port(agentPort)
                             get("/$agentPath") { _, res ->
                                 res.type("text/plain")
                                 sleepForSecs(10)
                                 "I timed out"
                             }
+                            awaitInitialization()
                         }
-
-        // Give http server chance to start
-        sleepForSecs(5)
 
         agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
         "http://localhost:$PROXY_PORT/$proxyPath".get { assertThat(it.code()).isEqualTo(404) }
         agent.unregisterPath("/$proxyPath")
 
-        httpService.stop()
+        httpServer.stop()
         sleepForSecs(5)
     }
 
@@ -173,21 +175,21 @@ object CommonTests {
         // Create the endpoints
         IntStream.range(0, httpServerCount)
                 .forEach { i ->
+                    val port = startingPort + i
                     val httpServer =
                             Service.ignite()
                                     .apply {
-                                        port(startingPort + i)
+                                        initExceptionHandler { e -> sparkExceptionHandler(e, port) }
+                                        port(port)
                                         threadPool(30, 10, 1000)
                                         get("/agent-$i") { _, res ->
                                             res.type("text/plain")
                                             "value: $i"
                                         }
+                                        awaitInitialization()
                                     }
                     httpServers.add(httpServer)
                 }
-
-        // Give http server chance to start
-        sleepForSecs(5)
 
         // Create the paths
         IntStream.range(0, pathCount)

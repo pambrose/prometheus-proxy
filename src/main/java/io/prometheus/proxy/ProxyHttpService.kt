@@ -27,19 +27,26 @@ import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import org.slf4j.LoggerFactory
 import spark.*
+import java.net.BindException
 import kotlin.properties.Delegates
 
 class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleService() {
     private val configVals = proxy.configVals
     private var tracing: Tracing by Delegates.notNull()
     private val httpServer =
-            Service.ignite()
-                    .apply {
-                        port(port)
-                        threadPool(configVals.http.maxThreads,
-                                   configVals.http.minThreads,
-                                   configVals.http.idleTimeoutMillis)
-                    }
+            try {
+                Service.ignite()
+                        .apply {
+                            initExceptionHandler { e -> sparkExceptionHandler(e, port) }
+                            port(port)
+                            threadPool(configVals.http.maxThreads,
+                                       configVals.http.minThreads,
+                                       configVals.http.idleTimeoutMillis)
+                        }
+            } catch (e: BindException) {
+                logger.error("Failed to bind to port $port", e)
+                throw e
+            }
 
     init {
         if (proxy.isZipkinEnabled)
@@ -56,52 +63,57 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
             Spark.afterAfter(sparkTracing.afterAfter())
         }
 
-        httpServer.get("/*",
-                       Route { req, res ->
-                     res.header("cache-control", "must-revalidate,no-cache,no-store")
+        httpServer
+                .apply {
+                    get("/*",
+                        Route { req, res ->
+                            res.header("cache-control", "must-revalidate,no-cache,no-store")
 
-                     if (!proxy.isRunning) {
-                         logger.error("Proxy stopped")
-                         res.status(503)
-                         updateScrapeRequests("proxy_stopped")
-                         return@Route null
-                     }
+                            if (!proxy.isRunning) {
+                                logger.error("Proxy stopped")
+                                res.status(503)
+                                updateScrapeRequests("proxy_stopped")
+                                return@Route null
+                            }
 
-                     val vals = req.splat()
+                            val vals = req.splat()
 
-                     if (vals == null || vals.isEmpty()) {
-                         logger.info("Request missing path")
-                         res.status(404)
-                         updateScrapeRequests("missing_path")
-                         return@Route null
-                     }
+                            if (vals == null || vals.isEmpty()) {
+                                logger.info("Request missing path")
+                                res.status(404)
+                                updateScrapeRequests("missing_path")
+                                return@Route null
+                            }
 
-                     val path = vals[0]
+                            val path = vals[0]
 
-                     if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
-                         res.status(200)
-                         res.type("text/plain")
-                         return@Route "42"
-                     }
+                            if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
+                                res.status(200)
+                                res.type("text/plain")
+                                return@Route "42"
+                            }
 
-                     val agentContext = proxy.getAgentContextByPath(path)
+                            val agentContext = proxy.getAgentContextByPath(path)
 
-                     if (agentContext == null) {
-                         logger.debug("Invalid path request /\${path")
-                         res.status(404)
-                         updateScrapeRequests("invalid_path")
-                         return@Route null
-                     }
+                            if (agentContext == null) {
+                                logger.debug("Invalid path request /\${path")
+                                res.status(404)
+                                updateScrapeRequests("invalid_path")
+                                return@Route null
+                            }
 
-                     if (!agentContext.isValid) {
-                         logger.error("Invalid AgentContext")
-                         res.status(404)
-                         updateScrapeRequests("invalid_agent_context")
-                         return@Route null
-                     }
+                            if (!agentContext.isValid) {
+                                logger.error("Invalid AgentContext")
+                                res.status(404)
+                                updateScrapeRequests("invalid_agent_context")
+                                return@Route null
+                            }
 
-                     return@Route submitScrapeRequest(req, res, agentContext, path)
-                 })
+                            return@Route submitScrapeRequest(req, res, agentContext, path)
+                        })
+                    awaitInitialization()
+                }
+
     }
 
     override fun shutDown() {
@@ -169,5 +181,14 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : AbstractIdleSe
 
     companion object {
         private val logger = LoggerFactory.getLogger(ProxyHttpService::class.java)
+
+        fun sparkExceptionHandler(e: Exception, port: Int) {
+            if (e is BindException)
+                logger.error("ignite failed to bind to port $port", e)
+            else
+                logger.error("ignite failed", e)
+            System.exit(100)
+        }
+
     }
 }
