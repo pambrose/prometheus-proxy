@@ -28,8 +28,17 @@ import io.prometheus.Proxy
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import org.slf4j.Logger
 import java.io.InputStreamReader
+import java.net.InetAddress
+import java.net.UnknownHostException
 import java.util.*
 
+val localHostName: String by lazy {
+    try {
+        InetAddress.getLocalHost().hostName
+    } catch (e: UnknownHostException) {
+        "Unknown"
+    }
+}
 
 fun getBanner(filename: String, logger: Logger): String {
     try {
