@@ -148,7 +148,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     private fun addService(service: Service) {
         logger.info { "Adding service $service" }
-        services.add(service)
+        services += service
     }
 
     protected fun addServices(service: Service, vararg services: Service) {

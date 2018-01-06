@@ -83,7 +83,7 @@ object CommonTests : KLogging() {
                                         val path = "test-${cnt.getAndIncrement()}"
 
                                         synchronized(paths) {
-                                            paths.add(path)
+                                            paths += path
                                         }
 
                                         try {
@@ -174,7 +174,7 @@ object CommonTests : KLogging() {
         IntStream.range(0, httpServerCount)
                 .forEach { i ->
                     val port = startingPort + i
-                    httpServers.add(
+                    httpServers +=
                             httpServer {
                                 initExceptionHandler { e -> sparkExceptionHandler(e, port) }
                                 port(port)
@@ -184,7 +184,7 @@ object CommonTests : KLogging() {
                                     "value: $i"
                                 }
                                 awaitInitialization()
-                            })
+                            }
                 }
 
         // Create the paths

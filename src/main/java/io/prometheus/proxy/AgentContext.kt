@@ -47,7 +47,9 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
         markActivity()
     }
 
-    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) = scrapeRequestQueue.add(scrapeRequest)
+    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) {
+        scrapeRequestQueue += scrapeRequest
+    }
 
     fun pollScrapeRequestQueue(): ScrapeRequestWrapper? =
             try {
