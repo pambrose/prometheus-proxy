@@ -22,6 +22,7 @@ import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
@@ -30,13 +31,13 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     private val scrapeRequestQueue = ArrayBlockingQueue<ScrapeRequestWrapper>(proxy.configVals.internal.scrapeRequestQueueSize)
     private val waitMillis = proxy.configVals.internal.scrapeRequestQueueCheckMillis.toLong()
 
-    private var lastActivityTime: Long by AtomicDelegates.long()
-    var isValid: Boolean by AtomicDelegates.boolean(true)
+    private var lastActivityTime = AtomicLong()
+    var isValid = AtomicBoolean(true)
     var hostName: String by AtomicDelegates.notNullReference()
     var agentName: String by AtomicDelegates.notNullReference()
 
     val inactivitySecs: Long
-        get() = (System.currentTimeMillis() - lastActivityTime).toSecs()
+        get() = (System.currentTimeMillis() - lastActivityTime.get()).toSecs()
 
     val scrapeRequestQueueSize: Int
         get() = scrapeRequestQueue.size
@@ -59,11 +60,11 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
             }
 
     fun markInvalid() {
-        isValid = false
+        isValid.set(false)
     }
 
     fun markActivity() {
-        lastActivityTime = System.currentTimeMillis()
+        lastActivityTime.set(System.currentTimeMillis())
     }
 
     override fun toString() =

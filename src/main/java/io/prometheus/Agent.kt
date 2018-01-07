@@ -33,7 +33,6 @@ import io.prometheus.common.*
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
-import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.delegate.AtomicDelegates.notNullReference
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
@@ -51,6 +50,7 @@ import java.util.concurrent.Executors.newCachedThreadPool
 import java.util.concurrent.Executors.newFixedThreadPool
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.properties.Delegates.notNull
 
 class Agent(options: AgentOptions,
@@ -101,9 +101,9 @@ class Agent(options: AgentOptions,
                     .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
                     .toList()
 
-    private var lastMsgSent: Long by AtomicDelegates.long()
+    private var lastMsgSent = AtomicLong()
 
-    private var grpcStarted: Boolean by AtomicDelegates.boolean(false)
+    private var isGrpcStarted = AtomicBoolean(false)
     var channel: ManagedChannel by notNullReference()
     var agentId: String by notNullReference()
 
@@ -147,7 +147,7 @@ class Agent(options: AgentOptions,
     override fun shutDown() {
         if (isZipkinEnabled)
             tracing.close()
-        if (grpcStarted)
+        if (isGrpcStarted.get())
             channel.shutdownNow()
         heartbeatService.shutdownNow()
         super.shutDown()
@@ -192,7 +192,7 @@ class Agent(options: AgentOptions,
         // Reset values for each connection attempt
         pathContextMap.clear()
         scrapeResponseQueue.clear()
-        lastMsgSent = 0
+        lastMsgSent.set(0)
 
         if (connectAgent()) {
             registerAgent()
@@ -210,7 +210,7 @@ class Agent(options: AgentOptions,
             logger.info { "Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity" }
             heartbeatService.submit {
                 while (isRunning && !disconnected.get()) {
-                    val timeSinceLastWriteMillis = System.currentTimeMillis() - lastMsgSent
+                    val timeSinceLastWriteMillis = System.currentTimeMillis() - lastMsgSent.get()
                     if (timeSinceLastWriteMillis > maxInactivitySecs.toLong().toMillis())
                         sendHeartBeat(disconnected)
                     sleepForMillis(threadPauseMillis)
@@ -226,10 +226,10 @@ class Agent(options: AgentOptions,
     private fun resetGrpcStubs() {
         logger.info { "Creating gRPC stubs" }
 
-        if (grpcStarted)
+        if (isGrpcStarted.get())
             channel.shutdownNow()
         else
-            grpcStarted = true
+            isGrpcStarted.set(true)
 
         channel =
                 channel(inProcessServerName = inProcessServerName, hostName = hostName, port = port) {
@@ -506,7 +506,7 @@ class Agent(options: AgentOptions,
     }
 
     private fun markMsgSent() {
-        lastMsgSent = System.currentTimeMillis()
+        lastMsgSent.set(System.currentTimeMillis())
     }
 
     private fun sendHeartBeat(disconnected: AtomicBoolean) {

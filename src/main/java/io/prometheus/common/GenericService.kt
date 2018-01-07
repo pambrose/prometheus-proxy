@@ -51,7 +51,8 @@ abstract class GenericService protected constructor(protected val genericConfigV
     val isMetricsEnabled: Boolean
         get() = metricsConfig.enabled
 
-    val isZipkinEnabled: Boolean
+    val
+            isZipkinEnabled: Boolean
         get() = zipkinConfig.enabled
 
     private var jmxReporter: JmxReporter by Delegates.notNull()
