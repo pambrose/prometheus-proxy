@@ -26,27 +26,29 @@
 
     <properties>
         <kotlin.version>1.2.10</kotlin.version>
+
         <prometheus.version>0.1.0</prometheus.version>
         <jcommander.version>1.72</jcommander.version>
         <config.version>1.3.2</config.version>
-        <grpc.version>1.8.0</grpc.version>
-        <grpc.plugin.version>1.8.0</grpc.plugin.version>
-        <grpc.contrib.version>0.7.0</grpc.contrib.version>
-        <protobuf.version>3.4.0</protobuf.version>
-        <protobuf.plugin.version>0.5.1</protobuf.plugin.version>
         <guava.version>19.0</guava.version>
+        <metrics.version>4.0.2</metrics.version>
+
+        <grpc.version>1.9.0</grpc.version>
+        <grpc.plugin.version>1.9.0</grpc.plugin.version>
+        <grpc.contrib.version>0.7.0</grpc.contrib.version>
+        <okhttp.version>3.9.1</okhttp.version>
+        <protobuf.version>3.5.1</protobuf.version>
+        <protobuf.plugin.version>0.5.1</protobuf.plugin.version>
+
         <spark.version>2.7.1</spark.version>
         <jetty.version>9.4.6.v20170531</jetty.version>
-        <okhttp.version>3.9.1</okhttp.version>
-        <grpc-prom.version>0.3.0</grpc-prom.version>
-        <metrics.version>4.0.0</metrics.version>
-        <kotlin.logging.version>1.4.9</kotlin.logging.version>
 
-        <brave.version>4.13.1</brave.version>
-        <zipkin-sender.version>2.2.2</zipkin-sender.version>
+        <brave.version>4.13.2</brave.version>
+        <zipkin-sender.version>2.3.0</zipkin-sender.version>
 
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.7.25</slf4j.version>
+        <kotlin.logging.version>1.4.9</kotlin.logging.version>
 
         <junit.version>4.12</junit.version>
         <assertj.version>3.9.0</assertj.version>
@@ -198,14 +200,6 @@
             <artifactId>okhttp</artifactId>
             <version>${okhttp.version}</version>
         </dependency>
-
-        <!-- Add back when they update their grpc lib - https://github.com/grpc-ecosystem/java-grpc-prometheus
-        <dependency>
-            <groupId>me.dinowernli</groupId>
-            <artifactId>java-grpc-prometheus</artifactId>
-            <version>${grpc-prom.version}</version>
-        </dependency>
-        -->
 
         <dependency>
             <groupId>io.zipkin.reporter2</groupId>
