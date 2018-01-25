@@ -1,17 +1,17 @@
 /*
- *  Copyright 2017, Paul Ambrose All rights reserved.
+ * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.prometheus.proxy
@@ -20,9 +20,9 @@ import io.prometheus.Proxy
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
 import io.prometheus.common.SamplerGaugeCollector
-import io.prometheus.dsl.MetricsDsl.counter
-import io.prometheus.dsl.MetricsDsl.gauge
-import io.prometheus.dsl.MetricsDsl.summary
+import io.prometheus.dsl.PrometheusDsl.counter
+import io.prometheus.dsl.PrometheusDsl.gauge
+import io.prometheus.dsl.PrometheusDsl.summary
 
 class ProxyMetrics(proxy: Proxy) {
 
@@ -65,18 +65,18 @@ class ProxyMetrics(proxy: Proxy) {
 
         SamplerGaugeCollector(name = "proxy_agent_map_size",
                               help = "Proxy connected agents",
-                              data = { proxy.agentContextSize.toDouble() })
+                              data = { proxy.agentContextManager.agentContextSize.toDouble() })
 
         SamplerGaugeCollector(name = "proxy_path_map_size",
                               help = "Proxy path map size",
-                              data = { proxy.pathMapSize.toDouble() })
+                              data = { proxy.pathManager.pathMapSize.toDouble() })
 
         SamplerGaugeCollector(name = "proxy_scrape_map_size",
                               help = "Proxy scrape map size",
-                              data = { proxy.scrapeMapSize.toDouble() })
+                              data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() })
 
         SamplerGaugeCollector(name = "proxy_cummulative_agent_queue_size",
                               help = "Proxy cummulative agent queue size",
-                              data = { proxy.totalAgentRequestQueueSize.toDouble() })
+                              data = { proxy.agentContextManager.totalAgentRequestQueueSize.toDouble() })
     }
 }

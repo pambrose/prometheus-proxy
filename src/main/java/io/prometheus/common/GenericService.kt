@@ -1,17 +1,17 @@
 /*
- *  Copyright 2017, Paul Ambrose All rights reserved.
+ * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.prometheus.common
@@ -30,7 +30,7 @@ import io.prometheus.dsl.GuavaDsl.serviceManagerListener
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import java.io.Closeable
 import kotlin.properties.Delegates
 
@@ -51,7 +51,8 @@ abstract class GenericService protected constructor(protected val genericConfigV
     val isMetricsEnabled: Boolean
         get() = metricsConfig.enabled
 
-    val isZipkinEnabled: Boolean
+    val
+            isZipkinEnabled: Boolean
         get() = zipkinConfig.enabled
 
     private var jmxReporter: JmxReporter by Delegates.notNull()
@@ -61,29 +62,29 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     init {
         if (isAdminEnabled) {
-            adminService = AdminService(healthCheckRegistry,
-                                        adminConfig.port,
-                                        adminConfig.pingPath,
-                                        adminConfig.versionPath,
-                                        adminConfig.healthCheckPath,
-                                        adminConfig.threadDumpPath) { addService(this) }
+            adminService = AdminService(healthCheckRegistry = healthCheckRegistry,
+                                        port = adminConfig.port,
+                                        pingPath = adminConfig.pingPath,
+                                        versionPath = adminConfig.versionPath,
+                                        healthCheckPath = adminConfig.healthCheckPath,
+                                        threadDumpPath = adminConfig.threadDumpPath) { addService(this) }
         }
         else {
-            logger.info("Admin service disabled")
+            logger.info { "Admin service disabled" }
         }
 
         if (isMetricsEnabled) {
             metricsService = MetricsService(metricsConfig.port, metricsConfig.path) { addService(this) }
-            SystemMetrics.initialize(metricsConfig.standardExportsEnabled,
-                                     metricsConfig.memoryPoolsExportsEnabled,
-                                     metricsConfig.garbageCollectorExportsEnabled,
-                                     metricsConfig.threadExportsEnabled,
-                                     metricsConfig.classLoadingExportsEnabled,
-                                     metricsConfig.versionInfoExportsEnabled)
+            SystemMetrics.initialize(enableStandardExports = metricsConfig.standardExportsEnabled,
+                                     enableMemoryPoolsExports = metricsConfig.memoryPoolsExportsEnabled,
+                                     enableGarbageCollectorExports = metricsConfig.garbageCollectorExportsEnabled,
+                                     enableThreadExports = metricsConfig.threadExportsEnabled,
+                                     enableClassLoadingExports = metricsConfig.classLoadingExportsEnabled,
+                                     enableVersionInfoExports = metricsConfig.versionInfoExportsEnabled)
             jmxReporter = JmxReporter.forRegistry(MetricRegistry()).build()
         }
         else {
-            logger.info("Metrics service disabled")
+            logger.info { "Metrics service disabled" }
         }
 
         if (isZipkinEnabled) {
@@ -91,7 +92,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
             zipkinReporterService = ZipkinReporterService(url) { addService(this) }
         }
         else {
-            logger.info("Zipkin reporter service disabled")
+            logger.info { "Zipkin reporter service disabled" }
         }
     }
 
@@ -103,9 +104,9 @@ abstract class GenericService protected constructor(protected val genericConfigV
                 serviceManager(services) {
                     addListener(
                             serviceManagerListener {
-                                healthy { logger.info("All $clazzName services healthy") }
-                                stopped { logger.info("All $clazzName services stopped") }
-                                failure { service -> logger.info("$clazzName service failed: $service") }
+                                healthy { logger.info { "All $clazzName services healthy" } }
+                                stopped { logger.info { "All $clazzName services stopped" } }
+                                failure { service -> logger.info { "$clazzName service failed: $service" } }
                             })
                 }
         registerHealthChecks()
@@ -147,8 +148,8 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     private fun addService(service: Service) {
-        logger.info("Adding service $service")
-        services.add(service)
+        logger.info { "Adding service $service" }
+        services += service
     }
 
     protected fun addServices(service: Service, vararg services: Service) {
@@ -173,7 +174,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                                     .servicesByState()
                                                     .entries()
                                                     .filter { it.key !== Service.State.RUNNING }
-                                                    .onEach { logger.warn("Incorrect state - ${it.key}: ${it.value}") }
+                                                    .onEach { logger.warn { "Incorrect state - ${it.key}: ${it.value}" } }
                                                     .map { "${it.key}: ${it.value}" }
                                                     .toList()
                                     HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
@@ -182,7 +183,5 @@ abstract class GenericService protected constructor(protected val genericConfigV
                 }
     }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(GenericService::class.java)
-    }
+    companion object : KLogging()
 }

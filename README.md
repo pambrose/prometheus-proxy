@@ -2,7 +2,9 @@
 
 [![Build Status](https://travis-ci.org/pambrose/prometheus-proxy.svg?branch=master)](https://travis-ci.org/pambrose/prometheus-proxy)
 [![Coverage Status](https://coveralls.io/repos/github/pambrose/prometheus-proxy/badge.svg?branch=master)](https://coveralls.io/github/pambrose/prometheus-proxy?branch=master)
+[![codebeat badge](https://codebeat.co/badges/8dbe1dc6-628e-44a4-99f9-d468831ff0cc)](https://codebeat.co/projects/github-com-pambrose-prometheus-proxy-master)
 [![Code Climate](https://codeclimate.com/github/pambrose/prometheus-proxy/badges/gpa.svg)](https://codeclimate.com/github/pambrose/prometheus-proxy)
+[![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 [![Dependency Status](https://www.versioneye.com/user/projects/5a4c7a110fb24f0536e5b92f/badge.svg?style=flat-square)](https://www.versioneye.com/user/projects/5a4c7a110fb24f0536e5b92f)
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for 
@@ -84,8 +86,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-$ docker pull pambrose/prometheus-proxy:1.3.2
-$ docker pull pambrose/prometheus-agent:1.3.2
+$ docker pull pambrose/prometheus-proxy:1.3.3
+$ docker pull pambrose/prometheus-agent:1.3.3
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
@@ -94,14 +96,14 @@ Start the proxy and an agent in separate shells on your local machine:
 $ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
         -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.3.2
+        pambrose/prometheus-proxy:1.3.3
 ```
 
 ```bash
 $ docker run --rm -p 8083:8083 -p 8093:8093 \
         -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.3.2
+        pambrose/prometheus-agent:1.3.3
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),

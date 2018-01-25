@@ -1,17 +1,17 @@
 /*
- *  Copyright 2017, Paul Ambrose All rights reserved.
+ * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.prometheus.agent
@@ -19,7 +19,7 @@ package io.prometheus.agent
 import io.grpc.*
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import org.slf4j.LoggerFactory
+import mu.KLogging
 
 class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
@@ -27,7 +27,7 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
                                              callOptions: CallOptions,
                                              next: Channel): ClientCall<ReqT, RespT> =
             // final String methodName = method.getFullMethodName();
-            // logger.info("Intercepting {}", methodName);
+            // logger.info {"Intercepting {}", methodName);
             object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(agent.channel.newCall(method, callOptions)) {
                 override fun start(responseListener: ClientCall.Listener<RespT>, metadata: Metadata) {
                     super.start(
@@ -38,8 +38,8 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
                                         headers!!.get(Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER))
                                                 ?.let {
                                                     agent.agentId = it
-                                                    logger.info("Assigned agentId to $agent")
-                                                } ?: logger.error("Headers missing AGENT_ID key")
+                                                    logger.info { "Assigned agentId to $agent" }
+                                                } ?: logger.error { "Headers missing AGENT_ID key" }
                                     }
                                     super.onHeaders(headers)
                                 }
@@ -48,7 +48,5 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
                 }
             }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(AgentClientInterceptor::class.java)
-    }
+    companion object : KLogging()
 }

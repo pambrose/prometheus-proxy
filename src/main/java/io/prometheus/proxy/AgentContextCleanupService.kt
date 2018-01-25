@@ -1,17 +1,17 @@
 /*
- *  Copyright 2017, Paul Ambrose All rights reserved.
+ * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.prometheus.proxy
@@ -22,7 +22,7 @@ import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
-import org.slf4j.LoggerFactory
+import mu.KLogging
 
 class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) : GenericExecutionThreadService() {
 
@@ -36,11 +36,11 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
         val maxInactivitySecs = proxy.configVals.internal.maxAgentInactivitySecs.toLong()
         val threadPauseSecs = proxy.configVals.internal.staleAgentCheckPauseSecs.toLong()
         while (isRunning) {
-            proxy.agentContextMap
+            proxy.agentContextManager.agentContextMap
                     .forEach { agentId, agentContext ->
                         val inactivitySecs = agentContext.inactivitySecs
                         if (inactivitySecs > maxInactivitySecs) {
-                            logger.info("Evicting agent after $inactivitySecs secs of inactivty $agentContext")
+                            logger.info { "Evicting agent after $inactivitySecs secs of inactivty $agentContext" }
                             proxy.removeAgentContext(agentId)
                             if (proxy.isMetricsEnabled)
                                 proxy.metrics.agentEvictions.inc()
@@ -56,7 +56,5 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
                 add("pause secs", proxy.configVals.internal.staleAgentCheckPauseSecs)
             }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(AgentContextCleanupService::class.java)
-    }
+    companion object : KLogging()
 }

@@ -1,17 +1,17 @@
 /*
- *  Copyright 2017, Paul Ambrose All rights reserved.
+ * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.prometheus.proxy
@@ -26,7 +26,7 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.SparkDsl.httpServer
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import spark.Request
 import spark.Response
 import spark.Route
@@ -68,7 +68,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                             res.header("cache-control", "must-revalidate,no-cache,no-store")
 
                             if (!proxy.isRunning) {
-                                logger.error("Proxy stopped")
+                                logger.error { "Proxy stopped" }
                                 res.status(503)
                                 updateScrapeRequests("proxy_stopped")
                                 return@Route null
@@ -77,7 +77,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                             val vals = req.splat()
 
                             if (vals == null || vals.isEmpty()) {
-                                logger.info("Request missing path")
+                                logger.info { "Request missing path" }
                                 res.status(404)
                                 updateScrapeRequests("missing_path")
                                 return@Route null
@@ -91,17 +91,17 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                                 return@Route "42"
                             }
 
-                            val agentContext = proxy.getAgentContextByPath(path)
+                            val agentContext = proxy.pathManager.getAgentContextByPath(path)
 
                             if (agentContext == null) {
-                                logger.debug("Invalid path request /\${path")
+                                logger.debug { "Invalid path request /\${path" }
                                 res.status(404)
                                 updateScrapeRequests("invalid_path")
                                 return@Route null
                             }
 
-                            if (!agentContext.isValid) {
-                                logger.error("Invalid AgentContext")
+                            if (!agentContext.isValid.get()) {
+                                logger.error { "Invalid AgentContext" }
                                 res.status(404)
                                 updateScrapeRequests("invalid_agent_context")
                                 return@Route null
@@ -128,7 +128,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                                     path: String): String? {
         val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext, path, req.headers(ACCEPT))
         try {
-            proxy.addToScrapeRequestMap(scrapeRequest)
+            proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
             agentContext.addToScrapeRequestQueue(scrapeRequest)
 
             val timeoutSecs = configVals.internal.scrapeRequestTimeoutSecs
@@ -139,17 +139,17 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                     break
 
                 // Check if agent is disconnected or agent is hung
-                if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.isValid || !proxy.isRunning) {
+                if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.isValid.get() || !proxy.isRunning) {
                     res.status(503)
                     updateScrapeRequests("time_out")
                     return null
                 }
             }
         } finally {
-            proxy.removeFromScrapeRequestMap(scrapeRequest.scrapeId) ?: logger.error("Scrape request ${scrapeRequest.scrapeId} missing in map")
+            proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeRequest.scrapeId) ?: logger.error { "Scrape request ${scrapeRequest.scrapeId} missing in map" }
         }
 
-        logger.debug("Results returned from $agentContext for $scrapeRequest")
+        logger.debug { "Results returned from $agentContext for $scrapeRequest" }
 
         val scrapeResponse = scrapeRequest.scrapeResponse
         val statusCode = scrapeResponse.statusCode
@@ -177,16 +177,13 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
 
     override fun toString() = toStringElements { add("port", port) }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(ProxyHttpService::class.java)
-
+    companion object : KLogging() {
         fun sparkExceptionHandler(e: Exception, port: Int) {
             if (e is BindException)
-                logger.error("ignite failed to bind to port $port", e)
+                logger.error(e) { "ignite failed to bind to port $port" }
             else
-                logger.error("ignite failed", e)
+                logger.error(e) { "ignite failed" }
             System.exit(100)
         }
-
     }
 }

@@ -1,17 +1,17 @@
 /*
- *  Copyright 2017, Paul Ambrose All rights reserved.
+ * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.prometheus
@@ -33,7 +33,6 @@ import io.prometheus.common.*
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
-import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.delegate.AtomicDelegates.notNullReference
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
@@ -41,8 +40,8 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ThreadDsl.threadFactory
 import io.prometheus.grpc.*
 import io.prometheus.grpc.ProxyServiceGrpc.*
+import mu.KLogging
 import okhttp3.OkHttpClient
-import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
@@ -51,6 +50,7 @@ import java.util.concurrent.Executors.newCachedThreadPool
 import java.util.concurrent.Executors.newFixedThreadPool
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.properties.Delegates.notNull
 
 class Agent(options: AgentOptions,
@@ -98,12 +98,12 @@ class Agent(options: AgentOptions,
     private val pathConfigs =
             configVals.pathConfigs
                     .map { mapOf("name" to it.name, "path" to it.path, "url" to it.url) }
-                    .onEach { logger.info("Proxy path /{} will be assigned to {}", it["path"], it["url"]) }
+                    .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
                     .toList()
 
-    private var lastMsgSent: Long by AtomicDelegates.long()
+    private var lastMsgSent = AtomicLong()
 
-    private var grpcStarted: Boolean by AtomicDelegates.boolean(false)
+    private var isGrpcStarted = AtomicBoolean(false)
     var channel: ManagedChannel by notNullReference()
     var agentId: String by notNullReference()
 
@@ -117,7 +117,7 @@ class Agent(options: AgentOptions,
         get() = genericConfigVals.agent
 
     init {
-        logger.info("Assigning proxy reconnect pause time to ${configVals.internal.reconectPauseSecs} secs")
+        logger.info { "Assigning proxy reconnect pause time to ${configVals.internal.reconectPauseSecs} secs" }
 
         agentId = ""
 
@@ -147,7 +147,7 @@ class Agent(options: AgentOptions,
     override fun shutDown() {
         if (isZipkinEnabled)
             tracing.close()
-        if (grpcStarted)
+        if (isGrpcStarted.get())
             channel.shutdownNow()
         heartbeatService.shutdownNow()
         super.shutDown()
@@ -158,14 +158,14 @@ class Agent(options: AgentOptions,
             try {
                 connectToProxy()
             } catch (e: RequestFailureException) {
-                logger.info("Disconnected from proxy at $proxyHost after invalid response ${e.message}")
+                logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
             } catch (e: StatusRuntimeException) {
-                logger.info("Disconnected from proxy at $proxyHost")
+                logger.info { "Disconnected from proxy at $proxyHost" }
             } catch (e: Exception) {
                 // Catch anything else to avoid exiting retry loop
             } finally {
                 val secsWaiting = reconnectLimiter.acquire()
-                logger.info("Waited $secsWaiting secs to reconnect")
+                logger.info { "Waited $secsWaiting secs to reconnect" }
             }
         }
     }
@@ -192,7 +192,7 @@ class Agent(options: AgentOptions,
         // Reset values for each connection attempt
         pathContextMap.clear()
         scrapeResponseQueue.clear()
-        lastMsgSent = 0
+        lastMsgSent.set(0)
 
         if (connectAgent()) {
             registerAgent()
@@ -207,29 +207,29 @@ class Agent(options: AgentOptions,
         if (configVals.internal.heartbeatEnabled) {
             val threadPauseMillis = configVals.internal.heartbeatCheckPauseMillis.toLong()
             val maxInactivitySecs = configVals.internal.heartbeatMaxInactivitySecs
-            logger.info("Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity")
+            logger.info { "Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity" }
             heartbeatService.submit {
                 while (isRunning && !disconnected.get()) {
-                    val timeSinceLastWriteMillis = System.currentTimeMillis() - lastMsgSent
+                    val timeSinceLastWriteMillis = System.currentTimeMillis() - lastMsgSent.get()
                     if (timeSinceLastWriteMillis > maxInactivitySecs.toLong().toMillis())
                         sendHeartBeat(disconnected)
                     sleepForMillis(threadPauseMillis)
                 }
-                logger.info("Heartbeat completed")
+                logger.info { "Heartbeat completed" }
             }
         }
         else {
-            logger.info("Heartbeat disabled")
+            logger.info { "Heartbeat disabled" }
         }
     }
 
     private fun resetGrpcStubs() {
-        logger.info("Creating gRPC stubs")
+        logger.info { "Creating gRPC stubs" }
 
-        if (grpcStarted)
+        if (isGrpcStarted.get())
             channel.shutdownNow()
         else
-            grpcStarted = true
+            isGrpcStarted.set(true)
 
         channel =
                 channel(inProcessServerName = inProcessServerName, hostName = hostName, port = port) {
@@ -261,7 +261,7 @@ class Agent(options: AgentOptions,
         val pathContext = pathContextMap[path]
 
         if (pathContext == null) {
-            logger.warn("Invalid path in fetchUrl(): $path")
+            logger.warn { "Invalid path in fetchUrl(): $path" }
             updateScrapeCounter("invalid_path")
             return scrapeResponse
                     .run {
@@ -299,7 +299,7 @@ class Agent(options: AgentOptions,
         } catch (e: IOException) {
             reason = "${e.javaClass.simpleName} - ${e.message}"
         } catch (e: Exception) {
-            logger.warn("fetchUrl()", e)
+            logger.warn(e) { "fetchUrl()" }
             reason = "${e.javaClass.simpleName} - ${e.message}"
         } finally {
             requestTimer?.observeDuration()
@@ -319,21 +319,20 @@ class Agent(options: AgentOptions,
     }
 
     // If successful, this will create an agentContxt on the Proxy and an interceptor will add an agent_id to the headers`
-    private fun connectAgent(): Boolean {
-        return try {
-            logger.info("Connecting to proxy at $proxyHost...")
-            blockingStub.connectAgent(Empty.getDefaultInstance())
-            logger.info("Connected to proxy at $proxyHost")
-            if (isMetricsEnabled)
-                metrics.connects.labels("success")?.inc()
-            true
-        } catch (e: StatusRuntimeException) {
-            if (isMetricsEnabled)
-                metrics.connects.labels("failure")?.inc()
-            logger.info("Cannot connect to proxy at $proxyHost [${e.message}]")
-            false
-        }
-    }
+    private fun connectAgent() =
+            try {
+                logger.info { "Connecting to proxy at $proxyHost..." }
+                blockingStub.connectAgent(Empty.getDefaultInstance())
+                logger.info { "Connected to proxy at $proxyHost" }
+                if (isMetricsEnabled)
+                    metrics.connects.labels("success")?.inc()
+                true
+            } catch (e: StatusRuntimeException) {
+                if (isMetricsEnabled)
+                    metrics.connects.labels("failure")?.inc()
+                logger.info { "Cannot connect to proxy at $proxyHost [${e.message}]" }
+                false
+            }
 
     @Throws(RequestFailureException::class)
     private fun registerAgent() {
@@ -356,18 +355,18 @@ class Agent(options: AgentOptions,
     }
 
     @Throws(RequestFailureException::class)
-    private fun registerPaths() {
-        pathConfigs.forEach {
-            registerPath(it["path"]!!, it["url"]!!)
-        }
-    }
+    private fun registerPaths() =
+            pathConfigs
+                    .forEach {
+                        registerPath(it["path"]!!, it["url"]!!)
+                    }
 
     @Throws(RequestFailureException::class)
     fun registerPath(pathVal: String, url: String) {
         val path = if (checkNotNull(pathVal).startsWith("/")) pathVal.substring(1) else pathVal
         val pathId = registerPathOnProxy(path)
         if (!isTestMode)
-            logger.info("Registered $url as /$path")
+            logger.info { "Registered $url as /$path" }
         pathContextMap.put(path, PathContext(okHttpClient, pathId, path, url))
     }
 
@@ -377,8 +376,8 @@ class Agent(options: AgentOptions,
         unregisterPathOnProxy(path)
         val pathContext = pathContextMap.remove(path)
         when {
-            pathContext == null -> logger.info("No path value /$path found in pathContextMap")
-            !isTestMode         -> logger.info("Unregistered /$path for ${pathContext.url}")
+            pathContext == null -> logger.info { "No path value /$path found in pathContextMap" }
+            !isTestMode         -> logger.info { "Unregistered /$path for ${pathContext.url}" }
         }
     }
 
@@ -431,16 +430,15 @@ class Agent(options: AgentOptions,
                 }
     }
 
-    private fun readRequestAction(request: ScrapeRequest): Runnable {
-        return Runnable {
-            val response = fetchUrl(request)
-            try {
-                scrapeResponseQueue.put(response)
-            } catch (e: InterruptedException) {
-                // Ignore
+    private fun readRequestAction(request: ScrapeRequest) =
+            Runnable {
+                val response = fetchUrl(request)
+                try {
+                    scrapeResponseQueue.put(response)
+                } catch (e: InterruptedException) {
+                    // Ignore
+                }
             }
-        }
-    }
 
     private fun readRequestsFromProxy(disconnected: AtomicBoolean) {
         val agentInfo =
@@ -458,7 +456,7 @@ class Agent(options: AgentOptions,
 
                     onError { t ->
                         val status = Status.fromThrowable(t)
-                        logger.error("Error in readRequestsFromProxy(): $status")
+                        logger.error { "Error in readRequestsFromProxy(): $status" }
                         disconnected.set(true)
                     }
 
@@ -481,7 +479,7 @@ class Agent(options: AgentOptions,
 
                             onError { t ->
                                 val s = Status.fromThrowable(t)
-                                logger.error("Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}")
+                                logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
                                 disconnected.set(true)
                             }
 
@@ -501,13 +499,11 @@ class Agent(options: AgentOptions,
             }
         }
 
-        logger.info("Disconnected from proxy at $proxyHost")
+        logger.info { "Disconnected from proxy at $proxyHost" }
         observer.onCompleted()
     }
 
-    private fun markMsgSent() {
-        lastMsgSent = System.currentTimeMillis()
-    }
+    private fun markMsgSent() = lastMsgSent.set(System.currentTimeMillis())
 
     private fun sendHeartBeat(disconnected: AtomicBoolean) {
         if (agentId.isEmpty())
@@ -524,12 +520,12 @@ class Agent(options: AgentOptions,
                     .let {
                         markMsgSent()
                         if (!it.valid) {
-                            logger.error("AgentId $agentId not found on proxy")
+                            logger.error { "AgentId $agentId not found on proxy" }
                             throw StatusRuntimeException(Status.NOT_FOUND)
                         }
                     }
         } catch (e: StatusRuntimeException) {
-            logger.error("Hearbeat failed ${e.status}")
+            logger.error { "Hearbeat failed ${e.status}" }
             disconnected.set(true)
         }
     }
@@ -546,15 +542,13 @@ class Agent(options: AgentOptions,
                 add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
             }
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(Agent::class.java)
-
+    companion object : KLogging() {
         @JvmStatic
         fun main(argv: Array<String>) {
             val options = AgentOptions(argv, true)
 
-            logger.info(getBanner("banners/agent.txt", logger))
-            logger.info(getVersionDesc(false))
+            logger.info { getBanner("banners/agent.txt", logger) }
+            logger.info { getVersionDesc(false) }
 
             Agent(options = options) { startSync() }
         }

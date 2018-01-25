@@ -1,17 +1,17 @@
 /*
- *  Copyright 2017, Paul Ambrose All rights reserved.
+ * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.prometheus
@@ -21,22 +21,19 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import java.io.IOException
 import java.util.concurrent.TimeoutException
 
-object TestUtils {
-
-    private val logger = LoggerFactory.getLogger(TestUtils::class.java)
-
+object TestUtils : KLogging() {
     @Throws(IOException::class, TimeoutException::class)
     fun startProxy(serverName: String = "",
                    adminEnabled: Boolean = false,
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Proxy {
 
-        logger.info(getBanner("banners/proxy.txt", logger))
-        logger.info(getVersionDesc(false))
+        logger.info { getBanner("banners/proxy.txt", logger) }
+        logger.info { getVersionDesc(false) }
 
         return Proxy(options =
                      ProxyOptions(
@@ -58,8 +55,8 @@ object TestUtils {
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Agent {
 
-        logger.info(getBanner("banners/agent.txt", logger))
-        logger.info(getVersionDesc(false))
+        logger.info { getBanner("banners/agent.txt", logger) }
+        logger.info { getVersionDesc(false) }
 
         return Agent(options =
                      AgentOptions(

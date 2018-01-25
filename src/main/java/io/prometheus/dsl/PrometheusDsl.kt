@@ -16,13 +16,29 @@
 
 package io.prometheus.dsl
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder
+import io.prometheus.client.Counter
+import io.prometheus.client.Gauge
+import io.prometheus.client.Summary
 
-object ThreadDsl {
-    fun threadFactory(block: ThreadFactoryBuilder.() -> Unit) =
-            ThreadFactoryBuilder()
+object PrometheusDsl {
+    fun counter(builder: Counter.Builder.() -> Unit) =
+            Counter.build()
                     .run {
-                        block(this)
-                        build()
+                        builder(this)
+                        register()
+                    }
+
+    fun summary(builder: Summary.Builder.() -> Unit) =
+            Summary.build()
+                    .run {
+                        builder(this)
+                        register()
+                    }
+
+    fun gauge(builder: Gauge.Builder.() -> Unit) =
+            Gauge.build()
+                    .run {
+                        builder(this)
+                        register()
                     }
 }

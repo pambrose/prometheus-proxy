@@ -1,17 +1,17 @@
 /*
- *  Copyright 2017, Paul Ambrose All rights reserved.
+ * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.prometheus
@@ -24,8 +24,8 @@ import io.prometheus.common.sleepForSecs
 import io.prometheus.dsl.OkHttpDsl.get
 import io.prometheus.dsl.SparkDsl.httpServer
 import io.prometheus.proxy.ProxyHttpService.Companion.sparkExceptionHandler
+import mu.KLogging
 import org.assertj.core.api.Assertions.assertThat
-import org.slf4j.LoggerFactory
 import spark.Service
 import java.lang.Math.abs
 import java.util.concurrent.CountDownLatch
@@ -33,22 +33,20 @@ import java.util.concurrent.TimeUnit.MINUTES
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.IntStream
 
-object CommonTests {
-
-    private val logger = LoggerFactory.getLogger(CommonTests::class.java)
+object CommonTests : KLogging() {
 
     fun missingPathTest(caller: String) {
-        logger.info("Calling missingPathTest() from $caller")
+        logger.info { "Calling missingPathTest() from $caller" }
         "http://localhost:$PROXY_PORT/".get { assertThat(it.code()).isEqualTo(404) }
     }
 
     fun invalidPathTest(caller: String) {
-        logger.info("Calling invalidPathTest() from $caller")
+        logger.info { "Calling invalidPathTest() from $caller" }
         "http://localhost:$PROXY_PORT/invalid_path".get { assertThat(it.code()).isEqualTo(404) }
     }
 
     fun addRemovePathsTest(agent: Agent, caller: String) {
-        logger.info("Calling addRemovePathsTest() from $caller")
+        logger.info { "Calling addRemovePathsTest() from $caller" }
 
         // Take into account pre-existing paths already registered
         val originalSize = agent.pathMapSize()
@@ -67,7 +65,7 @@ object CommonTests {
     }
 
     fun threadedAddRemovePathsTest(agent: Agent, caller: String) {
-        logger.info("Calling threadedAddRemovePathsTest() from $caller")
+        logger.info { "Calling threadedAddRemovePathsTest() from $caller" }
         val paths = mutableListOf<String>()
         val cnt = AtomicInteger(0)
         val latch1 = CountDownLatch(TestConstants.REPS)
@@ -85,7 +83,7 @@ object CommonTests {
                                         val path = "test-${cnt.getAndIncrement()}"
 
                                         synchronized(paths) {
-                                            paths.add(path)
+                                            paths += path
                                         }
 
                                         try {
@@ -121,7 +119,7 @@ object CommonTests {
     }
 
     fun invalidAgentUrlTest(agent: Agent, badPath: String = "badPath", caller: String) {
-        logger.info("Calling invalidAgentUrlTest() from $caller")
+        logger.info { "Calling invalidAgentUrlTest() from $caller" }
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
         "http://localhost:$PROXY_PORT/$badPath".get { assertThat(it.code()).isEqualTo(404) }
@@ -134,7 +132,7 @@ object CommonTests {
                     agentPath: String = "agent-timeout",
                     caller: String) {
 
-        logger.info("Calling timeoutTest() from $caller")
+        logger.info { "Calling timeoutTest() from $caller" }
 
         val httpServer =
                 httpServer {
@@ -165,7 +163,7 @@ object CommonTests {
                       startingPort: Int = 9600,
                       caller: String) {
 
-        logger.info("Calling proxyCallTest() from $caller")
+        logger.info { "Calling proxyCallTest() from $caller" }
         val httpServers = mutableListOf<Service>()
         val pathMap = newConcurrentMap<Int, Int>()
 
@@ -176,7 +174,7 @@ object CommonTests {
         IntStream.range(0, httpServerCount)
                 .forEach { i ->
                     val port = startingPort + i
-                    httpServers.add(
+                    httpServers +=
                             httpServer {
                                 initExceptionHandler { e -> sparkExceptionHandler(e, port) }
                                 port(port)
@@ -186,7 +184,7 @@ object CommonTests {
                                     "value: $i"
                                 }
                                 awaitInitialization()
-                            })
+                            }
                 }
 
         // Create the paths
@@ -241,14 +239,14 @@ object CommonTests {
     }
 
     private fun callProxy(pathMap: Map<Int, Int>, msg: String) {
-        //logger.info("Calling proxy for ${msg}")
+        //logger.info {"Calling proxy for ${msg}")
         // Choose one of the pathMap values
         val index = abs(TestConstants.RANDOM.nextInt() % pathMap.size)
         val httpVal = pathMap[index]
         "http://localhost:$PROXY_PORT/proxy-$index"
                 .get {
                     if (it.code() != 200)
-                        logger.error("Proxy failed on $msg")
+                        logger.error { "Proxy failed on $msg" }
                     assertThat(it.code()).isEqualTo(200)
                     val body = it.body()!!.string()
                     assertThat(body).isEqualTo("value: $httpVal")

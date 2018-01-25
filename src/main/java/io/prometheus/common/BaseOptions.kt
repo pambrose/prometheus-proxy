@@ -1,17 +1,17 @@
 /*
- *  Copyright 2017, Paul Ambrose All rights reserved.
+ * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.prometheus.common
@@ -22,7 +22,7 @@ import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
 import com.typesafe.config.*
 import io.prometheus.common.EnvVars.*
-import org.slf4j.LoggerFactory
+import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
@@ -93,7 +93,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                 System.exit(0)
             }
         } catch (e: ParameterException) {
-            logger.error(e.message, e)
+            logger.error(e) { e.message }
             System.exit(1)
         }
     }
@@ -146,7 +146,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
         when {
             configName.isBlank()     -> {
                 if (exitOnMissingConfig) {
-                    logger.error("A configuration file or url must be specified with --config or \$$envConfig")
+                    logger.error { "A configuration file or url must be specified with --config or \$$envConfig" }
                     System.exit(1)
                 }
                 return fallback
@@ -159,9 +159,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
                             .withFallback(fallback)
                 } catch (e: Exception) {
                     if (e.cause is FileNotFoundException)
-                        logger.error("Invalid getConfig url: $configName")
+                        logger.error { "Invalid getConfig url: $configName" }
                     else
-                        logger.error("Exception: ${e.javaClass.simpleName} - ${e.message}", e)
+                        logger.error(e) { "Exception: ${e.javaClass.simpleName} - ${e.message}" }
                 }
 
             }
@@ -170,9 +170,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
                     return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
                 } catch (e: Exception) {
                     if (e.cause is FileNotFoundException)
-                        logger.error("Invalid getConfig filename: $configName")
+                        logger.error { "Invalid getConfig filename: $configName" }
                     else
-                        logger.error("Exception: ${e.javaClass.simpleName} - ${e.message}", e)
+                        logger.error(e) { "Exception: ${e.javaClass.simpleName} - ${e.message}" }
                 }
             }
         }
@@ -181,7 +181,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
         return fallback // Never reached
     }
 
-    private fun getConfigSyntax(configName: String): ConfigSyntax =
+    private fun getConfigSyntax(configName: String) =
             when {
                 configName.isJsonSuffix()       -> ConfigSyntax.JSON
                 configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
@@ -194,8 +194,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
     private fun String.isPropertiesSuffix() = toLowerCase().endsWith(".properties") || toLowerCase().endsWith(".props")
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(BaseOptions::class.java)
+    companion object : KLogging() {
         private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
     }
 }

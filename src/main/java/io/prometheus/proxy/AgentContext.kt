@@ -1,17 +1,17 @@
 /*
- *  Copyright 2017, Paul Ambrose All rights reserved.
+ * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.prometheus.proxy
@@ -22,6 +22,7 @@ import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
@@ -30,13 +31,13 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     private val scrapeRequestQueue = ArrayBlockingQueue<ScrapeRequestWrapper>(proxy.configVals.internal.scrapeRequestQueueSize)
     private val waitMillis = proxy.configVals.internal.scrapeRequestQueueCheckMillis.toLong()
 
-    private var lastActivityTime: Long by AtomicDelegates.long()
-    var isValid: Boolean by AtomicDelegates.boolean(true)
+    private var lastActivityTime = AtomicLong()
+    var isValid = AtomicBoolean(true)
     var hostName: String by AtomicDelegates.notNullReference()
     var agentName: String by AtomicDelegates.notNullReference()
 
     val inactivitySecs: Long
-        get() = (System.currentTimeMillis() - lastActivityTime).toSecs()
+        get() = (System.currentTimeMillis() - lastActivityTime.get()).toSecs()
 
     val scrapeRequestQueueSize: Int
         get() = scrapeRequestQueue.size
@@ -47,7 +48,9 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
         markActivity()
     }
 
-    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) = scrapeRequestQueue.add(scrapeRequest)
+    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) {
+        scrapeRequestQueue += scrapeRequest
+    }
 
     fun pollScrapeRequestQueue(): ScrapeRequestWrapper? =
             try {
@@ -56,13 +59,9 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
                 null
             }
 
-    fun markInvalid() {
-        isValid = false
-    }
+    fun markInvalid() = isValid.set(false)
 
-    fun markActivity() {
-        lastActivityTime = System.currentTimeMillis()
-    }
+    fun markActivity() = lastActivityTime.set(System.currentTimeMillis())
 
     override fun toString() =
             toStringElements {
