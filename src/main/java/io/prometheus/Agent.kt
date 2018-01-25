@@ -319,21 +319,20 @@ class Agent(options: AgentOptions,
     }
 
     // If successful, this will create an agentContxt on the Proxy and an interceptor will add an agent_id to the headers`
-    private fun connectAgent(): Boolean {
-        return try {
-            logger.info { "Connecting to proxy at $proxyHost..." }
-            blockingStub.connectAgent(Empty.getDefaultInstance())
-            logger.info { "Connected to proxy at $proxyHost" }
-            if (isMetricsEnabled)
-                metrics.connects.labels("success")?.inc()
-            true
-        } catch (e: StatusRuntimeException) {
-            if (isMetricsEnabled)
-                metrics.connects.labels("failure")?.inc()
-            logger.info { "Cannot connect to proxy at $proxyHost [${e.message}]" }
-            false
-        }
-    }
+    private fun connectAgent() =
+            try {
+                logger.info { "Connecting to proxy at $proxyHost..." }
+                blockingStub.connectAgent(Empty.getDefaultInstance())
+                logger.info { "Connected to proxy at $proxyHost" }
+                if (isMetricsEnabled)
+                    metrics.connects.labels("success")?.inc()
+                true
+            } catch (e: StatusRuntimeException) {
+                if (isMetricsEnabled)
+                    metrics.connects.labels("failure")?.inc()
+                logger.info { "Cannot connect to proxy at $proxyHost [${e.message}]" }
+                false
+            }
 
     @Throws(RequestFailureException::class)
     private fun registerAgent() {
@@ -431,16 +430,15 @@ class Agent(options: AgentOptions,
                 }
     }
 
-    private fun readRequestAction(request: ScrapeRequest): Runnable {
-        return Runnable {
-            val response = fetchUrl(request)
-            try {
-                scrapeResponseQueue.put(response)
-            } catch (e: InterruptedException) {
-                // Ignore
+    private fun readRequestAction(request: ScrapeRequest) =
+            Runnable {
+                val response = fetchUrl(request)
+                try {
+                    scrapeResponseQueue.put(response)
+                } catch (e: InterruptedException) {
+                    // Ignore
+                }
             }
-        }
-    }
 
     private fun readRequestsFromProxy(disconnected: AtomicBoolean) {
         val agentInfo =

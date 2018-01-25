@@ -24,12 +24,11 @@ import mu.KLogging
 
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
-    private fun getRemoteAddr(attributes: Attributes): String {
-        return attributes.keys().first { "remote-addr" == it.toString() }
-                       ?.let {
-                           attributes.get(it)?.toString() ?: "Unknown"
-                       } ?: "Unknown"
-    }
+    private fun getRemoteAddr(attributes: Attributes) =
+            attributes.keys().first { "remote-addr" == it.toString() }
+                    ?.let {
+                        attributes.get(it)?.toString() ?: "Unknown"
+                    } ?: "Unknown"
 
     override fun transportReady(attributes: Attributes): Attributes {
         val agentContext = AgentContext(proxy, getRemoteAddr(attributes))

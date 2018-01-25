@@ -22,21 +22,18 @@ import com.google.common.util.concurrent.ServiceManager
 import io.prometheus.delegate.DelegatesExtensions.singleAssign
 
 object GuavaDsl {
-    fun Any.toStringElements(block: MoreObjects.ToStringHelper.() -> Unit): String {
-        return MoreObjects.toStringHelper(this)
-                .run {
-                    block(this)
-                    toString()
-                }
-    }
+    fun Any.toStringElements(block: MoreObjects.ToStringHelper.() -> Unit) =
+            MoreObjects.toStringHelper(this)
+                    .run {
+                        block(this)
+                        toString()
+                    }
 
-    fun serviceManager(services: List<Service>, block: ServiceManager.() -> Unit): ServiceManager {
-        return ServiceManager(services).apply { block.invoke(this) }
-    }
+    fun serviceManager(services: List<Service>, block: ServiceManager.() -> Unit) =
+            ServiceManager(services).apply { block.invoke(this) }
 
-    fun serviceManagerListener(init: ServiceManagerListenerHelper.() -> Unit): ServiceManager.Listener {
-        return ServiceManagerListenerHelper().apply { init() }
-    }
+    fun serviceManagerListener(init: ServiceManagerListenerHelper.() -> Unit) =
+            ServiceManagerListenerHelper().apply { init() }
 
     class ServiceManagerListenerHelper : ServiceManager.Listener() {
         private var healthyBlock: (() -> Unit)? by singleAssign()
@@ -71,9 +68,8 @@ object GuavaDsl {
         }
     }
 
-    fun serviceListener(init: ServiceListenerHelper.() -> Unit): Service.Listener {
-        return ServiceListenerHelper().apply { init() }
-    }
+    fun serviceListener(init: ServiceListenerHelper.() -> Unit) =
+            ServiceListenerHelper().apply { init() }
 
     class ServiceListenerHelper : Service.Listener() {
         private var startingBlock: (() -> Unit)? by singleAssign()

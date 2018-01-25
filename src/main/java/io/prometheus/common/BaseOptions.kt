@@ -181,7 +181,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
         return fallback // Never reached
     }
 
-    private fun getConfigSyntax(configName: String): ConfigSyntax =
+    private fun getConfigSyntax(configName: String) =
             when {
                 configName.isJsonSuffix()       -> ConfigSyntax.JSON
                 configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES

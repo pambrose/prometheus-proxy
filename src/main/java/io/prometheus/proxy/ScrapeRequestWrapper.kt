@@ -40,7 +40,7 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     var scrapeResponse: ScrapeResponse by AtomicDelegates.notNullReference()
 
-    val scrapeRequest: ScrapeRequest =
+    val scrapeRequest =
             ScrapeRequest.newBuilder()
                     .run {
                         agentId = agentContext.agentId

@@ -16,7 +16,6 @@
 
 package io.prometheus.common
 
-import brave.Tracing
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ZipkinDsl.tracing
@@ -35,7 +34,7 @@ class ZipkinReporterService(private val url: String, val initBlock: (ZipkinRepor
         initBlock?.invoke(this)
     }
 
-    fun newTracing(serviceName: String): Tracing =
+    fun newTracing(serviceName: String) =
             tracing {
                 localServiceName(serviceName)
                 spanReporter(reporter)

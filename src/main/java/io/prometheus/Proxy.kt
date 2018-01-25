@@ -120,23 +120,22 @@ class Proxy(options: ProxyOptions,
                 }
     }
 
-    fun removeAgentContext(agentId: String?): AgentContext? {
-        return if (agentId == null || agentId.isEmpty()) {
-            logger.error { "Missing agentId" }
-            null
-        }
-        else {
-            val agentContext = agentContextManager.removeAgentContext(agentId)
-            if (agentContext == null) {
-                logger.error { "Missing AgentContext for agentId: $agentId" }
+    fun removeAgentContext(agentId: String?) =
+            if (agentId == null || agentId.isEmpty()) {
+                logger.error { "Missing agentId" }
+                null
             }
             else {
-                logger.info { "Removed $agentContext" }
-                agentContext.markInvalid()
+                val agentContext = agentContextManager.removeAgentContext(agentId)
+                if (agentContext == null) {
+                    logger.error { "Missing AgentContext for agentId: $agentId" }
+                }
+                else {
+                    logger.info { "Removed $agentContext" }
+                    agentContext.markInvalid()
+                }
+                agentContext
             }
-            agentContext
-        }
-    }
 
     override fun toString() =
             toStringElements {

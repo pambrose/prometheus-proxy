@@ -35,5 +35,4 @@ class AgentContextManager {
     fun getAgentContext(agentId: String) = agentContextMap[agentId]
 
     fun removeAgentContext(agentId: String) = agentContextMap.remove(agentId)
-
 }

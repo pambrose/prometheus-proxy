@@ -30,9 +30,7 @@ object DelegatesExtensions {
     private class SingleAssignVar<T : Any?> : ReadWriteProperty<Any?, T?> {
         private var value: T? = null
 
-        override fun getValue(thisRef: Any?, property: KProperty<*>): T? {
-            return value
-        }
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = value
 
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: T?) {
             if (this.value != null)

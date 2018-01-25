@@ -185,6 +185,5 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                 logger.error(e) { "ignite failed" }
             System.exit(100)
         }
-
     }
 }

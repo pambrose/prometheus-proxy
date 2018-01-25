@@ -165,45 +165,44 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                 }
     }
 
-    override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> {
-        return streamObserver {
-            onNext { response ->
-                proxy.scrapeRequestManager.getFromScrapeRequestMap(response.scrapeId)
-                        ?.apply {
-                            scrapeResponse = response
-                            markComplete()
-                            agentContext.markActivity()
-                        } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}" }
-            }
+    override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> =
+            streamObserver {
+                onNext { response ->
+                    proxy.scrapeRequestManager.getFromScrapeRequestMap(response.scrapeId)
+                            ?.apply {
+                                scrapeResponse = response
+                                markComplete()
+                                agentContext.markActivity()
+                            } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}" }
+                }
 
-            onError { t ->
-                Status.fromThrowable(t)
-                        .let {
-                            if (it !== Status.CANCELLED)
-                                logger.info { "Error in writeResponsesToProxy(): $it" }
-                        }
+                onError { t ->
+                    Status.fromThrowable(t)
+                            .let {
+                                if (it !== Status.CANCELLED)
+                                    logger.info { "Error in writeResponsesToProxy(): $it" }
+                            }
 
-                try {
+                    try {
+                        responseObserver
+                                .apply {
+                                    onNext(Empty.getDefaultInstance())
+                                    onCompleted()
+                                }
+                    } catch (e: StatusRuntimeException) {
+                        // logger.warn(e) {"StatusRuntimeException"};
+                        // Ignore
+                    }
+                }
+
+                onCompleted {
                     responseObserver
                             .apply {
                                 onNext(Empty.getDefaultInstance())
                                 onCompleted()
                             }
-                } catch (e: StatusRuntimeException) {
-                    // logger.warn(e) {"StatusRuntimeException"};
-                    // Ignore
                 }
             }
-
-            onCompleted {
-                responseObserver
-                        .apply {
-                            onNext(Empty.getDefaultInstance())
-                            onCompleted()
-                        }
-            }
-        }
-    }
 
     companion object : KLogging() {
         private val PATH_ID_GENERATOR = AtomicLong(0)

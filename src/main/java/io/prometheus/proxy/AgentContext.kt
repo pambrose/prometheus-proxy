@@ -59,13 +59,9 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
                 null
             }
 
-    fun markInvalid() {
-        isValid.set(false)
-    }
+    fun markInvalid() = isValid.set(false)
 
-    fun markActivity() {
-        lastActivityTime.set(System.currentTimeMillis())
-    }
+    fun markActivity() = lastActivityTime.set(System.currentTimeMillis())
 
     override fun toString() =
             toStringElements {
