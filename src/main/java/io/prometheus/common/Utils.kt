@@ -115,7 +115,7 @@ fun getVersionDesc(asJson: Boolean): String {
         """Version: ${annotation.version} Release Date: ${annotation.date}"""
 }
 
-fun shutDownHookAction(service: Service): Thread =
+fun shutDownHookAction(service: Service) =
         Thread {
             println("*** ${service.javaClass.simpleName} shutting down ***")
             service.stopAsync()

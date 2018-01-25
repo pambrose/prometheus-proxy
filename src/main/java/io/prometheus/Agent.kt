@@ -355,11 +355,11 @@ class Agent(options: AgentOptions,
     }
 
     @Throws(RequestFailureException::class)
-    private fun registerPaths() {
-        pathConfigs.forEach {
-            registerPath(it["path"]!!, it["url"]!!)
-        }
-    }
+    private fun registerPaths() =
+            pathConfigs
+                    .forEach {
+                        registerPath(it["path"]!!, it["url"]!!)
+                    }
 
     @Throws(RequestFailureException::class)
     fun registerPath(pathVal: String, url: String) {
@@ -503,9 +503,7 @@ class Agent(options: AgentOptions,
         observer.onCompleted()
     }
 
-    private fun markMsgSent() {
-        lastMsgSent.set(System.currentTimeMillis())
-    }
+    private fun markMsgSent() = lastMsgSent.set(System.currentTimeMillis())
 
     private fun sendHeartBeat(disconnected: AtomicBoolean) {
         if (agentId.isEmpty())

@@ -50,44 +50,45 @@ class PathManager(private val isTestMode: Boolean) {
                 agentContext == null            -> {
                     val msg = "Unable to remove path /$path - path not found"
                     Proxy.logger.error { msg }
-                    responseBuilder.apply {
-                        valid = false
-                        reason = msg
-                    }
+                    responseBuilder
+                            .apply {
+                                valid = false
+                                reason = msg
+                            }
                 }
                 agentContext.agentId != agentId -> {
                     val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
                     Proxy.logger.error { msg }
-                    responseBuilder.apply {
-                        valid = false
-                        reason = msg
-                    }
+                    responseBuilder
+                            .apply {
+                                valid = false
+                                reason = msg
+                            }
                 }
                 else                            -> {
                     pathMap.remove(path)
                     if (!isTestMode)
                         Proxy.logger.info { "Removed path /$path for $agentContext" }
-                    responseBuilder.apply {
-                        valid = true
-                        reason = ""
-                    }
+                    responseBuilder
+                            .apply {
+                                valid = true
+                                reason = ""
+                            }
                 }
             }
         }
     }
 
-    fun removePathByAgentId(agentId: String?) {
-        if (agentId.isNullOrEmpty())
-            Proxy.logger.error { "Missing agentId" }
-        else
-            synchronized(pathMap) {
-                pathMap.forEach { k, v ->
-                    if (v.agentId == agentId)
-                        pathMap.remove(k)
-                                ?.let { Proxy.logger.info { "Removed path /$k for $it" } }
-                        ?: Proxy.logger.error { "Missing path /$k for agentId: $agentId" }
+    fun removePathByAgentId(agentId: String?) =
+            if (agentId.isNullOrEmpty())
+                Proxy.logger.error { "Missing agentId" }
+            else
+                synchronized(pathMap) {
+                    pathMap.forEach { k, v ->
+                        if (v.agentId == agentId)
+                            pathMap.remove(k)?.let { Proxy.logger.info { "Removed path /$k for $it" } }
+                            ?: Proxy.logger.error { "Missing path /$k for agentId: $agentId" }
+                    }
                 }
-            }
-    }
 
 }
