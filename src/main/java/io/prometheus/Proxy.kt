@@ -34,15 +34,16 @@ class Proxy(options: ProxyOptions,
             proxyPort: Int = options.agentPort,
             inProcessServerName: String = "",
             testMode: Boolean = false,
-            initBlock: (Proxy.() -> Unit)? = null) : GenericService(options.configVals,
-                                                                    newAdminConfig(options.adminEnabled,
-                                                                                   options.adminPort,
-                                                                                   options.configVals.proxy.admin),
-                                                                    newMetricsConfig(options.metricsEnabled,
-                                                                                     options.metricsPort,
-                                                                                     options.configVals.proxy.metrics),
-                                                                    newZipkinConfig(options.configVals.proxy.internal.zipkin),
-                                                                    testMode) {
+            initBlock: (Proxy.() -> Unit)? = null) :
+        GenericService(options.configVals,
+                       newAdminConfig(options.adminEnabled,
+                                      options.adminPort,
+                                      options.configVals.proxy.admin),
+                       newMetricsConfig(options.metricsEnabled,
+                                        options.metricsPort,
+                                        options.configVals.proxy.metrics),
+                       newZipkinConfig(options.configVals.proxy.internal.zipkin),
+                       testMode) {
     val pathManager = PathManager(isTestMode)
     val scrapeRequestManager = ScrapeRequestManager()
     val agentContextManager = AgentContextManager()

@@ -25,7 +25,8 @@ import mu.KLogging
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
     private fun getRemoteAddr(attributes: Attributes) =
-            attributes.keys().first { "remote-addr" == it.toString() }
+            attributes.keys()
+                    .first { "remote-addr" == it.toString() }
                     ?.let {
                         attributes.get(it)?.toString() ?: "Unknown"
                     } ?: "Unknown"
@@ -47,8 +48,8 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
         logger.info {
             "Disconnected " +
             if (agentContext != null)
-                        "from $agentContext"
-                    else
+                "from $agentContext"
+            else
                 "with invalid agentId: $agentId"
         }
         super.transportTerminated(attributes)

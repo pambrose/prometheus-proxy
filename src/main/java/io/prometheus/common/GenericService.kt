@@ -38,7 +38,9 @@ abstract class GenericService protected constructor(protected val genericConfigV
                                                     private val adminConfig: AdminConfig,
                                                     private val metricsConfig: MetricsConfig,
                                                     private val zipkinConfig: ZipkinConfig,
-                                                    val isTestMode: Boolean) : GenericExecutionThreadService(), Closeable {
+                                                    val isTestMode: Boolean) :
+        GenericExecutionThreadService(),
+        Closeable {
     protected val healthCheckRegistry = HealthCheckRegistry()
 
     private val services = mutableListOf<Service>()
@@ -106,7 +108,7 @@ abstract class GenericService protected constructor(protected val genericConfigV
                             serviceManagerListener {
                                 healthy { logger.info { "All $clazzName services healthy" } }
                                 stopped { logger.info { "All $clazzName services stopped" } }
-                                failure { service -> logger.info { "$clazzName service failed: $service" } }
+                                failure { logger.info { "$clazzName service failed: $it" } }
                             })
                 }
         registerHealthChecks()

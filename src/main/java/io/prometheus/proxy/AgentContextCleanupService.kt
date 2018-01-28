@@ -24,8 +24,8 @@ import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
 import mu.KLogging
 
-class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) : GenericExecutionThreadService() {
-
+class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) :
+        GenericExecutionThreadService() {
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
         initBlock?.invoke(this)
