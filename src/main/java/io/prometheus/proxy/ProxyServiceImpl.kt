@@ -167,17 +167,17 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
     override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> =
             streamObserver {
-                onNext { response ->
-                    proxy.scrapeRequestManager.getFromScrapeRequestMap(response.scrapeId)
+                onNext {
+                    proxy.scrapeRequestManager.getFromScrapeRequestMap(it.scrapeId)
                             ?.apply {
-                                scrapeResponse = response
+                                scrapeResponse = it
                                 markComplete()
                                 agentContext.markActivity()
-                            } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}" }
+                            } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${it.scrapeId}" }
                 }
 
-                onError { t ->
-                    Status.fromThrowable(t)
+                onError {
+                    Status.fromThrowable(it)
                             .let {
                                 if (it !== Status.CANCELLED)
                                     logger.info { "Error in writeResponsesToProxy(): $it" }

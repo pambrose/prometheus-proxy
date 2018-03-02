@@ -136,7 +136,7 @@ object CommonTests : KLogging() {
 
         val httpServer =
                 httpServer {
-                    initExceptionHandler { e -> sparkExceptionHandler(e, agentPort) }
+                    initExceptionHandler { sparkExceptionHandler(it, agentPort) }
                     port(agentPort)
                     get("/$agentPath") { _, res ->
                         res.type("text/plain")
@@ -172,16 +172,16 @@ object CommonTests : KLogging() {
 
         // Create the endpoints
         IntStream.range(0, httpServerCount)
-                .forEach { i ->
-                    val port = startingPort + i
+                .forEach {
+                    val port = startingPort + it
                     httpServers +=
                             httpServer {
-                                initExceptionHandler { e -> sparkExceptionHandler(e, port) }
+                                initExceptionHandler { sparkExceptionHandler(it, port) }
                                 port(port)
                                 threadPool(30, 10, 1000)
-                                get("/agent-$i") { _, res ->
+                                get("/agent-$it") { _, res ->
                                     res.type("text/plain")
-                                    "value: $i"
+                                    "value: $it"
                                 }
                                 awaitInitialization()
                             }

@@ -36,7 +36,8 @@ import kotlin.properties.Delegates
 
 class ProxyGrpcService private constructor(private val proxy: Proxy,
                                            private val port: Int = -1,
-                                           private val inProcessServerName: String = "") : GenericIdleService() {
+                                           private val inProcessServerName: String = "") :
+        GenericIdleService() {
     val healthCheck =
             healthCheck {
                 if (grpcServer.isShutdown || grpcServer.isShutdown)
@@ -93,7 +94,10 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
             }
 
     companion object : KLogging() {
-        fun newProxyGrpcService(proxy: Proxy, port: Int) = ProxyGrpcService(proxy = proxy, port = port)
-        fun newProxyGrpcService(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
+        fun newProxyGrpcService(proxy: Proxy, port: Int) =
+                ProxyGrpcService(proxy = proxy, port = port)
+
+        fun newProxyGrpcService(proxy: Proxy, serverName: String) =
+                ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
     }
 }

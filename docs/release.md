@@ -6,20 +6,22 @@
 
 3) Modify code
 
-4) Verify tests run cleanly before merge with: `make tests`
+4) Update the release date in *package-info.java*
 
-5) Check in branch and merge 
+5) Verify tests run cleanly before merge with: `make tests`
 
-6) Go back to master
+6) Check in branch and merge 
 
-7) Verify tests run cleanly after merge with: `make tests`
+7) Go back to master
 
-8) Build distro with: `make distro`
+8) Verify tests run cleanly after merge with: `make tests`
 
-9) Create release on github (https://github.com/pambrose/prometheus-proxy/releases) and 
+9) Build distro with: `make distro`
+
+10) Create release on github (https://github.com/pambrose/prometheus-proxy/releases) and 
 upload the *target/distro/prometheus-proxy.jar* and  *target/distro/prometheus-agent.jar* files.
 
-10) Build and push docker images with: `make docker-build docker-push`
+11) Build and push docker images with: `make docker-build docker-push`
 
-11) Update the *prometheus-proxy* and *prometheus-agent* repository descriptions 
-on Docker hub (https://hub.docker.com) with the latest version of *README.md*.
+12) Update the *prometheus-proxy* and *prometheus-agent* repository descriptions 
+on [Docker hub](https://hub.docker.com) with the latest version of *README.md*.

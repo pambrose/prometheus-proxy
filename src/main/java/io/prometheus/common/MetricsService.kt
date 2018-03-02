@@ -30,7 +30,8 @@ import org.eclipse.jetty.servlet.ServletHolder
 
 class MetricsService(private val port: Int,
                      private val path: String,
-                     initBlock: (MetricsService.() -> Unit)? = null) : GenericIdleService() {
+                     initBlock: (MetricsService.() -> Unit)? = null) :
+        GenericIdleService() {
     private val server =
             server(port) {
                 handler =

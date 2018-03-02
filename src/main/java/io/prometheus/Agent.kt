@@ -56,15 +56,16 @@ import kotlin.properties.Delegates.notNull
 class Agent(options: AgentOptions,
             private val inProcessServerName: String = "",
             testMode: Boolean = false,
-            initBlock: (Agent.() -> Unit)? = null) : GenericService(options.configVals,
-                                                                    newAdminConfig(options.adminEnabled,
-                                                                                   options.adminPort,
-                                                                                   options.configVals.agent.admin),
-                                                                    newMetricsConfig(options.metricsEnabled,
-                                                                                     options.metricsPort,
-                                                                                     options.configVals.agent.metrics),
-                                                                    newZipkinConfig(options.configVals.agent.internal.zipkin),
-                                                                    testMode) {
+            initBlock: (Agent.() -> Unit)? = null) :
+        GenericService(options.configVals,
+                       newAdminConfig(options.adminEnabled,
+                                      options.adminPort,
+                                      options.configVals.agent.admin),
+                       newMetricsConfig(options.metricsEnabled,
+                                        options.metricsPort,
+                                        options.configVals.agent.metrics),
+                       newZipkinConfig(options.configVals.agent.internal.zipkin),
+                       testMode) {
     private val pathContextMap = newConcurrentMap<String, PathContext>()  // Map path to PathContext
     private val heartbeatService = newFixedThreadPool(1)
     private val initialConnectionLatch = CountDownLatch(1)
@@ -450,12 +451,10 @@ class Agent(options: AgentOptions,
 
         val observer =
                 streamObserver<ScrapeRequest> {
-                    onNext { request ->
-                        readRequestsExecutorService.submit(readRequestAction(request))
-                    }
+                    onNext { readRequestsExecutorService.submit(readRequestAction(it)) }
 
-                    onError { t ->
-                        val status = Status.fromThrowable(t)
+                    onError {
+                        val status = Status.fromThrowable(it)
                         logger.error { "Error in readRequestsFromProxy(): $status" }
                         disconnected.set(true)
                     }
@@ -473,12 +472,12 @@ class Agent(options: AgentOptions,
         val observer =
                 asyncStub.writeResponsesToProxy(
                         streamObserver<Empty> {
-                            onNext { _ ->
+                            onNext {
                                 // Ignore Empty return value
                             }
 
-                            onError { t ->
-                                val s = Status.fromThrowable(t)
+                            onError {
+                                val s = Status.fromThrowable(it)
                                 logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
                                 disconnected.set(true)
                             }
