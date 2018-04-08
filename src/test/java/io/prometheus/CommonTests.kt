@@ -192,7 +192,7 @@ object CommonTests : KLogging() {
                 .forEach {
                     val index = abs(TestConstants.RANDOM.nextInt()) % httpServers.size
                     agent.registerPath("proxy-$it", "http://localhost:${startingPort + index}/agent-$index")
-                    pathMap.put(it, index)
+                    pathMap[it] = index
                 }
 
         assertThat(agent.pathMapSize()).isEqualTo(originalSize + pathCount)

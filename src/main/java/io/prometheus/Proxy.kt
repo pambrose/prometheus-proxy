@@ -98,27 +98,24 @@ class Proxy(options: ProxyOptions,
 
     override fun registerHealthChecks() {
         super.registerHealthChecks()
-        healthCheckRegistry
-                .apply {
-                    register("grpc_service", grpcService.healthCheck)
-                    register("scrape_response_map_check",
-                             newMapHealthCheck(scrapeRequestManager.scrapeRequestMap, configVals.internal.scrapeRequestMapUnhealthySize))
-                    register("agent_scrape_request_queue",
-                             healthCheck {
-                                 val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
-                                 val vals =
-                                         agentContextManager
-                                                 .agentContextMap
-                                                 .entries
-                                                 .filter { it.value.scrapeRequestQueueSize >= unhealthySize }
-                                                 .map { "${it.value} ${it.value.scrapeRequestQueueSize}" }
-                                                 .toList()
-                                 if (vals.isEmpty())
-                                     HealthCheck.Result.healthy()
-                                 else
-                                     HealthCheck.Result.unhealthy("Large scrapeRequestQueues: ${Joiner.on(", ").join(vals)}")
-                             })
-                }
+        healthCheckRegistry.apply {
+            register("grpc_service", grpcService.healthCheck)
+            register("scrape_response_map_check",
+                     newMapHealthCheck(scrapeRequestManager.scrapeRequestMap, configVals.internal.scrapeRequestMapUnhealthySize))
+            register("agent_scrape_request_queue",
+                     healthCheck {
+                         val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
+                         val vals =
+                                 agentContextManager.agentContextMap.entries
+                                         .filter { it.value.scrapeRequestQueueSize >= unhealthySize }
+                                         .map { "${it.value} ${it.value.scrapeRequestQueueSize}" }
+                                         .toList()
+                         if (vals.isEmpty())
+                             HealthCheck.Result.healthy()
+                         else
+                             HealthCheck.Result.unhealthy("Large scrapeRequestQueues: ${Joiner.on(", ").join(vals)}")
+                     })
+        }
     }
 
     fun removeAgentContext(agentId: String?) =
@@ -146,7 +143,7 @@ class Proxy(options: ProxyOptions,
             }
 
     companion object : KLogging() {
-        val AGENT_ID = "agent-id"
+        const val AGENT_ID = "agent-id"
         val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.of(AGENT_ID)
 
         @JvmStatic

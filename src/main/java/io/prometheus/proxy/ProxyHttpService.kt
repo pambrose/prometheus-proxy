@@ -61,56 +61,55 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
             Spark.afterAfter(sparkTracing.afterAfter())
         }
 
-        httpServer
-                .apply {
-                    get("/*",
-                        Route { req, res ->
-                            res.header("cache-control", "must-revalidate,no-cache,no-store")
+        httpServer.apply {
+            get("/*",
+                Route { req, res ->
+                    res.header("cache-control", "must-revalidate,no-cache,no-store")
 
-                            if (!proxy.isRunning) {
-                                logger.error { "Proxy stopped" }
-                                res.status(503)
-                                updateScrapeRequests("proxy_stopped")
-                                return@Route null
-                            }
+                    if (!proxy.isRunning) {
+                        logger.error { "Proxy stopped" }
+                        res.status(503)
+                        updateScrapeRequests("proxy_stopped")
+                        return@Route null
+                    }
 
-                            val vals = req.splat()
+                    val vals = req.splat()
 
-                            if (vals == null || vals.isEmpty()) {
-                                logger.info { "Request missing path" }
-                                res.status(404)
-                                updateScrapeRequests("missing_path")
-                                return@Route null
-                            }
+                    if (vals == null || vals.isEmpty()) {
+                        logger.info { "Request missing path" }
+                        res.status(404)
+                        updateScrapeRequests("missing_path")
+                        return@Route null
+                    }
 
-                            val path = vals[0]
+                    val path = vals[0]
 
-                            if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
-                                res.status(200)
-                                res.type("text/plain")
-                                return@Route "42"
-                            }
+                    if (configVals.internal.blitz.enabled && path == configVals.internal.blitz.path) {
+                        res.status(200)
+                        res.type("text/plain")
+                        return@Route "42"
+                    }
 
-                            val agentContext = proxy.pathManager.getAgentContextByPath(path)
+                    val agentContext = proxy.pathManager.getAgentContextByPath(path)
 
-                            if (agentContext == null) {
-                                logger.debug { "Invalid path request /\${path" }
-                                res.status(404)
-                                updateScrapeRequests("invalid_path")
-                                return@Route null
-                            }
+                    if (agentContext == null) {
+                        logger.debug { "Invalid path request /\${path" }
+                        res.status(404)
+                        updateScrapeRequests("invalid_path")
+                        return@Route null
+                    }
 
-                            if (!agentContext.isValid.get()) {
-                                logger.error { "Invalid AgentContext" }
-                                res.status(404)
-                                updateScrapeRequests("invalid_agent_context")
-                                return@Route null
-                            }
+                    if (!agentContext.isValid) {
+                        logger.error { "Invalid AgentContext" }
+                        res.status(404)
+                        updateScrapeRequests("invalid_agent_context")
+                        return@Route null
+                    }
 
-                            return@Route submitScrapeRequest(req, res, agentContext, path)
-                        })
-                    awaitInitialization()
-                }
+                    return@Route submitScrapeRequest(req, res, agentContext, path)
+                })
+            awaitInitialization()
+        }
 
     }
 
@@ -139,7 +138,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
                     break
 
                 // Check if agent is disconnected or agent is hung
-                if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.isValid.get() || !proxy.isRunning) {
+                if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.isValid || !proxy.isRunning) {
                     res.status(503)
                     updateScrapeRequests("time_out")
                     return null

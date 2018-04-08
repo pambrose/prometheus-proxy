@@ -37,8 +37,7 @@ object TestUtils : KLogging() {
 
         return Proxy(options =
                      ProxyOptions(
-                             mutableListOf<String>()
-                                     .apply {
+                             mutableListOf<String>().apply {
                                          addAll(TestConstants.args)
                                          addAll(argv)
                                          add("-Dproxy.admin.enabled=$adminEnabled")
@@ -60,8 +59,7 @@ object TestUtils : KLogging() {
 
         return Agent(options =
                      AgentOptions(
-                             mutableListOf<String>()
-                                     .apply {
+                             mutableListOf<String>().apply {
                                          addAll(TestConstants.args)
                                          addAll(argv)
                                          add("-Dagent.admin.enabled=$adminEnabled")

@@ -66,7 +66,7 @@ fun getBanner(filename: String, logger: Logger): String {
                         val currLine = lineNum++
                         currLine in first..last
                     }
-                    .map { "     " + it }
+                    .map { "     $it" }
                     .toList()
 
             val noNulls = Joiner.on("\n").skipNulls().join(vals)

@@ -19,11 +19,10 @@ package io.prometheus.proxy
 import com.google.common.collect.Maps
 import io.prometheus.Proxy
 import io.prometheus.grpc.UnregisterPathResponse
-import java.util.concurrent.ConcurrentMap
 
 class PathManager(private val isTestMode: Boolean) {
     // Map path to AgentContext
-    private val pathMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap<String, AgentContext>()
+    private val pathMap = Maps.newConcurrentMap<String, AgentContext>()
 
     fun getAgentContextByPath(path: String) = pathMap[path]
 
@@ -37,7 +36,7 @@ class PathManager(private val isTestMode: Boolean) {
 
     fun addPath(path: String, agentContext: AgentContext) {
         synchronized(pathMap) {
-            pathMap.put(path, agentContext)
+            pathMap[path] = agentContext
             if (!isTestMode)
                 Proxy.logger.info { "Added path /$path for $agentContext" }
         }
@@ -50,30 +49,27 @@ class PathManager(private val isTestMode: Boolean) {
                 agentContext == null            -> {
                     val msg = "Unable to remove path /$path - path not found"
                     Proxy.logger.error { msg }
-                    responseBuilder
-                            .apply {
-                                valid = false
-                                reason = msg
-                            }
+                    responseBuilder.apply {
+                        this.valid = false
+                        this.reason = msg
+                    }
                 }
                 agentContext.agentId != agentId -> {
                     val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
                     Proxy.logger.error { msg }
-                    responseBuilder
-                            .apply {
-                                valid = false
-                                reason = msg
-                            }
+                    responseBuilder.apply {
+                        this.valid = false
+                        this.reason = msg
+                    }
                 }
                 else                            -> {
                     pathMap.remove(path)
                     if (!isTestMode)
                         Proxy.logger.info { "Removed path /$path for $agentContext" }
-                    responseBuilder
-                            .apply {
-                                valid = true
-                                reason = ""
-                            }
+                    responseBuilder.apply {
+                        this.valid = true
+                        this.reason = ""
+                    }
                 }
             }
         }

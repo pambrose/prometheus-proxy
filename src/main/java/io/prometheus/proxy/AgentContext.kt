@@ -18,11 +18,11 @@ package io.prometheus.proxy
 
 import io.prometheus.Proxy
 import io.prometheus.common.toSecs
-import io.prometheus.delegate.AtomicDelegates
+import io.prometheus.delegate.AtomicDelegates.atomicBoolean
+import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
@@ -32,9 +32,9 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     private val waitMillis = proxy.configVals.internal.scrapeRequestQueueCheckMillis.toLong()
 
     private var lastActivityTime = AtomicLong()
-    var isValid = AtomicBoolean(true)
-    var hostName: String by AtomicDelegates.notNullReference()
-    var agentName: String by AtomicDelegates.notNullReference()
+    var isValid by atomicBoolean(true)
+    var hostName by nonNullableReference<String>()
+    var agentName by nonNullableReference<String>()
 
     val inactivitySecs: Long
         get() = (System.currentTimeMillis() - lastActivityTime.get()).toSecs()
@@ -52,14 +52,16 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
         scrapeRequestQueue += scrapeRequest
     }
 
-    fun pollScrapeRequestQueue(): ScrapeRequestWrapper? =
+    fun pollScrapeRequestQueue() =
             try {
                 scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS)
             } catch (e: InterruptedException) {
                 null
             }
 
-    fun markInvalid() = isValid.set(false)
+    fun markInvalid() {
+        isValid = false
+    }
 
     fun markActivity() = lastActivityTime.set(System.currentTimeMillis())
 

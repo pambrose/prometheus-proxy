@@ -160,29 +160,28 @@ abstract class GenericService protected constructor(protected val genericConfigV
     }
 
     protected open fun registerHealthChecks() {
-        healthCheckRegistry
-                .apply {
-                    register("thread_deadlock", ThreadDeadlockHealthCheck())
-                    if (isMetricsEnabled)
-                        register("metrics_service", metricsService.healthCheck)
-                    register(
-                            "all_services_healthy",
-                            healthCheck {
-                                if (serviceManager.isHealthy)
-                                    HealthCheck.Result.healthy()
-                                else {
-                                    val vals =
-                                            serviceManager
-                                                    .servicesByState()
-                                                    .entries()
-                                                    .filter { it.key !== Service.State.RUNNING }
-                                                    .onEach { logger.warn { "Incorrect state - ${it.key}: ${it.value}" } }
-                                                    .map { "${it.key}: ${it.value}" }
-                                                    .toList()
-                                    HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
-                                }
-                            })
-                }
+        healthCheckRegistry.apply {
+            register("thread_deadlock", ThreadDeadlockHealthCheck())
+            if (isMetricsEnabled)
+                register("metrics_service", metricsService.healthCheck)
+            register(
+                    "all_services_healthy",
+                    healthCheck {
+                        if (serviceManager.isHealthy)
+                            HealthCheck.Result.healthy()
+                        else {
+                            val vals =
+                                    serviceManager
+                                            .servicesByState()
+                                            .entries()
+                                            .filter { it.key !== Service.State.RUNNING }
+                                            .onEach { logger.warn { "Incorrect state - ${it.key}: ${it.value}" } }
+                                            .map { "${it.key}: ${it.value}" }
+                                            .toList()
+                            HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
+                        }
+                    })
+        }
     }
 
     companion object : KLogging()
