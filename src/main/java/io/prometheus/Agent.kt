@@ -288,7 +288,7 @@ class Agent(options: AgentOptions,
                                 valid = true
                                 reason = ""
                                 this.statusCode = statusCode
-                                text = it.body()?.string() ?: ""
+                                text = it.body()?.string().orEmpty()
                                 contentType = it.header(CONTENT_TYPE)
                                 build()
                             }

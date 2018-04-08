@@ -46,11 +46,11 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
             proxyHostname = PROXY_HOSTNAME.getEnv(if (configHostname.contains(":"))
                                                       configHostname
                                                   else
-                                                      "$configHostname:${configVals.agent.proxy.port}") ?: ""
+                                                      "$configHostname:${configVals.agent.proxy.port}")
         }
 
         if (agentName.isEmpty())
-            agentName = EnvVars.AGENT_NAME.getEnv(configVals.agent.name) ?: ""
+            agentName = EnvVars.AGENT_NAME.getEnv(configVals.agent.name)
 
         assignAdminEnabled(configVals.agent.admin.enabled)
         assignAdminPort(configVals.agent.admin.port)
