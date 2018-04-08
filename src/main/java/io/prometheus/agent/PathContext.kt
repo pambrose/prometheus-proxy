@@ -25,6 +25,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
+@Suppress("UNUSED_PARAMETER")
 class PathContext(private val okHttpClient: OkHttpClient,
                   private val pathId: Long,
                   private val path: String,
@@ -50,7 +51,7 @@ class PathContext(private val okHttpClient: OkHttpClient,
 
     override fun toString() =
             toStringElements {
-                add("path", "/" + path)
+                add("path", "/$path")
                 add("url", url)
             }
 

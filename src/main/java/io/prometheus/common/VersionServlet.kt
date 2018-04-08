@@ -35,6 +35,6 @@ class VersionServlet : HttpServlet() {
     }
 
     companion object {
-        private val serialVersionUID = -9115048679370256251L
+        private const val serialVersionUID = -9115048679370256251L
     }
 }

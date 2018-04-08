@@ -65,6 +65,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
                     addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
                     addTransportFilter(ProxyTransportFilter(proxy))
                 }
+
         Servers.shutdownWithJvm(grpcServer, 2000)
 
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())

@@ -37,21 +37,20 @@ class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val threadDumpPath: String,
                    initBlock: (AdminService.() -> Unit)? = null) : GenericIdleService() {
     private val server =
-            Server(port)
-                    .apply {
-                        handler =
-                                servletContextHandler {
-                                    contextPath = "/"
-                                    if (pingPath.isNotBlank())
-                                        addServlet(ServletHolder(PingServlet()), "/$pingPath")
-                                    if (versionPath.isNotBlank())
-                                        addServlet(ServletHolder(VersionServlet()), "/$versionPath")
-                                    if (healthCheckPath.isNotBlank())
-                                        addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
-                                    if (threadDumpPath.isNotBlank())
-                                        addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
-                                }
-                    }
+            Server(port).apply {
+                this.handler =
+                        servletContextHandler {
+                            contextPath = "/"
+                            if (pingPath.isNotBlank())
+                                addServlet(ServletHolder(PingServlet()), "/$pingPath")
+                            if (versionPath.isNotBlank())
+                                addServlet(ServletHolder(VersionServlet()), "/$versionPath")
+                            if (healthCheckPath.isNotBlank())
+                                addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
+                            if (threadDumpPath.isNotBlank())
+                                addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
+                        }
+            }
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())

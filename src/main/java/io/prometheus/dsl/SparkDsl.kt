@@ -20,7 +20,7 @@ import org.eclipse.jetty.servlet.ServletContextHandler
 import spark.Service
 
 object SparkDsl {
-    inline fun httpServer(block: Service.() -> Unit) =
+    inline fun httpServer(block: Service.() -> Unit): Service =
             Service.ignite().apply { block.invoke(this) }
 
     inline fun servletContextHandler(block: ServletContextHandler.() -> Unit) =

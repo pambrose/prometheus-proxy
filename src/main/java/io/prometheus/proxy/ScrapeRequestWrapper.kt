@@ -19,7 +19,7 @@ package io.prometheus.proxy
 
 import com.google.common.base.Preconditions
 import io.prometheus.Proxy
-import io.prometheus.delegate.AtomicDelegates
+import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
@@ -36,25 +36,24 @@ class ScrapeRequestWrapper(proxy: Proxy,
     private val complete = CountDownLatch(1)
     private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
-    val agentContext: AgentContext = Preconditions.checkNotNull(agentContext)
+    val agentContext = Preconditions.checkNotNull(agentContext)
 
-    var scrapeResponse: ScrapeResponse by AtomicDelegates.notNullReference()
+    var scrapeResponse by nonNullableReference<ScrapeResponse>()
 
     val scrapeRequest =
-            ScrapeRequest.newBuilder()
-                    .run {
-                        agentId = agentContext.agentId
-                        scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
-                        this.path = path
-                        if (!accept.isNullOrBlank())
-                            this.accept = accept
-                        build()
-                    }
+            ScrapeRequest.newBuilder().run {
+                this.agentId = agentContext.agentId
+                this.scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
+                this.path = path
+                if (!accept.isNullOrBlank())
+                    this.accept = accept
+                build()
+            }
 
-    val scrapeId: Long
+    val scrapeId
         get() = scrapeRequest.scrapeId
 
-    fun ageInSecs(): Long = (System.currentTimeMillis() - createTime) / 1000
+    fun ageInSecs() = (System.currentTimeMillis() - createTime) / 1000
 
     fun markComplete() {
         requestTimer?.observeDuration()
