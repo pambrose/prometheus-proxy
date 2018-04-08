@@ -36,9 +36,9 @@ enum class EnvVars {
     ADMIN_ENABLED,
     ADMIN_PORT;
 
-    fun getEnv(defaultVal: String): String? = getenv(name) ?: defaultVal
+    fun getEnv(defaultVal: String) = getenv(name) ?: defaultVal
 
-    fun getEnv(defaultVal: Boolean): Boolean = getenv(name)?.toBoolean() ?: defaultVal
+    fun getEnv(defaultVal: Boolean) = getenv(name)?.toBoolean() ?: defaultVal
 
-    fun getEnv(defaultVal: Int): Int = getenv(name)?.toInt() ?: defaultVal
+    fun getEnv(defaultVal: Int) = getenv(name)?.toInt() ?: defaultVal
 }

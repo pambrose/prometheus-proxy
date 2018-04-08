@@ -32,7 +32,7 @@ import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.*
 
-val localHostName: String by lazy {
+val localHostName by lazy {
     try {
         InetAddress.getLocalHost().hostName
     } catch (e: UnknownHostException) {
@@ -40,42 +40,41 @@ val localHostName: String by lazy {
     }
 }
 
-fun getBanner(filename: String, logger: Logger): String {
-    try {
-        logger.javaClass.classLoader.getResourceAsStream(filename).use {
-            val banner = CharStreams.toString(InputStreamReader(it, Charsets.UTF_8.name()))
-            val lines: List<String> = Splitter.on("\n").splitToList(banner)
+fun getBanner(filename: String, logger: Logger) =
+        try {
+            logger.javaClass.classLoader.getResourceAsStream(filename).use {
+                val banner = CharStreams.toString(InputStreamReader(it, Charsets.UTF_8.name()))
+                val lines: List<String> = Splitter.on("\n").splitToList(banner)
 
-            // Trim initial and trailing blank lines, but preserve blank lines in middle;
-            var first = -1
-            var last = -1
-            var lineNum = 0
-            lines.forEach {
-                if (it.trim { it <= ' ' }.isNotEmpty()) {
-                    if (first == -1)
-                        first = lineNum
-                    last = lineNum
-                }
-                lineNum++
-            }
-
-            lineNum = 0
-
-            val vals = lines
-                    .filter {
-                        val currLine = lineNum++
-                        currLine in first..last
+                // Trim initial and trailing blank lines, but preserve blank lines in middle;
+                var first = -1
+                var last = -1
+                var lineNum = 0
+                lines.forEach {
+                    if (it.trim { it <= ' ' }.isNotEmpty()) {
+                        if (first == -1)
+                            first = lineNum
+                        last = lineNum
                     }
-                    .map { "     " + it }
-                    .toList()
+                    lineNum++
+                }
 
-            val noNulls = Joiner.on("\n").skipNulls().join(vals)
-            return "\n\n$noNulls\n\n"
+                lineNum = 0
+
+                val vals = lines
+                        .filter {
+                            val currLine = lineNum++
+                            currLine in first..last
+                        }
+                        .map { "     $it" }
+                        .toList()
+
+                val noNulls = Joiner.on("\n").skipNulls().join(vals)
+                "\n\n$noNulls\n\n"
+            }
+        } catch (e: Exception) {
+            "Banner $filename cannot be found"
         }
-    } catch (e: Exception) {
-        return "Banner $filename cannot be found"
-    }
-}
 
 fun newQueueHealthCheck(queue: Queue<*>, size: Int) =
         healthCheck {
@@ -130,7 +129,7 @@ class VersionValidator : IParameterValidator {
     }
 }
 
-fun Long.toMillis(): Long = this * 1000
+fun Long.toMillis() = this * 1000
 
-fun Long.toSecs(): Long = this / 1000
+fun Long.toSecs() = this / 1000
 

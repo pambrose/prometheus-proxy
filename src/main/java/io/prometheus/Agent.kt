@@ -33,7 +33,8 @@ import io.prometheus.common.*
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
-import io.prometheus.delegate.AtomicDelegates.notNullReference
+import io.prometheus.delegate.AtomicDelegates.atomicLong
+import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
@@ -45,12 +46,10 @@ import okhttp3.OkHttpClient
 import java.io.IOException
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors.newCachedThreadPool
 import java.util.concurrent.Executors.newFixedThreadPool
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.properties.Delegates.notNull
 
 class Agent(options: AgentOptions,
@@ -66,6 +65,7 @@ class Agent(options: AgentOptions,
                                         options.configVals.agent.metrics),
                        newZipkinConfig(options.configVals.agent.internal.zipkin),
                        testMode) {
+
     private val pathContextMap = newConcurrentMap<String, PathContext>()  // Map path to PathContext
     private val heartbeatService = newFixedThreadPool(1)
     private val initialConnectionLatch = CountDownLatch(1)
@@ -73,9 +73,9 @@ class Agent(options: AgentOptions,
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
     private val agentName: String = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
     private var metrics: AgentMetrics by notNull()
-    private var blockingStub: ProxyServiceBlockingStub by notNullReference()
-    private var asyncStub: ProxyServiceStub by notNullReference()
-    private val readRequestsExecutorService: ExecutorService =
+    private var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
+    private var asyncStub: ProxyServiceStub by nonNullableReference()
+    private val readRequestsExecutorService =
             newCachedThreadPool(if (isMetricsEnabled)
                                     InstrumentedThreadFactory(
                                             threadFactory {
@@ -102,16 +102,16 @@ class Agent(options: AgentOptions,
                     .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
                     .toList()
 
-    private var lastMsgSent = AtomicLong()
+    private var lastMsgSent by atomicLong()
 
     private var isGrpcStarted = AtomicBoolean(false)
-    var channel: ManagedChannel by notNullReference()
-    var agentId: String by notNullReference()
+    var channel: ManagedChannel by nonNullableReference()
+    var agentId: String by nonNullableReference()
 
-    private val proxyHost: String
+    private val proxyHost
         get() = "$hostName:$port"
 
-    val scrapeResponseQueueSize: Int
+    val scrapeResponseQueueSize
         get() = scrapeResponseQueue.size
 
     val configVals: ConfigVals.Agent
@@ -193,7 +193,7 @@ class Agent(options: AgentOptions,
         // Reset values for each connection attempt
         pathContextMap.clear()
         scrapeResponseQueue.clear()
-        lastMsgSent.set(0)
+        lastMsgSent = 0
 
         if (connectAgent()) {
             registerAgent()
@@ -211,7 +211,7 @@ class Agent(options: AgentOptions,
             logger.info { "Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity" }
             heartbeatService.submit {
                 while (isRunning && !disconnected.get()) {
-                    val timeSinceLastWriteMillis = System.currentTimeMillis() - lastMsgSent.get()
+                    val timeSinceLastWriteMillis = System.currentTimeMillis() - lastMsgSent
                     if (timeSinceLastWriteMillis > maxInactivitySecs.toLong().toMillis())
                         sendHeartBeat(disconnected)
                     sleepForMillis(threadPauseMillis)
@@ -236,7 +236,7 @@ class Agent(options: AgentOptions,
                 channel(inProcessServerName = inProcessServerName, hostName = hostName, port = port) {
                     if (isZipkinEnabled)
                         intercept(grpcTracing.newClientInterceptor())
-                    usePlaintext(true)
+                    usePlaintext()
                 }
 
         val interceptors = listOf<ClientInterceptor>(AgentClientInterceptor(this))
@@ -256,8 +256,8 @@ class Agent(options: AgentOptions,
         val scrapeResponse =
                 ScrapeResponse.newBuilder()
                         .apply {
-                            agentId = scrapeRequest.agentId
-                            scrapeId = scrapeRequest.scrapeId
+                            this.agentId = scrapeRequest.agentId
+                            this.scrapeId = scrapeRequest.scrapeId
                         }
         val pathContext = pathContextMap[path]
 
@@ -266,11 +266,11 @@ class Agent(options: AgentOptions,
             updateScrapeCounter("invalid_path")
             return scrapeResponse
                     .run {
-                        valid = false
-                        reason = "Invalid path: $path"
+                        this.valid = false
+                        this.reason = "Invalid path: $path"
                         this.statusCode = statusCode
-                        text = ""
-                        contentType = ""
+                        this.text = ""
+                        this.contentType = ""
                         build()
                     }
         }
@@ -368,7 +368,7 @@ class Agent(options: AgentOptions,
         val pathId = registerPathOnProxy(path)
         if (!isTestMode)
             logger.info { "Registered $url as /$path" }
-        pathContextMap.put(path, PathContext(okHttpClient, pathId, path, url))
+        pathContextMap[path] = PathContext(okHttpClient, pathId, path, url)
     }
 
     @Throws(RequestFailureException::class)
@@ -502,7 +502,9 @@ class Agent(options: AgentOptions,
         observer.onCompleted()
     }
 
-    private fun markMsgSent() = lastMsgSent.set(System.currentTimeMillis())
+    private fun markMsgSent() {
+        lastMsgSent = System.currentTimeMillis()
+    }
 
     private fun sendHeartBeat(disconnected: AtomicBoolean) {
         if (agentId.isEmpty())

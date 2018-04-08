@@ -31,13 +31,13 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     private val scrapeRequestQueue = ArrayBlockingQueue<ScrapeRequestWrapper>(proxy.configVals.internal.scrapeRequestQueueSize)
     private val waitMillis = proxy.configVals.internal.scrapeRequestQueueCheckMillis.toLong()
 
-    private var lastActivityTime = AtomicLong()
+    private var lastActivityTime by AtomicDelegates.atomicLong()
     var isValid = AtomicBoolean(true)
-    var hostName: String by AtomicDelegates.notNullReference()
-    var agentName: String by AtomicDelegates.notNullReference()
+    var hostName: String by AtomicDelegates.nonNullableReference()
+    var agentName: String by AtomicDelegates.nonNullableReference()
 
     val inactivitySecs: Long
-        get() = (System.currentTimeMillis() - lastActivityTime.get()).toSecs()
+        get() = (System.currentTimeMillis() - lastActivityTime).toSecs()
 
     val scrapeRequestQueueSize: Int
         get() = scrapeRequestQueue.size
@@ -61,7 +61,9 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     fun markInvalid() = isValid.set(false)
 
-    fun markActivity() = lastActivityTime.set(System.currentTimeMillis())
+    fun markActivity() {
+        lastActivityTime = System.currentTimeMillis()
+    }
 
     override fun toString() =
             toStringElements {

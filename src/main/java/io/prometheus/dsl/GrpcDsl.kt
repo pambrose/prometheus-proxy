@@ -17,6 +17,8 @@
 package io.prometheus.dsl
 
 import io.grpc.Attributes
+import io.grpc.ManagedChannel
+import io.grpc.Server
 import io.grpc.ServerBuilder
 import io.grpc.inprocess.InProcessChannelBuilder
 import io.grpc.inprocess.InProcessServerBuilder
@@ -29,7 +31,7 @@ object GrpcDsl {
     fun channel(inProcessServerName: String = "",
                 hostName: String = "",
                 port: Int = -1,
-                block: AbstractManagedChannelImplBuilder<*>.() -> Unit) =
+                block: AbstractManagedChannelImplBuilder<*>.() -> Unit): ManagedChannel =
             (if (inProcessServerName.isEmpty())
                 NettyChannelBuilder.forAddress(hostName, port)
             else
@@ -39,7 +41,7 @@ object GrpcDsl {
                         build()
                     }
 
-    fun server(inProcessServerName: String = "", port: Int = -1, block: ServerBuilder<*>.() -> Unit) =
+    fun server(inProcessServerName: String = "", port: Int = -1, block: ServerBuilder<*>.() -> Unit): Server =
             (if (inProcessServerName.isEmpty())
                 ServerBuilder.forPort(port)
             else
@@ -49,7 +51,7 @@ object GrpcDsl {
                         build()
                     }
 
-    fun attributes(block: Attributes.Builder.() -> Unit) =
+    fun attributes(block: Attributes.Builder.() -> Unit): Attributes =
             Attributes.newBuilder()
                     .run {
                         block(this)

@@ -38,9 +38,9 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     val agentContext: AgentContext = Preconditions.checkNotNull(agentContext)
 
-    var scrapeResponse: ScrapeResponse by AtomicDelegates.notNullReference()
+    var scrapeResponse: ScrapeResponse by AtomicDelegates.nonNullableReference()
 
-    val scrapeRequest =
+    val scrapeRequest: ScrapeRequest =
             ScrapeRequest.newBuilder()
                     .run {
                         agentId = agentContext.agentId

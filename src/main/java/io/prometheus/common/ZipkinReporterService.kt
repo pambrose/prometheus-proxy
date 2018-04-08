@@ -25,7 +25,7 @@ import mu.KLogging
 import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
 
-class ZipkinReporterService(private val url: String, val initBlock: (ZipkinReporterService.() -> Unit)? = null) :
+class ZipkinReporterService(private val url: String, initBlock: (ZipkinReporterService.() -> Unit)? = null) :
         GenericIdleService() {
     private val sender = OkHttpSender.create(url)
     private val reporter = AsyncReporter.create(sender)
