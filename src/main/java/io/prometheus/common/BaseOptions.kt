@@ -83,9 +83,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
             val jcom =
                     JCommander(this)
                             .apply {
-                                programName = progName
-                                setCaseSensitiveOptions(false)
-                                parse(*argv ?: arrayOf<String>())
+                                this.programName = progName
+                                this.setCaseSensitiveOptions(false)
+                                this.parse(*argv ?: arrayOf<String>())
                             }
 
             if (usage) {

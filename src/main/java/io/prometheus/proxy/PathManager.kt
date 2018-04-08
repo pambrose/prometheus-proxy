@@ -37,7 +37,7 @@ class PathManager(private val isTestMode: Boolean) {
 
     fun addPath(path: String, agentContext: AgentContext) {
         synchronized(pathMap) {
-            pathMap.put(path, agentContext)
+            pathMap[path] = agentContext
             if (!isTestMode)
                 Proxy.logger.info { "Added path /$path for $agentContext" }
         }
@@ -52,8 +52,8 @@ class PathManager(private val isTestMode: Boolean) {
                     Proxy.logger.error { msg }
                     responseBuilder
                             .apply {
-                                valid = false
-                                reason = msg
+                                this.valid = false
+                                this.reason = msg
                             }
                 }
                 agentContext.agentId != agentId -> {
@@ -61,8 +61,8 @@ class PathManager(private val isTestMode: Boolean) {
                     Proxy.logger.error { msg }
                     responseBuilder
                             .apply {
-                                valid = false
-                                reason = msg
+                                this.valid = false
+                                this.reason = msg
                             }
                 }
                 else                            -> {
@@ -71,8 +71,8 @@ class PathManager(private val isTestMode: Boolean) {
                         Proxy.logger.info { "Removed path /$path for $agentContext" }
                     responseBuilder
                             .apply {
-                                valid = true
-                                reason = ""
+                                this.valid = true
+                                this.reason = ""
                             }
                 }
             }

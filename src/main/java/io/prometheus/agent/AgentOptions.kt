@@ -30,10 +30,10 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
             this(Iterables.toArray<String>(args, String::class.java), exitOnMissingConfig)
 
     @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
-    var proxyHostname: String = ""
+    var proxyHostname = ""
         private set
     @Parameter(names = ["-n", "--name"], description = "Agent name")
-    var agentName: String = ""
+    var agentName = ""
         private set
 
     init {

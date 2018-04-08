@@ -88,6 +88,6 @@ class OptionsTest {
     }
 
     companion object {
-        private val CONFIG = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/junit-test.conf"
+        private const val CONFIG = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/junit-test.conf"
     }
 }

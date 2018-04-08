@@ -55,7 +55,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                     onNext(
                             RegisterAgentResponse.newBuilder()
                                     .run {
-                                        reason = "Invalid agentId: $agentId"
+                                        this.reason = "Invalid agentId: $agentId"
                                         this.valid = valid
                                         this.agentId = agentId
                                         build()
@@ -86,9 +86,9 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                             RegisterPathResponse.newBuilder()
                                     .run {
                                         this.valid = valid
-                                        reason = "Invalid agentId: $agentId"
-                                        pathCount = proxy.pathManager.pathMapSize()
-                                        pathId = if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1
+                                        this.reason = "Invalid agentId: $agentId"
+                                        this.pathCount = proxy.pathManager.pathMapSize()
+                                        this.pathId = if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1
                                         build()
                                     })
                     onCompleted()
@@ -106,8 +106,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             logger.error { "Missing AgentContext for agentId: $agentId" }
             responseBuilder
                     .apply {
-                        valid = false
-                        reason = "Invalid agentId: $agentId"
+                        this.valid = false
+                        this.reason = "Invalid agentId: $agentId"
                     }
         }
         else {
@@ -139,14 +139,15 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         if (proxy.isZipkinEnabled)
             proxy.metrics.heartbeats.inc()
         val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
-        agentContext?.markActivity() ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
+        agentContext?.markActivity()
+        ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
         responseObserver
                 .apply {
                     onNext(
                             HeartBeatResponse.newBuilder()
                                     .run {
-                                        valid = agentContext != null
-                                        reason = "Invalid agentId: ${request.agentId}"
+                                        this.valid = agentContext != null
+                                        this.reason = "Invalid agentId: ${request.agentId}"
                                         build()
                                     })
                     onCompleted()

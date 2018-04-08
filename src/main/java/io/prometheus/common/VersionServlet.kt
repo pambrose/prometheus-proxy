@@ -27,14 +27,14 @@ class VersionServlet : HttpServlet() {
     @Throws(ServletException::class, IOException::class)
     override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
         resp.apply {
-            status = HttpServletResponse.SC_OK
-            setHeader("Cache-Control", "must-revalidate,no-cache,no-store")
-            contentType = "text/plain"
-            writer.use { it.println(getVersionDesc(true)) }
+            this.status = HttpServletResponse.SC_OK
+            this.setHeader("Cache-Control", "must-revalidate,no-cache,no-store")
+            this.contentType = "text/plain"
+            this.writer.use { it.println(getVersionDesc(true)) }
         }
     }
 
     companion object {
-        private val serialVersionUID = -9115048679370256251L
+        private const val serialVersionUID = -9115048679370256251L
     }
 }

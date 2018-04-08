@@ -50,7 +50,7 @@ class Proxy(options: ProxyOptions,
     var metrics: ProxyMetrics by Delegates.notNull()
 
     private val httpService = ProxyHttpService(this, proxyPort)
-    private val grpcService: ProxyGrpcService =
+    private val grpcService =
             if (inProcessServerName.isEmpty())
                 newProxyGrpcService(proxy = this, port = options.agentPort)
             else
@@ -146,7 +146,7 @@ class Proxy(options: ProxyOptions,
             }
 
     companion object : KLogging() {
-        val AGENT_ID = "agent-id"
+        const val AGENT_ID = "agent-id"
         val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.of(AGENT_ID)
 
         @JvmStatic
