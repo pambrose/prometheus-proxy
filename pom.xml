@@ -25,7 +25,7 @@
     <version>1.3.7-SNAPSHOT</version>
 
     <properties>
-        <kotlin.version>1.2.31</kotlin.version>
+        <kotlin.version>1.2.41</kotlin.version>
 
         <prometheus.version>0.3.0</prometheus.version>
         <jcommander.version>1.72</jcommander.version>
@@ -43,8 +43,8 @@
         <spark.version>2.7.2</spark.version>
         <jetty.version>9.4.8.v20171121</jetty.version>
 
-        <brave.version>4.19.0</brave.version>
-        <zipkin-sender.version>2.5.0</zipkin-sender.version>
+        <brave.version>4.19.2</brave.version>
+        <zipkin-sender.version>2.6.0</zipkin-sender.version>
 
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.7.25</slf4j.version>
