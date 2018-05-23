@@ -43,8 +43,8 @@
         <spark.version>2.7.2</spark.version>
         <jetty.version>9.4.8.v20171121</jetty.version>
 
-        <brave.version>4.19.2</brave.version>
-        <zipkin-sender.version>2.6.0</zipkin-sender.version>
+        <brave.version>5.0.0</brave.version>
+        <zipkin-sender.version>2.6.1</zipkin-sender.version>
 
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.7.25</slf4j.version>
