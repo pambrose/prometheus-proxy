@@ -32,7 +32,7 @@ import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.*
 
-val localHostName by lazy {
+val localHostName: String by lazy {
     try {
         InetAddress.getLocalHost().hostName
     } catch (e: UnknownHostException) {

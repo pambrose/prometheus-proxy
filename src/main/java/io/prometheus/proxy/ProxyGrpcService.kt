@@ -57,7 +57,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
         }
 
         grpcServer =
-                server(inProcessServerName = inProcessServerName, port = port) {
+                server(inProcessServerName, port) {
                     val proxyService = ProxyServiceImpl(proxy)
                     val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
                     if (proxy.isZipkinEnabled)
