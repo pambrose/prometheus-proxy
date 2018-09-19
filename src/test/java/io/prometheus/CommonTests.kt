@@ -78,22 +78,21 @@ object CommonTests : KLogging() {
                 .forEach {
                     TestConstants
                             .EXECUTOR_SERVICE
-                            .submit(
-                                    {
-                                        val path = "test-${cnt.getAndIncrement()}"
+                            .submit {
+                                val path = "test-${cnt.getAndIncrement()}"
 
-                                        synchronized(paths) {
-                                            paths += path
-                                        }
+                                synchronized(paths) {
+                                    paths += path
+                                }
 
-                                        try {
-                                            val url = "http://localhost:$PROXY_PORT/$path"
-                                            agent.registerPath(path, url)
-                                            latch1.countDown()
-                                        } catch (e: RequestFailureException) {
-                                            e.printStackTrace()
-                                        }
-                                    })
+                                try {
+                                    val url = "http://localhost:$PROXY_PORT/$path"
+                                    agent.registerPath(path, url)
+                                    latch1.countDown()
+                                } catch (e: RequestFailureException) {
+                                    e.printStackTrace()
+                                }
+                            }
                 }
 
         assertThat(latch1.await(1, MINUTES)).isTrue()
@@ -103,14 +102,14 @@ object CommonTests : KLogging() {
         paths.forEach {
             TestConstants
                     .EXECUTOR_SERVICE
-                    .submit({
-                                try {
-                                    agent.unregisterPath(it)
-                                    latch2.countDown()
-                                } catch (e: RequestFailureException) {
-                                    e.printStackTrace()
-                                }
-                            })
+                    .submit {
+                        try {
+                            agent.unregisterPath(it)
+                            latch2.countDown()
+                        } catch (e: RequestFailureException) {
+                            e.printStackTrace()
+                        }
+                    }
         }
 
         // Wait for all unregistrations to complete
@@ -176,7 +175,7 @@ object CommonTests : KLogging() {
                     val port = startingPort + it
                     httpServers +=
                             httpServer {
-                                initExceptionHandler { sparkExceptionHandler(it, port) }
+                                initExceptionHandler { arg -> sparkExceptionHandler(arg, port) }
                                 port(port)
                                 threadPool(30, 10, 1000)
                                 get("/agent-$it") { _, res ->

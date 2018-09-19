@@ -19,14 +19,25 @@ package io.prometheus
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.Joiner
 import io.grpc.Attributes
-import io.prometheus.common.*
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
+import io.prometheus.common.ConfigVals
+import io.prometheus.common.GenericService
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
+import io.prometheus.common.getBanner
+import io.prometheus.common.getVersionDesc
+import io.prometheus.common.newMapHealthCheck
+import io.prometheus.common.sleepForMillis
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
-import io.prometheus.proxy.*
+import io.prometheus.proxy.AgentContextCleanupService
+import io.prometheus.proxy.AgentContextManager
+import io.prometheus.proxy.PathManager
 import io.prometheus.proxy.ProxyGrpcService.Companion.newProxyGrpcService
+import io.prometheus.proxy.ProxyHttpService
+import io.prometheus.proxy.ProxyMetrics
+import io.prometheus.proxy.ProxyOptions
+import io.prometheus.proxy.ScrapeRequestManager
 import mu.KLogging
 import kotlin.properties.Delegates
 
@@ -110,6 +121,7 @@ class Proxy(options: ProxyOptions,
                                          agentContextManager
                                                  .agentContextMap
                                                  .entries
+                                                 .asSequence()
                                                  .filter { it.value.scrapeRequestQueueSize >= unhealthySize }
                                                  .map { "${it.value} ${it.value.scrapeRequestQueueSize}" }
                                                  .toList()
