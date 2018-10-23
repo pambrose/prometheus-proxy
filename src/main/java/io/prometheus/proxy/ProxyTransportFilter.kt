@@ -25,11 +25,7 @@ import mu.KLogging
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
     private fun getRemoteAddr(attributes: Attributes) =
-            attributes.keys()
-                    .first { "remote-addr" == it.toString() }
-                    ?.let {
-                        attributes.get(it)?.toString() ?: "Unknown"
-                    } ?: "Unknown"
+            attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"
 
     override fun transportReady(attributes: Attributes): Attributes {
         val agentContext = AgentContext(proxy, getRemoteAddr(attributes))
@@ -55,5 +51,7 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
         super.transportTerminated(attributes)
     }
 
-    companion object : KLogging()
+    companion object : KLogging() {
+        val REMOTE_ADDR_KEY: Attributes.Key<String> = Attributes.Key.create("remote-addr")
+    }
 }

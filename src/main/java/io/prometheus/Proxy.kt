@@ -159,7 +159,7 @@ class Proxy(options: ProxyOptions,
 
     companion object : KLogging() {
         const val AGENT_ID = "agent-id"
-        val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.of(AGENT_ID)
+        val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
 
         @JvmStatic
         fun main(argv: Array<String>) {

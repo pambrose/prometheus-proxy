@@ -63,7 +63,7 @@ fun getBanner(filename: String, logger: Logger) =
 
                 val vals = lines
                         .asSequence()
-                        .filter { arg ->
+                        .filter { _ ->
                             val currLine = lineNum++
                             currLine in first..last
                         }
