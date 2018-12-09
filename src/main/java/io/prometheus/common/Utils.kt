@@ -50,8 +50,8 @@ fun getBanner(filename: String, logger: Logger) =
                 var first = -1
                 var last = -1
                 var lineNum = 0
-                lines.forEach {
-                    if (it.trim { it <= ' ' }.isNotEmpty()) {
+                lines.forEach { arg1 ->
+                    if (arg1.trim { arg2 -> arg2 <= ' ' }.isNotEmpty()) {
                         if (first == -1)
                             first = lineNum
                         last = lineNum
@@ -62,11 +62,12 @@ fun getBanner(filename: String, logger: Logger) =
                 lineNum = 0
 
                 val vals = lines
+                        .asSequence()
                         .filter {
                             val currLine = lineNum++
                             currLine in first..last
                         }
-                        .map { "     $it" }
+                        .map { arg -> "     $arg" }
                         .toList()
 
                 val noNulls = Joiner.on("\n").skipNulls().join(vals)

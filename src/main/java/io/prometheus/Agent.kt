@@ -28,19 +28,41 @@ import io.grpc.ClientInterceptors.intercept
 import io.grpc.ManagedChannel
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
-import io.prometheus.agent.*
-import io.prometheus.common.*
+import io.prometheus.agent.AgentClientInterceptor
+import io.prometheus.agent.AgentMetrics
+import io.prometheus.agent.AgentOptions
+import io.prometheus.agent.PathContext
+import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
+import io.prometheus.common.ConfigVals
+import io.prometheus.common.GenericService
+import io.prometheus.common.InstrumentedThreadFactory
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
+import io.prometheus.common.getBanner
+import io.prometheus.common.getVersionDesc
+import io.prometheus.common.localHostName
+import io.prometheus.common.newQueueHealthCheck
+import io.prometheus.common.sleepForMillis
+import io.prometheus.common.toMillis
 import io.prometheus.delegate.AtomicDelegates.atomicLong
 import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ThreadDsl.threadFactory
-import io.prometheus.grpc.*
-import io.prometheus.grpc.ProxyServiceGrpc.*
+import io.prometheus.grpc.AgentInfo
+import io.prometheus.grpc.HeartBeatRequest
+import io.prometheus.grpc.PathMapSizeRequest
+import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
+import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
+import io.prometheus.grpc.ProxyServiceGrpc.newBlockingStub
+import io.prometheus.grpc.ProxyServiceGrpc.newStub
+import io.prometheus.grpc.RegisterAgentRequest
+import io.prometheus.grpc.RegisterPathRequest
+import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.grpc.ScrapeResponse
+import io.prometheus.grpc.UnregisterPathRequest
 import mu.KLogging
 import okhttp3.OkHttpClient
 import java.io.IOException
@@ -98,6 +120,7 @@ class Agent(options: AgentOptions,
 
     private val pathConfigs =
             configVals.pathConfigs
+                    .asSequence()
                     .map { mapOf("name" to it.name, "path" to it.path, "url" to it.url) }
                     .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
                     .toList()

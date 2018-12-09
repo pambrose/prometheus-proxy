@@ -22,7 +22,20 @@ import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
 import io.prometheus.Proxy
 import io.prometheus.dsl.GrpcDsl.streamObserver
-import io.prometheus.grpc.*
+import io.prometheus.grpc.AgentInfo
+import io.prometheus.grpc.HeartBeatRequest
+import io.prometheus.grpc.HeartBeatResponse
+import io.prometheus.grpc.PathMapSizeRequest
+import io.prometheus.grpc.PathMapSizeResponse
+import io.prometheus.grpc.ProxyServiceGrpc
+import io.prometheus.grpc.RegisterAgentRequest
+import io.prometheus.grpc.RegisterAgentResponse
+import io.prometheus.grpc.RegisterPathRequest
+import io.prometheus.grpc.RegisterPathResponse
+import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.grpc.ScrapeResponse
+import io.prometheus.grpc.UnregisterPathRequest
+import io.prometheus.grpc.UnregisterPathResponse
 import mu.KLogging
 import java.util.concurrent.atomic.AtomicLong
 
@@ -179,9 +192,9 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
                 onError {
                     Status.fromThrowable(it)
-                            .let {
-                                if (it !== Status.CANCELLED)
-                                    logger.info { "Error in writeResponsesToProxy(): $it" }
+                            .let { arg ->
+                                if (arg !== Status.CANCELLED)
+                                    logger.info { "Error in writeResponsesToProxy(): $arg" }
                             }
 
                     try {
