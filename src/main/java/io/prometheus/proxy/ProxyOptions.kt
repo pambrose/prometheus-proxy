@@ -20,17 +20,19 @@ import com.beust.jcommander.Parameter
 import com.google.common.collect.Iterables
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
-import io.prometheus.common.EnvVars.*
+import io.prometheus.common.EnvVars.AGENT_PORT
+import io.prometheus.common.EnvVars.PROXY_CONFIG
+import io.prometheus.common.EnvVars.PROXY_PORT
 
 class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
 
     constructor(args: List<String>) : this(Iterables.toArray<String>(args, String::class.java))
 
-    @Parameter(names = ["-p", "--port"], description = "Listen port for Prometheus")
-    var proxyPort: Int = -1
+    @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
+    var proxyHttpPort: Int = -1
         private set
-    @Parameter(names = ["-a", "--agent_port"], description = "Listen port for agents")
-    var agentPort: Int = -1
+    @Parameter(names = ["-a", "--agent_port"], description = "gRPC listen port for Agents")
+    var proxyAgentPort: Int = -1
         private set
 
     init {
@@ -38,11 +40,11 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
     }
 
     override fun assignConfigVals() {
-        if (proxyPort == -1)
-            proxyPort = PROXY_PORT.getEnv(configVals.proxy.http.port)
+        if (proxyHttpPort == -1)
+            proxyHttpPort = PROXY_PORT.getEnv(configVals.proxy.http.port)
 
-        if (agentPort == -1)
-            agentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port)
+        if (proxyAgentPort == -1)
+            proxyAgentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port)
 
         assignAdminEnabled(configVals.proxy.admin.enabled)
         assignAdminPort(configVals.proxy.admin.port)

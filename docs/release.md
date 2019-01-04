@@ -24,4 +24,4 @@ upload the *target/distro/prometheus-proxy.jar* and  *target/distro/prometheus-a
 11) Build and push docker images with: `make docker-build docker-push`
 
 12) Update the *prometheus-proxy* and *prometheus-agent* repository descriptions 
-on [Docker hub](https://hub.docker.com) with the latest `~~~~**_****_**~~~~`version of *README.md*.
+on [Docker hub](https://hub.docker.com) with the latest version of *README.md*.

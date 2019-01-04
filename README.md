@@ -5,12 +5,11 @@
 [![codebeat badge](https://codebeat.co/badges/8dbe1dc6-628e-44a4-99f9-d468831ff0cc)](https://codebeat.co/projects/github-com-pambrose-prometheus-proxy-master)
 [![Code Climate](https://codeclimate.com/github/pambrose/prometheus-proxy/badges/gpa.svg)](https://codeclimate.com/github/pambrose/prometheus-proxy)
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
-[![Dependency Status](https://www.versioneye.com/user/projects/5a4c7a110fb24f0536e5b92f/badge.svg?style=flat-square)](https://www.versioneye.com/user/projects/5a4c7a110fb24f0536e5b92f)
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for 
-collecting metrics. The pull model is problematic when a Prometheus server and its metrics endpoints are separated 
-by a firewall. [Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to 
-reach metrics endpoints running behind a firewall and preserves the pull model. 
+collecting metrics. The pull model is problematic when a Prometheus server and its metrics endpoints are separated by a 
+firewall. [Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints 
+running behind a firewall and preserves the pull model. 
 
 Endpoints running behind a firewall require a Prometheus Agent to be run inside the firewall. 
 An Agent can run as a stand-alone server, embedded in another java server or as a java agent. 
@@ -86,8 +85,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-$ docker pull pambrose/prometheus-proxy:1.3.8
-$ docker pull pambrose/prometheus-agent:1.3.8
+$ docker pull pambrose/prometheus-proxy:1.3.9
+$ docker pull pambrose/prometheus-agent:1.3.9
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
@@ -96,14 +95,14 @@ Start the proxy and an agent in separate shells on your local machine:
 $ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
         -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.3.8
+        pambrose/prometheus-proxy:1.3.9
 ```
 
 ```bash
 $ docker run --rm -p 8083:8083 -p 8093:8093 \
         -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.3.8
+        pambrose/prometheus-agent:1.3.9
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
@@ -130,7 +129,7 @@ The only required argument is an Agent config value, which should have an `agent
 |:--------------------|:----------------|:-----------------------|:-------|:---------------------------------------|
 | -c --config         | PROXY_CONFIG    |                        |        | Agent config file or url               |
 | -p --port           | PROXY_PORT      | proxy.http.port        | 8080   | Proxy listen port                      |
-| -a --agent_port     | AGENT_PORT      | proxy.agent.port       | 50051  | Grpc listen port                       |
+| -a --agent_port     | AGENT_PORT      | proxy.agent.port       | 50051  | gRPC listen port for Agents            |
 | -r --admin          | ADMIN_ENABLED   | proxy.admin.enabled    | false  | Enable admin servlets                  |
 | -i --admin_port     | ADMIN_PORT      | proxy.admin.port       | 8092   | Admin servlets port                    |
 | -e --metrics        | METRICS_ENABLED | proxy.metrics.enabled  | false  | Enable proxy metrics                   |

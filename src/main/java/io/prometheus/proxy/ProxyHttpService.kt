@@ -18,7 +18,9 @@ package io.prometheus.proxy
 
 import brave.Tracing
 import brave.sparkjava.SparkTracing
-import com.google.common.net.HttpHeaders.*
+import com.google.common.net.HttpHeaders.ACCEPT
+import com.google.common.net.HttpHeaders.ACCEPT_ENCODING
+import com.google.common.net.HttpHeaders.CONTENT_ENCODING
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
 import io.prometheus.common.sleepForSecs
@@ -34,13 +36,13 @@ import spark.Spark
 import java.net.BindException
 import kotlin.properties.Delegates
 
-class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleService() {
+class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
     private val configVals = proxy.configVals
     private var tracing: Tracing by Delegates.notNull()
     private val httpServer =
             httpServer {
-                initExceptionHandler { e -> sparkExceptionHandler(e, port) }
-                port(port)
+                initExceptionHandler { e -> sparkExceptionHandler(e, httpPort) }
+                port(httpPort)
                 threadPool(configVals.http.maxThreads,
                            configVals.http.minThreads,
                            configVals.http.idleTimeoutMillis)
@@ -176,7 +178,7 @@ class ProxyHttpService(private val proxy: Proxy, val port: Int) : GenericIdleSer
             proxy.metrics.scrapeRequests.labels(type).inc()
     }
 
-    override fun toString() = toStringElements { add("port", port) }
+    override fun toString() = toStringElements { add("port", httpPort) }
 
     companion object : KLogging() {
         fun sparkExceptionHandler(e: Exception, port: Int) {

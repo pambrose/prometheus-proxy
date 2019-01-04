@@ -44,7 +44,7 @@ object TestUtils : KLogging() {
                                          add("-Dproxy.admin.enabled=$adminEnabled")
                                          add("-Dproxy.metrics.enabled=$metricsEnabled")
                                      }),
-                     proxyPort = PROXY_PORT,
+                     proxyHttpPort = PROXY_PORT,
                      inProcessServerName = serverName,
                      testMode = true) { startSync() }
     }
