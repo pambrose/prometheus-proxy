@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@VersionAnnotation(version = "1.3.9", date = "12/08/18")
+@VersionAnnotation(version = "1.3.10", date = "01/04/19")
 package io.prometheus;
 
 import io.prometheus.common.VersionAnnotation;

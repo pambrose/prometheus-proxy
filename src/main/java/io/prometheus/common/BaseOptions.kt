@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,15 @@ import com.beust.jcommander.DynamicParameter
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
-import com.typesafe.config.*
-import io.prometheus.common.EnvVars.*
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import com.typesafe.config.ConfigParseOptions
+import com.typesafe.config.ConfigResolveOptions
+import com.typesafe.config.ConfigSyntax
+import io.prometheus.common.EnvVars.ADMIN_ENABLED
+import io.prometheus.common.EnvVars.ADMIN_PORT
+import io.prometheus.common.EnvVars.METRICS_ENABLED
+import io.prometheus.common.EnvVars.METRICS_PORT
 import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
