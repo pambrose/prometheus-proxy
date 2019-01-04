@@ -17,8 +17,8 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.Maps
-import io.prometheus.Proxy
 import io.prometheus.grpc.UnregisterPathResponse
+import mu.KLogging
 import java.util.concurrent.ConcurrentMap
 
 class PathManager(private val isTestMode: Boolean) {
@@ -34,12 +34,11 @@ class PathManager(private val isTestMode: Boolean) {
     val pathMapSize: Int
         get() = pathMap.size
 
-
     fun addPath(path: String, agentContext: AgentContext) {
         synchronized(pathMap) {
             pathMap[path] = agentContext
             if (!isTestMode)
-                Proxy.logger.info { "Added path /$path for $agentContext" }
+                logger.info { "Added path /$path for $agentContext" }
         }
     }
 
@@ -49,7 +48,7 @@ class PathManager(private val isTestMode: Boolean) {
             when {
                 agentContext == null            -> {
                     val msg = "Unable to remove path /$path - path not found"
-                    Proxy.logger.error { msg }
+                    logger.error { msg }
                     responseBuilder
                             .apply {
                                 this.valid = false
@@ -58,7 +57,7 @@ class PathManager(private val isTestMode: Boolean) {
                 }
                 agentContext.agentId != agentId -> {
                     val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
-                    Proxy.logger.error { msg }
+                    logger.error { msg }
                     responseBuilder
                             .apply {
                                 this.valid = false
@@ -68,7 +67,7 @@ class PathManager(private val isTestMode: Boolean) {
                 else                            -> {
                     pathMap.remove(path)
                     if (!isTestMode)
-                        Proxy.logger.info { "Removed path /$path for $agentContext" }
+                        logger.info { "Removed path /$path for $agentContext" }
                     responseBuilder
                             .apply {
                                 this.valid = true
@@ -81,14 +80,15 @@ class PathManager(private val isTestMode: Boolean) {
 
     fun removePathByAgentId(agentId: String?) =
             if (agentId.isNullOrEmpty())
-                Proxy.logger.error { "Missing agentId" }
+                logger.error { "Missing agentId" }
             else
                 synchronized(pathMap) {
                     pathMap.forEach { k, v ->
                         if (v.agentId == agentId)
-                            pathMap.remove(k)?.let { Proxy.logger.info { "Removed path /$k for $it" } }
-                            ?: Proxy.logger.error { "Missing path /$k for agentId: $agentId" }
+                            pathMap.remove(k)?.let { logger.info { "Removed path /$k for $it" } }
+                            ?: logger.error { "Missing path /$k for agentId: $agentId" }
                     }
                 }
 
+    companion object : KLogging()
 }

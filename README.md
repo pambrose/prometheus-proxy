@@ -129,7 +129,7 @@ The only required argument is an Agent config value, which should have an `agent
 |:--------------------|:----------------|:-----------------------|:-------|:---------------------------------------|
 | -c --config         | PROXY_CONFIG    |                        |        | Agent config file or url               |
 | -p --port           | PROXY_PORT      | proxy.http.port        | 8080   | Proxy listen port                      |
-| -a --agent_port     | AGENT_PORT      | proxy.agent.port       | 50051  | Grpc listen port                       |
+| -a --agent_port     | AGENT_PORT      | proxy.agent.port       | 50051  | gRPC listen port for Agents            |
 | -r --admin          | ADMIN_ENABLED   | proxy.admin.enabled    | false  | Enable admin servlets                  |
 | -i --admin_port     | ADMIN_PORT      | proxy.admin.port       | 8092   | Admin servlets port                    |
 | -e --metrics        | METRICS_ENABLED | proxy.metrics.enabled  | false  | Enable proxy metrics                   |

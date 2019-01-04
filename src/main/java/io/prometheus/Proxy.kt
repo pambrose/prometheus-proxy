@@ -42,7 +42,7 @@ import mu.KLogging
 import kotlin.properties.Delegates
 
 class Proxy(options: ProxyOptions,
-            proxyPort: Int = options.agentPort,
+            proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",
             testMode: Boolean = false,
             initBlock: (Proxy.() -> Unit)? = null) :
@@ -60,10 +60,10 @@ class Proxy(options: ProxyOptions,
     val agentContextManager = AgentContextManager()
     var metrics: ProxyMetrics by Delegates.notNull()
 
-    private val httpService = ProxyHttpService(this, proxyPort)
+    private val httpService = ProxyHttpService(this, proxyHttpPort)
     private val grpcService =
             if (inProcessServerName.isEmpty())
-                newProxyGrpcService(proxy = this, port = options.agentPort)
+                newProxyGrpcService(proxy = this, port = options.proxyAgentPort)
             else
                 newProxyGrpcService(proxy = this, serverName = inProcessServerName)
 
@@ -152,7 +152,7 @@ class Proxy(options: ProxyOptions,
 
     override fun toString() =
             toStringElements {
-                add("proxyPort", httpService.port)
+                add("proxyPort", httpService.httpPort)
                 add("adminService", if (isAdminEnabled) adminService else "Disabled")
                 add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
             }
