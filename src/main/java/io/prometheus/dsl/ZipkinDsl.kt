@@ -19,10 +19,10 @@ package io.prometheus.dsl
 import brave.Tracing
 
 object ZipkinDsl {
-    fun tracing(block: Tracing.Builder.() -> Unit): Tracing =
-            Tracing.newBuilder()
+    fun tracing(block: Tracing.Builder.() -> Unit) =
+            Tracing.newBuilder()!!
                     .run {
-                        block(this)
-                        build()
+                        block.invoke(this)
+                        build()!!
                     }
 }
