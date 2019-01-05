@@ -36,6 +36,13 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.GenericService
+import io.prometheus.common.GrpcObjects.Companion.newAgentInfo
+import io.prometheus.common.GrpcObjects.Companion.newHeartBeatRequest
+import io.prometheus.common.GrpcObjects.Companion.newPathMapSizeRequest
+import io.prometheus.common.GrpcObjects.Companion.newRegisterAgentRequest
+import io.prometheus.common.GrpcObjects.Companion.newRegisterPathRequest
+import io.prometheus.common.GrpcObjects.Companion.newScrapeResponse
+import io.prometheus.common.GrpcObjects.Companion.newUnregisterPathRequest
 import io.prometheus.common.InstrumentedThreadFactory
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
@@ -51,18 +58,12 @@ import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ThreadDsl.threadFactory
-import io.prometheus.grpc.AgentInfo
-import io.prometheus.grpc.HeartBeatRequest
-import io.prometheus.grpc.PathMapSizeRequest
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
 import io.prometheus.grpc.ProxyServiceGrpc.newBlockingStub
 import io.prometheus.grpc.ProxyServiceGrpc.newStub
-import io.prometheus.grpc.RegisterAgentRequest
-import io.prometheus.grpc.RegisterPathRequest
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
-import io.prometheus.grpc.UnregisterPathRequest
 import mu.KLogging
 import okhttp3.OkHttpClient
 import java.io.IOException
@@ -103,12 +104,14 @@ class Agent(options: AgentOptions,
                                             threadFactory {
                                                 setNameFormat("agent_fetch" + "-%d")
                                                 setDaemon(true)
-                                            }, "agent_fetch", "Agent fetch")
+                                            },
+                                            "agent_fetch",
+                                            "Agent fetch")
                                 else
                                     threadFactory {
                                         setNameFormat("agent_fetch-%d")
                                         setDaemon(true)
-                                    })
+                                    })!!
 
     private var tracing: Tracing by notNull()
     private var grpcTracing: GrpcTracing by notNull()
@@ -116,12 +119,12 @@ class Agent(options: AgentOptions,
     private val hostName: String
     private val port: Int
     private val reconnectLimiter =
-            RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs).apply { acquire() } // Prime the limiter
+            RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs)!!.apply { acquire() } // Prime the limiter
 
     private val pathConfigs =
             configVals.pathConfigs
                     .asSequence()
-                    .map { mapOf("name" to it.name, "path" to it.path, "url" to it.url) }
+                    .map { mapOf("name" to it.name!!, "path" to it.path!!, "url" to it.url!!) }
                     .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
                     .toList()
 
@@ -203,7 +206,6 @@ class Agent(options: AgentOptions,
 
     override fun serviceName() = "${javaClass.simpleName} $agentName"
 
-    @Throws(RequestFailureException::class)
     private fun connectToProxy() {
         val disconnected = AtomicBoolean(false)
 
@@ -276,26 +278,16 @@ class Agent(options: AgentOptions,
     private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
         var statusCode = 404
         val path = scrapeRequest.path
-        val scrapeResponse =
-                ScrapeResponse.newBuilder()
-                        .apply {
-                            this.agentId = scrapeRequest.agentId
-                            this.scrapeId = scrapeRequest.scrapeId
-                        }
         val pathContext = pathContextMap[path]
 
         if (pathContext == null) {
             logger.warn { "Invalid path in fetchUrl(): $path" }
             updateScrapeCounter("invalid_path")
-            return scrapeResponse
-                    .run {
-                        this.valid = false
-                        this.reason = "Invalid path: $path"
-                        this.statusCode = statusCode
-                        this.text = ""
-                        this.contentType = ""
-                        build()
-                    }
+            return newScrapeResponse(false,
+                                     "Invalid path: $path",
+                                     scrapeRequest.agentId,
+                                     scrapeRequest.scrapeId,
+                                     statusCode)
         }
 
         val requestTimer = if (isMetricsEnabled) metrics.scrapeRequestLatency.labels(agentName).startTimer() else null
@@ -306,15 +298,13 @@ class Agent(options: AgentOptions,
                 statusCode = it.code()
                 if (it.isSuccessful) {
                     updateScrapeCounter("success")
-                    return scrapeResponse
-                            .run {
-                                valid = true
-                                reason = ""
-                                this.statusCode = statusCode
-                                text = it.body()?.string().orEmpty()
-                                contentType = it.header(CONTENT_TYPE)
-                                build()
-                            }
+                    return newScrapeResponse(true,
+                                             "",
+                                             scrapeRequest.agentId,
+                                             scrapeRequest.scrapeId,
+                                             statusCode,
+                                             it.body()?.string().orEmpty(),
+                                             it.header(CONTENT_TYPE) ?: "")
                 }
                 else {
                     reason = "Unsucessful response code $statusCode"
@@ -331,15 +321,11 @@ class Agent(options: AgentOptions,
 
         updateScrapeCounter("unsuccessful")
 
-        return scrapeResponse
-                .run {
-                    valid = false
-                    this.reason = reason
-                    this.statusCode = statusCode
-                    text = ""
-                    contentType = ""
-                    build()
-                }
+        return newScrapeResponse(false,
+                                 reason,
+                                 scrapeRequest.agentId,
+                                 scrapeRequest.scrapeId,
+                                 statusCode)
     }
 
     // If successful, this will create an agentContxt on the Proxy and an interceptor will add an agent_id to the headers`
@@ -360,21 +346,13 @@ class Agent(options: AgentOptions,
 
     @Throws(RequestFailureException::class)
     private fun registerAgent() {
-        val request =
-                RegisterAgentRequest.newBuilder()
-                        .run {
-                            agentId = this@Agent.agentId
-                            agentName = this@Agent.agentName
-                            hostName = this@Agent.hostName
-                            build()
-                        }
+        val request = newRegisterAgentRequest(agentId, agentName, hostName)
         blockingStub.registerAgent(request)
                 .let {
                     markMsgSent()
                     if (!it.valid)
                         throw RequestFailureException("registerAgent() - ${it.reason}")
                 }
-
         initialConnectionLatch.countDown()
     }
 
@@ -406,13 +384,8 @@ class Agent(options: AgentOptions,
     }
 
     fun pathMapSize(): Int {
-        val request =
-                PathMapSizeRequest.newBuilder()
-                        .run {
-                            agentId = this@Agent.agentId
-                            build()
-                        }
-        blockingStub.pathMapSize(request)
+        val request = newPathMapSizeRequest(agentId)
+        blockingStub.pathMapSize(request)!!
                 .let {
                     markMsgSent()
                     return it.pathCount
@@ -421,14 +394,8 @@ class Agent(options: AgentOptions,
 
     @Throws(RequestFailureException::class)
     private fun registerPathOnProxy(path: String): Long {
-        val request =
-                RegisterPathRequest.newBuilder()
-                        .run {
-                            agentId = this@Agent.agentId
-                            this.path = path
-                            build()
-                        }
-        blockingStub.registerPath(request)
+        val request = newRegisterPathRequest(agentId, path)
+        blockingStub.registerPath(request)!!
                 .let {
                     markMsgSent()
                     if (!it.valid)
@@ -439,14 +406,8 @@ class Agent(options: AgentOptions,
 
     @Throws(RequestFailureException::class)
     private fun unregisterPathOnProxy(path: String) {
-        val request =
-                UnregisterPathRequest.newBuilder()
-                        .run {
-                            agentId = this@Agent.agentId
-                            this.path = path
-                            build()
-                        }
-        blockingStub.unregisterPath(request)
+        val request = newUnregisterPathRequest(agentId, path)
+        blockingStub.unregisterPath(request)!!
                 .let {
                     markMsgSent()
                     if (!it.valid)
@@ -465,20 +426,14 @@ class Agent(options: AgentOptions,
             }
 
     private fun readRequestsFromProxy(disconnected: AtomicBoolean) {
-        val agentInfo =
-                AgentInfo.newBuilder()
-                        .run {
-                            agentId = this@Agent.agentId
-                            build()
-                        }
+        val agentInfo = newAgentInfo(agentId)
 
         val observer =
                 streamObserver<ScrapeRequest> {
                     onNext { readRequestsExecutorService.submit(readRequestAction(it)) }
 
                     onError {
-                        val status = Status.fromThrowable(it)
-                        logger.error { "Error in readRequestsFromProxy(): $status" }
+                        logger.error { "Error in readRequestsFromProxy(): ${Status.fromThrowable(it)}" }
                         disconnected.set(true)
                     }
 
@@ -500,7 +455,7 @@ class Agent(options: AgentOptions,
                             }
 
                             onError {
-                                val s = Status.fromThrowable(it)
+                                val s = Status.fromThrowable(it)!!
                                 logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
                                 disconnected.set(true)
                             }
@@ -534,12 +489,7 @@ class Agent(options: AgentOptions,
             return
 
         try {
-            val request =
-                    HeartBeatRequest.newBuilder()
-                            .run {
-                                agentId = this@Agent.agentId
-                                build()
-                            }
+            val request = newHeartBeatRequest(agentId)
             blockingStub.sendHeartBeat(request)
                     .let {
                         markMsgSent()

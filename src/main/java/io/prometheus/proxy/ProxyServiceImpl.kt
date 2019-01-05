@@ -21,6 +21,11 @@ import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
 import io.prometheus.Proxy
+import io.prometheus.common.GrpcObjects.Companion.newHeartBeatResponse
+import io.prometheus.common.GrpcObjects.Companion.newPathMapSizeResponse
+import io.prometheus.common.GrpcObjects.Companion.newRegisterAgentResponse
+import io.prometheus.common.GrpcObjects.Companion.newRegisterPathResponse
+import io.prometheus.common.GrpcObjects.Companion.newUnregisterPathResponseBuilder
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.HeartBeatRequest
@@ -65,14 +70,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
         responseObserver
                 .apply {
-                    onNext(
-                            RegisterAgentResponse.newBuilder()
-                                    .run {
-                                        this.reason = "Invalid agentId: $agentId"
-                                        this.valid = valid
-                                        this.agentId = agentId
-                                        build()
-                                    })
+                    onNext(newRegisterAgentResponse(valid, "Invalid agentId: $agentId", agentId))
                     onCompleted()
                 }
     }
@@ -95,25 +93,19 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
         responseObserver
                 .apply {
-                    onNext(
-                            RegisterPathResponse.newBuilder()
-                                    .run {
-                                        this.valid = valid
-                                        this.reason = "Invalid agentId: $agentId"
-                                        this.pathCount = proxy.pathManager.pathMapSize()
-                                        this.pathId = if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1
-                                        build()
-                                    })
+                    onNext(newRegisterPathResponse(valid,
+                                                   "Invalid agentId: $agentId",
+                                                   proxy.pathManager.pathMapSize(),
+                                                   if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1))
                     onCompleted()
                 }
     }
 
     override fun unregisterPath(request: UnregisterPathRequest,
                                 responseObserver: StreamObserver<UnregisterPathResponse>) {
-        val path = request.path
-        val agentId = request.agentId
+        val agentId = request.agentId!!
         val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-        val responseBuilder = UnregisterPathResponse.newBuilder()
+        val responseBuilder = newUnregisterPathResponseBuilder()
 
         if (agentContext == null) {
             logger.error { "Missing AgentContext for agentId: $agentId" }
@@ -124,7 +116,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                     }
         }
         else {
-            proxy.pathManager.removePath(path, agentId, responseBuilder)
+            proxy.pathManager.removePath(request.path, agentId, responseBuilder)
             agentContext.markActivity()
         }
 
@@ -138,12 +130,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
     override fun pathMapSize(request: PathMapSizeRequest, responseObserver: StreamObserver<PathMapSizeResponse>) {
         responseObserver
                 .apply {
-                    onNext(
-                            PathMapSizeResponse.newBuilder()
-                                    .run {
-                                        pathCount = proxy.pathManager.pathMapSize()
-                                        build()
-                                    })
+                    onNext(newPathMapSizeResponse(proxy.pathManager.pathMapSize()))
                     onCompleted()
                 }
     }
@@ -156,13 +143,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
         responseObserver
                 .apply {
-                    onNext(
-                            HeartBeatResponse.newBuilder()
-                                    .run {
-                                        this.valid = agentContext != null
-                                        this.reason = "Invalid agentId: ${request.agentId}"
-                                        build()
-                                    })
+                    onNext(newHeartBeatResponse(agentContext != null, "Invalid agentId: ${request.agentId}"))
                     onCompleted()
                 }
     }
