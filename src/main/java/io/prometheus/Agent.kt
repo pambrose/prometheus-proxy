@@ -89,15 +89,13 @@ class Agent(options: AgentOptions,
                        newZipkinConfig(options.configVals.agent.internal.zipkin),
                        testMode) {
 
-    private val pathContextMap = newConcurrentMap<String, PathContext>()  // Map path to PathContext
+    private val pathContextMap = newConcurrentMap<String, PathContext>()!!
     private val heartbeatService = newFixedThreadPool(1)
     private val initialConnectionLatch = CountDownLatch(1)
     private val okHttpClient = OkHttpClient()
+    private var isGrpcStarted = AtomicBoolean(false)
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
-    private val agentName: String = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
-    private var metrics: AgentMetrics by notNull()
-    private var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
-    private var asyncStub: ProxyServiceStub by nonNullableReference()
+    private val agentName = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
     private val readRequestsExecutorService =
             newCachedThreadPool(if (isMetricsEnabled)
                                     InstrumentedThreadFactory(
@@ -113,11 +111,6 @@ class Agent(options: AgentOptions,
                                         setDaemon(true)
                                     })!!
 
-    private var tracing: Tracing by notNull()
-    private var grpcTracing: GrpcTracing by notNull()
-
-    private val hostName: String
-    private val port: Int
     private val reconnectLimiter =
             RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs)!!.apply { acquire() } // Prime the limiter
 
@@ -129,10 +122,17 @@ class Agent(options: AgentOptions,
                     .toList()
 
     private var lastMsgSent by atomicLong()
+    private var tracing: Tracing by notNull()
+    private var grpcTracing: GrpcTracing by notNull()
+    private var metrics: AgentMetrics by notNull()
+    private var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
+    private var asyncStub: ProxyServiceStub by nonNullableReference()
 
-    private var isGrpcStarted = AtomicBoolean(false)
     var channel: ManagedChannel by nonNullableReference()
     var agentId: String by nonNullableReference()
+
+    private val hostName: String
+    private val port: Int
 
     private val proxyHost
         get() = "$hostName:$port"
@@ -294,22 +294,23 @@ class Agent(options: AgentOptions,
         var reason = "None"
 
         try {
-            pathContext.fetchUrl(scrapeRequest).use {
-                statusCode = it.code()
-                if (it.isSuccessful) {
-                    updateScrapeCounter("success")
-                    return newScrapeResponse(true,
-                                             "",
-                                             scrapeRequest.agentId,
-                                             scrapeRequest.scrapeId,
-                                             statusCode,
-                                             it.body()?.string().orEmpty(),
-                                             it.header(CONTENT_TYPE) ?: "")
-                }
-                else {
-                    reason = "Unsucessful response code $statusCode"
-                }
-            }
+            pathContext.fetchUrl(scrapeRequest)
+                    .use {
+                        statusCode = it.code()
+                        if (it.isSuccessful) {
+                            updateScrapeCounter("success")
+                            return newScrapeResponse(true,
+                                                     "",
+                                                     scrapeRequest.agentId,
+                                                     scrapeRequest.scrapeId,
+                                                     statusCode,
+                                                     it.body()?.string().orEmpty(),
+                                                     it.header(CONTENT_TYPE) ?: "")
+                        }
+                        else {
+                            reason = "Unsucessful response code $statusCode"
+                        }
+                    }
         } catch (e: IOException) {
             reason = "${e.javaClass.simpleName} - ${e.message}"
         } catch (e: Exception) {
