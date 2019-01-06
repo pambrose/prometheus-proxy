@@ -29,10 +29,10 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
     constructor(args: List<String>) : this(Iterables.toArray<String>(args, String::class.java))
 
     @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
-    var proxyHttpPort: Int = -1
+    var proxyHttpPort = -1
         private set
     @Parameter(names = ["-a", "--agent_port"], description = "gRPC listen port for Agents")
-    var proxyAgentPort: Int = -1
+    var proxyAgentPort = -1
         private set
 
     init {

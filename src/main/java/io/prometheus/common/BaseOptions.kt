@@ -41,10 +41,10 @@ abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val exitOnMissingConfig: Boolean = false) {
 
     @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
-    private var configName: String = ""
+    private var configName = ""
 
     @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
-    var adminEnabled: Boolean = false
+    var adminEnabled = false
         private set
 
     @Parameter(names = ["-i", "--admin_port"], description = "Admin servlets port")
@@ -52,11 +52,11 @@ abstract class BaseOptions protected constructor(private val progName: String,
         private set
 
     @Parameter(names = ["-e", "--metrics"], description = "Metrics enabled")
-    var metricsEnabled: Boolean = false
+    var metricsEnabled = false
         private set
 
     @Parameter(names = ["-m", "--metrics_port"], description = "Metrics listen port")
-    var metricsPort: Int = -1
+    var metricsPort = -1
         private set
 
     @Parameter(names = ["-v", "--version"],
