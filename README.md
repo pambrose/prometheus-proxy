@@ -9,11 +9,20 @@
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for 
 collecting metrics. The pull model is problematic when a Prometheus server and its metrics endpoints are separated by a 
 firewall. [Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints 
-running behind a firewall and preserves the pull model. 
+running behind a firewall and preserves the pull model.
 
-Endpoints running behind a firewall require a Prometheus Agent to be run inside the firewall. 
-An Agent can run as a stand-alone server, embedded in another java server or as a java agent. 
-Agents connect to a Proxy and register the paths for which they will provide data. A Proxy can work one or many Agents.
+`prometheus-proxy` runtime is broken up into 2 microservices:
+
+* `proxy`: Runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
+* `agent`: Runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
+
+Here's a simplified network diagram of how the deployed `proxy` and `agent` work:
+
+![network diagram](https://rakhbari.github.io/prometheus-proxy/images/prometheus-proxy.png)
+
+Endpoints running behind a firewall require a `prometheus-agent` (the `agent`) to be run inside the firewall.
+An `agent` can run as a stand-alone server, embedded in another java server, or as a java agent.
+`agent`s connect to a `prometheus-proxy` (the `proxy`) and register the paths for which they will provide data. One `proxy` can work one or many `agent`s.
 
 ## CLI Usage
 
@@ -31,7 +40,8 @@ Start an agent with:
 $ java -jar prometheus-agent.jar -Dagent.proxy.hostname=proxy.local --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
 ```
 
-If prometheus-proxy were running on a machine named *proxy.local* and the 
+
+If prometheus-proxy were running on a machine named *proxy.local* and the
 `agent.pathConfigs` value in the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) 
 config file had these values:
 
@@ -41,17 +51,17 @@ agent {
     {
       name: myApp1
       path: myapp1_metrics
-      url: "http://myapp1.local:8080/metrics"
+      url: "http://myapp1.local:9100/metrics"
     },
     {
       name: myApp2
       path: myapp2_metrics
-      url: "http://myapp2.local:8080/metrics"
+      url: "http://myapp2.local:9100/metrics"
     },
     {
       name: myApp3
       path: myapp3_metrics
-      url: "http://myapp3.local:8080/metrics"
+      url: "http://myapp3.local:9100/metrics"
     }
   ]
 }
@@ -104,6 +114,18 @@ $ docker run --rm -p 8083:8083 -p 8093:8093 \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         pambrose/prometheus-agent:1.3.10
 ```
+
+If you want to be able to externalize your `agent` config file on your local machine (or VM) file system (instead of the above HTTP served config file), you'll need to add the Docker `volume` definition to the command:
+
+```bash
+$ docker run --rm -p 8083:8083 -p 8093:8093 \
+    -v ${PWD}/prom-agent.conf:/prom-agent.conf \
+    -e HOSTNAME=${HOSTNAME} \
+    -e AGENT_CONFIG=/prom-agent.conf \
+    pambrose/prometheus-agent:1.3.9
+```
+
+The above assumes that you have the file `prom-agent.conf` in the current directory from which you're running the `docker` command.
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy on *localhost* at:
