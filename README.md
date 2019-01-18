@@ -18,7 +18,7 @@ running behind a firewall and preserves the pull model.
 
 Here's a simplified network diagram of how the deployed `proxy` and `agent` work:
 
-![network diagram](https://rakhbari.github.io/prometheus-proxy/images/prometheus-proxy.png)
+![network diagram](https://github.com/pambrose/tiernan-lawsuit/raw/master/docs/prometheus-proxy.png)
 
 Endpoints running behind a firewall require a `prometheus-agent` (the `agent`) to be run inside the firewall.
 An `agent` can run as a stand-alone server, embedded in another java server, or as a java agent.
