@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,15 @@ import com.beust.jcommander.DynamicParameter
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
-import com.typesafe.config.*
-import io.prometheus.common.EnvVars.*
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import com.typesafe.config.ConfigParseOptions
+import com.typesafe.config.ConfigResolveOptions
+import com.typesafe.config.ConfigSyntax
+import io.prometheus.common.EnvVars.ADMIN_ENABLED
+import io.prometheus.common.EnvVars.ADMIN_PORT
+import io.prometheus.common.EnvVars.METRICS_ENABLED
+import io.prometheus.common.EnvVars.METRICS_PORT
 import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
@@ -34,10 +41,10 @@ abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val exitOnMissingConfig: Boolean = false) {
 
     @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
-    private var configName: String = ""
+    private var configName = ""
 
     @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
-    var adminEnabled: Boolean = false
+    var adminEnabled = false
         private set
 
     @Parameter(names = ["-i", "--admin_port"], description = "Admin servlets port")
@@ -45,11 +52,11 @@ abstract class BaseOptions protected constructor(private val progName: String,
         private set
 
     @Parameter(names = ["-e", "--metrics"], description = "Metrics enabled")
-    var metricsEnabled: Boolean = false
+    var metricsEnabled = false
         private set
 
     @Parameter(names = ["-m", "--metrics_port"], description = "Metrics listen port")
-    var metricsPort: Int = -1
+    var metricsPort = -1
         private set
 
     @Parameter(names = ["-v", "--version"],

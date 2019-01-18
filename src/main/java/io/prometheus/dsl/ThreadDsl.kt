@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,12 @@
 package io.prometheus.dsl
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
-import java.util.concurrent.ThreadFactory
 
 object ThreadDsl {
-    fun threadFactory(block: ThreadFactoryBuilder.() -> Unit): ThreadFactory =
+    fun threadFactory(block: ThreadFactoryBuilder.() -> Unit) =
             ThreadFactoryBuilder()
                     .run {
-                        block(this)
-                        build()
+                        block.invoke(this)
+                        build()!!
                     }
 }

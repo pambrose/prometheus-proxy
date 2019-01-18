@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ object GrpcDsl {
             else
                 InProcessChannelBuilder.forName(inProcessServerName))
                     .run {
-                        block(this)
+                        block.invoke(this)
                         build()
                     }
 
@@ -45,17 +45,17 @@ object GrpcDsl {
             (if (inProcessServerName.isEmpty())
                 ServerBuilder.forPort(port)
             else
-                InProcessServerBuilder.forName(inProcessServerName))
+                InProcessServerBuilder.forName(inProcessServerName))!!
                     .run {
-                        block(this)
+                        block.invoke(this)
                         build()
                     }
 
-    fun attributes(block: Attributes.Builder.() -> Unit): Attributes =
-            Attributes.newBuilder()
+    fun attributes(block: Attributes.Builder.() -> Unit) =
+            Attributes.newBuilder()!!
                     .run {
-                        block(this)
-                        build()
+                        block.invoke(this)
+                        build()!!
                     }
 
     fun <T> streamObserver(init: StreamObserverHelper<T>.() -> Unit) =

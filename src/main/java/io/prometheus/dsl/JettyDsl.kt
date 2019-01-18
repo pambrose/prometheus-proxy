@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@ import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletContextHandler
 
 object JettyDsl {
-    fun server(port: Int, block: Server.() -> Unit) = Server(port).apply { block(this) }
+    fun server(port: Int, block: Server.() -> Unit) = Server(port).apply { block.invoke(this) }
 
-    fun servletContextHandler(block: ServletContextHandler.() -> Unit) = ServletContextHandler().apply { block(this) }
+    fun servletContextHandler(block: ServletContextHandler.() -> Unit) =
+            ServletContextHandler().apply { block.invoke(this) }
 }

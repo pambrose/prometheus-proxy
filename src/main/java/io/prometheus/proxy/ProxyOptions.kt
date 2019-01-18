@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,10 +29,10 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
     constructor(args: List<String>) : this(Iterables.toArray<String>(args, String::class.java))
 
     @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
-    var proxyHttpPort: Int = -1
+    var proxyHttpPort = -1
         private set
     @Parameter(names = ["-a", "--agent_port"], description = "gRPC listen port for Agents")
-    var proxyAgentPort: Int = -1
+    var proxyAgentPort = -1
         private set
 
     init {

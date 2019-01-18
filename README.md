@@ -49,19 +49,19 @@ config file had these values:
 agent {
   pathConfigs: [
     {
-      name: myApp1
-      path: myapp1_metrics
-      url: "http://myapp1.local:9100/metrics"
+      name: app1
+      path: app1_metrics
+      url: "http://app1.local:9100/metrics"
     },
     {
-      name: myApp2
-      path: myapp2_metrics
-      url: "http://myapp2.local:9100/metrics"
+      name: app2
+      path: app2_metrics
+      url: "http://app2.local:9100/metrics"
     },
     {
-      name: myApp3
-      path: myapp3_metrics
-      url: "http://myapp3.local:9100/metrics"
+      name: app3
+      path: app3_metrics
+      url: "http://app3.local:9100/metrics"
     }
   ]
 }
@@ -69,24 +69,24 @@ agent {
 
 then the *prometheus.yml* scrape_config would target the three apps at:
 
-* http://proxy.local:8080/myapp1_metrics
-* http://proxy.local:8080/myapp2_metrics
-* http://proxy.local:8080/myapp3_metrics
+* http://proxy.local:8080/app1_metrics
+* http://proxy.local:8080/app2_metrics
+* http://proxy.local:8080/app3_metrics
 
 The `prometheus.yml` file would include:
 
 ```yaml
 scrape_configs:
-  - job_name: 'myapp1'
-    metrics_path: '/myapp1_metrics'
+  - job_name: 'app1'
+    metrics_path: '/app1_metrics'
     static_configs:
       - targets: ['proxy.local:8080']
-  - job_name: 'myapp2'
-    metrics_path: '/myapp2_metrics'
+  - job_name: 'app2'
+    metrics_path: '/app2_metrics'
     static_configs:
       - targets: ['proxy.local:8080']
-  - job_name: 'myapp3'
-    metrics_path: '/myapp3_metrics'
+  - job_name: 'app3'
+    metrics_path: '/app3_metrics'
     static_configs:
       - targets: ['proxy.local:8080']
 ```
@@ -95,8 +95,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-$ docker pull pambrose/prometheus-proxy:1.3.9
-$ docker pull pambrose/prometheus-agent:1.3.9
+$ docker pull pambrose/prometheus-proxy:1.3.10
+$ docker pull pambrose/prometheus-agent:1.3.10
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
@@ -105,14 +105,14 @@ Start the proxy and an agent in separate shells on your local machine:
 $ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
         -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.3.9
+        pambrose/prometheus-proxy:1.3.10
 ```
 
 ```bash
 $ docker run --rm -p 8083:8083 -p 8093:8093 \
         -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.3.9
+        pambrose/prometheus-agent:1.3.10
 ```
 
 If you want to be able to externalize your `agent` config file on your local machine (or VM) file system (instead of the above HTTP served config file), you'll need to add the Docker `volume` definition to the command:
