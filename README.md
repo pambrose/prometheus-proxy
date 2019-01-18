@@ -20,9 +20,10 @@ Here's a simplified network diagram of how the deployed `proxy` and `agent` work
 
 ![network diagram](https://github.com/pambrose/prometheus-proxy/raw/master/docs/prometheus-proxy.png)
 
-Endpoints running behind a firewall require a `prometheus-agent` (the `agent`) to be run inside the firewall.
-An `agent` can run as a stand-alone server, embedded in another java server, or as a java agent.
-`agent`s connect to a `prometheus-proxy` (the `proxy`) and register the paths for which they will provide data. One `proxy` can work one or many `agent`s.
+Endpoints running behind a firewall require a `prometheus-agent` (the agent) to be run inside the firewall.
+An agent can run as a stand-alone server, embedded in another java server, or as a java agent.
+Agents connect to a `prometheus-proxy` (the proxy) and register the paths for which they will provide data. 
+One proxy can work one or many agents.
 
 ## CLI Usage
 
