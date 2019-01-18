@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,11 @@
 
 package io.prometheus.proxy
 
-import io.grpc.*
+import io.grpc.ForwardingServerCall
+import io.grpc.Metadata
+import io.grpc.ServerCall
+import io.grpc.ServerCallHandler
+import io.grpc.ServerInterceptor
 import io.prometheus.Proxy
 
 class ProxyInterceptor : ServerInterceptor {

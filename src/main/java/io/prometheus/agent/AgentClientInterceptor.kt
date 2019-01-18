@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,14 @@
 
 package io.prometheus.agent
 
-import io.grpc.*
+import io.grpc.CallOptions
+import io.grpc.Channel
+import io.grpc.ClientCall
+import io.grpc.ClientInterceptor
+import io.grpc.ForwardingClientCall
+import io.grpc.ForwardingClientCallListener
+import io.grpc.Metadata
+import io.grpc.MethodDescriptor
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import mu.KLogging

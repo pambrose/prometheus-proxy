@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,9 @@ import io.prometheus.delegate.DelegatesExtensions.singleAssign
 
 object GuavaDsl {
     fun Any.toStringElements(block: MoreObjects.ToStringHelper.() -> Unit) =
-            MoreObjects.toStringHelper(this)
+            MoreObjects.toStringHelper(this)!!
                     .run {
-                        block(this)
+                        block.invoke(this)
                         toString()
                     }
 

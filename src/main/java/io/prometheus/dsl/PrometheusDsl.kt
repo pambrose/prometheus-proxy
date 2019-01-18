@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,24 +21,24 @@ import io.prometheus.client.Gauge
 import io.prometheus.client.Summary
 
 object PrometheusDsl {
-    fun counter(builder: Counter.Builder.() -> Unit): Counter =
+    fun counter(block: Counter.Builder.() -> Unit) =
             Counter.build()
                     .run {
-                        builder(this)
-                        register()
+                        block.invoke(this)
+                        register()!!
                     }
 
-    fun summary(builder: Summary.Builder.() -> Unit): Summary =
-            Summary.build()
+    fun summary(block: Summary.Builder.() -> Unit) =
+            Summary.build()!!
                     .run {
-                        builder(this)
-                        register()
+                        block.invoke(this)
+                        register()!!
                     }
 
-    fun gauge(builder: Gauge.Builder.() -> Unit): Gauge =
+    fun gauge(block: Gauge.Builder.() -> Unit) =
             Gauge.build()
                     .run {
-                        builder(this)
-                        register()
+                        block.invoke(this)
+                        register()!!
                     }
 }
