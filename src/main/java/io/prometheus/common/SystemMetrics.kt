@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,12 @@
 package io.prometheus.common
 
 import io.prometheus.client.Collector
-import io.prometheus.client.hotspot.*
+import io.prometheus.client.hotspot.ClassLoadingExports
+import io.prometheus.client.hotspot.GarbageCollectorExports
+import io.prometheus.client.hotspot.MemoryPoolsExports
+import io.prometheus.client.hotspot.StandardExports
+import io.prometheus.client.hotspot.ThreadExports
+import io.prometheus.client.hotspot.VersionInfoExports
 
 object SystemMetrics {
     private var initialized = false

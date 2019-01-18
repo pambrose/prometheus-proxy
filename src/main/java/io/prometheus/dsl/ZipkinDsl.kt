@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ package io.prometheus.dsl
 import brave.Tracing
 
 object ZipkinDsl {
-    fun tracing(block: Tracing.Builder.() -> Unit): Tracing =
-            Tracing.newBuilder()
+    fun tracing(block: Tracing.Builder.() -> Unit) =
+            Tracing.newBuilder()!!
                     .run {
-                        block(this)
-                        build()
+                        block.invoke(this)
+                        build()!!
                     }
 }

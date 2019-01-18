@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package io.prometheus.proxy
 
 import com.google.common.base.Preconditions
 import io.prometheus.Proxy
+import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
 import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeRequest
@@ -40,16 +41,10 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     var scrapeResponse: ScrapeResponse by AtomicDelegates.nonNullableReference()
 
-    val scrapeRequest: ScrapeRequest =
-            ScrapeRequest.newBuilder()
-                    .run {
-                        agentId = agentContext.agentId
-                        scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
-                        this.path = path
-                        if (!accept.isNullOrBlank())
-                            this.accept = accept
-                        build()
-                    }
+    val scrapeRequest: ScrapeRequest = newScrapeRequest(agentContext.agentId,
+                                                        SCRAPE_ID_GENERATOR.getAndIncrement(),
+                                                        path,
+                                                        accept)
 
     val scrapeId: Long
         get() = scrapeRequest.scrapeId
@@ -61,15 +56,12 @@ class ScrapeRequestWrapper(proxy: Proxy,
         complete.countDown()
     }
 
-    fun waitUntilCompleteMillis(waitMillis: Long): Boolean {
-        try {
-            return complete.await(waitMillis, TimeUnit.MILLISECONDS)
-        } catch (e: InterruptedException) {
-            // Ignore
-        }
-
-        return false
-    }
+    fun waitUntilCompleteMillis(waitMillis: Long): Boolean =
+            try {
+                complete.await(waitMillis, TimeUnit.MILLISECONDS)
+            } catch (e: InterruptedException) {
+                false
+            }
 
     override fun toString() =
             toStringElements {

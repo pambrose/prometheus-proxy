@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ import org.eclipse.jetty.servlet.ServletContextHandler
 import spark.Service
 
 object SparkDsl {
-    inline fun httpServer(block: Service.() -> Unit): Service =
-            Service.ignite().apply { block.invoke(this) }
+    inline fun httpServer(block: Service.() -> Unit) =
+            Service.ignite().apply { block.invoke(this) }!!
 
     inline fun servletContextHandler(block: ServletContextHandler.() -> Unit) =
             ServletContextHandler().apply { block.invoke(this) }
