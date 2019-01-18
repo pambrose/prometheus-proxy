@@ -49,19 +49,19 @@ config file had these values:
 agent {
   pathConfigs: [
     {
-      name: myApp1
-      path: myapp1_metrics
-      url: "http://myapp1.local:9100/metrics"
+      name: app1
+      path: app1_metrics
+      url: "http://app1.local:9100/metrics"
     },
     {
-      name: myApp2
-      path: myapp2_metrics
-      url: "http://myapp2.local:9100/metrics"
+      name: app2
+      path: app2_metrics
+      url: "http://app2.local:9100/metrics"
     },
     {
-      name: myApp3
-      path: myapp3_metrics
-      url: "http://myapp3.local:9100/metrics"
+      name: app3
+      path: app3_metrics
+      url: "http://app3.local:9100/metrics"
     }
   ]
 }
@@ -69,24 +69,24 @@ agent {
 
 then the *prometheus.yml* scrape_config would target the three apps at:
 
-* http://proxy.local:8080/myapp1_metrics
-* http://proxy.local:8080/myapp2_metrics
-* http://proxy.local:8080/myapp3_metrics
+* http://proxy.local:8080/app1_metrics
+* http://proxy.local:8080/app2_metrics
+* http://proxy.local:8080/app3_metrics
 
 The `prometheus.yml` file would include:
 
 ```yaml
 scrape_configs:
-  - job_name: 'myapp1'
-    metrics_path: '/myapp1_metrics'
+  - job_name: 'app1'
+    metrics_path: '/app1_metrics'
     static_configs:
       - targets: ['proxy.local:8080']
-  - job_name: 'myapp2'
-    metrics_path: '/myapp2_metrics'
+  - job_name: 'app2'
+    metrics_path: '/app2_metrics'
     static_configs:
       - targets: ['proxy.local:8080']
-  - job_name: 'myapp3'
-    metrics_path: '/myapp3_metrics'
+  - job_name: 'app3'
+    metrics_path: '/app3_metrics'
     static_configs:
       - targets: ['proxy.local:8080']
 ```
