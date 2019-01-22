@@ -22,7 +22,7 @@
 
     <groupId>io.prometheus</groupId>
     <artifactId>prometheus-proxy</artifactId>
-    <version>1.3.10-SNAPSHOT</version>
+    <version>1.3.11-SNAPSHOT</version>
 
     <properties>
         <kotlin.version>1.3.11</kotlin.version>
