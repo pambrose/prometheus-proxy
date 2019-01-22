@@ -123,15 +123,15 @@ $ docker run --rm -p 8083:8083 -p 8093:8093 \
     -v ${PWD}/prom-agent.conf:/prom-agent.conf \
     -e HOSTNAME=${HOSTNAME} \
     -e AGENT_CONFIG=/prom-agent.conf \
-    pambrose/prometheus-agent:1.3.9
+    pambrose/prometheus-agent:1.3.10
 ```
 
 The above assumes that you have the file `prom-agent.conf` in the current directory from which you're running the `docker` command.
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy on *localhost* at:
-* http://localohost:8080/proxy_metrics
-* http://localohost:8080/agent_metrics
+* http://localohost:8082/proxy_metrics
+* http://localohost:8083/agent_metrics
 
 ## Configuration
 
