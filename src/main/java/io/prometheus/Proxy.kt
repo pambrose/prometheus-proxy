@@ -85,11 +85,11 @@ class Proxy(options: ProxyOptions,
 
     override fun startUp() {
         super.startUp()
-        grpcService.apply { startSync() }
-        httpService.apply { startSync() }
+        grpcService.startSync()
+        httpService.startSync()
 
         if (configVals.internal.staleAgentCheckEnabled)
-            agentCleanupService.apply { startSync() }
+            agentCleanupService.startSync()
         else
             logger.info { "Agent eviction thread not started" }
     }

@@ -100,14 +100,14 @@ class Agent(options: AgentOptions,
             newCachedThreadPool(if (isMetricsEnabled)
                                     InstrumentedThreadFactory(
                                             threadFactory {
-                                                setNameFormat("agent_fetch" + "-%d")
+                                                setNameFormat(NAME_FORMAT)
                                                 setDaemon(true)
                                             },
                                             "agent_fetch",
                                             "Agent fetch")
                                 else
                                     threadFactory {
-                                        setNameFormat("agent_fetch-%d")
+                                        setNameFormat(NAME_FORMAT)
                                         setDaemon(true)
                                     })!!
 
@@ -518,6 +518,8 @@ class Agent(options: AgentOptions,
             }
 
     companion object : KLogging() {
+        const val NAME_FORMAT = "agent_fetch-%d"
+
         @JvmStatic
         fun main(argv: Array<String>) {
             val options = AgentOptions(argv, true)
