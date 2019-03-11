@@ -85,7 +85,7 @@ fun newQueueHealthCheck(queue: Queue<*>, size: Int) =
             if (queue.size < size)
                 HealthCheck.Result.healthy()
             else
-                HealthCheck.Result.unhealthy("Large size: %d", queue.size)
+                HealthCheck.Result.unhealthy("Large size: ${queue.size}")
         }
 
 fun newMapHealthCheck(map: Map<*, *>, size: Int) =
@@ -93,7 +93,7 @@ fun newMapHealthCheck(map: Map<*, *>, size: Int) =
             if (map.size < size)
                 HealthCheck.Result.healthy()
             else
-                HealthCheck.Result.unhealthy("Large size: %d", map.size)
+                HealthCheck.Result.unhealthy("Large size: ${map.size}")
         }
 
 inline class Millis(val value: Long) {
