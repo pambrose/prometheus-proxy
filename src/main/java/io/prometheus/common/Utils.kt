@@ -31,6 +31,9 @@ import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.*
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 val localHostName: String by lazy {
     try {
@@ -93,16 +96,38 @@ fun newMapHealthCheck(map: Map<*, *>, size: Int) =
                 HealthCheck.Result.unhealthy("Large size: %d", map.size)
         }
 
-fun sleepForMillis(millis: Long) =
+inline class Millis(val value: Long) {
+    constructor(value: Int) : this(value.toLong())
+
+    fun toSecs() = Secs(value / 1000)
+    operator fun plus(other: Millis) = Millis(this.value + other.value)
+    operator fun minus(other: Millis) = Millis(this.value - other.value)
+    operator fun compareTo(other: Millis) = this.value.compareTo(other.value)
+    override fun toString() = "$value"
+}
+
+inline class Secs(val value: Long) {
+    constructor(value: Int) : this(value.toLong())
+
+    fun toMillis() = Millis(value * 1000)
+    operator fun plus(other: Secs) = Secs(this.value + other.value)
+    operator fun minus(other: Secs) = Secs(this.value - other.value)
+    operator fun compareTo(other: Secs) = this.value.compareTo(other.value)
+    override fun toString() = "$value"
+}
+
+fun now() = Millis(System.currentTimeMillis())
+
+fun sleep(millis: Millis) =
         try {
-            Thread.sleep(millis)
+            Thread.sleep(millis.value)
         } catch (e: InterruptedException) {
             // Ignore
         }
 
-fun sleepForSecs(secs: Long) =
+fun sleep(secs: Secs) =
         try {
-            Thread.sleep(secs.toMillis())
+            Thread.sleep(secs.toMillis().value)
         } catch (e: InterruptedException) {
             // Ignore
         }
@@ -130,7 +155,10 @@ class VersionValidator : IParameterValidator {
     }
 }
 
-fun Long.toMillis() = this * 1000
+fun CountDownLatch.await(millis: Millis): Boolean {
+    return this.await(millis.value, TimeUnit.MILLISECONDS)
+}
 
-fun Long.toSecs() = this / 1000
-
+fun <E> ArrayBlockingQueue<E>.poll(millis: Millis): E? {
+    return this.poll(millis.value, TimeUnit.MILLISECONDS)
+}

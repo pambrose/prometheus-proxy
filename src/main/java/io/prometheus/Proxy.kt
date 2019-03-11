@@ -23,11 +23,12 @@ import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.GenericService
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
+import io.prometheus.common.Millis
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.common.newMapHealthCheck
-import io.prometheus.common.sleepForMillis
+import io.prometheus.common.sleep
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.proxy.AgentContextCleanupService
@@ -104,7 +105,7 @@ class Proxy(options: ProxyOptions,
 
     override fun run() {
         while (isRunning)
-            sleepForMillis(500)
+            sleep(Millis(500))
     }
 
     override fun registerHealthChecks() {

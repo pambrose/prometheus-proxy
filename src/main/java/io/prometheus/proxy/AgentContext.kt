@@ -17,11 +17,14 @@
 package io.prometheus.proxy
 
 import io.prometheus.Proxy
-import io.prometheus.common.toSecs
-import io.prometheus.delegate.AtomicDelegates
+import io.prometheus.common.Millis
+import io.prometheus.common.Secs
+import io.prometheus.common.now
+import io.prometheus.common.poll
+import io.prometheus.delegate.AtomicDelegates.atomicMillis
+import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -29,15 +32,15 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
     private val scrapeRequestQueue = ArrayBlockingQueue<ScrapeRequestWrapper>(proxy.configVals.internal.scrapeRequestQueueSize)
-    private val waitMillis = proxy.configVals.internal.scrapeRequestQueueCheckMillis.toLong()
+    private val waitMillis = Millis(proxy.configVals.internal.scrapeRequestQueueCheckMillis)
 
-    private var lastActivityTime by AtomicDelegates.atomicLong()
+    private var lastActivityTime by atomicMillis()
     var isValid = AtomicBoolean(true)
-    var hostName: String by AtomicDelegates.nonNullableReference()
-    var agentName: String by AtomicDelegates.nonNullableReference()
+    var hostName: String by nonNullableReference()
+    var agentName: String by nonNullableReference()
 
-    val inactivitySecs: Long
-        get() = (System.currentTimeMillis() - lastActivityTime).toSecs()
+    val inactivitySecs: Secs
+        get() = (now() - lastActivityTime).toSecs()
 
     val scrapeRequestQueueSize: Int
         get() = scrapeRequestQueue.size
@@ -54,7 +57,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     fun pollScrapeRequestQueue(): ScrapeRequestWrapper? =
             try {
-                scrapeRequestQueue.poll(waitMillis, TimeUnit.MILLISECONDS)
+                scrapeRequestQueue.poll(waitMillis)
             } catch (e: InterruptedException) {
                 null
             }
@@ -62,7 +65,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     fun markInvalid() = isValid.set(false)
 
     fun markActivity() {
-        lastActivityTime = System.currentTimeMillis()
+        lastActivityTime = now()
     }
 
     override fun toString() =

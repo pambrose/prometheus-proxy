@@ -19,6 +19,7 @@ package io.prometheus
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.Millis
 import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -63,7 +64,7 @@ class InProcessTestWithAdminMetricsTest {
                                   httpServerCount = 25,
                                   pathCount = 50,
                                   sequentialQueryCount = 500,
-                                  sequentialPauseMillis = 25,
+                                  sequentialPauseMillis = Millis(25),
                                   parallelQueryCount = 100,
                                   caller = javaClass.simpleName)
     }

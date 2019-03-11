@@ -20,12 +20,14 @@ package io.prometheus.proxy
 import com.google.common.base.Preconditions
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
+import io.prometheus.common.Millis
+import io.prometheus.common.await
+import io.prometheus.common.now
 import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 class ScrapeRequestWrapper(proxy: Proxy,
@@ -33,7 +35,7 @@ class ScrapeRequestWrapper(proxy: Proxy,
                            path: String,
                            accept: String?) {
 
-    private val createTime = System.currentTimeMillis()
+    private val createTime = now()
     private val complete = CountDownLatch(1)
     private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
@@ -49,16 +51,16 @@ class ScrapeRequestWrapper(proxy: Proxy,
     val scrapeId: Long
         get() = scrapeRequest.scrapeId
 
-    fun ageInSecs(): Long = (System.currentTimeMillis() - createTime) / 1000
+    fun ageInSecs() = (now() - createTime).toSecs()
 
     fun markComplete() {
         requestTimer?.observeDuration()
         complete.countDown()
     }
 
-    fun waitUntilCompleteMillis(waitMillis: Long): Boolean =
+    fun waitUntilComplete(waitMillis: Millis) =
             try {
-                complete.await(waitMillis, TimeUnit.MILLISECONDS)
+                complete.await(waitMillis)
             } catch (e: InterruptedException) {
                 false
             }

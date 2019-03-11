@@ -19,8 +19,9 @@ package io.prometheus
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.common.sleepForMillis
-import io.prometheus.common.sleepForSecs
+import io.prometheus.common.Millis
+import io.prometheus.common.Secs
+import io.prometheus.common.sleep
 import io.prometheus.dsl.OkHttpDsl.get
 import io.prometheus.dsl.SparkDsl.httpServer
 import io.prometheus.proxy.ProxyHttpService.Companion.sparkExceptionHandler
@@ -139,7 +140,7 @@ object CommonTests : KLogging() {
                     port(agentPort)
                     get("/$agentPath") { _, res ->
                         res.type("text/plain")
-                        sleepForSecs(10)
+                        sleep(Secs(10))
                         "I timed out"
                     }
                     awaitInitialization()
@@ -150,14 +151,14 @@ object CommonTests : KLogging() {
         agent.unregisterPath("/$proxyPath")
 
         httpServer.stop()
-        sleepForSecs(5)
+        sleep(Secs(5))
     }
 
     fun proxyCallTest(agent: Agent,
                       httpServerCount: Int,
                       pathCount: Int,
                       sequentialQueryCount: Int,
-                      sequentialPauseMillis: Long,
+                      sequentialPauseMillis: Millis,
                       parallelQueryCount: Int,
                       startingPort: Int = 9600,
                       caller: String) {
@@ -200,7 +201,7 @@ object CommonTests : KLogging() {
         IntStream.range(0, sequentialQueryCount)
                 .forEach {
                     callProxy(pathMap, "Sequential $it")
-                    sleepForMillis(sequentialPauseMillis)
+                    sleep(sequentialPauseMillis)
                 }
 
         // Call the proxy in parallel
@@ -234,7 +235,7 @@ object CommonTests : KLogging() {
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
 
         httpServers.forEach(Service::stop)
-        sleepForSecs(5)
+        sleep(Secs(5))
     }
 
     private fun callProxy(pathMap: Map<Int, Int>, msg: String) {

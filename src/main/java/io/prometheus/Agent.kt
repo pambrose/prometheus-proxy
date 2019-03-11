@@ -45,14 +45,17 @@ import io.prometheus.common.GrpcObjects.Companion.newScrapeResponse
 import io.prometheus.common.GrpcObjects.Companion.newUnregisterPathRequest
 import io.prometheus.common.InstrumentedThreadFactory
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
+import io.prometheus.common.Millis
+import io.prometheus.common.Secs
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.common.localHostName
 import io.prometheus.common.newQueueHealthCheck
-import io.prometheus.common.sleepForMillis
-import io.prometheus.common.toMillis
-import io.prometheus.delegate.AtomicDelegates.atomicLong
+import io.prometheus.common.now
+import io.prometheus.common.poll
+import io.prometheus.common.sleep
+import io.prometheus.delegate.AtomicDelegates.atomicMillis
 import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
@@ -121,7 +124,7 @@ class Agent(options: AgentOptions,
                     .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
                     .toList()
 
-    private var lastMsgSent by atomicLong()
+    private var lastMsgSent by atomicMillis()
     private var tracing: Tracing by notNull()
     private var grpcTracing: GrpcTracing by notNull()
     private var metrics: AgentMetrics by notNull()
@@ -218,7 +221,7 @@ class Agent(options: AgentOptions,
         // Reset values for each connection attempt
         pathContextMap.clear()
         scrapeResponseQueue.clear()
-        lastMsgSent = 0
+        lastMsgSent = Millis(0)
 
         if (connectAgent()) {
             registerAgent()
@@ -231,15 +234,15 @@ class Agent(options: AgentOptions,
 
     private fun startHeartBeat(disconnected: AtomicBoolean) {
         if (configVals.internal.heartbeatEnabled) {
-            val threadPauseMillis = configVals.internal.heartbeatCheckPauseMillis.toLong()
-            val maxInactivitySecs = configVals.internal.heartbeatMaxInactivitySecs
+            val threadPauseMillis = Millis(configVals.internal.heartbeatCheckPauseMillis)
+            val maxInactivitySecs = Secs(configVals.internal.heartbeatMaxInactivitySecs)
             logger.info { "Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity" }
             heartbeatService.submit {
                 while (isRunning && !disconnected.get()) {
-                    val timeSinceLastWriteMillis = System.currentTimeMillis() - lastMsgSent
-                    if (timeSinceLastWriteMillis > maxInactivitySecs.toLong().toMillis())
+                    val timeSinceLastWriteMillis = now() - lastMsgSent
+                    if (timeSinceLastWriteMillis > maxInactivitySecs.toMillis())
                         sendHeartBeat(disconnected)
-                    sleepForMillis(threadPauseMillis)
+                    sleep(threadPauseMillis)
                 }
                 logger.info { "Heartbeat completed" }
             }
@@ -447,7 +450,7 @@ class Agent(options: AgentOptions,
     }
 
     private fun writeResponsesToProxyUntilDisconnected(disconnected: AtomicBoolean) {
-        val checkMillis = configVals.internal.scrapeResponseQueueCheckMillis.toLong()
+        val checkMillis = Millis(configVals.internal.scrapeResponseQueueCheckMillis)
         val observer =
                 asyncStub.writeResponsesToProxy(
                         streamObserver<Empty> {
@@ -467,7 +470,7 @@ class Agent(options: AgentOptions,
         while (!disconnected.get()) {
             try {
                 // Set a short timeout to check if client has disconnected
-                scrapeResponseQueue.poll(checkMillis, TimeUnit.MILLISECONDS)
+                scrapeResponseQueue.poll(checkMillis)
                         ?.let {
                             observer.onNext(it)
                             markMsgSent()
@@ -482,7 +485,7 @@ class Agent(options: AgentOptions,
     }
 
     private fun markMsgSent() {
-        lastMsgSent = System.currentTimeMillis()
+        lastMsgSent = now()
     }
 
     private fun sendHeartBeat(disconnected: AtomicBoolean) {

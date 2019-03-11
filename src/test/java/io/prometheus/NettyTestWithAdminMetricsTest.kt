@@ -19,7 +19,9 @@ package io.prometheus
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.sleepForSecs
+import io.prometheus.common.Millis
+import io.prometheus.common.Secs
+import io.prometheus.common.sleep
 import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -65,7 +67,7 @@ class NettyTestWithAdminMetricsTest {
                                   httpServerCount = 10,
                                   pathCount = 25,
                                   sequentialQueryCount = 100,
-                                  sequentialPauseMillis = 25,
+                                  sequentialPauseMillis = Millis(25),
                                   parallelQueryCount = 25,
                                   caller = javaClass.simpleName)
     }
@@ -84,7 +86,7 @@ class NettyTestWithAdminMetricsTest {
             AGENT.awaitInitialConnection(10, SECONDS)
 
             // Wait long enough to trigger heartbeat for code coverage
-            sleepForSecs(15)
+            sleep(Secs(15))
         }
 
         @JvmStatic

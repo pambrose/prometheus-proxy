@@ -18,7 +18,8 @@ package io.prometheus.proxy
 
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
-import io.prometheus.common.sleepForSecs
+import io.prometheus.common.Secs
+import io.prometheus.common.sleep
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
@@ -33,8 +34,8 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
 
     @Throws(Exception::class)
     override fun run() {
-        val maxInactivitySecs = proxy.configVals.internal.maxAgentInactivitySecs.toLong()
-        val threadPauseSecs = proxy.configVals.internal.staleAgentCheckPauseSecs.toLong()
+        val maxInactivitySecs = Secs(proxy.configVals.internal.maxAgentInactivitySecs)
+        val threadPauseSecs = Secs(proxy.configVals.internal.staleAgentCheckPauseSecs)
         while (isRunning) {
             proxy.agentContextManager.agentContextMap
                     .forEach { agentId, agentContext ->
@@ -46,7 +47,7 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
                                 proxy.metrics.agentEvictions.inc()
                         }
                     }
-            sleepForSecs(threadPauseSecs)
+            sleep(threadPauseSecs)
         }
     }
 

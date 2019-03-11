@@ -23,7 +23,9 @@ import com.google.common.net.HttpHeaders.ACCEPT_ENCODING
 import com.google.common.net.HttpHeaders.CONTENT_ENCODING
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
-import io.prometheus.common.sleepForSecs
+import io.prometheus.common.Millis
+import io.prometheus.common.Secs
+import io.prometheus.common.sleep
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.SparkDsl.httpServer
 import io.prometheus.guava.GenericIdleService
@@ -121,7 +123,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             tracing.close()
 
         httpServer.stop()
-        sleepForSecs(3)
+        sleep(Secs(3))
     }
 
     private fun submitScrapeRequest(req: Request,
@@ -133,11 +135,11 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
             agentContext.addToScrapeRequestQueue(scrapeRequest)
 
-            val timeoutSecs = configVals.internal.scrapeRequestTimeoutSecs
-            val checkMillis = configVals.internal.scrapeRequestCheckMillis
+            val timeoutSecs = Secs(configVals.internal.scrapeRequestTimeoutSecs)
+            val checkMillis = Millis(configVals.internal.scrapeRequestCheckMillis)
             while (true) {
                 // Returns false if timed out
-                if (scrapeRequest.waitUntilCompleteMillis(checkMillis.toLong()))
+                if (scrapeRequest.waitUntilComplete(checkMillis))
                     break
 
                 // Check if agent is disconnected or agent is hung
