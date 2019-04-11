@@ -21,7 +21,7 @@ import okhttp3.Request
 import okhttp3.Response
 
 object OkHttpDsl {
-    val OK_HTTP_CLIENT = OkHttpClient()
+    private val OK_HTTP_CLIENT = OkHttpClient()
 
     fun String.get(block: (Response) -> Unit) {
         OK_HTTP_CLIENT
