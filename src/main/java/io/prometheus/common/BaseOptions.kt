@@ -134,7 +134,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                 .resolve(ConfigResolveOptions.defaults())
                 .resolve()
 
-        dynamicParams.forEach { k, v ->
+        dynamicParams.forEach { (k, v) ->
             // Strip quotes
             val qval = if (v.startsWith("\"") && v.endsWith("\"")) v.substring(1, v.length - 1) else v
             val prop = "$k=$qval"

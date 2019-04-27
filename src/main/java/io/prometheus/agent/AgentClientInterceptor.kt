@@ -36,7 +36,7 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
             // final String methodName = method.getFullMethodName();
             // logger.info {"Intercepting {}", methodName);
             object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(agent.channel.newCall(method, callOptions)) {
-                override fun start(responseListener: ClientCall.Listener<RespT>, metadata: Metadata) {
+                override fun start(responseListener: Listener<RespT>, metadata: Metadata) {
                     super.start(
                             object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
                                 override fun onHeaders(headers: Metadata?) {

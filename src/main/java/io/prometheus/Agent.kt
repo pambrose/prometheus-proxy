@@ -362,10 +362,9 @@ class Agent(options: AgentOptions,
 
     @Throws(RequestFailureException::class)
     private fun registerPaths() =
-            pathConfigs
-                    .forEach {
-                        registerPath(it["path"]!!, it["url"]!!)
-                    }
+            pathConfigs.forEach {
+                registerPath(it["path"]!!, it["url"]!!)
+            }
 
     @Throws(RequestFailureException::class)
     fun registerPath(pathVal: String, url: String) {

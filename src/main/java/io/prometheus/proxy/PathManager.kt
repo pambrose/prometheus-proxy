@@ -83,7 +83,7 @@ class PathManager(private val isTestMode: Boolean) {
                 logger.error { "Missing agentId" }
             else
                 synchronized(pathMap) {
-                    pathMap.forEach { k, v ->
+                    pathMap.forEach { (k, v) ->
                         if (v.agentId == agentId)
                             pathMap.remove(k)?.let { logger.info { "Removed path /$k for $it" } }
                             ?: logger.error { "Missing path /$k for agentId: $agentId" }

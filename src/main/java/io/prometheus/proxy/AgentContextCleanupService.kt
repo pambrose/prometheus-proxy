@@ -38,7 +38,7 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
         val threadPauseSecs = Secs(proxy.configVals.internal.staleAgentCheckPauseSecs)
         while (isRunning) {
             proxy.agentContextManager.agentContextMap
-                    .forEach { agentId, agentContext ->
+                    .forEach { (agentId, agentContext) ->
                         val inactivitySecs = agentContext.inactivitySecs
                         if (inactivitySecs > maxInactivitySecs) {
                             logger.info { "Evicting agent after $inactivitySecs secs of inactivty $agentContext" }
