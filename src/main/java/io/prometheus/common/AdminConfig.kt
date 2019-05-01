@@ -15,6 +15,7 @@
  */
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
 package io.prometheus.common
 
 data class AdminConfig(val enabled: Boolean,

@@ -15,6 +15,7 @@
  */
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
 package io.prometheus.agent
 
 class RequestFailureException(message: String) : Exception(message) {

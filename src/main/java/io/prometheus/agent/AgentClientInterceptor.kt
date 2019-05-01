@@ -15,6 +15,7 @@
  */
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
 package io.prometheus.agent
 
 import io.grpc.CallOptions
@@ -34,7 +35,7 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
     override fun <ReqT, RespT> interceptCall(method: MethodDescriptor<ReqT, RespT>,
                                              callOptions: CallOptions,
                                              next: Channel): ClientCall<ReqT, RespT> =
-            // final String methodName = method.getFullMethodName();
+    // final String methodName = method.getFullMethodName();
             // logger.info {"Intercepting {}", methodName);
             object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(agent.channel.newCall(method, callOptions)) {
                 override fun start(responseListener: Listener<RespT>, metadata: Metadata) {
