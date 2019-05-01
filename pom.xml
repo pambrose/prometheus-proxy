@@ -26,6 +26,7 @@
 
     <properties>
         <kotlin.version>1.3.31</kotlin.version>
+        <kotlin.code.style>official</kotlin.code.style>
 
         <prometheus.version>0.6.0</prometheus.version>
         <jcommander.version>1.72</jcommander.version>
