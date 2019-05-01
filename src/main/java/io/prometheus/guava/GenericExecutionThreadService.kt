@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 package io.prometheus.guava
 
 import com.google.common.util.concurrent.AbstractExecutionThreadService
