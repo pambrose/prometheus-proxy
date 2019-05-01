@@ -14,8 +14,8 @@ running behind a firewall and preserves the pull model.
 
 `prometheus-proxy` runtime is broken up into 2 microservices:
 
-  * `proxy`: Runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
-  * `agent`: Runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
+* `proxy`: Runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
+* `agent`: Runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
 
 Here's a simplified network diagram of how the deployed `proxy` and `agent` work:
 
@@ -70,9 +70,9 @@ agent {
 
 then the *prometheus.yml* scrape_config would target the three apps at:
 
-  * http://proxy.local:8080/app1_metrics
-  * http://proxy.local:8080/app2_metrics
-  * http://proxy.local:8080/app3_metrics
+* http://proxy.local:8080/app1_metrics
+* http://proxy.local:8080/app2_metrics
+* http://proxy.local:8080/app3_metrics
 
 The `prometheus.yml` file would include:
 
@@ -130,17 +130,17 @@ The above assumes that you have the file `prom-agent.conf` in the current direct
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy on *localhost* at:
-  * http://localohost:8082/proxy_metrics
-  * http://localohost:8083/agent_metrics
+* http://localohost:8082/proxy_metrics
+* http://localohost:8083/agent_metrics
 
 ## Configuration
 
 The Proxy and Agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
 Highlights include:
-  * supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
-  * config files can be files or urls
-  * config values can come from CLI options, environment vars, Java system properties, and/or config files.
-  * config files can reference environment variables
+* supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
+* config files can be files or urls
+* config values can come from CLI options, environment vars, Java system properties, and/or config files.
+* config files can reference environment variables
   
 The Proxy and Agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
 The only required argument is an Agent config value, which should have an `agent.pathConfigs` value.
@@ -178,20 +178,20 @@ The only required argument is an Agent config value, which should have an `agent
 | -D                  |                 |                        |        | Dynamic property assignment            |
 
 Misc notes:
-  * If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
-  * JSON config files must have a *.json* suffix
-  * Java Properties config files must have a *.properties*  or *.prop* suffix
-  * HOCON config files must have a *.conf* suffix
-  * Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
-  * Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
+* If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
+* JSON config files must have a *.json* suffix
+* Java Properties config files must have a *.properties*  or *.prop* suffix
+* HOCON config files must have a *.conf* suffix
+* Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
+* Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
 
 ### Admin Servlets
 
 Three admin servlets are available when the `proxy.admin.enabled` or `agent.admin.enabled` properties are enabled:
-  * /ping 
-  * /threaddump
-  * /healthcheck
-  * /version
+* /ping 
+* /threaddump
+* /healthcheck
+* /version
 
 Descriptions of the servlets are [here](http://metrics.dropwizard.io/3.2.2/manual/servlets.html).
 The path names can be changed in the configuration file. To disable an admin servlet, assign its path to "".
@@ -202,14 +202,14 @@ The path names can be changed in the configuration file. To disable an admin ser
 
 ## Related Links
 
-  * [Prometheus.io](http://prometheus.io)
-  * [gRPC](http://grpc.io)
-  * [Typesafe Config](https://github.com/typesafehub/config)
-  * [Zipkin]()
+* [Prometheus.io](http://prometheus.io)
+* [gRPC](http://grpc.io)
+* [Typesafe Config](https://github.com/typesafehub/config)
+* [Zipkin]()
 
 ## Zipkin 
 
-  * Run a Zipkin server with: `docker run -d -p 9411:9411 openzipkin/zipkin`
-  * View Zipkin info at http://localhost:9411
+* Run a Zipkin server with: `docker run -d -p 9411:9411 openzipkin/zipkin`
+* View Zipkin info at http://localhost:9411
 
 Details on the Zipkin container are [here](https://github.com/openzipkin/docker-zipkin).
