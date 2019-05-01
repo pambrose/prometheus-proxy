@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
 package io.prometheus.dsl
 
 import brave.Tracing

@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-package io.prometheus.proxy
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
+package io.prometheus.proxy
 
 import com.google.common.base.Preconditions
 import io.prometheus.Proxy
