@@ -14,8 +14,8 @@ running behind a firewall and preserves the pull model.
 
 `prometheus-proxy` runtime is broken up into 2 microservices:
 
-* `proxy`: Runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
-* `agent`: Runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
+  * `proxy`: Runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
+  * `agent`: Runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
 
 Here's a simplified network diagram of how the deployed `proxy` and `agent` work:
 
@@ -33,15 +33,14 @@ Download the proxy and agent uber-jars from [here](https://github.com/pambrose/p
 Start a proxy with:
 
 ```bash
-$ java -jar prometheus-proxy.jar
+java -jar prometheus-proxy.jar
 ```
 
 Start an agent with: 
 
 ```bash
-$ java -jar prometheus-agent.jar -Dagent.proxy.hostname=proxy.local --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
+java -jar prometheus-agent.jar -Dagent.proxy.hostname=proxy.local --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
 ```
-
 
 If prometheus-proxy were running on a machine named *proxy.local* and the
 `agent.pathConfigs` value in the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) 
@@ -71,9 +70,9 @@ agent {
 
 then the *prometheus.yml* scrape_config would target the three apps at:
 
-* http://proxy.local:8080/app1_metrics
-* http://proxy.local:8080/app2_metrics
-* http://proxy.local:8080/app3_metrics
+  * http://proxy.local:8080/app1_metrics
+  * http://proxy.local:8080/app2_metrics
+  * http://proxy.local:8080/app3_metrics
 
 The `prometheus.yml` file would include:
 
@@ -97,21 +96,21 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-$ docker pull pambrose/prometheus-proxy:1.3.11
-$ docker pull pambrose/prometheus-agent:1.3.11
+docker pull pambrose/prometheus-proxy:1.3.11
+docker pull pambrose/prometheus-agent:1.3.11
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
 
 ```bash
-$ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
+docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
         -e METRICS_ENABLED=true \
         pambrose/prometheus-proxy:1.3.11
 ```
 
 ```bash
-$ docker run --rm -p 8083:8083 -p 8093:8093 \
+docker run --rm -p 8083:8083 -p 8093:8093 \
         -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         pambrose/prometheus-agent:1.3.11
@@ -120,7 +119,7 @@ $ docker run --rm -p 8083:8083 -p 8093:8093 \
 If you want to be able to externalize your `agent` config file on your local machine (or VM) file system (instead of the above HTTP served config file), you'll need to add the Docker `volume` definition to the command:
 
 ```bash
-$ docker run --rm -p 8083:8083 -p 8093:8093 \
+docker run --rm -p 8083:8083 -p 8093:8093 \
     -v ${PWD}/prom-agent.conf:/prom-agent.conf \
     -e HOSTNAME=${HOSTNAME} \
     -e AGENT_CONFIG=/prom-agent.conf \
@@ -131,17 +130,17 @@ The above assumes that you have the file `prom-agent.conf` in the current direct
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy on *localhost* at:
-* http://localohost:8082/proxy_metrics
-* http://localohost:8083/agent_metrics
+  * http://localohost:8082/proxy_metrics
+  * http://localohost:8083/agent_metrics
 
 ## Configuration
 
 The Proxy and Agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
 Highlights include:
-* supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
-* config files can be files or urls
-* config values can come from CLI options, environment vars, Java system properties, and/or config files.
-* config files can reference environment variables
+  * supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
+  * config files can be files or urls
+  * config values can come from CLI options, environment vars, Java system properties, and/or config files.
+  * config files can reference environment variables
   
 The Proxy and Agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
 The only required argument is an Agent config value, which should have an `agent.pathConfigs` value.
@@ -179,20 +178,20 @@ The only required argument is an Agent config value, which should have an `agent
 | -D                  |                 |                        |        | Dynamic property assignment            |
 
 Misc notes:
-* If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
-* JSON config files must have a *.json* suffix
-* Java Properties config files must have a *.properties*  or *.prop* suffix
-* HOCON config files must have a *.conf* suffix
-* Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
-* Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
+  * If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
+  * JSON config files must have a *.json* suffix
+  * Java Properties config files must have a *.properties*  or *.prop* suffix
+  * HOCON config files must have a *.conf* suffix
+  * Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
+  * Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
 
 ### Admin Servlets
 
 Three admin servlets are available when the `proxy.admin.enabled` or `agent.admin.enabled` properties are enabled:
- * /ping 
- * /threaddump
- * /healthcheck
- * /version
+  * /ping 
+  * /threaddump
+  * /healthcheck
+  * /version
 
 Descriptions of the servlets are [here](http://metrics.dropwizard.io/3.2.2/manual/servlets.html).
 The path names can be changed in the configuration file. To disable an admin servlet, assign its path to "".
@@ -203,14 +202,14 @@ The path names can be changed in the configuration file. To disable an admin ser
 
 ## Related Links
 
-* [Prometheus.io](http://prometheus.io)
-* [gRPC](http://grpc.io)
-* [Typesafe Config](https://github.com/typesafehub/config)
-* [Zipkin]()
+  * [Prometheus.io](http://prometheus.io)
+  * [gRPC](http://grpc.io)
+  * [Typesafe Config](https://github.com/typesafehub/config)
+  * [Zipkin]()
 
 ## Zipkin 
 
-* Run a Zipkin server with: `docker run -d -p 9411:9411 openzipkin/zipkin`
-* View Zipkin info at http://localhost:9411
+  * Run a Zipkin server with: `docker run -d -p 9411:9411 openzipkin/zipkin`
+  * View Zipkin info at http://localhost:9411
 
 Details on the Zipkin container are [here](https://github.com/openzipkin/docker-zipkin).
