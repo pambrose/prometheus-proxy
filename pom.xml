@@ -34,7 +34,7 @@
         <guava.version>26.0-android</guava.version>
         <metrics.version>4.1.0</metrics.version>
 
-        <grpc.version>1.20.0</grpc.version>
+        <grpc.version>1.21.0</grpc.version>
         <grpc.plugin.version>1.11.0</grpc.plugin.version>
         <grpc.contrib.version>0.8.1</grpc.contrib.version>
         <okhttp.version>3.14.1</okhttp.version>
