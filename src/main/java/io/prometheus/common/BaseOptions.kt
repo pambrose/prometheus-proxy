@@ -22,20 +22,14 @@ import com.beust.jcommander.DynamicParameter
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import com.typesafe.config.ConfigParseOptions
-import com.typesafe.config.ConfigResolveOptions
-import com.typesafe.config.ConfigSyntax
-import io.prometheus.common.EnvVars.ADMIN_ENABLED
-import io.prometheus.common.EnvVars.ADMIN_PORT
-import io.prometheus.common.EnvVars.METRICS_ENABLED
-import io.prometheus.common.EnvVars.METRICS_PORT
+import com.typesafe.config.*
+import io.prometheus.common.EnvVars.*
 import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
 import kotlin.properties.Delegates
+import kotlin.system.exitProcess
 
 abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val argv: Array<String>,
@@ -94,16 +88,16 @@ abstract class BaseOptions protected constructor(private val progName: String,
                             .apply {
                                 this.programName = progName
                                 this.setCaseSensitiveOptions(false)
-                                this.parse(*argv ?: arrayOf<String>())
+                                this.parse(*argv ?: arrayOf())
                             }
 
             if (usage) {
                 jcom.usage()
-                System.exit(0)
+                exitProcess(0)
             }
         } catch (e: ParameterException) {
             logger.error(e) { e.message }
-            System.exit(1)
+            exitProcess(1)
         }
     }
 
@@ -156,7 +150,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
             configName.isBlank()     -> {
                 if (exitOnMissingConfig) {
                     logger.error { "A configuration file or url must be specified with --config or \$$envConfig" }
-                    System.exit(1)
+                    exitProcess(1)
                 }
                 return fallback
             }
@@ -186,7 +180,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
             }
         }
 
-        System.exit(1)
+        exitProcess(1)
         return fallback // Never reached
     }
 

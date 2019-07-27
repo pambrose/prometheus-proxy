@@ -36,6 +36,7 @@ import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.system.exitProcess
 
 val localHostName: String by lazy {
     try {
@@ -139,7 +140,7 @@ fun getVersionDesc(asJson: Boolean): String {
     return if (asJson)
         """{"Version": "${annotation.version}", "Release Date": "${annotation.date}"}"""
     else
-        """Version: ${annotation.version} Release Date: ${annotation.date}"""
+        "Version: ${annotation.version} Release Date: ${annotation.date}"
 }
 
 fun shutDownHookAction(service: Service) =
@@ -153,7 +154,7 @@ class VersionValidator : IParameterValidator {
     override fun validate(name: String, value: String) {
         val console = JCommander.getConsole()
         console.println(getVersionDesc(false))
-        System.exit(0)
+        exitProcess(0)
     }
 }
 

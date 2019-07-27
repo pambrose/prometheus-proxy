@@ -34,7 +34,6 @@ import java.lang.Math.abs
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MINUTES
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.stream.IntStream
 
 object CommonTests : KLogging() {
 
@@ -55,16 +54,16 @@ object CommonTests : KLogging() {
         val originalSize = agent.pathMapSize()
 
         var cnt = 0
-        IntStream.range(0, TestConstants.REPS)
-                .forEach {
-                    val path = "test-$it"
-                    agent.registerPath(path, "http://localhost:$PROXY_PORT/$path")
-                    cnt++
-                    assertThat(agent.pathMapSize()).isEqualTo(originalSize + cnt)
-                    agent.unregisterPath(path)
-                    cnt--
-                    assertThat(agent.pathMapSize()).isEqualTo(originalSize + cnt)
-                }
+        (0..TestConstants.REPS - 1)
+            .forEach {
+                val path = "test-$it"
+                agent.registerPath(path, "http://localhost:$PROXY_PORT/$path")
+                cnt++
+                assertThat(agent.pathMapSize()).isEqualTo(originalSize + cnt)
+                agent.unregisterPath(path)
+                cnt--
+                assertThat(agent.pathMapSize()).isEqualTo(originalSize + cnt)
+            }
     }
 
     fun threadedAddRemovePathsTest(agent: Agent, caller: String) {
@@ -77,26 +76,26 @@ object CommonTests : KLogging() {
         // Take into account pre-existing paths already registered
         val originalSize = agent.pathMapSize()
 
-        IntStream.range(0, TestConstants.REPS)
-                .forEach {
-                    TestConstants
-                            .EXECUTOR_SERVICE
-                            .submit {
-                                val path = "test-${cnt.getAndIncrement()}"
+        (0..TestConstants.REPS - 1)
+            .forEach {
+                TestConstants
+                    .EXECUTOR_SERVICE
+                    .submit {
+                        val path = "test-${cnt.getAndIncrement()}"
 
-                                synchronized(paths) {
-                                    paths += path
-                                }
+                        synchronized(paths) {
+                            paths += path
+                        }
 
-                                try {
-                                    val url = "http://localhost:$PROXY_PORT/$path"
-                                    agent.registerPath(path, url)
-                                    latch1.countDown()
-                                } catch (e: RequestFailureException) {
-                                    e.printStackTrace()
-                                }
-                            }
-                }
+                        try {
+                            val url = "http://localhost:$PROXY_PORT/$path"
+                            agent.registerPath(path, url)
+                            latch1.countDown()
+                        } catch (e: RequestFailureException) {
+                            e.printStackTrace()
+                        }
+                    }
+            }
 
         assertThat(latch1.await(1, MINUTES)).isTrue()
         assertThat(paths.size).isEqualTo(TestConstants.REPS)
@@ -104,15 +103,15 @@ object CommonTests : KLogging() {
 
         paths.forEach {
             TestConstants
-                    .EXECUTOR_SERVICE
-                    .submit {
-                        try {
-                            agent.unregisterPath(it)
-                            latch2.countDown()
-                        } catch (e: RequestFailureException) {
-                            e.printStackTrace()
-                        }
+                .EXECUTOR_SERVICE
+                .submit {
+                    try {
+                        agent.unregisterPath(it)
+                        latch2.countDown()
+                    } catch (e: RequestFailureException) {
+                        e.printStackTrace()
                     }
+                }
         }
 
         // Wait for all unregistrations to complete
@@ -128,25 +127,27 @@ object CommonTests : KLogging() {
         agent.unregisterPath(badPath)
     }
 
-    fun timeoutTest(agent: Agent,
-                    agentPort: Int = 9700,
-                    proxyPath: String = "proxy-timeout",
-                    agentPath: String = "agent-timeout",
-                    caller: String) {
+    fun timeoutTest(
+        agent: Agent,
+        agentPort: Int = 9700,
+        proxyPath: String = "proxy-timeout",
+        agentPath: String = "agent-timeout",
+        caller: String
+    ) {
 
         logger.info { "Calling timeoutTest() from $caller" }
 
         val httpServer =
-                httpServer {
-                    initExceptionHandler { sparkExceptionHandler(it, agentPort) }
-                    port(agentPort)
-                    get("/$agentPath") { _, res ->
-                        res.type("text/plain")
-                        sleep(Secs(10))
-                        "I timed out"
-                    }
-                    awaitInitialization()
+            httpServer {
+                initExceptionHandler { sparkExceptionHandler(it, agentPort) }
+                port(agentPort)
+                get("/$agentPath") { _, res ->
+                    res.type("text/plain")
+                    sleep(Secs(10))
+                    "I timed out"
                 }
+                awaitInitialization()
+            }
 
         agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
         "http://localhost:$PROXY_PORT/$proxyPath".get { assertThat(it.code()).isEqualTo(404) }
@@ -156,14 +157,16 @@ object CommonTests : KLogging() {
         sleep(Secs(5))
     }
 
-    fun proxyCallTest(agent: Agent,
-                      httpServerCount: Int,
-                      pathCount: Int,
-                      sequentialQueryCount: Int,
-                      sequentialPauseMillis: Millis,
-                      parallelQueryCount: Int,
-                      startingPort: Int = 9600,
-                      caller: String) {
+    fun proxyCallTest(
+        agent: Agent,
+        httpServerCount: Int,
+        pathCount: Int,
+        sequentialQueryCount: Int,
+        sequentialPauseMillis: Millis,
+        parallelQueryCount: Int,
+        startingPort: Int = 9600,
+        caller: String
+    ) {
 
         logger.info { "Calling proxyCallTest() from $caller" }
         val httpServers = mutableListOf<Service>()
@@ -173,54 +176,54 @@ object CommonTests : KLogging() {
         val originalSize = agent.pathMapSize()
 
         // Create the endpoints
-        IntStream.range(0, httpServerCount)
-                .forEach {
-                    val port = startingPort + it
-                    httpServers +=
-                            httpServer {
-                                initExceptionHandler { arg -> sparkExceptionHandler(arg, port) }
-                                port(port)
-                                threadPool(30, 10, 1000)
-                                get("/agent-$it") { _, res ->
-                                    res.type("text/plain")
-                                    "value: $it"
-                                }
-                                awaitInitialization()
-                            }
-                }
+        (0..httpServerCount - 1)
+            .forEach {
+                val port = startingPort + it
+                httpServers +=
+                    httpServer {
+                        initExceptionHandler { arg -> sparkExceptionHandler(arg, port) }
+                        port(port)
+                        threadPool(30, 10, 1000)
+                        get("/agent-$it") { _, res ->
+                            res.type("text/plain")
+                            "value: $it"
+                        }
+                        awaitInitialization()
+                    }
+            }
 
         // Create the paths
-        IntStream.range(0, pathCount)
-                .forEach {
-                    val index = abs(TestConstants.RANDOM.nextInt()) % httpServers.size
-                    agent.registerPath("proxy-$it", "http://localhost:${startingPort + index}/agent-$index")
-                    pathMap[it] = index
-                }
+        (0..pathCount - 1)
+            .forEach {
+                val index = kotlin.math.abs(TestConstants.RANDOM.nextInt()) % httpServers.size
+                agent.registerPath("proxy-$it", "http://localhost:${startingPort + index}/agent-$index")
+                pathMap[it] = index
+            }
 
         assertThat(agent.pathMapSize()).isEqualTo(originalSize + pathCount)
 
         // Call the proxy sequentially
-        IntStream.range(0, sequentialQueryCount)
-                .forEach {
-                    callProxy(pathMap, "Sequential $it")
-                    sleep(sequentialPauseMillis)
-                }
+        (0..sequentialQueryCount - 1)
+            .forEach {
+                callProxy(pathMap, "Sequential $it")
+                sleep(sequentialPauseMillis)
+            }
 
         // Call the proxy in parallel
         val latch = CountDownLatch(parallelQueryCount)
-        IntStream.range(0, parallelQueryCount)
-                .forEach {
-                    TestConstants
-                            .EXECUTOR_SERVICE
-                            .submit {
-                                try {
-                                    callProxy(pathMap, "Parallel $it")
-                                    latch.countDown()
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            }
-                }
+        (0..parallelQueryCount - 1)
+            .forEach {
+                TestConstants
+                    .EXECUTOR_SERVICE
+                    .submit {
+                        try {
+                            callProxy(pathMap, "Parallel $it")
+                            latch.countDown()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+            }
 
         assertThat(latch.await(1, MINUTES)).isTrue()
 
@@ -246,13 +249,13 @@ object CommonTests : KLogging() {
         val index = abs(TestConstants.RANDOM.nextInt() % pathMap.size)
         val httpVal = pathMap[index]
         "http://localhost:$PROXY_PORT/proxy-$index"
-                .get {
-                    if (it.code() != 200)
-                        logger.error { "Proxy failed on $msg" }
-                    assertThat(it.code()).isEqualTo(200)
-                    val body = it.body()!!.string()
-                    assertThat(body).isEqualTo("value: $httpVal")
-                }
+            .get {
+                if (it.code() != 200)
+                    logger.error { "Proxy failed on $msg" }
+                assertThat(it.code()).isEqualTo(200)
+                val body = it.body()!!.string()
+                assertThat(body).isEqualTo("value: $httpVal")
+            }
     }
 }
 

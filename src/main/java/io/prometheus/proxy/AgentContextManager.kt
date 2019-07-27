@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentMap
 
 class AgentContextManager {
     // Map agent_id to AgentContext
-    val agentContextMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap<String, AgentContext>()
+    val agentContextMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap()
 
     val agentContextSize: Int
         get() = agentContextMap.size

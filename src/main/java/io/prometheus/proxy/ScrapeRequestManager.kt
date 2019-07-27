@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentMap
 
 class ScrapeRequestManager {
     // Map scrape_id to agent_id
-    val scrapeRequestMap: ConcurrentMap<Long, ScrapeRequestWrapper> = Maps.newConcurrentMap<Long, ScrapeRequestWrapper>()
+    val scrapeRequestMap: ConcurrentMap<Long, ScrapeRequestWrapper> = Maps.newConcurrentMap()
 
     val scrapeMapSize: Int
         get() = scrapeRequestMap.size

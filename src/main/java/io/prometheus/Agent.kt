@@ -30,14 +30,9 @@ import io.grpc.ClientInterceptors.intercept
 import io.grpc.ManagedChannel
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
-import io.prometheus.agent.AgentClientInterceptor
-import io.prometheus.agent.AgentMetrics
-import io.prometheus.agent.AgentOptions
-import io.prometheus.agent.PathContext
-import io.prometheus.agent.RequestFailureException
+import io.prometheus.agent.*
+import io.prometheus.common.*
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
-import io.prometheus.common.ConfigVals
-import io.prometheus.common.GenericService
 import io.prometheus.common.GrpcObjects.Companion.newAgentInfo
 import io.prometheus.common.GrpcObjects.Companion.newHeartBeatRequest
 import io.prometheus.common.GrpcObjects.Companion.newPathMapSizeRequest
@@ -45,28 +40,15 @@ import io.prometheus.common.GrpcObjects.Companion.newRegisterAgentRequest
 import io.prometheus.common.GrpcObjects.Companion.newRegisterPathRequest
 import io.prometheus.common.GrpcObjects.Companion.newScrapeResponse
 import io.prometheus.common.GrpcObjects.Companion.newUnregisterPathRequest
-import io.prometheus.common.InstrumentedThreadFactory
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
-import io.prometheus.common.Millis
-import io.prometheus.common.Secs
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
-import io.prometheus.common.getBanner
-import io.prometheus.common.getVersionDesc
-import io.prometheus.common.localHostName
-import io.prometheus.common.newQueueHealthCheck
-import io.prometheus.common.now
-import io.prometheus.common.poll
-import io.prometheus.common.sleep
 import io.prometheus.delegate.AtomicDelegates.atomicMillis
 import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ThreadDsl.threadFactory
-import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
-import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
-import io.prometheus.grpc.ProxyServiceGrpc.newBlockingStub
-import io.prometheus.grpc.ProxyServiceGrpc.newStub
+import io.prometheus.grpc.ProxyServiceGrpc.*
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import mu.KLogging
@@ -114,7 +96,7 @@ class Agent(options: AgentOptions,
                                     threadFactory {
                                         setNameFormat(NAME_FORMAT)
                                         setDaemon(true)
-                                    })!!
+                                    })
 
     private val reconnectLimiter =
             RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs)!!.apply { acquire() } // Prime the limiter

@@ -20,9 +20,7 @@ package io.prometheus.proxy
 
 import brave.Tracing
 import brave.sparkjava.SparkTracing
-import com.google.common.net.HttpHeaders.ACCEPT
-import com.google.common.net.HttpHeaders.ACCEPT_ENCODING
-import com.google.common.net.HttpHeaders.CONTENT_ENCODING
+import com.google.common.net.HttpHeaders.*
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
 import io.prometheus.common.Millis
@@ -39,6 +37,7 @@ import spark.Route
 import spark.Spark
 import java.net.BindException
 import kotlin.properties.Delegates
+import kotlin.system.exitProcess
 
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
     private val configVals = proxy.configVals
@@ -190,7 +189,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                 logger.error(e) { "ignite failed to bind to port $port" }
             else
                 logger.error(e) { "ignite failed" }
-            System.exit(100)
+            exitProcess(100)
         }
     }
 }

@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentMap
 
 class PathManager(private val isTestMode: Boolean) {
     // Map path to AgentContext
-    private val pathMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap<String, AgentContext>()
+    private val pathMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap()
 
     fun getAgentContextByPath(path: String) = pathMap[path]
 
