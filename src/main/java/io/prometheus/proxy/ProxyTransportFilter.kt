@@ -35,7 +35,7 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
         logger.info { "Connected to $agentContext" }
         return attributes {
             set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)
-            setAll<Any>(attributes)
+            setAll(attributes)
         }
     }
 
