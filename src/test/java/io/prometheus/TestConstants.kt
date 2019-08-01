@@ -18,12 +18,10 @@
 
 package io.prometheus
 
-import java.util.*
 import java.util.concurrent.Executors.newCachedThreadPool
 
 object TestConstants {
     internal val EXECUTOR_SERVICE = newCachedThreadPool()
-    internal val RANDOM = Random()
     internal const val REPS = 1000
     internal const val PROXY_PORT = 9505
     internal val args = listOf("--config", "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/travis.conf")

@@ -62,19 +62,27 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.properties.Delegates.notNull
 
-class Agent(options: AgentOptions,
-            private val inProcessServerName: String = "",
-            testMode: Boolean = false,
-            initBlock: (Agent.() -> Unit)? = null) :
-        GenericService(options.configVals,
-                       newAdminConfig(options.adminEnabled,
-                                      options.adminPort,
-                                      options.configVals.agent.admin),
-                       newMetricsConfig(options.metricsEnabled,
-                                        options.metricsPort,
-                                        options.configVals.agent.metrics),
-                       newZipkinConfig(options.configVals.agent.internal.zipkin),
-                       testMode) {
+class Agent(
+    options: AgentOptions,
+    private val inProcessServerName: String = "",
+    testMode: Boolean = false,
+    initBlock: (Agent.() -> Unit)? = null
+) :
+    GenericService(
+        options.configVals,
+        newAdminConfig(
+            options.adminEnabled,
+            options.adminPort,
+            options.configVals.agent.admin
+        ),
+        newMetricsConfig(
+            options.metricsEnabled,
+            options.metricsPort,
+            options.configVals.agent.metrics
+        ),
+        newZipkinConfig(options.configVals.agent.internal.zipkin),
+        testMode
+    ) {
 
     private val pathContextMap = newConcurrentMap<String, PathContext>()!!
     private val heartbeatService = newFixedThreadPool(1)
@@ -84,29 +92,30 @@ class Agent(options: AgentOptions,
     private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
     private val agentName = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
     private val readRequestsExecutorService =
-            newCachedThreadPool(if (isMetricsEnabled)
-                                    InstrumentedThreadFactory(
-                                            threadFactory {
-                                                setNameFormat(NAME_FORMAT)
-                                                setDaemon(true)
-                                            },
-                                            "agent_fetch",
-                                            "Agent fetch")
-                                else
-                                    threadFactory {
-                                        setNameFormat(NAME_FORMAT)
-                                        setDaemon(true)
-                                    })
+        newCachedThreadPool(if (isMetricsEnabled)
+            InstrumentedThreadFactory(
+                threadFactory {
+                    setNameFormat(NAME_FORMAT)
+                    setDaemon(true)
+                },
+                "agent_fetch",
+                "Agent fetch"
+            )
+        else
+            threadFactory {
+                setNameFormat(NAME_FORMAT)
+                setDaemon(true)
+            })
 
     private val reconnectLimiter =
-            RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs)!!.apply { acquire() } // Prime the limiter
+        RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs)!!.apply { acquire() } // Prime the limiter
 
     private val pathConfigs =
-            configVals.pathConfigs
-                    .asSequence()
-                    .map { mapOf("name" to it.name!!, "path" to it.path!!, "url" to it.url!!) }
-                    .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
-                    .toList()
+        configVals.pathConfigs
+            .asSequence()
+            .map { mapOf("name" to it.name!!, "path" to it.path!!, "url" to it.url!!) }
+            .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
+            .toList()
 
     private var lastMsgSent by atomicMillis()
     private var tracing: Tracing by notNull()
@@ -139,8 +148,7 @@ class Agent(options: AgentOptions,
             val vals = options.proxyHostname.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
             hostName = vals[0]
             port = Integer.valueOf(vals[1])
-        }
-        else {
+        } else {
             hostName = options.proxyHostname
             port = 50051
         }
@@ -187,8 +195,10 @@ class Agent(options: AgentOptions,
     override fun registerHealthChecks() {
         super.registerHealthChecks()
         healthCheckRegistry
-                .register("scrape_response_queue_check",
-                          newQueueHealthCheck(scrapeResponseQueue, configVals.internal.scrapeResponseQueueUnhealthySize))
+            .register(
+                "scrape_response_queue_check",
+                newQueueHealthCheck(scrapeResponseQueue, configVals.internal.scrapeResponseQueueUnhealthySize)
+            )
     }
 
     override fun serviceName() = "${javaClass.simpleName} $agentName"
@@ -230,8 +240,7 @@ class Agent(options: AgentOptions,
                 }
                 logger.info { "Heartbeat completed" }
             }
-        }
-        else {
+        } else {
             logger.info { "Heartbeat disabled" }
         }
     }
@@ -245,11 +254,11 @@ class Agent(options: AgentOptions,
             isGrpcStarted.set(true)
 
         channel =
-                channel(inProcessServerName = inProcessServerName, hostName = hostName, port = port) {
-                    if (isZipkinEnabled)
-                        intercept(grpcTracing.newClientInterceptor())
-                    usePlaintext()
-                }
+            channel(inProcessServerName = inProcessServerName, hostName = hostName, port = port) {
+                if (isZipkinEnabled)
+                    intercept(grpcTracing.newClientInterceptor())
+                usePlaintext()
+            }
 
         val interceptors = listOf<ClientInterceptor>(AgentClientInterceptor(this))
 
@@ -270,11 +279,13 @@ class Agent(options: AgentOptions,
         if (pathContext == null) {
             logger.warn { "Invalid path in fetchUrl(): $path" }
             updateScrapeCounter("invalid_path")
-            return newScrapeResponse(false,
-                                     "Invalid path: $path",
-                                     scrapeRequest.agentId,
-                                     scrapeRequest.scrapeId,
-                                     statusCode)
+            return newScrapeResponse(
+                false,
+                "Invalid path: $path",
+                scrapeRequest.agentId,
+                scrapeRequest.scrapeId,
+                statusCode
+            )
         }
 
         val requestTimer = if (isMetricsEnabled) metrics.scrapeRequestLatency.labels(agentName).startTimer() else null
@@ -282,22 +293,23 @@ class Agent(options: AgentOptions,
 
         try {
             pathContext.fetchUrl(scrapeRequest)
-                    .use {
-                        statusCode = it.code()
-                        if (it.isSuccessful) {
-                            updateScrapeCounter("success")
-                            return newScrapeResponse(true,
-                                                     "",
-                                                     scrapeRequest.agentId,
-                                                     scrapeRequest.scrapeId,
-                                                     statusCode,
-                                                     it.body()?.string().orEmpty(),
-                                                     it.header(CONTENT_TYPE) ?: "")
-                        }
-                        else {
-                            reason = "Unsucessful response code $statusCode"
-                        }
+                .use {
+                    statusCode = it.code()
+                    if (it.isSuccessful) {
+                        updateScrapeCounter("success")
+                        return newScrapeResponse(
+                            true,
+                            "",
+                            scrapeRequest.agentId,
+                            scrapeRequest.scrapeId,
+                            statusCode,
+                            it.body()?.string().orEmpty(),
+                            it.header(CONTENT_TYPE) ?: ""
+                        )
+                    } else {
+                        reason = "Unsucessful response code $statusCode"
                     }
+                }
         } catch (e: IOException) {
             reason = "${e.javaClass.simpleName} - ${e.message}"
         } catch (e: Exception) {
@@ -309,46 +321,48 @@ class Agent(options: AgentOptions,
 
         updateScrapeCounter("unsuccessful")
 
-        return newScrapeResponse(false,
-                                 reason,
-                                 scrapeRequest.agentId,
-                                 scrapeRequest.scrapeId,
-                                 statusCode)
+        return newScrapeResponse(
+            false,
+            reason,
+            scrapeRequest.agentId,
+            scrapeRequest.scrapeId,
+            statusCode
+        )
     }
 
     // If successful, this will create an agentContxt on the Proxy and an interceptor will add an agent_id to the headers`
     private fun connectAgent() =
-            try {
-                logger.info { "Connecting to proxy at $proxyHost..." }
-                blockingStub.connectAgent(Empty.getDefaultInstance())
-                logger.info { "Connected to proxy at $proxyHost" }
-                if (isMetricsEnabled)
-                    metrics.connects.labels("success")?.inc()
-                true
-            } catch (e: StatusRuntimeException) {
-                if (isMetricsEnabled)
-                    metrics.connects.labels("failure")?.inc()
-                logger.info { "Cannot connect to proxy at $proxyHost [${e.message}]" }
-                false
-            }
+        try {
+            logger.info { "Connecting to proxy at $proxyHost..." }
+            blockingStub.connectAgent(Empty.getDefaultInstance())
+            logger.info { "Connected to proxy at $proxyHost" }
+            if (isMetricsEnabled)
+                metrics.connects.labels("success")?.inc()
+            true
+        } catch (e: StatusRuntimeException) {
+            if (isMetricsEnabled)
+                metrics.connects.labels("failure")?.inc()
+            logger.info { "Cannot connect to proxy at $proxyHost [${e.message}]" }
+            false
+        }
 
     @Throws(RequestFailureException::class)
     private fun registerAgent() {
         val request = newRegisterAgentRequest(agentId, agentName, hostName)
         blockingStub.registerAgent(request)
-                .let {
-                    markMsgSent()
-                    if (!it.valid)
-                        throw RequestFailureException("registerAgent() - ${it.reason}")
-                }
+            .let {
+                markMsgSent()
+                if (!it.valid)
+                    throw RequestFailureException("registerAgent() - ${it.reason}")
+            }
         initialConnectionLatch.countDown()
     }
 
     @Throws(RequestFailureException::class)
     private fun registerPaths() =
-            pathConfigs.forEach {
-                registerPath(it["path"]!!, it["url"]!!)
-            }
+        pathConfigs.forEach {
+            registerPath(it["path"]!!, it["url"]!!)
+        }
 
     @Throws(RequestFailureException::class)
     fun registerPath(pathVal: String, url: String) {
@@ -366,68 +380,68 @@ class Agent(options: AgentOptions,
         val pathContext = pathContextMap.remove(path)
         when {
             pathContext == null -> logger.info { "No path value /$path found in pathContextMap" }
-            !isTestMode         -> logger.info { "Unregistered /$path for ${pathContext.url}" }
+            !isTestMode -> logger.info { "Unregistered /$path for ${pathContext.url}" }
         }
     }
 
     fun pathMapSize(): Int {
         val request = newPathMapSizeRequest(agentId)
         blockingStub.pathMapSize(request)!!
-                .let {
-                    markMsgSent()
-                    return it.pathCount
-                }
+            .let {
+                markMsgSent()
+                return it.pathCount
+            }
     }
 
     @Throws(RequestFailureException::class)
     private fun registerPathOnProxy(path: String): Long {
         val request = newRegisterPathRequest(agentId, path)
         blockingStub.registerPath(request)!!
-                .let {
-                    markMsgSent()
-                    if (!it.valid)
-                        throw RequestFailureException("registerPath() - ${it.reason}")
-                    return it.pathId
-                }
+            .let {
+                markMsgSent()
+                if (!it.valid)
+                    throw RequestFailureException("registerPath() - ${it.reason}")
+                return it.pathId
+            }
     }
 
     @Throws(RequestFailureException::class)
     private fun unregisterPathOnProxy(path: String) {
         val request = newUnregisterPathRequest(agentId, path)
         blockingStub.unregisterPath(request)!!
-                .let {
-                    markMsgSent()
-                    if (!it.valid)
-                        throw RequestFailureException("unregisterPath() - ${it.reason}")
-                }
+            .let {
+                markMsgSent()
+                if (!it.valid)
+                    throw RequestFailureException("unregisterPath() - ${it.reason}")
+            }
     }
 
     private fun readRequestAction(request: ScrapeRequest) =
-            Runnable {
-                val response = fetchUrl(request)
-                try {
-                    scrapeResponseQueue.put(response)
-                } catch (e: InterruptedException) {
-                    // Ignore
-                }
+        Runnable {
+            val response = fetchUrl(request)
+            try {
+                scrapeResponseQueue.put(response)
+            } catch (e: InterruptedException) {
+                // Ignore
             }
+        }
 
     private fun readRequestsFromProxy(disconnected: AtomicBoolean) {
         val agentInfo = newAgentInfo(agentId)
 
         val observer =
-                streamObserver<ScrapeRequest> {
-                    onNext { readRequestsExecutorService.submit(readRequestAction(it)) }
+            streamObserver<ScrapeRequest> {
+                onNext { readRequestsExecutorService.submit(readRequestAction(it)) }
 
-                    onError {
-                        logger.error { "Error in readRequestsFromProxy(): ${Status.fromThrowable(it)}" }
-                        disconnected.set(true)
-                    }
-
-                    onCompleted {
-                        disconnected.set(true)
-                    }
+                onError {
+                    logger.error { "Error in readRequestsFromProxy(): ${Status.fromThrowable(it)}" }
+                    disconnected.set(true)
                 }
+
+                onCompleted {
+                    disconnected.set(true)
+                }
+            }
 
         asyncStub.readRequestsFromProxy(agentInfo, observer)
     }
@@ -435,29 +449,29 @@ class Agent(options: AgentOptions,
     private fun writeResponsesToProxyUntilDisconnected(disconnected: AtomicBoolean) {
         val checkMillis = Millis(configVals.internal.scrapeResponseQueueCheckMillis)
         val observer =
-                asyncStub.writeResponsesToProxy(
-                        streamObserver<Empty> {
-                            onNext {
-                                // Ignore Empty return value
-                            }
+            asyncStub.writeResponsesToProxy(
+                streamObserver<Empty> {
+                    onNext {
+                        // Ignore Empty return value
+                    }
 
-                            onError {
-                                val s = Status.fromThrowable(it)!!
-                                logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
-                                disconnected.set(true)
-                            }
+                    onError {
+                        val s = Status.fromThrowable(it)!!
+                        logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
+                        disconnected.set(true)
+                    }
 
-                            onCompleted { disconnected.set(true) }
-                        })
+                    onCompleted { disconnected.set(true) }
+                })
 
         while (!disconnected.get()) {
             try {
                 // Set a short timeout to check if client has disconnected
                 scrapeResponseQueue.poll(checkMillis)
-                        ?.let {
-                            observer.onNext(it)
-                            markMsgSent()
-                        }
+                    ?.let {
+                        observer.onNext(it)
+                        markMsgSent()
+                    }
             } catch (e: InterruptedException) {
                 // Ignore
             }
@@ -478,13 +492,13 @@ class Agent(options: AgentOptions,
         try {
             val request = newHeartBeatRequest(agentId)
             blockingStub.sendHeartBeat(request)
-                    .let {
-                        markMsgSent()
-                        if (!it.valid) {
-                            logger.error { "AgentId $agentId not found on proxy" }
-                            throw StatusRuntimeException(Status.NOT_FOUND)
-                        }
+                .let {
+                    markMsgSent()
+                    if (!it.valid) {
+                        logger.error { "AgentId $agentId not found on proxy" }
+                        throw StatusRuntimeException(Status.NOT_FOUND)
                     }
+                }
         } catch (e: StatusRuntimeException) {
             logger.error { "Hearbeat failed ${e.status}" }
             disconnected.set(true)
@@ -495,13 +509,13 @@ class Agent(options: AgentOptions,
     fun awaitInitialConnection(timeout: Long, unit: TimeUnit) = initialConnectionLatch.await(timeout, unit)
 
     override fun toString() =
-            toStringElements {
-                add("agentId", agentId)
-                add("agentName", agentName)
-                add("proxyHost", proxyHost)
-                add("adminService", if (isAdminEnabled) adminService else "Disabled")
-                add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
-            }
+        toStringElements {
+            add("agentId", agentId)
+            add("agentName", agentName)
+            add("proxyHost", proxyHost)
+            add("adminService", if (isAdminEnabled) adminService else "Disabled")
+            add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
+        }
 
     companion object : KLogging() {
         const val NAME_FORMAT = "agent_fetch-%d"
