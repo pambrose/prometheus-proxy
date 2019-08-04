@@ -19,6 +19,12 @@
 package io.prometheus
 
 import io.ktor.util.KtorExperimentalAPI
+import io.prometheus.CommonTests.addRemovePathsTest
+import io.prometheus.CommonTests.invalidAgentUrlTest
+import io.prometheus.CommonTests.invalidPathTest
+import io.prometheus.CommonTests.missingPathTest
+import io.prometheus.CommonTests.threadedAddRemovePathsTest
+import io.prometheus.CommonTests.timeoutTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
@@ -37,37 +43,25 @@ class NettyTestWithAdminMetricsTest {
 
     @Test
     @KtorExperimentalAPI
-    fun missingPathTest() {
-        CommonTests.missingPathTest(javaClass.simpleName)
-    }
+    fun missingPathTest() = missingPathTest(javaClass.simpleName)
 
     @Test
     @KtorExperimentalAPI
-    fun invalidPathTest() {
-        CommonTests.invalidPathTest(javaClass.simpleName)
-    }
+    fun invalidPathTest() = invalidPathTest(javaClass.simpleName)
 
     @Test
-    fun addRemovePathsTest() {
-        CommonTests.addRemovePathsTest(AGENT, javaClass.simpleName)
-    }
+    fun addRemovePathsTest() = addRemovePathsTest(AGENT, javaClass.simpleName)
 
     @Test
-    fun threadedAddRemovePathsTest() {
-        CommonTests.threadedAddRemovePathsTest(AGENT, javaClass.simpleName)
-    }
+    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(AGENT, javaClass.simpleName)
 
     @Test
     @KtorExperimentalAPI
-    fun invalidAgentUrlTest() {
-        CommonTests.invalidAgentUrlTest(AGENT, javaClass.simpleName)
-    }
+    fun invalidAgentUrlTest() = invalidAgentUrlTest(AGENT, javaClass.simpleName)
 
     @Test
     @KtorExperimentalAPI
-    fun timeoutTest() {
-        CommonTests.timeoutTest(AGENT, javaClass.simpleName)
-    }
+    fun timeoutTest() = timeoutTest(AGENT, javaClass.simpleName)
 
     @Test
     @InternalCoroutinesApi

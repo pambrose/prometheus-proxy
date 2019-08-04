@@ -29,20 +29,7 @@ import io.prometheus.common.GrpcObjects.Companion.newRegisterAgentResponse
 import io.prometheus.common.GrpcObjects.Companion.newRegisterPathResponse
 import io.prometheus.common.GrpcObjects.Companion.newUnregisterPathResponseBuilder
 import io.prometheus.dsl.GrpcDsl.streamObserver
-import io.prometheus.grpc.AgentInfo
-import io.prometheus.grpc.HeartBeatRequest
-import io.prometheus.grpc.HeartBeatResponse
-import io.prometheus.grpc.PathMapSizeRequest
-import io.prometheus.grpc.PathMapSizeResponse
-import io.prometheus.grpc.ProxyServiceGrpc
-import io.prometheus.grpc.RegisterAgentRequest
-import io.prometheus.grpc.RegisterAgentResponse
-import io.prometheus.grpc.RegisterPathRequest
-import io.prometheus.grpc.RegisterPathResponse
-import io.prometheus.grpc.ScrapeRequest
-import io.prometheus.grpc.ScrapeResponse
-import io.prometheus.grpc.UnregisterPathRequest
-import io.prometheus.grpc.UnregisterPathResponse
+import io.prometheus.grpc.*
 import mu.KLogging
 import java.util.concurrent.atomic.AtomicLong
 
@@ -154,7 +141,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         responseObserver
                 .run {
                     proxy.agentContextManager.getAgentContext(agentInfo.agentId)
-                            ?.let {
+                        ?.also {
                                 while (proxy.isRunning && it.isValid.get())
                                     it.pollScrapeRequestQueue()?.apply { onNext(scrapeRequest) }
                             }
@@ -175,7 +162,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
                 onError {
                     Status.fromThrowable(it)
-                            .let { arg ->
+                        .also { arg ->
                                 if (arg !== Status.CANCELLED)
                                     logger.info { "Error in writeResponsesToProxy(): $arg" }
                             }

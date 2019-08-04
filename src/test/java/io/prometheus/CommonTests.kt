@@ -161,7 +161,9 @@ object CommonTests : KLogging() {
         agent.unregisterPath("/$proxyPath")
 
         httpServer.stop()
-        sleep(Secs(5))
+        httpServer.awaitStop()
+
+        //sleep(Secs(5))
     }
 
     @InternalCoroutinesApi
@@ -177,6 +179,7 @@ object CommonTests : KLogging() {
         caller: String
     ) {
         logger.info { "Calling proxyCallTest() from $caller" }
+
         val httpServers = mutableListOf<Service>()
         val pathMap = newConcurrentMap<Int, Int>()
 
@@ -220,7 +223,7 @@ object CommonTests : KLogging() {
                 .use { httpClient ->
                     runBlocking {
                         val result =
-                            withTimeoutOrNull(1000) {
+                            withTimeoutOrNull(Secs(1).toMillis().value) {
                                 val job =
                                     GlobalScope.launch(handler) {
                                         callProxy(httpClient, pathMap, "Sequential $it")
@@ -241,7 +244,7 @@ object CommonTests : KLogging() {
                 runBlocking {
                     val jobs = mutableListOf<Job>()
                     val result =
-                        withTimeoutOrNull(5000) {
+                        withTimeoutOrNull(Secs(5).toMillis().value) {
                             repeat(parallelQueryCount) {
                                 jobs += GlobalScope.launch(dispatcher + handler) {
                                     callProxy(httpClient, pathMap, "Parallel $it")
@@ -271,8 +274,13 @@ object CommonTests : KLogging() {
         assertThat(errorCnt.get()).isEqualTo(0)
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
 
-        httpServers.forEach { it.stop() }
-        sleep(Secs(5))
+        httpServers
+            .forEach {
+                it.stop()
+                it.awaitStop()
+            }
+
+        //sleep(Secs(5))
     }
 
     @KtorExperimentalAPI

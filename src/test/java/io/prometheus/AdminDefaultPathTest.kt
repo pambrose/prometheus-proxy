@@ -38,10 +38,13 @@ class AdminDefaultPathTest {
     @Test
     @KtorExperimentalAPI
     fun proxyPingPathTest() {
-        blockingGet("http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}") {
-            assertThat(it.status.value).isEqualTo(200)
-            assertThat(it.receive<String>()).startsWith("pong")
-        }
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.pingPath}") {
+                    assertThat(it.status.value).isEqualTo(200)
+                    assertThat(it.receive<String>()).startsWith("pong")
+                }
+            }
     }
 
     @Test

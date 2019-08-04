@@ -18,11 +18,7 @@
 
 package io.prometheus.proxy
 
-import io.grpc.ForwardingServerCall
-import io.grpc.Metadata
-import io.grpc.ServerCall
-import io.grpc.ServerCallHandler
-import io.grpc.ServerInterceptor
+import io.grpc.*
 import io.prometheus.Proxy
 
 class ProxyInterceptor : ServerInterceptor {
@@ -39,7 +35,7 @@ class ProxyInterceptor : ServerInterceptor {
                 object : ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(call) {
                     override fun sendHeaders(headers: Metadata) {
                         // agent_id was assigned in ServerTransportFilter
-                        attributes.get(Proxy.ATTRIB_AGENT_ID)?.let { headers.put(META_AGENT_ID, it) }
+                        attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { headers.put(META_AGENT_ID, it) }
                         super.sendHeaders(headers)
                     }
                 },

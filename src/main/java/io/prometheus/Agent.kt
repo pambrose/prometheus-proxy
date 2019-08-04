@@ -350,7 +350,7 @@ class Agent(
     private fun registerAgent() {
         val request = newRegisterAgentRequest(agentId, agentName, hostName)
         blockingStub.registerAgent(request)
-            .let {
+            .also {
                 markMsgSent()
                 if (!it.valid)
                     throw RequestFailureException("registerAgent() - ${it.reason}")
@@ -396,7 +396,7 @@ class Agent(
     @Throws(RequestFailureException::class)
     private fun registerPathOnProxy(path: String): Long {
         val request = newRegisterPathRequest(agentId, path)
-        blockingStub.registerPath(request)!!
+        blockingStub.registerPath(request)
             .let {
                 markMsgSent()
                 if (!it.valid)
@@ -408,8 +408,8 @@ class Agent(
     @Throws(RequestFailureException::class)
     private fun unregisterPathOnProxy(path: String) {
         val request = newUnregisterPathRequest(agentId, path)
-        blockingStub.unregisterPath(request)!!
-            .let {
+        blockingStub.unregisterPath(request)
+            .also {
                 markMsgSent()
                 if (!it.valid)
                     throw RequestFailureException("unregisterPath() - ${it.reason}")
@@ -468,7 +468,7 @@ class Agent(
             try {
                 // Set a short timeout to check if client has disconnected
                 scrapeResponseQueue.poll(checkMillis)
-                    ?.let {
+                    ?.also {
                         observer.onNext(it)
                         markMsgSent()
                     }
@@ -492,7 +492,7 @@ class Agent(
         try {
             val request = newHeartBeatRequest(agentId)
             blockingStub.sendHeartBeat(request)
-                .let {
+                .also {
                     markMsgSent()
                     if (!it.valid) {
                         logger.error { "AgentId $agentId not found on proxy" }

@@ -27,6 +27,7 @@ import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
+import io.prometheus.common.Secs
 import io.prometheus.dsl.GrpcDsl.server
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
@@ -67,7 +68,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
                     addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
                     addTransportFilter(ProxyTransportFilter(proxy))
                 }
-        Servers.shutdownWithJvm(grpcServer, 2000)
+        Servers.shutdownWithJvm(grpcServer, Secs(2).toMillis().value)
 
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
     }
@@ -80,7 +81,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
     override fun shutDown() {
         if (proxy.isZipkinEnabled)
             tracing.close()
-        Servers.shutdownGracefully(grpcServer, 2000)
+        Servers.shutdownGracefully(grpcServer, Secs(2).toMillis().value)
     }
 
     override fun toString() =

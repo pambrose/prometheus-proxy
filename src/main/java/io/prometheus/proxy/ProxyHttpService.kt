@@ -25,7 +25,6 @@ import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
 import io.prometheus.common.Millis
 import io.prometheus.common.Secs
-import io.prometheus.common.sleep
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.SparkDsl.httpServer
 import io.prometheus.guava.GenericIdleService
@@ -49,6 +48,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                 threadPool(configVals.http.maxThreads,
                            configVals.http.minThreads,
                            configVals.http.idleTimeoutMillis)
+                //awaitInitialization()
             }
 
     init {
@@ -124,7 +124,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             tracing.close()
 
         httpServer.stop()
-        sleep(Secs(3))
+        httpServer.awaitStop()
+
+        //sleep(Secs(3))
     }
 
     private fun submitScrapeRequest(req: Request,
