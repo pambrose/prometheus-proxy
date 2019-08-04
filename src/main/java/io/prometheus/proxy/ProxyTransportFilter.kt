@@ -27,7 +27,7 @@ import mu.KLogging
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
     private fun getRemoteAddr(attributes: Attributes) =
-            attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"
+        attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"
 
     override fun transportReady(attributes: Attributes): Attributes {
         val agentContext = AgentContext(proxy, getRemoteAddr(attributes))
@@ -40,15 +40,19 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
     }
 
     override fun transportTerminated(attributes: Attributes?) {
-        val agentId = attributes!!.get(Proxy.ATTRIB_AGENT_ID)
-        proxy.pathManager.removePathByAgentId(agentId)
-        val agentContext = proxy.removeAgentContext(agentId)
-        logger.info {
-            "Disconnected " +
-            if (agentContext != null)
-                "from $agentContext"
-            else
-                "with invalid agentId: $agentId"
+        if (attributes == null) {
+            logger.error { "Null attributes" }
+        } else {
+            val agentId = attributes.get(Proxy.ATTRIB_AGENT_ID)
+            proxy.pathManager.removePathByAgentId(agentId)
+            val agentContext = proxy.removeAgentContext(agentId)
+            logger.info {
+                "Disconnected " +
+                        if (agentContext != null)
+                            "from $agentContext"
+                        else
+                            "with invalid agentId: $agentId"
+            }
         }
         super.transportTerminated(attributes)
     }

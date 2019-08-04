@@ -44,10 +44,7 @@ object KtorDsl {
 
     suspend fun HttpClient.get(url: String, block: suspend (HttpResponse) -> Unit) {
         val prefixedUrl = if (url.startsWith(prefix)) url else (prefix + url)
-        val resp =
-            use {
-                it.call(prefixedUrl) { method = HttpMethod.Get }
-            }
+        val resp = this.call(prefixedUrl) { method = HttpMethod.Get }
         block(resp.response)
     }
 }

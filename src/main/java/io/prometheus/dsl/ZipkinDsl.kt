@@ -22,9 +22,9 @@ import brave.Tracing
 
 object ZipkinDsl {
     fun tracing(block: Tracing.Builder.() -> Unit) =
-            Tracing.newBuilder()!!
+        Tracing.newBuilder()
                     .run {
                         block.invoke(this)
-                        build()!!
+                        build()
                     }
 }

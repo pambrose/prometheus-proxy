@@ -25,6 +25,6 @@ object ThreadDsl {
             ThreadFactoryBuilder()
                     .run {
                         block.invoke(this)
-                        build()!!
+                        build()
                     }
 }

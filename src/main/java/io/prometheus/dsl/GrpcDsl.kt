@@ -47,17 +47,17 @@ object GrpcDsl {
             (if (inProcessServerName.isEmpty())
                 ServerBuilder.forPort(port)
             else
-                InProcessServerBuilder.forName(inProcessServerName))!!
+                InProcessServerBuilder.forName(inProcessServerName))
                     .run {
                         block.invoke(this)
                         build()
                     }
 
     fun attributes(block: Attributes.Builder.() -> Unit) =
-            Attributes.newBuilder()!!
+        Attributes.newBuilder()
                     .run {
                         block.invoke(this)
-                        build()!!
+                        build()
                     }
 
     fun <T> streamObserver(init: StreamObserverHelper<T>.() -> Unit) =

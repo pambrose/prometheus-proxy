@@ -92,7 +92,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
     override fun unregisterPath(request: UnregisterPathRequest,
                                 responseObserver: StreamObserver<UnregisterPathResponse>) {
-        val agentId = request.agentId!!
+        val agentId = request.agentId
         val agentContext = proxy.agentContextManager.getAgentContext(agentId)
         val responseBuilder = newUnregisterPathResponseBuilder()
 

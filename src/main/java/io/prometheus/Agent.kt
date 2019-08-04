@@ -84,7 +84,7 @@ class Agent(
         testMode
     ) {
 
-    private val pathContextMap = newConcurrentMap<String, PathContext>()!!
+    private val pathContextMap = newConcurrentMap<String, PathContext>()
     private val heartbeatService = newFixedThreadPool(1)
     private val initialConnectionLatch = CountDownLatch(1)
     private val okHttpClient = OkHttpClient()
@@ -108,12 +108,18 @@ class Agent(
             })
 
     private val reconnectLimiter =
-        RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs)!!.apply { acquire() } // Prime the limiter
+        RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs).apply { acquire() } // Prime the limiter
 
     private val pathConfigs =
         configVals.pathConfigs
             .asSequence()
-            .map { mapOf("name" to it.name!!, "path" to it.path!!, "url" to it.url!!) }
+            .map {
+                mapOf(
+                    "name" to it.name,
+                    "path" to it.path,
+                    "url" to it.url
+                )
+            }
             .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
             .toList()
 
@@ -361,7 +367,12 @@ class Agent(
     @Throws(RequestFailureException::class)
     private fun registerPaths() =
         pathConfigs.forEach {
-            registerPath(it["path"]!!, it["url"]!!)
+            val path = it["path"]
+            val url = it["url"]
+            if (path != null && url != null)
+                registerPath(path, url)
+            else
+                logger.error { "Null path/url values: $path/$url" }
         }
 
     @Throws(RequestFailureException::class)
@@ -386,7 +397,7 @@ class Agent(
 
     fun pathMapSize(): Int {
         val request = newPathMapSizeRequest(agentId)
-        blockingStub.pathMapSize(request)!!
+        blockingStub.pathMapSize(request)
             .let {
                 markMsgSent()
                 return it.pathCount
@@ -456,7 +467,7 @@ class Agent(
                     }
 
                     onError {
-                        val s = Status.fromThrowable(it)!!
+                        val s = Status.fromThrowable(it)
                         logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
                         disconnected.set(true)
                     }

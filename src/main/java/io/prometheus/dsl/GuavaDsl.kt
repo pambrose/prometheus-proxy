@@ -25,7 +25,7 @@ import io.prometheus.delegate.DelegatesExtensions.singleAssign
 
 object GuavaDsl {
     fun Any.toStringElements(block: MoreObjects.ToStringHelper.() -> Unit) =
-            MoreObjects.toStringHelper(this)!!
+        MoreObjects.toStringHelper(this)
                     .run {
                         block.invoke(this)
                         toString()

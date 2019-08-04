@@ -27,20 +27,20 @@ object PrometheusDsl {
             Counter.build()
                     .run {
                         block.invoke(this)
-                        register()!!
+                        register()
                     }
 
     fun summary(block: Summary.Builder.() -> Unit) =
-            Summary.build()!!
+        Summary.build()
                     .run {
                         block.invoke(this)
-                        register()!!
+                        register()
                     }
 
     fun gauge(block: Gauge.Builder.() -> Unit) =
             Gauge.build()
                     .run {
                         block.invoke(this)
-                        register()!!
+                        register()
                     }
 }

@@ -23,7 +23,7 @@ import spark.Service
 
 object SparkDsl {
     fun httpServer(block: Service.() -> Unit) =
-            Service.ignite().apply { block.invoke(this) }!!
+        Service.ignite().apply { block.invoke(this) }
 
     fun servletContextHandler(block: ServletContextHandler.() -> Unit) =
             ServletContextHandler().apply { block.invoke(this) }

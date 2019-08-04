@@ -18,97 +18,85 @@
 
 package io.prometheus.common
 
-import io.prometheus.grpc.AgentInfo
-import io.prometheus.grpc.HeartBeatRequest
-import io.prometheus.grpc.HeartBeatResponse
-import io.prometheus.grpc.PathMapSizeRequest
-import io.prometheus.grpc.PathMapSizeResponse
-import io.prometheus.grpc.RegisterAgentRequest
-import io.prometheus.grpc.RegisterAgentResponse
-import io.prometheus.grpc.RegisterPathRequest
-import io.prometheus.grpc.RegisterPathResponse
-import io.prometheus.grpc.ScrapeRequest
-import io.prometheus.grpc.ScrapeResponse
-import io.prometheus.grpc.UnregisterPathRequest
-import io.prometheus.grpc.UnregisterPathResponse
+import io.prometheus.grpc.*
 
 class GrpcObjects {
 
     companion object {
         fun newHeartBeatRequest(agentId: String) =
-                HeartBeatRequest.newBuilder()!!
+            HeartBeatRequest.newBuilder()
                         .run {
                             this.agentId = agentId
-                            build()!!
+                            build()
                         }
 
         fun newHeartBeatResponse(valid: Boolean, reason: String) =
-                HeartBeatResponse.newBuilder()!!
+            HeartBeatResponse.newBuilder()
                         .run {
                             this.valid = valid
                             this.reason = reason
-                            build()!!
+                            build()
                         }
 
         fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String) =
-                RegisterAgentRequest.newBuilder()!!
+            RegisterAgentRequest.newBuilder()
                         .run {
                             this.agentId = agentId
                             this.agentName = agentName
                             this.hostName = hostName
-                            build()!!
+                            build()
                         }
 
         fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String) =
-                RegisterAgentResponse.newBuilder()!!
+            RegisterAgentResponse.newBuilder()
                         .run {
                             this.valid = valid
                             this.reason = reason
                             this.agentId = agentId
-                            build()!!
+                            build()
                         }
 
         fun newPathMapSizeRequest(agentId: String) =
-                PathMapSizeRequest.newBuilder()!!
+            PathMapSizeRequest.newBuilder()
                         .run {
                             this.agentId = agentId
-                            build()!!
+                            build()
                         }
 
         fun newPathMapSizeResponse(pathCount: Int) =
-                PathMapSizeResponse.newBuilder()!!
+            PathMapSizeResponse.newBuilder()
                         .run {
                             this.pathCount = pathCount
-                            build()!!
+                            build()
                         }
 
         fun newRegisterPathRequest(agentId: String, path: String) =
-                RegisterPathRequest.newBuilder()!!
+            RegisterPathRequest.newBuilder()
                         .run {
                             this.agentId = agentId
                             this.path = path
-                            build()!!
+                            build()
                         }
 
         fun newRegisterPathResponse(valid: Boolean, reason: String, pathCount: Int, pathId: Long) =
-                RegisterPathResponse.newBuilder()!!
+            RegisterPathResponse.newBuilder()
                         .run {
                             this.valid = valid
                             this.reason = reason
                             this.pathCount = pathCount
                             this.pathId = pathId
-                            build()!!
+                            build()
                         }
 
         fun newScrapeRequest(agentId: String, scrapeId: Long, path: String, accept: String?) =
-                ScrapeRequest.newBuilder()!!
+            ScrapeRequest.newBuilder()
                         .run {
                             this.agentId = agentId
                             this.scrapeId = scrapeId
                             this.path = path
                             if (!accept.isNullOrBlank())
                                 this.accept = accept
-                            build()!!
+                            build()
                         }
 
 
@@ -119,7 +107,7 @@ class GrpcObjects {
                               statusCode: Int,
                               text: String = "",
                               contentType: String = "") =
-                ScrapeResponse.newBuilder()!!
+            ScrapeResponse.newBuilder()
                         .run {
                             this.agentId = agentId
                             this.scrapeId = scrapeId
@@ -128,24 +116,24 @@ class GrpcObjects {
                             this.statusCode = statusCode
                             this.text = text
                             this.contentType = contentType
-                            build()!!
+                            build()
                         }
 
         fun newUnregisterPathRequest(agentId: String, path: String) =
-                UnregisterPathRequest.newBuilder()!!
+            UnregisterPathRequest.newBuilder()
                         .run {
                             this.agentId = agentId
                             this.path = path
-                            build()!!
+                            build()
                         }
 
-        fun newUnregisterPathResponseBuilder() = UnregisterPathResponse.newBuilder()!!
+        fun newUnregisterPathResponseBuilder() = UnregisterPathResponse.newBuilder()
 
         fun newAgentInfo(agentId: String) =
-                AgentInfo.newBuilder()!!
+            AgentInfo.newBuilder()
                         .run {
                             this.agentId = agentId
-                            build()!!
+                            build()
                         }
     }
 }
