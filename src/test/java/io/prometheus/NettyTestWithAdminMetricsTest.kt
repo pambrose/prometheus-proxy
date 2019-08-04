@@ -18,12 +18,14 @@
 
 package io.prometheus
 
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.Millis
 import io.prometheus.common.Secs
 import io.prometheus.common.sleep
+import kotlinx.coroutines.InternalCoroutinesApi
 import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -34,11 +36,13 @@ import java.util.concurrent.TimeoutException
 class NettyTestWithAdminMetricsTest {
 
     @Test
+    @KtorExperimentalAPI
     fun missingPathTest() {
         CommonTests.missingPathTest(javaClass.simpleName)
     }
 
     @Test
+    @KtorExperimentalAPI
     fun invalidPathTest() {
         CommonTests.invalidPathTest(javaClass.simpleName)
     }
@@ -50,28 +54,34 @@ class NettyTestWithAdminMetricsTest {
 
     @Test
     fun threadedAddRemovePathsTest() {
-        CommonTests.threadedAddRemovePathsTest(AGENT, caller = javaClass.simpleName)
+        CommonTests.threadedAddRemovePathsTest(AGENT, javaClass.simpleName)
     }
 
     @Test
+    @KtorExperimentalAPI
     fun invalidAgentUrlTest() {
-        CommonTests.invalidAgentUrlTest(AGENT, caller = javaClass.simpleName)
+        CommonTests.invalidAgentUrlTest(AGENT, javaClass.simpleName)
     }
 
     @Test
+    @KtorExperimentalAPI
     fun timeoutTest() {
-        CommonTests.timeoutTest(AGENT, caller = javaClass.simpleName)
+        CommonTests.timeoutTest(AGENT, javaClass.simpleName)
     }
 
     @Test
+    @InternalCoroutinesApi
+    @KtorExperimentalAPI
     fun proxyCallTest() {
-        CommonTests.proxyCallTest(AGENT,
-                                  httpServerCount = 10,
-                                  pathCount = 25,
-                                  sequentialQueryCount = 100,
-                                  sequentialPauseMillis = Millis(25),
-                                  parallelQueryCount = 25,
-                                  caller = javaClass.simpleName)
+        CommonTests.proxyCallTest(
+            AGENT,
+            httpServerCount = 10,
+            pathCount = 25,
+            sequentialQueryCount = 100,
+            sequentialPauseMillis = Millis(25),
+            parallelQueryCount = 25,
+            caller = javaClass.simpleName
+        )
     }
 
     companion object : KLogging() {

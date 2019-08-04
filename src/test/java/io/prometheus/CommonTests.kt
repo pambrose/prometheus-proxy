@@ -19,22 +19,23 @@
 package io.prometheus
 
 import com.google.common.collect.Maps.newConcurrentMap
+import io.ktor.client.HttpClient
+import io.ktor.client.call.receive
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.Millis
 import io.prometheus.common.Secs
 import io.prometheus.common.sleep
-import io.prometheus.dsl.OkHttpDsl.get
+import io.prometheus.dsl.KtorDsl.blockingGet
+import io.prometheus.dsl.KtorDsl.get
+import io.prometheus.dsl.KtorDsl.newHttpClient
 import io.prometheus.dsl.SparkDsl.httpServer
 import io.prometheus.proxy.ProxyHttpService.Companion.sparkExceptionHandler
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.*
 import mu.KLogging
 import org.assertj.core.api.Assertions.assertThat
 import spark.Service
-import java.lang.Math.abs
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MINUTES
 import java.util.concurrent.atomic.AtomicInteger
@@ -42,14 +43,16 @@ import kotlin.random.Random
 
 object CommonTests : KLogging() {
 
+    @KtorExperimentalAPI
     fun missingPathTest(caller: String) {
         logger.info { "Calling missingPathTest() from $caller" }
-        "http://localhost:$PROXY_PORT/".get { assertThat(it.code()).isEqualTo(404) }
+        blockingGet("$PROXY_PORT/") { assertThat(it.status.value).isEqualTo(404) }
     }
 
+    @KtorExperimentalAPI
     fun invalidPathTest(caller: String) {
         logger.info { "Calling invalidPathTest() from $caller" }
-        "http://localhost:$PROXY_PORT/invalid_path".get { assertThat(it.code()).isEqualTo(404) }
+        blockingGet("$PROXY_PORT/invalid_path") { assertThat(it.status.value).isEqualTo(404) }
     }
 
     fun addRemovePathsTest(agent: Agent, caller: String) {
@@ -122,22 +125,23 @@ object CommonTests : KLogging() {
         assertThat(agent.pathMapSize()).isEqualTo(originalSize)
     }
 
-    fun invalidAgentUrlTest(agent: Agent, badPath: String = "badPath", caller: String) {
+    @KtorExperimentalAPI
+    fun invalidAgentUrlTest(agent: Agent, caller: String, badPath: String = "badPath") {
         logger.info { "Calling invalidAgentUrlTest() from $caller" }
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
-        "http://localhost:$PROXY_PORT/$badPath".get { assertThat(it.code()).isEqualTo(404) }
+        blockingGet("$PROXY_PORT/$badPath") { assertThat(it.status.value).isEqualTo(404) }
         agent.unregisterPath(badPath)
     }
 
+    @KtorExperimentalAPI
     fun timeoutTest(
         agent: Agent,
+        caller: String,
         agentPort: Int = 9700,
-        proxyPath: String = "proxy-timeout",
         agentPath: String = "agent-timeout",
-        caller: String
+        proxyPath: String = "proxy-timeout"
     ) {
-
         logger.info { "Calling timeoutTest() from $caller" }
 
         val httpServer =
@@ -153,13 +157,15 @@ object CommonTests : KLogging() {
             }
 
         agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
-        "http://localhost:$PROXY_PORT/$proxyPath".get { assertThat(it.code()).isEqualTo(404) }
+        blockingGet("$PROXY_PORT/$proxyPath") { assertThat(it.status.value).isEqualTo(404) }
         agent.unregisterPath("/$proxyPath")
 
         httpServer.stop()
         sleep(Secs(5))
     }
 
+    @InternalCoroutinesApi
+    @KtorExperimentalAPI
     fun proxyCallTest(
         agent: Agent,
         httpServerCount: Int,
@@ -195,51 +201,63 @@ object CommonTests : KLogging() {
 
         // Create the paths
         repeat(pathCount) {
-            val index = kotlin.math.abs(Random.nextInt()) % httpServers.size
+            val index = Random.nextInt(httpServers.size)
             agent.registerPath("proxy-$it", "http://localhost:${startingPort + index}/agent-$index")
             pathMap[it] = index
         }
 
         assertThat(agent.pathMapSize()).isEqualTo(originalSize + pathCount)
 
+        val handler =
+            CoroutineExceptionHandler { context, e ->
+                e.printStackTrace()
+                println("Handler caught $e")
+            }
+
         // Call the proxy sequentially
         repeat(sequentialQueryCount) {
-            callProxy(pathMap, "Sequential $it")
+            newHttpClient()
+                .use { httpClient ->
+                    runBlocking {
+                        val result =
+                            withTimeoutOrNull(1000) {
+                                val job =
+                                    GlobalScope.launch(handler) {
+                                        callProxy(httpClient, pathMap, "Sequential $it")
+                                    }
+                                job.join()
+                                assertThat(job.getCancellationException().cause).isNull()
+                            }
+                        assertThat(result != null).isTrue()
+                    }
+                }
             sleep(sequentialPauseMillis)
         }
 
         // Call the proxy in parallel
-        runBlocking {
-            val result =
-                withTimeoutOrNull(1) {
-                    repeat(parallelQueryCount) {
-                        launch(Dispatchers.Default) {
-                            try {
-                                callProxy(pathMap, "Parallel $it")
-                            } catch (e: Exception) {
-                                e.printStackTrace()
+        val dispatcher = TestConstants.EXECUTOR_SERVICE.asCoroutineDispatcher()
+        newHttpClient()
+            .use { httpClient ->
+                runBlocking {
+                    val jobs = mutableListOf<Job>()
+                    val result =
+                        withTimeoutOrNull(5000) {
+                            repeat(parallelQueryCount) {
+                                jobs += GlobalScope.launch(dispatcher + handler) {
+                                    callProxy(httpClient, pathMap, "Parallel $it")
+                                }
                             }
                         }
-                    }
-                }
-            assertThat(result != null).isTrue()
-        }
 
-        // Call the proxy in parallel
-        val latch = CountDownLatch(parallelQueryCount)
-        repeat(parallelQueryCount) {
-            TestConstants.EXECUTOR_SERVICE
-                .submit {
-                    try {
-                        callProxy(pathMap, "Parallel $it")
-                        latch.countDown()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    jobs.forEach {
+                        it.join()
+                        assertThat(it.getCancellationException().cause).isNull()
                     }
-                }
-        }
 
-        assertThat(latch.await(1, MINUTES)).isTrue()
+                    // Check if call timed out
+                    assertThat(result != null).isTrue()
+                }
+            }
 
         val errorCnt = AtomicInteger()
         pathMap.forEach {
@@ -257,19 +275,19 @@ object CommonTests : KLogging() {
         sleep(Secs(5))
     }
 
-    private fun callProxy(pathMap: Map<Int, Int>, msg: String) {
+    @KtorExperimentalAPI
+    private suspend fun callProxy(httpClient: HttpClient, pathMap: Map<Int, Int>, msg: String) {
         //logger.info {"Calling proxy for ${msg}")
         // Choose one of the pathMap values
-        val index = abs(Random.nextInt() % pathMap.size)
+        val index = Random.nextInt(pathMap.size)
         val httpVal = pathMap[index]
-        "http://localhost:$PROXY_PORT/proxy-$index"
-            .get {
-                if (it.code() != 200)
-                    logger.error { "Proxy failed on $msg" }
-                assertThat(it.code()).isEqualTo(200)
-                val body = it.body()!!.string()
-                assertThat(body).isEqualTo("value: $httpVal")
-            }
+        httpClient.get("$PROXY_PORT/proxy-$index") {
+            if (it.status.value != 200)
+                logger.error { "Proxy failed on $msg" }
+            assertThat(it.status.value).isEqualTo(200)
+            val body = it.receive<String>()
+            assertThat(body).isEqualTo("value: $httpVal")
+        }
     }
 }
 

@@ -18,10 +18,12 @@
 
 package io.prometheus
 
+import io.ktor.client.call.receive
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.dsl.OkHttpDsl.get
+import io.prometheus.dsl.KtorDsl.blockingGet
 import mu.KLogging
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
@@ -34,42 +36,52 @@ import java.util.concurrent.TimeoutException
 class AdminNonDefaultPathTest {
 
     @Test
+    @KtorExperimentalAPI
     fun proxyPingPathTest() {
         assertThat(PROXY.configVals.admin.port).isEqualTo(8099)
         assertThat(PROXY.configVals.admin.pingPath).isEqualTo("pingPath2")
-        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
-                .get {
-                    assertThat(it.code()).isEqualTo(200)
-                    assertThat(it.body()!!.string()).startsWith("pong")
-                }
+        PROXY.configVals.admin.also { admin ->
+            blockingGet("${admin.port}/${admin.pingPath}") {
+                assertThat(it.status.value).isEqualTo(200)
+                assertThat(it.receive<String>()).startsWith("pong")
+            }
+        }
     }
 
     @Test
+    @KtorExperimentalAPI
     fun proxyVersionPathTest() {
         assertThat(PROXY.configVals.admin.port).isEqualTo(8099)
         assertThat(PROXY.configVals.admin.versionPath).isEqualTo("versionPath2")
-        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
-                .get {
-                    assertThat(it.code()).isEqualTo(200)
-                    assertThat(it.body()!!.string()).contains("Version")
-                }
+        PROXY.configVals.admin.also { admin ->
+            blockingGet("${admin.port}/${admin.versionPath}") {
+                assertThat(it.status.value).isEqualTo(200)
+                assertThat(it.receive<String>()).contains("Version")
+            }
+        }
     }
 
     @Test
+    @KtorExperimentalAPI
     fun proxyHealthCheckPathTest() {
         assertThat(PROXY.configVals.admin.healthCheckPath).isEqualTo("healthCheckPath2")
-        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
-                .get {
-                    assertThat(it.code()).isEqualTo(200)
-                    assertThat(it.body()!!.string().length).isGreaterThan(10)
-                }
+        PROXY.configVals.admin.also { admin ->
+            blockingGet("${admin.port}/${admin.healthCheckPath}") {
+                assertThat(it.status.value).isEqualTo(200)
+                assertThat(it.receive<String>().length).isGreaterThan(10)
+            }
+        }
     }
 
     @Test
+    @KtorExperimentalAPI
     fun proxyThreadDumpPathTest() {
         assertThat(PROXY.configVals.admin.threadDumpPath).isEqualTo("threadDumpPath2")
-        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
-                .get { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+        PROXY.configVals.admin.also { admin ->
+            blockingGet("${admin.port}/${admin.threadDumpPath}") {
+                assertThat(it.receive<String>().length).isGreaterThan(10)
+            }
+        }
     }
 
     companion object : KLogging() {
@@ -81,12 +93,13 @@ class AdminNonDefaultPathTest {
         @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            val args = listOf("-Dproxy.admin.port=8099",
-                              "-Dproxy.admin.pingPath=pingPath2",
-                              "-Dproxy.admin.versionPath=versionPath2",
-                              "-Dproxy.admin.healthCheckPath=healthCheckPath2",
-                              "-Dproxy.admin.threadDumpPath=threadDumpPath2"
-                             )
+            val args = listOf(
+                "-Dproxy.admin.port=8099",
+                "-Dproxy.admin.pingPath=pingPath2",
+                "-Dproxy.admin.versionPath=versionPath2",
+                "-Dproxy.admin.healthCheckPath=healthCheckPath2",
+                "-Dproxy.admin.threadDumpPath=threadDumpPath2"
+            )
             PROXY = startProxy(adminEnabled = true, argv = args)
             AGENT = startAgent(adminEnabled = true)
 

@@ -25,9 +25,13 @@
     <version>1.3.11-SNAPSHOT</version>
 
     <properties>
-        <kotlin.version>1.3.41</kotlin.version>
-        <kotlinx.version>1.3.0-RC</kotlinx.version>
+        <kotlin.version>1.3.60-dev-614</kotlin.version>
+        <kotlinx.version>1.3.0-RC-1.3.50-eap-5</kotlinx.version>
         <kotlin.code.style>official</kotlin.code.style>
+
+        <kotlin.maven.plugin.version>1.3.41</kotlin.maven.plugin.version>
+
+        <ktor.version>1.2.3-1.3.50-eap-5</ktor.version>
 
         <prometheus.version>0.6.0</prometheus.version>
         <jcommander.version>1.72</jcommander.version>
@@ -48,14 +52,14 @@
         <jetty.version>9.4.18.v20190429</jetty.version>
 
         <brave.version>5.6.9</brave.version>
-        <zipkin-sender.version>2.10.0</zipkin-sender.version>
+        <zipkin-sender.version>2.10.1</zipkin-sender.version>
 
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.7.25</slf4j.version>
         <kotlin.logging.version>1.7.2</kotlin.logging.version>
 
         <junit.version>4.12</junit.version>
-        <assertj.version>3.13.1</assertj.version>
+        <assertj.version>3.13.2</assertj.version>
         <assertj.maven.version>2.0.0</assertj.maven.version>
 
         <maven.assembly.version>2.6</maven.assembly.version>
@@ -77,6 +81,78 @@
     <prerequisites>
         <maven>${maven.version}</maven>
     </prerequisites>
+
+    <repositories>
+        <repository>
+            <id>asf-releases</id>
+            <name>Apache Public Releases</name>
+            <url>https://repository.apache.org/content/repositories/public/</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+
+        <repository>
+            <id>kotlin-eap</id>
+            <name>Kotlin Releases</name>
+            <url>https://dl.bintray.com/kotlin/kotlin-eap/</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+
+        <repository>
+            <id>kotlin-dev</id>
+            <name>Kotlin Releases</name>
+            <url>https://dl.bintray.com/kotlin/kotlin-dev/</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+
+        <repository>
+            <id>kotlinx</id>
+            <url>https://dl.bintray.com/kotlin/kotlinx/</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+
+        <repository>
+            <id>jcenter</id>
+            <url>https://jcenter.bintray.com</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+
+        <repository>
+            <id>ktor</id>
+            <url>https://dl.bintray.com/kotlin/ktor</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+
+    </repositories>
 
     <dependencyManagement>
         <dependencies>
@@ -209,6 +285,36 @@
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
             <version>${okhttp.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-server-core</artifactId>
+            <version>${ktor.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-server-netty</artifactId>
+            <version>${ktor.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-client-core</artifactId>
+            <version>${ktor.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-client-core-jvm</artifactId>
+            <version>${ktor.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-client-cio</artifactId>
+            <version>${ktor.version}</version>
         </dependency>
 
         <dependency>
@@ -352,7 +458,7 @@
             <plugin>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-maven-plugin</artifactId>
-                <version>${kotlin.version}</version>
+                <version>${kotlin.maven.plugin.version}</version>
                 <executions>
                     <execution>
                         <id>compile</id>
@@ -378,6 +484,9 @@
                 </executions>
                 <configuration>
                     <jvmTarget>1.8</jvmTarget>
+                    <args>
+                        <arg>-XXLanguage:+InlineClasses</arg>
+                    </args>
                 </configuration>
             </plugin>
 

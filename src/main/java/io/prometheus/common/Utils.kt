@@ -47,27 +47,31 @@ val localHostName: String by lazy {
 }
 
 fun getBanner(filename: String, logger: Logger) =
-        try {
-            logger.javaClass.classLoader.getResourceAsStream(filename).use {
-                val banner = CharStreams.toString(InputStreamReader(it, Charsets.UTF_8.name()))
+    try {
+        logger.javaClass.classLoader.getResourceAsStream(filename)
+            .use { inputStream ->
+                val UTF8 = Charsets.UTF_8.name()
+                val banner = CharStreams.toString(InputStreamReader(inputStream ?: throw InternalError(), UTF8))
                 val lines: List<String> = Splitter.on("\n").splitToList(banner)
 
                 // Trim initial and trailing blank lines, but preserve blank lines in middle;
                 var first = -1
                 var last = -1
                 var lineNum = 0
-                lines.forEach { arg1 ->
-                    if (arg1.trim { arg2 -> arg2 <= ' ' }.isNotEmpty()) {
-                        if (first == -1)
-                            first = lineNum
-                        last = lineNum
+                lines
+                    .forEach { arg1 ->
+                        if (arg1.trim { arg2 -> arg2 <= ' ' }.isNotEmpty()) {
+                            if (first == -1)
+                                first = lineNum
+                            last = lineNum
+                        }
+                        lineNum++
                     }
-                    lineNum++
-                }
 
                 lineNum = 0
 
-                val vals = lines
+                val vals =
+                    lines
                         .asSequence()
                         .filter {
                             val currLine = lineNum++
@@ -79,25 +83,25 @@ fun getBanner(filename: String, logger: Logger) =
                 val noNulls = Joiner.on("\n").skipNulls().join(vals)
                 "\n\n$noNulls\n\n"
             }
-        } catch (e: Exception) {
-            "Banner $filename cannot be found"
-        }
+    } catch (e: Exception) {
+        "Banner $filename cannot be found"
+    }
 
 fun newQueueHealthCheck(queue: Queue<*>, size: Int) =
-        healthCheck {
-            if (queue.size < size)
-                HealthCheck.Result.healthy()
-            else
-                HealthCheck.Result.unhealthy("Large size: ${queue.size}")
-        }
+    healthCheck {
+        if (queue.size < size)
+            HealthCheck.Result.healthy()
+        else
+            HealthCheck.Result.unhealthy("Large size: ${queue.size}")
+    }
 
 fun newMapHealthCheck(map: Map<*, *>, size: Int) =
-        healthCheck {
-            if (map.size < size)
-                HealthCheck.Result.healthy()
-            else
-                HealthCheck.Result.unhealthy("Large size: ${map.size}")
-        }
+    healthCheck {
+        if (map.size < size)
+            HealthCheck.Result.healthy()
+        else
+            HealthCheck.Result.unhealthy("Large size: ${map.size}")
+    }
 
 inline class Millis(val value: Long) {
     constructor(value: Int) : this(value.toLong())
@@ -122,18 +126,18 @@ inline class Secs(val value: Long) {
 fun now() = Millis(System.currentTimeMillis())
 
 fun sleep(millis: Millis) =
-        try {
-            Thread.sleep(millis.value)
-        } catch (e: InterruptedException) {
-            // Ignore
-        }
+    try {
+        Thread.sleep(millis.value)
+    } catch (e: InterruptedException) {
+        // Ignore
+    }
 
 fun sleep(secs: Secs) =
-        try {
-            Thread.sleep(secs.toMillis().value)
-        } catch (e: InterruptedException) {
-            // Ignore
-        }
+    try {
+        Thread.sleep(secs.toMillis().value)
+    } catch (e: InterruptedException) {
+        // Ignore
+    }
 
 fun getVersionDesc(asJson: Boolean): String {
     val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
@@ -144,11 +148,11 @@ fun getVersionDesc(asJson: Boolean): String {
 }
 
 fun shutDownHookAction(service: Service) =
-        Thread {
-            println("*** ${service.javaClass.simpleName} shutting down ***")
-            service.stopAsync()
-            println("*** ${service.javaClass.simpleName} shut down complete ***")
-        }
+    Thread {
+        println("*** ${service.javaClass.simpleName} shutting down ***")
+        service.stopAsync()
+        println("*** ${service.javaClass.simpleName} shut down complete ***")
+    }
 
 class VersionValidator : IParameterValidator {
     override fun validate(name: String, value: String) {

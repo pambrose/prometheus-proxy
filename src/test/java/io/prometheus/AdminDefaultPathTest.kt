@@ -18,10 +18,12 @@
 
 package io.prometheus
 
+import io.ktor.client.call.receive
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.dsl.OkHttpDsl.get
+import io.prometheus.dsl.KtorDsl.blockingGet
 import mu.KLogging
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.AfterClass
@@ -34,66 +36,87 @@ import java.util.concurrent.TimeoutException
 class AdminDefaultPathTest {
 
     @Test
+    @KtorExperimentalAPI
     fun proxyPingPathTest() {
-        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}"
-                .get {
-                    assertThat(it.code()).isEqualTo(200)
-                    assertThat(it.body()!!.string()).startsWith("pong")
-                }
+        blockingGet("http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.pingPath}") {
+            assertThat(it.status.value).isEqualTo(200)
+            assertThat(it.receive<String>()).startsWith("pong")
+        }
     }
 
     @Test
+    @KtorExperimentalAPI
     fun agentPingPathTest() {
-        "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.pingPath}"
-                .get {
-                    assertThat(it.code()).isEqualTo(200)
-                    assertThat(it.body()!!.string()).startsWith("pong")
+        AGENT.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.pingPath}") { resp ->
+                    assertThat(resp.status.value).isEqualTo(200)
+                    assertThat(resp.receive<String>()).startsWith("pong")
                 }
+            }
     }
 
     @Test
+    @KtorExperimentalAPI
     fun proxyVersionPathTest() {
-        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.versionPath}"
-                .get {
-                    assertThat(it.code()).isEqualTo(200)
-                    assertThat(it.body()!!.string()).contains("Version")
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.versionPath}") { resp ->
+                    assertThat(resp.status.value).isEqualTo(200)
+                    assertThat(resp.receive<String>()).contains("Version")
                 }
+            }
     }
 
     @Test
+    @KtorExperimentalAPI
     fun agentVersionPathTest() {
-        "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.versionPath}"
-                .get {
-                    assertThat(it.code()).isEqualTo(200)
-                    assertThat(it.body()!!.string()).contains("Version")
+        AGENT.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.versionPath}") { resp ->
+                    assertThat(resp.status.value).isEqualTo(200)
+                    assertThat(resp.receive<String>()).contains("Version")
                 }
+            }
     }
 
     @Test
+    @KtorExperimentalAPI
     fun proxyHealthCheckPathTest() {
-        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.healthCheckPath}"
-                .get {
-                    assertThat(it.code()).isEqualTo(200)
-                    assertThat(it.body()!!.string().length).isGreaterThan(10)
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
+                    assertThat(resp.status.value).isEqualTo(200)
+                    assertThat(resp.receive<String>().length).isGreaterThan(10)
                 }
+            }
     }
 
     @Test
+    @KtorExperimentalAPI
     fun agentHealthCheckPathTest() {
-        "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.healthCheckPath}"
-                .get { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+        AGENT.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
+                    assertThat(resp.receive<String>().length).isGreaterThan(10)
+                }
+            }
     }
 
     @Test
+    @KtorExperimentalAPI
     fun proxyThreadDumpPathTest() {
-        "http://localhost:${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}"
-                .get { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+        blockingGet("${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}") { resp ->
+            assertThat(resp.receive<String>().length).isGreaterThan(10)
+        }
     }
 
     @Test
+    @KtorExperimentalAPI
     fun agentThreadDumpPathTest() {
-        "http://localhost:${AGENT.configVals.admin.port}/${AGENT.configVals.admin.threadDumpPath}"
-                .get { assertThat(it.body()!!.string().length).isGreaterThan(10) }
+        blockingGet("${AGENT.configVals.admin.port}/${AGENT.configVals.admin.threadDumpPath}") {
+            assertThat(it.receive<String>().length).isGreaterThan(10)
+        }
     }
 
     companion object : KLogging() {
