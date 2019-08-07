@@ -24,7 +24,7 @@ import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.dsl.KtorDsl.blockingGet
 import mu.KLogging
-import org.assertj.core.api.Assertions.assertThat
+import org.amshove.kluent.shouldEqual
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
@@ -37,11 +37,11 @@ class AdminEmptyPathTest {
     @Test
     @KtorExperimentalAPI
     fun proxyPingPathTest() {
-        assertThat(PROXY.configVals.admin.port).isEqualTo(8098)
-        assertThat(PROXY.configVals.admin.pingPath).isEqualTo("")
+        PROXY.configVals.admin.port shouldEqual 8098
+        PROXY.configVals.admin.pingPath shouldEqual ""
         PROXY.configVals.admin.also { admin ->
             blockingGet("${admin.port}/${admin.pingPath}") {
-                assertThat(it.status.value).isEqualTo(404)
+                it.status.value shouldEqual 404
             }
         }
     }
@@ -49,11 +49,11 @@ class AdminEmptyPathTest {
     @Test
     @KtorExperimentalAPI
     fun proxyVersionPathTest() {
-        assertThat(PROXY.configVals.admin.port).isEqualTo(8098)
-        assertThat(PROXY.configVals.admin.versionPath).isEqualTo("")
+        PROXY.configVals.admin.port shouldEqual 8098
+        PROXY.configVals.admin.versionPath shouldEqual ""
         PROXY.configVals.admin.also { admin ->
             blockingGet("${admin.port}/${admin.versionPath}") {
-                assertThat(it.status.value).isEqualTo(404)
+                it.status.value shouldEqual 404
             }
         }
     }
@@ -61,10 +61,10 @@ class AdminEmptyPathTest {
     @Test
     @KtorExperimentalAPI
     fun proxyHealthCheckPathTest() {
-        assertThat(PROXY.configVals.admin.healthCheckPath).isEqualTo("")
+        PROXY.configVals.admin.healthCheckPath shouldEqual ""
         PROXY.configVals.admin.also { admin ->
             blockingGet("${admin.port}/${admin.healthCheckPath}") {
-                assertThat(it.status.value).isEqualTo(404)
+                it.status.value shouldEqual 404
             }
         }
     }
@@ -72,10 +72,10 @@ class AdminEmptyPathTest {
     @Test
     @KtorExperimentalAPI
     fun proxyThreadDumpPathTest() {
-        assertThat(PROXY.configVals.admin.threadDumpPath).isEqualTo("")
+        PROXY.configVals.admin.threadDumpPath shouldEqual ""
         PROXY.configVals.admin.also { admin ->
             blockingGet("${admin.port}/${admin.threadDumpPath}") {
-                assertThat(it.status.value).isEqualTo(404)
+                it.status.value shouldEqual 404
             }
         }
     }

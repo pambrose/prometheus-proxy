@@ -28,7 +28,7 @@ import io.prometheus.guava.genericServiceListener
 import mu.KLogging
 
 class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) :
-        GenericExecutionThreadService() {
+    GenericExecutionThreadService() {
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
         initBlock?.invoke(this)
@@ -40,24 +40,24 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
         val threadPauseSecs = Secs(proxy.configVals.internal.staleAgentCheckPauseSecs)
         while (isRunning) {
             proxy.agentContextManager.agentContextMap
-                    .forEach { (agentId, agentContext) ->
-                        val inactivitySecs = agentContext.inactivitySecs
-                        if (inactivitySecs > maxInactivitySecs) {
-                            logger.info { "Evicting agent after $inactivitySecs secs of inactivty $agentContext" }
-                            proxy.removeAgentContext(agentId)
-                            if (proxy.isMetricsEnabled)
-                                proxy.metrics.agentEvictions.inc()
-                        }
+                .forEach { (agentId, agentContext) ->
+                    val inactivitySecs = agentContext.inactivitySecs
+                    if (inactivitySecs > maxInactivitySecs) {
+                        logger.info { "Evicting agent after $inactivitySecs secs of inactivty $agentContext" }
+                        proxy.removeAgentContext(agentId)
+                        if (proxy.isMetricsEnabled)
+                            proxy.metrics.agentEvictions.inc()
                     }
+                }
             sleep(threadPauseSecs)
         }
     }
 
     override fun toString() =
-            toStringElements {
-                add("max inactivity secs", proxy.configVals.internal.maxAgentInactivitySecs)
-                add("pause secs", proxy.configVals.internal.staleAgentCheckPauseSecs)
-            }
+        toStringElements {
+            add("max inactivity secs", proxy.configVals.internal.maxAgentInactivitySecs)
+            add("pause secs", proxy.configVals.internal.staleAgentCheckPauseSecs)
+        }
 
     companion object : KLogging()
 }

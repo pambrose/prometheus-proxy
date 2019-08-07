@@ -50,8 +50,8 @@ fun getBanner(filename: String, logger: Logger) =
     try {
         logger.javaClass.classLoader.getResourceAsStream(filename)
             .use { inputStream ->
-                val UTF8 = Charsets.UTF_8.name()
-                val banner = CharStreams.toString(InputStreamReader(inputStream ?: throw InternalError(), UTF8))
+                val utf8 = Charsets.UTF_8.name()
+                val banner = CharStreams.toString(InputStreamReader(inputStream ?: throw InternalError(), utf8))
                 val lines: List<String> = Splitter.on("\n").splitToList(banner)
 
                 // Trim initial and trailing blank lines, but preserve blank lines in middle;

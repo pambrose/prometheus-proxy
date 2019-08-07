@@ -25,7 +25,10 @@ import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.dsl.KtorDsl.blockingGet
 import mu.KLogging
-import org.assertj.core.api.Assertions.assertThat
+import org.amshove.kluent.shouldBeGreaterThan
+import org.amshove.kluent.shouldContain
+import org.amshove.kluent.shouldEqual
+import org.amshove.kluent.shouldStartWith
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
@@ -41,8 +44,8 @@ class AdminDefaultPathTest {
         PROXY.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}") {
-                    assertThat(it.status.value).isEqualTo(200)
-                    assertThat(it.receive<String>()).startsWith("pong")
+                    it.status.value shouldEqual 200
+                    it.receive<String>() shouldStartWith "pong"
                 }
             }
     }
@@ -53,8 +56,8 @@ class AdminDefaultPathTest {
         AGENT.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}") { resp ->
-                    assertThat(resp.status.value).isEqualTo(200)
-                    assertThat(resp.receive<String>()).startsWith("pong")
+                    resp.status.value shouldEqual 200
+                    resp.receive<String>() shouldStartWith "pong"
                 }
             }
     }
@@ -65,8 +68,8 @@ class AdminDefaultPathTest {
         PROXY.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}") { resp ->
-                    assertThat(resp.status.value).isEqualTo(200)
-                    assertThat(resp.receive<String>()).contains("Version")
+                    resp.status.value shouldEqual 200
+                    resp.receive<String>() shouldContain "Version"
                 }
             }
     }
@@ -77,8 +80,8 @@ class AdminDefaultPathTest {
         AGENT.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}") { resp ->
-                    assertThat(resp.status.value).isEqualTo(200)
-                    assertThat(resp.receive<String>()).contains("Version")
+                    resp.status.value shouldEqual 200
+                    resp.receive<String>() shouldContain "Version"
                 }
             }
     }
@@ -89,8 +92,8 @@ class AdminDefaultPathTest {
         PROXY.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
-                    assertThat(resp.status.value).isEqualTo(200)
-                    assertThat(resp.receive<String>().length).isGreaterThan(10)
+                    resp.status.value shouldEqual 200
+                    resp.receive<String>().length shouldBeGreaterThan 10
                 }
             }
     }
@@ -101,7 +104,7 @@ class AdminDefaultPathTest {
         AGENT.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
-                    assertThat(resp.receive<String>().length).isGreaterThan(10)
+                    resp.receive<String>().length shouldBeGreaterThan 10
                 }
             }
     }
@@ -110,7 +113,7 @@ class AdminDefaultPathTest {
     @KtorExperimentalAPI
     fun proxyThreadDumpPathTest() {
         blockingGet("${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}") { resp ->
-            assertThat(resp.receive<String>().length).isGreaterThan(10)
+            resp.receive<String>().length shouldBeGreaterThan 10
         }
     }
 
@@ -118,7 +121,7 @@ class AdminDefaultPathTest {
     @KtorExperimentalAPI
     fun agentThreadDumpPathTest() {
         blockingGet("${AGENT.configVals.admin.port}/${AGENT.configVals.admin.threadDumpPath}") {
-            assertThat(it.receive<String>().length).isGreaterThan(10)
+            it.receive<String>().length shouldBeGreaterThan 10
         }
     }
 

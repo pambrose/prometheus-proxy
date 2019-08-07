@@ -21,7 +21,9 @@ package io.prometheus
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.ConfigVals
 import io.prometheus.proxy.ProxyOptions
-import org.assertj.core.api.Assertions.assertThat
+import org.amshove.kluent.shouldBeFalse
+import org.amshove.kluent.shouldBeTrue
+import org.amshove.kluent.shouldEqual
 import org.junit.Test
 
 class OptionsTest {
@@ -29,54 +31,55 @@ class OptionsTest {
     @Test
     fun verifyDefaultValues() {
         val configVals = readProxyOptions(listOf())
-        assertThat(configVals.proxy.http.port).isEqualTo(8080)
-        assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(false)
+        configVals.proxy.http.port shouldEqual 8080
+        configVals.proxy.internal.zipkin.enabled.shouldBeFalse()
     }
 
     @Test
     fun verifyConfValues() {
         val configVals = readProxyOptions(listOf("--config", CONFIG))
-        assertThat(configVals.proxy.http.port).isEqualTo(8181)
-        assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(true)
+        configVals.proxy.http.port shouldEqual 8181
+        configVals.proxy.internal.zipkin.enabled.shouldBeTrue()
     }
 
     @Test
     fun verifyUnquotedPropValue() {
         val configVals = readProxyOptions(listOf("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"))
-        assertThat(configVals.proxy.http.port).isEqualTo(9393)
-        assertThat(configVals.proxy.internal.zipkin.enabled).isEqualTo(true)
+        configVals.proxy.http.port shouldEqual 9393
+        configVals.proxy.internal.zipkin.enabled.shouldBeTrue()
     }
 
     @Test
     fun verifyQuotedPropValue() {
         val configVals = readProxyOptions(listOf("-D\"proxy.http.port=9394\""))
-        assertThat(configVals.proxy.http.port).isEqualTo(9394)
+        configVals.proxy.http.port shouldEqual 9394
     }
 
     @Test
     fun verifyPathConfigs() {
         val configVals = readAgentOptions(listOf("--config", CONFIG))
-        assertThat(configVals.agent.pathConfigs.size).isEqualTo(3)
+        configVals.agent.pathConfigs.size shouldEqual 3
     }
-
 
     @Test
     fun verifyProxyDefaults() {
         val options = ProxyOptions(listOf())
 
-        assertThat(options.proxyHttpPort).isEqualTo(8080)
-        assertThat(options.proxyAgentPort).isEqualTo(50051)
+        options.proxyHttpPort shouldEqual 8080
+        options.proxyAgentPort shouldEqual 50051
     }
 
     @Test
     fun verifyAgentDefaults() {
-        val options = AgentOptions(listOf("--name", "test-name", "--proxy", "host5"),
-                                   false)
+        val options = AgentOptions(
+            listOf("--name", "test-name", "--proxy", "host5"),
+            false
+        )
 
-        assertThat(options.metricsEnabled).isEqualTo(false)
-        assertThat(options.dynamicParams.size).isEqualTo(0)
-        assertThat(options.agentName).isEqualTo("test-name")
-        assertThat(options.proxyHostname).isEqualTo("host5")
+        options.metricsEnabled shouldEqual false
+        options.dynamicParams.size shouldEqual 0
+        options.agentName shouldEqual "test-name"
+        options.proxyHostname shouldEqual "host5"
     }
 
     private fun readProxyOptions(argList: List<String>): ConfigVals {
@@ -90,6 +93,7 @@ class OptionsTest {
     }
 
     companion object {
-        private const val CONFIG = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/junit-test.conf"
+        private const val CONFIG =
+            "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/junit-test.conf"
     }
 }

@@ -34,7 +34,10 @@ import io.prometheus.dsl.SparkDsl.httpServer
 import io.prometheus.proxy.ProxyHttpService.Companion.sparkExceptionHandler
 import kotlinx.coroutines.*
 import mu.KLogging
-import org.assertj.core.api.Assertions.assertThat
+import org.amshove.kluent.shouldBeNull
+import org.amshove.kluent.shouldBeTrue
+import org.amshove.kluent.shouldEqual
+import org.amshove.kluent.shouldNotBeNull
 import spark.Service
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MINUTES
@@ -46,13 +49,13 @@ object CommonTests : KLogging() {
     @KtorExperimentalAPI
     fun missingPathTest(caller: String) {
         logger.info { "Calling missingPathTest() from $caller" }
-        blockingGet("$PROXY_PORT/") { assertThat(it.status.value).isEqualTo(404) }
+        blockingGet("$PROXY_PORT/") { it.status.value shouldEqual 404 }
     }
 
     @KtorExperimentalAPI
     fun invalidPathTest(caller: String) {
         logger.info { "Calling invalidPathTest() from $caller" }
-        blockingGet("$PROXY_PORT/invalid_path") { assertThat(it.status.value).isEqualTo(404) }
+        blockingGet("$PROXY_PORT/invalid_path") { it.status.value shouldEqual 404 }
     }
 
     fun addRemovePathsTest(agent: Agent, caller: String) {
@@ -66,10 +69,10 @@ object CommonTests : KLogging() {
             val path = "test-$it"
             agent.registerPath(path, "http://localhost:$PROXY_PORT/$path")
             cnt++
-            assertThat(agent.pathMapSize()).isEqualTo(originalSize + cnt)
+            agent.pathMapSize() shouldEqual originalSize + cnt
             agent.unregisterPath(path)
             cnt--
-            assertThat(agent.pathMapSize()).isEqualTo(originalSize + cnt)
+            agent.pathMapSize() shouldEqual originalSize + cnt
         }
     }
 
@@ -103,9 +106,9 @@ object CommonTests : KLogging() {
                 }
         }
 
-        assertThat(latch1.await(1, MINUTES)).isTrue()
-        assertThat(paths.size).isEqualTo(TestConstants.REPS)
-        assertThat(agent.pathMapSize()).isEqualTo(originalSize + TestConstants.REPS)
+        latch1.await(1, MINUTES).shouldBeTrue()
+        paths.size shouldEqual TestConstants.REPS
+        agent.pathMapSize() shouldEqual originalSize + TestConstants.REPS
 
         paths.forEach {
             TestConstants
@@ -121,8 +124,8 @@ object CommonTests : KLogging() {
         }
 
         // Wait for all unregistrations to complete
-        assertThat(latch2.await(1, MINUTES)).isTrue()
-        assertThat(agent.pathMapSize()).isEqualTo(originalSize)
+        latch2.await(1, MINUTES).shouldBeTrue()
+        agent.pathMapSize() shouldEqual originalSize
     }
 
     @KtorExperimentalAPI
@@ -130,7 +133,7 @@ object CommonTests : KLogging() {
         logger.info { "Calling invalidAgentUrlTest() from $caller" }
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
-        blockingGet("$PROXY_PORT/$badPath") { assertThat(it.status.value).isEqualTo(404) }
+        blockingGet("$PROXY_PORT/$badPath") { it.status.value shouldEqual 404 }
         agent.unregisterPath(badPath)
     }
 
@@ -157,7 +160,7 @@ object CommonTests : KLogging() {
             }
 
         agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
-        blockingGet("$PROXY_PORT/$proxyPath") { assertThat(it.status.value).isEqualTo(404) }
+        blockingGet("$PROXY_PORT/$proxyPath") { it.status.value shouldEqual 404 }
         agent.unregisterPath("/$proxyPath")
 
         httpServer.stop()
@@ -209,7 +212,7 @@ object CommonTests : KLogging() {
             pathMap[it] = index
         }
 
-        assertThat(agent.pathMapSize()).isEqualTo(originalSize + pathCount)
+        agent.pathMapSize() shouldEqual originalSize + pathCount
 
         val handler =
             CoroutineExceptionHandler { context, e ->
@@ -229,9 +232,9 @@ object CommonTests : KLogging() {
                                         callProxy(httpClient, pathMap, "Sequential $it")
                                     }
                                 job.join()
-                                assertThat(job.getCancellationException().cause).isNull()
+                                job.getCancellationException().cause.shouldBeNull()
                             }
-                        assertThat(result != null).isTrue()
+                        result.shouldNotBeNull()
                     }
                 }
             sleep(sequentialPauseMillis)
@@ -254,11 +257,11 @@ object CommonTests : KLogging() {
 
                     jobs.forEach {
                         it.join()
-                        assertThat(it.getCancellationException().cause).isNull()
+                        it.getCancellationException().cause.shouldBeNull()
                     }
 
                     // Check if call timed out
-                    assertThat(result != null).isTrue()
+                    result.shouldNotBeNull()
                 }
             }
 
@@ -271,8 +274,8 @@ object CommonTests : KLogging() {
             }
         }
 
-        assertThat(errorCnt.get()).isEqualTo(0)
-        assertThat(agent.pathMapSize()).isEqualTo(originalSize)
+        errorCnt.get() shouldEqual 0
+        agent.pathMapSize() shouldEqual originalSize
 
         httpServers
             .forEach {
@@ -292,9 +295,9 @@ object CommonTests : KLogging() {
         httpClient.get("$PROXY_PORT/proxy-$index") {
             if (it.status.value != 200)
                 logger.error { "Proxy failed on $msg" }
-            assertThat(it.status.value).isEqualTo(200)
+            it.status.value shouldEqual 200
             val body = it.receive<String>()
-            assertThat(body).isEqualTo("value: $httpVal")
+            body shouldEqual "value: $httpVal"
         }
     }
 }

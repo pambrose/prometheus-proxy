@@ -25,7 +25,10 @@ import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.dsl.KtorDsl.blockingGet
 import mu.KLogging
-import org.assertj.core.api.Assertions.assertThat
+import org.amshove.kluent.shouldBeGreaterThan
+import org.amshove.kluent.shouldContain
+import org.amshove.kluent.shouldEqual
+import org.amshove.kluent.shouldStartWith
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
@@ -38,12 +41,12 @@ class AdminNonDefaultPathTest {
     @Test
     @KtorExperimentalAPI
     fun proxyPingPathTest() {
-        assertThat(PROXY.configVals.admin.port).isEqualTo(8099)
-        assertThat(PROXY.configVals.admin.pingPath).isEqualTo("pingPath2")
+        PROXY.configVals.admin.port shouldEqual 8099
+        PROXY.configVals.admin.pingPath shouldEqual "pingPath2"
         PROXY.configVals.admin.also { admin ->
             blockingGet("${admin.port}/${admin.pingPath}") {
-                assertThat(it.status.value).isEqualTo(200)
-                assertThat(it.receive<String>()).startsWith("pong")
+                it.status.value shouldEqual 200
+                it.receive<String>() shouldStartWith "pong"
             }
         }
     }
@@ -51,12 +54,12 @@ class AdminNonDefaultPathTest {
     @Test
     @KtorExperimentalAPI
     fun proxyVersionPathTest() {
-        assertThat(PROXY.configVals.admin.port).isEqualTo(8099)
-        assertThat(PROXY.configVals.admin.versionPath).isEqualTo("versionPath2")
+        PROXY.configVals.admin.port shouldEqual 8099
+        PROXY.configVals.admin.versionPath shouldEqual "versionPath2"
         PROXY.configVals.admin.also { admin ->
             blockingGet("${admin.port}/${admin.versionPath}") {
-                assertThat(it.status.value).isEqualTo(200)
-                assertThat(it.receive<String>()).contains("Version")
+                it.status.value shouldEqual 200
+                it.receive<String>() shouldContain "Version"
             }
         }
     }
@@ -64,11 +67,11 @@ class AdminNonDefaultPathTest {
     @Test
     @KtorExperimentalAPI
     fun proxyHealthCheckPathTest() {
-        assertThat(PROXY.configVals.admin.healthCheckPath).isEqualTo("healthCheckPath2")
+        PROXY.configVals.admin.healthCheckPath shouldEqual "healthCheckPath2"
         PROXY.configVals.admin.also { admin ->
             blockingGet("${admin.port}/${admin.healthCheckPath}") {
-                assertThat(it.status.value).isEqualTo(200)
-                assertThat(it.receive<String>().length).isGreaterThan(10)
+                it.status.value shouldEqual 200
+                it.receive<String>().length shouldBeGreaterThan 10
             }
         }
     }
@@ -76,10 +79,10 @@ class AdminNonDefaultPathTest {
     @Test
     @KtorExperimentalAPI
     fun proxyThreadDumpPathTest() {
-        assertThat(PROXY.configVals.admin.threadDumpPath).isEqualTo("threadDumpPath2")
+        PROXY.configVals.admin.threadDumpPath shouldEqual "threadDumpPath2"
         PROXY.configVals.admin.also { admin ->
             blockingGet("${admin.port}/${admin.threadDumpPath}") {
-                assertThat(it.receive<String>().length).isGreaterThan(10)
+                it.receive<String>().length shouldBeGreaterThan 10
             }
         }
     }
