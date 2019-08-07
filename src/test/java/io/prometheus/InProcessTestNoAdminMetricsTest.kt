@@ -29,6 +29,7 @@ import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.Millis
+import io.prometheus.common.simpleClassName
 import kotlinx.coroutines.InternalCoroutinesApi
 import mu.KLogging
 import org.junit.AfterClass
@@ -40,25 +41,25 @@ class InProcessTestNoAdminMetricsTest {
 
     @Test
     @KtorExperimentalAPI
-    fun missingPathTest() = missingPathTest(javaClass.simpleName)
+    fun missingPathTest() = missingPathTest(simpleClassName)
 
     @Test
     @KtorExperimentalAPI
-    fun invalidPathTest() = invalidPathTest(javaClass.simpleName)
+    fun invalidPathTest() = invalidPathTest(simpleClassName)
 
     @Test
-    fun addRemovePathsTest() = addRemovePathsTest(AGENT, javaClass.simpleName)
+    fun addRemovePathsTest() = addRemovePathsTest(AGENT, simpleClassName)
 
     @Test
-    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(AGENT, javaClass.simpleName)
-
-    @Test
-    @KtorExperimentalAPI
-    fun invalidAgentUrlTest() = invalidAgentUrlTest(AGENT, javaClass.simpleName)
+    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(AGENT, simpleClassName)
 
     @Test
     @KtorExperimentalAPI
-    fun timeoutTest() = timeoutTest(AGENT, javaClass.simpleName)
+    fun invalidAgentUrlTest() = invalidAgentUrlTest(AGENT, simpleClassName)
+
+    @Test
+    @KtorExperimentalAPI
+    fun timeoutTest() = timeoutTest(AGENT, simpleClassName)
 
     @Test
     @InternalCoroutinesApi
@@ -71,7 +72,7 @@ class InProcessTestNoAdminMetricsTest {
             sequentialQueryCount = 100,
             sequentialPauseMillis = Millis(25),
             parallelQueryCount = 25,
-            caller = javaClass.simpleName
+            caller = simpleClassName
         )
     }
 

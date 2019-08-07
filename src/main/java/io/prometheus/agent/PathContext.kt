@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import com.google.common.net.HttpHeaders.ACCEPT
+import io.prometheus.common.simpleClassName
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeRequest
 import mu.KLogging
@@ -47,7 +48,7 @@ class PathContext(private val okHttpClient: OkHttpClient,
 
                 okHttpClient.newCall(request).execute()
             } catch (e: IOException) {
-                logger.info { "Failed HTTP request: $url [${e.javaClass.simpleName}: ${e.message}]" }
+                logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
                 throw e
             }
 

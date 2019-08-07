@@ -102,14 +102,13 @@ abstract class GenericService protected constructor(protected val genericConfigV
     fun initService() {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
         addService(this)
-        val clazzName = javaClass.simpleName
         serviceManager =
                 serviceManager(services) {
                     addListener(
                             serviceManagerListener {
-                                healthy { logger.info { "All $clazzName services healthy" } }
-                                stopped { logger.info { "All $clazzName services stopped" } }
-                                failure { logger.info { "$clazzName service failed: $it" } }
+                                healthy { logger.info { "All $simpleClassName services healthy" } }
+                                stopped { logger.info { "All $simpleClassName services stopped" } }
+                                failure { logger.info { "$simpleClassName service failed: $it" } }
                             })
                 }
         registerHealthChecks()

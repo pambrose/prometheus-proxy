@@ -207,7 +207,7 @@ class Agent(
             )
     }
 
-    override fun serviceName() = "${javaClass.simpleName} $agentName"
+    override fun serviceName() = "${simpleClassName} $agentName"
 
     private fun connectToProxy() {
         val disconnected = AtomicBoolean(false)
@@ -317,10 +317,10 @@ class Agent(
                     }
                 }
         } catch (e: IOException) {
-            reason = "${e.javaClass.simpleName} - ${e.message}"
+            reason = "${e.simpleClassName} - ${e.message}"
         } catch (e: Exception) {
             logger.warn(e) { "fetchUrl()" }
-            reason = "${e.javaClass.simpleName} - ${e.message}"
+            reason = "${e.simpleClassName} - ${e.message}"
         } finally {
             requestTimer?.observeDuration()
         }

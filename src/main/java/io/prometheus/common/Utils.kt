@@ -149,9 +149,9 @@ fun getVersionDesc(asJson: Boolean): String {
 
 fun shutDownHookAction(service: Service) =
     Thread {
-        println("*** ${service.javaClass.simpleName} shutting down ***")
+        println("*** ${service.simpleClassName} shutting down ***")
         service.stopAsync()
-        println("*** ${service.javaClass.simpleName} shut down complete ***")
+        println("*** ${service.simpleClassName} shut down complete ***")
     }
 
 class VersionValidator : IParameterValidator {
@@ -169,3 +169,6 @@ fun CountDownLatch.await(millis: Millis): Boolean {
 fun <E> ArrayBlockingQueue<E>.poll(millis: Millis): E? {
     return this.poll(millis.value, TimeUnit.MILLISECONDS)
 }
+
+val <T : Any> T.simpleClassName: String
+    get() = this::class.simpleName ?: "None"

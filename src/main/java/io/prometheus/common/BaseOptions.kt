@@ -164,7 +164,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                     if (e.cause is FileNotFoundException)
                         logger.error { "Invalid getConfig url: $configName" }
                     else
-                        logger.error(e) { "Exception: ${e.javaClass.simpleName} - ${e.message}" }
+                        logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
                 }
 
             }
@@ -175,7 +175,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                     if (e.cause is FileNotFoundException)
                         logger.error { "Invalid getConfig filename: $configName" }
                     else
-                        logger.error(e) { "Exception: ${e.javaClass.simpleName} - ${e.message}" }
+                        logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
                 }
             }
         }
