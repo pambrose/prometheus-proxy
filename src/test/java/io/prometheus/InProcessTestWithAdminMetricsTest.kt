@@ -19,10 +19,12 @@
 package io.prometheus
 
 import io.ktor.util.KtorExperimentalAPI
+import io.prometheus.CommonTests.ProxyCallTestArgs
 import io.prometheus.CommonTests.addRemovePathsTest
 import io.prometheus.CommonTests.invalidAgentUrlTest
 import io.prometheus.CommonTests.invalidPathTest
 import io.prometheus.CommonTests.missingPathTest
+import io.prometheus.CommonTests.proxyCallTest
 import io.prometheus.CommonTests.threadedAddRemovePathsTest
 import io.prometheus.CommonTests.timeoutTest
 import io.prometheus.TestUtils.startAgent
@@ -67,18 +69,19 @@ class InProcessTestWithAdminMetricsTest {
     @Test
     @InternalCoroutinesApi
     @KtorExperimentalAPI
-    fun proxyCallTest() {
-        CommonTests.proxyCallTest(
-            AGENT,
-            httpServerCount = 10,
-            pathCount = 50,
-            sequentialQueryCount = 500,
-            sequentialPauseMillis = Millis(25),
-            parallelQueryCount = 100,
-            caller = simpleClassName,
-            startingPort = 10700
+    fun proxyCallTest() =
+        proxyCallTest(
+            ProxyCallTestArgs(
+                AGENT,
+                httpServerCount = 25,
+                pathCount = 50,
+                sequentialQueryCount = 500,
+                sequentialPauseMillis = Millis(25),
+                parallelQueryCount = 100,
+                caller = simpleClassName,
+                startingPort = 10700
+            )
         )
-    }
 
     companion object : KLogging() {
         private lateinit var PROXY: Proxy

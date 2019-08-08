@@ -34,6 +34,7 @@ import io.ktor.http.HttpStatusCode
 import io.prometheus.agent.*
 import io.prometheus.common.*
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
+import io.prometheus.common.GrpcObjects.Companion.ScrapeResponseArg
 import io.prometheus.common.GrpcObjects.Companion.newAgentInfo
 import io.prometheus.common.GrpcObjects.Companion.newHeartBeatRequest
 import io.prometheus.common.GrpcObjects.Companion.newPathMapSizeRequest
@@ -287,11 +288,13 @@ class Agent(
             logger.warn { "Invalid path in fetchUrl(): $path" }
             updateScrapeCounter("invalid_path")
             return newScrapeResponse(
-                false,
-                "Invalid path: $path",
-                scrapeRequest.agentId,
-                scrapeRequest.scrapeId,
-                statusCode
+                ScrapeResponseArg(
+                    false,
+                    "Invalid path: $path",
+                    scrapeRequest.agentId,
+                    scrapeRequest.scrapeId,
+                    statusCode
+                )
             )
         }
 
@@ -305,13 +308,15 @@ class Agent(
                     if (it.isSuccessful) {
                         updateScrapeCounter("success")
                         return newScrapeResponse(
-                            true,
-                            "",
-                            scrapeRequest.agentId,
-                            scrapeRequest.scrapeId,
-                            statusCode,
-                            it.body()?.string().orEmpty(),
-                            it.header(CONTENT_TYPE) ?: ""
+                            ScrapeResponseArg(
+                                true,
+                                "",
+                                scrapeRequest.agentId,
+                                scrapeRequest.scrapeId,
+                                statusCode,
+                                it.body()?.string().orEmpty(),
+                                it.header(CONTENT_TYPE) ?: ""
+                            )
                         )
                     } else {
                         reason = "Unsucessful response code $statusCode"
@@ -329,11 +334,13 @@ class Agent(
         updateScrapeCounter("unsuccessful")
 
         return newScrapeResponse(
-            false,
-            reason,
-            scrapeRequest.agentId,
-            scrapeRequest.scrapeId,
-            statusCode
+            ScrapeResponseArg(
+                false,
+                reason,
+                scrapeRequest.agentId,
+                scrapeRequest.scrapeId,
+                statusCode
+            )
         )
     }
 

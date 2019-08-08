@@ -154,20 +154,6 @@ object CommonTests : KLogging() {
     ) {
         logger.info { "Calling timeoutTest() from $caller" }
 
-        /*
-        val httpServer =
-            httpServer {
-                initExceptionHandler { sparkExceptionHandler(it, agentPort) }
-                port(agentPort)
-                get("/$agentPath") { _, res ->
-                    res.type("text/plain")
-                    sleep(Secs(10))
-                    "I timed out"
-                }
-                awaitInitialization()
-            }
-        */
-
         val httpServer =
             embeddedServer(CIO, port = agentPort) {
                 routing {
@@ -186,7 +172,6 @@ object CommonTests : KLogging() {
             }
         }
 
-
         agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
         blockingGet("$PROXY_PORT/$proxyPath") { resp -> resp.status shouldEqual HttpStatusCode.ServiceUnavailable }
         agent.unregisterPath("/$proxyPath")
@@ -194,52 +179,39 @@ object CommonTests : KLogging() {
         runBlocking {
             launch(Dispatchers.Default) {
                 logger.info { "Stopping httpServer" }
-                //httpServer.environment.stop()
                 httpServer.stop(5, 5, TimeUnit.SECONDS)
                 delay(Secs(5).toMillis().value)
             }
         }
     }
 
+    class ProxyCallTestArgs(
+        val agent: Agent,
+        val httpServerCount: Int,
+        val pathCount: Int,
+        val sequentialQueryCount: Int,
+        val sequentialPauseMillis: Millis,
+        val parallelQueryCount: Int,
+        val startingPort: Int = 9600,
+        val caller: String
+    )
+
     @InternalCoroutinesApi
     @KtorExperimentalAPI
-    fun proxyCallTest(
-        agent: Agent,
-        httpServerCount: Int,
-        pathCount: Int,
-        sequentialQueryCount: Int,
-        sequentialPauseMillis: Millis,
-        parallelQueryCount: Int,
-        startingPort: Int = 9600,
-        caller: String
-    ) {
-        logger.info { "Calling proxyCallTest() from $caller" }
+    fun proxyCallTest(args: ProxyCallTestArgs) {
+        logger.info { "Calling proxyCallTest() from ${args.caller}" }
 
         val httpServers = mutableListOf<CIOApplicationEngine>()
         val pathMap = newConcurrentMap<Int, Int>()
 
         // Take into account pre-existing paths already registered
-        val originalSize = agent.pathMapSize()
+        val originalSize = args.agent.pathMapSize()
 
         // Create the endpoints
-        logger.info { "Creating $httpServerCount httpServers" }
-        repeat(httpServerCount) { i ->
-            val port = startingPort + i
-            /*
+        logger.info { "Creating ${args.httpServerCount} httpServers" }
+        repeat(args.httpServerCount) { i ->
             httpServers +=
-                httpServer {
-                    initExceptionHandler { arg -> sparkExceptionHandler(arg, port) }
-                    port(port)
-                    threadPool(30, 10, 1000)
-                    get("/agent-$it") { _, res ->
-                        res.type("text/plain")
-                        "value: $it"
-                    }
-                    awaitInitialization()
-                }
-             */
-            httpServers +=
-                embeddedServer(CIO, port = port) {
+                embeddedServer(CIO, port = args.startingPort + i) {
                     routing {
                         get("/agent-$i") {
                             call.respondText("value: $i", ContentType.Text.Plain)
@@ -248,7 +220,7 @@ object CommonTests : KLogging() {
                 }
         }
 
-        logger.info { "Starting $httpServerCount httpServers" }
+        logger.info { "Starting ${args.httpServerCount} httpServers" }
 
         runBlocking {
             for (httpServer in httpServers) {
@@ -260,16 +232,16 @@ object CommonTests : KLogging() {
             }
         }
 
-        logger.info { "Finished starting $httpServerCount httpServers" }
+        logger.info { "Finished starting ${args.httpServerCount} httpServers" }
 
         // Create the paths
-        repeat(pathCount) {
+        repeat(args.pathCount) {
             val index = Random.nextInt(httpServers.size)
-            agent.registerPath("proxy-$it", "http://localhost:${startingPort + index}/agent-$index")
+            args.agent.registerPath("proxy-$it", "http://localhost:${args.startingPort + index}/agent-$index")
             pathMap[it] = index
         }
 
-        agent.pathMapSize() shouldEqual originalSize + pathCount
+        args.agent.pathMapSize() shouldEqual originalSize + args.pathCount
 
         val coroutineExceptionHandler =
             CoroutineExceptionHandler { context, e ->
@@ -278,7 +250,7 @@ object CommonTests : KLogging() {
             }
 
         // Call the proxy sequentially
-        repeat(sequentialQueryCount) {
+        repeat(args.sequentialQueryCount) {
             newHttpClient()
                 .use { httpClient ->
                     runBlocking {
@@ -294,7 +266,7 @@ object CommonTests : KLogging() {
                         result.shouldNotBeNull()
                     }
                 }
-            sleep(sequentialPauseMillis)
+            sleep(args.sequentialPauseMillis)
         }
 
         // Call the proxy in parallel
@@ -304,7 +276,7 @@ object CommonTests : KLogging() {
                 runBlocking {
                     val jobs = mutableListOf<Job>()
                     val results = withTimeoutOrNull(Secs(30).toMillis().value) {
-                        repeat(parallelQueryCount) {
+                        repeat(args.parallelQueryCount) {
                             jobs += GlobalScope.launch(dispatcher + coroutineExceptionHandler) {
                                 delay(Random.nextLong(500))
                                 callProxy(httpClient, pathMap, "Parallel $it")
@@ -326,21 +298,20 @@ object CommonTests : KLogging() {
         val errorCnt = AtomicInteger()
         pathMap.forEach {
             try {
-                agent.unregisterPath("proxy-${it.key}")
+                args.agent.unregisterPath("proxy-${it.key}")
             } catch (e: RequestFailureException) {
                 errorCnt.incrementAndGet()
             }
         }
 
         errorCnt.get() shouldEqual 0
-        agent.pathMapSize() shouldEqual originalSize
+        args.agent.pathMapSize() shouldEqual originalSize
 
         logger.info { "Shutting down ${httpServers.size} httpServers" }
         runBlocking {
             for (httpServer in httpServers) {
                 launch(Dispatchers.Default) {
                     logger.info { "Shutting down httpServer" }
-                    //httpServer.environment.stop()
                     httpServer.stop(5, 5, TimeUnit.SECONDS)
                     delay(Secs(5).toMillis().value)
                 }
