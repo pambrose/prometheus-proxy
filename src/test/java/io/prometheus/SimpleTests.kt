@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
 package io.prometheus
 
 import io.ktor.http.HttpStatusCode
@@ -26,6 +28,7 @@ import org.amshove.kluent.shouldEqual
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+
 
 @KtorExperimentalAPI
 object SimpleTests : KLogging() {

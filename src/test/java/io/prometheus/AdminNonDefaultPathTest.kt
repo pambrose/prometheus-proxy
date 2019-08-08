@@ -45,9 +45,9 @@ class AdminNonDefaultPathTest {
 
     @Test
     fun proxyPingPathTest() {
-        PROXY.configVals.admin.port shouldEqual 8099
-        PROXY.configVals.admin.pingPath shouldEqual "pingPath2"
-        PROXY.configVals.admin
+        proxy.configVals.admin.port shouldEqual 8099
+        proxy.configVals.admin.pingPath shouldEqual "pingPath2"
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -58,9 +58,9 @@ class AdminNonDefaultPathTest {
 
     @Test
     fun proxyVersionPathTest() {
-        PROXY.configVals.admin.port shouldEqual 8099
-        PROXY.configVals.admin.versionPath shouldEqual "versionPath2"
-        PROXY.configVals.admin
+        proxy.configVals.admin.port shouldEqual 8099
+        proxy.configVals.admin.versionPath shouldEqual "versionPath2"
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -71,8 +71,8 @@ class AdminNonDefaultPathTest {
 
     @Test
     fun proxyHealthCheckPathTest() {
-        PROXY.configVals.admin.healthCheckPath shouldEqual "healthCheckPath2"
-        PROXY.configVals.admin
+        proxy.configVals.admin.healthCheckPath shouldEqual "healthCheckPath2"
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -83,8 +83,8 @@ class AdminNonDefaultPathTest {
 
     @Test
     fun proxyThreadDumpPathTest() {
-        PROXY.configVals.admin.threadDumpPath shouldEqual "threadDumpPath2"
-        PROXY.configVals.admin
+        proxy.configVals.admin.threadDumpPath shouldEqual "threadDumpPath2"
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.threadDumpPath}") { resp ->
                     resp.receive<String>().length shouldBeGreaterThan 10
@@ -93,8 +93,8 @@ class AdminNonDefaultPathTest {
     }
 
     companion object : KLogging() {
-        private lateinit var PROXY: Proxy
-        private lateinit var AGENT: Agent
+        private lateinit var proxy: Proxy
+        private lateinit var agent: Agent
 
         @JvmStatic
         @BeforeClass
@@ -111,9 +111,9 @@ class AdminNonDefaultPathTest {
 
             logger.info { "Starting Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY = startProxy(adminEnabled = true, argv = args) }
+                launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = args) }
                 launch(Dispatchers.Default) {
-                    AGENT = startAgent(adminEnabled = true).apply { awaitInitialConnection(5, SECONDS) }
+                    agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5, SECONDS) }
                 }
             }
             logger.info { "Finished starting Proxy and Agent" }
@@ -125,8 +125,8 @@ class AdminNonDefaultPathTest {
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY.stopSync() }
-                launch(Dispatchers.Default) { AGENT.stopSync() }
+                launch(Dispatchers.Default) { proxy.stopSync() }
+                launch(Dispatchers.Default) { agent.stopSync() }
             }
             logger.info { "Finished stopping Proxy and Agent" }
         }

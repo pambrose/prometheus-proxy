@@ -36,14 +36,14 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 
+@KtorExperimentalAPI
 class AdminEmptyPathTest {
 
     @Test
-    @KtorExperimentalAPI
     fun proxyPingPathTest() {
-        PROXY.configVals.admin.port shouldEqual 8098
-        PROXY.configVals.admin.pingPath shouldEqual ""
-        PROXY.configVals.admin
+        proxy.configVals.admin.port shouldEqual 8098
+        proxy.configVals.admin.pingPath shouldEqual ""
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
@@ -52,11 +52,10 @@ class AdminEmptyPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun proxyVersionPathTest() {
-        PROXY.configVals.admin.port shouldEqual 8098
-        PROXY.configVals.admin.versionPath shouldEqual ""
-        PROXY.configVals.admin
+        proxy.configVals.admin.port shouldEqual 8098
+        proxy.configVals.admin.versionPath shouldEqual ""
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
@@ -65,10 +64,9 @@ class AdminEmptyPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun proxyHealthCheckPathTest() {
-        PROXY.configVals.admin.healthCheckPath shouldEqual ""
-        PROXY.configVals.admin
+        proxy.configVals.admin.healthCheckPath shouldEqual ""
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
@@ -77,10 +75,9 @@ class AdminEmptyPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun proxyThreadDumpPathTest() {
-        PROXY.configVals.admin.threadDumpPath shouldEqual ""
-        PROXY.configVals.admin
+        proxy.configVals.admin.threadDumpPath shouldEqual ""
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.threadDumpPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
@@ -89,8 +86,8 @@ class AdminEmptyPathTest {
     }
 
     companion object : KLogging() {
-        private lateinit var PROXY: Proxy
-        private lateinit var AGENT: Agent
+        private lateinit var proxy: Proxy
+        private lateinit var agent: Agent
 
         @JvmStatic
         @BeforeClass
@@ -107,9 +104,9 @@ class AdminEmptyPathTest {
 
             logger.info { "Starting Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY = startProxy(adminEnabled = true, argv = args) }
+                launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = args) }
                 launch(Dispatchers.Default) {
-                    AGENT = startAgent(adminEnabled = true).apply { awaitInitialConnection(5, SECONDS) }
+                    agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5, SECONDS) }
                 }
             }
             logger.info { "Finished starting Proxy and Agent" }
@@ -121,8 +118,8 @@ class AdminEmptyPathTest {
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY.stopSync() }
-                launch(Dispatchers.Default) { AGENT.stopSync() }
+                launch(Dispatchers.Default) { proxy.stopSync() }
+                launch(Dispatchers.Default) { agent.stopSync() }
             }
             logger.info { "Finished stopping Proxy and Agent" }
         }

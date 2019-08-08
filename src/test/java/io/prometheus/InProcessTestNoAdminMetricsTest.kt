@@ -52,36 +52,36 @@ class InProcessTestNoAdminMetricsTest {
     fun invalidPathTest() = invalidPathTest(simpleClassName)
 
     @Test
-    fun addRemovePathsTest() = addRemovePathsTest(AGENT, simpleClassName)
+    fun addRemovePathsTest() = addRemovePathsTest(agent, simpleClassName)
 
     @Test
-    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(AGENT, simpleClassName)
+    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent, simpleClassName)
 
     @Test
-    fun invalidAgentUrlTest() = invalidAgentUrlTest(AGENT, simpleClassName)
+    fun invalidAgentUrlTest() = invalidAgentUrlTest(agent, simpleClassName)
 
     @Test
-    fun timeoutTest() = timeoutTest(AGENT, simpleClassName)
+    fun timeoutTest() = timeoutTest(agent, simpleClassName)
 
     @Test
     @InternalCoroutinesApi
     fun proxyCallTest() =
         proxyCallTest(
             ProxyCallTestArgs(
-                AGENT,
+                agent,
                 httpServerCount = 25,
                 pathCount = 25,
                 sequentialQueryCount = 100,
                 sequentialPauseMillis = Millis(25),
-                parallelQueryCount = 25,
+                parallelQueryCount = 250,
                 caller = simpleClassName,
                 startingPort = 10100
             )
         )
 
     companion object : KLogging() {
-        private lateinit var PROXY: Proxy
-        private lateinit var AGENT: Agent
+        private lateinit var proxy: Proxy
+        private lateinit var agent: Agent
 
         @JvmStatic
         @BeforeClass
@@ -90,9 +90,9 @@ class InProcessTestNoAdminMetricsTest {
 
             logger.info { "Starting Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY = startProxy("nometrics") }
+                launch(Dispatchers.Default) { proxy = startProxy("nometrics") }
                 launch(Dispatchers.Default) {
-                    AGENT = startAgent("nometrics").apply { awaitInitialConnection(10, SECONDS) }
+                    agent = startAgent("nometrics").apply { awaitInitialConnection(10, SECONDS) }
                 }
             }
             logger.info { "Finished starting Proxy and Agent" }
@@ -103,8 +103,8 @@ class InProcessTestNoAdminMetricsTest {
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY.stopSync() }
-                launch(Dispatchers.Default) { AGENT.stopSync() }
+                launch(Dispatchers.Default) { proxy.stopSync() }
+                launch(Dispatchers.Default) { agent.stopSync() }
             }
             logger.info { "Finished stopping Proxy and Agent" }
         }

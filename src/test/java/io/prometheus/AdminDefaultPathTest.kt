@@ -40,12 +40,12 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 
+@KtorExperimentalAPI
 class AdminDefaultPathTest {
 
     @Test
-    @KtorExperimentalAPI
     fun proxyPingPathTest() {
-        PROXY.configVals.admin
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -55,9 +55,8 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun agentPingPathTest() {
-        AGENT.configVals.admin
+        agent.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -67,9 +66,8 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun proxyVersionPathTest() {
-        PROXY.configVals.admin
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -79,9 +77,8 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun agentVersionPathTest() {
-        AGENT.configVals.admin
+        agent.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -91,9 +88,8 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun proxyHealthCheckPathTest() {
-        PROXY.configVals.admin
+        proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -103,9 +99,8 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun agentHealthCheckPathTest() {
-        AGENT.configVals.admin
+        agent.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
                     resp.receive<String>().length shouldBeGreaterThan 10
@@ -114,24 +109,22 @@ class AdminDefaultPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun proxyThreadDumpPathTest() {
-        blockingGet("${PROXY.configVals.admin.port}/${PROXY.configVals.admin.threadDumpPath}") { resp ->
+        blockingGet("${proxy.configVals.admin.port}/${proxy.configVals.admin.threadDumpPath}") { resp ->
             resp.receive<String>().length shouldBeGreaterThan 10
         }
     }
 
     @Test
-    @KtorExperimentalAPI
     fun agentThreadDumpPathTest() {
-        blockingGet("${AGENT.configVals.admin.port}/${AGENT.configVals.admin.threadDumpPath}") {
+        blockingGet("${agent.configVals.admin.port}/${agent.configVals.admin.threadDumpPath}") {
             it.receive<String>().length shouldBeGreaterThan 10
         }
     }
 
     companion object : KLogging() {
-        private lateinit var PROXY: Proxy
-        private lateinit var AGENT: Agent
+        private lateinit var proxy: Proxy
+        private lateinit var agent: Agent
 
         @JvmStatic
         @BeforeClass
@@ -141,9 +134,9 @@ class AdminDefaultPathTest {
 
             logger.info { "Starting Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY = startProxy(adminEnabled = true) }
+                launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true) }
                 launch(Dispatchers.Default) {
-                    AGENT = startAgent(adminEnabled = true).apply { awaitInitialConnection(5, SECONDS) }
+                    agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5, SECONDS) }
                 }
             }
 
@@ -156,8 +149,8 @@ class AdminDefaultPathTest {
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY.stopSync() }
-                launch(Dispatchers.Default) { AGENT.stopSync() }
+                launch(Dispatchers.Default) { proxy.stopSync() }
+                launch(Dispatchers.Default) { agent.stopSync() }
             }
             logger.info { "Finished stopping Proxy and Agent" }
         }

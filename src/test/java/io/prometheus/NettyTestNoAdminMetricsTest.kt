@@ -43,50 +43,46 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 
+@KtorExperimentalAPI
 class NettyTestNoAdminMetricsTest {
 
     @Test
-    @KtorExperimentalAPI
     fun missingPathTest() = missingPathTest(simpleClassName)
 
     @Test
-    @KtorExperimentalAPI
     fun invalidPathTest() = invalidPathTest(simpleClassName)
 
     @Test
-    fun addRemovePathsTest() = addRemovePathsTest(AGENT, simpleClassName)
+    fun addRemovePathsTest() = addRemovePathsTest(agent, simpleClassName)
 
     @Test
-    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(AGENT, simpleClassName)
+    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent, simpleClassName)
 
     @Test
-    @KtorExperimentalAPI
-    fun invalidAgentUrlTest() = invalidAgentUrlTest(AGENT, simpleClassName)
+    fun invalidAgentUrlTest() = invalidAgentUrlTest(agent, simpleClassName)
 
     @Test
-    @KtorExperimentalAPI
-    fun timeoutTest() = timeoutTest(AGENT, simpleClassName)
+    fun timeoutTest() = timeoutTest(agent, simpleClassName)
 
     @Test
     @InternalCoroutinesApi
-    @KtorExperimentalAPI
     fun proxyCallTest() =
         proxyCallTest(
             ProxyCallTestArgs(
-                AGENT,
+                agent,
                 httpServerCount = 25,
                 pathCount = 50,
                 sequentialQueryCount = 500,
                 sequentialPauseMillis = Millis(25),
-                parallelQueryCount = 100,
+                parallelQueryCount = 250,
                 caller = simpleClassName,
                 startingPort = 10500
             )
         )
 
     companion object : KLogging() {
-        private lateinit var PROXY: Proxy
-        private lateinit var AGENT: Agent
+        private lateinit var proxy: Proxy
+        private lateinit var agent: Agent
 
         @JvmStatic
         @BeforeClass
@@ -95,8 +91,8 @@ class NettyTestNoAdminMetricsTest {
 
             logger.info { "Starting Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY = startProxy() }
-                launch(Dispatchers.Default) { AGENT = startAgent().apply { awaitInitialConnection(10, SECONDS) } }
+                launch(Dispatchers.Default) { proxy = startProxy() }
+                launch(Dispatchers.Default) { agent = startAgent().apply { awaitInitialConnection(10, SECONDS) } }
             }
             logger.info { "Finished starting Proxy and Agent" }
         }
@@ -107,8 +103,8 @@ class NettyTestNoAdminMetricsTest {
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY.stopSync() }
-                launch(Dispatchers.Default) { AGENT.stopSync() }
+                launch(Dispatchers.Default) { proxy.stopSync() }
+                launch(Dispatchers.Default) { agent.stopSync() }
             }
             logger.info { "Finished stopping Proxy and Agent" }
         }

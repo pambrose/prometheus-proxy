@@ -42,37 +42,33 @@ import org.junit.BeforeClass
 import org.junit.Test
 import java.util.concurrent.TimeUnit.SECONDS
 
+@KtorExperimentalAPI
 class InProcessTestWithAdminMetricsTest {
 
     @Test
-    @KtorExperimentalAPI
     fun missingPathTest() = missingPathTest(simpleClassName)
 
     @Test
-    @KtorExperimentalAPI
     fun invalidPathTest() = invalidPathTest(simpleClassName)
 
     @Test
-    fun addRemovePathsTest() = addRemovePathsTest(AGENT, simpleClassName)
+    fun addRemovePathsTest() = addRemovePathsTest(agent, simpleClassName)
 
     @Test
-    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(AGENT, simpleClassName)
+    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent, simpleClassName)
 
     @Test
-    @KtorExperimentalAPI
-    fun invalidAgentUrlTest() = invalidAgentUrlTest(AGENT, simpleClassName)
+    fun invalidAgentUrlTest() = invalidAgentUrlTest(agent, simpleClassName)
 
     @Test
-    @KtorExperimentalAPI
-    fun timeoutTest() = timeoutTest(AGENT, simpleClassName)
+    fun timeoutTest() = timeoutTest(agent, simpleClassName)
 
     @Test
     @InternalCoroutinesApi
-    @KtorExperimentalAPI
     fun proxyCallTest() =
         proxyCallTest(
             ProxyCallTestArgs(
-                AGENT,
+                agent,
                 httpServerCount = 25,
                 pathCount = 50,
                 sequentialQueryCount = 500,
@@ -84,8 +80,8 @@ class InProcessTestWithAdminMetricsTest {
         )
 
     companion object : KLogging() {
-        private lateinit var PROXY: Proxy
-        private lateinit var AGENT: Agent
+        private lateinit var proxy: Proxy
+        private lateinit var agent: Agent
 
         @JvmStatic
         @BeforeClass
@@ -95,10 +91,10 @@ class InProcessTestWithAdminMetricsTest {
             logger.info { "Starting Proxy and Agent" }
             runBlocking {
                 launch(Dispatchers.Default) {
-                    PROXY = startProxy("withmetrics", adminEnabled = true, metricsEnabled = true)
+                    proxy = startProxy("withmetrics", adminEnabled = true, metricsEnabled = true)
                 }
                 launch(Dispatchers.Default) {
-                    AGENT = startAgent("withmetrics", adminEnabled = true, metricsEnabled = true)
+                    agent = startAgent("withmetrics", adminEnabled = true, metricsEnabled = true)
                         .apply { awaitInitialConnection(10, SECONDS) }
                 }
             }
@@ -110,8 +106,8 @@ class InProcessTestWithAdminMetricsTest {
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { PROXY.stopSync() }
-                launch(Dispatchers.Default) { AGENT.stopSync() }
+                launch(Dispatchers.Default) { proxy.stopSync() }
+                launch(Dispatchers.Default) { agent.stopSync() }
             }
             logger.info { "Finished stopping Proxy and Agent" }
         }
