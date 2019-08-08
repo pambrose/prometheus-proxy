@@ -21,7 +21,6 @@ package io.prometheus
 import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.common.fixUrl
 import io.prometheus.dsl.KtorDsl
 import mu.KLogging
 import org.amshove.kluent.shouldBeTrue

@@ -76,3 +76,8 @@ object TestUtils : KLogging() {
             testMode = true) { startSync() }
     }
 }
+
+fun String.fixUrl(): String {
+    val prefix = "http://localhost:"
+    return if (this.startsWith(prefix)) this else (prefix + this)
+}

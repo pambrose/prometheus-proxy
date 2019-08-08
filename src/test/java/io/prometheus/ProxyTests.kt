@@ -35,7 +35,6 @@ import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.Millis
 import io.prometheus.common.Secs
-import io.prometheus.common.fixUrl
 import io.prometheus.common.sleep
 import io.prometheus.dsl.KtorDsl.blockingGet
 import io.prometheus.dsl.KtorDsl.get
