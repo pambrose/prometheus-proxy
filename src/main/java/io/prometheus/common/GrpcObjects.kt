@@ -24,14 +24,14 @@ import io.prometheus.grpc.*
 class GrpcObjects {
 
     companion object {
-        fun newHeartBeatRequest(agentId: String) =
+        fun newHeartBeatRequest(agentId: String): HeartBeatRequest =
             HeartBeatRequest.newBuilder()
                 .run {
                     this.agentId = agentId
                     build()
                 }
 
-        fun newHeartBeatResponse(valid: Boolean, reason: String) =
+        fun newHeartBeatResponse(valid: Boolean, reason: String): HeartBeatResponse =
             HeartBeatResponse.newBuilder()
                 .run {
                     this.valid = valid
@@ -39,7 +39,7 @@ class GrpcObjects {
                     build()
                 }
 
-        fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String) =
+        fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest =
             RegisterAgentRequest.newBuilder()
                 .run {
                     this.agentId = agentId
@@ -48,7 +48,7 @@ class GrpcObjects {
                     build()
                 }
 
-        fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String) =
+        fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse =
             RegisterAgentResponse.newBuilder()
                 .run {
                     this.valid = valid
@@ -57,21 +57,21 @@ class GrpcObjects {
                     build()
                 }
 
-        fun newPathMapSizeRequest(agentId: String) =
+        fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest =
             PathMapSizeRequest.newBuilder()
                 .run {
                     this.agentId = agentId
                     build()
                 }
 
-        fun newPathMapSizeResponse(pathCount: Int) =
+        fun newPathMapSizeResponse(pathCount: Int): PathMapSizeResponse =
             PathMapSizeResponse.newBuilder()
                 .run {
                     this.pathCount = pathCount
                     build()
                 }
 
-        fun newRegisterPathRequest(agentId: String, path: String) =
+        fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest =
             RegisterPathRequest.newBuilder()
                 .run {
                     this.agentId = agentId
@@ -79,7 +79,12 @@ class GrpcObjects {
                     build()
                 }
 
-        fun newRegisterPathResponse(valid: Boolean, reason: String, pathCount: Int, pathId: Long) =
+        fun newRegisterPathResponse(
+            valid: Boolean,
+            reason: String,
+            pathCount: Int,
+            pathId: Long
+        ): RegisterPathResponse =
             RegisterPathResponse.newBuilder()
                 .run {
                     this.valid = valid
@@ -89,7 +94,7 @@ class GrpcObjects {
                     build()
                 }
 
-        fun newScrapeRequest(agentId: String, scrapeId: Long, path: String, accept: String?) =
+        fun newScrapeRequest(agentId: String, scrapeId: Long, path: String, accept: String?): ScrapeRequest =
             ScrapeRequest.newBuilder()
                 .run {
                     this.agentId = agentId

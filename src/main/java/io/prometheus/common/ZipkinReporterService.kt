@@ -18,6 +18,7 @@
 
 package io.prometheus.common
 
+import brave.Tracing
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ZipkinDsl.tracing
@@ -28,7 +29,7 @@ import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
 
 class ZipkinReporterService(private val url: String, initBlock: (ZipkinReporterService.() -> Unit)? = null) :
-        GenericIdleService() {
+    GenericIdleService() {
     private val sender = OkHttpSender.create(url)
     private val reporter = AsyncReporter.create(sender)
 
@@ -37,11 +38,11 @@ class ZipkinReporterService(private val url: String, initBlock: (ZipkinReporterS
         initBlock?.invoke(this)
     }
 
-    fun newTracing(serviceName: String) =
-            tracing {
-                localServiceName(serviceName)
-                spanReporter(reporter)
-            }
+    fun newTracing(serviceName: String): Tracing =
+        tracing {
+            localServiceName(serviceName)
+            spanReporter(reporter)
+        }
 
     override fun startUp() {
         // Empty

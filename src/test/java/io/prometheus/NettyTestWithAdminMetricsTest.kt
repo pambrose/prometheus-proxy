@@ -91,7 +91,7 @@ class NettyTestWithAdminMetricsTest {
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
 
-            logger.info { "Starting Proxy and Agent" }
+            logger.info { "Starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
             runBlocking {
                 launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, metricsEnabled = true) }
                 launch(Dispatchers.Default) {
@@ -102,19 +102,20 @@ class NettyTestWithAdminMetricsTest {
             // Wait long enough to trigger heartbeat for code coverage
             sleep(Secs(15))
 
-            logger.info { "Finished starting Proxy and Agent" }
+            logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
         }
 
         @JvmStatic
         @AfterClass
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
-            logger.info { "Stopping Proxy and Agent" }
             runBlocking {
-                launch(Dispatchers.Default) { proxy.stopSync() }
-                launch(Dispatchers.Default) { agent.stopSync() }
+                for (service in listOf(proxy, agent)) {
+                    logger.info { "Stopping ${service.simpleClassName}" }
+                    launch(Dispatchers.Default) { service.stopSync() }
+                }
             }
-            logger.info { "Finished stopping Proxy and Agent" }
+            logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
         }
     }
 }

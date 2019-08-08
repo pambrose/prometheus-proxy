@@ -209,7 +209,7 @@ class Agent(
             )
     }
 
-    override fun serviceName() = "${simpleClassName} $agentName"
+    override fun serviceName() = "$simpleClassName $agentName"
 
     private fun connectToProxy() {
         val disconnected = AtomicBoolean(false)

@@ -21,43 +21,33 @@ package io.prometheus
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.Joiner
 import io.grpc.Attributes
+import io.ktor.util.KtorExperimentalAPI
+import io.prometheus.common.*
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
-import io.prometheus.common.ConfigVals
-import io.prometheus.common.GenericService
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
-import io.prometheus.common.Millis
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
-import io.prometheus.common.getBanner
-import io.prometheus.common.getVersionDesc
-import io.prometheus.common.newMapHealthCheck
-import io.prometheus.common.sleep
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
-import io.prometheus.proxy.AgentContextCleanupService
-import io.prometheus.proxy.AgentContextManager
-import io.prometheus.proxy.PathManager
+import io.prometheus.proxy.*
 import io.prometheus.proxy.ProxyGrpcService.Companion.newProxyGrpcService
-import io.prometheus.proxy.ProxyHttpService
-import io.prometheus.proxy.ProxyMetrics
-import io.prometheus.proxy.ProxyOptions
-import io.prometheus.proxy.ScrapeRequestManager
 import mu.KLogging
 import kotlin.properties.Delegates
 
+@KtorExperimentalAPI
 class Proxy(options: ProxyOptions,
             proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",
             testMode: Boolean = false,
             initBlock: (Proxy.() -> Unit)? = null) :
-        GenericService(options.configVals,
-                       newAdminConfig(options.adminEnabled,
-                                      options.adminPort,
-                                      options.configVals.proxy.admin),
-                       newMetricsConfig(options.metricsEnabled,
-                                        options.metricsPort,
-                                        options.configVals.proxy.metrics),
-                       newZipkinConfig(options.configVals.proxy.internal.zipkin),
-                       testMode) {
+    GenericService(options.configVals,
+        newAdminConfig(options.adminEnabled,
+            options.adminPort,
+            options.configVals.proxy.admin),
+        newMetricsConfig(options.metricsEnabled,
+            options.metricsPort,
+            options.configVals.proxy.metrics),
+        newZipkinConfig(options.configVals.proxy.internal.zipkin),
+        testMode) {
     val pathManager = PathManager(isTestMode)
     val scrapeRequestManager = ScrapeRequestManager()
     val agentContextManager = AgentContextManager()
@@ -65,10 +55,10 @@ class Proxy(options: ProxyOptions,
 
     private val httpService = ProxyHttpService(this, proxyHttpPort)
     private val grpcService =
-            if (inProcessServerName.isEmpty())
-                newProxyGrpcService(proxy = this, port = options.proxyAgentPort)
-            else
-                newProxyGrpcService(proxy = this, serverName = inProcessServerName)
+        if (inProcessServerName.isEmpty())
+            newProxyGrpcService(proxy = this, port = options.proxyAgentPort)
+        else
+            newProxyGrpcService(proxy = this, serverName = inProcessServerName)
 
     private var agentCleanupService: AgentContextCleanupService by Delegates.notNull()
 
@@ -113,52 +103,50 @@ class Proxy(options: ProxyOptions,
     override fun registerHealthChecks() {
         super.registerHealthChecks()
         healthCheckRegistry
-                .apply {
-                    register("grpc_service", grpcService.healthCheck)
-                    register("scrape_response_map_check",
-                             newMapHealthCheck(scrapeRequestManager.scrapeRequestMap, configVals.internal.scrapeRequestMapUnhealthySize))
-                    register("agent_scrape_request_queue",
-                             healthCheck {
-                                 val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
-                                 val vals =
-                                         agentContextManager
-                                                 .agentContextMap
-                                                 .entries
-                                                 .asSequence()
-                                                 .filter { it.value.scrapeRequestQueueSize >= unhealthySize }
-                                                 .map { "${it.value} ${it.value.scrapeRequestQueueSize}" }
-                                                 .toList()
-                                 if (vals.isEmpty())
-                                     HealthCheck.Result.healthy()
-                                 else
-                                     HealthCheck.Result.unhealthy("Large scrapeRequestQueues: ${Joiner.on(", ").join(vals)}")
-                             })
-                }
+            .apply {
+                register("grpc_service", grpcService.healthCheck)
+                register("scrape_response_map_check",
+                    newMapHealthCheck(scrapeRequestManager.scrapeRequestMap, configVals.internal.scrapeRequestMapUnhealthySize))
+                register("agent_scrape_request_queue",
+                    healthCheck {
+                        val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
+                        val vals =
+                            agentContextManager
+                                .agentContextMap
+                                .entries
+                                .asSequence()
+                                .filter { it.value.scrapeRequestQueueSize >= unhealthySize }
+                                .map { "${it.value} ${it.value.scrapeRequestQueueSize}" }
+                                .toList()
+                        if (vals.isEmpty())
+                            HealthCheck.Result.healthy()
+                        else
+                            HealthCheck.Result.unhealthy("Large scrapeRequestQueues: ${Joiner.on(", ").join(vals)}")
+                    })
+            }
     }
 
     fun removeAgentContext(agentId: String?) =
-            if (agentId == null || agentId.isEmpty()) {
-                logger.error { "Missing agentId" }
-                null
+        if (agentId == null || agentId.isEmpty()) {
+            logger.error { "Missing agentId" }
+            null
+        } else {
+            val agentContext = agentContextManager.removeAgentContext(agentId)
+            if (agentContext == null) {
+                logger.error { "Missing AgentContext for agentId: $agentId" }
+            } else {
+                logger.info { "Removed $agentContext" }
+                agentContext.markInvalid()
             }
-            else {
-                val agentContext = agentContextManager.removeAgentContext(agentId)
-                if (agentContext == null) {
-                    logger.error { "Missing AgentContext for agentId: $agentId" }
-                }
-                else {
-                    logger.info { "Removed $agentContext" }
-                    agentContext.markInvalid()
-                }
-                agentContext
-            }
+            agentContext
+        }
 
     override fun toString() =
-            toStringElements {
-                add("proxyPort", httpService.httpPort)
-                add("adminService", if (isAdminEnabled) adminService else "Disabled")
-                add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
-            }
+        toStringElements {
+            add("proxyPort", httpService.httpPort)
+            add("adminService", if (isAdminEnabled) adminService else "Disabled")
+            add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
+        }
 
     companion object : KLogging() {
         const val AGENT_ID = "agent-id"

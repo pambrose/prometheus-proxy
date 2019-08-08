@@ -19,9 +19,10 @@
 package io.prometheus.dsl
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
+import java.util.concurrent.ThreadFactory
 
 object ThreadDsl {
-    fun threadFactory(block: ThreadFactoryBuilder.() -> Unit) =
+    fun threadFactory(block: ThreadFactoryBuilder.() -> Unit): ThreadFactory =
             ThreadFactoryBuilder()
                     .run {
                         block.invoke(this)

@@ -30,38 +30,40 @@ import io.grpc.stub.StreamObserver
 import io.prometheus.delegate.DelegatesExtensions.singleAssign
 
 object GrpcDsl {
-    fun channel(inProcessServerName: String = "",
-                hostName: String = "",
-                port: Int = -1,
-                block: AbstractManagedChannelImplBuilder<*>.() -> Unit): ManagedChannel =
-            (if (inProcessServerName.isEmpty())
-                NettyChannelBuilder.forAddress(hostName, port)
-            else
-                InProcessChannelBuilder.forName(inProcessServerName))
-                    .run {
-                        block.invoke(this)
-                        build()
-                    }
+    fun channel(
+        inProcessServerName: String = "",
+        hostName: String = "",
+        port: Int = -1,
+        block: AbstractManagedChannelImplBuilder<*>.() -> Unit
+    ): ManagedChannel =
+        (if (inProcessServerName.isEmpty())
+            NettyChannelBuilder.forAddress(hostName, port)
+        else
+            InProcessChannelBuilder.forName(inProcessServerName))
+            .run {
+                block.invoke(this)
+                build()
+            }
 
     fun server(inProcessServerName: String = "", port: Int = -1, block: ServerBuilder<*>.() -> Unit): Server =
-            (if (inProcessServerName.isEmpty())
-                ServerBuilder.forPort(port)
-            else
-                InProcessServerBuilder.forName(inProcessServerName))
-                    .run {
-                        block.invoke(this)
-                        build()
-                    }
+        (if (inProcessServerName.isEmpty())
+            ServerBuilder.forPort(port)
+        else
+            InProcessServerBuilder.forName(inProcessServerName))
+            .run {
+                block.invoke(this)
+                build()
+            }
 
-    fun attributes(block: Attributes.Builder.() -> Unit) =
+    fun attributes(block: Attributes.Builder.() -> Unit): Attributes =
         Attributes.newBuilder()
-                    .run {
-                        block.invoke(this)
-                        build()
-                    }
+            .run {
+                block.invoke(this)
+                build()
+            }
 
     fun <T> streamObserver(init: StreamObserverHelper<T>.() -> Unit) =
-            StreamObserverHelper<T>().apply { init() }
+        StreamObserverHelper<T>().apply { init() }
 
     class StreamObserverHelper<T> : StreamObserver<T> {
         private var onNextBlock: ((T) -> Unit)? by singleAssign()
