@@ -183,9 +183,8 @@ object ProxyTests : KLogging() {
                     val results = withTimeoutOrNull(Secs(30).toMillis().value) {
                         repeat(args.parallelQueryCount) {
                             jobs += GlobalScope.launch(dispatcher + coroutineExceptionHandler) {
-                                delay(Random.nextLong(500))
+                                delay(Random.nextLong(400))
                                 callProxy(httpClient, pathMap, "Parallel $it")
-
                             }
                         }
 
@@ -201,9 +200,9 @@ object ProxyTests : KLogging() {
             }
 
         val errorCnt = AtomicInteger()
-        pathMap.forEach {
+        for (path in pathMap) {
             try {
-                args.agent.unregisterPath("proxy-${it.key}")
+                args.agent.unregisterPath("proxy-${path.key}")
             } catch (e: RequestFailureException) {
                 errorCnt.incrementAndGet()
             }
