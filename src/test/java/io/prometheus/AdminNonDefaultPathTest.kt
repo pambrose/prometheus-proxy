@@ -40,10 +40,10 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 
+@KtorExperimentalAPI
 class AdminNonDefaultPathTest {
 
     @Test
-    @KtorExperimentalAPI
     fun proxyPingPathTest() {
         PROXY.configVals.admin.port shouldEqual 8099
         PROXY.configVals.admin.pingPath shouldEqual "pingPath2"
@@ -57,7 +57,6 @@ class AdminNonDefaultPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun proxyVersionPathTest() {
         PROXY.configVals.admin.port shouldEqual 8099
         PROXY.configVals.admin.versionPath shouldEqual "versionPath2"
@@ -71,7 +70,6 @@ class AdminNonDefaultPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun proxyHealthCheckPathTest() {
         PROXY.configVals.admin.healthCheckPath shouldEqual "healthCheckPath2"
         PROXY.configVals.admin
@@ -84,7 +82,6 @@ class AdminNonDefaultPathTest {
     }
 
     @Test
-    @KtorExperimentalAPI
     fun proxyThreadDumpPathTest() {
         PROXY.configVals.admin.threadDumpPath shouldEqual "threadDumpPath2"
         PROXY.configVals.admin

@@ -19,14 +19,14 @@
 package io.prometheus
 
 import io.ktor.util.KtorExperimentalAPI
-import io.prometheus.CommonTests.ProxyCallTestArgs
-import io.prometheus.CommonTests.addRemovePathsTest
-import io.prometheus.CommonTests.invalidAgentUrlTest
-import io.prometheus.CommonTests.invalidPathTest
-import io.prometheus.CommonTests.missingPathTest
-import io.prometheus.CommonTests.proxyCallTest
-import io.prometheus.CommonTests.threadedAddRemovePathsTest
-import io.prometheus.CommonTests.timeoutTest
+import io.prometheus.ProxyTests.ProxyCallTestArgs
+import io.prometheus.ProxyTests.proxyCallTest
+import io.prometheus.ProxyTests.timeoutTest
+import io.prometheus.SimpleTests.addRemovePathsTest
+import io.prometheus.SimpleTests.invalidAgentUrlTest
+import io.prometheus.SimpleTests.invalidPathTest
+import io.prometheus.SimpleTests.missingPathTest
+import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry

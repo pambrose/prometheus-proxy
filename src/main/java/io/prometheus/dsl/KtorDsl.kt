@@ -25,13 +25,12 @@ import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.runBlocking
 
 
+@KtorExperimentalAPI
 object KtorDsl {
     private const val prefix = "http://localhost:"
 
-    @KtorExperimentalAPI
     fun newHttpClient() = HttpClient(CIO)
 
-    @KtorExperimentalAPI
     fun blockingGet(url: String, block: suspend (HttpResponse) -> Unit) {
         newHttpClient()
             .use { httpClient ->
