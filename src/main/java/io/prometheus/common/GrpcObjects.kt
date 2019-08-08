@@ -18,6 +18,7 @@
 
 package io.prometheus.common
 
+import io.ktor.http.HttpStatusCode
 import io.prometheus.grpc.*
 
 class GrpcObjects {
@@ -25,115 +26,117 @@ class GrpcObjects {
     companion object {
         fun newHeartBeatRequest(agentId: String) =
             HeartBeatRequest.newBuilder()
-                        .run {
-                            this.agentId = agentId
-                            build()
-                        }
+                .run {
+                    this.agentId = agentId
+                    build()
+                }
 
         fun newHeartBeatResponse(valid: Boolean, reason: String) =
             HeartBeatResponse.newBuilder()
-                        .run {
-                            this.valid = valid
-                            this.reason = reason
-                            build()
-                        }
+                .run {
+                    this.valid = valid
+                    this.reason = reason
+                    build()
+                }
 
         fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String) =
             RegisterAgentRequest.newBuilder()
-                        .run {
-                            this.agentId = agentId
-                            this.agentName = agentName
-                            this.hostName = hostName
-                            build()
-                        }
+                .run {
+                    this.agentId = agentId
+                    this.agentName = agentName
+                    this.hostName = hostName
+                    build()
+                }
 
         fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String) =
             RegisterAgentResponse.newBuilder()
-                        .run {
-                            this.valid = valid
-                            this.reason = reason
-                            this.agentId = agentId
-                            build()
-                        }
+                .run {
+                    this.valid = valid
+                    this.reason = reason
+                    this.agentId = agentId
+                    build()
+                }
 
         fun newPathMapSizeRequest(agentId: String) =
             PathMapSizeRequest.newBuilder()
-                        .run {
-                            this.agentId = agentId
-                            build()
-                        }
+                .run {
+                    this.agentId = agentId
+                    build()
+                }
 
         fun newPathMapSizeResponse(pathCount: Int) =
             PathMapSizeResponse.newBuilder()
-                        .run {
-                            this.pathCount = pathCount
-                            build()
-                        }
+                .run {
+                    this.pathCount = pathCount
+                    build()
+                }
 
         fun newRegisterPathRequest(agentId: String, path: String) =
             RegisterPathRequest.newBuilder()
-                        .run {
-                            this.agentId = agentId
-                            this.path = path
-                            build()
-                        }
+                .run {
+                    this.agentId = agentId
+                    this.path = path
+                    build()
+                }
 
         fun newRegisterPathResponse(valid: Boolean, reason: String, pathCount: Int, pathId: Long) =
             RegisterPathResponse.newBuilder()
-                        .run {
-                            this.valid = valid
-                            this.reason = reason
-                            this.pathCount = pathCount
-                            this.pathId = pathId
-                            build()
-                        }
+                .run {
+                    this.valid = valid
+                    this.reason = reason
+                    this.pathCount = pathCount
+                    this.pathId = pathId
+                    build()
+                }
 
         fun newScrapeRequest(agentId: String, scrapeId: Long, path: String, accept: String?) =
             ScrapeRequest.newBuilder()
-                        .run {
-                            this.agentId = agentId
-                            this.scrapeId = scrapeId
-                            this.path = path
-                            if (!accept.isNullOrBlank())
-                                this.accept = accept
-                            build()
-                        }
+                .run {
+                    this.agentId = agentId
+                    this.scrapeId = scrapeId
+                    this.path = path
+                    if (!accept.isNullOrBlank())
+                        this.accept = accept
+                    build()
+                }
 
 
-        fun newScrapeResponse(valid: Boolean,
-                              reason: String,
-                              agentId: String,
-                              scrapeId: Long,
-                              statusCode: Int,
-                              text: String = "",
-                              contentType: String = "") =
+        fun newScrapeResponse(
+            valid: Boolean,
+            reason: String,
+            agentId: String,
+            scrapeId: Long,
+            statusCode: HttpStatusCode,
+            text: String = "",
+            contentType: String = ""
+        ) =
             ScrapeResponse.newBuilder()
-                        .run {
-                            this.agentId = agentId
-                            this.scrapeId = scrapeId
-                            this.valid = valid
-                            this.reason = reason
-                            this.statusCode = statusCode
-                            this.text = text
-                            this.contentType = contentType
-                            build()
-                        }
+                .run {
+                    this.agentId = agentId
+                    this.scrapeId = scrapeId
+                    this.valid = valid
+                    this.reason = reason
+                    this.statusCode = statusCode.value
+                    this.text = text
+                    this.contentType = contentType
+                    build()
+                }
 
         fun newUnregisterPathRequest(agentId: String, path: String) =
             UnregisterPathRequest.newBuilder()
-                        .run {
-                            this.agentId = agentId
-                            this.path = path
-                            build()
-                        }
+                .run {
+                    this.agentId = agentId
+                    this.path = path
+                    build()
+                }
 
         fun newUnregisterPathResponseBuilder() = UnregisterPathResponse.newBuilder()
 
         fun newAgentInfo(agentId: String) =
             AgentInfo.newBuilder()
-                        .run {
-                            this.agentId = agentId
-                            build()
-                        }
+                .run {
+                    this.agentId = agentId
+                    build()
+                }
     }
 }

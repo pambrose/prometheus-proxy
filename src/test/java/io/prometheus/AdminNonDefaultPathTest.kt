@@ -19,11 +19,15 @@
 package io.prometheus
 
 import io.ktor.client.call.receive
+import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.dsl.KtorDsl.blockingGet
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import org.amshove.kluent.shouldBeGreaterThan
 import org.amshove.kluent.shouldContain
@@ -43,12 +47,13 @@ class AdminNonDefaultPathTest {
     fun proxyPingPathTest() {
         PROXY.configVals.admin.port shouldEqual 8099
         PROXY.configVals.admin.pingPath shouldEqual "pingPath2"
-        PROXY.configVals.admin.also { admin ->
-            blockingGet("${admin.port}/${admin.pingPath}") {
-                it.status.value shouldEqual 200
-                it.receive<String>() shouldStartWith "pong"
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.pingPath}") { resp ->
+                    resp.status shouldEqual HttpStatusCode.OK
+                    resp.receive<String>() shouldStartWith "pong"
+                }
             }
-        }
     }
 
     @Test
@@ -56,35 +61,38 @@ class AdminNonDefaultPathTest {
     fun proxyVersionPathTest() {
         PROXY.configVals.admin.port shouldEqual 8099
         PROXY.configVals.admin.versionPath shouldEqual "versionPath2"
-        PROXY.configVals.admin.also { admin ->
-            blockingGet("${admin.port}/${admin.versionPath}") {
-                it.status.value shouldEqual 200
-                it.receive<String>() shouldContain "Version"
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.versionPath}") { resp ->
+                    resp.status shouldEqual HttpStatusCode.OK
+                    resp.receive<String>() shouldContain "Version"
+                }
             }
-        }
     }
 
     @Test
     @KtorExperimentalAPI
     fun proxyHealthCheckPathTest() {
         PROXY.configVals.admin.healthCheckPath shouldEqual "healthCheckPath2"
-        PROXY.configVals.admin.also { admin ->
-            blockingGet("${admin.port}/${admin.healthCheckPath}") {
-                it.status.value shouldEqual 200
-                it.receive<String>().length shouldBeGreaterThan 10
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
+                    resp.status shouldEqual HttpStatusCode.OK
+                    resp.receive<String>().length shouldBeGreaterThan 10
+                }
             }
-        }
     }
 
     @Test
     @KtorExperimentalAPI
     fun proxyThreadDumpPathTest() {
         PROXY.configVals.admin.threadDumpPath shouldEqual "threadDumpPath2"
-        PROXY.configVals.admin.also { admin ->
-            blockingGet("${admin.port}/${admin.threadDumpPath}") {
-                it.receive<String>().length shouldBeGreaterThan 10
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.threadDumpPath}") { resp ->
+                    resp.receive<String>().length shouldBeGreaterThan 10
+                }
             }
-        }
     }
 
     companion object : KLogging() {
@@ -103,10 +111,15 @@ class AdminNonDefaultPathTest {
                 "-Dproxy.admin.healthCheckPath=healthCheckPath2",
                 "-Dproxy.admin.threadDumpPath=threadDumpPath2"
             )
-            PROXY = startProxy(adminEnabled = true, argv = args)
-            AGENT = startAgent(adminEnabled = true)
 
-            AGENT.awaitInitialConnection(5, SECONDS)
+            logger.info { "Starting Proxy and Agent" }
+            runBlocking {
+                launch(Dispatchers.Default) { PROXY = startProxy(adminEnabled = true, argv = args) }
+                launch(Dispatchers.Default) {
+                    AGENT = startAgent(adminEnabled = true).apply { awaitInitialConnection(5, SECONDS) }
+                }
+            }
+            logger.info { "Finished starting Proxy and Agent" }
         }
 
         @JvmStatic
@@ -114,8 +127,11 @@ class AdminNonDefaultPathTest {
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
-            PROXY.stopSync()
-            AGENT.stopSync()
+            runBlocking {
+                launch(Dispatchers.Default) { PROXY.stopSync() }
+                launch(Dispatchers.Default) { AGENT.stopSync() }
+            }
+            logger.info { "Finished stopping Proxy and Agent" }
         }
     }
 }

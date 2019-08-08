@@ -32,7 +32,10 @@ import io.prometheus.common.Millis
 import io.prometheus.common.Secs
 import io.prometheus.common.simpleClassName
 import io.prometheus.common.sleep
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -75,7 +78,8 @@ class NettyTestWithAdminMetricsTest {
             sequentialQueryCount = 100,
             sequentialPauseMillis = Millis(25),
             parallelQueryCount = 25,
-            caller = simpleClassName
+            caller = simpleClassName,
+            startingPort = 10900
         )
     }
 
@@ -87,13 +91,19 @@ class NettyTestWithAdminMetricsTest {
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = startProxy(adminEnabled = true, metricsEnabled = true)
-            AGENT = startAgent(adminEnabled = true, metricsEnabled = true)
 
-            AGENT.awaitInitialConnection(10, SECONDS)
-
+            logger.info { "Starting Proxy and Agent" }
+            runBlocking {
+                launch(Dispatchers.Default) { PROXY = startProxy(adminEnabled = true, metricsEnabled = true) }
+                launch(Dispatchers.Default) {
+                    AGENT = startAgent(adminEnabled = true, metricsEnabled = true)
+                        .apply { awaitInitialConnection(10, SECONDS) }
+                }
+            }
             // Wait long enough to trigger heartbeat for code coverage
             sleep(Secs(15))
+
+            logger.info { "Finished starting Proxy and Agent" }
         }
 
         @JvmStatic
@@ -101,8 +111,11 @@ class NettyTestWithAdminMetricsTest {
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
-            PROXY.stopSync()
-            AGENT.stopSync()
+            runBlocking {
+                launch(Dispatchers.Default) { PROXY.stopSync() }
+                launch(Dispatchers.Default) { AGENT.stopSync() }
+            }
+            logger.info { "Finished stopping Proxy and Agent" }
         }
     }
 }

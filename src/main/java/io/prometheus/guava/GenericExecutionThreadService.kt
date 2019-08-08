@@ -23,12 +23,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.SECONDS
 
 abstract class GenericExecutionThreadService : AbstractExecutionThreadService() {
-    fun startSync(timeout: Long = 15, timeUnit: TimeUnit = SECONDS) {
+    fun startSync(timeout: Long = 30, timeUnit: TimeUnit = SECONDS) {
         startAsync()
         awaitRunning(timeout, timeUnit)
     }
 
-    fun stopSync(timeout: Long = 15, timeUnit: TimeUnit = SECONDS) {
+    fun stopSync(timeout: Long = 30, timeUnit: TimeUnit = SECONDS) {
         stopAsync()
         awaitTerminated(timeout, timeUnit)
     }

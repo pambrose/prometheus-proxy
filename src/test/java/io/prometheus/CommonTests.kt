@@ -19,8 +19,17 @@
 package io.prometheus
 
 import com.google.common.collect.Maps.newConcurrentMap
+import io.ktor.application.call
 import io.ktor.client.HttpClient
 import io.ktor.client.call.receive
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.response.respondText
+import io.ktor.routing.get
+import io.ktor.routing.routing
+import io.ktor.server.cio.CIO
+import io.ktor.server.cio.CIOApplicationEngine
+import io.ktor.server.engine.embeddedServer
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.RequestFailureException
@@ -30,16 +39,14 @@ import io.prometheus.common.sleep
 import io.prometheus.dsl.KtorDsl.blockingGet
 import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.newHttpClient
-import io.prometheus.dsl.SparkDsl.httpServer
-import io.prometheus.proxy.ProxyHttpService.Companion.sparkExceptionHandler
 import kotlinx.coroutines.*
 import mu.KLogging
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldBeTrue
 import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
-import spark.Service
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.MINUTES
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
@@ -49,13 +56,13 @@ object CommonTests : KLogging() {
     @KtorExperimentalAPI
     fun missingPathTest(caller: String) {
         logger.info { "Calling missingPathTest() from $caller" }
-        blockingGet("$PROXY_PORT/") { it.status.value shouldEqual 404 }
+        blockingGet("$PROXY_PORT/") { resp -> resp.status shouldEqual HttpStatusCode.NotFound }
     }
 
     @KtorExperimentalAPI
     fun invalidPathTest(caller: String) {
         logger.info { "Calling invalidPathTest() from $caller" }
-        blockingGet("$PROXY_PORT/invalid_path") { it.status.value shouldEqual 404 }
+        blockingGet("$PROXY_PORT/invalid_path") { resp -> resp.status shouldEqual HttpStatusCode.NotFound }
     }
 
     fun addRemovePathsTest(agent: Agent, caller: String) {
@@ -133,7 +140,7 @@ object CommonTests : KLogging() {
         logger.info { "Calling invalidAgentUrlTest() from $caller" }
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
-        blockingGet("$PROXY_PORT/$badPath") { it.status.value shouldEqual 404 }
+        blockingGet("$PROXY_PORT/$badPath") { resp -> resp.status shouldEqual HttpStatusCode.NotFound }
         agent.unregisterPath(badPath)
     }
 
@@ -141,12 +148,13 @@ object CommonTests : KLogging() {
     fun timeoutTest(
         agent: Agent,
         caller: String,
-        agentPort: Int = 9700,
+        agentPort: Int = 9900,
         agentPath: String = "agent-timeout",
         proxyPath: String = "proxy-timeout"
     ) {
         logger.info { "Calling timeoutTest() from $caller" }
 
+        /*
         val httpServer =
             httpServer {
                 initExceptionHandler { sparkExceptionHandler(it, agentPort) }
@@ -158,15 +166,39 @@ object CommonTests : KLogging() {
                 }
                 awaitInitialization()
             }
+        */
+
+        val httpServer =
+            embeddedServer(CIO, port = agentPort) {
+                routing {
+                    get("/$agentPath") {
+                        sleep(Secs(10))
+                        call.respondText("I timed out", ContentType.Text.Plain)
+                    }
+                }
+            }
+
+        runBlocking {
+            launch(Dispatchers.Default) {
+                logger.info { "Starting httpServer" }
+                httpServer.start()
+                delay(Secs(5).toMillis().value)
+            }
+        }
+
 
         agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
-        blockingGet("$PROXY_PORT/$proxyPath") { it.status.value shouldEqual 404 }
+        blockingGet("$PROXY_PORT/$proxyPath") { resp -> resp.status shouldEqual HttpStatusCode.ServiceUnavailable }
         agent.unregisterPath("/$proxyPath")
 
-        httpServer.stop()
-        httpServer.awaitStop()
-
-        //sleep(Secs(5))
+        runBlocking {
+            launch(Dispatchers.Default) {
+                logger.info { "Stopping httpServer" }
+                //httpServer.environment.stop()
+                httpServer.stop(5, 5, TimeUnit.SECONDS)
+                delay(Secs(5).toMillis().value)
+            }
+        }
     }
 
     @InternalCoroutinesApi
@@ -183,15 +215,17 @@ object CommonTests : KLogging() {
     ) {
         logger.info { "Calling proxyCallTest() from $caller" }
 
-        val httpServers = mutableListOf<Service>()
+        val httpServers = mutableListOf<CIOApplicationEngine>()
         val pathMap = newConcurrentMap<Int, Int>()
 
         // Take into account pre-existing paths already registered
         val originalSize = agent.pathMapSize()
 
         // Create the endpoints
-        repeat(httpServerCount) {
-            val port = startingPort + it
+        logger.info { "Creating $httpServerCount httpServers" }
+        repeat(httpServerCount) { i ->
+            val port = startingPort + i
+            /*
             httpServers +=
                 httpServer {
                     initExceptionHandler { arg -> sparkExceptionHandler(arg, port) }
@@ -203,7 +237,30 @@ object CommonTests : KLogging() {
                     }
                     awaitInitialization()
                 }
+             */
+            httpServers +=
+                embeddedServer(CIO, port = port) {
+                    routing {
+                        get("/agent-$i") {
+                            call.respondText("value: $i", ContentType.Text.Plain)
+                        }
+                    }
+                }
         }
+
+        logger.info { "Starting $httpServerCount httpServers" }
+
+        runBlocking {
+            for (httpServer in httpServers) {
+                launch(Dispatchers.Default) {
+                    logger.info { "Starting httpServer" }
+                    httpServer.start()
+                    delay(Secs(2).toMillis().value)
+                }
+            }
+        }
+
+        logger.info { "Finished starting $httpServerCount httpServers" }
 
         // Create the paths
         repeat(pathCount) {
@@ -214,10 +271,10 @@ object CommonTests : KLogging() {
 
         agent.pathMapSize() shouldEqual originalSize + pathCount
 
-        val handler =
+        val coroutineExceptionHandler =
             CoroutineExceptionHandler { context, e ->
+                println("CoroutineExceptionHandler caught: $e")
                 e.printStackTrace()
-                println("Handler caught $e")
             }
 
         // Call the proxy sequentially
@@ -226,9 +283,9 @@ object CommonTests : KLogging() {
                 .use { httpClient ->
                     runBlocking {
                         val result =
-                            withTimeoutOrNull(Secs(1).toMillis().value) {
+                            withTimeoutOrNull(Secs(10).toMillis().value) {
                                 val job =
-                                    GlobalScope.launch(handler) {
+                                    GlobalScope.launch(coroutineExceptionHandler) {
                                         callProxy(httpClient, pathMap, "Sequential $it")
                                     }
                                 job.join()
@@ -246,22 +303,23 @@ object CommonTests : KLogging() {
             .use { httpClient ->
                 runBlocking {
                     val jobs = mutableListOf<Job>()
-                    val result =
-                        withTimeoutOrNull(Secs(5).toMillis().value) {
-                            repeat(parallelQueryCount) {
-                                jobs += GlobalScope.launch(dispatcher + handler) {
-                                    callProxy(httpClient, pathMap, "Parallel $it")
-                                }
+                    val results = withTimeoutOrNull(Secs(30).toMillis().value) {
+                        repeat(parallelQueryCount) {
+                            jobs += GlobalScope.launch(dispatcher + coroutineExceptionHandler) {
+                                delay(Random.nextLong(500))
+                                callProxy(httpClient, pathMap, "Parallel $it")
+
                             }
                         }
 
-                    jobs.forEach {
-                        it.join()
-                        it.getCancellationException().cause.shouldBeNull()
+                        for (job in jobs) {
+                            job.join()
+                            job.getCancellationException().cause.shouldBeNull()
+                        }
                     }
 
-                    // Check if call timed out
-                    result.shouldNotBeNull()
+                    // Check if timed out
+                    results.shouldNotBeNull()
                 }
             }
 
@@ -277,28 +335,36 @@ object CommonTests : KLogging() {
         errorCnt.get() shouldEqual 0
         agent.pathMapSize() shouldEqual originalSize
 
-        httpServers
-            .forEach {
-                it.stop()
-                it.awaitStop()
+        logger.info { "Shutting down ${httpServers.size} httpServers" }
+        runBlocking {
+            for (httpServer in httpServers) {
+                launch(Dispatchers.Default) {
+                    logger.info { "Shutting down httpServer" }
+                    //httpServer.environment.stop()
+                    httpServer.stop(5, 5, TimeUnit.SECONDS)
+                    delay(Secs(5).toMillis().value)
+                }
             }
-
-        //sleep(Secs(5))
+        }
+        logger.info { "Finished shutting down ${httpServers.size} httpServers" }
     }
 
     @KtorExperimentalAPI
     private suspend fun callProxy(httpClient: HttpClient, pathMap: Map<Int, Int>, msg: String) {
-        //logger.info {"Calling proxy for ${msg}")
-        // Choose one of the pathMap values
+        // Randomly choose one of the pathMap values
         val index = Random.nextInt(pathMap.size)
         val httpVal = pathMap[index]
-        httpClient.get("$PROXY_PORT/proxy-$index") {
-            if (it.status.value != 200)
-                logger.error { "Proxy failed on $msg" }
-            it.status.value shouldEqual 200
-            val body = it.receive<String>()
-            body shouldEqual "value: $httpVal"
-        }
+        httpVal.shouldNotBeNull()
+
+        httpClient
+            .get("$PROXY_PORT/proxy-$index") { resp ->
+                if (resp.status != HttpStatusCode.OK)
+                    logger.error { "Proxy failed on $msg" }
+                resp.status shouldEqual HttpStatusCode.OK
+
+                val body = resp.receive<String>()
+                body shouldEqual "value: $httpVal"
+            }
     }
 }
 

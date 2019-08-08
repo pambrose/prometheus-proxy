@@ -30,6 +30,7 @@ import io.grpc.ClientInterceptors.intercept
 import io.grpc.ManagedChannel
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
+import io.ktor.http.HttpStatusCode
 import io.prometheus.agent.*
 import io.prometheus.common.*
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
@@ -278,7 +279,7 @@ class Agent(
     }
 
     private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
-        var statusCode = 404
+        var statusCode = HttpStatusCode.NotFound
         val path = scrapeRequest.path
         val pathContext = pathContextMap[path]
 
@@ -300,7 +301,7 @@ class Agent(
         try {
             pathContext.fetchUrl(scrapeRequest)
                 .use {
-                    statusCode = it.code()
+                    statusCode = HttpStatusCode.fromValue(it.code())
                     if (it.isSuccessful) {
                         updateScrapeCounter("success")
                         return newScrapeResponse(

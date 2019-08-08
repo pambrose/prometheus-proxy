@@ -30,7 +30,10 @@ import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.Millis
 import io.prometheus.common.simpleClassName
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -68,12 +71,13 @@ class NettyTestNoAdminMetricsTest {
     fun proxyCallTest() {
         CommonTests.proxyCallTest(
             AGENT,
-            httpServerCount = 25,
+            httpServerCount = 10,
             pathCount = 50,
             sequentialQueryCount = 500,
             sequentialPauseMillis = Millis(25),
             parallelQueryCount = 100,
-            caller = simpleClassName
+            caller = simpleClassName,
+            startingPort = 10500
         )
     }
 
@@ -85,10 +89,13 @@ class NettyTestNoAdminMetricsTest {
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = startProxy()
-            AGENT = startAgent()
 
-            AGENT.awaitInitialConnection(10, SECONDS)
+            logger.info { "Starting Proxy and Agent" }
+            runBlocking {
+                launch(Dispatchers.Default) { PROXY = startProxy() }
+                launch(Dispatchers.Default) { AGENT = startAgent().apply { awaitInitialConnection(10, SECONDS) } }
+            }
+            logger.info { "Finished starting Proxy and Agent" }
         }
 
         @JvmStatic
@@ -96,8 +103,11 @@ class NettyTestNoAdminMetricsTest {
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
-            PROXY.stopSync()
-            AGENT.stopSync()
+            runBlocking {
+                launch(Dispatchers.Default) { PROXY.stopSync() }
+                launch(Dispatchers.Default) { AGENT.stopSync() }
+            }
+            logger.info { "Finished stopping Proxy and Agent" }
         }
     }
 }

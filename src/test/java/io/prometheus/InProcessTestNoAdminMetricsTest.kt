@@ -30,7 +30,10 @@ import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.Millis
 import io.prometheus.common.simpleClassName
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -72,7 +75,8 @@ class InProcessTestNoAdminMetricsTest {
             sequentialQueryCount = 100,
             sequentialPauseMillis = Millis(25),
             parallelQueryCount = 25,
-            caller = simpleClassName
+            caller = simpleClassName,
+            startingPort = 10100
         )
     }
 
@@ -84,18 +88,26 @@ class InProcessTestNoAdminMetricsTest {
         @BeforeClass
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            PROXY = startProxy("nometrics")
-            AGENT = startAgent("nometrics")
 
-            AGENT.awaitInitialConnection(10, SECONDS)
+            logger.info { "Starting Proxy and Agent" }
+            runBlocking {
+                launch(Dispatchers.Default) { PROXY = startProxy("nometrics") }
+                launch(Dispatchers.Default) {
+                    AGENT = startAgent("nometrics").apply { awaitInitialConnection(10, SECONDS) }
+                }
+            }
+            logger.info { "Finished starting Proxy and Agent" }
         }
 
         @JvmStatic
         @AfterClass
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
-            PROXY.stopSync()
-            AGENT.stopSync()
+            runBlocking {
+                launch(Dispatchers.Default) { PROXY.stopSync() }
+                launch(Dispatchers.Default) { AGENT.stopSync() }
+            }
+            logger.info { "Finished stopping Proxy and Agent" }
         }
     }
 }

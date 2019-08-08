@@ -18,11 +18,15 @@
 
 package io.prometheus
 
+import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.dsl.KtorDsl.blockingGet
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import org.amshove.kluent.shouldEqual
 import org.junit.AfterClass
@@ -39,11 +43,12 @@ class AdminEmptyPathTest {
     fun proxyPingPathTest() {
         PROXY.configVals.admin.port shouldEqual 8098
         PROXY.configVals.admin.pingPath shouldEqual ""
-        PROXY.configVals.admin.also { admin ->
-            blockingGet("${admin.port}/${admin.pingPath}") {
-                it.status.value shouldEqual 404
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.pingPath}") { resp ->
+                    resp.status shouldEqual HttpStatusCode.NotFound
+                }
             }
-        }
     }
 
     @Test
@@ -51,33 +56,36 @@ class AdminEmptyPathTest {
     fun proxyVersionPathTest() {
         PROXY.configVals.admin.port shouldEqual 8098
         PROXY.configVals.admin.versionPath shouldEqual ""
-        PROXY.configVals.admin.also { admin ->
-            blockingGet("${admin.port}/${admin.versionPath}") {
-                it.status.value shouldEqual 404
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.versionPath}") { resp ->
+                    resp.status shouldEqual HttpStatusCode.NotFound
+                }
             }
-        }
     }
 
     @Test
     @KtorExperimentalAPI
     fun proxyHealthCheckPathTest() {
         PROXY.configVals.admin.healthCheckPath shouldEqual ""
-        PROXY.configVals.admin.also { admin ->
-            blockingGet("${admin.port}/${admin.healthCheckPath}") {
-                it.status.value shouldEqual 404
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
+                    resp.status shouldEqual HttpStatusCode.NotFound
+                }
             }
-        }
     }
 
     @Test
     @KtorExperimentalAPI
     fun proxyThreadDumpPathTest() {
         PROXY.configVals.admin.threadDumpPath shouldEqual ""
-        PROXY.configVals.admin.also { admin ->
-            blockingGet("${admin.port}/${admin.threadDumpPath}") {
-                it.status.value shouldEqual 404
+        PROXY.configVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.threadDumpPath}") { resp ->
+                    resp.status shouldEqual HttpStatusCode.NotFound
+                }
             }
-        }
     }
 
     companion object : KLogging() {
@@ -96,10 +104,15 @@ class AdminEmptyPathTest {
                 "-Dproxy.admin.healthCheckPath=\"\"",
                 "-Dproxy.admin.threadDumpPath=\"\""
             )
-            PROXY = startProxy(adminEnabled = true, argv = args)
-            AGENT = startAgent(adminEnabled = true)
 
-            AGENT.awaitInitialConnection(5, SECONDS)
+            logger.info { "Starting Proxy and Agent" }
+            runBlocking {
+                launch(Dispatchers.Default) { PROXY = startProxy(adminEnabled = true, argv = args) }
+                launch(Dispatchers.Default) {
+                    AGENT = startAgent(adminEnabled = true).apply { awaitInitialConnection(5, SECONDS) }
+                }
+            }
+            logger.info { "Finished starting Proxy and Agent" }
         }
 
         @JvmStatic
@@ -107,8 +120,11 @@ class AdminEmptyPathTest {
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
             logger.info { "Stopping Proxy and Agent" }
-            PROXY.stopSync()
-            AGENT.stopSync()
+            runBlocking {
+                launch(Dispatchers.Default) { PROXY.stopSync() }
+                launch(Dispatchers.Default) { AGENT.stopSync() }
+            }
+            logger.info { "Finished stopping Proxy and Agent" }
         }
     }
 }
