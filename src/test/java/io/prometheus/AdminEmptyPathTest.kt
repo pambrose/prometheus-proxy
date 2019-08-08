@@ -23,6 +23,7 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.fixUrl
 import io.prometheus.common.simpleClassName
 import io.prometheus.dsl.KtorDsl.blockingGet
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +47,7 @@ class AdminEmptyPathTest {
         proxy.configVals.admin.pingPath shouldEqual ""
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.pingPath}") { resp ->
+                blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
                 }
             }
@@ -58,7 +59,7 @@ class AdminEmptyPathTest {
         proxy.configVals.admin.versionPath shouldEqual ""
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.versionPath}") { resp ->
+                blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
                 }
             }
@@ -69,7 +70,7 @@ class AdminEmptyPathTest {
         proxy.configVals.admin.healthCheckPath shouldEqual ""
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
+                blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
                 }
             }
@@ -80,7 +81,7 @@ class AdminEmptyPathTest {
         proxy.configVals.admin.threadDumpPath shouldEqual ""
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.threadDumpPath}") { resp ->
+                blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
                 }
             }

@@ -21,6 +21,7 @@ package io.prometheus.dsl
 import io.ktor.client.HttpClient
 import io.ktor.client.call.call
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.response.HttpResponse
 import io.ktor.http.HttpMethod
 import io.ktor.util.KtorExperimentalAPI
@@ -29,23 +30,26 @@ import kotlinx.coroutines.runBlocking
 
 @KtorExperimentalAPI
 object KtorDsl {
-    private const val prefix = "http://localhost:"
-
     fun newHttpClient() = HttpClient(CIO)
 
     fun blockingGet(url: String, block: suspend (HttpResponse) -> Unit) {
         newHttpClient()
             .use { httpClient ->
                 runBlocking {
-                    val prefixedUrl = if (url.startsWith(prefix)) url else (prefix + url)
-                    httpClient.get(prefixedUrl, block)
+                    httpClient.get(url, {}, block)
                 }
             }
     }
 
-    suspend fun HttpClient.get(url: String, block: suspend (HttpResponse) -> Unit) {
-        val prefixedUrl = if (url.startsWith(prefix)) url else (prefix + url)
-        val resp = this.call(prefixedUrl) { method = HttpMethod.Get }
-        block(resp.response)
+    suspend fun HttpClient.get(
+        url: String,
+        setUp: HttpRequestBuilder.() -> Unit = {},
+        block: suspend (HttpResponse) -> Unit
+    ) {
+        val clientCall = call(url) {
+            method = HttpMethod.Get
+            setUp()
+        }
+        clientCall.response.use { resp -> block(resp) }
     }
 }

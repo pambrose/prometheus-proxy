@@ -172,3 +172,6 @@ fun <E> ArrayBlockingQueue<E>.poll(millis: Millis): E? {
 
 val <T : Any> T.simpleClassName: String
     get() = this::class.simpleName ?: "None"
+
+private const val prefix = "http://localhost:"
+fun String.fixUrl() = if (this.startsWith(prefix)) this else (prefix + this)

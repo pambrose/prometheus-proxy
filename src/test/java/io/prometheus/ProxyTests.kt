@@ -35,6 +35,7 @@ import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.Millis
 import io.prometheus.common.Secs
+import io.prometheus.common.fixUrl
 import io.prometheus.common.sleep
 import io.prometheus.dsl.KtorDsl.blockingGet
 import io.prometheus.dsl.KtorDsl.get
@@ -79,7 +80,9 @@ object ProxyTests : KLogging() {
         }
 
         agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
-        blockingGet("$PROXY_PORT/$proxyPath") { resp -> resp.status shouldEqual HttpStatusCode.ServiceUnavailable }
+        blockingGet("$PROXY_PORT/$proxyPath".fixUrl()) { resp ->
+            resp.status shouldEqual HttpStatusCode.ServiceUnavailable
+        }
         agent.unregisterPath("/$proxyPath")
 
         runBlocking {
@@ -169,9 +172,10 @@ object ProxyTests : KLogging() {
                                 job.getCancellationException().cause.shouldBeNull()
                             }
                         result.shouldNotBeNull()
+                        delay(args.sequentialPauseMillis.value)
                     }
                 }
-            sleep(args.sequentialPauseMillis)
+            //sleep(args.sequentialPauseMillis)
         }
 
         // Call the proxy in parallel
@@ -183,7 +187,7 @@ object ProxyTests : KLogging() {
                     val results = withTimeoutOrNull(Secs(30).toMillis().value) {
                         repeat(args.parallelQueryCount) {
                             jobs += GlobalScope.launch(dispatcher + coroutineExceptionHandler) {
-                                delay(Random.nextLong(400))
+                                delay(Random.nextLong(200))
                                 callProxy(httpClient, pathMap, "Parallel $it")
                             }
                         }
@@ -231,7 +235,7 @@ object ProxyTests : KLogging() {
         httpVal.shouldNotBeNull()
 
         httpClient
-            .get("$PROXY_PORT/proxy-$index") { resp ->
+            .get("$PROXY_PORT/proxy-$index".fixUrl()) { resp ->
                 if (resp.status != HttpStatusCode.OK)
                     logger.error { "Proxy failed on $msg" }
                 resp.status shouldEqual HttpStatusCode.OK

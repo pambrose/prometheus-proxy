@@ -21,6 +21,7 @@ package io.prometheus
 import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.agent.RequestFailureException
+import io.prometheus.common.fixUrl
 import io.prometheus.dsl.KtorDsl
 import mu.KLogging
 import org.amshove.kluent.shouldBeTrue
@@ -35,12 +36,16 @@ object SimpleTests : KLogging() {
 
     fun missingPathTest(caller: String) {
         ProxyTests.logger.info { "Calling missingPathTest() from $caller" }
-        KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/") { resp -> resp.status shouldEqual HttpStatusCode.NotFound }
+        KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/".fixUrl()) { resp ->
+            resp.status shouldEqual HttpStatusCode.NotFound
+        }
     }
 
     fun invalidPathTest(caller: String) {
         ProxyTests.logger.info { "Calling invalidPathTest() from $caller" }
-        KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/invalid_path") { resp -> resp.status shouldEqual HttpStatusCode.NotFound }
+        KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/invalid_path".fixUrl()) { resp ->
+            resp.status shouldEqual HttpStatusCode.NotFound
+        }
     }
 
     fun addRemovePathsTest(agent: Agent, caller: String) {
@@ -65,7 +70,9 @@ object SimpleTests : KLogging() {
         ProxyTests.logger.info { "Calling invalidAgentUrlTest() from $caller" }
 
         agent.registerPath(badPath, "http://localhost:33/metrics")
-        KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/$badPath") { resp -> resp.status shouldEqual HttpStatusCode.NotFound }
+        KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/$badPath".fixUrl()) { resp ->
+            resp.status shouldEqual HttpStatusCode.NotFound
+        }
         agent.unregisterPath(badPath)
     }
 

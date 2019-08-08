@@ -24,6 +24,7 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.fixUrl
 import io.prometheus.common.simpleClassName
 import io.prometheus.dsl.KtorDsl.blockingGet
 import kotlinx.coroutines.Dispatchers
@@ -48,7 +49,7 @@ class AdminDefaultPathTest {
     fun proxyPingPathTest() {
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.pingPath}") { resp ->
+                blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.receive<String>() shouldStartWith "pong"
                 }
@@ -59,7 +60,7 @@ class AdminDefaultPathTest {
     fun agentPingPathTest() {
         agent.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.pingPath}") { resp ->
+                blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.receive<String>() shouldStartWith "pong"
                 }
@@ -70,7 +71,7 @@ class AdminDefaultPathTest {
     fun proxyVersionPathTest() {
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.versionPath}") { resp ->
+                blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.receive<String>() shouldContain "Version"
                 }
@@ -81,7 +82,7 @@ class AdminDefaultPathTest {
     fun agentVersionPathTest() {
         agent.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.versionPath}") { resp ->
+                blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.receive<String>() shouldContain "Version"
                 }
@@ -92,7 +93,7 @@ class AdminDefaultPathTest {
     fun proxyHealthCheckPathTest() {
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
+                blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.receive<String>().length shouldBeGreaterThan 10
                 }
@@ -103,7 +104,7 @@ class AdminDefaultPathTest {
     fun agentHealthCheckPathTest() {
         agent.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
+                blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
                     resp.receive<String>().length shouldBeGreaterThan 10
                 }
             }
@@ -111,14 +112,14 @@ class AdminDefaultPathTest {
 
     @Test
     fun proxyThreadDumpPathTest() {
-        blockingGet("${proxy.configVals.admin.port}/${proxy.configVals.admin.threadDumpPath}") { resp ->
+        blockingGet("${proxy.configVals.admin.port}/${proxy.configVals.admin.threadDumpPath}".fixUrl()) { resp ->
             resp.receive<String>().length shouldBeGreaterThan 10
         }
     }
 
     @Test
     fun agentThreadDumpPathTest() {
-        blockingGet("${agent.configVals.admin.port}/${agent.configVals.admin.threadDumpPath}") {
+        blockingGet("${agent.configVals.admin.port}/${agent.configVals.admin.threadDumpPath}".fixUrl()) {
             it.receive<String>().length shouldBeGreaterThan 10
         }
     }

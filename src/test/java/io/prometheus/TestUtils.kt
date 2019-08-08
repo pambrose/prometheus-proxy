@@ -18,6 +18,7 @@
 
 package io.prometheus
 
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getBanner
@@ -27,6 +28,7 @@ import mu.KLogging
 import java.io.IOException
 import java.util.concurrent.TimeoutException
 
+@KtorExperimentalAPI
 object TestUtils : KLogging() {
     @Throws(IOException::class, TimeoutException::class)
     fun startProxy(serverName: String = "",
@@ -38,17 +40,17 @@ object TestUtils : KLogging() {
         logger.info { getVersionDesc(false) }
 
         return Proxy(options =
-                     ProxyOptions(
-                             mutableListOf<String>()
-                                     .apply {
-                                         addAll(TestConstants.args)
-                                         addAll(argv)
-                                         add("-Dproxy.admin.enabled=$adminEnabled")
-                                         add("-Dproxy.metrics.enabled=$metricsEnabled")
-                                     }),
-                     proxyHttpPort = PROXY_PORT,
-                     inProcessServerName = serverName,
-                     testMode = true) { startSync() }
+        ProxyOptions(
+            mutableListOf<String>()
+                .apply {
+                    addAll(TestConstants.args)
+                    addAll(argv)
+                    add("-Dproxy.admin.enabled=$adminEnabled")
+                    add("-Dproxy.metrics.enabled=$metricsEnabled")
+                }),
+            proxyHttpPort = PROXY_PORT,
+            inProcessServerName = serverName,
+            testMode = true) { startSync() }
     }
 
     @Throws(IOException::class, TimeoutException::class)
@@ -61,16 +63,16 @@ object TestUtils : KLogging() {
         logger.info { getVersionDesc(false) }
 
         return Agent(options =
-                     AgentOptions(
-                             mutableListOf<String>()
-                                     .apply {
-                                         addAll(TestConstants.args)
-                                         addAll(argv)
-                                         add("-Dagent.admin.enabled=$adminEnabled")
-                                         add("-Dagent.metrics.enabled=$metricsEnabled")
-                                     },
-                             false),
-                     inProcessServerName = serverName,
-                     testMode = true) { startSync() }
+        AgentOptions(
+            mutableListOf<String>()
+                .apply {
+                    addAll(TestConstants.args)
+                    addAll(argv)
+                    add("-Dagent.admin.enabled=$adminEnabled")
+                    add("-Dagent.metrics.enabled=$metricsEnabled")
+                },
+            false),
+            inProcessServerName = serverName,
+            testMode = true) { startSync() }
     }
 }

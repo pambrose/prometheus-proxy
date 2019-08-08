@@ -29,34 +29,38 @@ import okhttp3.Response
 import java.io.IOException
 
 @Suppress("UNUSED_PARAMETER")
-class PathContext(private val okHttpClient: OkHttpClient,
-                  private val pathId: Long,
-                  private val path: String,
-                  val url: String) {
-    private val request = Request.Builder().url(url)
+class PathContext(
+    private val okHttpClient: OkHttpClient,
+    private val pathId: Long,
+    private val path: String,
+    val url: String
+) {
+    private val requestBuilder = Request.Builder().url(url)
 
     @Throws(IOException::class)
     fun fetchUrl(scrapeRequest: ScrapeRequest): Response =
-            try {
-                logger.debug { "Fetching $this" }
-                val request =
-                        request.run {
-                            if (!scrapeRequest.accept.isNullOrEmpty())
-                                header(ACCEPT, scrapeRequest.accept)
-                            build()
-                        }
+        try {
+            logger.debug { "Fetching $this" }
+            val request =
+                requestBuilder
+                    .run {
+                        val accept = scrapeRequest.accept
+                        if (!accept.isNullOrEmpty())
+                            header(ACCEPT, accept)
+                        build()
+                    }
 
-                okHttpClient.newCall(request).execute()
-            } catch (e: IOException) {
-                logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
-                throw e
-            }
+            okHttpClient.newCall(request).execute()
+        } catch (e: IOException) {
+            logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
+            throw e
+        }
 
     override fun toString() =
-            toStringElements {
-                add("path", "/$path")
-                add("url", url)
-            }
+        toStringElements {
+            add("path", "/$path")
+            add("url", url)
+        }
 
     companion object : KLogging()
 }

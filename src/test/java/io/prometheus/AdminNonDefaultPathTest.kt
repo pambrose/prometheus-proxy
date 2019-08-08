@@ -24,6 +24,7 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.fixUrl
 import io.prometheus.common.simpleClassName
 import io.prometheus.dsl.KtorDsl.blockingGet
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +51,7 @@ class AdminNonDefaultPathTest {
         proxy.configVals.admin.pingPath shouldEqual "pingPath2"
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.pingPath}") { resp ->
+                blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.receive<String>() shouldStartWith "pong"
                 }
@@ -63,7 +64,7 @@ class AdminNonDefaultPathTest {
         proxy.configVals.admin.versionPath shouldEqual "versionPath2"
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.versionPath}") { resp ->
+                blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.receive<String>() shouldContain "Version"
                 }
@@ -75,7 +76,7 @@ class AdminNonDefaultPathTest {
         proxy.configVals.admin.healthCheckPath shouldEqual "healthCheckPath2"
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.healthCheckPath}") { resp ->
+                blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.receive<String>().length shouldBeGreaterThan 10
                 }
@@ -87,7 +88,7 @@ class AdminNonDefaultPathTest {
         proxy.configVals.admin.threadDumpPath shouldEqual "threadDumpPath2"
         proxy.configVals.admin
             .also { admin ->
-                blockingGet("${admin.port}/${admin.threadDumpPath}") { resp ->
+                blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
                     resp.receive<String>().length shouldBeGreaterThan 10
                 }
             }

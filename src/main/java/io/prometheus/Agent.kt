@@ -302,6 +302,8 @@ class Agent(
         var reason = "None"
 
         try {
+            //zzz
+
             pathContext.fetchUrl(scrapeRequest)
                 .use {
                     statusCode = HttpStatusCode.fromValue(it.code())
@@ -333,15 +335,8 @@ class Agent(
 
         updateScrapeCounter("unsuccessful")
 
-        return newScrapeResponse(
-            ScrapeResponseArg(
-                false,
-                reason,
-                scrapeRequest.agentId,
-                scrapeRequest.scrapeId,
-                statusCode
-            )
-        )
+        val arg = ScrapeResponseArg(false, reason, scrapeRequest.agentId, scrapeRequest.scrapeId, statusCode)
+        return newScrapeResponse(arg)
     }
 
     // If successful, this will create an agentContxt on the Proxy and an interceptor will add an agent_id to the headers`
@@ -543,8 +538,10 @@ class Agent(
         fun main(argv: Array<String>) {
             val options = AgentOptions(argv, true)
 
-            logger.info { getBanner("banners/agent.txt", logger) }
-            logger.info { getVersionDesc(false) }
+            logger.apply {
+                info { getBanner("banners/agent.txt", this) }
+                info { getVersionDesc(false) }
+            }
 
             Agent(options = options) { startSync() }
         }

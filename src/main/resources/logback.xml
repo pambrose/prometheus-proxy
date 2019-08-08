@@ -26,6 +26,7 @@
 
     <logger name="io.grpc.internal" level="WARN"/>
     <logger name="spark.http.matching" level="WARN"/>
+    <logger name="io.ktor.server.engine.ApplicationEngineEnvironmentReloading" level="WARN"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
