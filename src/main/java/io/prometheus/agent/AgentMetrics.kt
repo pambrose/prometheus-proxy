@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Agent
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
@@ -26,28 +27,29 @@ import io.prometheus.dsl.PrometheusDsl.counter
 import io.prometheus.dsl.PrometheusDsl.gauge
 import io.prometheus.dsl.PrometheusDsl.summary
 
+@KtorExperimentalAPI
 class AgentMetrics(agent: Agent) {
 
     val scrapeRequests: Counter =
-            counter {
-                name("agent_scrape_requests")
-                help("Agent scrape requests")
-                labelNames("type")
-            }
+        counter {
+            name("agent_scrape_requests")
+            help("Agent scrape requests")
+            labelNames("type")
+        }
 
     val connects: Counter =
-            counter {
-                name("agent_connect_count")
-                help("Agent connect counts")
-                labelNames("type")
-            }
+        counter {
+            name("agent_connect_count")
+            help("Agent connect counts")
+            labelNames("type")
+        }
 
     val scrapeRequestLatency: Summary =
-            summary {
-                name("agent_scrape_request_latency_seconds")
-                help("Agent scrape request latency in seconds")
-                labelNames("agent_name")
-            }
+        summary {
+            name("agent_scrape_request_latency_seconds")
+            help("Agent scrape request latency in seconds")
+            labelNames("agent_name")
+        }
 
     init {
         gauge {
@@ -55,8 +57,8 @@ class AgentMetrics(agent: Agent) {
             help("Agent start time in seconds")
         }.setToCurrentTime()
 
-        SamplerGaugeCollector("agent_scrape_queue_size",
-                              "Agent scrape response queue size",
-                              data = { agent.scrapeResponseQueueSize.toDouble() })
+        SamplerGaugeCollector("agent_scrape_channel_backlog_size",
+            "Agent scrape channel backlog queue size",
+            data = { agent.channelBacklogSize.get().toDouble() })
     }
 }

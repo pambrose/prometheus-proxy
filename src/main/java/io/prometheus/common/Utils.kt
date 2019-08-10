@@ -26,13 +26,13 @@ import com.google.common.base.Joiner
 import com.google.common.base.Splitter
 import com.google.common.io.CharStreams
 import com.google.common.util.concurrent.Service
+import io.ktor.http.HttpStatusCode
 import io.prometheus.Proxy
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import org.slf4j.Logger
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
-import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -87,12 +87,12 @@ fun getBanner(filename: String, logger: Logger) =
         "Banner $filename cannot be found"
     }
 
-fun newQueueHealthCheck(queue: Queue<*>, size: Int) =
+fun newBacklogHealthCheck(backlogSize: Int, size: Int) =
     healthCheck {
-        if (queue.size < size)
+        if (backlogSize < size)
             HealthCheck.Result.healthy()
         else
-            HealthCheck.Result.unhealthy("Large size: ${queue.size}")
+            HealthCheck.Result.unhealthy("Large size: ${backlogSize}")
     }
 
 fun newMapHealthCheck(map: Map<*, *>, size: Int) =
@@ -169,6 +169,8 @@ fun CountDownLatch.await(millis: Millis): Boolean {
 fun <E> ArrayBlockingQueue<E>.poll(millis: Millis): E? {
     return this.poll(millis.value, TimeUnit.MILLISECONDS)
 }
+
+val HttpStatusCode.isSuccessful get() = value in (HttpStatusCode.OK.value..HttpStatusCode.MultipleChoices.value)
 
 val <T : Any> T.simpleClassName: String
     get() = this::class.simpleName ?: "None"

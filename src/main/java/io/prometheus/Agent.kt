@@ -22,6 +22,7 @@ import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.google.common.base.Preconditions.checkNotNull
 import com.google.common.collect.Maps.newConcurrentMap
+import com.google.common.net.HttpHeaders
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.util.concurrent.RateLimiter
 import com.google.protobuf.Empty
@@ -30,8 +31,16 @@ import io.grpc.ClientInterceptors.intercept
 import io.grpc.ManagedChannel
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
+import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.header
+import io.ktor.client.response.HttpResponse
+import io.ktor.client.response.readText
 import io.ktor.http.HttpStatusCode
-import io.prometheus.agent.*
+import io.ktor.util.KtorExperimentalAPI
+import io.prometheus.agent.AgentClientInterceptor
+import io.prometheus.agent.AgentMetrics
+import io.prometheus.agent.AgentOptions
+import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.*
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.GrpcObjects.Companion.ScrapeResponseArg
@@ -49,21 +58,27 @@ import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
+import io.prometheus.dsl.KtorDsl.get
+import io.prometheus.dsl.KtorDsl.newHttpClient
 import io.prometheus.dsl.ThreadDsl.threadFactory
 import io.prometheus.grpc.ProxyServiceGrpc.*
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
-import okhttp3.OkHttpClient
 import java.io.IOException
-import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors.newCachedThreadPool
 import java.util.concurrent.Executors.newFixedThreadPool
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates.notNull
 
+typealias FetchUrlAction = suspend () -> ScrapeResponse
+
+@KtorExperimentalAPI
 class Agent(
     options: AgentOptions,
     private val inProcessServerName: String = "",
@@ -86,12 +101,14 @@ class Agent(
         testMode
     ) {
 
+    class PathContext(val pathId: Long, val path: String, val url: String)
+
+    val channelBacklogSize = AtomicInteger(0)
+
     private val pathContextMap = newConcurrentMap<String, PathContext>()
     private val heartbeatService = newFixedThreadPool(1)
     private val initialConnectionLatch = CountDownLatch(1)
-    private val okHttpClient = OkHttpClient()
     private var isGrpcStarted = AtomicBoolean(false)
-    private val scrapeResponseQueue = ArrayBlockingQueue<ScrapeResponse>(configVals.internal.scrapeResponseQueueSize)
     private val agentName = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
     private val readRequestsExecutorService =
         newCachedThreadPool(if (isMetricsEnabled)
@@ -140,9 +157,6 @@ class Agent(
 
     private val proxyHost
         get() = "$hostName:$port"
-
-    val scrapeResponseQueueSize
-        get() = scrapeResponseQueue.size
 
     val configVals: ConfigVals.Agent
         get() = genericConfigVals.agent
@@ -204,8 +218,8 @@ class Agent(
         super.registerHealthChecks()
         healthCheckRegistry
             .register(
-                "scrape_response_queue_check",
-                newQueueHealthCheck(scrapeResponseQueue, configVals.internal.scrapeResponseQueueUnhealthySize)
+                "scrape_channel_backlog_check",
+                newBacklogHealthCheck(channelBacklogSize.get(), configVals.internal.scrapeChannelBacklogUnhealthySize)
             )
     }
 
@@ -222,15 +236,17 @@ class Agent(
 
         // Reset values for each connection attempt
         pathContextMap.clear()
-        scrapeResponseQueue.clear()
+        channelBacklogSize.set(0)
         lastMsgSent = Millis(0)
+
+        val fetchRequestChannel: Channel<FetchUrlAction> = Channel(Channel.UNLIMITED)
 
         if (connectAgent()) {
             registerAgent()
             registerPaths()
             startHeartBeat(disconnected)
-            readRequestsFromProxy(disconnected)
-            writeResponsesToProxyUntilDisconnected(disconnected)
+            readRequestsFromProxy(fetchRequestChannel, disconnected)
+            writeResponsesToProxyUntilDisconnected(fetchRequestChannel, disconnected)
         }
     }
 
@@ -275,67 +291,80 @@ class Agent(
     }
 
     private fun updateScrapeCounter(type: String) {
-        if (isMetricsEnabled)
+        if (isMetricsEnabled && type.isNotEmpty())
             metrics.scrapeRequests.labels(type).inc()
     }
 
-    private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
+    suspend private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
+        var failureReason = ""
         var statusCode = HttpStatusCode.NotFound
+        var validResponse = false
+        var scrapeCounterMsg = ""
+        var contentText = ""
+        var contentType = ""
         val path = scrapeRequest.path
         val pathContext = pathContextMap[path]
 
         if (pathContext == null) {
             logger.warn { "Invalid path in fetchUrl(): $path" }
-            updateScrapeCounter("invalid_path")
-            return newScrapeResponse(
-                ScrapeResponseArg(
-                    false,
-                    "Invalid path: $path",
-                    scrapeRequest.agentId,
-                    scrapeRequest.scrapeId,
-                    statusCode
-                )
-            )
-        }
+            scrapeCounterMsg = "invalid_path"
+            failureReason = "Invalid path: $path"
+        } else {
+            val requestTimer =
+                if (isMetricsEnabled) metrics.scrapeRequestLatency.labels(agentName).startTimer() else null
 
-        val requestTimer = if (isMetricsEnabled) metrics.scrapeRequestLatency.labels(agentName).startTimer() else null
-        var reason = "None"
+            try {
+                newHttpClient()
+                    .use { httpClient ->
 
-        try {
-            //zzz
+                        val setup: HttpRequestBuilder.() -> Unit = {
+                            val accept = scrapeRequest.accept
+                            if (!accept.isNullOrEmpty())
+                                header(HttpHeaders.ACCEPT, accept)
+                        }
 
-            pathContext.fetchUrl(scrapeRequest)
-                .use {
-                    statusCode = HttpStatusCode.fromValue(it.code())
-                    if (it.isSuccessful) {
-                        updateScrapeCounter("success")
-                        return newScrapeResponse(
-                            ScrapeResponseArg(
-                                true,
-                                "",
-                                scrapeRequest.agentId,
-                                scrapeRequest.scrapeId,
-                                statusCode,
-                                it.body()?.string().orEmpty(),
-                                it.header(CONTENT_TYPE) ?: ""
-                            )
-                        )
-                    } else {
-                        reason = "Unsucessful response code $statusCode"
+                        val block: suspend (HttpResponse) -> Unit = { resp ->
+                            //logger.info { "Fetching ${pathContext}" }
+
+                            statusCode = resp.status
+
+                            if (resp.status.isSuccessful) {
+                                contentText = resp.readText()
+                                contentType = resp.headers[CONTENT_TYPE].orEmpty()
+                                validResponse = true
+                                scrapeCounterMsg = "success"
+
+                            } else {
+                                failureReason = "Unsucessful response code $statusCode"
+                                scrapeCounterMsg = "unsuccessful"
+                            }
+                        }
+
+                        httpClient.get(pathContext.url, setup, block)
                     }
-                }
-        } catch (e: IOException) {
-            reason = "${e.simpleClassName} - ${e.message}"
-        } catch (e: Exception) {
-            logger.warn(e) { "fetchUrl()" }
-            reason = "${e.simpleClassName} - ${e.message}"
-        } finally {
-            requestTimer?.observeDuration()
+
+            } catch (e: IOException) {
+                logger.info { "Failed HTTP request: ${pathContext.url} [${e.simpleClassName}: ${e.message}]" }
+                failureReason = "${e.simpleClassName} - ${e.message}"
+            } catch (e: Exception) {
+                logger.warn(e) { "fetchUrl() $e" }
+                failureReason = "${e.simpleClassName} - ${e.message}"
+            } finally {
+                requestTimer?.observeDuration()
+            }
         }
 
-        updateScrapeCounter("unsuccessful")
+        updateScrapeCounter(scrapeCounterMsg)
 
-        val arg = ScrapeResponseArg(false, reason, scrapeRequest.agentId, scrapeRequest.scrapeId, statusCode)
+        val arg = ScrapeResponseArg(
+            validResponse = validResponse,
+            failureReason = failureReason,
+            agentId = scrapeRequest.agentId,
+            scrapeId = scrapeRequest.scrapeId,
+            statusCode = statusCode,
+            contentText = contentText,
+            contentType = contentType
+        )
         return newScrapeResponse(arg)
     }
 
@@ -359,7 +388,7 @@ class Agent(
     private fun registerAgent() {
         val request = newRegisterAgentRequest(agentId, agentName, hostName)
         blockingStub.registerAgent(request)
-            .also {
+            .let {
                 markMsgSent()
                 if (!it.valid)
                     throw RequestFailureException("registerAgent() - ${it.reason}")
@@ -384,7 +413,7 @@ class Agent(
         val pathId = registerPathOnProxy(path)
         if (!isTestMode)
             logger.info { "Registered $url as /$path" }
-        pathContextMap[path] = PathContext(okHttpClient, pathId, path, url)
+        pathContextMap[path] = PathContext(pathId, path, url)
     }
 
     @Throws(RequestFailureException::class)
@@ -430,38 +459,37 @@ class Agent(
             }
     }
 
-    private fun readRequestAction(request: ScrapeRequest) =
-        Runnable {
-            val response = fetchUrl(request)
-            try {
-                scrapeResponseQueue.put(response)
-            } catch (e: InterruptedException) {
-                // Ignore
-            }
-        }
-
-    private fun readRequestsFromProxy(disconnected: AtomicBoolean) {
+    private fun readRequestsFromProxy(fetchRequestChannel: Channel<FetchUrlAction>, disconnected: AtomicBoolean) {
         val agentInfo = newAgentInfo(agentId)
-
         val observer =
             streamObserver<ScrapeRequest> {
-                onNext { readRequestsExecutorService.submit(readRequestAction(it)) }
+                onNext { scrapeRequest ->
+                    // This will block, but only for the duration of the send. The fetch happens at the other end of the channel
+                    runBlocking {
+                        fetchRequestChannel.send({ fetchUrl(scrapeRequest) })
+                        channelBacklogSize.incrementAndGet()
+                    }
+                }
 
                 onError {
                     logger.error { "Error in readRequestsFromProxy(): ${Status.fromThrowable(it)}" }
                     disconnected.set(true)
+                    fetchRequestChannel.close()
                 }
 
                 onCompleted {
                     disconnected.set(true)
+                    fetchRequestChannel.close()
                 }
             }
 
         asyncStub.readRequestsFromProxy(agentInfo, observer)
     }
 
-    private fun writeResponsesToProxyUntilDisconnected(disconnected: AtomicBoolean) {
-        val checkMillis = Millis(configVals.internal.scrapeResponseQueueCheckMillis)
+    private fun writeResponsesToProxyUntilDisconnected(
+        fetchRequestChannel: Channel<FetchUrlAction>,
+        disconnected: AtomicBoolean
+    ) {
         val observer =
             asyncStub.writeResponsesToProxy(
                 streamObserver<Empty> {
@@ -478,20 +506,19 @@ class Agent(
                     onCompleted { disconnected.set(true) }
                 })
 
-        while (!disconnected.get()) {
-            try {
-                // Set a short timeout to check if client has disconnected
-                scrapeResponseQueue.poll(checkMillis)
-                    ?.also {
-                        observer.onNext(it)
-                        markMsgSent()
-                    }
-            } catch (e: InterruptedException) {
-                // Ignore
+        runBlocking {
+            for (fetchUrlAction in fetchRequestChannel) {
+                val scrapeResponse = fetchUrlAction.invoke()
+                observer.onNext(scrapeResponse)
+                markMsgSent()
+                channelBacklogSize.decrementAndGet()
+                if (disconnected.get())
+                    break
             }
         }
 
         logger.info { "Disconnected from proxy at $proxyHost" }
+
         observer.onCompleted()
     }
 

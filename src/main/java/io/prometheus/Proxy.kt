@@ -34,20 +34,28 @@ import mu.KLogging
 import kotlin.properties.Delegates
 
 @KtorExperimentalAPI
-class Proxy(options: ProxyOptions,
-            proxyHttpPort: Int = options.proxyHttpPort,
-            inProcessServerName: String = "",
-            testMode: Boolean = false,
-            initBlock: (Proxy.() -> Unit)? = null) :
-    GenericService(options.configVals,
-        newAdminConfig(options.adminEnabled,
+class Proxy(
+    options: ProxyOptions,
+    proxyHttpPort: Int = options.proxyHttpPort,
+    inProcessServerName: String = "",
+    testMode: Boolean = false,
+    initBlock: (Proxy.() -> Unit)? = null
+) :
+    GenericService(
+        options.configVals,
+        newAdminConfig(
+            options.adminEnabled,
             options.adminPort,
-            options.configVals.proxy.admin),
-        newMetricsConfig(options.metricsEnabled,
+            options.configVals.proxy.admin
+        ),
+        newMetricsConfig(
+            options.metricsEnabled,
             options.metricsPort,
-            options.configVals.proxy.metrics),
+            options.configVals.proxy.metrics
+        ),
         newZipkinConfig(options.configVals.proxy.internal.zipkin),
-        testMode) {
+        testMode
+    ) {
     val pathManager = PathManager(isTestMode)
     val scrapeRequestManager = ScrapeRequestManager()
     val agentContextManager = AgentContextManager()
@@ -105,16 +113,18 @@ class Proxy(options: ProxyOptions,
         healthCheckRegistry
             .apply {
                 register("grpc_service", grpcService.healthCheck)
-                register("scrape_response_map_check",
-                    newMapHealthCheck(scrapeRequestManager.scrapeRequestMap, configVals.internal.scrapeRequestMapUnhealthySize))
+                register(
+                    "scrape_response_map_check",
+                    newMapHealthCheck(
+                        scrapeRequestManager.scrapeRequestMap,
+                        configVals.internal.scrapeRequestMapUnhealthySize
+                    )
+                )
                 register("agent_scrape_request_queue",
                     healthCheck {
                         val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
                         val vals =
-                            agentContextManager
-                                .agentContextMap
-                                .entries
-                                .asSequence()
+                            agentContextManager.agentContextMap.entries
                                 .filter { it.value.scrapeRequestQueueSize >= unhealthySize }
                                 .map { "${it.value} ${it.value.scrapeRequestQueueSize}" }
                                 .toList()

@@ -106,13 +106,13 @@ class GrpcObjects {
                 }
 
         class ScrapeResponseArg(
-            val valid: Boolean,
-            val reason: String,
+            val validResponse: Boolean,
+            val failureReason: String,
             val agentId: String,
             val scrapeId: Long,
             val statusCode: HttpStatusCode,
-            val text: String = "",
-            val contentType: String = ""
+            val contentText: String,
+            val contentType: String
         )
 
         fun newScrapeResponse(arg: ScrapeResponseArg) =
@@ -120,10 +120,10 @@ class GrpcObjects {
                 .run {
                     agentId = arg.agentId
                     scrapeId = arg.scrapeId
-                    valid = arg.valid
-                    reason = arg.reason
+                    valid = arg.validResponse
+                    reason = arg.failureReason
                     statusCode = arg.statusCode.value
-                    text = arg.text
+                    text = arg.contentText
                     contentType = arg.contentType
                     build()
                 }

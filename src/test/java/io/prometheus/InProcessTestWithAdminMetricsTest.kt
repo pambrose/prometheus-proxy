@@ -69,11 +69,11 @@ class InProcessTestWithAdminMetricsTest {
         proxyCallTest(
             ProxyCallTestArgs(
                 agent,
-                httpServerCount = 25,
+                httpServerCount = 5,
                 pathCount = 50,
                 sequentialQueryCount = 500,
                 sequentialPauseMillis = Millis(25),
-                parallelQueryCount = 100,
+                parallelQueryCount = 250,
                 caller = simpleClassName,
                 startingPort = 10700
             )

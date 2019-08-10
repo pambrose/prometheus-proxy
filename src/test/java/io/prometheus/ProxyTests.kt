@@ -21,7 +21,7 @@ package io.prometheus
 import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.application.call
 import io.ktor.client.HttpClient
-import io.ktor.client.call.receive
+import io.ktor.client.response.readText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.response.respondText
@@ -239,7 +239,8 @@ object ProxyTests : KLogging() {
                     logger.error { "Proxy failed on $msg" }
                 resp.status shouldEqual HttpStatusCode.OK
 
-                val body = resp.receive<String>()
+                // val body = resp.receive<String>()
+                val body = resp.readText()
                 body shouldEqual "value: $httpVal"
             }
     }

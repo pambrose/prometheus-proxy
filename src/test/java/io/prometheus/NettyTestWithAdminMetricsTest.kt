@@ -72,7 +72,7 @@ class NettyTestWithAdminMetricsTest {
         proxyCallTest(
             ProxyCallTestArgs(
                 agent,
-                httpServerCount = 25,
+                httpServerCount = 5,
                 pathCount = 25,
                 sequentialQueryCount = 100,
                 sequentialPauseMillis = Millis(25),
