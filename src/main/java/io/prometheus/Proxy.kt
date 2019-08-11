@@ -170,8 +170,10 @@ class Proxy(
         fun main(argv: Array<String>) {
             val options = ProxyOptions(argv)
 
-            logger.info { getBanner("banners/proxy.txt", logger) }
-            logger.info { getVersionDesc(false) }
+            logger.apply {
+                info { getBanner("banners/proxy.txt", logger) }
+                info { getVersionDesc(false) }
+            }
 
             Proxy(options = options) { startSync() }
         }

@@ -24,6 +24,7 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
+import kotlinx.coroutines.CoroutineExceptionHandler
 import mu.KLogging
 import java.io.IOException
 import java.util.concurrent.TimeoutException
@@ -84,6 +85,12 @@ object TestUtils : KLogging() {
         ) { startSync() }
     }
 }
+
+val coroutineExceptionHandler =
+    CoroutineExceptionHandler { context, e ->
+        println("CoroutineExceptionHandler caught: $e")
+        e.printStackTrace()
+    }
 
 fun String.fixUrl(): String {
     val prefix = "http://localhost:"

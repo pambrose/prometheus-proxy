@@ -19,10 +19,8 @@
 package io.prometheus
 
 import io.prometheus.common.localHostName
-import java.util.concurrent.Executors.newCachedThreadPool
 
 object TestConstants {
-    internal val EXECUTOR_SERVICE = newCachedThreadPool()
     internal const val REPS = 1000
     internal const val PROXY_PORT = 9505
 

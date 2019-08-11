@@ -59,7 +59,6 @@ import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.http
-import io.prometheus.dsl.ThreadDsl.threadFactory
 import io.prometheus.grpc.ProxyServiceGrpc.*
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
@@ -69,7 +68,6 @@ import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors.newCachedThreadPool
 import java.util.concurrent.Executors.newFixedThreadPool
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -110,22 +108,6 @@ class Agent(
     private val initialConnectionLatch = CountDownLatch(1)
     private var isGrpcStarted = AtomicBoolean(false)
     private val agentName = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
-    private val readRequestsExecutorService =
-        newCachedThreadPool(if (isMetricsEnabled)
-            InstrumentedThreadFactory(
-                threadFactory {
-                    setNameFormat(NAME_FORMAT)
-                    setDaemon(true)
-                },
-                "agent_fetch",
-                "Agent fetch"
-            )
-        else
-            threadFactory {
-                setNameFormat(NAME_FORMAT)
-                setDaemon(true)
-            })
-
     private val reconnectLimiter =
         RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs).apply { acquire() } // Prime the limiter
 
@@ -158,7 +140,7 @@ class Agent(
     private val proxyHost
         get() = "$hostName:$port"
 
-    val configVals: ConfigVals.Agent
+    val configVals
         get() = genericConfigVals.agent
 
     init {
@@ -255,17 +237,18 @@ class Agent(
             val threadPauseMillis = Millis(configVals.internal.heartbeatCheckPauseMillis)
             val maxInactivitySecs = Secs(configVals.internal.heartbeatMaxInactivitySecs)
             logger.info { "Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity" }
-            heartbeatService.submit {
-                while (isRunning && !disconnected.get()) {
-                    val timeSinceLastWriteMillis = now() - lastMsgSent
-                    if (timeSinceLastWriteMillis > maxInactivitySecs.toMillis())
-                        sendHeartBeat(disconnected)
-                    runBlocking {
-                        delay(threadPauseMillis.value)
+            heartbeatService
+                .submit {
+                    while (isRunning && !disconnected.get()) {
+                        val timeSinceLastWriteMillis = now() - lastMsgSent
+                        if (timeSinceLastWriteMillis > maxInactivitySecs.toMillis())
+                            sendHeartBeat(disconnected)
+                        runBlocking {
+                            delay(threadPauseMillis.value)
+                        }
                     }
+                    logger.info { "Heartbeat completed" }
                 }
-                logger.info { "Heartbeat completed" }
-            }
         } else {
             logger.info { "Heartbeat disabled" }
         }
@@ -546,8 +529,6 @@ class Agent(
         }
 
     companion object : KLogging() {
-        const val NAME_FORMAT = "agent_fetch-%d"
-
         @JvmStatic
         fun main(argv: Array<String>) {
             val options = AgentOptions(argv, true)

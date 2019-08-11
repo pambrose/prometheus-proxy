@@ -20,17 +20,20 @@ package io.prometheus
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
-import io.prometheus.agent.RequestFailureException
+import io.prometheus.common.Secs
 import io.prometheus.dsl.KtorDsl
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import mu.KLogging
-import org.amshove.kluent.shouldBeTrue
+import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldEqual
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import org.amshove.kluent.shouldNotBeNull
 import java.util.concurrent.atomic.AtomicInteger
 
 
 @KtorExperimentalAPI
+@InternalCoroutinesApi
 object SimpleTests : KLogging() {
 
     fun missingPathTest(caller: String) {
@@ -79,51 +82,48 @@ object SimpleTests : KLogging() {
         ProxyTests.logger.info { "Calling threadedAddRemovePathsTest() from $caller" }
         val paths = mutableListOf<String>()
         val cnt = AtomicInteger(0)
-        val latch1 = CountDownLatch(TestConstants.REPS)
-        val latch2 = CountDownLatch(TestConstants.REPS)
 
         // Take into account pre-existing paths already registered
         val originalSize = agent.pathMapSize()
 
-        repeat(TestConstants.REPS) {
-            TestConstants
-                .EXECUTOR_SERVICE
-                .submit {
-                    val path = "test-${cnt.getAndIncrement()}"
-
-                    synchronized(paths) {
-                        paths += path
-                    }
-
-                    try {
+        runBlocking {
+            withTimeoutOrNull(Secs(30).toMillis().value) {
+                val mutex = Mutex()
+                val jobs = mutableListOf<Job>()
+                repeat(TestConstants.REPS) {
+                    jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                        val path = "test-${cnt.getAndIncrement()}"
                         val url = "${TestConstants.PROXY_PORT}/$path".fixUrl()
+                        mutex.withLock { paths += path }
                         agent.registerPath(path, url)
-                        latch1.countDown()
-                    } catch (e: RequestFailureException) {
-                        e.printStackTrace()
                     }
                 }
+                jobs.forEach { job ->
+                    job.join()
+                    job.getCancellationException().cause.shouldBeNull()
+                }
+            }.shouldNotBeNull()
         }
 
-        latch1.await(1, TimeUnit.MINUTES).shouldBeTrue()
         paths.size shouldEqual TestConstants.REPS
-        agent.pathMapSize() shouldEqual originalSize + TestConstants.REPS
+        agent.pathMapSize() shouldEqual (originalSize + TestConstants.REPS)
 
-        paths.forEach {
-            TestConstants
-                .EXECUTOR_SERVICE
-                .submit {
-                    try {
-                        agent.unregisterPath(it)
-                        latch2.countDown()
-                    } catch (e: RequestFailureException) {
-                        e.printStackTrace()
+        runBlocking {
+            withTimeoutOrNull(Secs(30).toMillis().value) {
+                val jobs = mutableListOf<Job>()
+                for (path in paths)
+                    jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                        agent.unregisterPath(
+                            path
+                        )
                     }
-                }
+                jobs.forEach { job ->
+                    job.join()
+                    job.getCancellationException().cause.shouldBeNull()
+                }.shouldNotBeNull()
+            }
         }
 
-        // Wait for all unregistrations to complete
-        latch2.await(1, TimeUnit.MINUTES).shouldBeTrue()
         agent.pathMapSize() shouldEqual originalSize
     }
 }

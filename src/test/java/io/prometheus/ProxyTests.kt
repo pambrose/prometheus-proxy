@@ -148,49 +148,37 @@ object ProxyTests : KLogging() {
 
         args.agent.pathMapSize() shouldEqual originalSize + args.pathCount
 
-        val coroutineExceptionHandler =
-            CoroutineExceptionHandler { context, e ->
-                println("CoroutineExceptionHandler caught: $e")
-                e.printStackTrace()
-            }
-
         // Call the proxy sequentially
         repeat(args.sequentialQueryCount) {
             runBlocking {
-                val result =
-                    withTimeoutOrNull(Secs(10).toMillis().value) {
-                        val job =
-                            GlobalScope.launch(coroutineExceptionHandler) {
-                                callProxy(pathMap, "Sequential $it")
-                            }
-                        job.join()
-                        job.getCancellationException().cause.shouldBeNull()
-                    }
-                result.shouldNotBeNull()
+                withTimeoutOrNull(Secs(10).toMillis().value) {
+                    val job =
+                        GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                            callProxy(pathMap, "Sequential $it")
+                        }
+                    job.join()
+                    job.getCancellationException().cause.shouldBeNull()
+                }.shouldNotBeNull()
                 delay(args.sequentialPauseMillis.value)
             }
         }
 
         // Call the proxy in parallel
-        val dispatcher = TestConstants.EXECUTOR_SERVICE.asCoroutineDispatcher()
         runBlocking {
-            val jobs = mutableListOf<Job>()
-            val results = withTimeoutOrNull(Secs(60).toMillis().value) {
+            withTimeoutOrNull(Secs(60).toMillis().value) {
+                val jobs = mutableListOf<Job>()
                 repeat(args.parallelQueryCount) {
-                    jobs += launch(dispatcher + coroutineExceptionHandler) {
+                    jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
                         delay(Random.nextLong(100))
                         callProxy(pathMap, "Parallel $it")
                     }
                 }
 
-                for (job in jobs) {
+                jobs.forEach { job ->
                     job.join()
                     job.getCancellationException().cause.shouldBeNull()
                 }
-            }
-
-            // Check if timed out
-            results.shouldNotBeNull()
+            }.shouldNotBeNull()
         }
 
         val errorCnt = AtomicInteger()
@@ -226,11 +214,8 @@ object ProxyTests : KLogging() {
 
         http {
             get("$PROXY_PORT/proxy-$index".fixUrl()) { resp ->
-                if (resp.status != HttpStatusCode.OK)
-                    logger.error { "Proxy failed on $msg" }
                 resp.status shouldEqual HttpStatusCode.OK
 
-                // val body = resp.receive<String>()
                 val body = resp.readText()
                 body shouldEqual "value: $httpVal"
             }
