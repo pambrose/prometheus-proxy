@@ -33,11 +33,7 @@ import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.Millis
 import io.prometheus.common.Secs
 import io.prometheus.common.simpleClassName
-import io.prometheus.common.sleep
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.InternalCoroutinesApi
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -92,6 +88,7 @@ class NettyTestWithAdminMetricsTest {
             CollectorRegistry.defaultRegistry.clear()
 
             logger.info { "Starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+
             runBlocking {
                 launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, metricsEnabled = true) }
                 launch(Dispatchers.Default) {
@@ -99,8 +96,11 @@ class NettyTestWithAdminMetricsTest {
                         .apply { awaitInitialConnection(10, SECONDS) }
                 }
             }
+
             // Wait long enough to trigger heartbeat for code coverage
-            sleep(Secs(15))
+            runBlocking {
+                delay(Secs(15).toMillis().value)
+            }
 
             logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
         }

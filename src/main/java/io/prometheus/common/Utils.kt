@@ -125,20 +125,6 @@ inline class Secs(val value: Long) {
 
 fun now() = Millis(System.currentTimeMillis())
 
-fun sleep(millis: Millis) =
-    try {
-        Thread.sleep(millis.value)
-    } catch (e: InterruptedException) {
-        // Ignore
-    }
-
-fun sleep(secs: Secs) =
-    try {
-        Thread.sleep(secs.toMillis().value)
-    } catch (e: InterruptedException) {
-        // Ignore
-    }
-
 fun getVersionDesc(asJson: Boolean): String {
     val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
     return if (asJson)
@@ -149,9 +135,9 @@ fun getVersionDesc(asJson: Boolean): String {
 
 fun shutDownHookAction(service: Service) =
     Thread {
-        println("*** ${service.simpleClassName} shutting down ***")
+        System.err.println("*** ${service.simpleClassName} shutting down ***")
         service.stopAsync()
-        println("*** ${service.simpleClassName} shut down complete ***")
+        System.err.println("*** ${service.simpleClassName} shut down complete ***")
     }
 
 class VersionValidator : IParameterValidator {
@@ -171,6 +157,8 @@ fun <E> ArrayBlockingQueue<E>.poll(millis: Millis): E? {
 }
 
 val HttpStatusCode.isSuccessful get() = value in (HttpStatusCode.OK.value..HttpStatusCode.MultipleChoices.value)
+
+val HttpStatusCode.isNotSuccessful get() = !isSuccessful
 
 val <T : Any> T.simpleClassName: String
     get() = this::class.simpleName ?: "None"

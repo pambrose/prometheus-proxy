@@ -25,11 +25,16 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.response.HttpResponse
 import io.ktor.http.HttpMethod
 import io.ktor.util.KtorExperimentalAPI
+import io.prometheus.common.simpleClassName
 import kotlinx.coroutines.runBlocking
+import mu.KLogging
+import java.io.IOException
 
 
 @KtorExperimentalAPI
-object KtorDsl {
+
+object KtorDsl : KLogging() {
+
     fun newHttpClient() = HttpClient(CIO)
 
     fun blockingGet(url: String, block: suspend (HttpResponse) -> Unit) {
@@ -46,10 +51,16 @@ object KtorDsl {
         setUp: HttpRequestBuilder.() -> Unit = {},
         block: suspend (HttpResponse) -> Unit
     ) {
-        val clientCall = call(url) {
-            method = HttpMethod.Get
-            setUp()
+        try {
+            val clientCall =
+                call(url) {
+                    method = HttpMethod.Get
+                    setUp()
+                }
+            clientCall.response.use { resp -> block(resp) }
+        } catch (e: IOException) {
+            logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
+            throw e
         }
-        clientCall.response.use { resp -> block(resp) }
     }
 }

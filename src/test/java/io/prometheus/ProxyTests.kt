@@ -35,7 +35,6 @@ import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.Millis
 import io.prometheus.common.Secs
-import io.prometheus.common.sleep
 import io.prometheus.dsl.KtorDsl.blockingGet
 import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.newHttpClient
@@ -64,8 +63,8 @@ object ProxyTests : KLogging() {
             embeddedServer(CIO, port = agentPort) {
                 routing {
                     get("/$agentPath") {
-                        sleep(Secs(10))
-                        call.respondText("I timed out", ContentType.Text.Plain)
+                        delay(Secs(10).toMillis().value)
+                        call.respondText("I got back a value", ContentType.Text.Plain)
                     }
                 }
             }
@@ -78,7 +77,7 @@ object ProxyTests : KLogging() {
             }
         }
 
-        agent.registerPath("/$proxyPath", "http://localhost:$agentPort/$agentPath")
+        agent.registerPath("/$proxyPath", "$agentPort/$agentPath".fixUrl())
         blockingGet("$PROXY_PORT/$proxyPath".fixUrl()) { resp ->
             resp.status shouldEqual HttpStatusCode.ServiceUnavailable
         }
@@ -144,7 +143,7 @@ object ProxyTests : KLogging() {
         // Create the paths
         repeat(args.pathCount) {
             val index = Random.nextInt(httpServers.size)
-            args.agent.registerPath("proxy-$it", "http://localhost:${args.startingPort + index}/agent-$index")
+            args.agent.registerPath("proxy-$it", "${args.startingPort + index}/agent-$index".fixUrl())
             pathMap[it] = index
         }
 
@@ -174,7 +173,6 @@ object ProxyTests : KLogging() {
                         delay(args.sequentialPauseMillis.value)
                     }
                 }
-            //sleep(args.sequentialPauseMillis)
         }
 
         // Call the proxy in parallel
@@ -183,10 +181,10 @@ object ProxyTests : KLogging() {
             .use { httpClient ->
                 runBlocking {
                     val jobs = mutableListOf<Job>()
-                    val results = withTimeoutOrNull(Secs(30).toMillis().value) {
+                    val results = withTimeoutOrNull(Secs(60).toMillis().value) {
                         repeat(args.parallelQueryCount) {
-                            jobs += GlobalScope.launch(dispatcher + coroutineExceptionHandler) {
-                                delay(Random.nextLong(300))
+                            jobs += launch(dispatcher + coroutineExceptionHandler) {
+                                delay(Random.nextLong(200))
                                 callProxy(httpClient, pathMap, "Parallel $it")
                             }
                         }

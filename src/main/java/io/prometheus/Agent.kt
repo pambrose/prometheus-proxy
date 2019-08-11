@@ -65,6 +65,7 @@ import io.prometheus.grpc.ProxyServiceGrpc.*
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.io.IOException
@@ -260,7 +261,9 @@ class Agent(
                     val timeSinceLastWriteMillis = now() - lastMsgSent
                     if (timeSinceLastWriteMillis > maxInactivitySecs.toMillis())
                         sendHeartBeat(disconnected)
-                    sleep(threadPauseMillis)
+                    runBlocking {
+                        delay(threadPauseMillis.value)
+                    }
                 }
                 logger.info { "Heartbeat completed" }
             }

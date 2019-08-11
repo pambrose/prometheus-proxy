@@ -19,8 +19,10 @@
 package io.prometheus.proxy
 
 import io.grpc.*
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 
+@KtorExperimentalAPI
 class ProxyInterceptor : ServerInterceptor {
 
     override fun <ReqT, RespT> interceptCall(call: ServerCall<ReqT, RespT>,
@@ -32,14 +34,14 @@ class ProxyInterceptor : ServerInterceptor {
         // logger.info {"Intercepting {}", methodName);
 
         return handler.startCall(
-                object : ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(call) {
-                    override fun sendHeaders(headers: Metadata) {
-                        // agent_id was assigned in ServerTransportFilter
-                        attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { headers.put(META_AGENT_ID, it) }
-                        super.sendHeaders(headers)
-                    }
-                },
-                requestHeaders)
+            object : ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(call) {
+                override fun sendHeaders(headers: Metadata) {
+                    // agent_id was assigned in ServerTransportFilter
+                    attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { headers.put(META_AGENT_ID, it) }
+                    super.sendHeaders(headers)
+                }
+            },
+            requestHeaders)
     }
 
     companion object {

@@ -31,39 +31,43 @@ import java.util.concurrent.TimeoutException
 @KtorExperimentalAPI
 object TestUtils : KLogging() {
     @Throws(IOException::class, TimeoutException::class)
-    fun startProxy(serverName: String = "",
-                   adminEnabled: Boolean = false,
-                   metricsEnabled: Boolean = false,
-                   argv: List<String> = emptyList()): Proxy {
-
+    fun startProxy(
+        serverName: String = "",
+        adminEnabled: Boolean = false,
+        metricsEnabled: Boolean = false,
+        argv: List<String> = emptyList()
+    ): Proxy {
         logger.info { getBanner("banners/proxy.txt", logger) }
         logger.info { getVersionDesc(false) }
 
-        return Proxy(options =
-        ProxyOptions(
+        val proxyOptions = ProxyOptions(
             mutableListOf<String>()
                 .apply {
                     addAll(TestConstants.args)
                     addAll(argv)
                     add("-Dproxy.admin.enabled=$adminEnabled")
                     add("-Dproxy.metrics.enabled=$metricsEnabled")
-                }),
+                })
+        return Proxy(
+            options = proxyOptions,
             proxyHttpPort = PROXY_PORT,
             inProcessServerName = serverName,
-            testMode = true) { startSync() }
+            testMode = true
+        ) { startSync() }
     }
 
     @Throws(IOException::class, TimeoutException::class)
-    fun startAgent(serverName: String = "",
-                   adminEnabled: Boolean = false,
-                   metricsEnabled: Boolean = false,
-                   argv: List<String> = emptyList()): Agent {
+    fun startAgent(
+        serverName: String = "",
+        adminEnabled: Boolean = false,
+        metricsEnabled: Boolean = false,
+        argv: List<String> = emptyList()
+    ): Agent {
 
         logger.info { getBanner("banners/agent.txt", logger) }
         logger.info { getVersionDesc(false) }
 
-        return Agent(options =
-        AgentOptions(
+        val agentOptions = AgentOptions(
             mutableListOf<String>()
                 .apply {
                     addAll(TestConstants.args)
@@ -71,9 +75,13 @@ object TestUtils : KLogging() {
                     add("-Dagent.admin.enabled=$adminEnabled")
                     add("-Dagent.metrics.enabled=$metricsEnabled")
                 },
-            false),
+            false
+        )
+        return Agent(
+            options = agentOptions,
             inProcessServerName = serverName,
-            testMode = true) { startSync() }
+            testMode = true
+        ) { startSync() }
     }
 }
 

@@ -25,4 +25,5 @@ object TestConstants {
     internal const val REPS = 1000
     internal const val PROXY_PORT = 9505
     internal val args = listOf("--config", "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/travis.conf")
+    //internal val args = listOf("--config", "etc/test-configs/travis.conf")
 }

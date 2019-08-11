@@ -56,7 +56,7 @@ object SimpleTests : KLogging() {
         var cnt = 0
         repeat(TestConstants.REPS) {
             val path = "test-$it"
-            agent.registerPath(path, "http://localhost:${TestConstants.PROXY_PORT}/$path")
+            agent.registerPath(path, "${TestConstants.PROXY_PORT}/$path".fixUrl())
             cnt++
             agent.pathMapSize() shouldEqual originalSize + cnt
             agent.unregisterPath(path)
@@ -68,7 +68,7 @@ object SimpleTests : KLogging() {
     fun invalidAgentUrlTest(agent: Agent, caller: String, badPath: String = "badPath") {
         ProxyTests.logger.info { "Calling invalidAgentUrlTest() from $caller" }
 
-        agent.registerPath(badPath, "http://localhost:33/metrics")
+        agent.registerPath(badPath, "33/metrics".fixUrl())
         KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/$badPath".fixUrl()) { resp ->
             resp.status shouldEqual HttpStatusCode.NotFound
         }
@@ -96,7 +96,7 @@ object SimpleTests : KLogging() {
                     }
 
                     try {
-                        val url = "http://localhost:${TestConstants.PROXY_PORT}/$path"
+                        val url = "${TestConstants.PROXY_PORT}/$path".fixUrl()
                         agent.registerPath(path, url)
                         latch1.countDown()
                     } catch (e: RequestFailureException) {

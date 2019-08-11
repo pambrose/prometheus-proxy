@@ -30,6 +30,8 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.proxy.*
 import io.prometheus.proxy.ProxyGrpcService.Companion.newProxyGrpcService
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.properties.Delegates
 
@@ -104,8 +106,10 @@ class Proxy(
     }
 
     override fun run() {
-        while (isRunning)
-            sleep(Millis(500))
+        runBlocking {
+            while (isRunning)
+                delay(Millis(500).value)
+        }
     }
 
     override fun registerHealthChecks() {

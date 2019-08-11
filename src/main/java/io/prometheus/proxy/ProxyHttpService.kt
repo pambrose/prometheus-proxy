@@ -38,10 +38,12 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.Millis
 import io.prometheus.common.Secs
-import io.prometheus.common.sleep
+import io.prometheus.common.isNotSuccessful
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.net.BindException
 import java.util.concurrent.TimeUnit
@@ -53,11 +55,12 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     private val configVals = proxy.configVals
     private var tracing: Tracing by Delegates.notNull()
 
+    val idleTimeoutSecs = if (configVals.http.idleTimeoutSecs == -1) 45 else configVals.http.idleTimeoutSecs
     val httpServer =
         embeddedServer(
             CIO,
             port = httpPort,
-            configure = { connectionIdleTimeoutSeconds = configVals.http.idleTimeoutSecs }) {
+            configure = { connectionIdleTimeoutSeconds = idleTimeoutSecs }) {
             routing {
                 get("/*") {
                     call.response.header("cache-control", "must-revalidate,no-cache,no-store")
@@ -133,10 +136,13 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             tracing.close()
 
         httpServer.stop(5, 5, TimeUnit.SECONDS)
-        sleep(Secs(2))
+
+        runBlocking {
+            delay(Secs(2).toMillis().value)
+        }
     }
 
-    class ScrapeRequestResponse(
+    private class ScrapeRequestResponse(
         val content: String,
         val contentType: ContentType,
         val statusCode: HttpStatusCode,
@@ -185,7 +191,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                 ContentType.Text.Plain
 
         // Do not return content on error status codes
-        return if (statusCode.value >= 400) {
+        return if (statusCode.isNotSuccessful) {
             ScrapeRequestResponse("", contentType, statusCode, "path_not_found")
         } else {
             req.header(ACCEPT_ENCODING)?.contains("gzip")?.let { res.header(CONTENT_ENCODING, "gzip") }
