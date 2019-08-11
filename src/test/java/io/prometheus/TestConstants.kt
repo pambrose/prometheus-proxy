@@ -18,6 +18,7 @@
 
 package io.prometheus
 
+import io.prometheus.common.localHostName
 import java.util.concurrent.Executors.newCachedThreadPool
 
 object TestConstants {
@@ -25,7 +26,7 @@ object TestConstants {
     internal const val REPS = 1000
     internal const val PROXY_PORT = 9505
 
-    private const val CI_TEST = false
+    private val CI_TEST = !localHostName.contains("pleiku")
 
     internal val args =
         listOf(
