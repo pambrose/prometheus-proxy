@@ -18,7 +18,7 @@
 
 package io.prometheus
 
-import io.ktor.client.call.receive
+import io.ktor.client.response.readText
 import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
@@ -50,7 +50,7 @@ class AdminDefaultPathTest {
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
-                    resp.receive<String>() shouldStartWith "pong"
+                    resp.readText() shouldStartWith "pong"
                 }
             }
     }
@@ -61,7 +61,7 @@ class AdminDefaultPathTest {
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
-                    resp.receive<String>() shouldStartWith "pong"
+                    resp.readText() shouldStartWith "pong"
                 }
             }
     }
@@ -72,7 +72,7 @@ class AdminDefaultPathTest {
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
-                    resp.receive<String>() shouldContain "Version"
+                    resp.readText() shouldContain "Version"
                 }
             }
     }
@@ -83,7 +83,7 @@ class AdminDefaultPathTest {
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
-                    resp.receive<String>() shouldContain "Version"
+                    resp.readText() shouldContain "Version"
                 }
             }
     }
@@ -94,7 +94,7 @@ class AdminDefaultPathTest {
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
-                    resp.receive<String>().length shouldBeGreaterThan 10
+                    resp.readText().length shouldBeGreaterThan 10
                 }
             }
     }
@@ -104,7 +104,7 @@ class AdminDefaultPathTest {
         agent.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
-                    resp.receive<String>().length shouldBeGreaterThan 10
+                    resp.readText().length shouldBeGreaterThan 10
                 }
             }
     }
@@ -112,14 +112,14 @@ class AdminDefaultPathTest {
     @Test
     fun proxyThreadDumpPathTest() {
         blockingGet("${proxy.configVals.admin.port}/${proxy.configVals.admin.threadDumpPath}".fixUrl()) { resp ->
-            resp.receive<String>().length shouldBeGreaterThan 10
+            resp.readText().length shouldBeGreaterThan 10
         }
     }
 
     @Test
     fun agentThreadDumpPathTest() {
-        blockingGet("${agent.configVals.admin.port}/${agent.configVals.admin.threadDumpPath}".fixUrl()) {
-            it.receive<String>().length shouldBeGreaterThan 10
+        blockingGet("${agent.configVals.admin.port}/${agent.configVals.admin.threadDumpPath}".fixUrl()) { resp ->
+            resp.readText().length shouldBeGreaterThan 10
         }
     }
 

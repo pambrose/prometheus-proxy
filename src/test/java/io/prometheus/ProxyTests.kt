@@ -20,7 +20,6 @@ package io.prometheus
 
 import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.application.call
-import io.ktor.client.HttpClient
 import io.ktor.client.response.readText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -37,7 +36,7 @@ import io.prometheus.common.Millis
 import io.prometheus.common.Secs
 import io.prometheus.dsl.KtorDsl.blockingGet
 import io.prometheus.dsl.KtorDsl.get
-import io.prometheus.dsl.KtorDsl.newHttpClient
+import io.prometheus.dsl.KtorDsl.http
 import kotlinx.coroutines.*
 import mu.KLogging
 import org.amshove.kluent.shouldBeNull
@@ -157,48 +156,42 @@ object ProxyTests : KLogging() {
 
         // Call the proxy sequentially
         repeat(args.sequentialQueryCount) {
-            newHttpClient()
-                .use { httpClient ->
-                    runBlocking {
-                        val result =
-                            withTimeoutOrNull(Secs(10).toMillis().value) {
-                                val job =
-                                    GlobalScope.launch(coroutineExceptionHandler) {
-                                        callProxy(httpClient, pathMap, "Sequential $it")
-                                    }
-                                job.join()
-                                job.getCancellationException().cause.shouldBeNull()
+            runBlocking {
+                val result =
+                    withTimeoutOrNull(Secs(10).toMillis().value) {
+                        val job =
+                            GlobalScope.launch(coroutineExceptionHandler) {
+                                callProxy(pathMap, "Sequential $it")
                             }
-                        result.shouldNotBeNull()
-                        delay(args.sequentialPauseMillis.value)
+                        job.join()
+                        job.getCancellationException().cause.shouldBeNull()
                     }
-                }
+                result.shouldNotBeNull()
+                delay(args.sequentialPauseMillis.value)
+            }
         }
 
         // Call the proxy in parallel
         val dispatcher = TestConstants.EXECUTOR_SERVICE.asCoroutineDispatcher()
-        newHttpClient()
-            .use { httpClient ->
-                runBlocking {
-                    val jobs = mutableListOf<Job>()
-                    val results = withTimeoutOrNull(Secs(60).toMillis().value) {
-                        repeat(args.parallelQueryCount) {
-                            jobs += launch(dispatcher + coroutineExceptionHandler) {
-                                delay(Random.nextLong(200))
-                                callProxy(httpClient, pathMap, "Parallel $it")
-                            }
-                        }
-
-                        for (job in jobs) {
-                            job.join()
-                            job.getCancellationException().cause.shouldBeNull()
-                        }
+        runBlocking {
+            val jobs = mutableListOf<Job>()
+            val results = withTimeoutOrNull(Secs(60).toMillis().value) {
+                repeat(args.parallelQueryCount) {
+                    jobs += launch(dispatcher + coroutineExceptionHandler) {
+                        delay(Random.nextLong(100))
+                        callProxy(pathMap, "Parallel $it")
                     }
+                }
 
-                    // Check if timed out
-                    results.shouldNotBeNull()
+                for (job in jobs) {
+                    job.join()
+                    job.getCancellationException().cause.shouldBeNull()
                 }
             }
+
+            // Check if timed out
+            results.shouldNotBeNull()
+        }
 
         val errorCnt = AtomicInteger()
         for (path in pathMap) {
@@ -225,14 +218,14 @@ object ProxyTests : KLogging() {
         logger.info { "Finished shutting down ${httpServers.size} httpServers" }
     }
 
-    private suspend fun callProxy(httpClient: HttpClient, pathMap: Map<Int, Int>, msg: String) {
+    private suspend fun callProxy(pathMap: Map<Int, Int>, msg: String) {
         // Randomly choose one of the pathMap values
         val index = Random.nextInt(pathMap.size)
         val httpVal = pathMap[index]
         httpVal.shouldNotBeNull()
 
-        httpClient
-            .get("$PROXY_PORT/proxy-$index".fixUrl()) { resp ->
+        http {
+            get("$PROXY_PORT/proxy-$index".fixUrl()) { resp ->
                 if (resp.status != HttpStatusCode.OK)
                     logger.error { "Proxy failed on $msg" }
                 resp.status shouldEqual HttpStatusCode.OK
@@ -241,6 +234,7 @@ object ProxyTests : KLogging() {
                 val body = resp.readText()
                 body shouldEqual "value: $httpVal"
             }
+        }
     }
 }
 

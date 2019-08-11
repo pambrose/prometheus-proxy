@@ -24,6 +24,17 @@ object TestConstants {
     internal val EXECUTOR_SERVICE = newCachedThreadPool()
     internal const val REPS = 1000
     internal const val PROXY_PORT = 9505
-    internal val args = listOf("--config", "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/travis.conf")
-    //internal val args = listOf("--config", "etc/test-configs/travis.conf")
+
+    private const val CI_TEST = false
+
+    internal val args =
+        listOf(
+            "--config",
+            (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +
+                    "etc/test-configs/travis.conf"
+        )
+
+    internal val OPTIONS_CONFIG =
+        (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +
+                "etc/test-configs/junit-test.conf"
 }

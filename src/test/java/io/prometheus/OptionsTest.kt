@@ -18,6 +18,7 @@
 
 package io.prometheus
 
+import io.prometheus.TestConstants.OPTIONS_CONFIG
 import io.prometheus.agent.AgentOptions
 import io.prometheus.proxy.ProxyOptions
 import org.amshove.kluent.shouldBeFalse
@@ -39,7 +40,7 @@ class OptionsTest {
 
     @Test
     fun verifyConfValues() {
-        val configVals = readProxyOptions(listOf("--config", CONFIG))
+        val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG))
         configVals
             .apply {
                 proxy.http.port shouldEqual 8181
@@ -65,7 +66,7 @@ class OptionsTest {
 
     @Test
     fun verifyPathConfigs() {
-        val configVals = readAgentOptions(listOf("--config", CONFIG))
+        val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
         configVals.agent.pathConfigs.size shouldEqual 3
     }
 
@@ -96,10 +97,4 @@ class OptionsTest {
     private fun readProxyOptions(argList: List<String>) = ProxyOptions(argList).configVals
 
     private fun readAgentOptions(argList: List<String>) = AgentOptions(argList, false).configVals
-
-    companion object {
-        private const val CONFIG =
-            "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/etc/test-configs/junit-test.conf"
-        //private const val CONFIG = "etc/test-configs/junit-test.conf"
-    }
 }

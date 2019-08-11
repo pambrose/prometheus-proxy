@@ -106,13 +106,13 @@ class GrpcObjects {
                 }
 
         class ScrapeResponseArg(
-            val validResponse: Boolean,
-            val failureReason: String,
+            var validResponse: Boolean = false,
+            var failureReason: String = "",
             val agentId: String,
             val scrapeId: Long,
-            val statusCode: HttpStatusCode,
-            val contentText: String,
-            val contentType: String
+            var statusCode: HttpStatusCode = HttpStatusCode.NotFound,
+            var contentText: String = "",
+            var contentType: String = ""
         )
 
         fun newScrapeResponse(arg: ScrapeResponseArg) =

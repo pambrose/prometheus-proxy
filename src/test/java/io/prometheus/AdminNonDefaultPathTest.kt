@@ -18,7 +18,7 @@
 
 package io.prometheus
 
-import io.ktor.client.call.receive
+import io.ktor.client.response.readText
 import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
@@ -52,7 +52,7 @@ class AdminNonDefaultPathTest {
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
-                    resp.receive<String>() shouldStartWith "pong"
+                    resp.readText() shouldStartWith "pong"
                 }
             }
     }
@@ -65,7 +65,7 @@ class AdminNonDefaultPathTest {
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
-                    resp.receive<String>() shouldContain "Version"
+                    resp.readText() shouldContain "Version"
                 }
             }
     }
@@ -77,7 +77,7 @@ class AdminNonDefaultPathTest {
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
-                    resp.receive<String>().length shouldBeGreaterThan 10
+                    resp.readText().length shouldBeGreaterThan 10
                 }
             }
     }
@@ -88,7 +88,7 @@ class AdminNonDefaultPathTest {
         proxy.configVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
-                    resp.receive<String>().length shouldBeGreaterThan 10
+                    resp.readText().length shouldBeGreaterThan 10
                 }
             }
     }

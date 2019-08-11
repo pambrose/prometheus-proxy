@@ -35,7 +35,6 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.response.HttpResponse
 import io.ktor.client.response.readText
-import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.agent.AgentClientInterceptor
 import io.prometheus.agent.AgentMetrics
@@ -59,7 +58,7 @@ import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.KtorDsl.get
-import io.prometheus.dsl.KtorDsl.newHttpClient
+import io.prometheus.dsl.KtorDsl.http
 import io.prometheus.dsl.ThreadDsl.threadFactory
 import io.prometheus.grpc.ProxyServiceGrpc.*
 import io.prometheus.grpc.ScrapeRequest
@@ -299,76 +298,61 @@ class Agent(
     }
 
     suspend private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
-        var failureReason = ""
-        var statusCode = HttpStatusCode.NotFound
-        var validResponse = false
+        val responseArg = ScrapeResponseArg(agentId = scrapeRequest.agentId, scrapeId = scrapeRequest.scrapeId)
         var scrapeCounterMsg = ""
-        var contentText = ""
-        var contentType = ""
         val path = scrapeRequest.path
         val pathContext = pathContextMap[path]
 
         if (pathContext == null) {
             logger.warn { "Invalid path in fetchUrl(): $path" }
             scrapeCounterMsg = "invalid_path"
-            failureReason = "Invalid path: $path"
+            responseArg.failureReason = "Invalid path: $path"
         } else {
             val requestTimer =
                 if (isMetricsEnabled) metrics.scrapeRequestLatency.labels(agentName).startTimer() else null
 
             try {
-                newHttpClient()
-                    .use { httpClient ->
+                val setup: HttpRequestBuilder.() -> Unit = {
+                    val accept = scrapeRequest.accept
+                    if (!accept.isNullOrEmpty())
+                        header(HttpHeaders.ACCEPT, accept)
+                }
 
-                        val setup: HttpRequestBuilder.() -> Unit = {
-                            val accept = scrapeRequest.accept
-                            if (!accept.isNullOrEmpty())
-                                header(HttpHeaders.ACCEPT, accept)
+                val block: suspend (HttpResponse) -> Unit = { resp ->
+                    //logger.info { "Fetching ${pathContext}" }
+                    responseArg.statusCode = resp.status
+
+                    when {
+                        resp.status.isSuccessful -> {
+                            responseArg.contentText = resp.readText()
+                            responseArg.contentType = resp.headers[CONTENT_TYPE].orEmpty()
+                            responseArg.validResponse = true
+                            scrapeCounterMsg = "success"
                         }
-
-                        val block: suspend (HttpResponse) -> Unit = { resp ->
-                            //logger.info { "Fetching ${pathContext}" }
-
-                            statusCode = resp.status
-
-                            if (resp.status.isSuccessful) {
-                                contentText = resp.readText()
-                                contentType = resp.headers[CONTENT_TYPE].orEmpty()
-                                validResponse = true
-                                scrapeCounterMsg = "success"
-
-                            } else {
-                                failureReason = "Unsucessful response code $statusCode"
-                                scrapeCounterMsg = "unsuccessful"
-                            }
+                        else -> {
+                            responseArg.failureReason = "Unsucessful response code ${responseArg.statusCode}"
+                            scrapeCounterMsg = "unsuccessful"
                         }
-
-                        httpClient.get(pathContext.url, setup, block)
                     }
+                }
+
+                http {
+                    get(pathContext.url, setup, block)
+                }
 
             } catch (e: IOException) {
                 logger.info { "Failed HTTP request: ${pathContext.url} [${e.simpleClassName}: ${e.message}]" }
-                failureReason = "${e.simpleClassName} - ${e.message}"
+                responseArg.failureReason = "${e.simpleClassName} - ${e.message}"
             } catch (e: Exception) {
                 logger.warn(e) { "fetchUrl() $e" }
-                failureReason = "${e.simpleClassName} - ${e.message}"
+                responseArg.failureReason = "${e.simpleClassName} - ${e.message}"
             } finally {
                 requestTimer?.observeDuration()
             }
         }
 
         updateScrapeCounter(scrapeCounterMsg)
-
-        val arg = ScrapeResponseArg(
-            validResponse = validResponse,
-            failureReason = failureReason,
-            agentId = scrapeRequest.agentId,
-            scrapeId = scrapeRequest.scrapeId,
-            statusCode = statusCode,
-            contentText = contentText,
-            contentType = contentType
-        )
-        return newScrapeResponse(arg)
+        return newScrapeResponse(responseArg)
     }
 
     // If successful, this will create an agentContxt on the Proxy and an interceptor will add an agent_id to the headers`
@@ -391,10 +375,10 @@ class Agent(
     private fun registerAgent() {
         val request = newRegisterAgentRequest(agentId, agentName, hostName)
         blockingStub.registerAgent(request)
-            .let {
+            .also { resp ->
                 markMsgSent()
-                if (!it.valid)
-                    throw RequestFailureException("registerAgent() - ${it.reason}")
+                if (!resp.valid)
+                    throw RequestFailureException("registerAgent() - ${resp.reason}")
             }
         initialConnectionLatch.countDown()
     }
