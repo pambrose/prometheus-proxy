@@ -149,15 +149,15 @@ object ProxyTests : KLogging() {
         args.agent.pathMapSize() shouldEqual originalSize + args.pathCount
 
         // Call the proxy sequentially
-        repeat(args.sequentialQueryCount) {
-            runBlocking {
-                withTimeoutOrNull(Secs(10).toMillis().value) {
-                    val job =
-                        GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
-                            callProxy(pathMap, "Sequential $it")
-                        }
-                    job.join()
-                    job.getCancellationException().cause.shouldBeNull()
+        runBlocking {
+            repeat(args.sequentialQueryCount) {
+                withTimeoutOrNull(Secs(5).toMillis().value) {
+                    GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                        callProxy(pathMap, "Sequential $it")
+                    }.apply {
+                        join()
+                        getCancellationException().cause.shouldBeNull()
+                    }
                 }.shouldNotBeNull()
                 delay(args.sequentialPauseMillis.value)
             }

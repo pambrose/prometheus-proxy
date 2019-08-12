@@ -43,6 +43,7 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit.SECONDS
 
 @KtorExperimentalAPI
+@InternalCoroutinesApi
 class InProcessTestNoAdminMetricsTest {
 
     @Test

@@ -120,10 +120,10 @@ class GrpcObjects {
                 .run {
                     agentId = arg.agentId
                     scrapeId = arg.scrapeId
-                    valid = arg.validResponse
-                    reason = arg.failureReason
+                    validResponse = arg.validResponse
+                    failureReason = arg.failureReason
                     statusCode = arg.statusCode.value
-                    text = arg.contentText
+                    contentText = arg.contentText
                     contentType = arg.contentType
                     build()
                 }

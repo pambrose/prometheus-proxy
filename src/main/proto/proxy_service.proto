@@ -61,12 +61,12 @@ message ScrapeRequest {
 }
 
 message ScrapeResponse {
-    bool valid = 1;
-    string reason = 2;
+    bool valid_response = 1;
+    string failure_reason = 2;
     string agent_id = 3;
     int64 scrape_id = 4;
     int32 status_code = 5;
-    string text = 6;
+    string content_text = 6;
     string content_type = 7;
 }
 

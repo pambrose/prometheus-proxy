@@ -27,6 +27,7 @@ import com.google.common.base.Splitter
 import com.google.common.io.CharStreams
 import com.google.common.util.concurrent.Service
 import io.ktor.http.HttpStatusCode
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import org.slf4j.Logger
@@ -58,21 +59,19 @@ fun getBanner(filename: String, logger: Logger) =
                 var first = -1
                 var last = -1
                 var lineNum = 0
-                lines
-                    .forEach { arg1 ->
-                        if (arg1.trim { arg2 -> arg2 <= ' ' }.isNotEmpty()) {
-                            if (first == -1)
-                                first = lineNum
-                            last = lineNum
-                        }
-                        lineNum++
+                lines.forEach { arg1 ->
+                    if (arg1.trim { arg2 -> arg2 <= ' ' }.isNotEmpty()) {
+                        if (first == -1)
+                            first = lineNum
+                        last = lineNum
                     }
+                    lineNum++
+                }
 
                 lineNum = 0
 
                 val vals =
                     lines
-                        .asSequence()
                         .filter {
                             val currLine = lineNum++
                             currLine in first..last
@@ -123,8 +122,7 @@ inline class Secs(val value: Long) {
     override fun toString() = "$value"
 }
 
-fun now() = Millis(System.currentTimeMillis())
-
+@KtorExperimentalAPI
 fun getVersionDesc(asJson: Boolean): String {
     val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
     return if (asJson)
@@ -140,6 +138,7 @@ fun shutDownHookAction(service: Service) =
         System.err.println("*** ${service.simpleClassName} shut down complete ***")
     }
 
+@KtorExperimentalAPI
 class VersionValidator : IParameterValidator {
     override fun validate(name: String, value: String) {
         val console = JCommander.getConsole()
@@ -148,13 +147,11 @@ class VersionValidator : IParameterValidator {
     }
 }
 
-fun CountDownLatch.await(millis: Millis): Boolean {
-    return this.await(millis.value, TimeUnit.MILLISECONDS)
-}
+fun now() = Millis(System.currentTimeMillis())
 
-fun <E> ArrayBlockingQueue<E>.poll(millis: Millis): E? {
-    return this.poll(millis.value, TimeUnit.MILLISECONDS)
-}
+fun CountDownLatch.await(millis: Millis): Boolean = await(millis.value, TimeUnit.MILLISECONDS)
+
+fun <E> ArrayBlockingQueue<E>.poll(millis: Millis): E? = poll(millis.value, TimeUnit.MILLISECONDS)
 
 val HttpStatusCode.isSuccessful get() = value in (HttpStatusCode.OK.value..HttpStatusCode.MultipleChoices.value)
 

@@ -18,6 +18,7 @@
 
 package io.prometheus
 
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestConstants.OPTIONS_CONFIG
 import io.prometheus.agent.AgentOptions
 import io.prometheus.proxy.ProxyOptions
@@ -26,35 +27,36 @@ import org.amshove.kluent.shouldBeTrue
 import org.amshove.kluent.shouldEqual
 import org.junit.Test
 
+@KtorExperimentalAPI
 class OptionsTest {
 
     @Test
     fun verifyDefaultValues() {
         val configVals = readProxyOptions(listOf())
-        configVals
+        configVals.proxy
             .apply {
-                proxy.http.port shouldEqual 8080
-                proxy.internal.zipkin.enabled.shouldBeFalse()
+                http.port shouldEqual 8080
+                internal.zipkin.enabled.shouldBeFalse()
             }
     }
 
     @Test
     fun verifyConfValues() {
         val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG))
-        configVals
+        configVals.proxy
             .apply {
-                proxy.http.port shouldEqual 8181
-                proxy.internal.zipkin.enabled.shouldBeTrue()
+                http.port shouldEqual 8181
+                internal.zipkin.enabled.shouldBeTrue()
             }
     }
 
     @Test
     fun verifyUnquotedPropValue() {
         val configVals = readProxyOptions(listOf("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"))
-        configVals
+        configVals.proxy
             .apply {
-                proxy.http.port shouldEqual 9393
-                proxy.internal.zipkin.enabled.shouldBeTrue()
+                http.port shouldEqual 9393
+                internal.zipkin.enabled.shouldBeTrue()
             }
     }
 

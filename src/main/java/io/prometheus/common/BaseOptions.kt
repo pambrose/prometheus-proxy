@@ -181,7 +181,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
         }
 
         exitProcess(1)
-        return fallback // Never reached
+        //return fallback // Never reached
     }
 
     private fun getConfigSyntax(configName: String) =

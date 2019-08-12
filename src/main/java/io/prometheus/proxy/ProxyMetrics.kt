@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
@@ -26,38 +27,39 @@ import io.prometheus.dsl.PrometheusDsl.counter
 import io.prometheus.dsl.PrometheusDsl.gauge
 import io.prometheus.dsl.PrometheusDsl.summary
 
+@KtorExperimentalAPI
 class ProxyMetrics(proxy: Proxy) {
 
     val scrapeRequests: Counter =
-            counter {
-                name("proxy_scrape_requests")
-                help("Proxy scrape requests")
-                labelNames("type")
-            }
+        counter {
+            name("proxy_scrape_requests")
+            help("Proxy scrape requests")
+            labelNames("type")
+        }
 
     val connects: Counter =
-            counter {
-                name("proxy_connect_count")
-                help("Proxy connect count")
-            }
+        counter {
+            name("proxy_connect_count")
+            help("Proxy connect count")
+        }
 
     val agentEvictions: Counter =
-            counter {
-                name("proxy_eviction_count")
-                help("Proxy eviction count")
-            }
+        counter {
+            name("proxy_eviction_count")
+            help("Proxy eviction count")
+        }
 
     val heartbeats: Counter =
-            counter {
-                name("proxy_heartbeat_count")
-                help("Proxy heartbeat count")
-            }
+        counter {
+            name("proxy_heartbeat_count")
+            help("Proxy heartbeat count")
+        }
 
     val scrapeRequestLatency: Summary =
-            summary {
-                name("proxy_scrape_request_latency_seconds")
-                help("Proxy scrape request latency in seconds")
-            }
+        summary {
+            name("proxy_scrape_request_latency_seconds")
+            help("Proxy scrape request latency in seconds")
+        }
 
     init {
         gauge {
@@ -66,19 +68,19 @@ class ProxyMetrics(proxy: Proxy) {
         }.setToCurrentTime()
 
         SamplerGaugeCollector(name = "proxy_agent_map_size",
-                              help = "Proxy connected agents",
-                              data = { proxy.agentContextManager.agentContextSize.toDouble() })
+            help = "Proxy connected agents",
+            data = { proxy.agentContextManager.agentContextSize.toDouble() })
 
         SamplerGaugeCollector(name = "proxy_path_map_size",
-                              help = "Proxy path map size",
-                              data = { proxy.pathManager.pathMapSize.toDouble() })
+            help = "Proxy path map size",
+            data = { proxy.pathManager.pathMapSize.toDouble() })
 
         SamplerGaugeCollector(name = "proxy_scrape_map_size",
-                              help = "Proxy scrape map size",
-                              data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() })
+            help = "Proxy scrape map size",
+            data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() })
 
         SamplerGaugeCollector(name = "proxy_cummulative_agent_queue_size",
-                              help = "Proxy cummulative agent queue size",
-                              data = { proxy.agentContextManager.totalAgentRequestQueueSize.toDouble() })
+            help = "Proxy cummulative agent queue size",
+            data = { proxy.agentContextManager.totalAgentRequestQueueSize.toDouble() })
     }
 }

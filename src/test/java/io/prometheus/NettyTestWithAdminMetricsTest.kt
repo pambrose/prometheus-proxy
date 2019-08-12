@@ -42,6 +42,7 @@ import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 
 @KtorExperimentalAPI
+@InternalCoroutinesApi
 class NettyTestWithAdminMetricsTest {
 
     @Test

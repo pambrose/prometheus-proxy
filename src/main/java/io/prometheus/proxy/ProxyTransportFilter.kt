@@ -20,10 +20,12 @@ package io.prometheus.proxy
 
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.dsl.GrpcDsl.attributes
 import mu.KLogging
 
+@KtorExperimentalAPI
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
     private fun getRemoteAddr(attributes: Attributes) =

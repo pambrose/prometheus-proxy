@@ -18,12 +18,14 @@
 
 package io.prometheus.common
 
+import io.ktor.util.KtorExperimentalAPI
 import java.io.IOException
 import javax.servlet.ServletException
 import javax.servlet.http.HttpServlet
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
 
+@KtorExperimentalAPI
 class VersionServlet : HttpServlet() {
 
     @Throws(ServletException::class, IOException::class)

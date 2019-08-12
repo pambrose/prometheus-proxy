@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.Millis
 import io.prometheus.common.Secs
@@ -30,6 +31,7 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
+@KtorExperimentalAPI
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
@@ -58,11 +60,11 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     }
 
     fun pollScrapeRequestQueue(): ScrapeRequestWrapper? =
-            try {
-                scrapeRequestQueue.poll(waitMillis)
-            } catch (e: InterruptedException) {
-                null
-            }
+        try {
+            scrapeRequestQueue.poll(waitMillis)
+        } catch (e: InterruptedException) {
+            null
+        }
 
     fun markInvalid() = isValid.set(false)
 
@@ -71,14 +73,14 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     }
 
     override fun toString() =
-            toStringElements {
-                add("agentId", agentId)
-                add("valid", isValid)
-                add("remoteAddr", remoteAddr)
-                add("agentName", agentName)
-                add("hostName", hostName)
-                add("inactivitySecs", inactivitySecs)
-            }
+        toStringElements {
+            add("agentId", agentId)
+            add("valid", isValid)
+            add("remoteAddr", remoteAddr)
+            add("agentName", agentName)
+            add("hostName", hostName)
+            add("inactivitySecs", inactivitySecs)
+        }
 
     companion object {
         private val AGENT_ID_GENERATOR = AtomicLong(0)
