@@ -20,34 +20,38 @@ package io.prometheus.proxy
 
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
-import io.prometheus.common.Millis
 import io.prometheus.common.Secs
 import io.prometheus.common.now
-import io.prometheus.common.poll
 import io.prometheus.delegate.AtomicDelegates.atomicMillis
 import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GuavaDsl.toStringElements
-import java.util.concurrent.ArrayBlockingQueue
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.receiveOrNull
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
-    private val scrapeRequestQueue = ArrayBlockingQueue<ScrapeRequestWrapper>(proxy.configVals.internal.scrapeRequestQueueSize)
-    private val waitMillis = Millis(proxy.configVals.internal.scrapeRequestQueueCheckMillis)
+
+    private val scrapeRequestChannel: Channel<ScrapeRequestWrapper> =
+        Channel(proxy.configVals.internal.scrapeRequestQueueSize)
+    val channelBacklogSize = AtomicInteger(0)
 
     private var lastActivityTime by atomicMillis()
-    var isValid = AtomicBoolean(true)
+    private var valid = AtomicBoolean(true)
     var hostName: String by nonNullableReference()
     var agentName: String by nonNullableReference()
 
     val inactivitySecs: Secs
         get() = (now() - lastActivityTime).toSecs()
 
-    val scrapeRequestQueueSize: Int
-        get() = scrapeRequestQueue.size
+    val scrapeRequestBacklogSize: Int
+        get() = channelBacklogSize.get()
 
     init {
         hostName = "Unassigned"
@@ -55,18 +59,24 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
         markActivity()
     }
 
-    fun addToScrapeRequestQueue(scrapeRequest: ScrapeRequestWrapper) {
-        scrapeRequestQueue += scrapeRequest
+    suspend fun writeToScrapeRequestChannel(scrapeRequest: ScrapeRequestWrapper) {
+        scrapeRequestChannel.send(scrapeRequest)
+        channelBacklogSize.incrementAndGet()
     }
 
-    fun pollScrapeRequestQueue(): ScrapeRequestWrapper? =
-        try {
-            scrapeRequestQueue.poll(waitMillis)
-        } catch (e: InterruptedException) {
-            null
+    suspend fun readScrapeRequestChannel(): ScrapeRequestWrapper? =
+        scrapeRequestChannel.receiveOrNull()?.also {
+            channelBacklogSize.decrementAndGet()
         }
 
-    fun markInvalid() = isValid.set(false)
+    fun isChannelReadyForReceive() = !scrapeRequestChannel.isClosedForReceive
+
+    fun isValid() = valid.get() && isChannelReadyForReceive()
+
+    fun invalidate() {
+        valid.set(false)
+        scrapeRequestChannel.cancel()
+    }
 
     fun markActivity() {
         lastActivityTime = now()
@@ -75,7 +85,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     override fun toString() =
         toStringElements {
             add("agentId", agentId)
-            add("valid", isValid)
+            add("valid", valid.get())
             add("remoteAddr", remoteAddr)
             add("agentName", agentName)
             add("hostName", hostName)

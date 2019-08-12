@@ -42,6 +42,7 @@ import io.prometheus.common.isNotSuccessful
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
@@ -50,6 +51,7 @@ import kotlin.properties.Delegates
 
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
     private val configVals = proxy.configVals
     private var tracing: Tracing by Delegates.notNull()
@@ -92,7 +94,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                                 statusCode = HttpStatusCode.NotFound
                             }
                         }
-                        !agentContext.isValid.get() -> {
+                        !agentContext.isValid() -> {
                             logger.error { "Invalid AgentContext" }
                             arg.apply {
                                 updateMsg = "invalid_agent_context"
@@ -150,13 +152,13 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     }
 
     private class ScrapeRequestResponse(
-        val contentText: String = "",
-        val contentType: ContentType,
+        var contentText: String = "",
+        var contentType: ContentType = ContentType.Text.Plain,
         val statusCode: HttpStatusCode,
         val updateMsg: String
     )
 
-    private fun submitScrapeRequest(
+    suspend private fun submitScrapeRequest(
         req: ApplicationRequest,
         res: ApplicationResponse,
         agentContext: AgentContext,
@@ -168,16 +170,15 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
         try {
             proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
-            agentContext.addToScrapeRequestQueue(scrapeRequest)
+            agentContext.writeToScrapeRequestChannel(scrapeRequest)
 
             // Returns false if timed out
             while (!scrapeRequest.waitUntilComplete(checkMillis)) {
                 // Check if agent is disconnected or agent is hung
-                if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.isValid.get() || !proxy.isRunning)
+                if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
                     return ScrapeRequestResponse(
-                        contentType = ContentType.Text.Plain,
                         statusCode = HttpStatusCode.ServiceUnavailable,
-                        updateMsg = "time_out"
+                        updateMsg = "timed_out"
                     )
             }
         } finally {

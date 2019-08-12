@@ -30,12 +30,14 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.proxy.*
 import io.prometheus.proxy.ProxyGrpcService.Companion.newProxyGrpcService
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.properties.Delegates
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class Proxy(
     options: ProxyOptions,
     proxyHttpPort: Int = options.proxyHttpPort,
@@ -130,13 +132,13 @@ class Proxy(
                         val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
                         val vals =
                             agentContextManager.agentContextMap.entries
-                                .filter { it.value.scrapeRequestQueueSize >= unhealthySize }
-                                .map { "${it.value} ${it.value.scrapeRequestQueueSize}" }
+                                .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
+                                .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
                                 .toList()
                         if (vals.isEmpty())
                             HealthCheck.Result.healthy()
                         else
-                            HealthCheck.Result.unhealthy("Large scrapeRequestQueues: ${Joiner.on(", ").join(vals)}")
+                            HealthCheck.Result.unhealthy("Large scrapeRequestBacklog: ${Joiner.on(", ").join(vals)}")
                     })
             }
     }
@@ -151,7 +153,7 @@ class Proxy(
                 logger.error { "Missing AgentContext for agentId: $agentId" }
             } else {
                 logger.info { "Removed $agentContext" }
-                agentContext.markInvalid()
+                agentContext.invalidate()
             }
             agentContext
         }

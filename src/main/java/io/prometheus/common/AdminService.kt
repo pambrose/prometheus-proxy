@@ -23,6 +23,7 @@ import com.codahale.metrics.servlets.HealthCheckServlet
 import com.codahale.metrics.servlets.PingServlet
 import com.codahale.metrics.servlets.ThreadDumpServlet
 import com.google.common.util.concurrent.MoreExecutors
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.SparkDsl.servletContextHandler
 import io.prometheus.guava.GenericIdleService
@@ -31,6 +32,7 @@ import mu.KLogging
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletHolder
 
+@KtorExperimentalAPI
 class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val port: Int,
                    private val pingPath: String,
@@ -39,21 +41,21 @@ class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val threadDumpPath: String,
                    initBlock: (AdminService.() -> Unit)? = null) : GenericIdleService() {
     private val server =
-            Server(port)
-                    .apply {
-                        handler =
-                                servletContextHandler {
-                                    contextPath = "/"
-                                    if (pingPath.isNotBlank())
-                                        addServlet(ServletHolder(PingServlet()), "/$pingPath")
-                                    if (versionPath.isNotBlank())
-                                        addServlet(ServletHolder(VersionServlet()), "/$versionPath")
-                                    if (healthCheckPath.isNotBlank())
-                                        addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
-                                    if (threadDumpPath.isNotBlank())
-                                        addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
-                                }
+        Server(port)
+            .apply {
+                handler =
+                    servletContextHandler {
+                        contextPath = "/"
+                        if (pingPath.isNotBlank())
+                            addServlet(ServletHolder(PingServlet()), "/$pingPath")
+                        if (versionPath.isNotBlank())
+                            addServlet(ServletHolder(VersionServlet()), "/$versionPath")
+                        if (healthCheckPath.isNotBlank())
+                            addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
+                        if (threadDumpPath.isNotBlank())
+                            addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
                     }
+            }
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
@@ -65,11 +67,11 @@ class AdminService(healthCheckRegistry: HealthCheckRegistry,
     override fun shutDown() = server.stop()
 
     override fun toString() =
-            toStringElements {
-                add("ping", ":$port/$pingPath")
-                add("healthcheck", ":$port/$healthCheckPath")
-                add("threaddump", ":$port/$threadDumpPath")
-            }
+        toStringElements {
+            add("ping", ":$port/$pingPath")
+            add("healthcheck", ":$port/$healthCheckPath")
+            add("threaddump", ":$port/$threadDumpPath")
+        }
 
     companion object : KLogging()
 }

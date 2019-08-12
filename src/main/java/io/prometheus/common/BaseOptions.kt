@@ -86,9 +86,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
             val jcom =
                     JCommander(this)
                             .apply {
-                                this.programName = progName
-                                this.setCaseSensitiveOptions(false)
-                                this.parse(*argv ?: arrayOf())
+                                programName = progName
+                                setCaseSensitiveOptions(false)
+                                parse(*argv ?: arrayOf())
                             }
 
             if (usage) {
@@ -145,7 +145,6 @@ abstract class BaseOptions protected constructor(private val progName: String,
                            configParseOptions: ConfigParseOptions,
                            fallback: Config,
                            exitOnMissingConfig: Boolean): Config {
-
         when {
             configName.isBlank()     -> {
                 if (exitOnMissingConfig) {
@@ -181,7 +180,6 @@ abstract class BaseOptions protected constructor(private val progName: String,
         }
 
         exitProcess(1)
-        //return fallback // Never reached
     }
 
     private fun getConfigSyntax(configName: String) =

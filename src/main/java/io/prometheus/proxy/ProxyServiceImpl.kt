@@ -31,10 +31,13 @@ import io.prometheus.common.GrpcObjects.Companion.newRegisterPathResponse
 import io.prometheus.common.GrpcObjects.Companion.newUnregisterPathResponseBuilder
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.grpc.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.atomic.AtomicLong
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
 
     override fun connectAgent(request: Empty, responseObserver: StreamObserver<Empty>) {
@@ -47,8 +50,10 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             }
     }
 
-    override fun registerAgent(request: RegisterAgentRequest,
-                               responseObserver: StreamObserver<RegisterAgentResponse>) {
+    override fun registerAgent(
+        request: RegisterAgentRequest,
+        responseObserver: StreamObserver<RegisterAgentResponse>
+    ) {
         val agentId = request.agentId
         var valid = false
         proxy.agentContextManager.getAgentContext(agentId)
@@ -66,8 +71,10 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
             }
     }
 
-    override fun registerPath(request: RegisterPathRequest,
-                              responseObserver: StreamObserver<RegisterPathResponse>) {
+    override fun registerPath(
+        request: RegisterPathRequest,
+        responseObserver: StreamObserver<RegisterPathResponse>
+    ) {
         val path = request.path
         if (proxy.pathManager.containsPath(path))
             logger.info { "Overwriting path /$path" }
@@ -84,16 +91,22 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
         responseObserver
             .apply {
-                onNext(newRegisterPathResponse(valid,
-                    "Invalid agentId: $agentId",
-                    proxy.pathManager.pathMapSize(),
-                    if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1))
+                onNext(
+                    newRegisterPathResponse(
+                        valid,
+                        "Invalid agentId: $agentId",
+                        proxy.pathManager.pathMapSize(),
+                        if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1
+                    )
+                )
                 onCompleted()
             }
     }
 
-    override fun unregisterPath(request: UnregisterPathRequest,
-                                responseObserver: StreamObserver<UnregisterPathResponse>) {
+    override fun unregisterPath(
+        request: UnregisterPathRequest,
+        responseObserver: StreamObserver<UnregisterPathResponse>
+    ) {
         val agentId = request.agentId
         val agentContext = proxy.agentContextManager.getAgentContext(agentId)
         val responseBuilder = newUnregisterPathResponseBuilder()
@@ -140,13 +153,15 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
     override fun readRequestsFromProxy(agentInfo: AgentInfo, responseObserver: StreamObserver<ScrapeRequest>) {
         responseObserver
-            .run {
+            .also { observer ->
                 proxy.agentContextManager.getAgentContext(agentInfo.agentId)
                     ?.also { agentContext ->
-                        while (proxy.isRunning && agentContext.isValid.get())
-                            agentContext.pollScrapeRequestQueue()?.apply { onNext(scrapeRequest) }
+                        runBlocking {
+                            while (proxy.isRunning && agentContext.isValid())
+                                agentContext.readScrapeRequestChannel()?.apply { observer.onNext(scrapeRequest) }
+                        }
                     }
-                onCompleted()
+                observer.onCompleted()
             }
     }
 

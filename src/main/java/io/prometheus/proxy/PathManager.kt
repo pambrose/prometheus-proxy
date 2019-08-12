@@ -21,10 +21,12 @@ package io.prometheus.proxy
 import com.google.common.collect.Maps
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.grpc.UnregisterPathResponse
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import java.util.concurrent.ConcurrentMap
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class PathManager(private val isTestMode: Boolean) {
     // Map path to AgentContext
     private val pathMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap()

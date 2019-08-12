@@ -27,16 +27,19 @@ import io.prometheus.common.await
 import io.prometheus.common.now
 import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.dsl.GuavaDsl.toStringElements
-import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicLong
 
 @KtorExperimentalAPI
-class ScrapeRequestWrapper(proxy: Proxy,
-                           agentContext: AgentContext,
-                           path: String,
-                           accept: String?) {
+@ExperimentalCoroutinesApi
+class ScrapeRequestWrapper(
+    proxy: Proxy,
+    agentContext: AgentContext,
+    path: String,
+    accept: String?
+) {
 
     private val createTime = now()
     private val complete = CountDownLatch(1)
@@ -46,10 +49,7 @@ class ScrapeRequestWrapper(proxy: Proxy,
 
     var scrapeResponse: ScrapeResponse by AtomicDelegates.nonNullableReference()
 
-    val scrapeRequest: ScrapeRequest = newScrapeRequest(agentContext.agentId,
-        SCRAPE_ID_GENERATOR.getAndIncrement(),
-        path,
-        accept)
+    val scrapeRequest = newScrapeRequest(agentContext.agentId, SCRAPE_ID_GENERATOR.getAndIncrement(), path, accept)
 
     val scrapeId: Long
         get() = scrapeRequest.scrapeId

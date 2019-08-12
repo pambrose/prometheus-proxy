@@ -21,8 +21,10 @@ package io.prometheus.proxy
 import io.grpc.*
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class ProxyInterceptor : ServerInterceptor {
 
     override fun <ReqT, RespT> interceptCall(call: ServerCall<ReqT, RespT>,

@@ -32,10 +32,7 @@ import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.Millis
 import io.prometheus.common.simpleClassName
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.InternalCoroutinesApi
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
@@ -44,6 +41,7 @@ import java.util.concurrent.TimeUnit.SECONDS
 
 @KtorExperimentalAPI
 @InternalCoroutinesApi
+@ExperimentalCoroutinesApi
 class InProcessTestWithAdminMetricsTest {
 
     @Test

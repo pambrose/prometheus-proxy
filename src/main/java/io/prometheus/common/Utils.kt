@@ -30,11 +30,11 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.dsl.MetricsDsl.healthCheck
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.slf4j.Logger
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
-import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
@@ -123,6 +123,7 @@ inline class Secs(val value: Long) {
 }
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 fun getVersionDesc(asJson: Boolean): String {
     val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
     return if (asJson)
@@ -139,6 +140,7 @@ fun shutDownHookAction(service: Service) =
     }
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class VersionValidator : IParameterValidator {
     override fun validate(name: String, value: String) {
         val console = JCommander.getConsole()
@@ -150,8 +152,6 @@ class VersionValidator : IParameterValidator {
 fun now() = Millis(System.currentTimeMillis())
 
 fun CountDownLatch.await(millis: Millis): Boolean = await(millis.value, TimeUnit.MILLISECONDS)
-
-fun <E> ArrayBlockingQueue<E>.poll(millis: Millis): E? = poll(millis.value, TimeUnit.MILLISECONDS)
 
 val HttpStatusCode.isSuccessful get() = value in (HttpStatusCode.OK.value..HttpStatusCode.MultipleChoices.value)
 

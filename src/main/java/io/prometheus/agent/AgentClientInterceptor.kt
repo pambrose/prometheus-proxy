@@ -22,9 +22,11 @@ import io.grpc.*
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Agent
 import io.prometheus.Proxy
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
     override fun <ReqT, RespT> interceptCall(

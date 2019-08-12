@@ -26,8 +26,10 @@ import io.prometheus.common.SamplerGaugeCollector
 import io.prometheus.dsl.PrometheusDsl.counter
 import io.prometheus.dsl.PrometheusDsl.gauge
 import io.prometheus.dsl.PrometheusDsl.summary
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class ProxyMetrics(proxy: Proxy) {
 
     val scrapeRequests: Counter =
@@ -79,8 +81,8 @@ class ProxyMetrics(proxy: Proxy) {
             help = "Proxy scrape map size",
             data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() })
 
-        SamplerGaugeCollector(name = "proxy_cummulative_agent_queue_size",
-            help = "Proxy cummulative agent queue size",
-            data = { proxy.agentContextManager.totalAgentRequestQueueSize.toDouble() })
+        SamplerGaugeCollector(name = "proxy_cummulative_agent_scrape_request_backlog_size",
+            help = "Proxy cummulative agent scrape request backlog size",
+            data = { proxy.agentContextManager.totalAgentScrapeRequestBacklogSize.toDouble() })
     }
 }

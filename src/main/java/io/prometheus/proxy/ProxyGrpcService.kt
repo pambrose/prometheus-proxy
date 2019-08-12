@@ -34,11 +34,13 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import java.io.IOException
 import kotlin.properties.Delegates
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class ProxyGrpcService private constructor(private val proxy: Proxy,
                                            private val port: Int = -1,
                                            private val inProcessServerName: String = "") :

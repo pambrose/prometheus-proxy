@@ -43,6 +43,7 @@ import java.util.concurrent.TimeoutException
 
 @KtorExperimentalAPI
 @InternalCoroutinesApi
+@ExperimentalCoroutinesApi
 class NettyTestWithAdminMetricsTest {
 
     @Test

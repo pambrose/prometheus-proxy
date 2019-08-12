@@ -26,6 +26,7 @@ import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.simpleClassName
 import io.prometheus.dsl.KtorDsl.blockingGet
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
@@ -38,6 +39,7 @@ import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class AdminEmptyPathTest {
 
     @Test
