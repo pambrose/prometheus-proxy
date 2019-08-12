@@ -88,6 +88,7 @@ class Proxy(
 
     override fun startUp() {
         super.startUp()
+        
         grpcService.startSync()
         httpService.startSync()
 

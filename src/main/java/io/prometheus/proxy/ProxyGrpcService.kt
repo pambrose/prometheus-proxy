@@ -26,6 +26,7 @@ import com.salesforce.grpc.contrib.Servers
 import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.Secs
 import io.prometheus.dsl.GrpcDsl.server
@@ -37,17 +38,18 @@ import mu.KLogging
 import java.io.IOException
 import kotlin.properties.Delegates
 
+@KtorExperimentalAPI
 class ProxyGrpcService private constructor(private val proxy: Proxy,
                                            private val port: Int = -1,
                                            private val inProcessServerName: String = "") :
-        GenericIdleService() {
+    GenericIdleService() {
     val healthCheck =
-            healthCheck {
-                if (grpcServer.isShutdown || grpcServer.isShutdown)
-                    HealthCheck.Result.unhealthy("gRPC server is not running")
-                else
-                    HealthCheck.Result.healthy()
-            }
+        healthCheck {
+            if (grpcServer.isShutdown || grpcServer.isShutdown)
+                HealthCheck.Result.unhealthy("gRPC server is not running")
+            else
+                HealthCheck.Result.healthy()
+        }
 
     private var tracing: Tracing by Delegates.notNull()
     private var grpcTracing: GrpcTracing by Delegates.notNull()
@@ -60,14 +62,14 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
         }
 
         grpcServer =
-                server(inProcessServerName, port) {
-                    val proxyService = ProxyServiceImpl(proxy)
-                    val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
-                    if (proxy.isZipkinEnabled)
-                        interceptors += grpcTracing.newServerInterceptor()
-                    addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
-                    addTransportFilter(ProxyTransportFilter(proxy))
-                }
+            server(inProcessServerName, port) {
+                val proxyService = ProxyServiceImpl(proxy)
+                val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
+                if (proxy.isZipkinEnabled)
+                    interceptors += grpcTracing.newServerInterceptor()
+                addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
+                addTransportFilter(ProxyTransportFilter(proxy))
+            }
         Servers.shutdownWithJvm(grpcServer, Secs(2).toMillis().value)
 
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
@@ -85,22 +87,21 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
     }
 
     override fun toString() =
-            toStringElements {
-                if (inProcessServerName.isNotEmpty()) {
-                    add("serverType", "InProcess")
-                    add("serverName", inProcessServerName)
-                }
-                else {
-                    add("serverType", "Netty")
-                    add("port", port)
-                }
+        toStringElements {
+            if (inProcessServerName.isNotEmpty()) {
+                add("serverType", "InProcess")
+                add("serverName", inProcessServerName)
+            } else {
+                add("serverType", "Netty")
+                add("port", port)
             }
+        }
 
     companion object : KLogging() {
         fun newProxyGrpcService(proxy: Proxy, port: Int) =
-                ProxyGrpcService(proxy = proxy, port = port)
+            ProxyGrpcService(proxy = proxy, port = port)
 
         fun newProxyGrpcService(proxy: Proxy, serverName: String) =
-                ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
+            ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
     }
 }

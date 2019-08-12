@@ -74,7 +74,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates.notNull
 
-typealias FetchUrlAction = suspend () -> ScrapeResponse
+private typealias FetchUrlAction = suspend () -> ScrapeResponse
 
 @KtorExperimentalAPI
 class Agent(
@@ -140,7 +140,7 @@ class Agent(
     private val proxyHost
         get() = "$hostName:$port"
 
-    val configVals
+    val configVals: ConfigVals.Agent
         get() = genericConfigVals.agent
 
     init {
@@ -198,11 +198,10 @@ class Agent(
 
     override fun registerHealthChecks() {
         super.registerHealthChecks()
-        healthCheckRegistry
-            .register(
-                "scrape_channel_backlog_check",
-                newBacklogHealthCheck(channelBacklogSize.get(), configVals.internal.scrapeChannelBacklogUnhealthySize)
-            )
+        healthCheckRegistry.register(
+            "scrape_channel_backlog_check",
+            newBacklogHealthCheck(channelBacklogSize.get(), configVals.internal.scrapeChannelBacklogUnhealthySize)
+        )
     }
 
     override fun serviceName() = "$simpleClassName $agentName"
@@ -280,7 +279,7 @@ class Agent(
             metrics.scrapeRequests.labels(type).inc()
     }
 
-    suspend private fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
+    private suspend fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
         val responseArg = ScrapeResponseArg(agentId = scrapeRequest.agentId, scrapeId = scrapeRequest.scrapeId)
         var scrapeCounterMsg = ""
         val path = scrapeRequest.path
@@ -307,9 +306,11 @@ class Agent(
 
                     when {
                         resp.status.isSuccessful -> {
-                            responseArg.contentText = resp.readText()
-                            responseArg.contentType = resp.headers[CONTENT_TYPE].orEmpty()
-                            responseArg.validResponse = true
+                            responseArg.apply {
+                                contentText = resp.readText()
+                                contentType = resp.headers[CONTENT_TYPE].orEmpty()
+                                validResponse = true
+                            }
                             scrapeCounterMsg = "success"
                         }
                         else -> {
@@ -400,9 +401,9 @@ class Agent(
     fun pathMapSize(): Int {
         val request = newPathMapSizeRequest(agentId)
         blockingStub.pathMapSize(request)
-            .let {
+            .let { resp ->
                 markMsgSent()
-                return it.pathCount
+                return resp.pathCount
             }
     }
 
@@ -410,11 +411,11 @@ class Agent(
     private fun registerPathOnProxy(path: String): Long {
         val request = newRegisterPathRequest(agentId, path)
         blockingStub.registerPath(request)
-            .let {
+            .let { resp ->
                 markMsgSent()
-                if (!it.valid)
-                    throw RequestFailureException("registerPath() - ${it.reason}")
-                return it.pathId
+                if (!resp.valid)
+                    throw RequestFailureException("registerPath() - ${resp.reason}")
+                return resp.pathId
             }
     }
 
@@ -422,10 +423,10 @@ class Agent(
     private fun unregisterPathOnProxy(path: String) {
         val request = newUnregisterPathRequest(agentId, path)
         blockingStub.unregisterPath(request)
-            .also {
+            .also { resp ->
                 markMsgSent()
-                if (!it.valid)
-                    throw RequestFailureException("unregisterPath() - ${it.reason}")
+                if (!resp.valid)
+                    throw RequestFailureException("unregisterPath() - ${resp.reason}")
             }
     }
 
@@ -436,7 +437,7 @@ class Agent(
                 onNext { scrapeRequest ->
                     // This will block, but only for the duration of the send. The fetch happens at the other end of the channel
                     runBlocking {
-                        fetchRequestChannel.send({ fetchUrl(scrapeRequest) })
+                        fetchRequestChannel.send { fetchUrl(scrapeRequest) }
                         channelBacklogSize.incrementAndGet()
                     }
                 }
@@ -503,9 +504,9 @@ class Agent(
         try {
             val request = newHeartBeatRequest(agentId)
             blockingStub.sendHeartBeat(request)
-                .also {
+                .also { resp ->
                     markMsgSent()
-                    if (!it.valid) {
+                    if (!resp.valid) {
                         logger.error { "AgentId $agentId not found on proxy" }
                         throw StatusRuntimeException(Status.NOT_FOUND)
                     }

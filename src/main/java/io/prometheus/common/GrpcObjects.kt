@@ -115,7 +115,7 @@ class GrpcObjects {
             var contentType: String = ""
         )
 
-        fun newScrapeResponse(arg: ScrapeResponseArg) =
+        fun newScrapeResponse(arg: ScrapeResponseArg): ScrapeResponse =
             ScrapeResponse.newBuilder()
                 .run {
                     agentId = arg.agentId
@@ -128,7 +128,7 @@ class GrpcObjects {
                     build()
                 }
 
-        fun newUnregisterPathRequest(agentId: String, path: String) =
+        fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest =
             UnregisterPathRequest.newBuilder()
                 .run {
                     this.agentId = agentId
@@ -136,9 +136,9 @@ class GrpcObjects {
                     build()
                 }
 
-        fun newUnregisterPathResponseBuilder() = UnregisterPathResponse.newBuilder()
+        fun newUnregisterPathResponseBuilder(): UnregisterPathResponse.Builder = UnregisterPathResponse.newBuilder()
 
-        fun newAgentInfo(agentId: String) =
+        fun newAgentInfo(agentId: String): AgentInfo =
             AgentInfo.newBuilder()
                 .run {
                     this.agentId = agentId

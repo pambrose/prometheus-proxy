@@ -45,10 +45,8 @@ import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
-import java.net.BindException
 import java.util.concurrent.TimeUnit
 import kotlin.properties.Delegates
-import kotlin.system.exitProcess
 
 @KtorExperimentalAPI
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
@@ -117,17 +115,6 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     }
 
     override fun startUp() {
-/*
-        if (proxy.isZipkinEnabled) {
-            val sparkTracing = SparkTracing.create(tracing)
-            Spark.before(sparkTracing.before())
-            Spark.exception(Exception::class.java,
-                sparkTracing.exception { _, _, response -> response.body("exception") })
-            Spark.afterAfter(sparkTracing.afterAfter())
-        }
-
-        */
-
         httpServer.start()
     }
 
@@ -143,7 +130,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     }
 
     private class ScrapeRequestResponse(
-        val content: String,
+        val content: String = "",
         val contentType: ContentType,
         val statusCode: HttpStatusCode,
         val updateMsg: String
@@ -168,10 +155,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                 // Check if agent is disconnected or agent is hung
                 if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.isValid.get() || !proxy.isRunning)
                     return ScrapeRequestResponse(
-                        "",
-                        ContentType.Text.Plain,
-                        HttpStatusCode.ServiceUnavailable,
-                        "time_out"
+                        contentType = ContentType.Text.Plain,
+                        statusCode = HttpStatusCode.ServiceUnavailable,
+                        updateMsg = "time_out"
                     )
             }
         } finally {
@@ -192,10 +178,19 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
         // Do not return content on error status codes
         return if (statusCode.isNotSuccessful) {
-            ScrapeRequestResponse("", contentType, statusCode, "path_not_found")
+            ScrapeRequestResponse(
+                contentType = contentType,
+                statusCode = statusCode,
+                updateMsg = "path_not_found"
+            )
         } else {
             req.header(ACCEPT_ENCODING)?.contains("gzip")?.let { res.header(CONTENT_ENCODING, "gzip") }
-            ScrapeRequestResponse(scrapeRequest.scrapeResponse.text, contentType, statusCode, "success")
+            ScrapeRequestResponse(
+                content = scrapeRequest.scrapeResponse.text,
+                contentType = contentType,
+                statusCode = statusCode,
+                updateMsg = "success"
+            )
         }
     }
 
@@ -206,13 +201,5 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
     override fun toString() = toStringElements { add("port", httpPort) }
 
-    companion object : KLogging() {
-        fun sparkExceptionHandler(e: Exception, port: Int) {
-            if (e is BindException)
-                logger.error(e) { "ignite failed to bind to port $port" }
-            else
-                logger.error(e) { "ignite failed" }
-            exitProcess(100)
-        }
-    }
+    companion object : KLogging()
 }

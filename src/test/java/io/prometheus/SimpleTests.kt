@@ -113,9 +113,7 @@ object SimpleTests : KLogging() {
                 val jobs = mutableListOf<Job>()
                 for (path in paths)
                     jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
-                        agent.unregisterPath(
-                            path
-                        )
+                        agent.unregisterPath(path)
                     }
                 jobs.forEach { job ->
                     job.join()

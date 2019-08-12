@@ -92,7 +92,7 @@ fun newBacklogHealthCheck(backlogSize: Int, size: Int) =
         if (backlogSize < size)
             HealthCheck.Result.healthy()
         else
-            HealthCheck.Result.unhealthy("Large size: ${backlogSize}")
+            HealthCheck.Result.unhealthy("Large size: $backlogSize")
     }
 
 fun newMapHealthCheck(map: Map<*, *>, size: Int) =
