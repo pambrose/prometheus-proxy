@@ -275,14 +275,14 @@ class Agent(
             metrics.scrapeRequests.labels(type).inc()
     }
 
-    private suspend fun fetchUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
+    private suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
         val responseArg = ScrapeResponseArg(agentId = scrapeRequest.agentId, scrapeId = scrapeRequest.scrapeId)
         var scrapeCounterMsg = ""
         val path = scrapeRequest.path
         val pathContext = pathContextMap[path]
 
         if (pathContext == null) {
-            logger.warn { "Invalid path in fetchUrl(): $path" }
+            logger.warn { "Invalid path in fetchScrapeUrl(): $path" }
             scrapeCounterMsg = "invalid_path"
             responseArg.failureReason = "Invalid path: $path"
         } else {
@@ -324,7 +324,7 @@ class Agent(
                 logger.info { "Failed HTTP request: ${pathContext.url} [${e.simpleClassName}: ${e.message}]" }
                 responseArg.failureReason = "${e.simpleClassName} - ${e.message}"
             } catch (e: Exception) {
-                logger.warn(e) { "fetchUrl() $e" }
+                logger.warn(e) { "fetchScrapeUrl() $e" }
                 responseArg.failureReason = "${e.simpleClassName} - ${e.message}"
             } finally {
                 requestTimer?.observeDuration()
@@ -433,7 +433,7 @@ class Agent(
                 onNext { req ->
                     // This will block, but only for the duration of the send. The fetch happens at the other end of the channel
                     runBlocking {
-                        scrapeRequestChannel.send { fetchUrl(req) }
+                        scrapeRequestChannel.send { fetchScrapeUrl(req) }
                         scrapeRequestBacklogSize.incrementAndGet()
                     }
                 }
@@ -473,8 +473,8 @@ class Agent(
                     onCompleted { disconnected.set(true) }
                 })
 
-        for (fetchUrlAction in scrapeRequestChannel) {
-            val scrapeResponse = fetchUrlAction.invoke()
+        for (scrapeRequestAction in scrapeRequestChannel) {
+            val scrapeResponse = scrapeRequestAction.invoke()
             observer.onNext(scrapeResponse)
             markMsgSent()
             scrapeRequestBacklogSize.decrementAndGet()
