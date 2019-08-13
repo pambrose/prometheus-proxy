@@ -63,7 +63,6 @@ class InProcessTestWithAdminMetricsTest {
     fun timeoutTest() = timeoutTest(agent, simpleClassName)
 
     @Test
-    @InternalCoroutinesApi
     fun proxyCallTest() =
         proxyCallTest(
             ProxyCallTestArgs(

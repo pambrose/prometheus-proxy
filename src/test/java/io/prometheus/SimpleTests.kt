@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 @KtorExperimentalAPI
 @InternalCoroutinesApi
+@ExperimentalCoroutinesApi
 object SimpleTests : KLogging() {
 
     fun missingPathTest(caller: String) {

@@ -60,6 +60,6 @@ class AgentMetrics(agent: Agent) {
         SamplerGaugeCollector(
             "agent_scrape_backlog_size",
             "Agent scrape backlog size",
-            data = { agent.channelBacklogSize.get().toDouble() })
+            data = { agent.scrapeRequestBacklogSize.get().toDouble() })
     }
 }

@@ -39,7 +39,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
 
     private val scrapeRequestChannel: Channel<ScrapeRequestWrapper> =
-        Channel(proxy.configVals.internal.scrapeRequestBacklogSize)
+        Channel(proxy.configVals.internal.scrapeRequestChannelSize)
     private val channelBacklogSize = AtomicInteger(0)
 
     private var lastActivityTime by atomicMillis()

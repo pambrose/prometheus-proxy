@@ -47,6 +47,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 object ProxyTests : KLogging() {
 
     fun timeoutTest(
@@ -169,7 +170,7 @@ object ProxyTests : KLogging() {
                 val jobs = mutableListOf<Job>()
                 repeat(args.parallelQueryCount) {
                     jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
-                        delay(Random.nextLong(10, 50))
+                        //delay(Random.nextLong(10, 50))
                         callProxy(pathMap, "Parallel $it")
                     }
                 }

@@ -71,7 +71,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates.notNull
 
-private typealias FetchUrlAction = suspend () -> ScrapeResponse
+private typealias ScrapeRequestAction = suspend () -> ScrapeResponse
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
@@ -99,7 +99,7 @@ class Agent(
 
     class PathContext(val pathId: Long, val path: String, val url: String)
 
-    val channelBacklogSize = AtomicInteger(0)
+    val scrapeRequestBacklogSize = AtomicInteger(0)
 
     private val pathContextMap = newConcurrentMap<String, PathContext>()
     private val initialConnectionLatch = CountDownLatch(1)
@@ -195,8 +195,8 @@ class Agent(
     override fun registerHealthChecks() {
         super.registerHealthChecks()
         healthCheckRegistry.register(
-            "scrape_channel_backlog_check",
-            newBacklogHealthCheck(channelBacklogSize.get(), configVals.internal.scrapeChannelBacklogUnhealthySize)
+            "scrape_request_backlog_check",
+            newBacklogHealthCheck(scrapeRequestBacklogSize.get(), configVals.internal.scrapeRequestBacklogUnhealthySize)
         )
     }
 
@@ -213,19 +213,19 @@ class Agent(
 
         // Reset values for each connection attempt
         pathContextMap.clear()
-        channelBacklogSize.set(0)
+        scrapeRequestBacklogSize.set(0)
         lastMsgSent = Millis(0)
 
-        val fetchRequestChannel: Channel<FetchUrlAction> = Channel(Channel.UNLIMITED)
+        val scrapeRequestChannel: Channel<ScrapeRequestAction> = Channel(configVals.internal.scrapeRequestChannelSize)
 
         if (connectAgent()) {
             registerAgent()
             registerPaths()
-            readRequestsFromProxy(fetchRequestChannel, disconnected)
+            readRequestsFromProxy(scrapeRequestChannel, disconnected)
 
             runBlocking {
                 launch(Dispatchers.Default) { startHeartBeat(disconnected) }
-                launch(Dispatchers.Default) { writeToProxyUntilDisconnected(fetchRequestChannel, disconnected) }
+                launch(Dispatchers.Default) { writeToProxyUntilDisconnected(scrapeRequestChannel, disconnected) }
             }
         }
     }
@@ -426,27 +426,27 @@ class Agent(
             }
     }
 
-    private fun readRequestsFromProxy(fetchRequestChannel: Channel<FetchUrlAction>, disconnected: AtomicBoolean) {
+    private fun readRequestsFromProxy(scrapeRequestChannel: Channel<ScrapeRequestAction>, disconnected: AtomicBoolean) {
         val agentInfo = newAgentInfo(agentId)
         val observer =
             streamObserver<ScrapeRequest> {
                 onNext { req ->
                     // This will block, but only for the duration of the send. The fetch happens at the other end of the channel
                     runBlocking {
-                        fetchRequestChannel.send { fetchUrl(req) }
-                        channelBacklogSize.incrementAndGet()
+                        scrapeRequestChannel.send { fetchUrl(req) }
+                        scrapeRequestBacklogSize.incrementAndGet()
                     }
                 }
 
                 onError { throwable ->
                     logger.error { "Error in readRequestsFromProxy(): ${Status.fromThrowable(throwable)}" }
                     disconnected.set(true)
-                    fetchRequestChannel.close()
+                    scrapeRequestChannel.close()
                 }
 
                 onCompleted {
                     disconnected.set(true)
-                    fetchRequestChannel.close()
+                    scrapeRequestChannel.close()
                 }
             }
 
@@ -454,7 +454,7 @@ class Agent(
     }
 
     private suspend fun writeToProxyUntilDisconnected(
-        fetchRequestChannel: Channel<FetchUrlAction>,
+        scrapeRequestChannel: Channel<ScrapeRequestAction>,
         disconnected: AtomicBoolean
     ) {
         val observer =
@@ -473,11 +473,11 @@ class Agent(
                     onCompleted { disconnected.set(true) }
                 })
 
-        for (fetchUrlAction in fetchRequestChannel) {
+        for (fetchUrlAction in scrapeRequestChannel) {
             val scrapeResponse = fetchUrlAction.invoke()
             observer.onNext(scrapeResponse)
             markMsgSent()
-            channelBacklogSize.decrementAndGet()
+            scrapeRequestBacklogSize.decrementAndGet()
             if (disconnected.get())
                 break
         }
