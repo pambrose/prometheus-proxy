@@ -225,9 +225,7 @@ class Agent(
 
             runBlocking {
                 launch(Dispatchers.Default) { startHeartBeat(disconnected) }
-                launch(Dispatchers.Default) {
-                    writeResponsesToProxyUntilDisconnected(fetchRequestChannel, disconnected)
-                }
+                launch(Dispatchers.Default) { writeToProxyUntilDisconnected(fetchRequestChannel, disconnected) }
             }
         }
     }
@@ -455,7 +453,7 @@ class Agent(
         asyncStub.readRequestsFromProxy(agentInfo, observer)
     }
 
-    private suspend fun writeResponsesToProxyUntilDisconnected(
+    private suspend fun writeToProxyUntilDisconnected(
         fetchRequestChannel: Channel<FetchUrlAction>,
         disconnected: AtomicBoolean
     ) {
@@ -468,7 +466,7 @@ class Agent(
 
                     onError { throwable ->
                         val s = Status.fromThrowable(throwable)
-                        logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
+                        logger.error { "Error in writeToProxyUntilDisconnected(): ${s.code} ${s.description}" }
                         disconnected.set(true)
                     }
 
