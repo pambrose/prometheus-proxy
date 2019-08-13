@@ -105,12 +105,11 @@ class Agent(
     private val initialConnectionLatch = CountDownLatch(1)
     private var isGrpcStarted = AtomicBoolean(false)
     private val agentName = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
-    private val reconnectLimiter =
-        RateLimiter.create(1.0 / configVals.internal.reconectPauseSecs).apply { acquire() } // Prime the limiter
+    private val pauseSecs = configVals.internal.reconectPauseSecs
+    private val reconnectLimiter = RateLimiter.create(1.0 / pauseSecs).apply { acquire() } // Prime the limiter
 
     private val pathConfigs =
         configVals.pathConfigs
-            .asSequence()
             .map {
                 mapOf(
                     "name" to it.name,
