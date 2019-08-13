@@ -103,11 +103,13 @@ object ProxyTests : KLogging() {
         val caller: String
     )
 
+    private class HttpServerWrapper(val port: Int, val server: CIOApplicationEngine)
+
     @InternalCoroutinesApi
     fun proxyCallTest(args: ProxyCallTestArgs) {
         logger.info { "Calling proxyCallTest() from ${args.caller}" }
 
-        val httpServers = mutableListOf<CIOApplicationEngine>()
+        val httpServers = mutableListOf<HttpServerWrapper>()
         val pathMap = newConcurrentMap<Int, Int>()
 
         // Take into account pre-existing paths already registered
@@ -116,14 +118,18 @@ object ProxyTests : KLogging() {
         // Create the endpoints
         logger.info { "Creating ${args.httpServerCount} httpServers" }
         repeat(args.httpServerCount) { i ->
+            val port = args.startingPort + i
             httpServers +=
-                embeddedServer(CIO, port = args.startingPort + i) {
-                    routing {
-                        get("/agent-$i") {
-                            call.respondText("value: $i", ContentType.Text.Plain)
+                HttpServerWrapper(
+                    port = port,
+                    server = embeddedServer(CIO, port = port) {
+                        routing {
+                            get("/agent-$i") {
+                                call.respondText("value: $i", ContentType.Text.Plain)
+                            }
                         }
                     }
-                }
+                )
         }
 
         logger.info { "Starting ${args.httpServerCount} httpServers" }
@@ -131,8 +137,8 @@ object ProxyTests : KLogging() {
         runBlocking {
             for (httpServer in httpServers) {
                 launch(Dispatchers.Default) {
-                    logger.info { "Starting httpServer" }
-                    httpServer.start()
+                    logger.info { "Starting httpServer listening on ${httpServer.port}" }
+                    httpServer.server.start()
                     delay(Secs(2).toMillis().value)
                 }
             }
@@ -141,6 +147,7 @@ object ProxyTests : KLogging() {
         logger.info { "Finished starting ${args.httpServerCount} httpServers" }
 
         // Create the paths
+        logger.info { "Registering paths" }
         repeat(args.pathCount) {
             val index = Random.nextInt(httpServers.size)
             args.agent.registerPath("proxy-$it", "${args.startingPort + index}/agent-$index".fixUrl())
@@ -148,6 +155,8 @@ object ProxyTests : KLogging() {
         }
 
         args.agent.pathMapSize() shouldEqual originalSize + args.pathCount
+
+        logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
 
         // Call the proxy sequentially
         runBlocking {
@@ -163,6 +172,8 @@ object ProxyTests : KLogging() {
                 delay(args.sequentialPauseMillis.value)
             }
         }
+
+        logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
 
         // Call the proxy in parallel
         runBlocking {
@@ -182,6 +193,7 @@ object ProxyTests : KLogging() {
             }.shouldNotBeNull()
         }
 
+        logger.info { "Unregistering paths" }
         val errorCnt = AtomicInteger()
         for (path in pathMap) {
             try {
@@ -198,8 +210,8 @@ object ProxyTests : KLogging() {
         runBlocking {
             for (httpServer in httpServers) {
                 launch(Dispatchers.Default) {
-                    logger.info { "Shutting down httpServer" }
-                    httpServer.stop(5, 5, TimeUnit.SECONDS)
+                    logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
+                    httpServer.server.stop(5, 5, TimeUnit.SECONDS)
                     delay(Secs(5).toMillis().value)
                 }
             }

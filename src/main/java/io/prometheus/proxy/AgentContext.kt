@@ -27,7 +27,6 @@ import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.receiveOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong

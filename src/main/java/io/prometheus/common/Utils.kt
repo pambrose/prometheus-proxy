@@ -35,8 +35,6 @@ import org.slf4j.Logger
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
 val localHostName: String by lazy {
@@ -150,8 +148,6 @@ class VersionValidator : IParameterValidator {
 }
 
 fun now() = Millis(System.currentTimeMillis())
-
-fun CountDownLatch.await(millis: Millis): Boolean = await(millis.value, TimeUnit.MILLISECONDS)
 
 val HttpStatusCode.isSuccessful get() = value in (HttpStatusCode.OK.value..HttpStatusCode.MultipleChoices.value)
 
