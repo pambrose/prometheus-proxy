@@ -97,7 +97,7 @@ class Agent(
         testMode
     ) {
 
-    class PathContext(val pathId: Long, val path: String, val url: String)
+    private class PathContext(val pathId: Long, val path: String, val url: String)
 
     val scrapeRequestBacklogSize = AtomicInteger(0)
 
@@ -232,7 +232,7 @@ class Agent(
 
     private suspend fun startHeartBeat(disconnected: AtomicBoolean) {
         if (configVals.internal.heartbeatEnabled) {
-            val heartbeatPauseMillis = Millis(configVals.internal.heartbeatCheckPauseMillis)
+            val heartbeatPauseMillis = Millis(configVals.internal.heartbeatCheckPauseMillis).value
             val maxInactivitySecs = Secs(configVals.internal.heartbeatMaxInactivitySecs)
             logger.info { "Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity" }
 
@@ -240,7 +240,7 @@ class Agent(
                 val timeSinceLastWriteMillis = now() - lastMsgSent
                 if (timeSinceLastWriteMillis > maxInactivitySecs.toMillis())
                     sendHeartBeat(disconnected)
-                delay(heartbeatPauseMillis.value)
+                delay(heartbeatPauseMillis)
             }
             logger.info { "Heartbeat completed" }
 
@@ -396,22 +396,22 @@ class Agent(
 
     fun pathMapSize(): Int {
         val request = newPathMapSizeRequest(agentId)
-        blockingStub.pathMapSize(request)
+        return blockingStub.pathMapSize(request)
             .let { resp ->
                 markMsgSent()
-                return resp.pathCount
+                resp.pathCount
             }
     }
 
     @Throws(RequestFailureException::class)
     private fun registerPathOnProxy(path: String): Long {
         val request = newRegisterPathRequest(agentId, path)
-        blockingStub.registerPath(request)
+        return blockingStub.registerPath(request)
             .let { resp ->
                 markMsgSent()
                 if (!resp.valid)
                     throw RequestFailureException("registerPath() - ${resp.reason}")
-                return resp.pathId
+                resp.pathId
             }
     }
 
