@@ -55,9 +55,9 @@ import kotlin.properties.Delegates
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
     private val configVals = proxy.configVals
     private var tracing: Tracing by Delegates.notNull()
+    private val idleTimeoutSecs = if (configVals.http.idleTimeoutSecs == -1) 45 else configVals.http.idleTimeoutSecs
 
-    val idleTimeoutSecs = if (configVals.http.idleTimeoutSecs == -1) 45 else configVals.http.idleTimeoutSecs
-    val httpServer =
+    private val httpServer =
         embeddedServer(
             CIO,
             port = httpPort,
@@ -158,17 +158,19 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
         val updateMsg: String
     )
 
-    suspend private fun submitScrapeRequest(
+    private suspend fun submitScrapeRequest(
         req: ApplicationRequest,
         res: ApplicationResponse,
         agentContext: AgentContext,
         path: String
     ): ScrapeRequestResponse {
+
         val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext, path, req.header(ACCEPT))
-        val timeoutSecs = Secs(configVals.internal.scrapeRequestTimeoutSecs)
-        val checkMillis = Millis(configVals.internal.scrapeRequestCheckMillis)
 
         try {
+            val timeoutSecs = Secs(configVals.internal.scrapeRequestTimeoutSecs)
+            val checkMillis = Millis(configVals.internal.scrapeRequestCheckMillis)
+
             proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
             agentContext.writeToScrapeRequestChannel(scrapeRequest)
 

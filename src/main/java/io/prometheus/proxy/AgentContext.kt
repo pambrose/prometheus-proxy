@@ -40,7 +40,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     private val scrapeRequestChannel: Channel<ScrapeRequestWrapper> =
         Channel(proxy.configVals.internal.scrapeRequestQueueSize)
-    val channelBacklogSize = AtomicInteger(0)
+    private val channelBacklogSize = AtomicInteger(0)
 
     private var lastActivityTime by atomicMillis()
     private var valid = AtomicBoolean(true)
@@ -69,13 +69,11 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
             channelBacklogSize.decrementAndGet()
         }
 
-    fun isChannelReadyForReceive() = !scrapeRequestChannel.isClosedForReceive
-
-    fun isValid() = valid.get() && isChannelReadyForReceive()
+    fun isValid() = valid.get() && !scrapeRequestChannel.isClosedForReceive
 
     fun invalidate() {
         valid.set(false)
-        scrapeRequestChannel.cancel()
+        scrapeRequestChannel.close()
     }
 
     fun markActivity() {

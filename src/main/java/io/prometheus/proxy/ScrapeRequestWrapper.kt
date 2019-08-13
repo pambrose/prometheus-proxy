@@ -18,7 +18,6 @@
 
 package io.prometheus.proxy
 
-import com.google.common.base.Preconditions
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
@@ -36,20 +35,16 @@ import java.util.concurrent.atomic.AtomicLong
 @ExperimentalCoroutinesApi
 class ScrapeRequestWrapper(
     proxy: Proxy,
-    agentContext: AgentContext,
+    val agentContext: AgentContext,
     path: String,
     accept: String?
 ) {
-
     private val createTime = now()
     private val complete = CountDownLatch(1)
     private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
-    val agentContext: AgentContext = Preconditions.checkNotNull(agentContext)
-
-    var scrapeResponse: ScrapeResponse by AtomicDelegates.nonNullableReference()
-
     val scrapeRequest = newScrapeRequest(agentContext.agentId, SCRAPE_ID_GENERATOR.getAndIncrement(), path, accept)
+    var scrapeResponse by AtomicDelegates.nonNullableReference<ScrapeResponse>()
 
     val scrapeId: Long
         get() = scrapeRequest.scrapeId

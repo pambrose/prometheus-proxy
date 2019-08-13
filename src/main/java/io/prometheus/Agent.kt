@@ -20,7 +20,6 @@ package io.prometheus
 
 import brave.Tracing
 import brave.grpc.GrpcTracing
-import com.google.common.base.Preconditions.checkNotNull
 import com.google.common.collect.Maps.newConcurrentMap
 import com.google.common.net.HttpHeaders
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
@@ -380,7 +379,7 @@ class Agent(
 
     @Throws(RequestFailureException::class)
     fun registerPath(pathVal: String, url: String) {
-        val path = if (checkNotNull(pathVal).startsWith("/")) pathVal.substring(1) else pathVal
+        val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
         val pathId = registerPathOnProxy(path)
         if (!isTestMode)
             logger.info { "Registered $url as /$path" }
@@ -389,7 +388,7 @@ class Agent(
 
     @Throws(RequestFailureException::class)
     fun unregisterPath(pathVal: String) {
-        val path = if (checkNotNull(pathVal).startsWith("/")) pathVal.substring(1) else pathVal
+        val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
         unregisterPathOnProxy(path)
         val pathContext = pathContextMap.remove(path)
         when {
@@ -434,16 +433,16 @@ class Agent(
         val agentInfo = newAgentInfo(agentId)
         val observer =
             streamObserver<ScrapeRequest> {
-                onNext { scrapeRequest ->
+                onNext { req ->
                     // This will block, but only for the duration of the send. The fetch happens at the other end of the channel
                     runBlocking {
-                        fetchRequestChannel.send { fetchUrl(scrapeRequest) }
+                        fetchRequestChannel.send { fetchUrl(req) }
                         channelBacklogSize.incrementAndGet()
                     }
                 }
 
-                onError {
-                    logger.error { "Error in readRequestsFromProxy(): ${Status.fromThrowable(it)}" }
+                onError { throwable ->
+                    logger.error { "Error in readRequestsFromProxy(): ${Status.fromThrowable(throwable)}" }
                     disconnected.set(true)
                     fetchRequestChannel.close()
                 }
@@ -468,8 +467,8 @@ class Agent(
                         // Ignore Empty return value
                     }
 
-                    onError {
-                        val s = Status.fromThrowable(it)
+                    onError { throwable ->
+                        val s = Status.fromThrowable(throwable)
                         logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
                         disconnected.set(true)
                     }
