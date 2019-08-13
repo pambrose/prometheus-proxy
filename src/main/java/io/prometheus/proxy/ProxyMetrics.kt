@@ -81,8 +81,9 @@ class ProxyMetrics(proxy: Proxy) {
             help = "Proxy scrape map size",
             data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() })
 
-        SamplerGaugeCollector(name = "proxy_cummulative_agent_scrape_request_backlog_size",
-            help = "Proxy cummulative agent scrape request backlog size",
+        SamplerGaugeCollector(
+            name = "proxy_cummulative_agent_backlog_size",
+            help = "Proxy cummulative agent backlog size",
             data = { proxy.agentContextManager.totalAgentScrapeRequestBacklogSize.toDouble() })
     }
 }

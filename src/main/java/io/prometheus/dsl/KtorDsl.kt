@@ -34,8 +34,8 @@ object KtorDsl {
 
     suspend fun http(httpClient: HttpClient? = null, block: suspend HttpClient.() -> Unit) {
         if (httpClient == null) {
-            HttpClient(CIO).use {
-                it.block()
+            HttpClient(CIO).use { client ->
+                client.block()
             }
         } else {
             httpClient.block()

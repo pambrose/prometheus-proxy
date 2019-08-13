@@ -127,9 +127,10 @@ class Proxy(
                         configVals.internal.scrapeRequestMapUnhealthySize
                     )
                 )
-                register("agent_scrape_request_queue",
+                register(
+                    "agent_scrape_request_backlog",
                     healthCheck {
-                        val unhealthySize = configVals.internal.scrapeRequestQueueUnhealthySize
+                        val unhealthySize = configVals.internal.scrapeRequestBacklogUnhealthySize
                         val vals =
                             agentContextManager.agentContextMap.entries
                                 .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
@@ -138,7 +139,11 @@ class Proxy(
                         if (vals.isEmpty())
                             HealthCheck.Result.healthy()
                         else
-                            HealthCheck.Result.unhealthy("Large scrapeRequestBacklog: ${Joiner.on(", ").join(vals)}")
+                            HealthCheck.Result.unhealthy(
+                                "Large agent scrape request backlog: ${Joiner.on(", ").join(
+                                    vals
+                                )}"
+                            )
                     })
             }
     }

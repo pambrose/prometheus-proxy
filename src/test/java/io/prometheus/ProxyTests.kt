@@ -169,7 +169,7 @@ object ProxyTests : KLogging() {
                 val jobs = mutableListOf<Job>()
                 repeat(args.parallelQueryCount) {
                     jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
-                        delay(Random.nextLong(100))
+                        delay(Random.nextLong(10, 50))
                         callProxy(pathMap, "Parallel $it")
                     }
                 }

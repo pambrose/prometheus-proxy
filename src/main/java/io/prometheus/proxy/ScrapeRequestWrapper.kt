@@ -22,13 +22,14 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
 import io.prometheus.common.Millis
-import io.prometheus.common.await
 import io.prometheus.common.now
 import io.prometheus.delegate.AtomicDelegates
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import java.util.concurrent.CountDownLatch
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 
 @KtorExperimentalAPI
@@ -40,7 +41,7 @@ class ScrapeRequestWrapper(
     accept: String?
 ) {
     private val createTime = now()
-    private val complete = CountDownLatch(1)
+    private val completeChannel = Channel<Boolean>()
     private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
     val scrapeRequest = newScrapeRequest(agentContext.agentId, SCRAPE_ID_GENERATOR.getAndIncrement(), path, accept)
@@ -53,15 +54,19 @@ class ScrapeRequestWrapper(
 
     fun markComplete() {
         requestTimer?.observeDuration()
-        complete.countDown()
+        completeChannel.close()
     }
 
-    fun waitUntilComplete(waitMillis: Millis) =
-        try {
-            complete.await(waitMillis)
-        } catch (e: InterruptedException) {
-            false
-        }
+    suspend fun suspendUntilComplete(waitMillis: Millis) =
+        withTimeoutOrNull(waitMillis.value) {
+            // completeChannel will eventually close and never get a value, or timeout
+            try {
+                completeChannel.receive()
+                true
+            } catch (e: ClosedReceiveChannelException) {
+                true
+            }
+        } != null
 
     override fun toString() =
         toStringElements {

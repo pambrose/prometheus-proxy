@@ -178,10 +178,10 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "agent_scrape_queue_size",
+              "expr": "agent_scrape_backlog_size",
               "intervalFactor": 2,
               "legendFormat": "Agent:  {{job}}",
-              "metric": "agent_scrape_queue_size",
+              "metric": "agent_scrape_backlog_size",
               "refId": "A",
               "step": 2
             }
@@ -189,7 +189,7 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Scrape Queue Size",
+          "title": "Scrape Backlog Size",
           "tooltip": {
             "shared": true,
             "sort": 0,

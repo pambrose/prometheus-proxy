@@ -981,7 +981,7 @@
           },
           "targets": [
             {
-              "expr": "proxy_cummulative_agent_queue_size",
+              "expr": "proxy_cummulative_agent_backlog_size",
               "intervalFactor": 2,
               "legendFormat": "",
               "metric": "proxy_connected_agents",
@@ -990,7 +990,7 @@
             }
           ],
           "thresholds": "",
-          "title": "Scrape Queue Size",
+          "title": "Scrape Backlog Size",
           "type": "singlestat",
           "valueFontSize": "80%",
           "valueMaps": [
@@ -1145,7 +1145,7 @@
           },
           "targets": [
             {
-              "expr": "proxy_cummulative_agent_queue_size",
+              "expr": "proxy_cummulative_agent_backlog_size",
               "intervalFactor": 2,
               "legendFormat": "",
               "metric": "proxy_connected_agents",
@@ -1154,7 +1154,7 @@
             }
           ],
           "thresholds": "",
-          "title": "Cummulative Agent Queue Size",
+          "title": "Cummulative Agent Backlog Size",
           "type": "singlestat",
           "valueFontSize": "80%",
           "valueMaps": [

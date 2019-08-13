@@ -50,7 +50,6 @@ class MetricsService(private val port: Int,
                     HealthCheck.Result.unhealthy("Jetty server not running")
             }
 
-
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
         initBlock?.invoke(this)

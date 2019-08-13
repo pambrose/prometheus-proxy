@@ -172,10 +172,10 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             val checkMillis = Millis(configVals.internal.scrapeRequestCheckMillis)
 
             proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
-            agentContext.writeToScrapeRequestChannel(scrapeRequest)
+            agentContext.writeScrapeRequest(scrapeRequest)
 
             // Returns false if timed out
-            while (!scrapeRequest.waitUntilComplete(checkMillis)) {
+            while (!scrapeRequest.suspendUntilComplete(checkMillis)) {
                 // Check if agent is disconnected or agent is hung
                 if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
                     return ScrapeRequestResponse(

@@ -57,8 +57,9 @@ class AgentMetrics(agent: Agent) {
             help("Agent start time in seconds")
         }.setToCurrentTime()
 
-        SamplerGaugeCollector("agent_scrape_channel_backlog_size",
-            "Agent scrape channel backlog queue size",
+        SamplerGaugeCollector(
+            "agent_scrape_backlog_size",
+            "Agent scrape backlog size",
             data = { agent.channelBacklogSize.get().toDouble() })
     }
 }

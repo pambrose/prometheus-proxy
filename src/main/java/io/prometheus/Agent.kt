@@ -61,13 +61,11 @@ import io.prometheus.dsl.KtorDsl.http
 import io.prometheus.grpc.ProxyServiceGrpc.*
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors.newFixedThreadPool
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -76,6 +74,7 @@ import kotlin.properties.Delegates.notNull
 private typealias FetchUrlAction = suspend () -> ScrapeResponse
 
 @KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 class Agent(
     options: AgentOptions,
     private val inProcessServerName: String = "",
@@ -103,7 +102,6 @@ class Agent(
     val channelBacklogSize = AtomicInteger(0)
 
     private val pathContextMap = newConcurrentMap<String, PathContext>()
-    private val heartbeatService = newFixedThreadPool(1)
     private val initialConnectionLatch = CountDownLatch(1)
     private var isGrpcStarted = AtomicBoolean(false)
     private val agentName = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
@@ -174,7 +172,6 @@ class Agent(
             tracing.close()
         if (isGrpcStarted.get())
             channel.shutdownNow()
-        heartbeatService.shutdownNow()
         super.shutDown()
     }
 
@@ -224,29 +221,31 @@ class Agent(
         if (connectAgent()) {
             registerAgent()
             registerPaths()
-            startHeartBeat(disconnected)
             readRequestsFromProxy(fetchRequestChannel, disconnected)
-            writeResponsesToProxyUntilDisconnected(fetchRequestChannel, disconnected)
+
+            runBlocking {
+                launch(Dispatchers.Default) { startHeartBeat(disconnected) }
+                launch(Dispatchers.Default) {
+                    writeResponsesToProxyUntilDisconnected(fetchRequestChannel, disconnected)
+                }
+            }
         }
     }
 
-    private fun startHeartBeat(disconnected: AtomicBoolean) {
+    private suspend fun startHeartBeat(disconnected: AtomicBoolean) {
         if (configVals.internal.heartbeatEnabled) {
-            val threadPauseMillis = Millis(configVals.internal.heartbeatCheckPauseMillis)
+            val heartbeatPauseMillis = Millis(configVals.internal.heartbeatCheckPauseMillis)
             val maxInactivitySecs = Secs(configVals.internal.heartbeatMaxInactivitySecs)
             logger.info { "Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity" }
-            heartbeatService
-                .submit {
-                    while (isRunning && !disconnected.get()) {
-                        val timeSinceLastWriteMillis = now() - lastMsgSent
-                        if (timeSinceLastWriteMillis > maxInactivitySecs.toMillis())
-                            sendHeartBeat(disconnected)
-                        runBlocking {
-                            delay(threadPauseMillis.value)
-                        }
-                    }
-                    logger.info { "Heartbeat completed" }
-                }
+
+            while (isRunning && !disconnected.get()) {
+                val timeSinceLastWriteMillis = now() - lastMsgSent
+                if (timeSinceLastWriteMillis > maxInactivitySecs.toMillis())
+                    sendHeartBeat(disconnected)
+                delay(heartbeatPauseMillis.value)
+            }
+            logger.info { "Heartbeat completed" }
+
         } else {
             logger.info { "Heartbeat disabled" }
         }
@@ -456,7 +455,7 @@ class Agent(
         asyncStub.readRequestsFromProxy(agentInfo, observer)
     }
 
-    private fun writeResponsesToProxyUntilDisconnected(
+    private suspend fun writeResponsesToProxyUntilDisconnected(
         fetchRequestChannel: Channel<FetchUrlAction>,
         disconnected: AtomicBoolean
     ) {
@@ -476,15 +475,13 @@ class Agent(
                     onCompleted { disconnected.set(true) }
                 })
 
-        runBlocking {
-            for (fetchUrlAction in fetchRequestChannel) {
-                val scrapeResponse = fetchUrlAction.invoke()
-                observer.onNext(scrapeResponse)
-                markMsgSent()
-                channelBacklogSize.decrementAndGet()
-                if (disconnected.get())
-                    break
-            }
+        for (fetchUrlAction in fetchRequestChannel) {
+            val scrapeResponse = fetchUrlAction.invoke()
+            observer.onNext(scrapeResponse)
+            markMsgSent()
+            channelBacklogSize.decrementAndGet()
+            if (disconnected.get())
+                break
         }
 
         logger.info { "Disconnected from proxy at $proxyHost" }

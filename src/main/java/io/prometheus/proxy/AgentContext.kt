@@ -39,11 +39,12 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
 
     private val scrapeRequestChannel: Channel<ScrapeRequestWrapper> =
-        Channel(proxy.configVals.internal.scrapeRequestQueueSize)
+        Channel(proxy.configVals.internal.scrapeRequestBacklogSize)
     private val channelBacklogSize = AtomicInteger(0)
 
     private var lastActivityTime by atomicMillis()
     private var valid = AtomicBoolean(true)
+
     var hostName: String by nonNullableReference()
     var agentName: String by nonNullableReference()
 
@@ -59,12 +60,12 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
         markActivity()
     }
 
-    suspend fun writeToScrapeRequestChannel(scrapeRequest: ScrapeRequestWrapper) {
+    suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
         scrapeRequestChannel.send(scrapeRequest)
         channelBacklogSize.incrementAndGet()
     }
 
-    suspend fun readScrapeRequestChannel(): ScrapeRequestWrapper? =
+    suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
         scrapeRequestChannel.receiveOrNull()?.also {
             channelBacklogSize.decrementAndGet()
         }
