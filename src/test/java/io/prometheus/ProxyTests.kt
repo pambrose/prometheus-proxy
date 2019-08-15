@@ -220,7 +220,7 @@ object ProxyTests : KLogging() {
         logger.info { "Finished shutting down ${httpServers.size} httpServers" }
     }
 
-    private suspend fun callProxy(pathMap: Map<Int, Int>, msg: String) {
+    suspend fun callProxy(pathMap: Map<Int, Int>, msg: String) {
         // Randomly choose one of the pathMap values
         val index = Random.nextInt(pathMap.size)
         val httpVal = pathMap[index]
@@ -232,6 +232,7 @@ object ProxyTests : KLogging() {
 
                 val body = resp.readText()
                 body shouldEqual "value: $httpVal"
+                yield()
             }
         }
     }
