@@ -42,12 +42,15 @@ import java.util.concurrent.TimeoutException
 @ExperimentalCoroutinesApi
 class AdminEmptyPathTest {
 
+    val proxyConfigVals = proxy.genericConfigVals.proxy
+
     @Test
     fun proxyPingPathTest() {
-        proxy.configVals.admin.port shouldEqual 8098
-        proxy.configVals.admin.pingPath shouldEqual ""
-        proxy.configVals.admin
+        proxyConfigVals.admin
             .also { admin ->
+                admin.port shouldEqual 8098
+                admin.pingPath shouldEqual ""
+
                 blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
                 }
@@ -56,10 +59,11 @@ class AdminEmptyPathTest {
 
     @Test
     fun proxyVersionPathTest() {
-        proxy.configVals.admin.port shouldEqual 8098
-        proxy.configVals.admin.versionPath shouldEqual ""
-        proxy.configVals.admin
+        proxyConfigVals.admin
             .also { admin ->
+                admin.port shouldEqual 8098
+                admin.versionPath shouldEqual ""
+
                 blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
                 }
@@ -68,9 +72,10 @@ class AdminEmptyPathTest {
 
     @Test
     fun proxyHealthCheckPathTest() {
-        proxy.configVals.admin.healthCheckPath shouldEqual ""
-        proxy.configVals.admin
+        proxyConfigVals.admin
             .also { admin ->
+                admin.healthCheckPath shouldEqual ""
+
                 blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
                 }
@@ -79,9 +84,10 @@ class AdminEmptyPathTest {
 
     @Test
     fun proxyThreadDumpPathTest() {
-        proxy.configVals.admin.threadDumpPath shouldEqual ""
-        proxy.configVals.admin
+        proxyConfigVals.admin
             .also { admin ->
+                admin.threadDumpPath shouldEqual ""
+
                 blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.NotFound
                 }

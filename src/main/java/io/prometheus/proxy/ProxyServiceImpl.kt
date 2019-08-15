@@ -74,7 +74,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         responseObserver: StreamObserver<RegisterPathResponse>
     ) {
         val path = request.path
-        if (proxy.pathManager.containsPath(path))
+        if (path in proxy.pathManager)
             logger.info { "Overwriting path /$path" }
 
         val agentId = request.agentId
@@ -92,7 +92,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
                 newRegisterPathResponse(
                     valid,
                     "Invalid agentId: $agentId",
-                    proxy.pathManager.pathMapSize(),
+                    proxy.pathManager.pathMapSize,
                     if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1
                 )
             )
@@ -128,7 +128,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
     override fun pathMapSize(request: PathMapSizeRequest, responseObserver: StreamObserver<PathMapSizeResponse>) {
         responseObserver.apply {
-            onNext(newPathMapSizeResponse(proxy.pathManager.pathMapSize()))
+            onNext(newPathMapSizeResponse(proxy.pathManager.pathMapSize))
             onCompleted()
         }
     }

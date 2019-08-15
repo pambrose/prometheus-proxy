@@ -52,22 +52,22 @@ class NettyTestNoAdminMetricsTest {
     fun invalidPathTest() = invalidPathTest(simpleClassName)
 
     @Test
-    fun addRemovePathsTest() = addRemovePathsTest(agent, simpleClassName)
+    fun addRemovePathsTest() = addRemovePathsTest(agent.pathManager, simpleClassName)
 
     @Test
-    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent, simpleClassName)
+    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent.pathManager, simpleClassName)
 
     @Test
-    fun invalidAgentUrlTest() = invalidAgentUrlTest(agent, simpleClassName)
+    fun invalidAgentUrlTest() = invalidAgentUrlTest(agent.pathManager, simpleClassName)
 
     @Test
-    fun timeoutTest() = timeoutTest(agent, simpleClassName)
+    fun timeoutTest() = timeoutTest(agent.pathManager, simpleClassName)
 
     @Test
     fun proxyCallTest() =
         proxyCallTest(
             ProxyCallTestArgs(
-                agent,
+                agent.pathManager,
                 httpServerCount = 5,
                 pathCount = 50,
                 sequentialQueryCount = 500,

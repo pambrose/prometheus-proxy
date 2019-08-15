@@ -18,16 +18,10 @@
 
 package io.prometheus
 
-import brave.Tracing
-import brave.grpc.GrpcTracing
-import com.google.common.collect.Maps.newConcurrentMap
 import com.google.common.net.HttpHeaders
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.util.concurrent.RateLimiter
 import com.google.protobuf.Empty
-import io.grpc.ClientInterceptor
-import io.grpc.ClientInterceptors.intercept
-import io.grpc.ManagedChannel
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.ktor.client.request.HttpRequestBuilder
@@ -35,30 +29,22 @@ import io.ktor.client.request.header
 import io.ktor.client.response.HttpResponse
 import io.ktor.client.response.readText
 import io.ktor.util.KtorExperimentalAPI
-import io.prometheus.agent.AgentClientInterceptor
-import io.prometheus.agent.AgentMetrics
-import io.prometheus.agent.AgentOptions
-import io.prometheus.agent.RequestFailureException
+import io.prometheus.agent.*
 import io.prometheus.common.*
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.GrpcObjects.Companion.ScrapeResponseArg
 import io.prometheus.common.GrpcObjects.Companion.newAgentInfo
 import io.prometheus.common.GrpcObjects.Companion.newHeartBeatRequest
-import io.prometheus.common.GrpcObjects.Companion.newPathMapSizeRequest
 import io.prometheus.common.GrpcObjects.Companion.newRegisterAgentRequest
-import io.prometheus.common.GrpcObjects.Companion.newRegisterPathRequest
 import io.prometheus.common.GrpcObjects.Companion.newScrapeResponse
-import io.prometheus.common.GrpcObjects.Companion.newUnregisterPathRequest
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.delegate.AtomicDelegates.atomicMillis
 import io.prometheus.delegate.AtomicDelegates.nonNullableReference
-import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.http
-import io.prometheus.grpc.ProxyServiceGrpc.*
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.*
@@ -71,13 +57,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates.notNull
 
-private typealias ScrapeRequestAction = suspend () -> ScrapeResponse
-
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 class Agent(
     options: AgentOptions,
-    private val inProcessServerName: String = "",
+    inProcessServerName: String = "",
     testMode: Boolean = false,
     initBlock: (Agent.() -> Unit)? = null
 ) :
@@ -97,80 +81,33 @@ class Agent(
         testMode
     ) {
 
-    private class PathContext(val pathId: Long, val path: String, val url: String)
-
-    val scrapeRequestBacklogSize = AtomicInteger(0)
-
-    private val pathContextMap = newConcurrentMap<String, PathContext>()
+    private val configVals = genericConfigVals.agent.internal
     private val initialConnectionLatch = CountDownLatch(1)
-    private var isGrpcStarted = AtomicBoolean(false)
-    private val agentName = if (options.agentName.isBlank()) "Unnamed-$localHostName" else options.agentName
-    private val pauseSecs = configVals.internal.reconectPauseSecs
-    private val reconnectLimiter = RateLimiter.create(1.0 / pauseSecs).apply { acquire() } // Prime the limiter
-
-    private val pathConfigs =
-        configVals.pathConfigs
-            .map {
-                mapOf(
-                    "name" to it.name,
-                    "path" to it.path,
-                    "url" to it.url
-                )
-            }
-            .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
-            .toList()
+    private val agentName = options.agentName.isBlank().thenElse("Unnamed-$localHostName", options.agentName)
+    private val reconnectLimiter =
+        RateLimiter.create(1.0 / configVals.reconectPauseSecs).apply { acquire() } // Prime the limiter
 
     private var lastMsgSent by atomicMillis()
-    private var tracing: Tracing by notNull()
-    private var grpcTracing: GrpcTracing by notNull()
     private var metrics: AgentMetrics by notNull()
-    private var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
-    private var asyncStub: ProxyServiceStub by nonNullableReference()
 
-    var channel: ManagedChannel by nonNullableReference()
-    var agentId: String by nonNullableReference()
+    var agentId: String by nonNullableReference("")
 
-    private val hostName: String
-    private val port: Int
-
-    private val proxyHost
-        get() = "$hostName:$port"
-
-    val configVals: ConfigVals.Agent
-        get() = genericConfigVals.agent
+    val scrapeRequestBacklogSize = AtomicInteger(0)
+    val pathManager = AgentPathManager(this)
+    val grpcService: AgentGrpcService = AgentGrpcService(this, options, inProcessServerName)
 
     init {
-        logger.info { "Assigning proxy reconnect pause time to ${configVals.internal.reconectPauseSecs} secs" }
-
-        agentId = ""
-
-        if (options.proxyHostname.contains(":")) {
-            val vals = options.proxyHostname.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-            hostName = vals[0]
-            port = Integer.valueOf(vals[1])
-        } else {
-            hostName = options.proxyHostname
-            port = 50051
-        }
+        logger.info { "Assigning proxy reconnect pause time to ${configVals.reconectPauseSecs} secs" }
 
         if (isMetricsEnabled)
             metrics = AgentMetrics(this)
 
-        if (isZipkinEnabled) {
-            tracing = zipkinReporterService.newTracing("grpc_client")
-            grpcTracing = GrpcTracing.create(tracing)
-        }
-
-        resetGrpcStubs()
         initService()
         initBlock?.invoke(this)
     }
 
     override fun shutDown() {
-        if (isZipkinEnabled)
-            tracing.close()
-        if (isGrpcStarted.get())
-            channel.shutdownNow()
+        grpcService.shutDown()
         super.shutDown()
     }
 
@@ -191,11 +128,14 @@ class Agent(
         }
     }
 
+    private val proxyHost
+        get() = "${grpcService.hostName}:${grpcService.port}"
+
     override fun registerHealthChecks() {
         super.registerHealthChecks()
         healthCheckRegistry.register(
             "scrape_request_backlog_check",
-            newBacklogHealthCheck(scrapeRequestBacklogSize.get(), configVals.internal.scrapeRequestBacklogUnhealthySize)
+            newBacklogHealthCheck(scrapeRequestBacklogSize.get(), configVals.scrapeRequestBacklogUnhealthySize)
         )
     }
 
@@ -206,21 +146,21 @@ class Agent(
 
         // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != ""
         if (agentId.isNotEmpty()) {
-            resetGrpcStubs()
+            grpcService.resetGrpcStubs()
             agentId = ""
         }
 
         // Reset values for each connection attempt
-        pathContextMap.clear()
+        pathManager.clear()
         scrapeRequestBacklogSize.set(0)
         lastMsgSent = Millis(0)
 
-        val scrapeRequestChannel: Channel<ScrapeRequestAction> = Channel(configVals.internal.scrapeRequestChannelSize)
+        val scrapeRequestChannel: Channel<ScrapeRequestAction> = Channel(configVals.scrapeRequestChannelSize)
 
         if (connectAgent()) {
             registerAgent()
-            registerPaths()
-            readRequestsFromProxy(scrapeRequestChannel, disconnected)
+            pathManager.registerPaths()
+            readFromProxy(scrapeRequestChannel, disconnected)
 
             runBlocking {
                 launch(Dispatchers.Default) { startHeartBeat(disconnected) }
@@ -230,9 +170,9 @@ class Agent(
     }
 
     private suspend fun startHeartBeat(disconnected: AtomicBoolean) {
-        if (configVals.internal.heartbeatEnabled) {
-            val heartbeatPauseMillis = Millis(configVals.internal.heartbeatCheckPauseMillis).value
-            val maxInactivitySecs = Secs(configVals.internal.heartbeatMaxInactivitySecs)
+        if (configVals.heartbeatEnabled) {
+            val heartbeatPauseMillis = Millis(configVals.heartbeatCheckPauseMillis).value
+            val maxInactivitySecs = Secs(configVals.heartbeatMaxInactivitySecs)
             logger.info { "Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity" }
 
             while (isRunning && !disconnected.get()) {
@@ -248,27 +188,6 @@ class Agent(
         }
     }
 
-    private fun resetGrpcStubs() {
-        logger.info { "Creating gRPC stubs" }
-
-        if (isGrpcStarted.get())
-            channel.shutdownNow()
-        else
-            isGrpcStarted.set(true)
-
-        channel =
-            channel(inProcessServerName = inProcessServerName, hostName = hostName, port = port) {
-                if (isZipkinEnabled)
-                    intercept(grpcTracing.newClientInterceptor())
-                usePlaintext()
-            }
-
-        val interceptors = listOf<ClientInterceptor>(AgentClientInterceptor(this))
-
-        blockingStub = newBlockingStub(intercept(channel, interceptors))
-        asyncStub = newStub(intercept(channel, interceptors))
-    }
-
     private fun updateScrapeCounter(type: String) {
         if (isMetricsEnabled && type.isNotEmpty())
             metrics.scrapeRequests.labels(type).inc()
@@ -278,7 +197,7 @@ class Agent(
         val responseArg = ScrapeResponseArg(agentId = scrapeRequest.agentId, scrapeId = scrapeRequest.scrapeId)
         var scrapeCounterMsg = ""
         val path = scrapeRequest.path
-        val pathContext = pathContextMap[path]
+        val pathContext = pathManager[path]
 
         if (pathContext == null) {
             logger.warn { "Invalid path in fetchScrapeUrl(): $path" }
@@ -338,7 +257,7 @@ class Agent(
     private fun connectAgent() =
         try {
             logger.info { "Connecting to proxy at $proxyHost..." }
-            blockingStub.connectAgent(Empty.getDefaultInstance())
+            grpcService.blockingStub.connectAgent(Empty.getDefaultInstance())
             logger.info { "Connected to proxy at $proxyHost" }
             if (isMetricsEnabled)
                 metrics.connects.labels("success")?.inc()
@@ -352,8 +271,8 @@ class Agent(
 
     @Throws(RequestFailureException::class)
     private fun registerAgent() {
-        val request = newRegisterAgentRequest(agentId, agentName, hostName)
-        blockingStub.registerAgent(request)
+        val request = newRegisterAgentRequest(agentId, agentName, grpcService.hostName)
+        grpcService.blockingStub.registerAgent(request)
             .also { resp ->
                 markMsgSent()
                 if (!resp.valid)
@@ -362,70 +281,7 @@ class Agent(
         initialConnectionLatch.countDown()
     }
 
-    @Throws(RequestFailureException::class)
-    private fun registerPaths() =
-        pathConfigs.forEach {
-            val path = it["path"]
-            val url = it["url"]
-            if (path != null && url != null)
-                registerPath(path, url)
-            else
-                logger.error { "Null path/url values: $path/$url" }
-        }
-
-    @Throws(RequestFailureException::class)
-    fun registerPath(pathVal: String, url: String) {
-        val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
-        val pathId = registerPathOnProxy(path)
-        if (!isTestMode)
-            logger.info { "Registered $url as /$path" }
-        pathContextMap[path] = PathContext(pathId, path, url)
-    }
-
-    @Throws(RequestFailureException::class)
-    fun unregisterPath(pathVal: String) {
-        val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
-        unregisterPathOnProxy(path)
-        val pathContext = pathContextMap.remove(path)
-        when {
-            pathContext == null -> logger.info { "No path value /$path found in pathContextMap" }
-            !isTestMode -> logger.info { "Unregistered /$path for ${pathContext.url}" }
-        }
-    }
-
-    fun pathMapSize(): Int {
-        val request = newPathMapSizeRequest(agentId)
-        return blockingStub.pathMapSize(request)
-            .let { resp ->
-                markMsgSent()
-                resp.pathCount
-            }
-    }
-
-    @Throws(RequestFailureException::class)
-    private fun registerPathOnProxy(path: String): Long {
-        val request = newRegisterPathRequest(agentId, path)
-        return blockingStub.registerPath(request)
-            .let { resp ->
-                markMsgSent()
-                if (!resp.valid)
-                    throw RequestFailureException("registerPath() - ${resp.reason}")
-                resp.pathId
-            }
-    }
-
-    @Throws(RequestFailureException::class)
-    private fun unregisterPathOnProxy(path: String) {
-        val request = newUnregisterPathRequest(agentId, path)
-        blockingStub.unregisterPath(request)
-            .also { resp ->
-                markMsgSent()
-                if (!resp.valid)
-                    throw RequestFailureException("unregisterPath() - ${resp.reason}")
-            }
-    }
-
-    private fun readRequestsFromProxy(scrapeRequestChannel: Channel<ScrapeRequestAction>, disconnected: AtomicBoolean) {
+    private fun readFromProxy(scrapeRequestChannel: Channel<ScrapeRequestAction>, disconnected: AtomicBoolean) {
         val agentInfo = newAgentInfo(agentId)
         val observer =
             streamObserver<ScrapeRequest> {
@@ -438,7 +294,7 @@ class Agent(
                 }
 
                 onError { throwable ->
-                    logger.error { "Error in readRequestsFromProxy(): ${Status.fromThrowable(throwable)}" }
+                    logger.error { "Error in readFromProxy(): ${Status.fromThrowable(throwable)}" }
                     disconnected.set(true)
                     scrapeRequestChannel.close()
                 }
@@ -449,7 +305,7 @@ class Agent(
                 }
             }
 
-        asyncStub.readRequestsFromProxy(agentInfo, observer)
+        grpcService.asyncStub.readRequestsFromProxy(agentInfo, observer)
     }
 
     private suspend fun writeToProxyUntilDisconnected(
@@ -457,7 +313,7 @@ class Agent(
         disconnected: AtomicBoolean
     ) {
         val observer =
-            asyncStub.writeResponsesToProxy(
+            grpcService.asyncStub.writeResponsesToProxy(
                 streamObserver<Empty> {
                     onNext {
                         // Ignore Empty return value
@@ -486,7 +342,7 @@ class Agent(
         observer.onCompleted()
     }
 
-    private fun markMsgSent() {
+    fun markMsgSent() {
         lastMsgSent = now()
     }
 
@@ -496,7 +352,7 @@ class Agent(
 
         try {
             val request = newHeartBeatRequest(agentId)
-            blockingStub.sendHeartBeat(request)
+            grpcService.blockingStub.sendHeartBeat(request)
                 .also { resp ->
                     markMsgSent()
                     if (!resp.valid) {
@@ -525,13 +381,12 @@ class Agent(
     companion object : KLogging() {
         @JvmStatic
         fun main(argv: Array<String>) {
-            val options = AgentOptions(argv, true)
-
             logger.apply {
                 info { getBanner("banners/agent.txt", this) }
                 info { getVersionDesc(false) }
             }
 
+            val options = AgentOptions(argv, true)
             Agent(options = options) { startSync() }
         }
     }

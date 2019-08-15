@@ -60,7 +60,9 @@ class Proxy(
         newZipkinConfig(options.configVals.proxy.internal.zipkin),
         testMode
     ) {
-    val pathManager = PathManager(isTestMode)
+
+    val configVals = genericConfigVals.proxy.internal
+    val pathManager = ProxyPathManager(isTestMode)
     val scrapeRequestManager = ScrapeRequestManager()
     val agentContextManager = AgentContextManager()
     var metrics: ProxyMetrics by Delegates.notNull()
@@ -68,20 +70,16 @@ class Proxy(
     private val httpService = ProxyHttpService(this, proxyHttpPort)
     private val grpcService =
         if (inProcessServerName.isEmpty())
-            newProxyGrpcService(proxy = this, port = options.proxyAgentPort)
+            newProxyGrpcService(this, port = options.proxyAgentPort)
         else
-            newProxyGrpcService(proxy = this, serverName = inProcessServerName)
+            newProxyGrpcService(this, serverName = inProcessServerName)
 
     private var agentCleanupService: AgentContextCleanupService by Delegates.notNull()
-
-
-    val configVals: ConfigVals.Proxy2
-        get() = genericConfigVals.proxy
 
     init {
         if (isMetricsEnabled)
             metrics = ProxyMetrics(this)
-        if (configVals.internal.staleAgentCheckEnabled)
+        if (configVals.staleAgentCheckEnabled)
             agentCleanupService = AgentContextCleanupService(this) { addServices(this) }
         addServices(grpcService, httpService)
         initService()
@@ -90,11 +88,11 @@ class Proxy(
 
     override fun startUp() {
         super.startUp()
-        
+
         grpcService.startSync()
         httpService.startSync()
 
-        if (configVals.internal.staleAgentCheckEnabled)
+        if (configVals.staleAgentCheckEnabled)
             agentCleanupService.startSync()
         else
             logger.info { "Agent eviction thread not started" }
@@ -103,7 +101,7 @@ class Proxy(
     override fun shutDown() {
         grpcService.stopSync()
         httpService.stopSync()
-        if (configVals.internal.staleAgentCheckEnabled)
+        if (configVals.staleAgentCheckEnabled)
             agentCleanupService.stopSync()
         super.shutDown()
     }
@@ -124,26 +122,24 @@ class Proxy(
                     "scrape_response_map_check",
                     newMapHealthCheck(
                         scrapeRequestManager.scrapeRequestMap,
-                        configVals.internal.scrapeRequestMapUnhealthySize
+                        configVals.scrapeRequestMapUnhealthySize
                     )
                 )
                 register(
                     "agent_scrape_request_backlog",
                     healthCheck {
-                        val unhealthySize = configVals.internal.scrapeRequestBacklogUnhealthySize
+                        val unhealthySize = configVals.scrapeRequestBacklogUnhealthySize
                         val vals =
                             agentContextManager.agentContextMap.entries
                                 .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
                                 .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
                                 .toList()
-                        if (vals.isEmpty())
+                        if (vals.isEmpty()) {
                             HealthCheck.Result.healthy()
-                        else
-                            HealthCheck.Result.unhealthy(
-                                "Large agent scrape request backlog: ${Joiner.on(", ").join(
-                                    vals
-                                )}"
-                            )
+                        } else {
+                            val s = Joiner.on(", ").join(vals)
+                            HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
+                        }
                     })
             }
     }
@@ -176,13 +172,12 @@ class Proxy(
 
         @JvmStatic
         fun main(argv: Array<String>) {
-            val options = ProxyOptions(argv)
-
             logger.apply {
                 info { getBanner("banners/proxy.txt", logger) }
                 info { getVersionDesc(false) }
             }
 
+            val options = ProxyOptions(argv)
             Proxy(options = options) { startSync() }
         }
     }

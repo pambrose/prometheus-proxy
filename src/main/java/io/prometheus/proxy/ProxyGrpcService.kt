@@ -41,9 +41,11 @@ import kotlin.properties.Delegates
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-class ProxyGrpcService private constructor(private val proxy: Proxy,
-                                           private val port: Int = -1,
-                                           private val inProcessServerName: String = "") :
+class ProxyGrpcService private constructor(
+    private val proxy: Proxy,
+    private val port: Int = -1,
+    private val inProcessName: String = ""
+) :
     GenericIdleService() {
     val healthCheck =
         healthCheck {
@@ -64,7 +66,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
         }
 
         grpcServer =
-            server(inProcessServerName, port) {
+            server(inProcessName, port) {
                 val proxyService = ProxyServiceImpl(proxy)
                 val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
                 if (proxy.isZipkinEnabled)
@@ -90,9 +92,9 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
 
     override fun toString() =
         toStringElements {
-            if (inProcessServerName.isNotEmpty()) {
+            if (inProcessName.isNotEmpty()) {
                 add("serverType", "InProcess")
-                add("serverName", inProcessServerName)
+                add("serverName", inProcessName)
             } else {
                 add("serverType", "Netty")
                 add("port", port)
@@ -100,10 +102,7 @@ class ProxyGrpcService private constructor(private val proxy: Proxy,
         }
 
     companion object : KLogging() {
-        fun newProxyGrpcService(proxy: Proxy, port: Int) =
-            ProxyGrpcService(proxy = proxy, port = port)
-
-        fun newProxyGrpcService(proxy: Proxy, serverName: String) =
-            ProxyGrpcService(proxy = proxy, inProcessServerName = serverName)
+        fun newProxyGrpcService(proxy: Proxy, port: Int) = ProxyGrpcService(proxy, port = port)
+        fun newProxyGrpcService(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy, inProcessName = serverName)
     }
 }

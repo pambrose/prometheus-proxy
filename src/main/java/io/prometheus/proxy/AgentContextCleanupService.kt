@@ -41,8 +41,8 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
 
     @Throws(Exception::class)
     override fun run() {
-        val maxInactivitySecs = Secs(proxy.configVals.internal.maxAgentInactivitySecs)
-        val pauseSecs = Secs(proxy.configVals.internal.staleAgentCheckPauseSecs)
+        val maxInactivitySecs = Secs(proxy.configVals.maxAgentInactivitySecs)
+        val pauseSecs = Secs(proxy.configVals.staleAgentCheckPauseSecs)
         while (isRunning) {
             proxy.agentContextManager.agentContextMap
                 .forEach { (agentId, agentContext) ->
@@ -62,8 +62,8 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
 
     override fun toString() =
         toStringElements {
-            add("max inactivity secs", proxy.configVals.internal.maxAgentInactivitySecs)
-            add("pause secs", proxy.configVals.internal.staleAgentCheckPauseSecs)
+            add("max inactivity secs", proxy.configVals.maxAgentInactivitySecs)
+            add("pause secs", proxy.configVals.staleAgentCheckPauseSecs)
         }
 
     companion object : KLogging()

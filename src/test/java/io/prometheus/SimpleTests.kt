@@ -20,8 +20,9 @@ package io.prometheus
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
+import io.prometheus.agent.AgentPathManager
 import io.prometheus.common.Secs
-import io.prometheus.dsl.KtorDsl
+import io.prometheus.dsl.KtorDsl.blockingGet
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -38,54 +39,56 @@ import java.util.concurrent.atomic.AtomicInteger
 object SimpleTests : KLogging() {
 
     fun missingPathTest(caller: String) {
-        ProxyTests.logger.info { "Calling missingPathTest() from $caller" }
-        KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/".fixUrl()) { resp ->
+        logger.info { "Calling missingPathTest() from $caller" }
+        blockingGet("${TestConstants.PROXY_PORT}/".fixUrl()) { resp ->
             resp.status shouldEqual HttpStatusCode.NotFound
         }
     }
 
     fun invalidPathTest(caller: String) {
-        ProxyTests.logger.info { "Calling invalidPathTest() from $caller" }
-        KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/invalid_path".fixUrl()) { resp ->
+        logger.info { "Calling invalidPathTest() from $caller" }
+        blockingGet("${TestConstants.PROXY_PORT}/invalid_path".fixUrl()) { resp ->
             resp.status shouldEqual HttpStatusCode.NotFound
         }
     }
 
-    fun addRemovePathsTest(agent: Agent, caller: String) {
-        ProxyTests.logger.info { "Calling addRemovePathsTest() from $caller" }
+    fun addRemovePathsTest(pathManager: AgentPathManager, caller: String) {
+        logger.info { "Calling addRemovePathsTest() from $caller" }
 
         // Take into account pre-existing paths already registered
-        val originalSize = agent.pathMapSize()
+        val originalSize = pathManager.pathMapSize()
 
         var cnt = 0
         repeat(TestConstants.REPS) {
             val path = "test-$it"
-            agent.registerPath(path, "${TestConstants.PROXY_PORT}/$path".fixUrl())
-            cnt++
-            agent.pathMapSize() shouldEqual originalSize + cnt
-            agent.unregisterPath(path)
-            cnt--
-            agent.pathMapSize() shouldEqual originalSize + cnt
+            pathManager.let { manager ->
+                manager.registerPath(path, "${TestConstants.PROXY_PORT}/$path".fixUrl())
+                cnt++
+                manager.pathMapSize() shouldEqual originalSize + cnt
+                manager.unregisterPath(path)
+                cnt--
+                manager.pathMapSize() shouldEqual originalSize + cnt
+            }
         }
     }
 
-    fun invalidAgentUrlTest(agent: Agent, caller: String, badPath: String = "badPath") {
-        ProxyTests.logger.info { "Calling invalidAgentUrlTest() from $caller" }
+    fun invalidAgentUrlTest(pathManager: AgentPathManager, caller: String, badPath: String = "badPath") {
+        logger.info { "Calling invalidAgentUrlTest() from $caller" }
 
-        agent.registerPath(badPath, "33/metrics".fixUrl())
-        KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/$badPath".fixUrl()) { resp ->
+        pathManager.registerPath(badPath, "33/metrics".fixUrl())
+        blockingGet("${TestConstants.PROXY_PORT}/$badPath".fixUrl()) { resp ->
             resp.status shouldEqual HttpStatusCode.NotFound
         }
-        agent.unregisterPath(badPath)
+        pathManager.unregisterPath(badPath)
     }
 
-    fun threadedAddRemovePathsTest(agent: Agent, caller: String) {
-        ProxyTests.logger.info { "Calling threadedAddRemovePathsTest() from $caller" }
+    fun threadedAddRemovePathsTest(pathManager: AgentPathManager, caller: String) {
+        logger.info { "Calling threadedAddRemovePathsTest() from $caller" }
         val paths = mutableListOf<String>()
         val cnt = AtomicInteger(0)
 
         // Take into account pre-existing paths already registered
-        val originalSize = agent.pathMapSize()
+        val originalSize = pathManager.pathMapSize()
 
         runBlocking {
             withTimeoutOrNull(Secs(30).toMillis().value) {
@@ -96,7 +99,7 @@ object SimpleTests : KLogging() {
                         val path = "test-${cnt.getAndIncrement()}"
                         val url = "${TestConstants.PROXY_PORT}/$path".fixUrl()
                         mutex.withLock { paths += path }
-                        agent.registerPath(path, url)
+                        pathManager.registerPath(path, url)
                     }
                 }
                 jobs.forEach { job ->
@@ -107,14 +110,14 @@ object SimpleTests : KLogging() {
         }
 
         paths.size shouldEqual TestConstants.REPS
-        agent.pathMapSize() shouldEqual (originalSize + TestConstants.REPS)
+        pathManager.pathMapSize() shouldEqual (originalSize + TestConstants.REPS)
 
         runBlocking {
             withTimeoutOrNull(Secs(30).toMillis().value) {
                 val jobs = mutableListOf<Job>()
                 for (path in paths)
                     jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
-                        agent.unregisterPath(path)
+                        pathManager.unregisterPath(path)
                     }
                 jobs.forEach { job ->
                     job.join()
@@ -123,6 +126,6 @@ object SimpleTests : KLogging() {
             }
         }
 
-        agent.pathMapSize() shouldEqual originalSize
+        pathManager.pathMapSize() shouldEqual originalSize
     }
 }

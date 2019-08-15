@@ -38,11 +38,13 @@ import java.io.Closeable
 import kotlin.properties.Delegates
 
 @KtorExperimentalAPI
-abstract class GenericService protected constructor(protected val genericConfigVals: ConfigVals,
-                                                    private val adminConfig: AdminConfig,
-                                                    private val metricsConfig: MetricsConfig,
-                                                    private val zipkinConfig: ZipkinConfig,
-                                                    val isTestMode: Boolean) :
+abstract class GenericService protected constructor(
+    val genericConfigVals: ConfigVals,
+    adminConfig: AdminConfig,
+    metricsConfig: MetricsConfig,
+    zipkinConfig: ZipkinConfig,
+    val isTestMode: Boolean
+) :
     GenericExecutionThreadService(),
     Closeable {
     protected val healthCheckRegistry = HealthCheckRegistry()
@@ -51,14 +53,9 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     private lateinit var serviceManager: ServiceManager
 
-    val isAdminEnabled: Boolean
-        get() = adminConfig.enabled
-
-    val isMetricsEnabled: Boolean
-        get() = metricsConfig.enabled
-
-    val isZipkinEnabled: Boolean
-        get() = zipkinConfig.enabled
+    val isAdminEnabled = adminConfig.enabled
+    val isMetricsEnabled = metricsConfig.enabled
+    val isZipkinEnabled = zipkinConfig.enabled
 
     private var jmxReporter: JmxReporter by Delegates.notNull()
     var adminService: AdminService by Delegates.notNull()
@@ -67,24 +64,28 @@ abstract class GenericService protected constructor(protected val genericConfigV
 
     init {
         if (isAdminEnabled) {
-            adminService = AdminService(healthCheckRegistry = healthCheckRegistry,
+            adminService = AdminService(
+                healthCheckRegistry = healthCheckRegistry,
                 port = adminConfig.port,
                 pingPath = adminConfig.pingPath,
                 versionPath = adminConfig.versionPath,
                 healthCheckPath = adminConfig.healthCheckPath,
-                threadDumpPath = adminConfig.threadDumpPath) { addService(this) }
+                threadDumpPath = adminConfig.threadDumpPath
+            ) { addService(this) }
         } else {
             logger.info { "Admin service disabled" }
         }
 
         if (isMetricsEnabled) {
             metricsService = MetricsService(metricsConfig.port, metricsConfig.path) { addService(this) }
-            SystemMetrics.initialize(enableStandardExports = metricsConfig.standardExportsEnabled,
+            SystemMetrics.initialize(
+                enableStandardExports = metricsConfig.standardExportsEnabled,
                 enableMemoryPoolsExports = metricsConfig.memoryPoolsExportsEnabled,
                 enableGarbageCollectorExports = metricsConfig.garbageCollectorExportsEnabled,
                 enableThreadExports = metricsConfig.threadExportsEnabled,
                 enableClassLoadingExports = metricsConfig.classLoadingExportsEnabled,
-                enableVersionInfoExports = metricsConfig.versionInfoExportsEnabled)
+                enableVersionInfoExports = metricsConfig.versionInfoExportsEnabled
+            )
             jmxReporter = JmxReporter.forRegistry(MetricRegistry()).build()
         } else {
             logger.info { "Metrics service disabled" }

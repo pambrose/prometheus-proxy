@@ -156,3 +156,6 @@ val HttpStatusCode.isNotSuccessful get() = !isSuccessful
 val <T : Any> T.simpleClassName: String
     get() = this::class.simpleName ?: "None"
 
+fun <R> Boolean.thenElse(trueVal: () -> R, falseVal: () -> R): R = if (this) trueVal() else falseVal()
+
+fun Boolean.thenElse(trueVal: String, falseVal: String): String = if (this) trueVal else falseVal

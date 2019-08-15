@@ -26,7 +26,6 @@ import io.prometheus.delegate.AtomicDelegates.atomicMillis
 import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -34,12 +33,11 @@ import java.util.concurrent.atomic.AtomicLong
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-@ObsoleteCoroutinesApi
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
 
-    private val channelSize = proxy.configVals.internal.scrapeRequestChannelSize
+    private val channelSize = proxy.configVals.scrapeRequestChannelSize
     private val scrapeRequestChannel: Channel<ScrapeRequestWrapper> = Channel(channelSize)
     private val channelBacklogSize = AtomicInteger(0)
 

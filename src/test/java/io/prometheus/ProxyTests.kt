@@ -31,6 +31,7 @@ import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestConstants.PROXY_PORT
+import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.Millis
 import io.prometheus.common.Secs
@@ -51,7 +52,7 @@ import kotlin.random.Random
 object ProxyTests : KLogging() {
 
     fun timeoutTest(
-        agent: Agent,
+        pathManager: AgentPathManager,
         caller: String,
         agentPort: Int = 9900,
         agentPath: String = "agent-timeout",
@@ -77,11 +78,11 @@ object ProxyTests : KLogging() {
             }
         }
 
-        agent.registerPath("/$proxyPath", "$agentPort/$agentPath".fixUrl())
+        pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".fixUrl())
         blockingGet("$PROXY_PORT/$proxyPath".fixUrl()) { resp ->
             resp.status shouldEqual HttpStatusCode.ServiceUnavailable
         }
-        agent.unregisterPath("/$proxyPath")
+        pathManager.unregisterPath("/$proxyPath")
 
         runBlocking {
             launch(Dispatchers.Default) {
@@ -93,7 +94,7 @@ object ProxyTests : KLogging() {
     }
 
     class ProxyCallTestArgs(
-        val agent: Agent,
+        val pathManager: AgentPathManager,
         val httpServerCount: Int,
         val pathCount: Int,
         val sequentialQueryCount: Int,
@@ -113,7 +114,7 @@ object ProxyTests : KLogging() {
         val pathMap = newConcurrentMap<Int, Int>()
 
         // Take into account pre-existing paths already registered
-        val originalSize = args.agent.pathMapSize()
+        val originalSize = args.pathManager.pathMapSize()
 
         // Create the endpoints
         logger.info { "Creating ${args.httpServerCount} httpServers" }
@@ -150,11 +151,11 @@ object ProxyTests : KLogging() {
         logger.info { "Registering paths" }
         repeat(args.pathCount) {
             val index = Random.nextInt(httpServers.size)
-            args.agent.registerPath("proxy-$it", "${args.startingPort + index}/agent-$index".fixUrl())
+            args.pathManager.registerPath("proxy-$it", "${args.startingPort + index}/agent-$index".fixUrl())
             pathMap[it] = index
         }
 
-        args.agent.pathMapSize() shouldEqual originalSize + args.pathCount
+        args.pathManager.pathMapSize() shouldEqual originalSize + args.pathCount
 
         logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
 
@@ -197,14 +198,14 @@ object ProxyTests : KLogging() {
         val errorCnt = AtomicInteger()
         for (path in pathMap) {
             try {
-                args.agent.unregisterPath("proxy-${path.key}")
+                args.pathManager.unregisterPath("proxy-${path.key}")
             } catch (e: RequestFailureException) {
                 errorCnt.incrementAndGet()
             }
         }
 
         errorCnt.get() shouldEqual 0
-        args.agent.pathMapSize() shouldEqual originalSize
+        args.pathManager.pathMapSize() shouldEqual originalSize
 
         logger.info { "Shutting down ${httpServers.size} httpServers" }
         runBlocking {

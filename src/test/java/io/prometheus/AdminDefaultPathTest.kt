@@ -46,9 +46,12 @@ import java.util.concurrent.TimeoutException
 @ExperimentalCoroutinesApi
 class AdminDefaultPathTest {
 
+    private val agentConfigVals = agent.genericConfigVals.agent
+    private val proxyConfigVals = proxy.genericConfigVals.proxy
+
     @Test
     fun proxyPingPathTest() {
-        proxy.configVals.admin
+        proxyConfigVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -59,7 +62,7 @@ class AdminDefaultPathTest {
 
     @Test
     fun agentPingPathTest() {
-        agent.configVals.admin
+        agentConfigVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -70,7 +73,7 @@ class AdminDefaultPathTest {
 
     @Test
     fun proxyVersionPathTest() {
-        proxy.configVals.admin
+        agentConfigVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -81,7 +84,7 @@ class AdminDefaultPathTest {
 
     @Test
     fun agentVersionPathTest() {
-        agent.configVals.admin
+        agentConfigVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -92,7 +95,7 @@ class AdminDefaultPathTest {
 
     @Test
     fun proxyHealthCheckPathTest() {
-        proxy.configVals.admin
+        proxyConfigVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
@@ -103,7 +106,7 @@ class AdminDefaultPathTest {
 
     @Test
     fun agentHealthCheckPathTest() {
-        agent.configVals.admin
+        agentConfigVals.admin
             .also { admin ->
                 blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
                     resp.readText().length shouldBeGreaterThan 10
@@ -113,14 +116,17 @@ class AdminDefaultPathTest {
 
     @Test
     fun proxyThreadDumpPathTest() {
-        blockingGet("${proxy.configVals.admin.port}/${proxy.configVals.admin.threadDumpPath}".fixUrl()) { resp ->
-            resp.readText().length shouldBeGreaterThan 10
-        }
+        proxyConfigVals.admin
+            .also { admin ->
+                blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
+                    resp.readText().length shouldBeGreaterThan 10
+                }
+            }
     }
 
     @Test
     fun agentThreadDumpPathTest() {
-        blockingGet("${agent.configVals.admin.port}/${agent.configVals.admin.threadDumpPath}".fixUrl()) { resp ->
+        blockingGet("${agentConfigVals.admin.port}/${agentConfigVals.admin.threadDumpPath}".fixUrl()) { resp ->
             resp.readText().length shouldBeGreaterThan 10
         }
     }

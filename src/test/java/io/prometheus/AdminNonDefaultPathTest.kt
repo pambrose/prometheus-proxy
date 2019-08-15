@@ -46,12 +46,15 @@ import java.util.concurrent.TimeoutException
 @ExperimentalCoroutinesApi
 class AdminNonDefaultPathTest {
 
+    val proxyConfigVals = proxy.genericConfigVals.proxy
+
     @Test
     fun proxyPingPathTest() {
-        proxy.configVals.admin.port shouldEqual 8099
-        proxy.configVals.admin.pingPath shouldEqual "pingPath2"
-        proxy.configVals.admin
+        proxyConfigVals.admin
             .also { admin ->
+                admin.port shouldEqual 8099
+                admin.pingPath shouldEqual "pingPath2"
+
                 blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.readText() shouldStartWith "pong"
@@ -61,10 +64,11 @@ class AdminNonDefaultPathTest {
 
     @Test
     fun proxyVersionPathTest() {
-        proxy.configVals.admin.port shouldEqual 8099
-        proxy.configVals.admin.versionPath shouldEqual "versionPath2"
-        proxy.configVals.admin
+        proxyConfigVals.admin
             .also { admin ->
+                admin.port shouldEqual 8099
+                admin.versionPath shouldEqual "versionPath2"
+
                 blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.readText() shouldContain "Version"
@@ -74,9 +78,10 @@ class AdminNonDefaultPathTest {
 
     @Test
     fun proxyHealthCheckPathTest() {
-        proxy.configVals.admin.healthCheckPath shouldEqual "healthCheckPath2"
-        proxy.configVals.admin
+        proxyConfigVals.admin
             .also { admin ->
+                admin.healthCheckPath shouldEqual "healthCheckPath2"
+
                 blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
                     resp.status shouldEqual HttpStatusCode.OK
                     resp.readText().length shouldBeGreaterThan 10
@@ -86,9 +91,10 @@ class AdminNonDefaultPathTest {
 
     @Test
     fun proxyThreadDumpPathTest() {
-        proxy.configVals.admin.threadDumpPath shouldEqual "threadDumpPath2"
-        proxy.configVals.admin
+        proxyConfigVals.admin
             .also { admin ->
+                admin.threadDumpPath shouldEqual "threadDumpPath2"
+
                 blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
                     resp.readText().length shouldBeGreaterThan 10
                 }

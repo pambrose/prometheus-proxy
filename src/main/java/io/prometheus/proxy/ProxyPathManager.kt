@@ -27,15 +27,13 @@ import java.util.concurrent.ConcurrentMap
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-class PathManager(private val isTestMode: Boolean) {
-    // Map path to AgentContext
-    private val pathMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap()
+class ProxyPathManager(private val isTestMode: Boolean) {
 
-    fun getAgentContextByPath(path: String) = pathMap[path]
+    private val pathMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap() // Map path to AgentContext
 
-    fun containsPath(path: String) = pathMap.containsKey(path)
+    operator fun get(path: String) = pathMap[path]
 
-    fun pathMapSize() = pathMap.size
+    operator fun contains(path: String) = pathMap.containsKey(path)
 
     val pathMapSize: Int
         get() = pathMap.size

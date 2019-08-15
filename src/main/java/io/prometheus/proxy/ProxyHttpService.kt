@@ -53,7 +53,7 @@ import kotlin.properties.Delegates
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
-    private val configVals = proxy.configVals
+    private val configVals = proxy.genericConfigVals.proxy
     private var tracing: Tracing by Delegates.notNull()
     private val idleTimeoutSecs = if (configVals.http.idleTimeoutSecs == -1) 45 else configVals.http.idleTimeoutSecs
 
@@ -67,7 +67,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                     call.response.header("cache-control", "must-revalidate,no-cache,no-store")
 
                     val path = call.request.path().drop(1)
-                    val agentContext = proxy.pathManager.getAgentContextByPath(path)
+                    val agentContext = proxy.pathManager[path]
                     val arg = ResponseArg()
 
                     when {
