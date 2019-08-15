@@ -23,7 +23,9 @@ import com.beust.jcommander.JCommander
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
 import com.typesafe.config.*
+import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.common.EnvVars.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
@@ -31,6 +33,8 @@ import java.net.URL
 import kotlin.properties.Delegates
 import kotlin.system.exitProcess
 
+@KtorExperimentalAPI
+@ExperimentalCoroutinesApi
 abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val argv: Array<String>,
                                                  private val envConfig: String,
@@ -56,8 +60,8 @@ abstract class BaseOptions protected constructor(private val progName: String,
         private set
 
     @Parameter(names = ["-v", "--version"],
-               description = "Print version info and exit",
-               validateWith = [VersionValidator::class])
+        description = "Print version info and exit",
+        validateWith = [VersionValidator::class])
     private var version = false
 
     @Parameter(names = ["-u", "--usage"], help = true)
@@ -84,12 +88,12 @@ abstract class BaseOptions protected constructor(private val progName: String,
     private fun parseArgs(argv: Array<String>?) {
         try {
             val jcom =
-                    JCommander(this)
-                            .apply {
-                                programName = progName
-                                setCaseSensitiveOptions(false)
-                                parse(*argv ?: arrayOf())
-                            }
+                JCommander(this)
+                    .apply {
+                        programName = progName
+                        setCaseSensitiveOptions(false)
+                        parse(*argv ?: arrayOf())
+                    }
 
             if (usage) {
                 jcom.usage()
@@ -123,12 +127,12 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
     private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
         config = readConfig(if (configName.isNotEmpty()) configName else System.getenv(envConfig).orEmpty(),
-                            envConfig,
-                            ConfigParseOptions.defaults().setAllowMissing(false),
-                            ConfigFactory.load().resolve(),
-                            exitOnMissingConfig)
-                .resolve(ConfigResolveOptions.defaults())
-                .resolve()
+            envConfig,
+            ConfigParseOptions.defaults().setAllowMissing(false),
+            ConfigFactory.load().resolve(),
+            exitOnMissingConfig)
+            .resolve(ConfigResolveOptions.defaults())
+            .resolve()
 
         dynamicParams.forEach { (k, v) ->
             // Strip quotes
@@ -158,7 +162,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                 try {
                     val configSyntax = getConfigSyntax(configName)
                     return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
-                            .withFallback(fallback)
+                        .withFallback(fallback)
                 } catch (e: Exception) {
                     if (e.cause is FileNotFoundException)
                         logger.error { "Invalid getConfig url: $configName" }
@@ -183,11 +187,11 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     private fun getConfigSyntax(configName: String) =
-            when {
-                configName.isJsonSuffix()       -> ConfigSyntax.JSON
-                configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
-                else                            -> ConfigSyntax.CONF
-            }
+        when {
+            configName.isJsonSuffix()       -> ConfigSyntax.JSON
+            configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
+            else                            -> ConfigSyntax.CONF
+        }
 
     private fun String.isUrlPrefix() = toLowerCase().startsWith("http://") || toLowerCase().startsWith("https://")
 
