@@ -29,7 +29,6 @@ import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.proxy.*
-import io.prometheus.proxy.ProxyGrpcService.Companion.newProxyGrpcService
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -70,9 +69,9 @@ class Proxy(
     private val httpService = ProxyHttpService(this, proxyHttpPort)
     private val grpcService =
         if (inProcessServerName.isEmpty())
-            newProxyGrpcService(this, port = options.proxyAgentPort)
+            ProxyGrpcService(this, port = options.proxyAgentPort)
         else
-            newProxyGrpcService(this, serverName = inProcessServerName)
+            ProxyGrpcService(this, inProcessName = inProcessServerName)
 
     private var agentCleanupService: AgentContextCleanupService by Delegates.notNull()
 

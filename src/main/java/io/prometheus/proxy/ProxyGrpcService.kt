@@ -41,7 +41,7 @@ import kotlin.properties.Delegates
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-class ProxyGrpcService private constructor(
+class ProxyGrpcService(
     private val proxy: Proxy,
     private val port: Int = -1,
     private val inProcessName: String = ""
@@ -101,8 +101,5 @@ class ProxyGrpcService private constructor(
             }
         }
 
-    companion object : KLogging() {
-        fun newProxyGrpcService(proxy: Proxy, port: Int) = ProxyGrpcService(proxy, port = port)
-        fun newProxyGrpcService(proxy: Proxy, serverName: String) = ProxyGrpcService(proxy, inProcessName = serverName)
-    }
+    companion object : KLogging()
 }

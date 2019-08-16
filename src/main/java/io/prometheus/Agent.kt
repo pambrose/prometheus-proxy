@@ -131,6 +131,8 @@ class Agent(
     private val proxyHost
         get() = "${grpcService.hostName}:${grpcService.port}"
 
+    override fun serviceName() = "$simpleClassName $agentName"
+
     override fun registerHealthChecks() {
         super.registerHealthChecks()
         healthCheckRegistry.register(
@@ -138,8 +140,6 @@ class Agent(
             newBacklogHealthCheck(scrapeRequestBacklogSize.get(), configVals.scrapeRequestBacklogUnhealthySize)
         )
     }
-
-    override fun serviceName() = "$simpleClassName $agentName"
 
     private fun connectToProxy() {
         val disconnected = AtomicBoolean(false)
@@ -193,10 +193,10 @@ class Agent(
             metrics.scrapeRequests.labels(type).inc()
     }
 
-    private suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResponse {
-        val responseArg = ScrapeResponseArg(agentId = scrapeRequest.agentId, scrapeId = scrapeRequest.scrapeId)
+    private suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResponse {
+        val responseArg = ScrapeResponseArg(agentId = request.agentId, scrapeId = request.scrapeId)
         var scrapeCounterMsg = ""
-        val path = scrapeRequest.path
+        val path = request.path
         val pathContext = pathManager[path]
 
         if (pathContext == null) {
@@ -209,7 +209,7 @@ class Agent(
 
             try {
                 val setup: HttpRequestBuilder.() -> Unit = {
-                    val accept = scrapeRequest.accept
+                    val accept = request.accept
                     if (!accept.isNullOrEmpty())
                         header(HttpHeaders.ACCEPT, accept)
                 }
