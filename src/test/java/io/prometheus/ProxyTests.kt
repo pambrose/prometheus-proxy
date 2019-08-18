@@ -162,9 +162,9 @@ object ProxyTests : KLogging() {
 
         // Call the proxy sequentially
         runBlocking {
-            HttpClient(io.ktor.client.engine.cio.CIO).use { httpClient ->
-                repeat(args.sequentialQueryCount) { cnt ->
-                    withTimeoutOrNull(Secs(20).toMillis().value) {
+            withTimeoutOrNull(Secs(60).toMillis().value) {
+                HttpClient(io.ktor.client.engine.cio.CIO).use { httpClient ->
+                    repeat(args.sequentialQueryCount) { cnt ->
                         val job = launch(Dispatchers.Default + coroutineExceptionHandler) {
                             println("Launched $cnt")
                             callProxy(httpClient, pathMap, "Sequential $cnt")
@@ -173,33 +173,34 @@ object ProxyTests : KLogging() {
                         job.join()
                         job.getCancellationException().cause.shouldBeNull()
 
+                        delay(args.sequentialPauseMillis.value)
                     }.shouldNotBeNull()
-                    delay(args.sequentialPauseMillis.value)
                 }
             }
         }
 
-        /*
         logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
 
         // Call the proxy in parallel
         runBlocking {
             withTimeoutOrNull(Secs(60).toMillis().value) {
-                val jobs = mutableListOf<Job>()
-                repeat(args.parallelQueryCount) {
-                    jobs += launch(Dispatchers.Default + coroutineExceptionHandler) {
+                HttpClient(io.ktor.client.engine.cio.CIO).use { httpClient ->
+                    val jobs = mutableListOf<Job>()
+                    repeat(args.parallelQueryCount) { cnt ->
+                        jobs += launch(Dispatchers.Default + coroutineExceptionHandler) {
+                            println("Launched $cnt")
+                            callProxy(httpClient, pathMap, "Parallel $cnt")
+                        }
                         delay(Random.nextLong(10, 400))
-                        callProxy(pathMap, "Parallel $it")
                     }
-                }
 
-                jobs.forEach { job ->
-                    job.join()
-                    job.getCancellationException().cause.shouldBeNull()
+                    jobs.forEach { job ->
+                        job.join()
+                        job.getCancellationException().cause.shouldBeNull()
+                    }
                 }
             }.shouldNotBeNull()
         }
-        */
 
         logger.info { "Unregistering paths" }
         val errorCnt = AtomicInteger()
