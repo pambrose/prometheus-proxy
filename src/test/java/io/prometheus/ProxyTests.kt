@@ -178,7 +178,7 @@ object ProxyTests : KLogging() {
                                     job.join()
                                     job.getCancellationException().cause.shouldBeNull()
 
-                                    delay(args.sequentialPauseMillis.value)
+                                    //delay(args.sequentialPauseMillis.value)
                                 }.shouldNotBeNull()
                                 counter.get() shouldEqual args.sequentialQueryCount
                             }

@@ -22,6 +22,8 @@ import brave.Tracing
 import com.google.common.net.HttpHeaders.*
 import com.google.common.util.concurrent.MoreExecutors
 import io.ktor.application.call
+import io.ktor.application.install
+import io.ktor.features.DefaultHeaders
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -63,6 +65,10 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             CIO,
             port = httpPort,
             configure = { connectionIdleTimeoutSeconds = idleTimeoutSecs }) {
+
+            install(DefaultHeaders)
+            //install(CallLogging)
+
             routing {
                 get("/*") {
                     call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")

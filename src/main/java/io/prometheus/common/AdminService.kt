@@ -28,18 +28,22 @@ import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.SparkDsl.servletContextHandler
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletHolder
 
 @KtorExperimentalAPI
-class AdminService(healthCheckRegistry: HealthCheckRegistry,
-                   private val port: Int,
-                   private val pingPath: String,
-                   private val versionPath: String,
-                   private val healthCheckPath: String,
-                   private val threadDumpPath: String,
-                   initBlock: (AdminService.() -> Unit)? = null) : GenericIdleService() {
+@ExperimentalCoroutinesApi
+class AdminService(
+    healthCheckRegistry: HealthCheckRegistry,
+    private val port: Int,
+    private val pingPath: String = "",
+    private val versionPath: String = "",
+    private val healthCheckPath: String = "",
+    private val threadDumpPath: String = "",
+    initBlock: (AdminService.() -> Unit)? = null
+) : GenericIdleService() {
     private val server =
         Server(port)
             .apply {
