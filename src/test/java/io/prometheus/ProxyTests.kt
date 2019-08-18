@@ -165,8 +165,7 @@ object ProxyTests : KLogging() {
             withTimeoutOrNull(Secs(60).toMillis().value) {
                 HttpClient(io.ktor.client.engine.cio.CIO).use { httpClient ->
                     repeat(args.sequentialQueryCount) { cnt ->
-                        val job = launch(Dispatchers.Default + coroutineExceptionHandler) {
-                            println("Launched $cnt")
+                        val job = GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
                             callProxy(httpClient, pathMap, "Sequential $cnt")
                         }
 
@@ -187,11 +186,10 @@ object ProxyTests : KLogging() {
                 HttpClient(io.ktor.client.engine.cio.CIO).use { httpClient ->
                     val jobs = mutableListOf<Job>()
                     repeat(args.parallelQueryCount) { cnt ->
-                        jobs += launch(Dispatchers.Default + coroutineExceptionHandler) {
-                            println("Launched $cnt")
+                        jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                            delay(Random.nextLong(10, 400))
                             callProxy(httpClient, pathMap, "Parallel $cnt")
                         }
-                        delay(Random.nextLong(10, 400))
                     }
 
                     jobs.forEach { job ->
@@ -229,6 +227,9 @@ object ProxyTests : KLogging() {
     }
 
     suspend fun callProxy(httpClient: HttpClient, pathMap: Map<Int, Int>, msg: String) {
+
+        println("Launched $msg")
+
         // Randomly choose one of the pathMap values
         val index = Random.nextInt(pathMap.size)
         val httpVal = pathMap[index]
