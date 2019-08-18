@@ -164,8 +164,8 @@ object ProxyTests : KLogging() {
             repeat(args.sequentialQueryCount) {
                 withTimeoutOrNull(Secs(20).toMillis().value) {
                     val job = launch(Dispatchers.Default + coroutineExceptionHandler) {
-                        //callProxy(pathMap, "Sequential $it")
                         println("Launched $it")
+                        callProxy(pathMap, "Sequential $it")
                     }
 
                     job.join()
