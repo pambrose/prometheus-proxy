@@ -165,7 +165,7 @@ object ProxyTests : KLogging() {
             withTimeoutOrNull(Secs(60).toMillis().value) {
                 HttpClient(io.ktor.client.engine.cio.CIO).use { httpClient ->
                     repeat(args.sequentialQueryCount) { cnt ->
-                        val job = GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                        val job = /*GlobalScope.*/launch(Dispatchers.Default + coroutineExceptionHandler) {
                             callProxy(httpClient, pathMap, "Sequential $cnt")
                         }
 
@@ -186,7 +186,7 @@ object ProxyTests : KLogging() {
                 HttpClient(io.ktor.client.engine.cio.CIO).use { httpClient ->
                     val jobs = mutableListOf<Job>()
                     repeat(args.parallelQueryCount) { cnt ->
-                        jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                        jobs += /*GlobalScope.*/launch(Dispatchers.Default + coroutineExceptionHandler) {
                             delay(Random.nextLong(10, 400))
                             callProxy(httpClient, pathMap, "Parallel $cnt")
                         }
