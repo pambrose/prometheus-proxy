@@ -164,7 +164,8 @@ object ProxyTests : KLogging() {
             repeat(args.sequentialQueryCount) {
                 withTimeoutOrNull(Secs(20).toMillis().value) {
                     val job = launch(Dispatchers.Default + coroutineExceptionHandler) {
-                        callProxy(pathMap, "Sequential $it")
+                        //callProxy(pathMap, "Sequential $it")
+                        println("Launched $it")
                     }
 
                     job.join()
@@ -232,10 +233,8 @@ object ProxyTests : KLogging() {
         http {
             get("$PROXY_PORT/proxy-$index".fixUrl()) { resp ->
                 resp.status shouldEqual HttpStatusCode.OK
-
                 val body = resp.readText()
                 body shouldEqual "value: $httpVal"
-                yield()
             }
         }
     }
