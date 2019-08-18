@@ -20,6 +20,7 @@ package io.prometheus
 
 import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.application.call
+import io.ktor.client.HttpClient
 import io.ktor.client.response.readText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -161,18 +162,20 @@ object ProxyTests : KLogging() {
 
         // Call the proxy sequentially
         runBlocking {
-            repeat(args.sequentialQueryCount) {
-                withTimeoutOrNull(Secs(20).toMillis().value) {
-                    val job = launch(Dispatchers.Default + coroutineExceptionHandler) {
-                        println("Launched $it")
-                        callProxy(pathMap, "Sequential $it")
-                    }
+            HttpClient(io.ktor.client.engine.cio.CIO).use { httpClient ->
+                repeat(args.sequentialQueryCount) { cnt ->
+                    withTimeoutOrNull(Secs(20).toMillis().value) {
+                        val job = launch(Dispatchers.Default + coroutineExceptionHandler) {
+                            println("Launched $cnt")
+                            callProxy(httpClient, pathMap, "Sequential $cnt")
+                        }
 
-                    job.join()
-                    job.getCancellationException().cause.shouldBeNull()
+                        job.join()
+                        job.getCancellationException().cause.shouldBeNull()
 
-                }.shouldNotBeNull()
-                delay(args.sequentialPauseMillis.value)
+                    }.shouldNotBeNull()
+                    delay(args.sequentialPauseMillis.value)
+                }
             }
         }
 
@@ -224,17 +227,17 @@ object ProxyTests : KLogging() {
         logger.info { "Finished shutting down ${httpServers.size} httpServers" }
     }
 
-    suspend fun callProxy(pathMap: Map<Int, Int>, msg: String) {
+    suspend fun callProxy(httpClient: HttpClient, pathMap: Map<Int, Int>, msg: String) {
         // Randomly choose one of the pathMap values
         val index = Random.nextInt(pathMap.size)
         val httpVal = pathMap[index]
         httpVal.shouldNotBeNull()
 
-        http {
+        http(httpClient) {
             get("$PROXY_PORT/proxy-$index".fixUrl()) { resp ->
-                resp.status shouldEqual HttpStatusCode.OK
                 val body = resp.readText()
                 body shouldEqual "value: $httpVal"
+                resp.status shouldEqual HttpStatusCode.OK
             }
         }
     }
