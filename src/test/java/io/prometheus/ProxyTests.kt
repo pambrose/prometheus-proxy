@@ -163,7 +163,7 @@ object ProxyTests : KLogging() {
         runBlocking {
             repeat(args.sequentialQueryCount) {
                 withTimeoutOrNull(Secs(5).toMillis().value) {
-                    GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                    launch(Dispatchers.Default + coroutineExceptionHandler) {
                         callProxy(pathMap, "Sequential $it")
                     }.apply {
                         join()
@@ -181,7 +181,7 @@ object ProxyTests : KLogging() {
             withTimeoutOrNull(Secs(60).toMillis().value) {
                 val jobs = mutableListOf<Job>()
                 repeat(args.parallelQueryCount) {
-                    jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                    jobs += launch(Dispatchers.Default + coroutineExceptionHandler) {
                         delay(Random.nextLong(10, 400))
                         callProxy(pathMap, "Parallel $it")
                     }

@@ -23,6 +23,7 @@ import com.google.common.net.HttpHeaders.*
 import com.google.common.util.concurrent.MoreExecutors
 import io.ktor.application.call
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.request.ApplicationRequest
 import io.ktor.request.header
@@ -64,7 +65,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             configure = { connectionIdleTimeoutSeconds = idleTimeoutSecs }) {
             routing {
                 get("/*") {
-                    call.response.header("cache-control", "must-revalidate,no-cache,no-store")
+                    call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
 
                     val path = call.request.path().drop(1)
                     val agentContext = proxy.pathManager[path]
@@ -113,12 +114,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                     }
 
                     updateScrapeRequests(arg.updateMsg)
-
-                    call.apply {
-                        response.status(arg.statusCode)
-                        respondText(arg.contentText, arg.contentType)
-
-                    }
+                    call.respondText(text = arg.contentText, contentType = arg.contentType, status = arg.statusCode)
                 }
             }
         }

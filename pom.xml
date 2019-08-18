@@ -36,7 +36,7 @@
         <guava.version>26.0-android</guava.version>
         <metrics.version>4.1.0</metrics.version>
 
-        <grpc.version>1.22.1</grpc.version>
+        <grpc.version>1.23.0</grpc.version>
         <grpc.plugin.version>1.11.0</grpc.plugin.version>
         <grpc.contrib.version>0.8.1</grpc.contrib.version>
         <protobuf.version>3.7.1</protobuf.version>
@@ -53,7 +53,7 @@
 
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.7.25</slf4j.version>
-        <kotlin.logging.version>1.7.4</kotlin.logging.version>
+        <kotlin.logging.version>1.7.5</kotlin.logging.version>
 
         <junit.version>4.12</junit.version>
         <kluent.version>1.53</kluent.version>

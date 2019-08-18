@@ -18,6 +18,7 @@
 
 package io.prometheus.common
 
+import io.ktor.http.HttpHeaders
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.io.IOException
@@ -33,10 +34,10 @@ class VersionServlet : HttpServlet() {
     @Throws(ServletException::class, IOException::class)
     override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
         resp.apply {
-            this.status = HttpServletResponse.SC_OK
-            this.setHeader("Cache-Control", "must-revalidate,no-cache,no-store")
-            this.contentType = "text/plain"
-            this.writer.use { it.println(getVersionDesc(true)) }
+            status = HttpServletResponse.SC_OK
+            setHeader(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
+            contentType = "text/plain"
+            writer.use { it.println(getVersionDesc(true)) }
         }
     }
 
