@@ -39,11 +39,13 @@ import io.prometheus.common.Secs
 import io.prometheus.dsl.KtorDsl.blockingGet
 import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.http
+import io.prometheus.dsl.KtorDsl.newHttpClient
 import kotlinx.coroutines.*
 import mu.KLogging
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
@@ -158,64 +160,80 @@ object ProxyTests : KLogging() {
 
         args.pathManager.pathMapSize() shouldEqual originalSize + args.pathCount
 
-        logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
-
         // Call the proxy sequentially
-        runBlocking {
-            withTimeoutOrNull(Secs(60).toMillis().value) {
-                HttpClient(io.ktor.client.engine.cio.CIO).use { httpClient ->
-                    repeat(args.sequentialQueryCount) { cnt ->
-                        val job = /*GlobalScope.*/launch(Dispatchers.Default + coroutineExceptionHandler) {
-                            callProxy(httpClient, pathMap, "Sequential $cnt")
-                        }
+        logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
+        Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+            .use { dispatcher ->
+                runBlocking {
+                    withTimeoutOrNull(Secs(60).toMillis().value) {
+                        newHttpClient()
+                            .use { httpClient ->
+                                val counter = AtomicInteger(0)
+                                repeat(args.sequentialQueryCount) { cnt ->
+                                    val job = /*GlobalScope.*/launch(dispatcher + coroutineExceptionHandler) {
+                                        callProxy(httpClient, pathMap, "Sequential $cnt")
+                                        counter.incrementAndGet()
+                                    }
 
-                        job.join()
-                        job.getCancellationException().cause.shouldBeNull()
+                                    job.join()
+                                    job.getCancellationException().cause.shouldBeNull()
 
-                        delay(args.sequentialPauseMillis.value)
+                                    delay(args.sequentialPauseMillis.value)
+                                }.shouldNotBeNull()
+                                counter.get() shouldEqual args.sequentialQueryCount
+                            }
+                    }
+                }
+            }
+
+        // Call the proxy in parallel
+        logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
+        Executors.newFixedThreadPool(20).asCoroutineDispatcher()
+            .use { dispatcher ->
+                runBlocking {
+                    withTimeoutOrNull(Secs(60).toMillis().value) {
+                        newHttpClient()
+                            .use { httpClient ->
+                                val jobs = mutableListOf<Job>()
+                                val counter = AtomicInteger(0)
+                                repeat(args.parallelQueryCount) { cnt ->
+                                    jobs += /*GlobalScope.*/launch(dispatcher + coroutineExceptionHandler) {
+                                        delay(Random.nextLong(10, 400))
+                                        callProxy(httpClient, pathMap, "Parallel $cnt")
+                                        counter.incrementAndGet()
+                                    }
+                                }
+
+                                jobs.forEach { job ->
+                                    job.join()
+                                    job.getCancellationException().cause.shouldBeNull()
+                                }
+
+                                counter.get() shouldEqual args.parallelQueryCount
+                            }
                     }.shouldNotBeNull()
                 }
             }
-        }
-
-        logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
-
-        // Call the proxy in parallel
-        runBlocking {
-            withTimeoutOrNull(Secs(60).toMillis().value) {
-                HttpClient(io.ktor.client.engine.cio.CIO).use { httpClient ->
-                    val jobs = mutableListOf<Job>()
-                    repeat(args.parallelQueryCount) { cnt ->
-                        jobs += /*GlobalScope.*/launch(Dispatchers.Default + coroutineExceptionHandler) {
-                            delay(Random.nextLong(10, 400))
-                            callProxy(httpClient, pathMap, "Parallel $cnt")
-                        }
-                    }
-
-                    jobs.forEach { job ->
-                        job.join()
-                        job.getCancellationException().cause.shouldBeNull()
-                    }
-                }
-            }.shouldNotBeNull()
-        }
 
         logger.info { "Unregistering paths" }
-        val errorCnt = AtomicInteger()
-        for (path in pathMap) {
+        val counter = AtomicInteger(0)
+        val errorCnt = AtomicInteger(0)
+        pathMap.forEach { path ->
             try {
                 args.pathManager.unregisterPath("proxy-${path.key}")
+                counter.incrementAndGet()
             } catch (e: RequestFailureException) {
                 errorCnt.incrementAndGet()
             }
         }
 
+        counter.get() shouldEqual pathMap.size
         errorCnt.get() shouldEqual 0
         args.pathManager.pathMapSize() shouldEqual originalSize
 
         logger.info { "Shutting down ${httpServers.size} httpServers" }
         runBlocking {
-            for (httpServer in httpServers) {
+            httpServers.forEach { httpServer ->
                 launch(Dispatchers.Default) {
                     logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
                     httpServer.server.stop(5, 5, TimeUnit.SECONDS)

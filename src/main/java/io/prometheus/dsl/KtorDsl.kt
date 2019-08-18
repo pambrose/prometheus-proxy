@@ -32,11 +32,14 @@ import kotlinx.coroutines.runBlocking
 
 object KtorDsl {
 
+    fun newHttpClient(): HttpClient = HttpClient(CIO)
+
     suspend fun http(httpClient: HttpClient? = null, block: suspend HttpClient.() -> Unit) {
         if (httpClient == null) {
-            HttpClient(CIO).use { client ->
-                client.block()
-            }
+            newHttpClient()
+                .use { client ->
+                    client.block()
+                }
         } else {
             httpClient.block()
         }
