@@ -55,7 +55,6 @@
         <slf4j.version>1.7.25</slf4j.version>
         <kotlin.logging.version>1.7.5</kotlin.logging.version>
 
-        <junit.version>4.12</junit.version>
         <kluent.version>1.53</kluent.version>
 
         <maven.assembly.version>2.6</maven.assembly.version>
@@ -92,9 +91,8 @@
         </repository>
 
         <repository>
-            <id>kotlin-eap</id>
-            <name>Kotlin Releases</name>
-            <url>https://dl.bintray.com/kotlin/kotlin-eap/</url>
+            <id>jcenter</id>
+            <url>https://jcenter.bintray.com</url>
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>
@@ -107,39 +105,6 @@
             <id>kotlin-dev</id>
             <name>Kotlin Releases</name>
             <url>https://dl.bintray.com/kotlin/kotlin-dev/</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-        </repository>
-
-        <repository>
-            <id>kotlinx</id>
-            <url>https://dl.bintray.com/kotlin/kotlinx/</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-        </repository>
-
-        <repository>
-            <id>jcenter</id>
-            <url>https://jcenter.bintray.com</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-        </repository>
-
-        <repository>
-            <id>ktor</id>
-            <url>https://dl.bintray.com/kotlin/ktor</url>
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>
@@ -335,13 +300,6 @@
             <groupId>org.slf4j</groupId>
             <artifactId>jul-to-slf4j</artifactId>
             <version>${slf4j.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
         </dependency>
 
         <dependency>
