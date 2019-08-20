@@ -170,7 +170,7 @@ object ProxyTests : KLogging() {
                             .use { httpClient ->
                                 val counter = AtomicInteger(0)
                                 repeat(args.sequentialQueryCount) { cnt ->
-                                    val job = /*GlobalScope.*/launch(dispatcher + coroutineExceptionHandler) {
+                                    val job = launch(dispatcher + coroutineExceptionHandler) {
                                         callProxy(httpClient, pathMap, "Sequential $cnt")
                                         counter.incrementAndGet()
                                     }
@@ -197,8 +197,8 @@ object ProxyTests : KLogging() {
                                 val jobs = mutableListOf<Job>()
                                 val counter = AtomicInteger(0)
                                 repeat(args.parallelQueryCount) { cnt ->
-                                    jobs += /*GlobalScope.*/launch(dispatcher + coroutineExceptionHandler) {
-                                        delay(Random.nextLong(10, 400))
+                                    jobs += launch(dispatcher + coroutineExceptionHandler) {
+                                        delay(Random.nextLong(10, 200))
                                         callProxy(httpClient, pathMap, "Parallel $cnt")
                                         counter.incrementAndGet()
                                     }
