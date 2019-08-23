@@ -198,7 +198,7 @@ object ProxyTests : KLogging() {
                                 val counter = AtomicInteger(0)
                                 repeat(args.parallelQueryCount) { cnt ->
                                     jobs += launch(dispatcher + coroutineExceptionHandler) {
-                                        delay(Random.nextLong(10, 200))
+                                        delay(Random.nextLong(10, 300))
                                         callProxy(httpClient, pathMap, "Parallel $cnt")
                                         counter.incrementAndGet()
                                     }
