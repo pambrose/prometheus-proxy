@@ -186,7 +186,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                     )
             }
         } finally {
-            proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeRequest.scrapeId)
+            proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeRequest)
                 ?: logger.error { "Scrape request ${scrapeRequest.scrapeId} missing in map" }
         }
 

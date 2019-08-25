@@ -37,5 +37,6 @@ class ScrapeRequestManager {
 
     fun getFromScrapeRequestMap(scrapeId: Long) = scrapeRequestMap[scrapeId]
 
-    fun removeFromScrapeRequestMap(scrapeId: Long) = scrapeRequestMap.remove(scrapeId)
+    fun removeFromScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) =
+        scrapeRequestMap.remove(scrapeRequest.scrapeId)
 }

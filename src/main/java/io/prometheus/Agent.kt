@@ -155,11 +155,12 @@ class Agent(
         scrapeRequestBacklogSize.set(0)
         lastMsgSent = Millis(0)
 
-        val scrapeRequestChannel: Channel<ScrapeRequestAction> = Channel(configVals.scrapeRequestChannelSize)
-
         if (connectAgent()) {
             registerAgent()
             pathManager.registerPaths()
+
+            val scrapeRequestChannel = Channel<ScrapeRequestAction>(configVals.scrapeRequestChannelSize)
+
             readFromProxy(scrapeRequestChannel, disconnected)
 
             runBlocking {
