@@ -141,7 +141,7 @@ fun shutDownHookAction(service: Service) =
 @ExperimentalCoroutinesApi
 class VersionValidator : IParameterValidator {
     override fun validate(name: String, value: String) {
-        val console = JCommander.getConsole()
+        val console = JCommander().getConsole()
         console.println(getVersionDesc(false))
         exitProcess(0)
     }
