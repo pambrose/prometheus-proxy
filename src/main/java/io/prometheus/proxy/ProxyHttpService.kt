@@ -39,8 +39,6 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
-import io.prometheus.common.Millis
-import io.prometheus.common.Secs
 import io.prometheus.common.isNotSuccessful
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericIdleService
@@ -50,21 +48,26 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.TimeUnit
-import kotlin.properties.Delegates
+import kotlin.properties.Delegates.notNull
+import kotlin.time.ExperimentalTime
+import kotlin.time.milliseconds
+import kotlin.time.seconds
 
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@UseExperimental(ExperimentalTime::class)
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
     private val configVals = proxy.genericConfigVals.proxy
-    private var tracing: Tracing by Delegates.notNull()
-    private val idleTimeoutSecs = if (configVals.http.idleTimeoutSecs == -1) 45 else configVals.http.idleTimeoutSecs
+    private var tracing by notNull<Tracing>()
+    private val idleTimeoutSecs =
+        if (configVals.http.idleTimeoutSecs == -1) 45.seconds else configVals.http.idleTimeoutSecs.seconds
 
     private val httpServer =
         embeddedServer(
             CIO,
             port = httpPort,
-            configure = { connectionIdleTimeoutSeconds = idleTimeoutSecs }) {
+            configure = { connectionIdleTimeoutSeconds = idleTimeoutSecs.inSeconds.toInt() }) {
 
             install(DefaultHeaders)
             //install(CallLogging)
@@ -149,7 +152,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
         httpServer.stop(5, 5, TimeUnit.SECONDS)
 
         runBlocking {
-            delay(Secs(2).toMillis().value)
+            delay(2.seconds.toLongMilliseconds())
         }
     }
 
@@ -170,8 +173,8 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
         val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext, path, req.header(ACCEPT))
 
         try {
-            val timeoutSecs = Secs(configVals.internal.scrapeRequestTimeoutSecs)
-            val checkMillis = Millis(configVals.internal.scrapeRequestCheckMillis)
+            val timeoutSecs = configVals.internal.scrapeRequestTimeoutSecs.seconds
+            val checkMillis = configVals.internal.scrapeRequestCheckMillis.milliseconds
 
             proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
             agentContext.writeScrapeRequest(scrapeRequest)

@@ -30,7 +30,7 @@ import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
-import kotlin.properties.Delegates
+import kotlin.properties.Delegates.notNull
 import kotlin.system.exitProcess
 
 @KtorExperimentalAPI
@@ -71,9 +71,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
     var dynamicParams = mutableMapOf<String, String>()
         private set
 
-    private var config: Config by Delegates.notNull()
+    private var config by notNull<Config>()
 
-    var configVals: ConfigVals by Delegates.notNull()
+    var configVals by notNull<ConfigVals>()
         private set
 
     protected abstract fun assignConfigVals()

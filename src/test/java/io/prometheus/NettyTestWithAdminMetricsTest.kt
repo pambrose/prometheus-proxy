@@ -30,8 +30,6 @@ import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.Millis
-import io.prometheus.common.Secs
 import io.prometheus.common.simpleClassName
 import kotlinx.coroutines.*
 import mu.KLogging
@@ -40,10 +38,13 @@ import org.junit.BeforeClass
 import org.junit.Test
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
+import kotlin.time.ExperimentalTime
+import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @InternalCoroutinesApi
 @ExperimentalCoroutinesApi
+@UseExperimental(ExperimentalTime::class)
 class NettyTestWithAdminMetricsTest {
 
     @Test
@@ -72,10 +73,9 @@ class NettyTestWithAdminMetricsTest {
                 httpServerCount = 5,
                 pathCount = 25,
                 sequentialQueryCount = 100,
-                sequentialPauseMillis = Millis(25),
                 parallelQueryCount = 250,
-                caller = simpleClassName,
-                startingPort = 10900
+                startingPort = 10900,
+                caller = simpleClassName
             )
         )
 
@@ -100,7 +100,7 @@ class NettyTestWithAdminMetricsTest {
 
             // Wait long enough to trigger heartbeat for code coverage
             runBlocking {
-                delay(Secs(15).toMillis().value)
+                delay(15.seconds.toLongMilliseconds())
             }
 
             logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }

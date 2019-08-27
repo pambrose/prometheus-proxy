@@ -25,13 +25,15 @@ import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Agent
-import io.prometheus.delegate.AtomicDelegates
+import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.grpc.ProxyServiceGrpc
+import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
+import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.properties.Delegates
+import kotlin.properties.Delegates.notNull
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
@@ -43,11 +45,11 @@ class AgentGrpcService(
 
     private var grpcStarted = AtomicBoolean(false)
 
-    var channel: ManagedChannel by AtomicDelegates.nonNullableReference()
-    var grpcTracing: GrpcTracing by Delegates.notNull()
-    var blockingStub: ProxyServiceGrpc.ProxyServiceBlockingStub by AtomicDelegates.nonNullableReference()
-    var asyncStub: ProxyServiceGrpc.ProxyServiceStub by AtomicDelegates.nonNullableReference()
-    private var tracing: Tracing by Delegates.notNull()
+    var channel by nonNullableReference<ManagedChannel>()
+    var grpcTracing by notNull<GrpcTracing>()
+    var blockingStub by nonNullableReference<ProxyServiceBlockingStub>()
+    var asyncStub by nonNullableReference<ProxyServiceStub>()
+    private var tracing by notNull<Tracing>()
 
     val hostName: String
     val port: Int

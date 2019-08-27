@@ -21,7 +21,6 @@ package io.prometheus.proxy
 import com.google.common.util.concurrent.MoreExecutors
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
-import io.prometheus.common.Secs
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
@@ -29,9 +28,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
+import kotlin.time.ExperimentalTime
+import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@UseExperimental(ExperimentalTime::class)
 class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) :
     GenericExecutionThreadService() {
     init {
@@ -41,8 +43,8 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
 
     @Throws(Exception::class)
     override fun run() {
-        val maxInactivitySecs = Secs(proxy.configVals.maxAgentInactivitySecs)
-        val pauseSecs = Secs(proxy.configVals.staleAgentCheckPauseSecs)
+        val maxInactivitySecs = proxy.configVals.maxAgentInactivitySecs.seconds
+        val pauseSecs = proxy.configVals.staleAgentCheckPauseSecs.seconds
         while (isRunning) {
             proxy.agentContextManager.agentContextMap
                 .forEach { (agentId, agentContext) ->
@@ -55,7 +57,7 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
                     }
                 }
             runBlocking {
-                delay(pauseSecs.toMillis().value)
+                delay(pauseSecs.toLongMilliseconds())
             }
         }
     }

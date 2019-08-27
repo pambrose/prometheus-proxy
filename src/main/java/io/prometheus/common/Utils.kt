@@ -36,6 +36,8 @@ import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
 import kotlin.system.exitProcess
+import kotlin.time.ExperimentalTime
+import kotlin.time.milliseconds
 
 val localHostName: String by lazy {
     try {
@@ -100,26 +102,6 @@ fun newMapHealthCheck(map: Map<*, *>, size: Int) =
             HealthCheck.Result.unhealthy("Large size: ${map.size}")
     }
 
-inline class Millis(val value: Long) {
-    constructor(value: Int) : this(value.toLong())
-
-    fun toSecs() = Secs(value / 1000)
-    operator fun plus(other: Millis) = Millis(this.value + other.value)
-    operator fun minus(other: Millis) = Millis(this.value - other.value)
-    operator fun compareTo(other: Millis) = this.value.compareTo(other.value)
-    override fun toString() = "$value"
-}
-
-inline class Secs(val value: Long) {
-    constructor(value: Int) : this(value.toLong())
-
-    fun toMillis() = Millis(value * 1000)
-    operator fun plus(other: Secs) = Secs(this.value + other.value)
-    operator fun minus(other: Secs) = Secs(this.value - other.value)
-    operator fun compareTo(other: Secs) = this.value.compareTo(other.value)
-    override fun toString() = "$value"
-}
-
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 fun getVersionDesc(asJson: Boolean): String {
@@ -147,7 +129,8 @@ class VersionValidator : IParameterValidator {
     }
 }
 
-fun now() = Millis(System.currentTimeMillis())
+@UseExperimental(ExperimentalTime::class)
+fun now() = System.currentTimeMillis().milliseconds
 
 val HttpStatusCode.isSuccessful get() = value in (HttpStatusCode.OK.value..HttpStatusCode.MultipleChoices.value)
 

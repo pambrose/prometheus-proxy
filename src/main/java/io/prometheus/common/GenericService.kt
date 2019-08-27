@@ -36,7 +36,7 @@ import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import java.io.Closeable
-import kotlin.properties.Delegates
+import kotlin.properties.Delegates.notNull
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
@@ -59,10 +59,10 @@ abstract class GenericService protected constructor(
     val isMetricsEnabled = metricsConfig.enabled
     val isZipkinEnabled = zipkinConfig.enabled
 
-    private var jmxReporter: JmxReporter by Delegates.notNull()
-    var adminService: AdminService by Delegates.notNull()
-    var metricsService: MetricsService by Delegates.notNull()
-    var zipkinReporterService: ZipkinReporterService by Delegates.notNull()
+    private var jmxReporter by notNull<JmxReporter>()
+    var adminService by notNull<AdminService>()
+    var metricsService by notNull<MetricsService>()
+    var zipkinReporterService by notNull<ZipkinReporterService>()
 
     init {
         if (isAdminEnabled) {

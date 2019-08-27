@@ -34,8 +34,6 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.common.Millis
-import io.prometheus.common.Secs
 import io.prometheus.dsl.KtorDsl.blockingGet
 import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.http
@@ -49,9 +47,13 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
+import kotlin.time.ExperimentalTime
+import kotlin.time.minutes
+import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@UseExperimental(ExperimentalTime::class)
 object ProxyTests : KLogging() {
 
     fun timeoutTest(
@@ -67,7 +69,7 @@ object ProxyTests : KLogging() {
             embeddedServer(CIO, port = agentPort) {
                 routing {
                     get("/$agentPath") {
-                        delay(Secs(10).toMillis().value)
+                        delay(10.seconds.toLongMilliseconds())
                         call.respondText("I got back a value", ContentType.Text.Plain)
                     }
                 }
@@ -77,7 +79,7 @@ object ProxyTests : KLogging() {
             launch(Dispatchers.Default) {
                 logger.info { "Starting httpServer" }
                 httpServer.start()
-                delay(Secs(5).toMillis().value)
+                delay(5.seconds.toLongMilliseconds())
             }
         }
 
@@ -91,7 +93,7 @@ object ProxyTests : KLogging() {
             launch(Dispatchers.Default) {
                 logger.info { "Stopping httpServer" }
                 httpServer.stop(5, 5, TimeUnit.SECONDS)
-                delay(Secs(5).toMillis().value)
+                delay(5.seconds.toLongMilliseconds())
             }
         }
     }
@@ -101,7 +103,6 @@ object ProxyTests : KLogging() {
         val httpServerCount: Int,
         val pathCount: Int,
         val sequentialQueryCount: Int,
-        val sequentialPauseMillis: Millis,
         val parallelQueryCount: Int,
         val startingPort: Int = 9600,
         val caller: String
@@ -143,7 +144,7 @@ object ProxyTests : KLogging() {
                 launch(Dispatchers.Default) {
                     logger.info { "Starting httpServer listening on ${httpServer.port}" }
                     httpServer.server.start()
-                    delay(Secs(2).toMillis().value)
+                    delay(2.seconds.toLongMilliseconds())
                 }
             }
         }
@@ -165,7 +166,7 @@ object ProxyTests : KLogging() {
         Executors.newSingleThreadExecutor().asCoroutineDispatcher()
             .use { dispatcher ->
                 runBlocking {
-                    withTimeoutOrNull(Secs(60).toMillis().value) {
+                    withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
                         newHttpClient()
                             .use { httpClient ->
                                 val counter = AtomicInteger(0)
@@ -178,7 +179,6 @@ object ProxyTests : KLogging() {
                                     job.join()
                                     job.getCancellationException().cause.shouldBeNull()
 
-                                    //delay(args.sequentialPauseMillis.value)
                                 }.shouldNotBeNull()
                                 counter.get() shouldEqual args.sequentialQueryCount
                             }
@@ -191,7 +191,7 @@ object ProxyTests : KLogging() {
         Executors.newFixedThreadPool(20).asCoroutineDispatcher()
             .use { dispatcher ->
                 runBlocking {
-                    withTimeoutOrNull(Secs(60).toMillis().value) {
+                    withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
                         newHttpClient()
                             .use { httpClient ->
                                 val jobs = mutableListOf<Job>()
@@ -237,7 +237,7 @@ object ProxyTests : KLogging() {
                 launch(Dispatchers.Default) {
                     logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
                     httpServer.server.stop(5, 5, TimeUnit.SECONDS)
-                    delay(Secs(5).toMillis().value)
+                    delay(5.seconds.toLongMilliseconds())
                 }
             }
         }

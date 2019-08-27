@@ -21,7 +21,6 @@ package io.prometheus
 import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.agent.AgentPathManager
-import io.prometheus.common.Secs
 import io.prometheus.dsl.KtorDsl.blockingGet
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
@@ -31,11 +30,14 @@ import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.ExperimentalTime
+import kotlin.time.seconds
 
 
 @KtorExperimentalAPI
 @InternalCoroutinesApi
 @ExperimentalCoroutinesApi
+@UseExperimental(ExperimentalTime::class)
 object SimpleTests : KLogging() {
 
     fun missingPathTest(caller: String) {
@@ -91,7 +93,7 @@ object SimpleTests : KLogging() {
         val originalSize = pathManager.pathMapSize()
 
         runBlocking {
-            withTimeoutOrNull(Secs(30).toMillis().value) {
+            withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
                 val mutex = Mutex()
                 val jobs = mutableListOf<Job>()
                 repeat(TestConstants.REPS) {
@@ -113,7 +115,7 @@ object SimpleTests : KLogging() {
         pathManager.pathMapSize() shouldEqual (originalSize + TestConstants.REPS)
 
         runBlocking {
-            withTimeoutOrNull(Secs(30).toMillis().value) {
+            withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
                 val jobs = mutableListOf<Job>()
                 for (path in paths)
                     jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {

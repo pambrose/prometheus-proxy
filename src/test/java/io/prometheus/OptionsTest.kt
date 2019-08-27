@@ -64,7 +64,7 @@ class OptionsTest {
 
     @Test
     fun verifyQuotedPropValue() {
-        val configVals = readProxyOptions(listOf("-D\"proxy.http.port=9394\""))
+        val configVals = readProxyOptions(listOf("-Dproxy.http.port=9394"))
         configVals.proxy.http.port shouldEqual 9394
     }
 
@@ -76,9 +76,7 @@ class OptionsTest {
 
     @Test
     fun verifyProxyDefaults() {
-        val options = ProxyOptions(listOf())
-
-        options
+        ProxyOptions(listOf())
             .apply {
                 proxyHttpPort shouldEqual 8080
                 proxyAgentPort shouldEqual 50051

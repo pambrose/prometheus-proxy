@@ -20,9 +20,7 @@ package io.prometheus.proxy
 
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
-import io.prometheus.common.Secs
 import io.prometheus.common.now
-import io.prometheus.delegate.AtomicDelegates.atomicMillis
 import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,9 +28,12 @@ import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@UseExperimental(ExperimentalTime::class)
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
@@ -41,14 +42,14 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(channelSize)
     private val channelBacklogSize = AtomicInteger(0)
 
-    private var lastActivityTime by atomicMillis()
+    private var lastActivityTime by nonNullableReference<Duration>()
     private var valid = AtomicBoolean(true)
 
-    var hostName: String by nonNullableReference()
-    var agentName: String by nonNullableReference()
+    var hostName by nonNullableReference<String>()
+    var agentName by nonNullableReference<String>()
 
-    val inactivitySecs: Secs
-        get() = (now() - lastActivityTime).toSecs()
+    val inactivitySecs
+        get() = now() - lastActivityTime
 
     val scrapeRequestBacklogSize: Int
         get() = channelBacklogSize.get()

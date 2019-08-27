@@ -21,9 +21,8 @@ package io.prometheus.proxy
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
-import io.prometheus.common.Millis
 import io.prometheus.common.now
-import io.prometheus.delegate.AtomicDelegates
+import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,9 +30,12 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@UseExperimental(ExperimentalTime::class)
 class ScrapeRequestWrapper(
     proxy: Proxy,
     val agentContext: AgentContext,
@@ -45,20 +47,20 @@ class ScrapeRequestWrapper(
     private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
     val scrapeRequest = newScrapeRequest(agentContext.agentId, SCRAPE_ID_GENERATOR.getAndIncrement(), path, accept)
-    var scrapeResponse by AtomicDelegates.nonNullableReference<ScrapeResponse>()
+    var scrapeResponse by nonNullableReference<ScrapeResponse>()
 
     val scrapeId: Long
         get() = scrapeRequest.scrapeId
 
-    fun ageInSecs() = (now() - createTime).toSecs()
+    fun ageInSecs() = now() - createTime
 
     fun markComplete() {
         requestTimer?.observeDuration()
         completeChannel.close()
     }
 
-    suspend fun suspendUntilComplete(waitMillis: Millis) =
-        withTimeoutOrNull(waitMillis.value) {
+    suspend fun suspendUntilComplete(waitMillis: Duration) =
+        withTimeoutOrNull(waitMillis.toLongMilliseconds()) {
             // completeChannel will eventually close and never get a value, or timeout
             try {
                 completeChannel.receive()

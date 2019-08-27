@@ -28,7 +28,6 @@ import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
-import io.prometheus.common.Secs
 import io.prometheus.dsl.GrpcDsl.server
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
@@ -37,10 +36,13 @@ import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import java.io.IOException
-import kotlin.properties.Delegates
+import kotlin.properties.Delegates.notNull
+import kotlin.time.ExperimentalTime
+import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@UseExperimental(ExperimentalTime::class)
 class ProxyGrpcService(
     private val proxy: Proxy,
     private val port: Int = -1,
@@ -55,8 +57,8 @@ class ProxyGrpcService(
                 HealthCheck.Result.healthy()
         }
 
-    private var tracing: Tracing by Delegates.notNull()
-    private var grpcTracing: GrpcTracing by Delegates.notNull()
+    private var tracing by notNull<Tracing>()
+    private var grpcTracing by notNull<GrpcTracing>()
     private val grpcServer: Server
 
     init {
@@ -74,7 +76,7 @@ class ProxyGrpcService(
                 addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
                 addTransportFilter(ProxyTransportFilter(proxy))
             }
-        Servers.shutdownWithJvm(grpcServer, Secs(2).toMillis().value)
+        Servers.shutdownWithJvm(grpcServer, 2.seconds.toLongMilliseconds())
 
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
     }
@@ -87,7 +89,7 @@ class ProxyGrpcService(
     override fun shutDown() {
         if (proxy.isZipkinEnabled)
             tracing.close()
-        Servers.shutdownGracefully(grpcServer, Secs(2).toMillis().value)
+        Servers.shutdownGracefully(grpcServer, 2.seconds.toLongMilliseconds())
     }
 
     override fun toString() =

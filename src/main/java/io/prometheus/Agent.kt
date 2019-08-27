@@ -39,7 +39,6 @@ import io.prometheus.common.GrpcObjects.Companion.newRegisterAgentRequest
 import io.prometheus.common.GrpcObjects.Companion.newScrapeResponse
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
-import io.prometheus.delegate.AtomicDelegates.atomicMillis
 import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.dsl.GuavaDsl.toStringElements
@@ -56,9 +55,14 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates.notNull
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
+import kotlin.time.milliseconds
+import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@UseExperimental(ExperimentalTime::class)
 class Agent(
     options: AgentOptions,
     inProcessServerName: String = "",
@@ -87,10 +91,10 @@ class Agent(
     private val reconnectLimiter =
         RateLimiter.create(1.0 / configVals.reconectPauseSecs).apply { acquire() } // Prime the limiter
 
-    private var lastMsgSent by atomicMillis()
-    private var metrics: AgentMetrics by notNull()
+    private var lastMsgSent by nonNullableReference<Duration>()
+    private var metrics by notNull<AgentMetrics>()
 
-    var agentId: String by nonNullableReference("")
+    var agentId by nonNullableReference("")
 
     val scrapeRequestBacklogSize = AtomicInteger(0)
     val pathManager = AgentPathManager(this)
@@ -153,7 +157,7 @@ class Agent(
         // Reset values for each connection attempt
         pathManager.clear()
         scrapeRequestBacklogSize.set(0)
-        lastMsgSent = Millis(0)
+        lastMsgSent = 0.milliseconds
 
         if (connectAgent()) {
             registerAgent()
@@ -172,15 +176,15 @@ class Agent(
 
     private suspend fun startHeartBeat(disconnected: AtomicBoolean) {
         if (configVals.heartbeatEnabled) {
-            val heartbeatPauseMillis = Millis(configVals.heartbeatCheckPauseMillis).value
-            val maxInactivitySecs = Secs(configVals.heartbeatMaxInactivitySecs)
-            logger.info { "Heartbeat scheduled to fire after $maxInactivitySecs secs of inactivity" }
+            val heartbeatPauseMillis = configVals.heartbeatCheckPauseMillis.milliseconds
+            val maxInactivitySecs = configVals.heartbeatMaxInactivitySecs.seconds
+            logger.info { "Heartbeat scheduled to fire after ${maxInactivitySecs.inSeconds} secs of inactivity" }
 
             while (isRunning && !disconnected.get()) {
                 val timeSinceLastWriteMillis = now() - lastMsgSent
-                if (timeSinceLastWriteMillis > maxInactivitySecs.toMillis())
+                if (timeSinceLastWriteMillis > maxInactivitySecs)
                     sendHeartBeat(disconnected)
-                delay(heartbeatPauseMillis)
+                delay(heartbeatPauseMillis.toLongMilliseconds())
             }
             logger.info { "Heartbeat completed" }
 

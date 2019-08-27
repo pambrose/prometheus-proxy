@@ -30,7 +30,6 @@ import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.Millis
 import io.prometheus.common.simpleClassName
 import kotlinx.coroutines.*
 import mu.KLogging
@@ -38,10 +37,12 @@ import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
 import java.util.concurrent.TimeUnit.SECONDS
+import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
 @InternalCoroutinesApi
 @ExperimentalCoroutinesApi
+@UseExperimental(ExperimentalTime::class)
 class InProcessTestNoAdminMetricsTest {
 
     @Test
@@ -70,10 +71,9 @@ class InProcessTestNoAdminMetricsTest {
                 httpServerCount = 5,
                 pathCount = 25,
                 sequentialQueryCount = 100,
-                sequentialPauseMillis = Millis(25),
                 parallelQueryCount = 250,
-                caller = simpleClassName,
-                startingPort = 10100
+                startingPort = 10100,
+                caller = simpleClassName
             )
         )
 

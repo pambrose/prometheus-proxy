@@ -103,6 +103,17 @@
         </repository>
 
         <repository>
+            <id>jcenter</id>
+            <url>https://jcenter.bintray.com</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+
+        <repository>
             <id>kotlin-dev</id>
             <name>Kotlin Releases</name>
             <url>https://dl.bintray.com/kotlin/kotlin-dev/</url>
@@ -142,6 +153,31 @@
 
     <dependencyManagement>
         <dependencies>
+
+            <dependency>
+                <groupId>org.jetbrains.kotlinx</groupId>
+                <artifactId>kotlinx-coroutines-core</artifactId>
+                <version>${coroutines.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.jetbrains.kotlinx</groupId>
+                <artifactId>kotlinx-coroutines-jdk8</artifactId>
+                <version>${coroutines.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.jetbrains.kotlinx</groupId>
+                <artifactId>kotlinx-coroutines-slf4j</artifactId>
+                <version>${coroutines.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.jetbrains.kotlinx</groupId>
+                <artifactId>kotlinx-coroutines-debug</artifactId>
+                <version>${coroutines.version}</version>
+            </dependency>
+
             <dependency>
                 <groupId>io.grpc</groupId>
                 <artifactId>grpc-all</artifactId>
@@ -471,7 +507,8 @@
                 <configuration>
                     <jvmTarget>1.8</jvmTarget>
                     <args>
-                        <arg>-XXLanguage:+InlineClasses</arg>
+                        <!-- <arg>-XXLanguage:+InlineClasses</arg> -->
+                        <arg>-Xuse-experimental=kotlin.Experimental</arg>
                     </args>
                 </configuration>
             </plugin>
