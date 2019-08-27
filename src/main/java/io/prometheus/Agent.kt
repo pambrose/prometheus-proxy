@@ -174,11 +174,11 @@ class Agent(
         }
     }
 
-    private suspend fun startHeartBeat(disconnected: AtomicBoolean) {
+    private suspend fun startHeartBeat(disconnected: AtomicBoolean) =
         if (configVals.heartbeatEnabled) {
             val heartbeatPauseMillis = configVals.heartbeatCheckPauseMillis.milliseconds
             val maxInactivitySecs = configVals.heartbeatMaxInactivitySecs.seconds
-            logger.info { "Heartbeat scheduled to fire after ${maxInactivitySecs.inSeconds} secs of inactivity" }
+            logger.info { "Heartbeat scheduled to fire after ${maxInactivitySecs.inSeconds.toInt()} secs of inactivity" }
 
             while (isRunning && !disconnected.get()) {
                 val timeSinceLastWriteMillis = now() - lastMsgSent
@@ -191,7 +191,6 @@ class Agent(
         } else {
             logger.info { "Heartbeat disabled" }
         }
-    }
 
     private fun updateScrapeCounter(type: String) {
         if (isMetricsEnabled && type.isNotEmpty())
