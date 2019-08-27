@@ -21,11 +21,11 @@ package io.prometheus.proxy
 import com.google.common.util.concurrent.MoreExecutors
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
+import io.prometheus.common.delay
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.time.ExperimentalTime
@@ -43,21 +43,21 @@ class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentCont
 
     @Throws(Exception::class)
     override fun run() {
-        val maxInactivitySecs = proxy.configVals.maxAgentInactivitySecs.seconds
-        val pauseSecs = proxy.configVals.staleAgentCheckPauseSecs.seconds
+        val maxInactivityTime = proxy.configVals.maxAgentInactivitySecs.seconds
+        val pauseTime = proxy.configVals.staleAgentCheckPauseSecs.seconds
         while (isRunning) {
             proxy.agentContextManager.agentContextMap
                 .forEach { (agentId, agentContext) ->
-                    val inactivitySecs = agentContext.inactivitySecs
-                    if (inactivitySecs > maxInactivitySecs) {
-                        logger.info { "Evicting agent after $inactivitySecs secs of inactivty $agentContext" }
+                    val inactivityTime = agentContext.inactivityTime
+                    if (inactivityTime > maxInactivityTime) {
+                        logger.info { "Evicting agent after $inactivityTime secs of inactivty $agentContext" }
                         proxy.removeAgentContext(agentId)
                         if (proxy.isMetricsEnabled)
                             proxy.metrics.agentEvictions.inc()
                     }
                 }
             runBlocking {
-                delay(pauseSecs.toLongMilliseconds())
+                delay(pauseTime)
             }
         }
     }

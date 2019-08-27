@@ -39,12 +39,12 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
+import io.prometheus.common.delay
 import io.prometheus.common.isNotSuccessful
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.TimeUnit
@@ -53,21 +53,20 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
-
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 @UseExperimental(ExperimentalTime::class)
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
     private val configVals = proxy.genericConfigVals.proxy
     private var tracing by notNull<Tracing>()
-    private val idleTimeoutSecs =
+    private val idleTimeout =
         if (configVals.http.idleTimeoutSecs == -1) 45.seconds else configVals.http.idleTimeoutSecs.seconds
 
     private val httpServer =
         embeddedServer(
             CIO,
             port = httpPort,
-            configure = { connectionIdleTimeoutSeconds = idleTimeoutSecs.inSeconds.toInt() }) {
+            configure = { connectionIdleTimeoutSeconds = idleTimeout.inSeconds.toInt() }) {
 
             install(DefaultHeaders)
             //install(CallLogging)
@@ -152,7 +151,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
         httpServer.stop(5, 5, TimeUnit.SECONDS)
 
         runBlocking {
-            delay(2.seconds.toLongMilliseconds())
+            delay(2.seconds)
         }
     }
 
@@ -173,16 +172,16 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
         val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext, path, req.header(ACCEPT))
 
         try {
-            val timeoutSecs = configVals.internal.scrapeRequestTimeoutSecs.seconds
-            val checkMillis = configVals.internal.scrapeRequestCheckMillis.milliseconds
+            val timeoutTime = configVals.internal.scrapeRequestTimeoutSecs.seconds
+            val checkTime = configVals.internal.scrapeRequestCheckMillis.milliseconds
 
             proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
             agentContext.writeScrapeRequest(scrapeRequest)
 
             // Returns false if timed out
-            while (!scrapeRequest.suspendUntilComplete(checkMillis)) {
+            while (!scrapeRequest.suspendUntilComplete(checkTime)) {
                 // Check if agent is disconnected or agent is hung
-                if (scrapeRequest.ageInSecs() >= timeoutSecs || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
+                if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
                     return ScrapeRequestResponse(
                         statusCode = HttpStatusCode.ServiceUnavailable,
                         updateMsg = "timed_out"

@@ -34,6 +34,7 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
+import io.prometheus.common.delay
 import io.prometheus.dsl.KtorDsl.blockingGet
 import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.http
@@ -69,7 +70,7 @@ object ProxyTests : KLogging() {
             embeddedServer(CIO, port = agentPort) {
                 routing {
                     get("/$agentPath") {
-                        delay(10.seconds.toLongMilliseconds())
+                        delay(10.seconds)
                         call.respondText("I got back a value", ContentType.Text.Plain)
                     }
                 }
@@ -79,7 +80,7 @@ object ProxyTests : KLogging() {
             launch(Dispatchers.Default) {
                 logger.info { "Starting httpServer" }
                 httpServer.start()
-                delay(5.seconds.toLongMilliseconds())
+                delay(5.seconds)
             }
         }
 
@@ -93,7 +94,7 @@ object ProxyTests : KLogging() {
             launch(Dispatchers.Default) {
                 logger.info { "Stopping httpServer" }
                 httpServer.stop(5, 5, TimeUnit.SECONDS)
-                delay(5.seconds.toLongMilliseconds())
+                delay(5.seconds)
             }
         }
     }
@@ -144,7 +145,7 @@ object ProxyTests : KLogging() {
                 launch(Dispatchers.Default) {
                     logger.info { "Starting httpServer listening on ${httpServer.port}" }
                     httpServer.server.start()
-                    delay(2.seconds.toLongMilliseconds())
+                    delay(2.seconds)
                 }
             }
         }
@@ -237,7 +238,7 @@ object ProxyTests : KLogging() {
                 launch(Dispatchers.Default) {
                     logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
                     httpServer.server.stop(5, 5, TimeUnit.SECONDS)
-                    delay(5.seconds.toLongMilliseconds())
+                    delay(5.seconds)
                 }
             }
         }

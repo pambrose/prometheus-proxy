@@ -20,7 +20,6 @@ package io.prometheus.proxy
 
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
-import io.prometheus.common.now
 import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,8 +27,8 @@ import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
+import kotlin.time.MonoClock
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
@@ -42,14 +41,15 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(channelSize)
     private val channelBacklogSize = AtomicInteger(0)
 
-    private var lastActivityTime by nonNullableReference<Duration>()
+    private val clock = MonoClock
+    private var lastActivityTimeMark by nonNullableReference(clock.markNow())
     private var valid = AtomicBoolean(true)
 
     var hostName by nonNullableReference<String>()
     var agentName by nonNullableReference<String>()
 
-    val inactivitySecs
-        get() = now() - lastActivityTime
+    val inactivityTime
+        get() = lastActivityTimeMark.elapsedNow()
 
     val scrapeRequestBacklogSize: Int
         get() = channelBacklogSize.get()
@@ -78,7 +78,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     }
 
     fun markActivity() {
-        lastActivityTime = now()
+        lastActivityTimeMark = clock.markNow()
     }
 
     override fun toString() =
@@ -88,7 +88,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
             add("remoteAddr", remoteAddr)
             add("agentName", agentName)
             add("hostName", hostName)
-            add("inactivitySecs", inactivitySecs)
+            add("inactivitySecs", inactivityTime)
         }
 
     companion object {

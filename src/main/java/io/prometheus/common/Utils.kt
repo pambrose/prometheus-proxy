@@ -36,8 +36,8 @@ import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
 import kotlin.system.exitProcess
+import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
-import kotlin.time.milliseconds
 
 val localHostName: String by lazy {
     try {
@@ -129,8 +129,10 @@ class VersionValidator : IParameterValidator {
     }
 }
 
-@UseExperimental(ExperimentalTime::class)
-fun now() = System.currentTimeMillis().milliseconds
+@ExperimentalTime
+suspend fun delay(duration: Duration) {
+    kotlinx.coroutines.delay(duration.toLongMilliseconds())
+}
 
 val HttpStatusCode.isSuccessful get() = value in (HttpStatusCode.OK.value..HttpStatusCode.MultipleChoices.value)
 

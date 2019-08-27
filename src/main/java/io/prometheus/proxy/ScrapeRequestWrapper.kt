@@ -21,7 +21,6 @@ package io.prometheus.proxy
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
-import io.prometheus.common.now
 import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeResponse
@@ -32,6 +31,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
+import kotlin.time.MonoClock
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
@@ -42,7 +42,8 @@ class ScrapeRequestWrapper(
     path: String,
     accept: String?
 ) {
-    private val createTime = now()
+    private val clock = MonoClock
+    private val createTimeMark = clock.markNow()
     private val completeChannel = Channel<Boolean>()
     private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
@@ -52,7 +53,7 @@ class ScrapeRequestWrapper(
     val scrapeId: Long
         get() = scrapeRequest.scrapeId
 
-    fun ageInSecs() = now() - createTime
+    fun ageDuration() = createTimeMark.elapsedNow()
 
     fun markComplete() {
         requestTimer?.observeDuration()

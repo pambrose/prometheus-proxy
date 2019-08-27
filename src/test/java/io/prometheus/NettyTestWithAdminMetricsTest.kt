@@ -30,6 +30,7 @@ import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.delay
 import io.prometheus.common.simpleClassName
 import kotlinx.coroutines.*
 import mu.KLogging
@@ -100,7 +101,7 @@ class NettyTestWithAdminMetricsTest {
 
             // Wait long enough to trigger heartbeat for code coverage
             runBlocking {
-                delay(15.seconds.toLongMilliseconds())
+                delay(15.seconds)
             }
 
             logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }

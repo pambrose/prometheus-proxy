@@ -46,8 +46,11 @@ import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.http
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
@@ -55,8 +58,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates.notNull
-import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
+import kotlin.time.MonoClock
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
@@ -91,7 +94,8 @@ class Agent(
     private val reconnectLimiter =
         RateLimiter.create(1.0 / configVals.reconectPauseSecs).apply { acquire() } // Prime the limiter
 
-    private var lastMsgSent by nonNullableReference<Duration>()
+    private val clock = MonoClock
+    private var lastMsgSentMark by nonNullableReference(clock.markNow())
     private var metrics by notNull<AgentMetrics>()
 
     var agentId by nonNullableReference("")
@@ -157,7 +161,7 @@ class Agent(
         // Reset values for each connection attempt
         pathManager.clear()
         scrapeRequestBacklogSize.set(0)
-        lastMsgSent = 0.milliseconds
+        lastMsgSentMark = clock.markNow()
 
         if (connectAgent()) {
             registerAgent()
@@ -176,18 +180,17 @@ class Agent(
 
     private suspend fun startHeartBeat(disconnected: AtomicBoolean) =
         if (configVals.heartbeatEnabled) {
-            val heartbeatPauseMillis = configVals.heartbeatCheckPauseMillis.milliseconds
-            val maxInactivitySecs = configVals.heartbeatMaxInactivitySecs.seconds
-            logger.info { "Heartbeat scheduled to fire after ${maxInactivitySecs.inSeconds.toInt()} secs of inactivity" }
+            val heartbeatPauseTime = configVals.heartbeatCheckPauseMillis.milliseconds
+            val maxInactivityTime = configVals.heartbeatMaxInactivitySecs.seconds
+            logger.info { "Heartbeat scheduled to fire after ${maxInactivityTime.inSeconds.toInt()} secs of inactivity" }
 
             while (isRunning && !disconnected.get()) {
-                val timeSinceLastWriteMillis = now() - lastMsgSent
-                if (timeSinceLastWriteMillis > maxInactivitySecs)
+                val timeSinceLastWrite = lastMsgSentMark.elapsedNow()
+                if (timeSinceLastWrite > maxInactivityTime)
                     sendHeartBeat(disconnected)
-                delay(heartbeatPauseMillis.toLongMilliseconds())
+                delay(heartbeatPauseTime)
             }
             logger.info { "Heartbeat completed" }
-
         } else {
             logger.info { "Heartbeat disabled" }
         }
@@ -347,7 +350,7 @@ class Agent(
     }
 
     fun markMsgSent() {
-        lastMsgSent = now()
+        lastMsgSentMark = clock.markNow()
     }
 
     private fun sendHeartBeat(disconnected: AtomicBoolean) {
