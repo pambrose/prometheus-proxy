@@ -115,7 +115,6 @@ object ProxyTests : KLogging() {
     fun proxyCallTest(args: ProxyCallTestArgs) {
         logger.info { "Calling proxyCallTest() from ${args.caller}" }
 
-        val httpServers = mutableListOf<HttpServerWrapper>()
         val pathMap = newConcurrentMap<Int, Int>()
 
         // Take into account pre-existing paths already registered
@@ -123,9 +122,9 @@ object ProxyTests : KLogging() {
 
         // Create the endpoints
         logger.info { "Creating ${args.httpServerCount} httpServers" }
-        repeat(args.httpServerCount) { i ->
-            val port = args.startingPort + i
-            httpServers +=
+        val httpServers =
+            List(args.httpServerCount) { i ->
+                val port = args.startingPort + i
                 HttpServerWrapper(
                     port = port,
                     server = embeddedServer(CIO, port = port) {
@@ -136,7 +135,7 @@ object ProxyTests : KLogging() {
                         }
                     }
                 )
-        }
+            }
 
         logger.info { "Starting ${args.httpServerCount} httpServers" }
 
@@ -154,10 +153,10 @@ object ProxyTests : KLogging() {
 
         // Create the paths
         logger.info { "Registering paths" }
-        repeat(args.pathCount) {
+        repeat(args.pathCount) { i ->
             val index = Random.nextInt(httpServers.size)
-            args.pathManager.registerPath("proxy-$it", "${args.startingPort + index}/agent-$index".fixUrl())
-            pathMap[it] = index
+            args.pathManager.registerPath("proxy-$i", "${args.startingPort + index}/agent-$index".fixUrl())
+            pathMap[i] = index
         }
 
         args.pathManager.pathMapSize() shouldEqual originalSize + args.pathCount
@@ -195,15 +194,15 @@ object ProxyTests : KLogging() {
                     withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
                         newHttpClient()
                             .use { httpClient ->
-                                val jobs = mutableListOf<Job>()
                                 val counter = AtomicInteger(0)
-                                repeat(args.parallelQueryCount) { cnt ->
-                                    jobs += launch(dispatcher + coroutineExceptionHandler) {
-                                        delay(Random.nextLong(10, 300))
-                                        callProxy(httpClient, pathMap, "Parallel $cnt")
-                                        counter.incrementAndGet()
+                                val jobs =
+                                    List(args.parallelQueryCount) { cnt ->
+                                        launch(dispatcher + coroutineExceptionHandler) {
+                                            delay(Random.nextLong(10, 300))
+                                            callProxy(httpClient, pathMap, "Parallel $cnt")
+                                            counter.incrementAndGet()
+                                        }
                                     }
-                                }
 
                                 jobs.forEach { job ->
                                     job.join()

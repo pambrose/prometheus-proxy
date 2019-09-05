@@ -29,7 +29,6 @@ import mu.KLogging
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.ExperimentalTime
 import kotlin.time.seconds
 
@@ -61,8 +60,8 @@ object SimpleTests : KLogging() {
         val originalSize = pathManager.pathMapSize()
 
         var cnt = 0
-        repeat(TestConstants.REPS) {
-            val path = "test-$it"
+        repeat(TestConstants.REPS) { i ->
+            val path = "test-$i"
             pathManager.let { manager ->
                 manager.registerPath(path, "${TestConstants.PROXY_PORT}/$path".fixUrl())
                 cnt++
@@ -87,7 +86,6 @@ object SimpleTests : KLogging() {
     fun threadedAddRemovePathsTest(pathManager: AgentPathManager, caller: String) {
         logger.info { "Calling threadedAddRemovePathsTest() from $caller" }
         val paths = mutableListOf<String>()
-        val cnt = AtomicInteger(0)
 
         // Take into account pre-existing paths already registered
         val originalSize = pathManager.pathMapSize()
@@ -95,15 +93,16 @@ object SimpleTests : KLogging() {
         runBlocking {
             withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
                 val mutex = Mutex()
-                val jobs = mutableListOf<Job>()
-                repeat(TestConstants.REPS) {
-                    jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
-                        val path = "test-${cnt.getAndIncrement()}"
-                        val url = "${TestConstants.PROXY_PORT}/$path".fixUrl()
-                        mutex.withLock { paths += path }
-                        pathManager.registerPath(path, url)
+                val jobs =
+                    List(TestConstants.REPS) { i ->
+                        GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                            val path = "test-$i}"
+                            val url = "${TestConstants.PROXY_PORT}/$path".fixUrl()
+                            mutex.withLock { paths += path }
+                            pathManager.registerPath(path, url)
+                        }
                     }
-                }
+
                 jobs.forEach { job ->
                     job.join()
                     job.getCancellationException().cause.shouldBeNull()
@@ -116,10 +115,11 @@ object SimpleTests : KLogging() {
 
         runBlocking {
             withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
-                val jobs = mutableListOf<Job>()
-                for (path in paths)
-                    jobs += GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
-                        pathManager.unregisterPath(path)
+                val jobs =
+                    List(paths.size) {
+                        GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                            pathManager.unregisterPath(paths[it])
+                        }
                     }
                 jobs.forEach { job ->
                     job.join()
