@@ -18,7 +18,11 @@
 
 package io.prometheus.proxy
 
-import io.grpc.*
+import io.grpc.ForwardingServerCall
+import io.grpc.Metadata
+import io.grpc.ServerCall
+import io.grpc.ServerCallHandler
+import io.grpc.ServerInterceptor
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,9 +31,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 @ExperimentalCoroutinesApi
 class ProxyInterceptor : ServerInterceptor {
 
-    override fun <ReqT, RespT> interceptCall(call: ServerCall<ReqT, RespT>,
-                                             requestHeaders: Metadata,
-                                             handler: ServerCallHandler<ReqT, RespT>): ServerCall.Listener<ReqT> {
+    override fun <ReqT, RespT> interceptCall(
+        call: ServerCall<ReqT, RespT>,
+        requestHeaders: Metadata,
+        handler: ServerCallHandler<ReqT, RespT>
+    ): ServerCall.Listener<ReqT> {
         val attributes = call.attributes
         //val methodDescriptor = call.methodDescriptor
         // final String methodName = methodDescriptor.getFullMethodName();
@@ -43,7 +49,8 @@ class ProxyInterceptor : ServerInterceptor {
                     super.sendHeaders(headers)
                 }
             },
-            requestHeaders)
+            requestHeaders
+        )
     }
 
     companion object {

@@ -26,17 +26,17 @@ data class ZipkinConfig(val enabled: Boolean,
 
     companion object {
         fun newZipkinConfig(zipkin: ConfigVals.Proxy2.Internal2.Zipkin2) =
-                ZipkinConfig(zipkin.enabled,
-                             zipkin.hostname,
-                             zipkin.port,
-                             zipkin.path,
-                             zipkin.serviceName)
+            ZipkinConfig(zipkin.enabled,
+                         zipkin.hostname,
+                         zipkin.port,
+                         zipkin.path,
+                         zipkin.serviceName)
 
         fun newZipkinConfig(zipkin: ConfigVals.Agent.Internal.Zipkin) =
-                ZipkinConfig(zipkin.enabled,
-                             zipkin.hostname,
-                             zipkin.port,
-                             zipkin.path,
-                             zipkin.serviceName)
+            ZipkinConfig(zipkin.enabled,
+                         zipkin.hostname,
+                         zipkin.port,
+                         zipkin.path,
+                         zipkin.serviceName)
     }
 }

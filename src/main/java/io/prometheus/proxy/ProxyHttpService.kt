@@ -19,7 +19,9 @@
 package io.prometheus.proxy
 
 import brave.Tracing
-import com.google.common.net.HttpHeaders.*
+import com.google.common.net.HttpHeaders.ACCEPT
+import com.google.common.net.HttpHeaders.ACCEPT_ENCODING
+import com.google.common.net.HttpHeaders.CONTENT_ENCODING
 import com.google.common.util.concurrent.MoreExecutors
 import io.ktor.application.call
 import io.ktor.application.install

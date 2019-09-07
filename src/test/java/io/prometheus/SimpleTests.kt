@@ -22,9 +22,15 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.dsl.KtorDsl.blockingGet
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import mu.KLogging
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldEqual

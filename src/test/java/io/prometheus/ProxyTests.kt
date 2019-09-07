@@ -39,7 +39,14 @@ import io.prometheus.dsl.KtorDsl.blockingGet
 import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.http
 import io.prometheus.dsl.KtorDsl.newHttpClient
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import mu.KLogging
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldEqual

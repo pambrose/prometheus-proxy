@@ -25,5 +25,5 @@ object JettyDsl {
     fun server(port: Int, block: Server.() -> Unit) = Server(port).apply { block.invoke(this) }
 
     fun servletContextHandler(block: ServletContextHandler.() -> Unit) =
-            ServletContextHandler().apply { block.invoke(this) }
+        ServletContextHandler().apply { block.invoke(this) }
 }

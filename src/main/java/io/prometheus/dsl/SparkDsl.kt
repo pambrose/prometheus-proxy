@@ -26,5 +26,5 @@ object SparkDsl {
         Service.ignite().apply { block.invoke(this) }
 
     fun servletContextHandler(block: ServletContextHandler.() -> Unit) =
-            ServletContextHandler().apply { block.invoke(this) }
+        ServletContextHandler().apply { block.invoke(this) }
 }

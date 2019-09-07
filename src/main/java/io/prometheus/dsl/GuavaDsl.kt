@@ -26,16 +26,16 @@ import io.prometheus.delegate.DelegatesExtensions.singleAssign
 object GuavaDsl {
     fun Any.toStringElements(block: MoreObjects.ToStringHelper.() -> Unit) =
         MoreObjects.toStringHelper(this)
-                    .run {
-                        block.invoke(this)
-                        toString()
-                    }
+            .run {
+                block.invoke(this)
+                toString()
+            }
 
     fun serviceManager(services: List<Service>, block: ServiceManager.() -> Unit) =
-            ServiceManager(services).apply { block.invoke(this) }
+        ServiceManager(services).apply { block.invoke(this) }
 
     fun serviceManagerListener(init: ServiceManagerListenerHelper.() -> Unit) =
-            ServiceManagerListenerHelper().apply { init() }
+        ServiceManagerListenerHelper().apply { init() }
 
     class ServiceManagerListenerHelper : ServiceManager.Listener() {
         private var healthyBlock: (() -> Unit)? by singleAssign()
@@ -71,7 +71,7 @@ object GuavaDsl {
     }
 
     fun serviceListener(init: ServiceListenerHelper.() -> Unit) =
-            ServiceListenerHelper().apply { init() }
+        ServiceListenerHelper().apply { init() }
 
     class ServiceListenerHelper : Service.Listener() {
         private var startingBlock: (() -> Unit)? by singleAssign()

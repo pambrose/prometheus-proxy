@@ -22,10 +22,10 @@ import com.codahale.metrics.health.HealthCheck
 
 object MetricsDsl {
     fun healthCheck(block: HealthCheck.() -> HealthCheck.Result) =
-            object : HealthCheck() {
-                @Throws(Exception::class)
-                override fun check(): Result {
-                    return block.invoke(this)
-                }
+        object : HealthCheck() {
+            @Throws(Exception::class)
+            override fun check(): Result {
+                return block.invoke(this)
             }
+        }
 }

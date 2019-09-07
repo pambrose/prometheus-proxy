@@ -25,20 +25,20 @@ import java.util.concurrent.ThreadFactory
 class InstrumentedThreadFactory(private val delegate: ThreadFactory, name: String, help: String) : ThreadFactory {
 
     private val created =
-            counter {
-                name("${name}_threads_created")
-                help("$help threads created")
-            }
+        counter {
+            name("${name}_threads_created")
+            help("$help threads created")
+        }
     private val running =
-            gauge {
-                name("${name}_threads_running")
-                help("$help threads running")
-            }
+        gauge {
+            name("${name}_threads_running")
+            help("$help threads running")
+        }
     private val terminated =
-            counter {
-                name("${name}_threads_terminated")
-                help("$help threads terminated")
-            }
+        counter {
+            name("${name}_threads_terminated")
+            help("$help threads terminated")
+        }
 
     override fun newThread(runnable: Runnable): Thread {
         val wrappedRunnable = InstrumentedRunnable(runnable)

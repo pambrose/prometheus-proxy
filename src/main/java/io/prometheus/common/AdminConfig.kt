@@ -24,23 +24,22 @@ data class AdminConfig(val enabled: Boolean,
                        val versionPath: String,
                        val healthCheckPath: String,
                        val threadDumpPath: String) {
-
     companion object {
         fun newAdminConfig(enabled: Boolean, port: Int, admin: ConfigVals.Proxy2.Admin2) =
-                AdminConfig(enabled,
-                            port,
-                            admin.pingPath,
-                            admin.versionPath,
-                            admin.healthCheckPath,
-                            admin.threadDumpPath)
+            AdminConfig(enabled,
+                        port,
+                        admin.pingPath,
+                        admin.versionPath,
+                        admin.healthCheckPath,
+                        admin.threadDumpPath)
 
         fun newAdminConfig(enabled: Boolean, port: Int, admin: ConfigVals.Agent.Admin) =
-                AdminConfig(enabled,
-                            port,
-                            admin.pingPath,
-                            admin.versionPath,
-                            admin.healthCheckPath,
-                            admin.threadDumpPath)
+            AdminConfig(enabled,
+                        port,
+                        admin.pingPath,
+                        admin.versionPath,
+                        admin.healthCheckPath,
+                        admin.threadDumpPath)
     }
 }
 

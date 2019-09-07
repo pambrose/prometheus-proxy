@@ -32,23 +32,23 @@ import org.eclipse.jetty.servlet.ServletHolder
 
 class MetricsService(private val port: Int,
                      private val path: String,
-                     initBlock: (MetricsService.() -> Unit)? = null) :
-        GenericIdleService() {
+                     initBlock: (MetricsService.() -> Unit)? = null) : GenericIdleService() {
+
     private val server =
-            server(port) {
-                handler =
-                        servletContextHandler {
-                            contextPath = "/"
-                            addServlet(ServletHolder(MetricsServlet()), "/$path")
-                        }
-            }
+        server(port) {
+            handler =
+                servletContextHandler {
+                    contextPath = "/"
+                    addServlet(ServletHolder(MetricsServlet()), "/$path")
+                }
+        }
     val healthCheck =
-            healthCheck {
-                if (server.isRunning)
-                    HealthCheck.Result.healthy()
-                else
-                    HealthCheck.Result.unhealthy("Jetty server not running")
-            }
+        healthCheck {
+            if (server.isRunning)
+                HealthCheck.Result.healthy()
+            else
+                HealthCheck.Result.unhealthy("Jetty server not running")
+        }
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
@@ -60,9 +60,9 @@ class MetricsService(private val port: Int,
     override fun shutDown() = server.stop()
 
     override fun toString() =
-            toStringElements {
-                add("url", "http://localhost:$port/$path")
-            }
+        toStringElements {
+            add("url", "http://localhost:$port/$path")
+        }
 
     companion object : KLogging()
 }

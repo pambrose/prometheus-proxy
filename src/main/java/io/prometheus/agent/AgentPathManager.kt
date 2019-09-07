@@ -18,7 +18,7 @@
 
 package io.prometheus.agent
 
-import com.google.common.collect.Maps
+import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Agent
 import io.prometheus.common.GrpcObjects
@@ -30,7 +30,7 @@ import mu.KLogging
 class AgentPathManager(private val agent: Agent) {
 
     private val configVals = agent.genericConfigVals.agent
-    private val pathContextMap = Maps.newConcurrentMap<String, PathContext>()
+    private val pathContextMap = newConcurrentMap<String, PathContext>()
 
     fun clear() {
         pathContextMap.clear()

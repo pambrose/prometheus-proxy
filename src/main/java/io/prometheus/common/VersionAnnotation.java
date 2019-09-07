@@ -25,7 +25,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.PACKAGE)
 public @interface VersionAnnotation {
 
-  String version();
+    String version();
 
-  String date();
+    String date();
 }

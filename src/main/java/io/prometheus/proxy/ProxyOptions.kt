@@ -23,7 +23,9 @@ import com.google.common.collect.Iterables
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
-import io.prometheus.common.EnvVars.*
+import io.prometheus.common.EnvVars.AGENT_PORT
+import io.prometheus.common.EnvVars.PROXY_CONFIG
+import io.prometheus.common.EnvVars.PROXY_PORT
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 @KtorExperimentalAPI

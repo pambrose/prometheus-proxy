@@ -18,22 +18,21 @@
 
 package io.prometheus.proxy
 
-import com.google.common.collect.Maps
+import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import java.util.concurrent.ConcurrentMap
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 class ScrapeRequestManager {
     // Map scrape_id to agent_id
-    val scrapeRequestMap: ConcurrentMap<Long, ScrapeRequestWrapper> = Maps.newConcurrentMap()
+    val scrapeRequestMap = newConcurrentMap<Long, ScrapeRequestWrapper>()
 
     val scrapeMapSize: Int
         get() = scrapeRequestMap.size
 
-    fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) = scrapeRequestMap.put(scrapeRequest.scrapeId,
-        scrapeRequest)
+    fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) =
+        scrapeRequestMap.put(scrapeRequest.scrapeId, scrapeRequest)
 
     fun getFromScrapeRequestMap(scrapeId: Long) = scrapeRequestMap[scrapeId]
 

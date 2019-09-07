@@ -31,7 +31,11 @@ import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.simpleClassName
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass

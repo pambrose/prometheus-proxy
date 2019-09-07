@@ -22,9 +22,16 @@ import com.beust.jcommander.DynamicParameter
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
-import com.typesafe.config.*
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import com.typesafe.config.ConfigParseOptions
+import com.typesafe.config.ConfigResolveOptions
+import com.typesafe.config.ConfigSyntax
 import io.ktor.util.KtorExperimentalAPI
-import io.prometheus.common.EnvVars.*
+import io.prometheus.common.EnvVars.ADMIN_ENABLED
+import io.prometheus.common.EnvVars.ADMIN_PORT
+import io.prometheus.common.EnvVars.METRICS_ENABLED
+import io.prometheus.common.EnvVars.METRICS_PORT
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import java.io.File
@@ -60,8 +67,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
         private set
 
     @Parameter(names = ["-v", "--version"],
-        description = "Print version info and exit",
-        validateWith = [VersionValidator::class])
+               description = "Print version info and exit",
+               validateWith = [VersionValidator::class])
+
     private var version = false
 
     @Parameter(names = ["-u", "--usage"], help = true)
@@ -126,11 +134,13 @@ abstract class BaseOptions protected constructor(private val progName: String,
     }
 
     private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-        config = readConfig(if (configName.isNotEmpty()) configName else System.getenv(envConfig).orEmpty(),
+        config = readConfig(
+            if (configName.isNotEmpty()) configName else System.getenv(envConfig).orEmpty(),
             envConfig,
             ConfigParseOptions.defaults().setAllowMissing(false),
             ConfigFactory.load().resolve(),
-            exitOnMissingConfig)
+            exitOnMissingConfig
+        )
             .resolve(ConfigResolveOptions.defaults())
             .resolve()
 
@@ -149,8 +159,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
                            configParseOptions: ConfigParseOptions,
                            fallback: Config,
                            exitOnMissingConfig: Boolean): Config {
+
         when {
-            configName.isBlank()     -> {
+            configName.isBlank() -> {
                 if (exitOnMissingConfig) {
                     logger.error { "A configuration file or url must be specified with --config or \$$envConfig" }
                     exitProcess(1)
@@ -171,7 +182,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                 }
 
             }
-            else                     -> {
+            else -> {
                 try {
                     return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
                 } catch (e: Exception) {
@@ -188,9 +199,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
     private fun getConfigSyntax(configName: String) =
         when {
-            configName.isJsonSuffix()       -> ConfigSyntax.JSON
+            configName.isJsonSuffix() -> ConfigSyntax.JSON
             configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
-            else                            -> ConfigSyntax.CONF
+            else -> ConfigSyntax.CONF
         }
 
     private fun String.isUrlPrefix() = toLowerCase().startsWith("http://") || toLowerCase().startsWith("https://")

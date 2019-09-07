@@ -49,10 +49,12 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
     override fun assignConfigVals() {
         if (proxyHostname.isEmpty()) {
             val configHostname = configVals.agent.proxy.hostname
-            proxyHostname = PROXY_HOSTNAME.getEnv(if (configHostname.contains(":"))
-                configHostname
-            else
-                "$configHostname:${configVals.agent.proxy.port}")
+            proxyHostname = PROXY_HOSTNAME.getEnv(
+                if (configHostname.contains(":"))
+                    configHostname
+                else
+                    "$configHostname:${configVals.agent.proxy.port}"
+            )
         }
 
         if (agentName.isEmpty())

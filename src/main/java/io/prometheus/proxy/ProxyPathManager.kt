@@ -18,18 +18,17 @@
 
 package io.prometheus.proxy
 
-import com.google.common.collect.Maps
+import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.grpc.UnregisterPathResponse
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
-import java.util.concurrent.ConcurrentMap
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 class ProxyPathManager(private val isTestMode: Boolean) {
 
-    private val pathMap: ConcurrentMap<String, AgentContext> = Maps.newConcurrentMap() // Map path to AgentContext
+    private val pathMap = newConcurrentMap<String, AgentContext>() // Map path to AgentContext
 
     operator fun get(path: String) = pathMap[path]
 
@@ -50,7 +49,7 @@ class ProxyPathManager(private val isTestMode: Boolean) {
         synchronized(pathMap) {
             val agentContext = pathMap[path]
             when {
-                agentContext == null            -> {
+                agentContext == null -> {
                     val msg = "Unable to remove path /$path - path not found"
                     logger.error { msg }
                     responseBuilder
@@ -60,7 +59,8 @@ class ProxyPathManager(private val isTestMode: Boolean) {
                         }
                 }
                 agentContext.agentId != agentId -> {
-                    val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
+                    val msg =
+                        "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
                     logger.error { msg }
                     responseBuilder
                         .apply {
@@ -68,7 +68,7 @@ class ProxyPathManager(private val isTestMode: Boolean) {
                             this.reason = msg
                         }
                 }
-                else                            -> {
+                else -> {
                     pathMap.remove(path)
                     if (!isTestMode)
                         logger.info { "Removed path /$path for $agentContext" }
