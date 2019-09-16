@@ -79,28 +79,19 @@ import kotlin.time.seconds
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 @UseExperimental(ExperimentalTime::class)
-class Agent(
-    options: AgentOptions,
-    inProcessServerName: String = "",
-    testMode: Boolean = false,
-    initBlock: (Agent.() -> Unit)? = null
-) :
-    GenericService(
-        options.configVals,
-        newAdminConfig(
-            options.adminEnabled,
-            options.adminPort,
-            options.configVals.agent.admin
-        ),
-        newMetricsConfig(
-            options.metricsEnabled,
-            options.metricsPort,
-            options.configVals.agent.metrics
-        ),
-        newZipkinConfig(options.configVals.agent.internal.zipkin),
-        testMode
-    ) {
-
+class Agent(options: AgentOptions,
+            inProcessServerName: String = "",
+            testMode: Boolean = false,
+            initBlock: (Agent.() -> Unit)? = null) :
+    GenericService(options.configVals,
+                   newAdminConfig(options.adminEnabled,
+                                  options.adminPort,
+                                  options.configVals.agent.admin),
+                   newMetricsConfig(options.metricsEnabled,
+                                    options.metricsPort,
+                                    options.configVals.agent.metrics),
+                   newZipkinConfig(options.configVals.agent.internal.zipkin),
+                   testMode) {
     private val configVals = genericConfigVals.agent.internal
     private val initialConnectionLatch = CountDownLatch(1)
     private val agentName = options.agentName.isBlank().thenElse("Unnamed-$localHostName", options.agentName)
@@ -156,10 +147,9 @@ class Agent(
 
     override fun registerHealthChecks() {
         super.registerHealthChecks()
-        healthCheckRegistry.register(
-            "scrape_request_backlog_check",
-            newBacklogHealthCheck(scrapeRequestBacklogSize.get(), configVals.scrapeRequestBacklogUnhealthySize)
-        )
+        healthCheckRegistry.register("scrape_request_backlog_check",
+                                     newBacklogHealthCheck(scrapeRequestBacklogSize.get(),
+                                                           configVals.scrapeRequestBacklogUnhealthySize))
     }
 
     private fun connectToProxy() {
@@ -316,7 +306,7 @@ class Agent(
                 onError { throwable ->
                     logger.error { "Error in readFromProxy(): ${Status.fromThrowable(throwable)}" }
                     disconnected.set(true)
-                    scrapeRequestChannel.close()
+                    scrapeRequestChannel.cancel()
                 }
 
                 onCompleted {
@@ -328,10 +318,8 @@ class Agent(
         grpcService.asyncStub.readRequestsFromProxy(agentInfo, observer)
     }
 
-    private suspend fun writeToProxyUntilDisconnected(
-        scrapeRequestChannel: Channel<ScrapeRequestAction>,
-        disconnected: AtomicBoolean
-    ) {
+    private suspend fun writeToProxyUntilDisconnected(scrapeRequestChannel: Channel<ScrapeRequestAction>,
+                                                      disconnected: AtomicBoolean) {
         val observer =
             grpcService.asyncStub.writeResponsesToProxy(
                 streamObserver<Empty> {

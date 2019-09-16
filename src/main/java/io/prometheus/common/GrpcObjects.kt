@@ -91,12 +91,10 @@ class GrpcObjects {
                     build()
                 }
 
-        fun newRegisterPathResponse(
-            valid: Boolean,
-            reason: String,
-            pathCount: Int,
-            pathId: Long
-        ): RegisterPathResponse =
+        fun newRegisterPathResponse(valid: Boolean,
+                                    reason: String,
+                                    pathCount: Int,
+                                    pathId: Long): RegisterPathResponse =
             RegisterPathResponse.newBuilder()
                 .run {
                     this.valid = valid
@@ -117,15 +115,13 @@ class GrpcObjects {
                     build()
                 }
 
-        class ScrapeResponseArg(
-            var validResponse: Boolean = false,
-            var failureReason: String = "",
-            val agentId: String,
-            val scrapeId: Long,
-            var statusCode: HttpStatusCode = HttpStatusCode.NotFound,
-            var contentText: String = "",
-            var contentType: String = ""
-        )
+        class ScrapeResponseArg(var validResponse: Boolean = false,
+                                var failureReason: String = "",
+                                val agentId: String,
+                                val scrapeId: Long,
+                                var statusCode: HttpStatusCode = HttpStatusCode.NotFound,
+                                var contentText: String = "",
+                                var contentType: String = "")
 
         fun newScrapeResponse(arg: ScrapeResponseArg): ScrapeResponse =
             ScrapeResponse.newBuilder()

@@ -34,29 +34,24 @@ import java.util.concurrent.TimeoutException
 @ExperimentalCoroutinesApi
 object TestUtils : KLogging() {
     @Throws(IOException::class, TimeoutException::class)
-    fun startProxy(
-        serverName: String = "",
-        adminEnabled: Boolean = false,
-        metricsEnabled: Boolean = false,
-        argv: List<String> = emptyList()
-    ): Proxy {
+    fun startProxy(serverName: String = "",
+                   adminEnabled: Boolean = false,
+                   metricsEnabled: Boolean = false,
+                   argv: List<String> = emptyList()): Proxy {
         logger.info { getBanner("banners/proxy.txt", logger) }
         logger.info { getVersionDesc(false) }
 
-        val proxyOptions = ProxyOptions(
-            mutableListOf<String>()
-                .apply {
-                    addAll(TestConstants.args)
-                    addAll(argv)
-                    add("-Dproxy.admin.enabled=$adminEnabled")
-                    add("-Dproxy.metrics.enabled=$metricsEnabled")
-                })
-        return Proxy(
-            options = proxyOptions,
-            proxyHttpPort = PROXY_PORT,
-            inProcessServerName = serverName,
-            testMode = true
-        ) { startSync() }
+        val proxyOptions = ProxyOptions(mutableListOf<String>()
+                                            .apply {
+                                                addAll(TestConstants.args)
+                                                addAll(argv)
+                                                add("-Dproxy.admin.enabled=$adminEnabled")
+                                                add("-Dproxy.metrics.enabled=$metricsEnabled")
+                                            })
+        return Proxy(options = proxyOptions,
+                     proxyHttpPort = PROXY_PORT,
+                     inProcessServerName = serverName,
+                     testMode = true) { startSync() }
     }
 
     @Throws(IOException::class, TimeoutException::class)
@@ -70,21 +65,17 @@ object TestUtils : KLogging() {
         logger.info { getBanner("banners/agent.txt", logger) }
         logger.info { getVersionDesc(false) }
 
-        val agentOptions = AgentOptions(
-            mutableListOf<String>()
-                .apply {
-                    addAll(TestConstants.args)
-                    addAll(argv)
-                    add("-Dagent.admin.enabled=$adminEnabled")
-                    add("-Dagent.metrics.enabled=$metricsEnabled")
-                },
-            false
-        )
-        return Agent(
-            options = agentOptions,
-            inProcessServerName = serverName,
-            testMode = true
-        ) { startSync() }
+        val agentOptions = AgentOptions(mutableListOf<String>()
+                                            .apply {
+                                                addAll(TestConstants.args)
+                                                addAll(argv)
+                                                add("-Dagent.admin.enabled=$adminEnabled")
+                                                add("-Dagent.metrics.enabled=$metricsEnabled")
+                                            },
+                                        false)
+        return Agent(options = agentOptions,
+                     inProcessServerName = serverName,
+                     testMode = true) { startSync() }
     }
 }
 

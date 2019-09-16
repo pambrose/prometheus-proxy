@@ -65,10 +65,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
         if (configVals.http.idleTimeoutSecs == -1) 45.seconds else configVals.http.idleTimeoutSecs.seconds
 
     private val httpServer =
-        embeddedServer(
-            CIO,
-            port = httpPort,
-            configure = { connectionIdleTimeoutSeconds = idleTimeout.inSeconds.toInt() }) {
+        embeddedServer(CIO,
+                       port = httpPort,
+                       configure = { connectionIdleTimeoutSeconds = idleTimeout.inSeconds.toInt() }) {
 
             install(DefaultHeaders)
             //install(CallLogging)
@@ -129,12 +128,10 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             }
         }
 
-    class ResponseArg(
-        var contentText: String = "",
-        var contentType: ContentType = ContentType.Text.Plain,
-        var statusCode: HttpStatusCode = HttpStatusCode.OK,
-        var updateMsg: String = ""
-    )
+    class ResponseArg(var contentText: String = "",
+                      var contentType: ContentType = ContentType.Text.Plain,
+                      var statusCode: HttpStatusCode = HttpStatusCode.OK,
+                      var updateMsg: String = "")
 
     init {
         if (proxy.isZipkinEnabled)
@@ -157,19 +154,15 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
         }
     }
 
-    private class ScrapeRequestResponse(
-        var contentText: String = "",
-        var contentType: ContentType = ContentType.Text.Plain,
-        val statusCode: HttpStatusCode,
-        val updateMsg: String
-    )
+    private class ScrapeRequestResponse(var contentText: String = "",
+                                        var contentType: ContentType = ContentType.Text.Plain,
+                                        val statusCode: HttpStatusCode,
+                                        val updateMsg: String)
 
-    private suspend fun submitScrapeRequest(
-        req: ApplicationRequest,
-        res: ApplicationResponse,
-        agentContext: AgentContext,
-        path: String
-    ): ScrapeRequestResponse {
+    private suspend fun submitScrapeRequest(req: ApplicationRequest,
+                                            res: ApplicationResponse,
+                                            agentContext: AgentContext,
+                                            path: String): ScrapeRequestResponse {
 
         val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext, path, req.header(ACCEPT))
 
@@ -184,10 +177,8 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             while (!scrapeRequest.suspendUntilComplete(checkTime)) {
                 // Check if agent is disconnected or agent is hung
                 if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
-                    return ScrapeRequestResponse(
-                        statusCode = HttpStatusCode.ServiceUnavailable,
-                        updateMsg = "timed_out"
-                    )
+                    return ScrapeRequestResponse(statusCode = HttpStatusCode.ServiceUnavailable,
+                                                 updateMsg = "timed_out")
             }
         } finally {
             proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeRequest)
@@ -207,19 +198,15 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
         // Do not return content on error status codes
         return if (statusCode.isNotSuccessful) {
-            ScrapeRequestResponse(
-                contentType = contentType,
-                statusCode = statusCode,
-                updateMsg = "path_not_found"
-            )
+            ScrapeRequestResponse(contentType = contentType,
+                                  statusCode = statusCode,
+                                  updateMsg = "path_not_found")
         } else {
             req.header(ACCEPT_ENCODING)?.contains("gzip")?.let { res.header(CONTENT_ENCODING, "gzip") }
-            ScrapeRequestResponse(
-                contentText = scrapeRequest.scrapeResponse.contentText,
-                contentType = contentType,
-                statusCode = statusCode,
-                updateMsg = "success"
-            )
+            ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
+                                  contentType = contentType,
+                                  statusCode = statusCode,
+                                  updateMsg = "success")
         }
     }
 

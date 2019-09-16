@@ -45,11 +45,9 @@ object KtorDsl {
         }
     }
 
-    suspend fun HttpClient.get(
-        url: String,
-        setUp: HttpRequestBuilder.() -> Unit = {},
-        block: suspend (HttpResponse) -> Unit
-    ) {
+    suspend fun HttpClient.get(url: String,
+                               setUp: HttpRequestBuilder.() -> Unit = {},
+                               block: suspend (HttpResponse) -> Unit) {
         val clientCall =
             call(url) {
                 method = HttpMethod.Get

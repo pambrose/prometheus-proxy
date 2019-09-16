@@ -69,18 +69,13 @@ class InProcessTestNoAdminMetricsTest {
 
     @Test
     fun proxyCallTest() =
-        proxyCallTest(
-            ProxyCallTestArgs(
-                agent.pathManager,
-                httpServerCount = 5,
-                pathCount = 25,
-                sequentialQueryCount = 100,
-                parallelQueryCount = 250,
-                startingPort = 10100,
-                caller = simpleClassName
-            )
-        )
-
+        proxyCallTest(ProxyCallTestArgs(agent.pathManager,
+                                        httpServerCount = 5,
+                                        pathCount = 25,
+                                        sequentialQueryCount = 100,
+                                        parallelQueryCount = 250,
+                                        startingPort = 10100,
+                                        caller = simpleClassName))
     companion object : KLogging() {
         private lateinit var proxy: Proxy
         private lateinit var agent: Agent

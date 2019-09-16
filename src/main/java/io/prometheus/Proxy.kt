@@ -50,29 +50,20 @@ import kotlin.time.milliseconds
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 @UseExperimental(ExperimentalTime::class)
-class Proxy(
-    options: ProxyOptions,
-    proxyHttpPort: Int = options.proxyHttpPort,
-    inProcessServerName: String = "",
-    testMode: Boolean = false,
-    initBlock: (Proxy.() -> Unit)? = null
-) :
-    GenericService(
-        options.configVals,
-        newAdminConfig(
-            options.adminEnabled,
-            options.adminPort,
-            options.configVals.proxy.admin
-        ),
-        newMetricsConfig(
-            options.metricsEnabled,
-            options.metricsPort,
-            options.configVals.proxy.metrics
-        ),
-        newZipkinConfig(options.configVals.proxy.internal.zipkin),
-        testMode
-    ) {
-
+class Proxy(options: ProxyOptions,
+            proxyHttpPort: Int = options.proxyHttpPort,
+            inProcessServerName: String = "",
+            testMode: Boolean = false,
+            initBlock: (Proxy.() -> Unit)? = null) :
+    GenericService(options.configVals,
+                   newAdminConfig(options.adminEnabled,
+                                  options.adminPort,
+                                  options.configVals.proxy.admin),
+                   newMetricsConfig(options.metricsEnabled,
+                                    options.metricsPort,
+                                    options.configVals.proxy.metrics),
+                   newZipkinConfig(options.configVals.proxy.internal.zipkin),
+                   testMode) {
     val configVals = genericConfigVals.proxy.internal
     val pathManager = ProxyPathManager(isTestMode)
     val scrapeRequestManager = ScrapeRequestManager()
@@ -130,29 +121,24 @@ class Proxy(
         healthCheckRegistry
             .apply {
                 register("grpc_service", grpcService.healthCheck)
-                register(
-                    "scrape_response_map_check",
-                    newMapHealthCheck(
-                        scrapeRequestManager.scrapeRequestMap,
-                        configVals.scrapeRequestMapUnhealthySize
-                    )
-                )
-                register(
-                    "agent_scrape_request_backlog",
-                    healthCheck {
-                        val unhealthySize = configVals.scrapeRequestBacklogUnhealthySize
-                        val vals =
-                            agentContextManager.agentContextMap.entries
-                                .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
-                                .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
-                                .toList()
-                        if (vals.isEmpty()) {
-                            HealthCheck.Result.healthy()
-                        } else {
-                            val s = Joiner.on(", ").join(vals)
-                            HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
-                        }
-                    })
+                register("scrape_response_map_check",
+                         newMapHealthCheck(scrapeRequestManager.scrapeRequestMap,
+                                           configVals.scrapeRequestMapUnhealthySize))
+                register("agent_scrape_request_backlog",
+                         healthCheck {
+                             val unhealthySize = configVals.scrapeRequestBacklogUnhealthySize
+                             val vals =
+                                 agentContextManager.agentContextMap.entries
+                                     .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
+                                     .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
+                                     .toList()
+                             if (vals.isEmpty()) {
+                                 HealthCheck.Result.healthy()
+                             } else {
+                                 val s = Joiner.on(", ").join(vals)
+                                 HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
+                             }
+                         })
             }
     }
 

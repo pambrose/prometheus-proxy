@@ -64,13 +64,11 @@ import kotlin.time.seconds
 @UseExperimental(ExperimentalTime::class)
 object ProxyTests : KLogging() {
 
-    fun timeoutTest(
-        pathManager: AgentPathManager,
-        caller: String,
-        agentPort: Int = 9900,
-        agentPath: String = "agent-timeout",
-        proxyPath: String = "proxy-timeout"
-    ) {
+    fun timeoutTest(pathManager: AgentPathManager,
+                    caller: String,
+                    agentPort: Int = 9900,
+                    agentPath: String = "agent-timeout",
+                    proxyPath: String = "proxy-timeout") {
         logger.info { "Calling timeoutTest() from $caller" }
 
         val httpServer =
@@ -106,15 +104,13 @@ object ProxyTests : KLogging() {
         }
     }
 
-    class ProxyCallTestArgs(
-        val pathManager: AgentPathManager,
-        val httpServerCount: Int,
-        val pathCount: Int,
-        val sequentialQueryCount: Int,
-        val parallelQueryCount: Int,
-        val startingPort: Int = 9600,
-        val caller: String
-    )
+    class ProxyCallTestArgs(val pathManager: AgentPathManager,
+                            val httpServerCount: Int,
+                            val pathCount: Int,
+                            val sequentialQueryCount: Int,
+                            val parallelQueryCount: Int,
+                            val startingPort: Int = 9600,
+                            val caller: String)
 
     private class HttpServerWrapper(val port: Int, val server: CIOApplicationEngine)
 
@@ -132,16 +128,14 @@ object ProxyTests : KLogging() {
         val httpServers =
             List(args.httpServerCount) { i ->
                 val port = args.startingPort + i
-                HttpServerWrapper(
-                    port = port,
-                    server = embeddedServer(CIO, port = port) {
-                        routing {
-                            get("/agent-$i") {
-                                call.respondText("value: $i", ContentType.Text.Plain)
-                            }
-                        }
-                    }
-                )
+                HttpServerWrapper(port = port,
+                                  server = embeddedServer(CIO, port = port) {
+                                      routing {
+                                          get("/agent-$i") {
+                                              call.respondText("value: $i", ContentType.Text.Plain)
+                                          }
+                                      }
+                                  })
             }
 
         logger.info { "Starting ${args.httpServerCount} httpServers" }

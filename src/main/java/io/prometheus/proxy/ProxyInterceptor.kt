@@ -31,11 +31,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 @ExperimentalCoroutinesApi
 class ProxyInterceptor : ServerInterceptor {
 
-    override fun <ReqT, RespT> interceptCall(
-        call: ServerCall<ReqT, RespT>,
-        requestHeaders: Metadata,
-        handler: ServerCallHandler<ReqT, RespT>
-    ): ServerCall.Listener<ReqT> {
+    override fun <ReqT, RespT> interceptCall(call: ServerCall<ReqT, RespT>,
+                                             requestHeaders: Metadata,
+                                             handler: ServerCallHandler<ReqT, RespT>): ServerCall.Listener<ReqT> {
         val attributes = call.attributes
         //val methodDescriptor = call.methodDescriptor
         // final String methodName = methodDescriptor.getFullMethodName();

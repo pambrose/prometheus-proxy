@@ -27,11 +27,9 @@ object TestConstants {
     private val CI_TEST = !localHostName.contains("pleiku")
 
     internal val args =
-        listOf(
-            "--config",
-            (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +
-                    "etc/test-configs/travis.conf"
-        )
+        listOf("--config",
+               (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +
+                       "etc/test-configs/travis.conf")
 
     internal val OPTIONS_CONFIG =
         (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +

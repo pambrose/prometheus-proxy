@@ -36,20 +36,14 @@ import mu.KLogging
 @ExperimentalCoroutinesApi
 class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
-    override fun <ReqT, RespT> interceptCall(
-        method: MethodDescriptor<ReqT, RespT>,
-        callOptions: CallOptions,
-        next: Channel
-    ): ClientCall<ReqT, RespT> =
+    override fun <ReqT, RespT> interceptCall(method: MethodDescriptor<ReqT, RespT>,
+                                             callOptions: CallOptions,
+                                             next: Channel): ClientCall<ReqT, RespT> =
     // final String methodName = method.getFullMethodName();
         // logger.info {"Intercepting {}", methodName);
         object :
             ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-                agent.grpcService.channel.newCall(
-                    method,
-                    callOptions
-                )
-            ) {
+                agent.grpcService.channel.newCall(method, callOptions)) {
             override fun start(responseListener: Listener<RespT>, metadata: Metadata) {
                 super.start(
                     object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {

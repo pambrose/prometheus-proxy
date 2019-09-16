@@ -41,11 +41,9 @@ class AgentPathManager(private val agent: Agent) {
     private val pathConfigs =
         configVals.pathConfigs
             .map {
-                mapOf(
-                    "name" to it.name,
-                    "path" to it.path,
-                    "url" to it.url
-                )
+                mapOf("name" to it.name,
+                      "path" to it.path,
+                      "url" to it.url)
             }
             .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
             .toList()

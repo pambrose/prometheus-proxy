@@ -30,12 +30,10 @@ import io.grpc.stub.StreamObserver
 import io.prometheus.delegate.DelegatesExtensions.singleAssign
 
 object GrpcDsl {
-    fun channel(
-        inProcessServerName: String = "",
-        hostName: String = "",
-        port: Int = -1,
-        block: AbstractManagedChannelImplBuilder<*>.() -> Unit
-    ): ManagedChannel =
+    fun channel(inProcessServerName: String = "",
+                hostName: String = "",
+                port: Int = -1,
+                block: AbstractManagedChannelImplBuilder<*>.() -> Unit): ManagedChannel =
         (if (inProcessServerName.isEmpty())
             NettyChannelBuilder.forAddress(hostName, port)
         else

@@ -110,13 +110,11 @@ class AdminNonDefaultPathTest {
         @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
-            val args = listOf(
-                "-Dproxy.admin.port=8099",
-                "-Dproxy.admin.pingPath=pingPath2",
-                "-Dproxy.admin.versionPath=versionPath2",
-                "-Dproxy.admin.healthCheckPath=healthCheckPath2",
-                "-Dproxy.admin.threadDumpPath=threadDumpPath2"
-            )
+            val args = listOf("-Dproxy.admin.port=8099",
+                              "-Dproxy.admin.pingPath=pingPath2",
+                              "-Dproxy.admin.versionPath=versionPath2",
+                              "-Dproxy.admin.healthCheckPath=healthCheckPath2",
+                              "-Dproxy.admin.threadDumpPath=threadDumpPath2")
 
             logger.info { "Starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
             runBlocking {

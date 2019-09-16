@@ -36,12 +36,10 @@ import kotlin.time.MonoClock
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 @UseExperimental(ExperimentalTime::class)
-class ScrapeRequestWrapper(
-    proxy: Proxy,
-    val agentContext: AgentContext,
-    path: String,
-    accept: String?
-) {
+class ScrapeRequestWrapper(proxy: Proxy,
+                           val agentContext: AgentContext,
+                           path: String,
+                           accept: String?) {
     private val clock = MonoClock
     private val createTimeMark = clock.markNow()
     private val completeChannel = Channel<Boolean>()

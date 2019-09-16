@@ -62,10 +62,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         }
     }
 
-    override fun registerAgent(
-        request: RegisterAgentRequest,
-        responseObserver: StreamObserver<RegisterAgentResponse>
-    ) {
+    override fun registerAgent(request: RegisterAgentRequest,
+                               responseObserver: StreamObserver<RegisterAgentResponse>) {
         val agentId = request.agentId
         var valid = false
         proxy.agentContextManager.getAgentContext(agentId)
@@ -82,10 +80,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         }
     }
 
-    override fun registerPath(
-        request: RegisterPathRequest,
-        responseObserver: StreamObserver<RegisterPathResponse>
-    ) {
+    override fun registerPath(request: RegisterPathRequest,
+                              responseObserver: StreamObserver<RegisterPathResponse>) {
         val path = request.path
         if (path in proxy.pathManager)
             logger.info { "Overwriting path /$path" }
@@ -102,21 +98,17 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
 
         responseObserver.apply {
             onNext(
-                newRegisterPathResponse(
-                    valid,
-                    "Invalid agentId: $agentId",
-                    proxy.pathManager.pathMapSize,
-                    if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1
-                )
+                newRegisterPathResponse(valid,
+                                        "Invalid agentId: $agentId",
+                                        proxy.pathManager.pathMapSize,
+                                        if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1)
             )
             onCompleted()
         }
     }
 
-    override fun unregisterPath(
-        request: UnregisterPathRequest,
-        responseObserver: StreamObserver<UnregisterPathResponse>
-    ) {
+    override fun unregisterPath(request: UnregisterPathRequest,
+                                responseObserver: StreamObserver<UnregisterPathResponse>) {
         val agentId = request.agentId
         val agentContext = proxy.agentContextManager.getAgentContext(agentId)
         val responseBuilder = newUnregisterPathResponseBuilder()

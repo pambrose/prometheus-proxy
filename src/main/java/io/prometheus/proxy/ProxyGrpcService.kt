@@ -43,12 +43,9 @@ import kotlin.time.seconds
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 @UseExperimental(ExperimentalTime::class)
-class ProxyGrpcService(
-    private val proxy: Proxy,
-    private val port: Int = -1,
-    private val inProcessName: String = ""
-) :
-    GenericIdleService() {
+class ProxyGrpcService(private val proxy: Proxy,
+                       private val port: Int = -1,
+                       private val inProcessName: String = "") : GenericIdleService() {
     val healthCheck =
         healthCheck {
             if (grpcServer.isShutdown || grpcServer.isShutdown)

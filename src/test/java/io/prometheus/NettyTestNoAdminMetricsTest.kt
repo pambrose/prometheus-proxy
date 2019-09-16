@@ -70,18 +70,13 @@ class NettyTestNoAdminMetricsTest {
 
     @Test
     fun proxyCallTest() =
-        proxyCallTest(
-            ProxyCallTestArgs(
-                agent.pathManager,
-                httpServerCount = 5,
-                pathCount = 50,
-                sequentialQueryCount = 500,
-                parallelQueryCount = 250,
-                startingPort = 10500,
-                caller = simpleClassName
-            )
-        )
-
+        proxyCallTest(ProxyCallTestArgs(agent.pathManager,
+                                        httpServerCount = 5,
+                                        pathCount = 50,
+                                        sequentialQueryCount = 500,
+                                        parallelQueryCount = 250,
+                                        startingPort = 10500,
+                                        caller = simpleClassName))
     companion object : KLogging() {
         private lateinit var proxy: Proxy
         private lateinit var agent: Agent

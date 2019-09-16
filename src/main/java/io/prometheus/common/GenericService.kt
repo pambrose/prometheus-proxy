@@ -40,14 +40,11 @@ import kotlin.properties.Delegates.notNull
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-abstract class GenericService protected constructor(
-    val genericConfigVals: ConfigVals,
-    adminConfig: AdminConfig,
-    metricsConfig: MetricsConfig,
-    zipkinConfig: ZipkinConfig,
-    val isTestMode: Boolean
-) :
-    GenericExecutionThreadService(),
+abstract class GenericService protected constructor(val genericConfigVals: ConfigVals,
+                                                    adminConfig: AdminConfig,
+                                                    metricsConfig: MetricsConfig,
+                                                    zipkinConfig: ZipkinConfig,
+                                                    val isTestMode: Boolean) : GenericExecutionThreadService(),
     Closeable {
     protected val healthCheckRegistry = HealthCheckRegistry()
 
@@ -66,28 +63,24 @@ abstract class GenericService protected constructor(
 
     init {
         if (isAdminEnabled) {
-            adminService = AdminService(
-                healthCheckRegistry = healthCheckRegistry,
-                port = adminConfig.port,
-                pingPath = adminConfig.pingPath,
-                versionPath = adminConfig.versionPath,
-                healthCheckPath = adminConfig.healthCheckPath,
-                threadDumpPath = adminConfig.threadDumpPath
-            ) { addService(this) }
+            adminService = AdminService(healthCheckRegistry = healthCheckRegistry,
+                                        port = adminConfig.port,
+                                        pingPath = adminConfig.pingPath,
+                                        versionPath = adminConfig.versionPath,
+                                        healthCheckPath = adminConfig.healthCheckPath,
+                                        threadDumpPath = adminConfig.threadDumpPath) { addService(this) }
         } else {
             logger.info { "Admin service disabled" }
         }
 
         if (isMetricsEnabled) {
             metricsService = MetricsService(metricsConfig.port, metricsConfig.path) { addService(this) }
-            SystemMetrics.initialize(
-                enableStandardExports = metricsConfig.standardExportsEnabled,
-                enableMemoryPoolsExports = metricsConfig.memoryPoolsExportsEnabled,
-                enableGarbageCollectorExports = metricsConfig.garbageCollectorExportsEnabled,
-                enableThreadExports = metricsConfig.threadExportsEnabled,
-                enableClassLoadingExports = metricsConfig.classLoadingExportsEnabled,
-                enableVersionInfoExports = metricsConfig.versionInfoExportsEnabled
-            )
+            SystemMetrics.initialize(enableStandardExports = metricsConfig.standardExportsEnabled,
+                                     enableMemoryPoolsExports = metricsConfig.memoryPoolsExportsEnabled,
+                                     enableGarbageCollectorExports = metricsConfig.garbageCollectorExportsEnabled,
+                                     enableThreadExports = metricsConfig.threadExportsEnabled,
+                                     enableClassLoadingExports = metricsConfig.classLoadingExportsEnabled,
+                                     enableVersionInfoExports = metricsConfig.versionInfoExportsEnabled)
             jmxReporter = JmxReporter.forRegistry(MetricRegistry()).build()
         } else {
             logger.info { "Metrics service disabled" }
@@ -167,23 +160,22 @@ abstract class GenericService protected constructor(
                 register("thread_deadlock", ThreadDeadlockHealthCheck())
                 if (isMetricsEnabled)
                     register("metrics_service", metricsService.healthCheck)
-                register(
-                    "all_services_healthy",
-                    healthCheck {
-                        if (serviceManager.isHealthy)
-                            HealthCheck.Result.healthy()
-                        else {
-                            val vals =
-                                serviceManager
-                                    .servicesByState()
-                                    .entries()
-                                    .filter { it.key !== Service.State.RUNNING }
-                                    .onEach { logger.warn { "Incorrect state - ${it.key}: ${it.value}" } }
-                                    .map { "${it.key}: ${it.value}" }
-                                    .toList()
-                            HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
-                        }
-                    })
+                register("all_services_healthy",
+                         healthCheck {
+                             if (serviceManager.isHealthy)
+                                 HealthCheck.Result.healthy()
+                             else {
+                                 val vals =
+                                     serviceManager
+                                         .servicesByState()
+                                         .entries()
+                                         .filter { it.key !== Service.State.RUNNING }
+                                         .onEach { logger.warn { "Incorrect state - ${it.key}: ${it.value}" } }
+                                         .map { "${it.key}: ${it.value}" }
+                                         .toList()
+                                 HealthCheck.Result.unhealthy("Incorrect state: ${Joiner.on(", ").join(vals)}")
+                             }
+                         })
             }
     }
 

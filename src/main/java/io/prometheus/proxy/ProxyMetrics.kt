@@ -70,20 +70,19 @@ class ProxyMetrics(proxy: Proxy) {
         }.setToCurrentTime()
 
         SamplerGaugeCollector(name = "proxy_agent_map_size",
-            help = "Proxy connected agents",
-            data = { proxy.agentContextManager.agentContextSize.toDouble() })
+                              help = "Proxy connected agents",
+                              data = { proxy.agentContextManager.agentContextSize.toDouble() })
 
         SamplerGaugeCollector(name = "proxy_path_map_size",
-            help = "Proxy path map size",
-            data = { proxy.pathManager.pathMapSize.toDouble() })
+                              help = "Proxy path map size",
+                              data = { proxy.pathManager.pathMapSize.toDouble() })
 
         SamplerGaugeCollector(name = "proxy_scrape_map_size",
-            help = "Proxy scrape map size",
-            data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() })
+                              help = "Proxy scrape map size",
+                              data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() })
 
-        SamplerGaugeCollector(
-            name = "proxy_cummulative_agent_backlog_size",
-            help = "Proxy cummulative agent backlog size",
-            data = { proxy.agentContextManager.totalAgentScrapeRequestBacklogSize.toDouble() })
+        SamplerGaugeCollector(name = "proxy_cummulative_agent_backlog_size",
+                              help = "Proxy cummulative agent backlog size",
+                              data = { proxy.agentContextManager.totalAgentScrapeRequestBacklogSize.toDouble() })
     }
 }

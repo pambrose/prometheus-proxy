@@ -37,12 +37,9 @@ import kotlin.properties.Delegates.notNull
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-class AgentGrpcService(
-    private val agent: Agent,
-    options: AgentOptions,
-    private val inProcessServerName: String
-) {
-
+class AgentGrpcService(private val agent: Agent,
+                       options: AgentOptions,
+                       private val inProcessServerName: String) {
     private var grpcStarted = AtomicBoolean(false)
 
     var channel by nonNullableReference<ManagedChannel>()
