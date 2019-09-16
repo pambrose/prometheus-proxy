@@ -175,8 +175,7 @@ class Proxy(options: ProxyOptions,
                 info { getVersionDesc(false) }
             }
 
-            val options = ProxyOptions(argv)
-            Proxy(options = options) { startSync() }
+            Proxy(options = ProxyOptions(argv)) { startSync() }
         }
     }
 }

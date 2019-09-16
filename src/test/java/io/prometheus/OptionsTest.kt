@@ -86,7 +86,6 @@ class OptionsTest {
     @Test
     fun verifyAgentDefaults() {
         val options = AgentOptions(listOf("--name", "test-name", "--proxy", "host5"), false)
-
         options
             .apply {
                 metricsEnabled shouldEqual false

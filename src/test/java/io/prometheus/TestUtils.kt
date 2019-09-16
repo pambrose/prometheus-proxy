@@ -38,8 +38,10 @@ object TestUtils : KLogging() {
                    adminEnabled: Boolean = false,
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Proxy {
-        logger.info { getBanner("banners/proxy.txt", logger) }
-        logger.info { getVersionDesc(false) }
+        logger.apply {
+            info { getBanner("banners/proxy.txt", logger) }
+            info { getVersionDesc(false) }
+        }
 
         val proxyOptions = ProxyOptions(mutableListOf<String>()
                                             .apply {
@@ -55,15 +57,14 @@ object TestUtils : KLogging() {
     }
 
     @Throws(IOException::class, TimeoutException::class)
-    fun startAgent(
-        serverName: String = "",
-        adminEnabled: Boolean = false,
-        metricsEnabled: Boolean = false,
-        argv: List<String> = emptyList()
-    ): Agent {
-
-        logger.info { getBanner("banners/agent.txt", logger) }
-        logger.info { getVersionDesc(false) }
+    fun startAgent(serverName: String = "",
+                   adminEnabled: Boolean = false,
+                   metricsEnabled: Boolean = false,
+                   argv: List<String> = emptyList()): Agent {
+        logger.apply {
+            info { getBanner("banners/agent.txt", logger) }
+            info { getVersionDesc(false) }
+        }
 
         val agentOptions = AgentOptions(mutableListOf<String>()
                                             .apply {

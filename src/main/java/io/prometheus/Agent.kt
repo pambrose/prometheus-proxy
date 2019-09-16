@@ -394,8 +394,7 @@ class Agent(options: AgentOptions,
                 info { getVersionDesc(false) }
             }
 
-            val options = AgentOptions(argv, true)
-            Agent(options = options) { startSync() }
+            Agent(options = AgentOptions(argv, true)) { startSync() }
         }
     }
 }
