@@ -358,6 +358,12 @@
         </dependency>
 
         <dependency>
+            <groupId>io.github.microutils</groupId>
+            <artifactId>kotlin-logging</artifactId>
+            <version>${kotlin.logging.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.amshove.kluent</groupId>
             <artifactId>kluent</artifactId>
             <version>${kluent.version}</version>
@@ -417,13 +423,6 @@
             <groupId>org.jetbrains.kotlinx</groupId>
             <artifactId>kotlinx-coroutines-debug</artifactId>
             <version>${coroutines.version}</version>
-        </dependency>
-
-
-        <dependency>
-            <groupId>io.github.microutils</groupId>
-            <artifactId>kotlin-logging</artifactId>
-            <version>${kotlin.logging.version}</version>
         </dependency>
 
     </dependencies>
