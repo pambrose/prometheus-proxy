@@ -58,5 +58,4 @@ class InstrumentedThreadFactory(private val delegate: ThreadFactory, name: Strin
             }
         }
     }
-
 }
