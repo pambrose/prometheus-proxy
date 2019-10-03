@@ -23,6 +23,8 @@ import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.util.concurrent.MoreExecutors
 import com.salesforce.grpc.contrib.Servers
+import com.sudothought.common.concurrent.GenericIdleService
+import com.sudothought.common.concurrent.genericServiceListener
 import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.grpc.Server
 import io.grpc.ServerInterceptor
@@ -30,8 +32,6 @@ import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
 import io.prometheus.dsl.GrpcDsl.server
 import io.prometheus.dsl.MetricsDsl.healthCheck
-import io.prometheus.guava.GenericIdleService
-import io.prometheus.guava.genericServiceListener
 import mu.KLogging
 import java.io.IOException
 import kotlin.properties.Delegates.notNull

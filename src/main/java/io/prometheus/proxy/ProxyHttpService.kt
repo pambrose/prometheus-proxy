@@ -23,6 +23,8 @@ import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.ACCEPT_ENCODING
 import com.google.common.net.HttpHeaders.CONTENT_ENCODING
 import com.google.common.util.concurrent.MoreExecutors
+import com.sudothought.common.concurrent.GenericIdleService
+import com.sudothought.common.concurrent.genericServiceListener
 import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.ktor.application.call
 import io.ktor.application.install
@@ -43,8 +45,6 @@ import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
 import io.prometheus.common.delay
 import io.prometheus.common.isNotSuccessful
-import io.prometheus.guava.GenericIdleService
-import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.TimeUnit

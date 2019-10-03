@@ -21,16 +21,10 @@ package io.prometheus.common
 import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
 import com.codahale.metrics.health.HealthCheck
-import com.google.common.base.Charsets
-import com.google.common.base.Joiner
-import com.google.common.base.Splitter
-import com.google.common.io.CharStreams
 import com.google.common.util.concurrent.Service
 import io.ktor.http.HttpStatusCode
 import io.prometheus.Proxy
 import io.prometheus.dsl.MetricsDsl.healthCheck
-import org.slf4j.Logger
-import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
 import kotlin.system.exitProcess
@@ -43,45 +37,6 @@ val localHostName: String by lazy {
         "Unknown"
     }
 }
-
-fun getBanner(filename: String, logger: Logger) =
-    try {
-        logger.javaClass.classLoader.getResourceAsStream(filename)
-            .use { inputStream ->
-                val utf8 = Charsets.UTF_8.name()
-                val banner = CharStreams.toString(InputStreamReader(inputStream ?: throw InternalError(), utf8))
-                val lines: List<String> = Splitter.on("\n").splitToList(banner)
-
-                // Trim initial and trailing blank lines, but preserve blank lines in middle;
-                var first = -1
-                var last = -1
-                var lineNum = 0
-                lines.forEach { arg1 ->
-                    if (arg1.trim { arg2 -> arg2 <= ' ' }.isNotEmpty()) {
-                        if (first == -1)
-                            first = lineNum
-                        last = lineNum
-                    }
-                    lineNum++
-                }
-
-                lineNum = 0
-
-                val vals =
-                    lines
-                        .filter {
-                            val currLine = lineNum++
-                            currLine in first..last
-                        }
-                        .map { arg -> "     $arg" }
-                        .toList()
-
-                val noNulls = Joiner.on("\n").skipNulls().join(vals)
-                "\n\n$noNulls\n\n"
-            }
-    } catch (e: Exception) {
-        "Banner $filename cannot be found"
-    }
 
 fun newBacklogHealthCheck(backlogSize: Int, size: Int) =
     healthCheck {

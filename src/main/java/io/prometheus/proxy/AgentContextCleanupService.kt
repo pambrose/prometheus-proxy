@@ -19,11 +19,11 @@
 package io.prometheus.proxy
 
 import com.google.common.util.concurrent.MoreExecutors
+import com.sudothought.common.concurrent.GenericExecutionThreadService
+import com.sudothought.common.concurrent.genericServiceListener
 import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.Proxy
 import io.prometheus.common.delay
-import io.prometheus.guava.GenericExecutionThreadService
-import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.time.seconds

@@ -20,13 +20,13 @@ package io.prometheus.common
 
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.util.concurrent.MoreExecutors
+import com.sudothought.common.concurrent.GenericIdleService
+import com.sudothought.common.concurrent.genericServiceListener
 import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.client.exporter.MetricsServlet
 import io.prometheus.dsl.JettyDsl.server
 import io.prometheus.dsl.JettyDsl.servletContextHandler
 import io.prometheus.dsl.MetricsDsl.healthCheck
-import io.prometheus.guava.GenericIdleService
-import io.prometheus.guava.genericServiceListener
 import mu.KLogging
 import org.eclipse.jetty.servlet.ServletHolder
 

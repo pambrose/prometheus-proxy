@@ -21,6 +21,7 @@ package io.prometheus
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.Joiner
 import com.sudothought.common.dsl.GuavaDsl.toStringElements
+import com.sudothought.common.util.getBanner
 import io.grpc.Attributes
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.ConfigVals
@@ -28,7 +29,6 @@ import io.prometheus.common.GenericService
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.common.delay
-import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.common.newMapHealthCheck
 import io.prometheus.dsl.MetricsDsl.healthCheck

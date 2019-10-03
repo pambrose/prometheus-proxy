@@ -18,9 +18,9 @@
 
 package io.prometheus
 
+import com.sudothought.common.util.getBanner
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentOptions
-import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler

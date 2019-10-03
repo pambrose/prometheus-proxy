@@ -24,6 +24,7 @@ import com.google.common.util.concurrent.RateLimiter
 import com.google.protobuf.Empty
 import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
 import com.sudothought.common.dsl.GuavaDsl.toStringElements
+import com.sudothought.common.util.getBanner
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.ktor.client.request.HttpRequestBuilder
@@ -46,7 +47,6 @@ import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.common.delay
-import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.common.isSuccessful
 import io.prometheus.common.localHostName
