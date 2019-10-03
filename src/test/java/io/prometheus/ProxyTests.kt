@@ -42,6 +42,7 @@ import io.prometheus.dsl.KtorDsl.newHttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,7 +62,8 @@ import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-@UseExperimental(ExperimentalTime::class)
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 object ProxyTests : KLogging() {
 
     fun timeoutTest(pathManager: AgentPathManager,

@@ -28,6 +28,7 @@ import io.prometheus.common.simpleClassName
 import io.prometheus.dsl.KtorDsl.blockingGet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
@@ -46,6 +47,7 @@ import kotlin.time.seconds
 @KtorExperimentalAPI
 @ExperimentalTime
 @ExperimentalCoroutinesApi
+@ObsoleteCoroutinesApi
 class AdminDefaultPathTest {
 
     private val agentConfigVals = agent.genericConfigVals.agent

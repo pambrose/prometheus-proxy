@@ -47,6 +47,7 @@ import io.prometheus.common.isNotSuccessful
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.TimeUnit
@@ -57,7 +58,8 @@ import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-@UseExperimental(ExperimentalTime::class)
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
     private val configVals = proxy.genericConfigVals.proxy
     private var tracing by notNull<Tracing>()

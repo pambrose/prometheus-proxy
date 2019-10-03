@@ -27,9 +27,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.runBlocking
 
-
 @KtorExperimentalAPI
-
 object KtorDsl {
 
     fun newHttpClient(): HttpClient = HttpClient(CIO)

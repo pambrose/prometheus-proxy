@@ -26,9 +26,13 @@ import io.grpc.ServerInterceptor
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
+import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 class ProxyInterceptor : ServerInterceptor {
 
     override fun <ReqT, RespT> interceptCall(call: ServerCall<ReqT, RespT>,

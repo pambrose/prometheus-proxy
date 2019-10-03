@@ -61,6 +61,7 @@ import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -79,7 +80,8 @@ import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-@UseExperimental(ExperimentalTime::class)
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 class Agent(options: AgentOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,

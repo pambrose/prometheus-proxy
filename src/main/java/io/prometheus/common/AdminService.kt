@@ -29,6 +29,7 @@ import io.prometheus.dsl.SparkDsl.servletContextHandler
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletHolder
@@ -37,6 +38,7 @@ import kotlin.time.ExperimentalTime
 @KtorExperimentalAPI
 @ExperimentalTime
 @ExperimentalCoroutinesApi
+@ObsoleteCoroutinesApi
 class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val port: Int,
                    private val pingPath: String = "",

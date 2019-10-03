@@ -26,6 +26,7 @@ import io.prometheus.common.delay
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.time.ExperimentalTime
@@ -33,7 +34,8 @@ import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-@UseExperimental(ExperimentalTime::class)
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) :
     GenericExecutionThreadService() {
     init {

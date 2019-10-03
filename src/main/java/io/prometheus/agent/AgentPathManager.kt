@@ -23,12 +23,14 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Agent
 import io.prometheus.common.GrpcObjects
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
 import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
 @ExperimentalTime
 @ExperimentalCoroutinesApi
+@ObsoleteCoroutinesApi
 class AgentPathManager(private val agent: Agent) {
 
     private val configVals = agent.genericConfigVals.agent

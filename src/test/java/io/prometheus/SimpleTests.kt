@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -42,7 +43,8 @@ import kotlin.time.seconds
 @KtorExperimentalAPI
 @InternalCoroutinesApi
 @ExperimentalCoroutinesApi
-@UseExperimental(ExperimentalTime::class)
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 object SimpleTests : KLogging() {
 
     fun missingPathTest(caller: String) {

@@ -21,12 +21,17 @@ package io.prometheus.proxy
 import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
+import java.util.concurrent.ConcurrentMap
+import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 class AgentContextManager {
     // Map agent_id to AgentContext
-    val agentContextMap = newConcurrentMap<String, AgentContext>()
+    val agentContextMap: ConcurrentMap<String, AgentContext> = newConcurrentMap<String, AgentContext>()
 
     val agentContextSize: Int
         get() = agentContextMap.size

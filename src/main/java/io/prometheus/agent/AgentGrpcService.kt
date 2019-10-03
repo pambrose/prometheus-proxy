@@ -31,6 +31,7 @@ import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.properties.Delegates.notNull
@@ -39,6 +40,7 @@ import kotlin.time.ExperimentalTime
 @ExperimentalTime
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@ObsoleteCoroutinesApi
 class AgentGrpcService(private val agent: Agent,
                        options: AgentOptions,
                        private val inProcessServerName: String) {

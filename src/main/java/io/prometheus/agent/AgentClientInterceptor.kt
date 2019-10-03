@@ -30,11 +30,14 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
 import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
     @ExperimentalTime

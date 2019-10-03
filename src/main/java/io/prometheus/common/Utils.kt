@@ -31,6 +31,7 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import org.slf4j.Logger
 import java.io.InputStreamReader
 import java.net.InetAddress
@@ -102,8 +103,10 @@ fun newMapHealthCheck(map: Map<*, *>, size: Int) =
             HealthCheck.Result.unhealthy("Large size: ${map.size}")
     }
 
+@ObsoleteCoroutinesApi
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@ExperimentalTime
 fun getVersionDesc(asJson: Boolean): String {
     val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
     return if (asJson)
@@ -121,9 +124,11 @@ fun shutDownHookAction(service: Service) =
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 class VersionValidator : IParameterValidator {
     override fun validate(name: String, value: String) {
-        val console = JCommander().getConsole()
+        val console = JCommander().console
         console.println(getVersionDesc(false))
         exitProcess(0)
     }

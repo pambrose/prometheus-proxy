@@ -34,6 +34,7 @@ import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
 import java.io.IOException
 import kotlin.properties.Delegates.notNull
@@ -42,7 +43,8 @@ import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-@UseExperimental(ExperimentalTime::class)
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 class ProxyGrpcService(private val proxy: Proxy,
                        private val port: Int = -1,
                        private val inProcessName: String = "") : GenericIdleService() {

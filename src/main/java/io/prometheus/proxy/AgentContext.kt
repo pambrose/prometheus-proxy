@@ -23,6 +23,7 @@ import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -32,7 +33,8 @@ import kotlin.time.MonoClock
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-@UseExperimental(ExperimentalTime::class)
+@ObsoleteCoroutinesApi
+@ExperimentalTime
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
     val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()

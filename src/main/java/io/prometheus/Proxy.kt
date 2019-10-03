@@ -24,6 +24,7 @@ import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.grpc.Attributes
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
+import io.prometheus.common.ConfigVals
 import io.prometheus.common.GenericService
 import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
@@ -41,6 +42,7 @@ import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRequestManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.properties.Delegates.notNull
@@ -49,7 +51,8 @@ import kotlin.time.milliseconds
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-@UseExperimental(ExperimentalTime::class)
+@ExperimentalTime
+@ObsoleteCoroutinesApi
 class Proxy(options: ProxyOptions,
             proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",
@@ -64,7 +67,7 @@ class Proxy(options: ProxyOptions,
                                     options.configVals.proxy.metrics),
                    newZipkinConfig(options.configVals.proxy.internal.zipkin),
                    testMode) {
-    val configVals = genericConfigVals.proxy.internal
+    val configVals: ConfigVals.Proxy2.Internal2 = genericConfigVals.proxy.internal
     val pathManager = ProxyPathManager(isTestMode)
     val scrapeRequestManager = ScrapeRequestManager()
     val agentContextManager = AgentContextManager()

@@ -131,6 +131,7 @@
             <id>jitpack.io</id>
             <url>https://jitpack.io</url>
         </repository>
+
     </repositories>
 
     <pluginRepositories>
@@ -217,7 +218,7 @@
         <dependency>
             <groupId>com.github.pambrose</groupId>
             <artifactId>common-utils</artifactId>
-            <version>utils.version</version>
+            <version>${utils.version}</version>
         </dependency>
 
         <dependency>
