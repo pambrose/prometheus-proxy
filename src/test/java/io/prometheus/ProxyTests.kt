@@ -30,7 +30,6 @@ import io.ktor.routing.routing
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.embeddedServer
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
@@ -40,9 +39,7 @@ import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.http
 import io.prometheus.dsl.KtorDsl.newHttpClient
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -56,14 +53,10 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
-import kotlin.time.ExperimentalTime
 import kotlin.time.minutes
 import kotlin.time.seconds
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
+@InternalCoroutinesApi
 object ProxyTests : KLogging() {
 
     fun timeoutTest(pathManager: AgentPathManager,
@@ -116,7 +109,6 @@ object ProxyTests : KLogging() {
 
     private class HttpServerWrapper(val port: Int, val server: CIOApplicationEngine)
 
-    @InternalCoroutinesApi
     fun proxyCallTest(args: ProxyCallTestArgs) {
         logger.info { "Calling proxyCallTest() from ${args.caller}" }
 
@@ -201,7 +193,7 @@ object ProxyTests : KLogging() {
                                 val jobs =
                                     List(args.parallelQueryCount) { cnt ->
                                         launch(dispatcher + coroutineExceptionHandler) {
-                                            delay(Random.nextLong(10, 300))
+                                            delay(Random.nextLong(50, 300))
                                             callProxy(httpClient, pathMap, "Parallel $cnt")
                                             counter.incrementAndGet()
                                         }

@@ -27,24 +27,16 @@ import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.dsl.GrpcDsl.server
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
 import java.io.IOException
 import kotlin.properties.Delegates.notNull
-import kotlin.time.ExperimentalTime
 import kotlin.time.seconds
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class ProxyGrpcService(private val proxy: Proxy,
                        private val port: Int = -1,
                        private val inProcessName: String = "") : GenericIdleService() {

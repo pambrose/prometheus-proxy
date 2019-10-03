@@ -19,17 +19,9 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.Maps.newConcurrentMap
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.grpc.UnregisterPathResponse
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
-import kotlin.time.ExperimentalTime
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class ProxyPathManager(private val isTestMode: Boolean) {
 
     private val pathMap = newConcurrentMap<String, AgentContext>() // Map path to AgentContext

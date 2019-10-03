@@ -20,24 +20,16 @@ package io.prometheus.proxy
 
 import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
 import com.sudothought.common.dsl.GuavaDsl.toStringElements
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
 import kotlin.time.MonoClock
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class ScrapeRequestWrapper(proxy: Proxy,
                            val agentContext: AgentContext,
                            path: String,

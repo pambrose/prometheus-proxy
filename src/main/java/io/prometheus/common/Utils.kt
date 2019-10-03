@@ -27,18 +27,14 @@ import com.google.common.base.Splitter
 import com.google.common.io.CharStreams
 import com.google.common.util.concurrent.Service
 import io.ktor.http.HttpStatusCode
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.dsl.MetricsDsl.healthCheck
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import org.slf4j.Logger
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.UnknownHostException
 import kotlin.system.exitProcess
 import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
 
 val localHostName: String by lazy {
     try {
@@ -103,10 +99,6 @@ fun newMapHealthCheck(map: Map<*, *>, size: Int) =
             HealthCheck.Result.unhealthy("Large size: ${map.size}")
     }
 
-@ObsoleteCoroutinesApi
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
 fun getVersionDesc(asJson: Boolean): String {
     val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
     return if (asJson)
@@ -122,10 +114,6 @@ fun shutDownHookAction(service: Service) =
         System.err.println("*** ${service.simpleClassName} shut down complete ***")
     }
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class VersionValidator : IParameterValidator {
     override fun validate(name: String, value: String) {
         val console = JCommander().console
@@ -134,7 +122,6 @@ class VersionValidator : IParameterValidator {
     }
 }
 
-@ExperimentalTime
 suspend fun delay(duration: Duration) {
     kotlinx.coroutines.delay(duration.toLongMilliseconds())
 }

@@ -18,7 +18,6 @@
 
 package io.prometheus.proxy
 
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
@@ -26,14 +25,7 @@ import io.prometheus.common.SamplerGaugeCollector
 import io.prometheus.dsl.PrometheusDsl.counter
 import io.prometheus.dsl.PrometheusDsl.gauge
 import io.prometheus.dsl.PrometheusDsl.summary
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
-import kotlin.time.ExperimentalTime
 
-@ObsoleteCoroutinesApi
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
 class ProxyMetrics(proxy: Proxy) {
 
     val scrapeRequests: Counter =

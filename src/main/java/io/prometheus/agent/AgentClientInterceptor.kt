@@ -26,21 +26,12 @@ import io.grpc.ForwardingClientCall
 import io.grpc.ForwardingClientCallListener
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
-import kotlin.time.ExperimentalTime
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
-    @ExperimentalTime
     override fun <ReqT, RespT> interceptCall(method: MethodDescriptor<ReqT, RespT>,
                                              callOptions: CallOptions,
                                              next: Channel): ClientCall<ReqT, RespT> =

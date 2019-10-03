@@ -29,9 +29,7 @@ import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
 import mu.KLogging
 import org.eclipse.jetty.servlet.ServletHolder
-import kotlin.time.ExperimentalTime
 
-@ExperimentalTime
 class MetricsService(private val port: Int,
                      private val path: String,
                      initBlock: (MetricsService.() -> Unit)? = null) : GenericIdleService() {

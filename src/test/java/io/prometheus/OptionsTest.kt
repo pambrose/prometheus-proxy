@@ -18,22 +18,14 @@
 
 package io.prometheus
 
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestConstants.OPTIONS_CONFIG
 import io.prometheus.agent.AgentOptions
 import io.prometheus.proxy.ProxyOptions
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import org.amshove.kluent.shouldBeFalse
 import org.amshove.kluent.shouldBeTrue
 import org.amshove.kluent.shouldEqual
 import org.junit.Test
-import kotlin.time.ExperimentalTime
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class OptionsTest {
 
     @Test

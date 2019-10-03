@@ -39,11 +39,9 @@ import java.io.FileNotFoundException
 import java.net.URL
 import kotlin.properties.Delegates.notNull
 import kotlin.system.exitProcess
-import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
-@ExperimentalTime
 abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val argv: Array<String>,
                                                  private val envConfig: String,

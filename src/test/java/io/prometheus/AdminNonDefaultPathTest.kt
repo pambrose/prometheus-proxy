@@ -20,7 +20,6 @@ package io.prometheus
 
 import io.ktor.client.response.readText
 import io.ktor.http.HttpStatusCode
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
@@ -28,8 +27,6 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.simpleClassName
 import io.prometheus.dsl.KtorDsl.blockingGet
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
@@ -42,13 +39,8 @@ import org.junit.BeforeClass
 import org.junit.Test
 import java.io.IOException
 import java.util.concurrent.TimeoutException
-import kotlin.time.ExperimentalTime
 import kotlin.time.seconds
 
-@KtorExperimentalAPI
-@ExperimentalTime
-@ExperimentalCoroutinesApi
-@ObsoleteCoroutinesApi
 class AdminNonDefaultPathTest {
 
     val proxyConfigVals: ConfigVals.Proxy2 = proxy.genericConfigVals.proxy

@@ -24,23 +24,15 @@ import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Agent
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.properties.Delegates.notNull
-import kotlin.time.ExperimentalTime
 
-@ExperimentalTime
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ObsoleteCoroutinesApi
 class AgentGrpcService(private val agent: Agent,
                        options: AgentOptions,
                        private val inProcessServerName: String) {

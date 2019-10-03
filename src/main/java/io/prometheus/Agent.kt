@@ -30,7 +30,6 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.response.HttpResponse
 import io.ktor.client.response.readText
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.agent.AgentGrpcService
 import io.prometheus.agent.AgentMetrics
 import io.prometheus.agent.AgentOptions
@@ -60,8 +59,6 @@ import io.prometheus.dsl.KtorDsl.http
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -73,15 +70,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates.notNull
 import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
 import kotlin.time.MonoClock
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class Agent(options: AgentOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,

@@ -18,24 +18,16 @@
 
 package io.prometheus
 
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
 import java.io.IOException
 import java.util.concurrent.TimeoutException
-import kotlin.time.ExperimentalTime
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 object TestUtils : KLogging() {
     @Throws(IOException::class, TimeoutException::class)
     fun startProxy(serverName: String = "",

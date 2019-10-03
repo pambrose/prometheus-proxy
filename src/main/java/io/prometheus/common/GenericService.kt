@@ -29,21 +29,13 @@ import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
 import com.sudothought.common.dsl.GuavaDsl.serviceManager
 import com.sudothought.common.dsl.GuavaDsl.serviceManagerListener
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import mu.KLogging
 import java.io.Closeable
 import kotlin.properties.Delegates.notNull
-import kotlin.time.ExperimentalTime
 
-@KtorExperimentalAPI
-@ExperimentalTime
-@ExperimentalCoroutinesApi
-@ObsoleteCoroutinesApi
 abstract class GenericService protected constructor(val genericConfigVals: ConfigVals,
                                                     adminConfig: AdminConfig,
                                                     metricsConfig: MetricsConfig,

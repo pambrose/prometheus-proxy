@@ -20,20 +20,12 @@ package io.prometheus.proxy
 
 import com.beust.jcommander.Parameter
 import com.google.common.collect.Iterables
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.AGENT_PORT
 import io.prometheus.common.EnvVars.PROXY_CONFIG
 import io.prometheus.common.EnvVars.PROXY_PORT
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
-import kotlin.time.ExperimentalTime
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
 
     constructor(args: List<String>) : this(Iterables.toArray<String>(args, String::class.java))

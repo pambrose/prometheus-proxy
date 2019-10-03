@@ -22,7 +22,6 @@ import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.Joiner
 import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.grpc.Attributes
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.GenericService
@@ -41,18 +40,11 @@ import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRequestManager
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.properties.Delegates.notNull
-import kotlin.time.ExperimentalTime
 import kotlin.time.milliseconds
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class Proxy(options: ProxyOptions,
             proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",

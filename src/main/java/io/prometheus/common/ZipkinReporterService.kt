@@ -27,9 +27,7 @@ import io.prometheus.guava.genericServiceListener
 import mu.KLogging
 import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
-import kotlin.time.ExperimentalTime
 
-@ExperimentalTime
 class ZipkinReporterService(private val url: String,
                             initBlock: (ZipkinReporterService.() -> Unit)? = null) : GenericIdleService() {
     private val sender = OkHttpSender.create(url)

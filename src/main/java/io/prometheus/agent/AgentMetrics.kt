@@ -18,7 +18,6 @@
 
 package io.prometheus.agent
 
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Agent
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
@@ -26,14 +25,7 @@ import io.prometheus.common.SamplerGaugeCollector
 import io.prometheus.dsl.PrometheusDsl.counter
 import io.prometheus.dsl.PrometheusDsl.gauge
 import io.prometheus.dsl.PrometheusDsl.summary
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
-import kotlin.time.ExperimentalTime
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class AgentMetrics(agent: Agent) {
 
     val scrapeRequests: Counter =

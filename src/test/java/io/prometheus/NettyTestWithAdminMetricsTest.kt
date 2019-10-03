@@ -18,7 +18,6 @@
 
 package io.prometheus
 
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.ProxyTests.ProxyCallTestArgs
 import io.prometheus.ProxyTests.proxyCallTest
 import io.prometheus.ProxyTests.timeoutTest
@@ -33,9 +32,6 @@ import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.delay
 import io.prometheus.common.simpleClassName
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.InternalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
@@ -43,14 +39,8 @@ import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
 import java.util.concurrent.TimeoutException
-import kotlin.time.ExperimentalTime
 import kotlin.time.seconds
 
-@KtorExperimentalAPI
-@InternalCoroutinesApi
-@ExperimentalCoroutinesApi
-@ExperimentalTime
-@ObsoleteCoroutinesApi
 class NettyTestWithAdminMetricsTest {
 
     @Test

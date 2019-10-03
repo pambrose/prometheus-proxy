@@ -31,7 +31,7 @@
 
         <kotlin.maven.plugin.version>1.3.50</kotlin.maven.plugin.version>
 
-        <utils.version>37c308ace6</utils.version>
+        <utils.version>f5a9c48a1c</utils.version>
 
         <prometheus.version>0.7.0</prometheus.version>
         <jcommander.version>1.78</jcommander.version>
@@ -516,6 +516,11 @@
                     <args>
                         <!-- <arg>-XXLanguage:+InlineClasses</arg> -->
                         <arg>-Xuse-experimental=kotlin.Experimental</arg>
+                        <arg>-Xuse-experimental=kotlin.time.ExperimentalTime</arg>
+                        <arg>-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi</arg>
+                        <arg>-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi</arg>
+                        <arg>-Xuse-experimental=kotlinx.coroutines.ObsoleteCoroutinesApi</arg>
+                        <arg>-Xuse-experimental=io.ktor.util.KtorExperimentalAPI</arg>
                     </args>
                 </configuration>
             </plugin>
