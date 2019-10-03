@@ -67,10 +67,11 @@ import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates.notNull
+import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.MonoClock
 import kotlin.time.milliseconds
@@ -375,7 +376,8 @@ class Agent(options: AgentOptions,
     }
 
     @Throws(InterruptedException::class)
-    fun awaitInitialConnection(timeout: Long, unit: TimeUnit) = initialConnectionLatch.await(timeout, unit)
+    fun awaitInitialConnection(timeout: Duration) =
+        initialConnectionLatch.await(timeout.toLongMilliseconds(), MILLISECONDS)
 
     override fun toString() =
         toStringElements {

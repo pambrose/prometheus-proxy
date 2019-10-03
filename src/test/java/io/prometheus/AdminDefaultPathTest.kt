@@ -39,10 +39,12 @@ import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
 import java.io.IOException
-import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
+import kotlin.time.ExperimentalTime
+import kotlin.time.seconds
 
 @KtorExperimentalAPI
+@ExperimentalTime
 @ExperimentalCoroutinesApi
 class AdminDefaultPathTest {
 
@@ -145,7 +147,7 @@ class AdminDefaultPathTest {
             runBlocking {
                 launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true) }
                 launch(Dispatchers.Default) {
-                    agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5, SECONDS) }
+                    agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
                 }
             }
             logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }

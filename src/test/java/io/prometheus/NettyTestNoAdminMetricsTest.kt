@@ -40,9 +40,9 @@ import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
-import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 import kotlin.time.ExperimentalTime
+import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @InternalCoroutinesApi
@@ -89,7 +89,7 @@ class NettyTestNoAdminMetricsTest {
             logger.info { "Starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
             runBlocking {
                 launch(Dispatchers.Default) { proxy = startProxy() }
-                launch(Dispatchers.Default) { agent = startAgent().apply { awaitInitialConnection(10, SECONDS) } }
+                launch(Dispatchers.Default) { agent = startAgent().apply { awaitInitialConnection(10.seconds) } }
             }
             logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
         }

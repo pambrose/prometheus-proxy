@@ -19,17 +19,20 @@
 package io.prometheus.guava
 
 import com.google.common.util.concurrent.AbstractExecutionThreadService
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeUnit.SECONDS
+import java.util.concurrent.TimeUnit.MILLISECONDS
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
+import kotlin.time.seconds
 
+@ExperimentalTime
 abstract class GenericExecutionThreadService : AbstractExecutionThreadService() {
-    fun startSync(timeout: Long = 30, timeUnit: TimeUnit = SECONDS) {
+    fun startSync(timeout: Duration = 30.seconds) {
         startAsync()
-        awaitRunning(timeout, timeUnit)
+        awaitRunning(timeout.toLongMilliseconds(), MILLISECONDS)
     }
 
-    fun stopSync(timeout: Long = 30, timeUnit: TimeUnit = SECONDS) {
+    fun stopSync(timeout: Duration = 30.seconds) {
         stopAsync()
-        awaitTerminated(timeout, timeUnit)
+        awaitTerminated(timeout.toLongMilliseconds(), MILLISECONDS)
     }
 }

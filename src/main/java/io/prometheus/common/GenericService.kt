@@ -37,8 +37,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import java.io.Closeable
 import kotlin.properties.Delegates.notNull
+import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
+@ExperimentalTime
 @ExperimentalCoroutinesApi
 abstract class GenericService protected constructor(val genericConfigVals: ConfigVals,
                                                     adminConfig: AdminConfig,

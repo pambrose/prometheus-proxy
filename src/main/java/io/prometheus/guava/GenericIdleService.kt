@@ -19,17 +19,20 @@
 package io.prometheus.guava
 
 import com.google.common.util.concurrent.AbstractIdleService
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeUnit.SECONDS
+import java.util.concurrent.TimeUnit.MILLISECONDS
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
+import kotlin.time.seconds
 
+@ExperimentalTime
 abstract class GenericIdleService : AbstractIdleService() {
-    fun startSync(maxWaitSecs: Long = 15, timeUnit: TimeUnit = SECONDS) {
+    fun startSync(maxWaitSecs: Duration = 15.seconds) {
         startAsync()
-        awaitRunning(maxWaitSecs, timeUnit)
+        awaitRunning(maxWaitSecs.toLongMilliseconds(), MILLISECONDS)
     }
 
-    fun stopSync(maxWaitSecs: Long = 15, timeUnit: TimeUnit = SECONDS) {
+    fun stopSync(maxWaitSecs: Duration = 15.seconds) {
         stopAsync()
-        awaitTerminated(maxWaitSecs, timeUnit)
+        awaitTerminated(maxWaitSecs.toLongMilliseconds(), MILLISECONDS)
     }
 }

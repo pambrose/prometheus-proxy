@@ -41,7 +41,6 @@ import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
-import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.TimeoutException
 import kotlin.time.ExperimentalTime
 import kotlin.time.seconds
@@ -95,7 +94,7 @@ class NettyTestWithAdminMetricsTest {
                 launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, metricsEnabled = true) }
                 launch(Dispatchers.Default) {
                     agent = startAgent(adminEnabled = true, metricsEnabled = true)
-                        .apply { awaitInitialConnection(10, SECONDS) }
+                        .apply { awaitInitialConnection(10.seconds) }
                 }
             }
 

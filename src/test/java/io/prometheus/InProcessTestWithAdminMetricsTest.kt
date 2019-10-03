@@ -40,8 +40,8 @@ import mu.KLogging
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
-import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.time.ExperimentalTime
+import kotlin.time.seconds
 
 @KtorExperimentalAPI
 @InternalCoroutinesApi
@@ -92,7 +92,7 @@ class InProcessTestWithAdminMetricsTest {
                 }
                 launch(Dispatchers.Default) {
                     agent = startAgent("withmetrics", adminEnabled = true, metricsEnabled = true)
-                        .apply { awaitInitialConnection(10, SECONDS) }
+                        .apply { awaitInitialConnection(10.seconds) }
                 }
             }
             logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }

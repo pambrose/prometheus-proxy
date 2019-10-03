@@ -32,8 +32,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletHolder
+import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
+@ExperimentalTime
 @ExperimentalCoroutinesApi
 class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val port: Int,
