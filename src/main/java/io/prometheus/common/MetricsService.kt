@@ -20,8 +20,8 @@ package io.prometheus.common
 
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.util.concurrent.MoreExecutors
+import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.client.exporter.MetricsServlet
-import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.JettyDsl.server
 import io.prometheus.dsl.JettyDsl.servletContextHandler
 import io.prometheus.dsl.MetricsDsl.healthCheck

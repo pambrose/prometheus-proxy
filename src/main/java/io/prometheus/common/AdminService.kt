@@ -23,8 +23,8 @@ import com.codahale.metrics.servlets.HealthCheckServlet
 import com.codahale.metrics.servlets.PingServlet
 import com.codahale.metrics.servlets.ThreadDumpServlet
 import com.google.common.util.concurrent.MoreExecutors
+import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.ktor.util.KtorExperimentalAPI
-import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.SparkDsl.servletContextHandler
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener

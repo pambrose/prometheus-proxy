@@ -31,11 +31,13 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
+import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
+    @ExperimentalTime
     override fun <ReqT, RespT> interceptCall(method: MethodDescriptor<ReqT, RespT>,
                                              callOptions: CallOptions,
                                              next: Channel): ClientCall<ReqT, RespT> =

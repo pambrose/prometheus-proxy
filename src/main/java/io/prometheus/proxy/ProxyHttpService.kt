@@ -23,6 +23,7 @@ import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.ACCEPT_ENCODING
 import com.google.common.net.HttpHeaders.CONTENT_ENCODING
 import com.google.common.util.concurrent.MoreExecutors
+import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.features.DefaultHeaders
@@ -43,7 +44,6 @@ import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.delay
 import io.prometheus.common.isNotSuccessful
-import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi

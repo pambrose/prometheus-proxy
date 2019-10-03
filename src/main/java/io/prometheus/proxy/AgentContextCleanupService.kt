@@ -19,10 +19,10 @@
 package io.prometheus.proxy
 
 import com.google.common.util.concurrent.MoreExecutors
+import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.delay
-import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi

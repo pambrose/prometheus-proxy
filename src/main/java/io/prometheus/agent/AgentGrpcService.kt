@@ -20,12 +20,12 @@ package io.prometheus.agent
 
 import brave.Tracing
 import brave.grpc.GrpcTracing
+import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Agent
-import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
@@ -34,7 +34,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.properties.Delegates.notNull
+import kotlin.time.ExperimentalTime
 
+@ExperimentalTime
 @KtorExperimentalAPI
 @ExperimentalCoroutinesApi
 class AgentGrpcService(private val agent: Agent,

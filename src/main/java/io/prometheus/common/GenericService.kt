@@ -27,9 +27,9 @@ import com.google.common.base.Joiner
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
+import com.sudothought.common.dsl.GuavaDsl.serviceManager
+import com.sudothought.common.dsl.GuavaDsl.serviceManagerListener
 import io.ktor.util.KtorExperimentalAPI
-import io.prometheus.dsl.GuavaDsl.serviceManager
-import io.prometheus.dsl.GuavaDsl.serviceManagerListener
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.guava.GenericExecutionThreadService
 import io.prometheus.guava.genericServiceListener

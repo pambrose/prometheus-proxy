@@ -18,11 +18,11 @@
 
 package io.prometheus.proxy
 
+import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
+import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
-import io.prometheus.delegate.AtomicDelegates.nonNullableReference
-import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel

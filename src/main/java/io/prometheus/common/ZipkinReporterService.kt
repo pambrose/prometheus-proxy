@@ -20,7 +20,7 @@ package io.prometheus.common
 
 import brave.Tracing
 import com.google.common.util.concurrent.MoreExecutors
-import io.prometheus.dsl.GuavaDsl.toStringElements
+import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ZipkinDsl.tracing
 import io.prometheus.guava.GenericIdleService
 import io.prometheus.guava.genericServiceListener

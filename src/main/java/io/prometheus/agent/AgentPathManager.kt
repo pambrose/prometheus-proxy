@@ -24,8 +24,10 @@ import io.prometheus.Agent
 import io.prometheus.common.GrpcObjects
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
+import kotlin.time.ExperimentalTime
 
 @KtorExperimentalAPI
+@ExperimentalTime
 @ExperimentalCoroutinesApi
 class AgentPathManager(private val agent: Agent) {
 

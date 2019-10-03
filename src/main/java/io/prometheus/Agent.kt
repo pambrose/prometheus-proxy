@@ -22,6 +22,8 @@ import com.google.common.net.HttpHeaders
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.util.concurrent.RateLimiter
 import com.google.protobuf.Empty
+import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
+import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.ktor.client.request.HttpRequestBuilder
@@ -52,9 +54,7 @@ import io.prometheus.common.localHostName
 import io.prometheus.common.newBacklogHealthCheck
 import io.prometheus.common.simpleClassName
 import io.prometheus.common.thenElse
-import io.prometheus.delegate.AtomicDelegates.nonNullableReference
 import io.prometheus.dsl.GrpcDsl.streamObserver
-import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.KtorDsl.get
 import io.prometheus.dsl.KtorDsl.http
 import io.prometheus.grpc.ScrapeRequest

@@ -20,6 +20,7 @@ package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.base.Joiner
+import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.grpc.Attributes
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
@@ -30,7 +31,6 @@ import io.prometheus.common.delay
 import io.prometheus.common.getBanner
 import io.prometheus.common.getVersionDesc
 import io.prometheus.common.newMapHealthCheck
-import io.prometheus.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager

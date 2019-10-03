@@ -18,10 +18,10 @@
 
 package io.prometheus.proxy
 
+import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
+import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.Proxy
-import io.prometheus.delegate.AtomicDelegates.nonNullableReference
-import io.prometheus.dsl.GuavaDsl.toStringElements
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.atomic.AtomicBoolean
