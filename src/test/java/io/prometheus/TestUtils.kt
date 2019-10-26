@@ -77,7 +77,7 @@ object TestUtils : KLogging() {
 }
 
 val coroutineExceptionHandler =
-    CoroutineExceptionHandler { context, e ->
+    CoroutineExceptionHandler { _, e ->
         println("CoroutineExceptionHandler caught: $e")
         e.printStackTrace()
     }
