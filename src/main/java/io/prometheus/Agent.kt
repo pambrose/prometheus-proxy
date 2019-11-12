@@ -223,19 +223,16 @@ class Agent(options: AgentOptions,
                     //logger.info { "Fetching ${pathContext}" }
                     responseArg.statusCode = resp.status
 
-                    when {
-                        resp.status.isSuccessful -> {
-                            responseArg.apply {
-                                contentText = resp.readText()
-                                contentType = resp.headers[CONTENT_TYPE].orEmpty()
-                                validResponse = true
-                            }
-                            scrapeCounterMsg = "success"
+                    if (resp.status.isSuccessful) {
+                        responseArg.apply {
+                            contentText = resp.readText()
+                            contentType = resp.headers[CONTENT_TYPE].orEmpty()
+                            validResponse = true
                         }
-                        else -> {
-                            responseArg.failureReason = "Unsucessful response code ${responseArg.statusCode}"
-                            scrapeCounterMsg = "unsuccessful"
-                        }
+                        scrapeCounterMsg = "success"
+                    } else {
+                        responseArg.failureReason = "Unsucessful response code ${responseArg.statusCode}"
+                        scrapeCounterMsg = "unsuccessful"
                     }
                 }
 
