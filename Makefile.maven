@@ -1,18 +1,18 @@
 VERSION=1.3.11
 
-default: compile
+default: build
 
-clean:
-	./gradlew clean
-
-compile:
-	./gradlew build -x test
-
-tests:
-	./gradlew check
+build:
+	./mvnw -DskipTests=true clean package
 
 config:
 	java -jar ./etc/jars/tscfg-0.9.94.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
+
+tests:
+	./mvnw test
+
+clean:
+	./mvnw -DskipTests=true clean
 
 docker-build:
 	docker build -f ./etc/docker/proxy.df -t=pambrose/prometheus-proxy:${VERSION} .
@@ -42,6 +42,11 @@ site:
 tree:
 	./mvnw dependency:tree
 
-versioncheck:
-	./gradlew dependencyUpdates
+jarcheck:
+	./mvnw versions:display-dependency-updates
+
+plugincheck:
+	./mvnw versions:display-plugin-updates
+
+versioncheck: jarcheck plugincheck
 

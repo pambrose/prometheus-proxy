@@ -40,21 +40,21 @@ import kotlin.time.seconds
 object SimpleTests : KLogging() {
 
     fun missingPathTest(caller: String) {
-        logger.info { "Calling missingPathTest() from $caller" }
+        logger.debug { "Calling missingPathTest() from $caller" }
         blockingGet("${TestConstants.PROXY_PORT}/".fixUrl()) { resp ->
             resp.status shouldEqual HttpStatusCode.NotFound
         }
     }
 
     fun invalidPathTest(caller: String) {
-        logger.info { "Calling invalidPathTest() from $caller" }
+        logger.debug { "Calling invalidPathTest() from $caller" }
         blockingGet("${TestConstants.PROXY_PORT}/invalid_path".fixUrl()) { resp ->
             resp.status shouldEqual HttpStatusCode.NotFound
         }
     }
 
     fun addRemovePathsTest(pathManager: AgentPathManager, caller: String) {
-        logger.info { "Calling addRemovePathsTest() from $caller" }
+        logger.debug { "Calling addRemovePathsTest() from $caller" }
 
         // Take into account pre-existing paths already registered
         val originalSize = pathManager.pathMapSize()
@@ -74,7 +74,7 @@ object SimpleTests : KLogging() {
     }
 
     fun invalidAgentUrlTest(pathManager: AgentPathManager, caller: String, badPath: String = "badPath") {
-        logger.info { "Calling invalidAgentUrlTest() from $caller" }
+        logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
         pathManager.registerPath(badPath, "33/metrics".fixUrl())
         blockingGet("${TestConstants.PROXY_PORT}/$badPath".fixUrl()) { resp ->
@@ -84,7 +84,7 @@ object SimpleTests : KLogging() {
     }
 
     fun threadedAddRemovePathsTest(pathManager: AgentPathManager, caller: String) {
-        logger.info { "Calling threadedAddRemovePathsTest() from $caller" }
+        logger.debug { "Calling threadedAddRemovePathsTest() from $caller" }
         val paths = mutableListOf<String>()
 
         // Take into account pre-existing paths already registered

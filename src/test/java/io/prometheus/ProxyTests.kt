@@ -64,7 +64,7 @@ object ProxyTests : KLogging() {
                     agentPort: Int = 9900,
                     agentPath: String = "agent-timeout",
                     proxyPath: String = "proxy-timeout") {
-        logger.info { "Calling timeoutTest() from $caller" }
+        logger.debug { "Calling timeoutTest() from $caller" }
 
         val httpServer =
             embeddedServer(CIO, port = agentPort) {
@@ -110,7 +110,7 @@ object ProxyTests : KLogging() {
     private class HttpServerWrapper(val port: Int, val server: CIOApplicationEngine)
 
     fun proxyCallTest(args: ProxyCallTestArgs) {
-        logger.info { "Calling proxyCallTest() from ${args.caller}" }
+        logger.debug { "Calling proxyCallTest() from ${args.caller}" }
 
         val pathMap = newConcurrentMap<Int, Int>()
 
@@ -147,7 +147,7 @@ object ProxyTests : KLogging() {
         logger.info { "Finished starting ${args.httpServerCount} httpServers" }
 
         // Create the paths
-        logger.info { "Registering paths" }
+        logger.debug { "Registering paths" }
         repeat(args.pathCount) { i ->
             val index = Random.nextInt(httpServers.size)
             args.pathManager.registerPath("proxy-$i", "${args.startingPort + index}/agent-$index".fixUrl())
@@ -157,7 +157,7 @@ object ProxyTests : KLogging() {
         args.pathManager.pathMapSize() shouldEqual originalSize + args.pathCount
 
         // Call the proxy sequentially
-        logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
+        logger.debug { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
         Executors.newSingleThreadExecutor().asCoroutineDispatcher()
             .use { dispatcher ->
                 runBlocking {
@@ -182,7 +182,7 @@ object ProxyTests : KLogging() {
             }
 
         // Call the proxy in parallel
-        logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
+        logger.debug { "Calling proxy in parallel ${args.parallelQueryCount} times" }
         Executors.newFixedThreadPool(20).asCoroutineDispatcher()
             .use { dispatcher ->
                 runBlocking {
@@ -210,7 +210,7 @@ object ProxyTests : KLogging() {
                 }
             }
 
-        logger.info { "Unregistering paths" }
+        logger.debug { "Unregistering paths" }
         val counter = AtomicInteger(0)
         val errorCnt = AtomicInteger(0)
         pathMap.forEach { path ->
@@ -241,7 +241,7 @@ object ProxyTests : KLogging() {
 
     suspend fun callProxy(httpClient: HttpClient, pathMap: Map<Int, Int>, msg: String) {
 
-        println("Launched $msg")
+        logger.debug { "Launched $msg" }
 
         // Randomly choose one of the pathMap values
         val index = Random.nextInt(pathMap.size)

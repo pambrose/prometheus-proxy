@@ -34,6 +34,7 @@ object TestUtils : KLogging() {
                    adminEnabled: Boolean = false,
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Proxy {
+
         logger.apply {
             info { getBanner("banners/proxy.txt", logger) }
             info { getVersionDesc(false) }
