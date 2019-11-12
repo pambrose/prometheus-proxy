@@ -34,9 +34,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
-import org.junit.AfterClass
-import org.junit.BeforeClass
-import org.junit.Test
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
 class InProcessTestNoAdminMetricsTest {
@@ -74,7 +74,7 @@ class InProcessTestNoAdminMetricsTest {
         private lateinit var agent: Agent
 
         @JvmStatic
-        @BeforeClass
+        @BeforeAll
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
 
@@ -88,7 +88,7 @@ class InProcessTestNoAdminMetricsTest {
         }
 
         @JvmStatic
-        @AfterClass
+        @AfterAll
         fun takeDown() {
             runBlocking {
                 for (service in listOf(proxy, agent)) {

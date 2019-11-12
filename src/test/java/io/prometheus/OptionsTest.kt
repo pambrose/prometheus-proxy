@@ -24,7 +24,7 @@ import io.prometheus.proxy.ProxyOptions
 import org.amshove.kluent.shouldBeFalse
 import org.amshove.kluent.shouldBeTrue
 import org.amshove.kluent.shouldEqual
-import org.junit.Test
+import org.junit.jupiter.api.Test
 
 class OptionsTest {
 

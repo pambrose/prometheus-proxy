@@ -33,9 +33,9 @@ import org.amshove.kluent.shouldBeGreaterThan
 import org.amshove.kluent.shouldContain
 import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldStartWith
-import org.junit.AfterClass
-import org.junit.BeforeClass
-import org.junit.Test
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
 import java.io.IOException
 import java.util.concurrent.TimeoutException
 import kotlin.time.seconds
@@ -132,7 +132,7 @@ class AdminDefaultPathTest {
         private lateinit var agent: Agent
 
         @JvmStatic
-        @BeforeClass
+        @BeforeAll
         @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
@@ -147,7 +147,7 @@ class AdminDefaultPathTest {
         }
 
         @JvmStatic
-        @AfterClass
+        @AfterAll
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
             runBlocking {

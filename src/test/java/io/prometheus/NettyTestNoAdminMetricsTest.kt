@@ -34,9 +34,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
-import org.junit.AfterClass
-import org.junit.BeforeClass
-import org.junit.Test
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
 import java.util.concurrent.TimeoutException
 import kotlin.time.seconds
 
@@ -74,7 +74,7 @@ class NettyTestNoAdminMetricsTest {
         private lateinit var agent: Agent
 
         @JvmStatic
-        @BeforeClass
+        @BeforeAll
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
 
@@ -86,7 +86,7 @@ class NettyTestNoAdminMetricsTest {
         }
 
         @JvmStatic
-        @AfterClass
+        @AfterAll
         @Throws(InterruptedException::class, TimeoutException::class)
         fun takeDown() {
             runBlocking {

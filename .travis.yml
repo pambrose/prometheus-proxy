@@ -1,12 +1,22 @@
 language: java
 
 jdk:
-  #  - oraclejdk11
+  # - oraclejdk11
   - openjdk11
+
+before_cache:
+  - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
+  - rm -fr $HOME/.gradle/caches/*/plugin-resolution/
+
+cache:
+  directories:
+    - $HOME/.gradle/caches/
+    - $HOME/.gradle/wrapper/
+
+after_success:
+  - ./gradlew jacocoTestReport coveralls
+#  - ./mvnw jacoco:report coveralls:report
 
 notifications:
   email:
     - pambrose@mac.com
-
-after_success:
-  - ./mvnw jacoco:report coveralls:report

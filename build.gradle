@@ -91,12 +91,10 @@ dependencies {
     implementation "org.slf4j:jul-to-slf4j:${slf4jVersion}"
     implementation "io.github.microutils:kotlin-logging:${loggingVersion}"
 
-    testImplementation "org.jetbrains.kotlin:kotlin-test-junit:${kotlinVersion}"
+    //testImplementation "org.jetbrains.kotlin:kotlin-test-junit:${kotlinVersion}"
     testImplementation "org.amshove.kluent:kluent:${kluentVersion}"
-
     testImplementation "org.junit.jupiter:junit-jupiter-api:$junitVersion"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
-
 }
 
 protobuf {
@@ -143,9 +141,14 @@ artifacts {
 //    archives javadocJar
 }
 
-
-configurations.all {
+/*
+jacocoTestReport {
+    reports {
+        xml.enabled = true // coveralls plugin depends on xml format report
+        html.enabled = true
+    }
 }
+*/
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
