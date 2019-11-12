@@ -31,7 +31,7 @@
 
         <kotlin.maven.plugin.version>1.3.50</kotlin.maven.plugin.version>
 
-        <utils.version>1.0.3</utils.version>
+        <utils.version>1.0.5</utils.version>
 
         <prometheus.version>0.8.0</prometheus.version>
         <jcommander.version>1.78</jcommander.version>
@@ -52,7 +52,7 @@
         <jetty.version>9.4.20.v20190813</jetty.version>
 
         <brave.version>5.9.0</brave.version>
-        <zipkin-sender.version>2.10.3</zipkin-sender.version>
+        <zipkin-sender.version>2.11.0</zipkin-sender.version>
 
         <logback.version>1.2.3</logback.version>
         <slf4j.version>1.7.28</slf4j.version>
