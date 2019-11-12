@@ -95,7 +95,7 @@ object SimpleTests : KLogging() {
                 val mutex = Mutex()
                 val jobs =
                     List(TestConstants.REPS) { i ->
-                        GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                        GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
                             val path = "test-$i}"
                             val url = "${TestConstants.PROXY_PORT}/$path".fixUrl()
                             mutex.withLock { paths += path }
@@ -117,7 +117,7 @@ object SimpleTests : KLogging() {
             withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
                 val jobs =
                     List(paths.size) {
-                        GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler) {
+                        GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
                             pathManager.unregisterPath(paths[it])
                         }
                     }

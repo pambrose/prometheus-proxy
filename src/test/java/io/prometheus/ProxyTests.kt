@@ -166,7 +166,7 @@ object ProxyTests : KLogging() {
                             .use { httpClient ->
                                 val counter = AtomicInteger(0)
                                 repeat(args.sequentialQueryCount) { cnt ->
-                                    val job = launch(dispatcher + coroutineExceptionHandler) {
+                                    val job = launch(dispatcher + coroutineExceptionHandler(logger)) {
                                         callProxy(httpClient, pathMap, "Sequential $cnt")
                                         counter.incrementAndGet()
                                     }
@@ -192,7 +192,7 @@ object ProxyTests : KLogging() {
                                 val counter = AtomicInteger(0)
                                 val jobs =
                                     List(args.parallelQueryCount) { cnt ->
-                                        launch(dispatcher + coroutineExceptionHandler) {
+                                        launch(dispatcher + coroutineExceptionHandler(logger)) {
                                             delay(Random.nextLong(50, 300))
                                             callProxy(httpClient, pathMap, "Parallel $cnt")
                                             counter.incrementAndGet()
@@ -239,7 +239,7 @@ object ProxyTests : KLogging() {
         logger.info { "Finished shutting down ${httpServers.size} httpServers" }
     }
 
-    suspend fun callProxy(httpClient: HttpClient, pathMap: Map<Int, Int>, msg: String) {
+    private suspend fun callProxy(httpClient: HttpClient, pathMap: Map<Int, Int>, msg: String) {
 
         logger.debug { "Launched $msg" }
 

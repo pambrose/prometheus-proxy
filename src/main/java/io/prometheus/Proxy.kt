@@ -165,6 +165,7 @@ class Proxy(options: ProxyOptions,
 
         @JvmStatic
         fun main(argv: Array<String>) {
+
             logger.apply {
                 info { getBanner("banners/proxy.txt", logger) }
                 info { getVersionDesc(false) }

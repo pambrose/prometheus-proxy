@@ -382,6 +382,7 @@ class Agent(options: AgentOptions,
     companion object : KLogging() {
         @JvmStatic
         fun main(argv: Array<String>) {
+
             logger.apply {
                 info { getBanner("banners/agent.txt", this) }
                 info { getVersionDesc(false) }

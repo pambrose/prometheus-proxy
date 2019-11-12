@@ -24,8 +24,10 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
+import mu.KLogger
 import mu.KLogging
 import java.io.IOException
+import java.nio.channels.ClosedSelectorException
 import java.util.concurrent.TimeoutException
 
 object TestUtils : KLogging() {
@@ -58,6 +60,7 @@ object TestUtils : KLogging() {
                    adminEnabled: Boolean = false,
                    metricsEnabled: Boolean = false,
                    argv: List<String> = emptyList()): Agent {
+
         logger.apply {
             info { getBanner("banners/agent.txt", logger) }
             info { getVersionDesc(false) }
@@ -77,10 +80,12 @@ object TestUtils : KLogging() {
     }
 }
 
-val coroutineExceptionHandler =
+fun coroutineExceptionHandler(logger: KLogger) =
     CoroutineExceptionHandler { _, e ->
-        println("CoroutineExceptionHandler caught: $e")
-        e.printStackTrace()
+        if (e is ClosedSelectorException)
+            logger.info { "CoroutineExceptionHandler caught: $e" }
+        else
+            logger.warn(e) { "CoroutineExceptionHandler caught: $e" }
     }
 
 fun String.fixUrl(): String {
