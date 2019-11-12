@@ -113,14 +113,13 @@ class AdminNonDefaultPathTest {
                               "-Dproxy.admin.healthCheckPath=healthCheckPath2",
                               "-Dproxy.admin.threadDumpPath=threadDumpPath2")
 
-            logger.info { "Starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
             runBlocking {
                 launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = args) }
                 launch(Dispatchers.Default) {
                     agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
                 }
             }
-            logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+            logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
         }
 
         @JvmStatic

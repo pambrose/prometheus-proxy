@@ -77,7 +77,6 @@ class InProcessTestWithAdminMetricsTest {
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
 
-            logger.info { "Starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
             runBlocking {
                 launch(Dispatchers.Default) {
                     proxy = startProxy("withmetrics", adminEnabled = true, metricsEnabled = true)
@@ -87,7 +86,7 @@ class InProcessTestWithAdminMetricsTest {
                         .apply { awaitInitialConnection(10.seconds) }
                 }
             }
-            logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+            logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
         }
 
         @JvmStatic

@@ -106,14 +106,13 @@ class AdminEmptyPathTest {
                               "-Dproxy.admin.healthCheckPath=\"\"",
                               "-Dproxy.admin.threadDumpPath=\"\"")
 
-            logger.info { "Starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
             runBlocking {
                 launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = args) }
                 launch(Dispatchers.Default) {
                     agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
                 }
             }
-            logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+            logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
         }
 
         @JvmStatic

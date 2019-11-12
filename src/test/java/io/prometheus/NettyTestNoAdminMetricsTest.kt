@@ -78,12 +78,11 @@ class NettyTestNoAdminMetricsTest {
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
 
-            logger.info { "Starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
             runBlocking {
                 launch(Dispatchers.Default) { proxy = startProxy() }
                 launch(Dispatchers.Default) { agent = startAgent().apply { awaitInitialConnection(10.seconds) } }
             }
-            logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+            logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
         }
 
         @JvmStatic

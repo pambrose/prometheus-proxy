@@ -78,14 +78,13 @@ class InProcessTestNoAdminMetricsTest {
         fun setUp() {
             CollectorRegistry.defaultRegistry.clear()
 
-            logger.info { "Starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
             runBlocking {
                 launch(Dispatchers.Default) { proxy = startProxy("nometrics") }
                 launch(Dispatchers.Default) {
                     agent = startAgent("nometrics").apply { awaitInitialConnection(10.seconds) }
                 }
             }
-            logger.info { "Finished starting ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+            logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
         }
 
         @JvmStatic

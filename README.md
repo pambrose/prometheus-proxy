@@ -151,7 +151,7 @@ The only required argument is an Agent config value, which should have an `agent
 
 | Options             | Env Var         | Property               |Default | Description                            |
 |:--------------------|:----------------|:-----------------------|:-------|:---------------------------------------|
-| -c --config         | PROXY_CONFIG    |                        |        | Agent config file or url               |
+| -c --config          | PROXY_CONFIG    |                        |        | Agent config file or url                 |
 | -p --port           | PROXY_PORT      | proxy.http.port        | 8080   | Proxy listen port                      |
 | -a --agent_port     | AGENT_PORT      | proxy.agent.port       | 50051  | gRPC listen port for Agents            |
 | -r --admin          | ADMIN_ENABLED   | proxy.admin.enabled    | false  | Enable admin servlets                  |
@@ -167,7 +167,7 @@ The only required argument is an Agent config value, which should have an `agent
 
 | Options             | Env Var         | Property               |Default | Description                            |
 |:--------------------|:----------------|:-----------------------|:-------|:---------------------------------------|
-| -c --config         | AGENT_CONFIG    |                        |        | Agent config file or url (required)    |
+| -c --config          | AGENT_CONFIG    |                        |        | Agent config file or url (required)      |
 | -p --proxy          | PROXY_HOSTNAME  | agent.proxy.hostname   |        | Proxy hostname (can include :port)     |
 | -n --name           | AGENT_NAME      | agent.name             |        | Agent name                             |
 | -r --admin          | ADMIN_ENABLED   | agent.admin.enabled    | false  | Enable admin servlets                  |
