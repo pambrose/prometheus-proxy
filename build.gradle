@@ -47,16 +47,11 @@ repositories {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}"
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:${kotlinVersion}"
     implementation "org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}"
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-common:${kotlinVersion}"
-
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime:${serializationVersion}"
-    
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${coroutinesVersion}"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:${coroutinesVersion}"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:${coroutinesVersion}"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-debug:${coroutinesVersion}"
 
     implementation "io.grpc:grpc-all:${grpcVersion}"
 

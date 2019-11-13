@@ -12,7 +12,7 @@ RUN chown -R $APPLICATION_USER /app
 # Mark this container to use the specified $APPLICATION_USER
 USER $APPLICATION_USER
 
-COPY ./build/distro/prometheus-proxy.jar /app/prometheus-proxy.jar
+COPY ./build/libs/prometheus-proxy.jar /app/prometheus-proxy.jar
 WORKDIR /app
 
 EXPOSE 8080
