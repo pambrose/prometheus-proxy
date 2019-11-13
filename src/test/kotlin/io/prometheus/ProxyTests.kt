@@ -19,6 +19,7 @@
 package io.prometheus
 
 import com.google.common.collect.Maps.newConcurrentMap
+import com.sudothought.common.util.random
 import io.ktor.application.call
 import io.ktor.client.HttpClient
 import io.ktor.client.response.readText
@@ -132,7 +133,7 @@ object ProxyTests : KLogging() {
                                   })
             }
 
-        logger.info { "Starting ${args.httpServerCount} httpServers" }
+        logger.debug { "Starting ${args.httpServerCount} httpServers" }
 
         runBlocking {
             for (httpServer in httpServers) {
@@ -144,12 +145,12 @@ object ProxyTests : KLogging() {
             }
         }
 
-        logger.info { "Finished starting ${args.httpServerCount} httpServers" }
+        logger.debug { "Finished starting ${args.httpServerCount} httpServers" }
 
         // Create the paths
         logger.debug { "Registering paths" }
         repeat(args.pathCount) { i ->
-            val index = Random.nextInt(httpServers.size)
+            val index = httpServers.size.random
             args.pathManager.registerPath("proxy-$i", "${args.startingPort + index}/agent-$index".fixUrl())
             pathMap[i] = index
         }
@@ -174,7 +175,8 @@ object ProxyTests : KLogging() {
                                     job.join()
                                     job.getCancellationException().cause.shouldBeNull()
 
-                                }.shouldNotBeNull()
+                                }
+
                                 counter.get() shouldEqual args.sequentialQueryCount
                             }
                     }
@@ -206,7 +208,7 @@ object ProxyTests : KLogging() {
 
                                 counter.get() shouldEqual args.parallelQueryCount
                             }
-                    }.shouldNotBeNull()
+                    }
                 }
             }
 
@@ -244,7 +246,7 @@ object ProxyTests : KLogging() {
         logger.debug { "Launched $msg" }
 
         // Randomly choose one of the pathMap values
-        val index = Random.nextInt(pathMap.size)
+        val index = pathMap.size.random
         val httpVal = pathMap[index]
         httpVal.shouldNotBeNull()
 

@@ -1,4 +1,4 @@
-VERSION=1.3.11
+VERSION=1.4.0
 
 default: compile
 
@@ -26,6 +26,8 @@ docker-build:
 docker-push:
 	docker push pambrose/prometheus-proxy:${VERSION}
 	docker push pambrose/prometheus-agent:${VERSION}
+
+all: distro docker-build docker-push
 
 build-coverage:
 	./mvnw clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report
