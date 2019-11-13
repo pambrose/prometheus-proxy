@@ -83,7 +83,7 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
             add("remoteAddr", remoteAddr)
             add("agentName", agentName)
             add("hostName", hostName)
-            add("inactivitySecs", inactivityTime)
+            add("inactivityTime", inactivityTime)
         }
 
     companion object {

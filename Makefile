@@ -8,15 +8,20 @@ clean:
 compile:
 	./gradlew build -x test
 
+jars:
+	./gradlew agentJar proxyJar
+
 tests:
 	./gradlew check
 
 config:
 	java -jar ./etc/jars/tscfg-0.9.94.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
+distro: clean compile jars
+
 docker-build:
-	docker build -f ./etc/docker/proxy.df -t=pambrose/prometheus-proxy:${VERSION} .
-	docker build -f ./etc/docker/agent.df -t=pambrose/prometheus-agent:${VERSION} .
+	docker build -f ./etc/docker/proxy.df -t pambrose/prometheus-proxy:${VERSION} .
+	docker build -f ./etc/docker/agent.df -t pambrose/prometheus-agent:${VERSION} .
 
 docker-push:
 	docker push pambrose/prometheus-proxy:${VERSION}
@@ -30,11 +35,6 @@ report-coverage:
 
 sonar:
 	./mvnw sonar:sonar -Dsonar.host.url=http://localhost:9000
-
-distro: build
-	mkdir target/distro
-	mv target/prometheus-proxy-jar-with-dependencies.jar target/distro/prometheus-proxy.jar
-	mv target/prometheus-agent-jar-with-dependencies.jar target/distro/prometheus-agent.jar
 
 site:
 	./mvnw site

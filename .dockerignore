@@ -1,8 +1,9 @@
 .idea/
 .git/
 .wercker/
-bin
-target
+bin/
+out/
+target/
 etc/docker
 etc/compose
 *.yml
