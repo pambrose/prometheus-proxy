@@ -32,7 +32,7 @@ import org.eclipse.jetty.servlet.ServletHolder
 
 class MetricsService(private val port: Int,
                      private val path: String,
-                     initBlock: (MetricsService.() -> Unit)? = null) : GenericIdleService() {
+                     initBlock: (MetricsService.() -> Unit) = {}) : GenericIdleService() {
 
     private val server =
         server(port) {
@@ -52,7 +52,7 @@ class MetricsService(private val port: Int,
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
-        initBlock?.invoke(this)
+        initBlock(this)
     }
 
     override fun startUp() = server.start()

@@ -63,7 +63,7 @@ class Proxy(options: ProxyOptions,
     val pathManager = ProxyPathManager(isTestMode)
     val scrapeRequestManager = ScrapeRequestManager()
     val agentContextManager = AgentContextManager()
-    var metrics by notNull<ProxyMetrics>()
+    var metrics: ProxyMetrics by notNull()
 
     private val httpService = ProxyHttpService(this, proxyHttpPort)
     private val grpcService =
@@ -72,7 +72,7 @@ class Proxy(options: ProxyOptions,
         else
             ProxyGrpcService(this, inProcessName = inProcessServerName)
 
-    private var agentCleanupService by notNull<AgentContextCleanupService>()
+    private var agentCleanupService: AgentContextCleanupService by notNull()
 
     init {
         if (isMetricsEnabled)

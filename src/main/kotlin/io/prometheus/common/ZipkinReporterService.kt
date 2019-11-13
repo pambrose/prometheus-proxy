@@ -29,13 +29,13 @@ import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
 
 class ZipkinReporterService(private val url: String,
-                            initBlock: (ZipkinReporterService.() -> Unit)? = null) : GenericIdleService() {
+                            initBlock: (ZipkinReporterService.() -> Unit) = {}) : GenericIdleService() {
     private val sender = OkHttpSender.create(url)
     private val reporter = AsyncReporter.create(sender)
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
-        initBlock?.invoke(this)
+        initBlock(this)
     }
 
     fun newTracing(serviceName: String): Tracing =

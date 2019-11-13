@@ -24,8 +24,6 @@ object MetricsDsl {
     fun healthCheck(block: HealthCheck.() -> HealthCheck.Result) =
         object : HealthCheck() {
             @Throws(Exception::class)
-            override fun check(): Result {
-                return block.invoke(this)
-            }
+            override fun check(): Result = block(this)
         }
 }

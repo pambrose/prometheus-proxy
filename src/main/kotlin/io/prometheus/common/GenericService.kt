@@ -52,10 +52,10 @@ abstract class GenericService protected constructor(val genericConfigVals: Confi
     val isMetricsEnabled = metricsConfig.enabled
     val isZipkinEnabled = zipkinConfig.enabled
 
-    private var jmxReporter by notNull<JmxReporter>()
-    var adminService by notNull<AdminService>()
-    var metricsService by notNull<MetricsService>()
-    var zipkinReporterService by notNull<ZipkinReporterService>()
+    private var jmxReporter: JmxReporter by notNull()
+    var adminService: AdminService by notNull()
+    var metricsService: MetricsService by notNull()
+    var zipkinReporterService: ZipkinReporterService by notNull()
 
     init {
         if (isAdminEnabled) {

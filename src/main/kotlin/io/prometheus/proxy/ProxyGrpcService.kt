@@ -48,8 +48,8 @@ class ProxyGrpcService(private val proxy: Proxy,
                 HealthCheck.Result.healthy()
         }
 
-    private var tracing by notNull<Tracing>()
-    private var grpcTracing by notNull<GrpcTracing>()
+    private var tracing: Tracing by notNull()
+    private var grpcTracing: GrpcTracing by notNull()
     private val grpcServer: Server
 
     init {

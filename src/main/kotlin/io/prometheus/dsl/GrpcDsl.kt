@@ -39,7 +39,7 @@ object GrpcDsl {
         else
             InProcessChannelBuilder.forName(inProcessServerName))
             .run {
-                block.invoke(this)
+                block(this)
                 build()
             }
 
@@ -49,14 +49,14 @@ object GrpcDsl {
         else
             InProcessServerBuilder.forName(inProcessServerName))
             .run {
-                block.invoke(this)
+                block(this)
                 build()
             }
 
     fun attributes(block: Attributes.Builder.() -> Unit): Attributes =
         Attributes.newBuilder()
             .run {
-                block.invoke(this)
+                block(this)
                 build()
             }
 

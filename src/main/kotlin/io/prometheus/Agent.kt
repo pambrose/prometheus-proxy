@@ -69,6 +69,7 @@ import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates.notNull
+import kotlin.time.ClockMark
 import kotlin.time.Duration
 import kotlin.time.MonoClock
 import kotlin.time.milliseconds
@@ -94,10 +95,10 @@ class Agent(options: AgentOptions,
         RateLimiter.create(1.0 / configVals.reconectPauseSecs).apply { acquire() } // Prime the limiter
 
     private val clock = MonoClock
-    private var lastMsgSentMark by nonNullableReference(clock.markNow())
-    private var metrics by notNull<AgentMetrics>()
+    private var lastMsgSentMark: ClockMark by nonNullableReference(clock.markNow())
+    private var metrics: AgentMetrics by notNull()
 
-    var agentId by nonNullableReference("")
+    var agentId: String by nonNullableReference("")
 
     val scrapeRequestBacklogSize = AtomicInteger(0)
     val pathManager = AgentPathManager(this)
@@ -329,7 +330,7 @@ class Agent(options: AgentOptions,
                 })
 
         for (scrapeRequestAction in scrapeRequestChannel) {
-            val scrapeResponse = scrapeRequestAction.invoke()
+            val scrapeResponse = scrapeRequestAction()
             observer.onNext(scrapeResponse)
             markMsgSent()
             scrapeRequestBacklogSize.decrementAndGet()

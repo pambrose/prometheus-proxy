@@ -79,9 +79,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
     var dynamicParams = mutableMapOf<String, String>()
         private set
 
-    private var config by notNull<Config>()
+    private var config: Config by notNull()
 
-    var configVals by notNull<ConfigVals>()
+    var configVals: ConfigVals by notNull()
         private set
 
     protected abstract fun assignConfigVals()

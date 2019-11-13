@@ -22,8 +22,8 @@ import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletContextHandler
 
 object JettyDsl {
-    fun server(port: Int, block: Server.() -> Unit) = Server(port).apply { block.invoke(this) }
+    fun server(port: Int, block: Server.() -> Unit) = Server(port).apply { block(this) }
 
     fun servletContextHandler(block: ServletContextHandler.() -> Unit) =
-        ServletContextHandler().apply { block.invoke(this) }
+        ServletContextHandler().apply { block(this) }
 }

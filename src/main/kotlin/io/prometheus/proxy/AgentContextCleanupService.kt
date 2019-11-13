@@ -28,11 +28,13 @@ import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.time.seconds
 
-class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) :
+class AgentContextCleanupService(private val proxy: Proxy,
+                                 initBlock: (AgentContextCleanupService.() -> Unit) = {}) :
     GenericExecutionThreadService() {
+
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
-        initBlock?.invoke(this)
+        initBlock(this)
     }
 
     @Throws(Exception::class)

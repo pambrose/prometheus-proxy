@@ -54,7 +54,7 @@ import kotlin.time.seconds
 
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
     private val configVals = proxy.genericConfigVals.proxy
-    private var tracing by notNull<Tracing>()
+    private var tracing: Tracing by notNull()
     private val idleTimeout =
         if (configVals.http.idleTimeoutSecs == -1) 45.seconds else configVals.http.idleTimeoutSecs.seconds
 
