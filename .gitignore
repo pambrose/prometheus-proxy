@@ -1,6 +1,8 @@
+.gradle/
 .idea/
 .wercker/
 target/
+build/
+out/
 
 *.iml
-

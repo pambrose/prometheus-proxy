@@ -5,11 +5,11 @@ dev:
     - script:
       name: Build
       code: |
-        ./mvnw -DskipTests=true clean package
+        ./gradlew clean build -x test
 
 build:
   steps:
     - script:
       name: Build
       code: |
-        ./mvnw -DskipTests=true clean package
+        ./gradlew clean build -x test

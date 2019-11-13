@@ -1,26 +1,33 @@
-VERSION=1.3.10
+VERSION=1.4.0
 
-default: build
-
-build:
-	./mvnw -DskipTests=true clean package
-
-config:
-	java -jar ./etc/jars/tscfg-0.9.7.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
-
-tests:
-	./mvnw test
+default: compile
 
 clean:
-	./mvnw -DskipTests=true clean
+	./gradlew clean
+
+compile:
+	./gradlew build -x test
+
+jars:
+	./gradlew agentJar proxyJar
+
+tests:
+	./gradlew check
+
+config:
+	java -jar ./etc/jars/tscfg-0.9.94.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
+
+distro: clean compile jars
 
 docker-build:
-	docker build -f ./etc/docker/proxy.df -t=pambrose/prometheus-proxy:${VERSION} .
-	docker build -f ./etc/docker/agent.df -t=pambrose/prometheus-agent:${VERSION} .
+	docker build -f ./etc/docker/proxy.df -t pambrose/prometheus-proxy:${VERSION} .
+	docker build -f ./etc/docker/agent.df -t pambrose/prometheus-agent:${VERSION} .
 
 docker-push:
 	docker push pambrose/prometheus-proxy:${VERSION}
 	docker push pambrose/prometheus-agent:${VERSION}
+
+all: distro docker-build docker-push
 
 build-coverage:
 	./mvnw clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report
@@ -31,22 +38,12 @@ report-coverage:
 sonar:
 	./mvnw sonar:sonar -Dsonar.host.url=http://localhost:9000
 
-distro: build
-	mkdir target/distro
-	mv target/prometheus-proxy-jar-with-dependencies.jar target/distro/prometheus-proxy.jar
-	mv target/prometheus-agent-jar-with-dependencies.jar target/distro/prometheus-agent.jar
-
 site:
 	./mvnw site
 
 tree:
 	./mvnw dependency:tree
 
-jarcheck:
-	./mvnw versions:display-dependency-updates
-
-plugincheck:
-	./mvnw versions:display-plugin-updates
-
-versioncheck: jarcheck plugincheck
+versioncheck:
+	./gradlew dependencyUpdates
 

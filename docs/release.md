@@ -19,7 +19,7 @@
 9) Build distro with: `make distro`
 
 10) Create release on github (https://github.com/pambrose/prometheus-proxy/releases) and 
-upload the *target/distro/prometheus-proxy.jar* and  *target/distro/prometheus-agent.jar* files.
+upload the *build/distro/prometheus-proxy.jar* and  *build/distro/prometheus-agent.jar* files.
 
 11) Build and push docker images with: `make docker-build docker-push`
 
