@@ -106,6 +106,10 @@ protobuf {
     }
 }
 
+configurations.all {
+    resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+}
+
 sourceSets {
     main {
         java {
