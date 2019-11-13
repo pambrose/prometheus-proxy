@@ -9,7 +9,7 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.4.0-SNAPSHOT'
+version = '1.4.1-SNAPSHOT'
 sourceCompatibility = '1.8'
 
 def kotlinVersion = '1.3.50'
