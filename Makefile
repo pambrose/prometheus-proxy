@@ -6,7 +6,7 @@ clean:
 	./gradlew clean
 
 compile:
-	./gradlew build -x test
+	./gradlew build -xtest
 
 jars:
 	./gradlew agentJar proxyJar
