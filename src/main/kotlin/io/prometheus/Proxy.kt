@@ -19,9 +19,9 @@
 package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
-import com.sudothought.common.util.getBanner
 import io.grpc.Attributes
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.ConfigVals

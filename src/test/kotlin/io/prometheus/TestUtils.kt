@@ -18,7 +18,7 @@
 
 package io.prometheus
 
-import com.sudothought.common.util.getBanner
+import com.github.pambrose.common.util.getBanner
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getVersionDesc

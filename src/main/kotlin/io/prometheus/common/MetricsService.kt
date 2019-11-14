@@ -19,10 +19,10 @@
 package io.prometheus.common
 
 import com.codahale.metrics.health.HealthCheck
+import com.github.pambrose.common.concurrent.GenericIdleService
+import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.google.common.util.concurrent.MoreExecutors
-import com.sudothought.common.concurrent.GenericIdleService
-import com.sudothought.common.concurrent.genericServiceListener
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.client.exporter.MetricsServlet
 import io.prometheus.dsl.JettyDsl.server
 import io.prometheus.dsl.JettyDsl.servletContextHandler

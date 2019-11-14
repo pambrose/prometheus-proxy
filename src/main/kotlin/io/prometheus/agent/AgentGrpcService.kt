@@ -20,7 +20,7 @@ package io.prometheus.agent
 
 import brave.Tracing
 import brave.grpc.GrpcTracing
-import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel

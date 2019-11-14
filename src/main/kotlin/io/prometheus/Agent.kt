@@ -18,13 +18,13 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.util.getBanner
 import com.google.common.net.HttpHeaders
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.util.concurrent.RateLimiter
 import com.google.protobuf.Empty
-import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
-import com.sudothought.common.util.getBanner
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.ktor.client.request.HttpRequestBuilder

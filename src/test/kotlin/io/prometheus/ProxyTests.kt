@@ -18,8 +18,8 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
-import com.sudothought.common.util.random
 import io.ktor.application.call
 import io.ktor.client.HttpClient
 import io.ktor.client.response.readText

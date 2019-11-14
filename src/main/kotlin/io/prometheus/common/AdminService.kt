@@ -22,10 +22,10 @@ import com.codahale.metrics.health.HealthCheckRegistry
 import com.codahale.metrics.servlets.HealthCheckServlet
 import com.codahale.metrics.servlets.PingServlet
 import com.codahale.metrics.servlets.ThreadDumpServlet
+import com.github.pambrose.common.concurrent.GenericIdleService
+import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.google.common.util.concurrent.MoreExecutors
-import com.sudothought.common.concurrent.GenericIdleService
-import com.sudothought.common.concurrent.genericServiceListener
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.JettyDsl.servletContextHandler
 import mu.KLogging
 import org.eclipse.jetty.server.Server

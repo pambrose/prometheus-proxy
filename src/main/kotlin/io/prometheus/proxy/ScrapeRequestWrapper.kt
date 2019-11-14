@@ -18,8 +18,8 @@
 
 package io.prometheus.proxy
 
-import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
 import io.prometheus.grpc.ScrapeResponse

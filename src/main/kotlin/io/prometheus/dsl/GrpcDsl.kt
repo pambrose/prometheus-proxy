@@ -18,7 +18,7 @@
 
 package io.prometheus.dsl
 
-import com.sudothought.common.delegate.SingleAssignVar.singleAssign
+import com.github.pambrose.common.delegate.SingleAssignVar.singleAssign
 import io.grpc.Attributes
 import io.grpc.ManagedChannel
 import io.grpc.Server

@@ -19,13 +19,13 @@
 package io.prometheus.proxy
 
 import brave.Tracing
+import com.github.pambrose.common.concurrent.GenericIdleService
+import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.ACCEPT_ENCODING
 import com.google.common.net.HttpHeaders.CONTENT_ENCODING
 import com.google.common.util.concurrent.MoreExecutors
-import com.sudothought.common.concurrent.GenericIdleService
-import com.sudothought.common.concurrent.genericServiceListener
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.features.DefaultHeaders

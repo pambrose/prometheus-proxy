@@ -18,8 +18,8 @@
 
 package io.prometheus.proxy
 
-import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.Proxy
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.receiveOrNull

@@ -19,10 +19,10 @@
 package io.prometheus.common
 
 import brave.Tracing
+import com.github.pambrose.common.concurrent.GenericIdleService
+import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.google.common.util.concurrent.MoreExecutors
-import com.sudothought.common.concurrent.GenericIdleService
-import com.sudothought.common.concurrent.genericServiceListener
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.dsl.ZipkinDsl.tracing
 import mu.KLogging
 import zipkin2.reporter.AsyncReporter
