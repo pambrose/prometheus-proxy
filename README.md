@@ -4,7 +4,7 @@
 [![Build Status](https://travis-ci.org/pambrose/prometheus-proxy.svg?branch=master)](https://travis-ci.org/pambrose/prometheus-proxy)
 [![Coverage Status](https://coveralls.io/repos/github/pambrose/prometheus-proxy/badge.svg?branch=master)](https://coveralls.io/github/pambrose/prometheus-proxy?branch=master)
 [![codebeat badge](https://codebeat.co/badges/8dbe1dc6-628e-44a4-99f9-d468831ff0cc)](https://codebeat.co/projects/github-com-pambrose-prometheus-proxy-master)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/58aaa4a43d2a482c8f460d852302f997)](https://www.codacy.com/app/pambrose/prometheus-proxy?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=pambrose/prometheus-proxy&amp;utm_campaign=Badge_Grade)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/422df508473443df9fbd8ea00fdee973)](https://www.codacy.com/app/pambrose/prometheus-proxy?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=pambrose/prometheus-proxy&amp;utm_campaign=Badge_Grade)
 [![Code Climate](https://codeclimate.com/github/pambrose/prometheus-proxy/badges/gpa.svg)](https://codeclimate.com/github/pambrose/prometheus-proxy)
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 
@@ -97,8 +97,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-docker pull pambrose/prometheus-proxy:1.4.0
-docker pull pambrose/prometheus-agent:1.4.0
+docker pull pambrose/prometheus-proxy:1.4.1
+docker pull pambrose/prometheus-agent:1.4.1
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
@@ -107,14 +107,14 @@ Start the proxy and an agent in separate shells on your local machine:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
         -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.4.0
+        pambrose/prometheus-proxy:1.4.1
 ```
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.4.0
+        pambrose/prometheus-agent:1.4.1
 ```
 
 If you want to be able to externalize your `agent` config file on your local machine (or VM) file system (instead of the above HTTP served config file), you'll need to add the Docker `volume` definition to the command:
@@ -124,7 +124,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     -v ${PWD}/prom-agent.conf:/prom-agent.conf \
     -e HOSTNAME=${HOSTNAME} \
     -e AGENT_CONFIG=/prom-agent.conf \
-    pambrose/prometheus-agent:1.4.0
+    pambrose/prometheus-agent:1.4.1
 ```
 
 The above assumes that you have the file `prom-agent.conf` in the current directory from which you're running the `docker` command.

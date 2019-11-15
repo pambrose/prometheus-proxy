@@ -18,10 +18,10 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.dsl.GrpcDsl.attributes
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
-import io.prometheus.dsl.GrpcDsl.attributes
 import mu.KLogging
 
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {

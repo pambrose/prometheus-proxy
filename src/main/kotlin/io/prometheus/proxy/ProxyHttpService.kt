@@ -19,13 +19,13 @@
 package io.prometheus.proxy
 
 import brave.Tracing
+import com.github.pambrose.common.concurrent.GenericIdleService
+import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.ACCEPT_ENCODING
 import com.google.common.net.HttpHeaders.CONTENT_ENCODING
 import com.google.common.util.concurrent.MoreExecutors
-import com.sudothought.common.concurrent.GenericIdleService
-import com.sudothought.common.concurrent.genericServiceListener
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.features.DefaultHeaders
@@ -54,7 +54,7 @@ import kotlin.time.seconds
 
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
     private val configVals = proxy.genericConfigVals.proxy
-    private var tracing by notNull<Tracing>()
+    private var tracing: Tracing by notNull()
     private val idleTimeout =
         if (configVals.http.idleTimeoutSecs == -1) 45.seconds else configVals.http.idleTimeoutSecs.seconds
 

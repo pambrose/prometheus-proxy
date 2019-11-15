@@ -20,12 +20,12 @@ package io.prometheus.agent
 
 import brave.Tracing
 import brave.grpc.GrpcTracing
-import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.dsl.GrpcDsl.channel
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
 import io.prometheus.Agent
-import io.prometheus.dsl.GrpcDsl.channel
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
@@ -38,11 +38,11 @@ class AgentGrpcService(private val agent: Agent,
                        private val inProcessServerName: String) {
     private var grpcStarted = AtomicBoolean(false)
 
-    var channel by nonNullableReference<ManagedChannel>()
-    var grpcTracing by notNull<GrpcTracing>()
-    var blockingStub by nonNullableReference<ProxyServiceBlockingStub>()
-    var asyncStub by nonNullableReference<ProxyServiceStub>()
-    private var tracing by notNull<Tracing>()
+    private var tracing: Tracing by notNull()
+    var channel: ManagedChannel by nonNullableReference()
+    private var grpcTracing: GrpcTracing by notNull()
+    var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
+    var asyncStub: ProxyServiceStub by nonNullableReference()
 
     val hostName: String
     val port: Int
@@ -65,33 +65,30 @@ class AgentGrpcService(private val agent: Agent,
         resetGrpcStubs()
     }
 
-    val isGrpcStarted
-        get() = grpcStarted.get()
-
     fun shutDown() {
         if (agent.isZipkinEnabled)
             tracing.close()
-        if (isGrpcStarted)
+        if (grpcStarted.get())
             channel.shutdownNow()
     }
 
     fun resetGrpcStubs() {
         logger.info { "Creating gRPC stubs" }
 
-        if (isGrpcStarted)
+        if (grpcStarted.get())
             shutDown()
         else
             grpcStarted.set(true)
 
         channel =
-            channel(inProcessServerName = inProcessServerName, hostName = hostName, port = port) {
+            channel(inProcessServerName = inProcessServerName,
+                    hostName = hostName,
+                    port = port) {
                 if (agent.isZipkinEnabled)
                     intercept(grpcTracing.newClientInterceptor())
                 usePlaintext()
             }
-
-        val interceptors = listOf<ClientInterceptor>(AgentClientInterceptor(agent))
-
+        val interceptors: List<ClientInterceptor> = listOf(AgentClientInterceptor(agent))
         blockingStub = ProxyServiceGrpc.newBlockingStub(ClientInterceptors.intercept(channel, interceptors))
         asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(channel, interceptors))
     }

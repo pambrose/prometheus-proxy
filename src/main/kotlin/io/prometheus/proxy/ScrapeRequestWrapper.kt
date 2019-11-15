@@ -18,8 +18,8 @@
 
 package io.prometheus.proxy
 
-import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
@@ -40,7 +40,7 @@ class ScrapeRequestWrapper(proxy: Proxy,
     private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
     val scrapeRequest = newScrapeRequest(agentContext.agentId, SCRAPE_ID_GENERATOR.getAndIncrement(), path, accept)
-    var scrapeResponse by nonNullableReference<ScrapeResponse>()
+    var scrapeResponse: ScrapeResponse by nonNullableReference()
 
     val scrapeId: Long
         get() = scrapeRequest.scrapeId

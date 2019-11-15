@@ -19,20 +19,20 @@
 package io.prometheus.common
 
 import com.codahale.metrics.health.HealthCheck
+import com.github.pambrose.common.concurrent.GenericIdleService
+import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.dsl.JettyDsl.server
+import com.github.pambrose.common.dsl.JettyDsl.servletContextHandler
+import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.google.common.util.concurrent.MoreExecutors
-import com.sudothought.common.concurrent.GenericIdleService
-import com.sudothought.common.concurrent.genericServiceListener
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.client.exporter.MetricsServlet
-import io.prometheus.dsl.JettyDsl.server
-import io.prometheus.dsl.JettyDsl.servletContextHandler
-import io.prometheus.dsl.MetricsDsl.healthCheck
 import mu.KLogging
 import org.eclipse.jetty.servlet.ServletHolder
 
 class MetricsService(private val port: Int,
                      private val path: String,
-                     initBlock: (MetricsService.() -> Unit)? = null) : GenericIdleService() {
+                     initBlock: (MetricsService.() -> Unit) = {}) : GenericIdleService() {
 
     private val server =
         server(port) {
@@ -52,7 +52,7 @@ class MetricsService(private val port: Int,
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
-        initBlock?.invoke(this)
+        initBlock(this)
     }
 
     override fun startUp() = server.start()

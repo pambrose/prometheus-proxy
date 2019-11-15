@@ -1,4 +1,4 @@
-VERSION=1.4.0
+VERSION=1.4.1
 
 default: compile
 
@@ -6,7 +6,7 @@ clean:
 	./gradlew clean
 
 compile:
-	./gradlew build -x test
+	./gradlew build -xtest
 
 jars:
 	./gradlew agentJar proxyJar

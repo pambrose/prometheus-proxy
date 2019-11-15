@@ -18,14 +18,15 @@
 
 package io.prometheus.proxy
 
-import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.Proxy
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.receiveOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.ClockMark
 import kotlin.time.MonoClock
 
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
@@ -37,11 +38,11 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
     private val channelBacklogSize = AtomicInteger(0)
 
     private val clock = MonoClock
-    private var lastActivityTimeMark by nonNullableReference(clock.markNow())
+    private var lastActivityTimeMark: ClockMark by nonNullableReference(clock.markNow())
     private var valid = AtomicBoolean(true)
 
-    var hostName by nonNullableReference<String>()
-    var agentName by nonNullableReference<String>()
+    var hostName: String by nonNullableReference()
+    var agentName: String by nonNullableReference()
 
     val inactivityTime
         get() = lastActivityTimeMark.elapsedNow()

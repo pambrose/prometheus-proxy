@@ -19,23 +19,23 @@
 package io.prometheus.common
 
 import brave.Tracing
+import com.github.pambrose.common.concurrent.GenericIdleService
+import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.dsl.ZipkinDsl.tracing
 import com.google.common.util.concurrent.MoreExecutors
-import com.sudothought.common.concurrent.GenericIdleService
-import com.sudothought.common.concurrent.genericServiceListener
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
-import io.prometheus.dsl.ZipkinDsl.tracing
 import mu.KLogging
 import zipkin2.reporter.AsyncReporter
 import zipkin2.reporter.okhttp3.OkHttpSender
 
 class ZipkinReporterService(private val url: String,
-                            initBlock: (ZipkinReporterService.() -> Unit)? = null) : GenericIdleService() {
+                            initBlock: (ZipkinReporterService.() -> Unit) = {}) : GenericIdleService() {
     private val sender = OkHttpSender.create(url)
     private val reporter = AsyncReporter.create(sender)
 
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
-        initBlock?.invoke(this)
+        initBlock(this)
     }
 
     fun newTracing(serviceName: String): Tracing =

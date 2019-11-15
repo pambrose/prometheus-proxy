@@ -18,13 +18,16 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.dsl.GrpcDsl.streamObserver
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.dsl.KtorDsl.get
+import com.github.pambrose.common.dsl.KtorDsl.http
+import com.github.pambrose.common.util.getBanner
 import com.google.common.net.HttpHeaders
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.util.concurrent.RateLimiter
 import com.google.protobuf.Empty
-import com.sudothought.common.delegate.AtomicDelegates.nonNullableReference
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
-import com.sudothought.common.util.getBanner
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.ktor.client.request.HttpRequestBuilder
@@ -53,9 +56,6 @@ import io.prometheus.common.localHostName
 import io.prometheus.common.newBacklogHealthCheck
 import io.prometheus.common.simpleClassName
 import io.prometheus.common.thenElse
-import io.prometheus.dsl.GrpcDsl.streamObserver
-import io.prometheus.dsl.KtorDsl.get
-import io.prometheus.dsl.KtorDsl.http
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +69,7 @@ import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates.notNull
+import kotlin.time.ClockMark
 import kotlin.time.Duration
 import kotlin.time.MonoClock
 import kotlin.time.milliseconds
@@ -94,10 +95,10 @@ class Agent(options: AgentOptions,
         RateLimiter.create(1.0 / configVals.reconectPauseSecs).apply { acquire() } // Prime the limiter
 
     private val clock = MonoClock
-    private var lastMsgSentMark by nonNullableReference(clock.markNow())
-    private var metrics by notNull<AgentMetrics>()
+    private var lastMsgSentMark: ClockMark by nonNullableReference(clock.markNow())
+    private var metrics: AgentMetrics by notNull()
 
-    var agentId by nonNullableReference("")
+    var agentId: String by nonNullableReference("")
 
     val scrapeRequestBacklogSize = AtomicInteger(0)
     val pathManager = AgentPathManager(this)
@@ -329,7 +330,7 @@ class Agent(options: AgentOptions,
                 })
 
         for (scrapeRequestAction in scrapeRequestChannel) {
-            val scrapeResponse = scrapeRequestAction.invoke()
+            val scrapeResponse = scrapeRequestAction()
             observer.onNext(scrapeResponse)
             markMsgSent()
             scrapeRequestBacklogSize.decrementAndGet()

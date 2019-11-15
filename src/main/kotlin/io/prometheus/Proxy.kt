@@ -19,9 +19,10 @@
 package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
-import com.sudothought.common.util.getBanner
 import io.grpc.Attributes
 import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.ConfigVals
@@ -31,7 +32,6 @@ import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.common.delay
 import io.prometheus.common.getVersionDesc
 import io.prometheus.common.newMapHealthCheck
-import io.prometheus.dsl.MetricsDsl.healthCheck
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
 import io.prometheus.proxy.ProxyGrpcService
@@ -63,7 +63,7 @@ class Proxy(options: ProxyOptions,
     val pathManager = ProxyPathManager(isTestMode)
     val scrapeRequestManager = ScrapeRequestManager()
     val agentContextManager = AgentContextManager()
-    var metrics by notNull<ProxyMetrics>()
+    var metrics: ProxyMetrics by notNull()
 
     private val httpService = ProxyHttpService(this, proxyHttpPort)
     private val grpcService =
@@ -72,7 +72,7 @@ class Proxy(options: ProxyOptions,
         else
             ProxyGrpcService(this, inProcessName = inProcessServerName)
 
-    private var agentCleanupService by notNull<AgentContextCleanupService>()
+    private var agentCleanupService: AgentContextCleanupService by notNull()
 
     init {
         if (isMetricsEnabled)

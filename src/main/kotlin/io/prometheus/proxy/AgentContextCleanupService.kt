@@ -18,21 +18,23 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.concurrent.GenericExecutionThreadService
+import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.google.common.util.concurrent.MoreExecutors
-import com.sudothought.common.concurrent.GenericExecutionThreadService
-import com.sudothought.common.concurrent.genericServiceListener
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.Proxy
 import io.prometheus.common.delay
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.time.seconds
 
-class AgentContextCleanupService(private val proxy: Proxy, initBlock: (AgentContextCleanupService.() -> Unit)? = null) :
+class AgentContextCleanupService(private val proxy: Proxy,
+                                 initBlock: (AgentContextCleanupService.() -> Unit) = {}) :
     GenericExecutionThreadService() {
+
     init {
         addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
-        initBlock?.invoke(this)
+        initBlock(this)
     }
 
     @Throws(Exception::class)

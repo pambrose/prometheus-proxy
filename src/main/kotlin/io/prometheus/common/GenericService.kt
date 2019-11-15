@@ -23,15 +23,16 @@ import com.codahale.metrics.health.HealthCheck
 import com.codahale.metrics.health.HealthCheckRegistry
 import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck
 import com.codahale.metrics.jmx.JmxReporter
+import com.github.pambrose.common.concurrent.GenericExecutionThreadService
+import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.dsl.GuavaDsl.serviceManager
+import com.github.pambrose.common.dsl.GuavaDsl.serviceManagerListener
+import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.github.pambrose.common.metrics.SystemMetrics
 import com.google.common.base.Joiner
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
-import com.sudothought.common.concurrent.GenericExecutionThreadService
-import com.sudothought.common.concurrent.genericServiceListener
-import com.sudothought.common.dsl.GuavaDsl.serviceManager
-import com.sudothought.common.dsl.GuavaDsl.serviceManagerListener
-import io.prometheus.dsl.MetricsDsl.healthCheck
 import mu.KLogging
 import java.io.Closeable
 import kotlin.properties.Delegates.notNull
@@ -52,10 +53,10 @@ abstract class GenericService protected constructor(val genericConfigVals: Confi
     val isMetricsEnabled = metricsConfig.enabled
     val isZipkinEnabled = zipkinConfig.enabled
 
-    private var jmxReporter by notNull<JmxReporter>()
-    var adminService by notNull<AdminService>()
-    var metricsService by notNull<MetricsService>()
-    var zipkinReporterService by notNull<ZipkinReporterService>()
+    private var jmxReporter: JmxReporter by notNull()
+    var adminService: AdminService by notNull()
+    var metricsService: MetricsService by notNull()
+    var zipkinReporterService: ZipkinReporterService by notNull()
 
     init {
         if (isAdminEnabled) {

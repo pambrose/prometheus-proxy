@@ -27,12 +27,10 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
-import io.ktor.util.KtorExperimentalAPI
 import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
 import io.prometheus.common.EnvVars.METRICS_ENABLED
 import io.prometheus.common.EnvVars.METRICS_PORT
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
@@ -40,8 +38,6 @@ import java.net.URL
 import kotlin.properties.Delegates.notNull
 import kotlin.system.exitProcess
 
-@KtorExperimentalAPI
-@ExperimentalCoroutinesApi
 abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val argv: Array<String>,
                                                  private val envConfig: String,
@@ -79,9 +75,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
     var dynamicParams = mutableMapOf<String, String>()
         private set
 
-    private var config by notNull<Config>()
+    private var config: Config by notNull()
 
-    var configVals by notNull<ConfigVals>()
+    var configVals: ConfigVals by notNull()
         private set
 
     protected abstract fun assignConfigVals()

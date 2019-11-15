@@ -21,17 +21,17 @@ package io.prometheus.proxy
 import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
+import com.github.pambrose.common.concurrent.GenericIdleService
+import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.dsl.GrpcDsl.server
+import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.google.common.util.concurrent.MoreExecutors
 import com.salesforce.grpc.contrib.Servers
-import com.sudothought.common.concurrent.GenericIdleService
-import com.sudothought.common.concurrent.genericServiceListener
-import com.sudothought.common.dsl.GuavaDsl.toStringElements
 import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
-import io.prometheus.dsl.GrpcDsl.server
-import io.prometheus.dsl.MetricsDsl.healthCheck
 import mu.KLogging
 import java.io.IOException
 import kotlin.properties.Delegates.notNull
@@ -48,8 +48,8 @@ class ProxyGrpcService(private val proxy: Proxy,
                 HealthCheck.Result.healthy()
         }
 
-    private var tracing by notNull<Tracing>()
-    private var grpcTracing by notNull<GrpcTracing>()
+    private var tracing: Tracing by notNull()
+    private var grpcTracing: GrpcTracing by notNull()
     private val grpcServer: Server
 
     init {

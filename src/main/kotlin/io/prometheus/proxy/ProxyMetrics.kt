@@ -18,13 +18,13 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.dsl.PrometheusDsl.counter
+import com.github.pambrose.common.dsl.PrometheusDsl.gauge
+import com.github.pambrose.common.dsl.PrometheusDsl.summary
+import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Proxy
 import io.prometheus.client.Counter
 import io.prometheus.client.Summary
-import io.prometheus.common.SamplerGaugeCollector
-import io.prometheus.dsl.PrometheusDsl.counter
-import io.prometheus.dsl.PrometheusDsl.gauge
-import io.prometheus.dsl.PrometheusDsl.summary
 
 class ProxyMetrics(proxy: Proxy) {
 
