@@ -8,6 +8,8 @@ clean:
 compile:
 	./gradlew build -xtest
 
+build: compile
+
 jars:
 	./gradlew agentJar proxyJar
 
