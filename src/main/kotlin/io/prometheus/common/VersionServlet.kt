@@ -27,17 +27,17 @@ import javax.servlet.http.HttpServletResponse
 
 class VersionServlet : HttpServlet() {
 
-    @Throws(ServletException::class, IOException::class)
-    override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
-        resp.apply {
-            status = HttpServletResponse.SC_OK
-            setHeader(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
-            contentType = "text/plain"
-            writer.use { it.println(getVersionDesc(true)) }
-        }
+  @Throws(ServletException::class, IOException::class)
+  override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
+    resp.apply {
+      status = HttpServletResponse.SC_OK
+      setHeader(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
+      contentType = "text/plain"
+      writer.use { it.println(getVersionDesc(true)) }
     }
+  }
 
-    companion object {
-        private const val serialVersionUID = -9115048679370256251L
-    }
+  companion object {
+    private const val serialVersionUID = -9115048679370256251L
+  }
 }

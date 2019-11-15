@@ -28,35 +28,35 @@ import io.prometheus.client.Summary
 
 class AgentMetrics(agent: Agent) {
 
-    val scrapeRequests: Counter =
-        counter {
-            name("agent_scrape_requests")
-            help("Agent scrape requests")
-            labelNames("type")
-        }
-
-    val connects: Counter =
-        counter {
-            name("agent_connect_count")
-            help("Agent connect counts")
-            labelNames("type")
-        }
-
-    val scrapeRequestLatency: Summary =
-        summary {
-            name("agent_scrape_request_latency_seconds")
-            help("Agent scrape request latency in seconds")
-            labelNames("agent_name")
-        }
-
-    init {
-        gauge {
-            name("agent_start_time_seconds")
-            help("Agent start time in seconds")
-        }.setToCurrentTime()
-
-        SamplerGaugeCollector("agent_scrape_backlog_size",
-                              "Agent scrape backlog size",
-                              data = { agent.scrapeRequestBacklogSize.get().toDouble() })
+  val scrapeRequests: Counter =
+    counter {
+      name("agent_scrape_requests")
+      help("Agent scrape requests")
+      labelNames("type")
     }
+
+  val connects: Counter =
+    counter {
+      name("agent_connect_count")
+      help("Agent connect counts")
+      labelNames("type")
+    }
+
+  val scrapeRequestLatency: Summary =
+    summary {
+      name("agent_scrape_request_latency_seconds")
+      help("Agent scrape request latency in seconds")
+      labelNames("agent_name")
+    }
+
+  init {
+    gauge {
+      name("agent_start_time_seconds")
+      help("Agent start time in seconds")
+    }.setToCurrentTime()
+
+    SamplerGaugeCollector("agent_scrape_backlog_size",
+                          "Agent scrape backlog size",
+                          data = { agent.scrapeRequestBacklogSize.get().toDouble() })
+  }
 }

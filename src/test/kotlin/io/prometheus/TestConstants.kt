@@ -21,17 +21,17 @@ package io.prometheus
 import io.prometheus.common.localHostName
 
 object TestConstants {
-    internal const val REPS = 1000
-    internal const val PROXY_PORT = 9505
+  internal const val REPS = 1000
+  internal const val PROXY_PORT = 9505
 
-    private val CI_TEST = !localHostName.contains("pleiku")
+  private val CI_TEST = !localHostName.contains("pleiku")
 
-    internal val args =
-        listOf("--config",
-               (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +
-                       "etc/test-configs/travis.conf")
+  internal val args =
+    listOf("--config",
+           (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +
+               "etc/test-configs/travis.conf")
 
-    internal val OPTIONS_CONFIG =
-        (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +
-                "etc/test-configs/junit-test.conf"
+  internal val OPTIONS_CONFIG =
+    (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +
+        "etc/test-configs/junit-test.conf"
 }

@@ -27,27 +27,27 @@ import io.prometheus.Proxy
 
 class ProxyInterceptor : ServerInterceptor {
 
-    override fun <ReqT, RespT> interceptCall(call: ServerCall<ReqT, RespT>,
-                                             requestHeaders: Metadata,
-                                             handler: ServerCallHandler<ReqT, RespT>): ServerCall.Listener<ReqT> {
-        val attributes = call.attributes
-        //val methodDescriptor = call.methodDescriptor
-        // final String methodName = methodDescriptor.getFullMethodName();
-        // logger.info {"Intercepting {}", methodName);
+  override fun <ReqT, RespT> interceptCall(call: ServerCall<ReqT, RespT>,
+                                           requestHeaders: Metadata,
+                                           handler: ServerCallHandler<ReqT, RespT>): ServerCall.Listener<ReqT> {
+    val attributes = call.attributes
+    //val methodDescriptor = call.methodDescriptor
+    // final String methodName = methodDescriptor.getFullMethodName();
+    // logger.info {"Intercepting {}", methodName);
 
-        return handler.startCall(
-            object : ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(call) {
-                override fun sendHeaders(headers: Metadata) {
-                    // agent_id was assigned in ServerTransportFilter
-                    attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { headers.put(META_AGENT_ID, it) }
-                    super.sendHeaders(headers)
-                }
-            },
-            requestHeaders
-        )
-    }
+    return handler.startCall(
+      object : ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(call) {
+        override fun sendHeaders(headers: Metadata) {
+          // agent_id was assigned in ServerTransportFilter
+          attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { headers.put(META_AGENT_ID, it) }
+          super.sendHeaders(headers)
+        }
+      },
+      requestHeaders
+    )
+  }
 
-    companion object {
-        private val META_AGENT_ID = Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER)
-    }
+  companion object {
+    private val META_AGENT_ID = Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER)
+  }
 }

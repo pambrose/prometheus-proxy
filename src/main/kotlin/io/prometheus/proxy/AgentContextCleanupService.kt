@@ -30,39 +30,39 @@ import kotlin.time.seconds
 
 class AgentContextCleanupService(private val proxy: Proxy,
                                  initBlock: (AgentContextCleanupService.() -> Unit) = {}) :
-    GenericExecutionThreadService() {
+  GenericExecutionThreadService() {
 
-    init {
-        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
-        initBlock(this)
+  init {
+    addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+    initBlock(this)
+  }
+
+  @Throws(Exception::class)
+  override fun run() {
+    val maxInactivityTime = proxy.configVals.maxAgentInactivitySecs.seconds
+    val pauseTime = proxy.configVals.staleAgentCheckPauseSecs.seconds
+    while (isRunning) {
+      proxy.agentContextManager.agentContextMap
+        .forEach { (agentId, agentContext) ->
+          val inactivityTime = agentContext.inactivityTime
+          if (inactivityTime > maxInactivityTime) {
+            logger.info { "Evicting agent after $inactivityTime secs of inactivty $agentContext" }
+            proxy.removeAgentContext(agentId)
+            if (proxy.isMetricsEnabled)
+              proxy.metrics.agentEvictions.inc()
+          }
+        }
+      runBlocking {
+        delay(pauseTime)
+      }
+    }
+  }
+
+  override fun toString() =
+    toStringElements {
+      add("max inactivity secs", proxy.configVals.maxAgentInactivitySecs)
+      add("pause secs", proxy.configVals.staleAgentCheckPauseSecs)
     }
 
-    @Throws(Exception::class)
-    override fun run() {
-        val maxInactivityTime = proxy.configVals.maxAgentInactivitySecs.seconds
-        val pauseTime = proxy.configVals.staleAgentCheckPauseSecs.seconds
-        while (isRunning) {
-            proxy.agentContextManager.agentContextMap
-                .forEach { (agentId, agentContext) ->
-                    val inactivityTime = agentContext.inactivityTime
-                    if (inactivityTime > maxInactivityTime) {
-                        logger.info { "Evicting agent after $inactivityTime secs of inactivty $agentContext" }
-                        proxy.removeAgentContext(agentId)
-                        if (proxy.isMetricsEnabled)
-                            proxy.metrics.agentEvictions.inc()
-                    }
-                }
-            runBlocking {
-                delay(pauseTime)
-            }
-        }
-    }
-
-    override fun toString() =
-        toStringElements {
-            add("max inactivity secs", proxy.configVals.maxAgentInactivitySecs)
-            add("pause secs", proxy.configVals.staleAgentCheckPauseSecs)
-        }
-
-    companion object : KLogging()
+  companion object : KLogging()
 }

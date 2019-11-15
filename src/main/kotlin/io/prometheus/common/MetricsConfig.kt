@@ -28,29 +28,29 @@ data class MetricsConfig(val enabled: Boolean,
                          val classLoadingExportsEnabled: Boolean,
                          val versionInfoExportsEnabled: Boolean) {
 
-    companion object {
-        fun newMetricsConfig(enabled: Boolean, port: Int, metrics: ConfigVals.Proxy2.Metrics2) =
-            MetricsConfig(enabled,
-                          port,
-                          metrics.path,
-                          metrics.standardExportsEnabled,
-                          metrics.memoryPoolsExportsEnabled,
-                          metrics.garbageCollectorExportsEnabled,
-                          metrics.threadExportsEnabled,
-                          metrics.classLoadingExportsEnabled,
-                          metrics.versionInfoExportsEnabled)
+  companion object {
+    fun newMetricsConfig(enabled: Boolean, port: Int, metrics: ConfigVals.Proxy2.Metrics2) =
+      MetricsConfig(enabled,
+                    port,
+                    metrics.path,
+                    metrics.standardExportsEnabled,
+                    metrics.memoryPoolsExportsEnabled,
+                    metrics.garbageCollectorExportsEnabled,
+                    metrics.threadExportsEnabled,
+                    metrics.classLoadingExportsEnabled,
+                    metrics.versionInfoExportsEnabled)
 
-        fun newMetricsConfig(enabled: Boolean, port: Int, metrics: ConfigVals.Agent.Metrics) =
-            MetricsConfig(enabled,
-                          port,
-                          metrics.path,
-                          metrics.standardExportsEnabled,
-                          metrics.memoryPoolsExportsEnabled,
-                          metrics.garbageCollectorExportsEnabled,
-                          metrics.threadExportsEnabled,
-                          metrics.classLoadingExportsEnabled,
-                          metrics.versionInfoExportsEnabled)
-    }
+    fun newMetricsConfig(enabled: Boolean, port: Int, metrics: ConfigVals.Agent.Metrics) =
+      MetricsConfig(enabled,
+                    port,
+                    metrics.path,
+                    metrics.standardExportsEnabled,
+                    metrics.memoryPoolsExportsEnabled,
+                    metrics.garbageCollectorExportsEnabled,
+                    metrics.threadExportsEnabled,
+                    metrics.classLoadingExportsEnabled,
+                    metrics.versionInfoExportsEnabled)
+  }
 }
 
 

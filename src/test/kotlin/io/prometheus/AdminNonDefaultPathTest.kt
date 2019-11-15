@@ -43,96 +43,96 @@ import kotlin.time.seconds
 
 class AdminNonDefaultPathTest {
 
-    private val proxyConfigVals: ConfigVals.Proxy2 = proxy.genericConfigVals.proxy
+  private val proxyConfigVals: ConfigVals.Proxy2 = proxy.genericConfigVals.proxy
 
-    @Test
-    fun proxyPingPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                admin.port shouldEqual 8099
-                admin.pingPath shouldEqual "pingPath2"
+  @Test
+  fun proxyPingPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        admin.port shouldEqual 8099
+        admin.pingPath shouldEqual "pingPath2"
 
-                blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.OK
-                    resp.readText() shouldStartWith "pong"
-                }
-            }
-    }
-
-    @Test
-    fun proxyVersionPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                admin.port shouldEqual 8099
-                admin.versionPath shouldEqual "versionPath2"
-
-                blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.OK
-                    resp.readText() shouldContain "Version"
-                }
-            }
-    }
-
-    @Test
-    fun proxyHealthCheckPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                admin.healthCheckPath shouldEqual "healthCheckPath2"
-
-                blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.OK
-                    resp.readText().length shouldBeGreaterThan 10
-                }
-            }
-    }
-
-    @Test
-    fun proxyThreadDumpPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                admin.threadDumpPath shouldEqual "threadDumpPath2"
-
-                blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
-                    resp.readText().length shouldBeGreaterThan 10
-                }
-            }
-    }
-
-    companion object : KLogging() {
-        private lateinit var proxy: Proxy
-        private lateinit var agent: Agent
-
-        @JvmStatic
-        @BeforeAll
-        @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
-        fun setUp() {
-            CollectorRegistry.defaultRegistry.clear()
-            val args = listOf("-Dproxy.admin.port=8099",
-                              "-Dproxy.admin.pingPath=pingPath2",
-                              "-Dproxy.admin.versionPath=versionPath2",
-                              "-Dproxy.admin.healthCheckPath=healthCheckPath2",
-                              "-Dproxy.admin.threadDumpPath=threadDumpPath2")
-
-            runBlocking {
-                launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = args) }
-                launch(Dispatchers.Default) {
-                    agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
-                }
-            }
-            logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+        blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.OK
+          resp.readText() shouldStartWith "pong"
         }
+      }
+  }
 
-        @JvmStatic
-        @AfterAll
-        @Throws(InterruptedException::class, TimeoutException::class)
-        fun takeDown() {
-            runBlocking {
-                for (service in listOf(proxy, agent)) {
-                    logger.info { "Stopping ${service.simpleClassName}" }
-                    launch(Dispatchers.Default) { service.stopSync() }
-                }
-            }
-            logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+  @Test
+  fun proxyVersionPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        admin.port shouldEqual 8099
+        admin.versionPath shouldEqual "versionPath2"
+
+        blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.OK
+          resp.readText() shouldContain "Version"
         }
+      }
+  }
+
+  @Test
+  fun proxyHealthCheckPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        admin.healthCheckPath shouldEqual "healthCheckPath2"
+
+        blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.OK
+          resp.readText().length shouldBeGreaterThan 10
+        }
+      }
+  }
+
+  @Test
+  fun proxyThreadDumpPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        admin.threadDumpPath shouldEqual "threadDumpPath2"
+
+        blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
+          resp.readText().length shouldBeGreaterThan 10
+        }
+      }
+  }
+
+  companion object : KLogging() {
+    private lateinit var proxy: Proxy
+    private lateinit var agent: Agent
+
+    @JvmStatic
+    @BeforeAll
+    @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
+    fun setUp() {
+      CollectorRegistry.defaultRegistry.clear()
+      val args = listOf("-Dproxy.admin.port=8099",
+                        "-Dproxy.admin.pingPath=pingPath2",
+                        "-Dproxy.admin.versionPath=versionPath2",
+                        "-Dproxy.admin.healthCheckPath=healthCheckPath2",
+                        "-Dproxy.admin.threadDumpPath=threadDumpPath2")
+
+      runBlocking {
+        launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = args) }
+        launch(Dispatchers.Default) {
+          agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
+        }
+      }
+      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
     }
+
+    @JvmStatic
+    @AfterAll
+    @Throws(InterruptedException::class, TimeoutException::class)
+    fun takeDown() {
+      runBlocking {
+        for (service in listOf(proxy, agent)) {
+          logger.info { "Stopping ${service.simpleClassName}" }
+          launch(Dispatchers.Default) { service.stopSync() }
+        }
+      }
+      logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+    }
+  }
 }

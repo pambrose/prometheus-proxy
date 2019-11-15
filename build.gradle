@@ -1,11 +1,11 @@
 plugins {
-    id 'idea'
-    id 'java'
-    id 'org.jetbrains.kotlin.jvm' version '1.3.60'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '1.3.60'
-    id 'com.google.protobuf' version '0.8.10'
-    id "com.github.ben-manes.versions" version '0.27.0'
-    id 'com.github.johnrengelman.shadow' version '5.2.0'
+  id 'idea'
+  id 'java'
+  id 'org.jetbrains.kotlin.jvm' version '1.3.60'
+  id 'org.jetbrains.kotlin.plugin.serialization' version '1.3.60'
+  id 'com.google.protobuf' version '0.8.10'
+  id "com.github.ben-manes.versions" version '0.27.0'
+  id 'com.github.johnrengelman.shadow' version '5.2.0'
 }
 
 group = 'io.prometheus'
@@ -39,95 +39,95 @@ def slf4jVersion = '1.7.28'
 def junitVersion = '5.5.2'
 
 repositories {
-    maven { url = "https://kotlin.bintray.com/kotlinx" }
-    maven { url = 'https://dl.bintray.com/kotlin/kotlin-dev/' }
-    maven { url = 'https://maven-central.storage-download.googleapis.com/repos/central/data/' }
-    mavenCentral()
-    jcenter()
-    maven { url = 'https://jitpack.io' }
+  maven { url = "https://kotlin.bintray.com/kotlinx" }
+  maven { url = 'https://dl.bintray.com/kotlin/kotlin-dev/' }
+  maven { url = 'https://maven-central.storage-download.googleapis.com/repos/central/data/' }
+  mavenCentral()
+  jcenter()
+  maven { url = 'https://jitpack.io' }
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}"
-    implementation "org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}"
-    implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime:${serializationVersion}"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${coroutinesVersion}"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:${coroutinesVersion}"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:${coroutinesVersion}"
+  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}"
+  implementation "org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}"
+  implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime:${serializationVersion}"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${coroutinesVersion}"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:${coroutinesVersion}"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:${coroutinesVersion}"
 
-    implementation "io.grpc:grpc-all:${grpcVersion}"
+  implementation "io.grpc:grpc-all:${grpcVersion}"
 
-    implementation "com.github.pambrose.common-utils:core-utils:${utilsVersion}"
-    implementation "com.github.pambrose.common-utils:dropwizard-utils:${utilsVersion}"
-    implementation "com.github.pambrose.common-utils:guava-utils:${utilsVersion}"
-    implementation "com.github.pambrose.common-utils:grpc-utils:${utilsVersion}"
-    implementation "com.github.pambrose.common-utils:ktor-client-utils:${utilsVersion}"
-    implementation "com.github.pambrose.common-utils:jetty-utils:${utilsVersion}"
-    implementation "com.github.pambrose.common-utils:prometheus-utils:${utilsVersion}"
-    implementation "com.github.pambrose.common-utils:zipkin-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:core-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:dropwizard-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:guava-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:grpc-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:ktor-client-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:jetty-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:prometheus-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:zipkin-utils:${utilsVersion}"
 
-    implementation "javax.annotation:javax.annotation-api:${annotationVersion}"
-    implementation "com.beust:jcommander:${jcommanderVersion}"
-    implementation "com.typesafe:config:${tscfgVersion}"
-    implementation "com.salesforce.servicelibs:grpc-contrib:${contribVersion}"
+  implementation "javax.annotation:javax.annotation-api:${annotationVersion}"
+  implementation "com.beust:jcommander:${jcommanderVersion}"
+  implementation "com.typesafe:config:${tscfgVersion}"
+  implementation "com.salesforce.servicelibs:grpc-contrib:${contribVersion}"
 
-    implementation "io.prometheus:simpleclient:${prometheusVersion}"
-    implementation "io.prometheus:simpleclient_hotspot:${prometheusVersion}"
-    implementation "io.prometheus:simpleclient_servlet:${prometheusVersion}"
+  implementation "io.prometheus:simpleclient:${prometheusVersion}"
+  implementation "io.prometheus:simpleclient_hotspot:${prometheusVersion}"
+  implementation "io.prometheus:simpleclient_servlet:${prometheusVersion}"
 
-    implementation "io.ktor:ktor-server-core:${ktorVersion}"
-    implementation "io.ktor:ktor-server-cio:${ktorVersion}"
-    implementation "io.ktor:ktor-client-core:${ktorVersion}"
-    implementation "io.ktor:ktor-client-cio:${ktorVersion}"
+  implementation "io.ktor:ktor-server-core:${ktorVersion}"
+  implementation "io.ktor:ktor-server-cio:${ktorVersion}"
+  implementation "io.ktor:ktor-client-core:${ktorVersion}"
+  implementation "io.ktor:ktor-client-cio:${ktorVersion}"
 
-    implementation "org.eclipse.jetty:jetty-server:${jettyVersion}"
-    implementation "org.eclipse.jetty:jetty-servlet:${jettyVersion}"
+  implementation "org.eclipse.jetty:jetty-server:${jettyVersion}"
+  implementation "org.eclipse.jetty:jetty-servlet:${jettyVersion}"
 
-    implementation "io.dropwizard.metrics:metrics-core:${dropwizardVersion}"
-    implementation "io.dropwizard.metrics:metrics-healthchecks:${dropwizardVersion}"
-    implementation "io.dropwizard.metrics:metrics-servlets:${dropwizardVersion}"
-    implementation "io.dropwizard.metrics:metrics-jmx:${dropwizardVersion}"
+  implementation "io.dropwizard.metrics:metrics-core:${dropwizardVersion}"
+  implementation "io.dropwizard.metrics:metrics-healthchecks:${dropwizardVersion}"
+  implementation "io.dropwizard.metrics:metrics-servlets:${dropwizardVersion}"
+  implementation "io.dropwizard.metrics:metrics-jmx:${dropwizardVersion}"
 
-    implementation "io.zipkin.brave:brave-instrumentation-sparkjava:${zipkinVersion}"
-    implementation "io.zipkin.brave:brave-instrumentation-grpc:${zipkinVersion}"
-    implementation "io.zipkin.reporter2:zipkin-sender-okhttp3:${zipkenSenderVersion }"
+  implementation "io.zipkin.brave:brave-instrumentation-sparkjava:${zipkinVersion}"
+  implementation "io.zipkin.brave:brave-instrumentation-grpc:${zipkinVersion}"
+  implementation "io.zipkin.reporter2:zipkin-sender-okhttp3:${zipkenSenderVersion}"
 
-    implementation "ch.qos.logback:logback-classic:${logbackVersion}"
-    implementation "org.slf4j:jul-to-slf4j:${slf4jVersion}"
-    implementation "io.github.microutils:kotlin-logging:${loggingVersion}"
+  implementation "ch.qos.logback:logback-classic:${logbackVersion}"
+  implementation "org.slf4j:jul-to-slf4j:${slf4jVersion}"
+  implementation "io.github.microutils:kotlin-logging:${loggingVersion}"
 
-    testImplementation "org.amshove.kluent:kluent:${kluentVersion}"
-    testImplementation "org.junit.jupiter:junit-jupiter-api:$junitVersion"
-    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
+  testImplementation "org.amshove.kluent:kluent:${kluentVersion}"
+  testImplementation "org.junit.jupiter:junit-jupiter-api:$junitVersion"
+  testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
 }
 
 protobuf {
-    protoc {
-        artifact = "com.google.protobuf:protoc:${protocVersion}"
+  protoc {
+    artifact = "com.google.protobuf:protoc:${protocVersion}"
+  }
+  plugins {
+    grpc { artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}" }
+  }
+  generateProtoTasks {
+    all()*.plugins {
+      grpc {}
     }
-    plugins {
-        grpc { artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}" }
-    }
-    generateProtoTasks {
-        all()*.plugins {
-            grpc {}
-        }
-    }
+  }
 }
 
 configurations.all {
-    resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+  resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
 }
 
 sourceSets {
-    main {
-        java {
-            srcDirs 'src/main/java'
-            srcDirs 'src/main/kotlin'
-            srcDirs 'build/generated/source/proto/main/grpc'
-            srcDirs 'build/generated/source/proto/main/java'
-        }
+  main {
+    java {
+      srcDirs 'src/main/java'
+      srcDirs 'src/main/kotlin'
+      srcDirs 'build/generated/source/proto/main/grpc'
+      srcDirs 'build/generated/source/proto/main/java'
     }
+  }
 }
 
 compileKotlin.dependsOn ':generateProto'
@@ -135,17 +135,17 @@ compileKotlin.dependsOn ':generateProto'
 //startScripts.enabled = false
 
 task sourcesJar(type: Jar, dependsOn: classes) {
-    classifier = 'sources'
-    from sourceSets.main.allSource
+  classifier = 'sources'
+  from sourceSets.main.allSource
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {
-    classifier = 'javadoc'
-    from javadoc.destinationDir
+  classifier = 'javadoc'
+  from javadoc.destinationDir
 }
 
 artifacts {
-    archives sourcesJar
+  archives sourcesJar
 //    archives javadocJar
 }
 
@@ -159,61 +159,61 @@ jacocoTestReport {
 */
 
 tasks.withType(JavaCompile) {
-    options.encoding = 'UTF-8'
+  options.encoding = 'UTF-8'
 }
 
 compileKotlin {
-    kotlinOptions {
-        jvmTarget = "1.8"
-        freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
-                             '-Xuse-experimental=kotlinx.serialization.UnstableDefault',
-                             '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
-                             '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
-                             '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
-                             '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI',
-                             '-Xuse-experimental=kotlinx.serialization.UnstableDefault']
-    }
+  kotlinOptions {
+    jvmTarget = "1.8"
+    freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
+                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault',
+                         '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
+                         '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
+                         '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
+                         '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI',
+                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault']
+  }
 }
 
 compileTestKotlin {
-    kotlinOptions {
-        jvmTarget = "1.8"
-        freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
-                             '-Xuse-experimental=kotlinx.serialization.UnstableDefault',
-                             '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
-                             '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
-                             '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
-                             '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI',
-                             '-Xuse-experimental=kotlinx.serialization.UnstableDefault']
-    }
+  kotlinOptions {
+    jvmTarget = "1.8"
+    freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
+                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault',
+                         '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
+                         '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
+                         '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
+                         '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI',
+                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault']
+  }
 }
 
 shadowJar {
-    mergeServiceFiles()
+  mergeServiceFiles()
 }
 
 task agentJar(type: Jar, dependsOn: shadowJar) {
-    archiveFileName = 'prometheus-agent.jar'
-    manifest {
-        attributes('Main-Class': 'io.prometheus.Agent')
-    }
-    from zipTree(shadowJar.archiveFile)
+  archiveFileName = 'prometheus-agent.jar'
+  manifest {
+    attributes('Main-Class': 'io.prometheus.Agent')
+  }
+  from zipTree(shadowJar.archiveFile)
 }
 
 task proxyJar(type: Jar, dependsOn: shadowJar) {
-    archiveFileName = 'prometheus-proxy.jar'
-    manifest {
-        attributes('Main-Class': 'io.prometheus.Proxy')
-    }
-    from zipTree(shadowJar.archiveFile)
+  archiveFileName = 'prometheus-proxy.jar'
+  manifest {
+    attributes('Main-Class': 'io.prometheus.Proxy')
+  }
+  from zipTree(shadowJar.archiveFile)
 }
 
 test {
-    useJUnitPlatform()
+  useJUnitPlatform()
 
-    testLogging {
-        events "passed", "skipped", "failed", "standardOut", "standardError"
-        exceptionFormat "full"
-        showStandardStreams = true
-    }
+  testLogging {
+    events "passed", "skipped", "failed", "standardOut", "standardError"
+    exceptionFormat "full"
+    showStandardStreams = true
+  }
 }

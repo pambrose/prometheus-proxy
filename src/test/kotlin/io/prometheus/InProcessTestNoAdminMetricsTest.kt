@@ -41,62 +41,62 @@ import kotlin.time.seconds
 
 class InProcessTestNoAdminMetricsTest {
 
-    @Test
-    fun missingPathTest() = missingPathTest(simpleClassName)
+  @Test
+  fun missingPathTest() = missingPathTest(simpleClassName)
 
-    @Test
-    fun invalidPathTest() = invalidPathTest(simpleClassName)
+  @Test
+  fun invalidPathTest() = invalidPathTest(simpleClassName)
 
-    @Test
-    fun addRemovePathsTest() = addRemovePathsTest(agent.pathManager, simpleClassName)
+  @Test
+  fun addRemovePathsTest() = addRemovePathsTest(agent.pathManager, simpleClassName)
 
-    @Test
-    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent.pathManager, simpleClassName)
+  @Test
+  fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent.pathManager, simpleClassName)
 
-    @Test
-    fun invalidAgentUrlTest() = invalidAgentUrlTest(agent.pathManager, simpleClassName)
+  @Test
+  fun invalidAgentUrlTest() = invalidAgentUrlTest(agent.pathManager, simpleClassName)
 
-    @Test
-    fun timeoutTest() = timeoutTest(agent.pathManager, simpleClassName)
+  @Test
+  fun timeoutTest() = timeoutTest(agent.pathManager, simpleClassName)
 
-    @Test
-    fun proxyCallTest() =
-        proxyCallTest(ProxyCallTestArgs(agent.pathManager,
-                                        httpServerCount = 5,
-                                        pathCount = 25,
-                                        sequentialQueryCount = 100,
-                                        parallelQueryCount = 250,
-                                        startingPort = 10100,
-                                        caller = simpleClassName))
+  @Test
+  fun proxyCallTest() =
+    proxyCallTest(ProxyCallTestArgs(agent.pathManager,
+                                    httpServerCount = 5,
+                                    pathCount = 25,
+                                    sequentialQueryCount = 100,
+                                    parallelQueryCount = 250,
+                                    startingPort = 10100,
+                                    caller = simpleClassName))
 
-    companion object : KLogging() {
-        private lateinit var proxy: Proxy
-        private lateinit var agent: Agent
+  companion object : KLogging() {
+    private lateinit var proxy: Proxy
+    private lateinit var agent: Agent
 
-        @JvmStatic
-        @BeforeAll
-        fun setUp() {
-            CollectorRegistry.defaultRegistry.clear()
+    @JvmStatic
+    @BeforeAll
+    fun setUp() {
+      CollectorRegistry.defaultRegistry.clear()
 
-            runBlocking {
-                launch(Dispatchers.Default) { proxy = startProxy("nometrics") }
-                launch(Dispatchers.Default) {
-                    agent = startAgent("nometrics").apply { awaitInitialConnection(10.seconds) }
-                }
-            }
-            logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+      runBlocking {
+        launch(Dispatchers.Default) { proxy = startProxy("nometrics") }
+        launch(Dispatchers.Default) {
+          agent = startAgent("nometrics").apply { awaitInitialConnection(10.seconds) }
         }
-
-        @JvmStatic
-        @AfterAll
-        fun takeDown() {
-            runBlocking {
-                for (service in listOf(proxy, agent)) {
-                    logger.info { "Stopping ${service.simpleClassName}" }
-                    launch(Dispatchers.Default) { service.stopSync() }
-                }
-            }
-            logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-        }
+      }
+      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
     }
+
+    @JvmStatic
+    @AfterAll
+    fun takeDown() {
+      runBlocking {
+        for (service in listOf(proxy, agent)) {
+          logger.info { "Stopping ${service.simpleClassName}" }
+          launch(Dispatchers.Default) { service.stopSync() }
+        }
+      }
+      logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+    }
+  }
 }

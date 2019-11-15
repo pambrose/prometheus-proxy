@@ -34,35 +34,35 @@ class MetricsService(private val port: Int,
                      private val path: String,
                      initBlock: (MetricsService.() -> Unit) = {}) : GenericIdleService() {
 
-    private val server =
-        server(port) {
-            handler =
-                servletContextHandler {
-                    contextPath = "/"
-                    addServlet(ServletHolder(MetricsServlet()), "/$path")
-                }
+  private val server =
+    server(port) {
+      handler =
+        servletContextHandler {
+          contextPath = "/"
+          addServlet(ServletHolder(MetricsServlet()), "/$path")
         }
-    val healthCheck =
-        healthCheck {
-            if (server.isRunning)
-                HealthCheck.Result.healthy()
-            else
-                HealthCheck.Result.unhealthy("Jetty server not running")
-        }
-
-    init {
-        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
-        initBlock(this)
+    }
+  val healthCheck =
+    healthCheck {
+      if (server.isRunning)
+        HealthCheck.Result.healthy()
+      else
+        HealthCheck.Result.unhealthy("Jetty server not running")
     }
 
-    override fun startUp() = server.start()
+  init {
+    addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+    initBlock(this)
+  }
 
-    override fun shutDown() = server.stop()
+  override fun startUp() = server.start()
 
-    override fun toString() =
-        toStringElements {
-            add("url", "http://localhost:$port/$path")
-        }
+  override fun shutDown() = server.stop()
 
-    companion object : KLogging()
+  override fun toString() =
+    toStringElements {
+      add("url", "http://localhost:$port/$path")
+    }
+
+  companion object : KLogging()
 }

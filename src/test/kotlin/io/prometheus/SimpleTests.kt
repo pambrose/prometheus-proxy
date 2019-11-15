@@ -36,95 +36,95 @@ import kotlin.time.seconds
 
 object SimpleTests : KLogging() {
 
-    fun missingPathTest(caller: String) {
-        logger.debug { "Calling missingPathTest() from $caller" }
-        blockingGet("${TestConstants.PROXY_PORT}/".fixUrl()) { resp ->
-            resp.status shouldEqual HttpStatusCode.NotFound
-        }
+  fun missingPathTest(caller: String) {
+    logger.debug { "Calling missingPathTest() from $caller" }
+    blockingGet("${TestConstants.PROXY_PORT}/".fixUrl()) { resp ->
+      resp.status shouldEqual HttpStatusCode.NotFound
     }
+  }
 
-    fun invalidPathTest(caller: String) {
-        logger.debug { "Calling invalidPathTest() from $caller" }
-        blockingGet("${TestConstants.PROXY_PORT}/invalid_path".fixUrl()) { resp ->
-            resp.status shouldEqual HttpStatusCode.NotFound
-        }
+  fun invalidPathTest(caller: String) {
+    logger.debug { "Calling invalidPathTest() from $caller" }
+    blockingGet("${TestConstants.PROXY_PORT}/invalid_path".fixUrl()) { resp ->
+      resp.status shouldEqual HttpStatusCode.NotFound
     }
+  }
 
-    fun addRemovePathsTest(pathManager: AgentPathManager, caller: String) {
-        logger.debug { "Calling addRemovePathsTest() from $caller" }
+  fun addRemovePathsTest(pathManager: AgentPathManager, caller: String) {
+    logger.debug { "Calling addRemovePathsTest() from $caller" }
 
-        // Take into account pre-existing paths already registered
-        val originalSize = pathManager.pathMapSize()
+    // Take into account pre-existing paths already registered
+    val originalSize = pathManager.pathMapSize()
 
-        var cnt = 0
-        repeat(TestConstants.REPS) { i ->
-            val path = "test-$i"
-            pathManager.let { manager ->
-                manager.registerPath(path, "${TestConstants.PROXY_PORT}/$path".fixUrl())
-                cnt++
-                manager.pathMapSize() shouldEqual originalSize + cnt
-                manager.unregisterPath(path)
-                cnt--
-                manager.pathMapSize() shouldEqual originalSize + cnt
+    var cnt = 0
+    repeat(TestConstants.REPS) { i ->
+      val path = "test-$i"
+      pathManager.let { manager ->
+        manager.registerPath(path, "${TestConstants.PROXY_PORT}/$path".fixUrl())
+        cnt++
+        manager.pathMapSize() shouldEqual originalSize + cnt
+        manager.unregisterPath(path)
+        cnt--
+        manager.pathMapSize() shouldEqual originalSize + cnt
+      }
+    }
+  }
+
+  fun invalidAgentUrlTest(pathManager: AgentPathManager, caller: String, badPath: String = "badPath") {
+    logger.debug { "Calling invalidAgentUrlTest() from $caller" }
+
+    pathManager.registerPath(badPath, "33/metrics".fixUrl())
+    blockingGet("${TestConstants.PROXY_PORT}/$badPath".fixUrl()) { resp ->
+      resp.status shouldEqual HttpStatusCode.NotFound
+    }
+    pathManager.unregisterPath(badPath)
+  }
+
+  fun threadedAddRemovePathsTest(pathManager: AgentPathManager, caller: String) {
+    logger.debug { "Calling threadedAddRemovePathsTest() from $caller" }
+    val paths = mutableListOf<String>()
+
+    // Take into account pre-existing paths already registered
+    val originalSize = pathManager.pathMapSize()
+
+    runBlocking {
+      withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
+        val mutex = Mutex()
+        val jobs =
+          List(TestConstants.REPS) { i ->
+            GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
+              val path = "test-$i}"
+              val url = "${TestConstants.PROXY_PORT}/$path".fixUrl()
+              mutex.withLock { paths += path }
+              pathManager.registerPath(path, url)
             }
+          }
+
+        jobs.forEach { job ->
+          job.join()
+          job.getCancellationException().cause.shouldBeNull()
         }
+      }.shouldNotBeNull()
     }
 
-    fun invalidAgentUrlTest(pathManager: AgentPathManager, caller: String, badPath: String = "badPath") {
-        logger.debug { "Calling invalidAgentUrlTest() from $caller" }
+    paths.size shouldEqual TestConstants.REPS
+    pathManager.pathMapSize() shouldEqual (originalSize + TestConstants.REPS)
 
-        pathManager.registerPath(badPath, "33/metrics".fixUrl())
-        blockingGet("${TestConstants.PROXY_PORT}/$badPath".fixUrl()) { resp ->
-            resp.status shouldEqual HttpStatusCode.NotFound
-        }
-        pathManager.unregisterPath(badPath)
-    }
-
-    fun threadedAddRemovePathsTest(pathManager: AgentPathManager, caller: String) {
-        logger.debug { "Calling threadedAddRemovePathsTest() from $caller" }
-        val paths = mutableListOf<String>()
-
-        // Take into account pre-existing paths already registered
-        val originalSize = pathManager.pathMapSize()
-
-        runBlocking {
-            withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
-                val mutex = Mutex()
-                val jobs =
-                    List(TestConstants.REPS) { i ->
-                        GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
-                            val path = "test-$i}"
-                            val url = "${TestConstants.PROXY_PORT}/$path".fixUrl()
-                            mutex.withLock { paths += path }
-                            pathManager.registerPath(path, url)
-                        }
-                    }
-
-                jobs.forEach { job ->
-                    job.join()
-                    job.getCancellationException().cause.shouldBeNull()
-                }
-            }.shouldNotBeNull()
-        }
-
-        paths.size shouldEqual TestConstants.REPS
-        pathManager.pathMapSize() shouldEqual (originalSize + TestConstants.REPS)
-
-        runBlocking {
-            withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
-                val jobs =
-                    List(paths.size) {
-                        GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
-                            pathManager.unregisterPath(paths[it])
-                        }
-                    }
-                jobs.forEach { job ->
-                    job.join()
-                    job.getCancellationException().cause.shouldBeNull()
-                }.shouldNotBeNull()
+    runBlocking {
+      withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
+        val jobs =
+          List(paths.size) {
+            GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
+              pathManager.unregisterPath(paths[it])
             }
-        }
-
-        pathManager.pathMapSize() shouldEqual originalSize
+          }
+        jobs.forEach { job ->
+          job.join()
+          job.getCancellationException().cause.shouldBeNull()
+        }.shouldNotBeNull()
+      }
     }
+
+    pathManager.pathMapSize() shouldEqual originalSize
+  }
 }

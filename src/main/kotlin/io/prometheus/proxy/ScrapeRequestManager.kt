@@ -22,17 +22,17 @@ import com.google.common.collect.Maps.newConcurrentMap
 import java.util.concurrent.ConcurrentMap
 
 class ScrapeRequestManager {
-    // Map scrape_id to agent_id
-    val scrapeRequestMap: ConcurrentMap<Long, ScrapeRequestWrapper> = newConcurrentMap<Long, ScrapeRequestWrapper>()
+  // Map scrape_id to agent_id
+  val scrapeRequestMap: ConcurrentMap<Long, ScrapeRequestWrapper> = newConcurrentMap<Long, ScrapeRequestWrapper>()
 
-    val scrapeMapSize: Int
-        get() = scrapeRequestMap.size
+  val scrapeMapSize: Int
+    get() = scrapeRequestMap.size
 
-    fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) =
-        scrapeRequestMap.put(scrapeRequest.scrapeId, scrapeRequest)
+  fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) =
+    scrapeRequestMap.put(scrapeRequest.scrapeId, scrapeRequest)
 
-    fun getFromScrapeRequestMap(scrapeId: Long) = scrapeRequestMap[scrapeId]
+  fun getFromScrapeRequestMap(scrapeId: Long) = scrapeRequestMap[scrapeId]
 
-    fun removeFromScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) =
-        scrapeRequestMap.remove(scrapeRequest.scrapeId)
+  fun removeFromScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) =
+    scrapeRequestMap.remove(scrapeRequest.scrapeId)
 }

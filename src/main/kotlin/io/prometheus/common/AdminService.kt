@@ -39,38 +39,38 @@ class AdminService(healthCheckRegistry: HealthCheckRegistry,
                    private val threadDumpPath: String = "",
                    initBlock: (AdminService.() -> Unit) = {}) : GenericIdleService() {
 
-    private val server =
-        Server(port)
-            .apply {
-                handler =
-                    servletContextHandler {
-                        contextPath = "/"
-                        if (pingPath.isNotBlank())
-                            addServlet(ServletHolder(PingServlet()), "/$pingPath")
-                        if (versionPath.isNotBlank())
-                            addServlet(ServletHolder(VersionServlet()), "/$versionPath")
-                        if (healthCheckPath.isNotBlank())
-                            addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
-                        if (threadDumpPath.isNotBlank())
-                            addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
-                    }
-            }
+  private val server =
+    Server(port)
+      .apply {
+        handler =
+          servletContextHandler {
+            contextPath = "/"
+            if (pingPath.isNotBlank())
+              addServlet(ServletHolder(PingServlet()), "/$pingPath")
+            if (versionPath.isNotBlank())
+              addServlet(ServletHolder(VersionServlet()), "/$versionPath")
+            if (healthCheckPath.isNotBlank())
+              addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
+            if (threadDumpPath.isNotBlank())
+              addServlet(ServletHolder(ThreadDumpServlet()), "/$threadDumpPath")
+          }
+      }
 
-    init {
-        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
-        initBlock(this)
+  init {
+    addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+    initBlock(this)
+  }
+
+  override fun startUp() = server.start()
+
+  override fun shutDown() = server.stop()
+
+  override fun toString() =
+    toStringElements {
+      add("ping", ":$port/$pingPath")
+      add("healthcheck", ":$port/$healthCheckPath")
+      add("threaddump", ":$port/$threadDumpPath")
     }
 
-    override fun startUp() = server.start()
-
-    override fun shutDown() = server.stop()
-
-    override fun toString() =
-        toStringElements {
-            add("ping", ":$port/$pingPath")
-            add("healthcheck", ":$port/$healthCheckPath")
-            add("threaddump", ":$port/$threadDumpPath")
-        }
-
-    companion object : KLogging()
+  companion object : KLogging()
 }

@@ -43,168 +43,168 @@ abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val envConfig: String,
                                                  private val exitOnMissingConfig: Boolean = false) {
 
-    @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
-    private var configName = ""
+  @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
+  private var configName = ""
 
-    @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
-    var adminEnabled = false
-        private set
+  @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
+  var adminEnabled = false
+    private set
 
-    @Parameter(names = ["-i", "--admin_port"], description = "Admin servlets port")
-    var adminPort: Int = -1
-        private set
+  @Parameter(names = ["-i", "--admin_port"], description = "Admin servlets port")
+  var adminPort: Int = -1
+    private set
 
-    @Parameter(names = ["-e", "--metrics"], description = "Metrics enabled")
-    var metricsEnabled = false
-        private set
+  @Parameter(names = ["-e", "--metrics"], description = "Metrics enabled")
+  var metricsEnabled = false
+    private set
 
-    @Parameter(names = ["-m", "--metrics_port"], description = "Metrics listen port")
-    var metricsPort = -1
-        private set
+  @Parameter(names = ["-m", "--metrics_port"], description = "Metrics listen port")
+  var metricsPort = -1
+    private set
 
-    @Parameter(names = ["-v", "--version"],
-               description = "Print version info and exit",
-               validateWith = [VersionValidator::class])
+  @Parameter(names = ["-v", "--version"],
+             description = "Print version info and exit",
+             validateWith = [VersionValidator::class])
 
-    private var version = false
+  private var version = false
 
-    @Parameter(names = ["-u", "--usage"], help = true)
-    private var usage = false
+  @Parameter(names = ["-u", "--usage"], help = true)
+  private var usage = false
 
-    @DynamicParameter(names = ["-D"], description = "Dynamic property assignment")
-    var dynamicParams = mutableMapOf<String, String>()
-        private set
+  @DynamicParameter(names = ["-D"], description = "Dynamic property assignment")
+  var dynamicParams = mutableMapOf<String, String>()
+    private set
 
-    private var config: Config by notNull()
+  private var config: Config by notNull()
 
-    var configVals: ConfigVals by notNull()
-        private set
+  var configVals: ConfigVals by notNull()
+    private set
 
-    protected abstract fun assignConfigVals()
+  protected abstract fun assignConfigVals()
 
-    protected fun parseOptions() {
-        parseArgs(argv)
-        readConfig(envConfig, exitOnMissingConfig)
-        configVals = ConfigVals(config)
-        assignConfigVals()
+  protected fun parseOptions() {
+    parseArgs(argv)
+    readConfig(envConfig, exitOnMissingConfig)
+    configVals = ConfigVals(config)
+    assignConfigVals()
+  }
+
+  private fun parseArgs(argv: Array<String>?) {
+    try {
+      val jcom =
+        JCommander(this)
+          .apply {
+            programName = progName
+            setCaseSensitiveOptions(false)
+            parse(*argv ?: arrayOf())
+          }
+
+      if (usage) {
+        jcom.usage()
+        exitProcess(0)
+      }
+    } catch (e: ParameterException) {
+      logger.error(e) { e.message }
+      exitProcess(1)
     }
+  }
 
-    private fun parseArgs(argv: Array<String>?) {
+  protected fun assignAdminEnabled(defaultVal: Boolean) {
+    if (!adminEnabled)
+      adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
+  }
+
+  protected fun assignAdminPort(defaultVal: Int) {
+    if (adminPort == -1)
+      adminPort = ADMIN_PORT.getEnv(defaultVal)
+  }
+
+  protected fun assignMetricsEnabled(defaultVal: Boolean) {
+    if (!metricsEnabled)
+      metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
+  }
+
+  protected fun assignMetricsPort(defaultVal: Int) {
+    if (metricsPort == -1)
+      metricsPort = METRICS_PORT.getEnv(defaultVal)
+  }
+
+  private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
+    config = readConfig(if (configName.isNotEmpty()) configName else System.getenv(envConfig).orEmpty(),
+                        envConfig,
+                        ConfigParseOptions.defaults().setAllowMissing(false),
+                        ConfigFactory.load().resolve(),
+                        exitOnMissingConfig)
+      .resolve(ConfigResolveOptions.defaults())
+      .resolve()
+
+    dynamicParams.forEach { (k, v) ->
+      // Strip quotes
+      val qval = if (v.startsWith("\"") && v.endsWith("\"")) v.substring(1, v.length - 1) else v
+      val prop = "$k=$qval"
+      System.setProperty(k, prop)
+      val newConfig = ConfigFactory.parseString(prop, PROPS)
+      config = newConfig.withFallback(config).resolve()
+    }
+  }
+
+  private fun readConfig(configName: String,
+                         envConfig: String,
+                         configParseOptions: ConfigParseOptions,
+                         fallback: Config,
+                         exitOnMissingConfig: Boolean): Config {
+
+    when {
+      configName.isBlank() -> {
+        if (exitOnMissingConfig) {
+          logger.error { "A configuration file or url must be specified with --config or \$$envConfig" }
+          exitProcess(1)
+        }
+        return fallback
+      }
+
+      configName.isUrlPrefix() -> {
         try {
-            val jcom =
-                JCommander(this)
-                    .apply {
-                        programName = progName
-                        setCaseSensitiveOptions(false)
-                        parse(*argv ?: arrayOf())
-                    }
-
-            if (usage) {
-                jcom.usage()
-                exitProcess(0)
-            }
-        } catch (e: ParameterException) {
-            logger.error(e) { e.message }
-            exitProcess(1)
-        }
-    }
-
-    protected fun assignAdminEnabled(defaultVal: Boolean) {
-        if (!adminEnabled)
-            adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
-    }
-
-    protected fun assignAdminPort(defaultVal: Int) {
-        if (adminPort == -1)
-            adminPort = ADMIN_PORT.getEnv(defaultVal)
-    }
-
-    protected fun assignMetricsEnabled(defaultVal: Boolean) {
-        if (!metricsEnabled)
-            metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
-    }
-
-    protected fun assignMetricsPort(defaultVal: Int) {
-        if (metricsPort == -1)
-            metricsPort = METRICS_PORT.getEnv(defaultVal)
-    }
-
-    private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-        config = readConfig(if (configName.isNotEmpty()) configName else System.getenv(envConfig).orEmpty(),
-                            envConfig,
-                            ConfigParseOptions.defaults().setAllowMissing(false),
-                            ConfigFactory.load().resolve(),
-                            exitOnMissingConfig)
-            .resolve(ConfigResolveOptions.defaults())
-            .resolve()
-
-        dynamicParams.forEach { (k, v) ->
-            // Strip quotes
-            val qval = if (v.startsWith("\"") && v.endsWith("\"")) v.substring(1, v.length - 1) else v
-            val prop = "$k=$qval"
-            System.setProperty(k, prop)
-            val newConfig = ConfigFactory.parseString(prop, PROPS)
-            config = newConfig.withFallback(config).resolve()
-        }
-    }
-
-    private fun readConfig(configName: String,
-                           envConfig: String,
-                           configParseOptions: ConfigParseOptions,
-                           fallback: Config,
-                           exitOnMissingConfig: Boolean): Config {
-
-        when {
-            configName.isBlank() -> {
-                if (exitOnMissingConfig) {
-                    logger.error { "A configuration file or url must be specified with --config or \$$envConfig" }
-                    exitProcess(1)
-                }
-                return fallback
-            }
-
-            configName.isUrlPrefix() -> {
-                try {
-                    val configSyntax = getConfigSyntax(configName)
-                    return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
-                        .withFallback(fallback)
-                } catch (e: Exception) {
-                    if (e.cause is FileNotFoundException)
-                        logger.error { "Invalid getConfig url: $configName" }
-                    else
-                        logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
-                }
-
-            }
-            else -> {
-                try {
-                    return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
-                } catch (e: Exception) {
-                    if (e.cause is FileNotFoundException)
-                        logger.error { "Invalid getConfig filename: $configName" }
-                    else
-                        logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
-                }
-            }
+          val configSyntax = getConfigSyntax(configName)
+          return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
+            .withFallback(fallback)
+        } catch (e: Exception) {
+          if (e.cause is FileNotFoundException)
+            logger.error { "Invalid getConfig url: $configName" }
+          else
+            logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
 
-        exitProcess(1)
-    }
-
-    private fun getConfigSyntax(configName: String) =
-        when {
-            configName.isJsonSuffix() -> ConfigSyntax.JSON
-            configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
-            else -> ConfigSyntax.CONF
+      }
+      else -> {
+        try {
+          return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
+        } catch (e: Exception) {
+          if (e.cause is FileNotFoundException)
+            logger.error { "Invalid getConfig filename: $configName" }
+          else
+            logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
-
-    private fun String.isUrlPrefix() = toLowerCase().startsWith("http://") || toLowerCase().startsWith("https://")
-
-    private fun String.isJsonSuffix() = toLowerCase().endsWith(".json") || toLowerCase().endsWith(".jsn")
-
-    private fun String.isPropertiesSuffix() = toLowerCase().endsWith(".properties") || toLowerCase().endsWith(".props")
-
-    companion object : KLogging() {
-        private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
+      }
     }
+
+    exitProcess(1)
+  }
+
+  private fun getConfigSyntax(configName: String) =
+    when {
+      configName.isJsonSuffix() -> ConfigSyntax.JSON
+      configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
+      else -> ConfigSyntax.CONF
+    }
+
+  private fun String.isUrlPrefix() = toLowerCase().startsWith("http://") || toLowerCase().startsWith("https://")
+
+  private fun String.isJsonSuffix() = toLowerCase().endsWith(".json") || toLowerCase().endsWith(".jsn")
+
+  private fun String.isPropertiesSuffix() = toLowerCase().endsWith(".properties") || toLowerCase().endsWith(".props")
+
+  companion object : KLogging() {
+    private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
+  }
 }

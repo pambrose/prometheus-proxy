@@ -35,122 +35,122 @@ import io.prometheus.grpc.UnregisterPathResponse
 
 class GrpcObjects {
 
-    companion object {
-        fun newHeartBeatRequest(agentId: String): HeartBeatRequest =
-            HeartBeatRequest.newBuilder()
-                .run {
-                    this.agentId = agentId
-                    build()
-                }
+  companion object {
+    fun newHeartBeatRequest(agentId: String): HeartBeatRequest =
+      HeartBeatRequest.newBuilder()
+        .run {
+          this.agentId = agentId
+          build()
+        }
 
-        fun newHeartBeatResponse(valid: Boolean, reason: String): HeartBeatResponse =
-            HeartBeatResponse.newBuilder()
-                .run {
-                    this.valid = valid
-                    this.reason = reason
-                    build()
-                }
+    fun newHeartBeatResponse(valid: Boolean, reason: String): HeartBeatResponse =
+      HeartBeatResponse.newBuilder()
+        .run {
+          this.valid = valid
+          this.reason = reason
+          build()
+        }
 
-        fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest =
-            RegisterAgentRequest.newBuilder()
-                .run {
-                    this.agentId = agentId
-                    this.agentName = agentName
-                    this.hostName = hostName
-                    build()
-                }
+    fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest =
+      RegisterAgentRequest.newBuilder()
+        .run {
+          this.agentId = agentId
+          this.agentName = agentName
+          this.hostName = hostName
+          build()
+        }
 
-        fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse =
-            RegisterAgentResponse.newBuilder()
-                .run {
-                    this.valid = valid
-                    this.reason = reason
-                    this.agentId = agentId
-                    build()
-                }
+    fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse =
+      RegisterAgentResponse.newBuilder()
+        .run {
+          this.valid = valid
+          this.reason = reason
+          this.agentId = agentId
+          build()
+        }
 
-        fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest =
-            PathMapSizeRequest.newBuilder()
-                .run {
-                    this.agentId = agentId
-                    build()
-                }
+    fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest =
+      PathMapSizeRequest.newBuilder()
+        .run {
+          this.agentId = agentId
+          build()
+        }
 
-        fun newPathMapSizeResponse(pathCount: Int): PathMapSizeResponse =
-            PathMapSizeResponse.newBuilder()
-                .run {
-                    this.pathCount = pathCount
-                    build()
-                }
+    fun newPathMapSizeResponse(pathCount: Int): PathMapSizeResponse =
+      PathMapSizeResponse.newBuilder()
+        .run {
+          this.pathCount = pathCount
+          build()
+        }
 
-        fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest =
-            RegisterPathRequest.newBuilder()
-                .run {
-                    this.agentId = agentId
-                    this.path = path
-                    build()
-                }
+    fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest =
+      RegisterPathRequest.newBuilder()
+        .run {
+          this.agentId = agentId
+          this.path = path
+          build()
+        }
 
-        fun newRegisterPathResponse(valid: Boolean,
-                                    reason: String,
-                                    pathCount: Int,
-                                    pathId: Long): RegisterPathResponse =
-            RegisterPathResponse.newBuilder()
-                .run {
-                    this.valid = valid
-                    this.reason = reason
-                    this.pathCount = pathCount
-                    this.pathId = pathId
-                    build()
-                }
+    fun newRegisterPathResponse(valid: Boolean,
+                                reason: String,
+                                pathCount: Int,
+                                pathId: Long): RegisterPathResponse =
+      RegisterPathResponse.newBuilder()
+        .run {
+          this.valid = valid
+          this.reason = reason
+          this.pathCount = pathCount
+          this.pathId = pathId
+          build()
+        }
 
-        fun newScrapeRequest(agentId: String, scrapeId: Long, path: String, accept: String?): ScrapeRequest =
-            ScrapeRequest.newBuilder()
-                .run {
-                    this.agentId = agentId
-                    this.scrapeId = scrapeId
-                    this.path = path
-                    if (!accept.isNullOrBlank())
-                        this.accept = accept
-                    build()
-                }
+    fun newScrapeRequest(agentId: String, scrapeId: Long, path: String, accept: String?): ScrapeRequest =
+      ScrapeRequest.newBuilder()
+        .run {
+          this.agentId = agentId
+          this.scrapeId = scrapeId
+          this.path = path
+          if (!accept.isNullOrBlank())
+            this.accept = accept
+          build()
+        }
 
-        class ScrapeResponseArg(var validResponse: Boolean = false,
-                                var failureReason: String = "",
-                                val agentId: String,
-                                val scrapeId: Long,
-                                var statusCode: HttpStatusCode = HttpStatusCode.NotFound,
-                                var contentText: String = "",
-                                var contentType: String = "")
+    class ScrapeResponseArg(var validResponse: Boolean = false,
+                            var failureReason: String = "",
+                            val agentId: String,
+                            val scrapeId: Long,
+                            var statusCode: HttpStatusCode = HttpStatusCode.NotFound,
+                            var contentText: String = "",
+                            var contentType: String = "")
 
-        fun newScrapeResponse(arg: ScrapeResponseArg): ScrapeResponse =
-            ScrapeResponse.newBuilder()
-                .run {
-                    agentId = arg.agentId
-                    scrapeId = arg.scrapeId
-                    validResponse = arg.validResponse
-                    failureReason = arg.failureReason
-                    statusCode = arg.statusCode.value
-                    contentText = arg.contentText
-                    contentType = arg.contentType
-                    build()
-                }
+    fun newScrapeResponse(arg: ScrapeResponseArg): ScrapeResponse =
+      ScrapeResponse.newBuilder()
+        .run {
+          agentId = arg.agentId
+          scrapeId = arg.scrapeId
+          validResponse = arg.validResponse
+          failureReason = arg.failureReason
+          statusCode = arg.statusCode.value
+          contentText = arg.contentText
+          contentType = arg.contentType
+          build()
+        }
 
-        fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest =
-            UnregisterPathRequest.newBuilder()
-                .run {
-                    this.agentId = agentId
-                    this.path = path
-                    build()
-                }
+    fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest =
+      UnregisterPathRequest.newBuilder()
+        .run {
+          this.agentId = agentId
+          this.path = path
+          build()
+        }
 
-        fun newUnregisterPathResponseBuilder(): UnregisterPathResponse.Builder = UnregisterPathResponse.newBuilder()
+    fun newUnregisterPathResponseBuilder(): UnregisterPathResponse.Builder = UnregisterPathResponse.newBuilder()
 
-        fun newAgentInfo(agentId: String): AgentInfo =
-            AgentInfo.newBuilder()
-                .run {
-                    this.agentId = agentId
-                    build()
-                }
-    }
+    fun newAgentInfo(agentId: String): AgentInfo =
+      AgentInfo.newBuilder()
+        .run {
+          this.agentId = agentId
+          build()
+        }
+  }
 }

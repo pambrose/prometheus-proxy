@@ -28,29 +28,29 @@ import io.prometheus.common.EnvVars.PROXY_PORT
 
 class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
 
-    constructor(args: List<String>) : this(Iterables.toArray<String>(args, String::class.java))
+  constructor(args: List<String>) : this(Iterables.toArray<String>(args, String::class.java))
 
-    @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
-    var proxyHttpPort = -1
-        private set
-    @Parameter(names = ["-a", "--agent_port"], description = "gRPC listen port for Agents")
-    var proxyAgentPort = -1
-        private set
+  @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
+  var proxyHttpPort = -1
+    private set
+  @Parameter(names = ["-a", "--agent_port"], description = "gRPC listen port for Agents")
+  var proxyAgentPort = -1
+    private set
 
-    init {
-        parseOptions()
-    }
+  init {
+    parseOptions()
+  }
 
-    override fun assignConfigVals() {
-        if (proxyHttpPort == -1)
-            proxyHttpPort = PROXY_PORT.getEnv(configVals.proxy.http.port)
+  override fun assignConfigVals() {
+    if (proxyHttpPort == -1)
+      proxyHttpPort = PROXY_PORT.getEnv(configVals.proxy.http.port)
 
-        if (proxyAgentPort == -1)
-            proxyAgentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port)
+    if (proxyAgentPort == -1)
+      proxyAgentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port)
 
-        assignAdminEnabled(configVals.proxy.admin.enabled)
-        assignAdminPort(configVals.proxy.admin.port)
-        assignMetricsEnabled(configVals.proxy.metrics.enabled)
-        assignMetricsPort(configVals.proxy.metrics.port)
-    }
+    assignAdminEnabled(configVals.proxy.admin.enabled)
+    assignAdminPort(configVals.proxy.admin.port)
+    assignMetricsEnabled(configVals.proxy.metrics.enabled)
+    assignMetricsPort(configVals.proxy.metrics.port)
+  }
 }

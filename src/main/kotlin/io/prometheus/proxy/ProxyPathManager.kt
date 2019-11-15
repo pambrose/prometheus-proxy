@@ -24,71 +24,71 @@ import mu.KLogging
 
 class ProxyPathManager(private val isTestMode: Boolean) {
 
-    private val pathMap = newConcurrentMap<String, AgentContext>() // Map path to AgentContext
+  private val pathMap = newConcurrentMap<String, AgentContext>() // Map path to AgentContext
 
-    operator fun get(path: String) = pathMap[path]
+  operator fun get(path: String) = pathMap[path]
 
-    operator fun contains(path: String) = pathMap.containsKey(path)
+  operator fun contains(path: String) = pathMap.containsKey(path)
 
-    val pathMapSize: Int
-        get() = pathMap.size
+  val pathMapSize: Int
+    get() = pathMap.size
 
-    fun addPath(path: String, agentContext: AgentContext) {
-        synchronized(pathMap) {
-            pathMap[path] = agentContext
-            if (!isTestMode)
-                logger.info { "Added path /$path for $agentContext" }
-        }
+  fun addPath(path: String, agentContext: AgentContext) {
+    synchronized(pathMap) {
+      pathMap[path] = agentContext
+      if (!isTestMode)
+        logger.info { "Added path /$path for $agentContext" }
     }
+  }
 
-    fun removePath(path: String, agentId: String, responseBuilder: UnregisterPathResponse.Builder) {
-        synchronized(pathMap) {
-            val agentContext = pathMap[path]
-            when {
-                agentContext == null -> {
-                    val msg = "Unable to remove path /$path - path not found"
-                    logger.error { msg }
-                    responseBuilder
-                        .apply {
-                            this.valid = false
-                            this.reason = msg
-                        }
-                }
-                agentContext.agentId != agentId -> {
-                    val msg =
-                        "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
-                    logger.error { msg }
-                    responseBuilder
-                        .apply {
-                            this.valid = false
-                            this.reason = msg
-                        }
-                }
-                else -> {
-                    pathMap.remove(path)
-                    if (!isTestMode)
-                        logger.info { "Removed path /$path for $agentContext" }
-                    responseBuilder
-                        .apply {
-                            this.valid = true
-                            this.reason = ""
-                        }
-                }
+  fun removePath(path: String, agentId: String, responseBuilder: UnregisterPathResponse.Builder) {
+    synchronized(pathMap) {
+      val agentContext = pathMap[path]
+      when {
+        agentContext == null -> {
+          val msg = "Unable to remove path /$path - path not found"
+          logger.error { msg }
+          responseBuilder
+            .apply {
+              this.valid = false
+              this.reason = msg
             }
         }
-    }
-
-    fun removePathByAgentId(agentId: String?) =
-        if (agentId.isNullOrEmpty())
-            logger.error { "Missing agentId" }
-        else
-            synchronized(pathMap) {
-                pathMap.forEach { (k, v) ->
-                    if (v.agentId == agentId)
-                        pathMap.remove(k)?.also { logger.info { "Removed path /$k for $it" } }
-                            ?: logger.error { "Missing path /$k for agentId: $agentId" }
-                }
+        agentContext.agentId != agentId -> {
+          val msg =
+            "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
+          logger.error { msg }
+          responseBuilder
+            .apply {
+              this.valid = false
+              this.reason = msg
             }
+        }
+        else -> {
+          pathMap.remove(path)
+          if (!isTestMode)
+            logger.info { "Removed path /$path for $agentContext" }
+          responseBuilder
+            .apply {
+              this.valid = true
+              this.reason = ""
+            }
+        }
+      }
+    }
+  }
 
-    companion object : KLogging()
+  fun removePathByAgentId(agentId: String?) =
+    if (agentId.isNullOrEmpty())
+      logger.error { "Missing agentId" }
+    else
+      synchronized(pathMap) {
+        pathMap.forEach { (k, v) ->
+          if (v.agentId == agentId)
+            pathMap.remove(k)?.also { logger.info { "Removed path /$k for $it" } }
+              ?: logger.error { "Missing path /$k for agentId: $agentId" }
+        }
+      }
+
+  companion object : KLogging()
 }

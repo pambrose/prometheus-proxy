@@ -31,63 +31,63 @@ import kotlin.time.MonoClock
 
 class AgentContext(proxy: Proxy, private val remoteAddr: String) {
 
-    val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
+  val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
 
-    private val channelSize = proxy.configVals.scrapeRequestChannelSize
-    private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(channelSize)
-    private val channelBacklogSize = AtomicInteger(0)
+  private val channelSize = proxy.configVals.scrapeRequestChannelSize
+  private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(channelSize)
+  private val channelBacklogSize = AtomicInteger(0)
 
-    private val clock = MonoClock
-    private var lastActivityTimeMark: ClockMark by nonNullableReference(clock.markNow())
-    private var valid = AtomicBoolean(true)
+  private val clock = MonoClock
+  private var lastActivityTimeMark: ClockMark by nonNullableReference(clock.markNow())
+  private var valid = AtomicBoolean(true)
 
-    var hostName: String by nonNullableReference()
-    var agentName: String by nonNullableReference()
+  var hostName: String by nonNullableReference()
+  var agentName: String by nonNullableReference()
 
-    val inactivityTime
-        get() = lastActivityTimeMark.elapsedNow()
+  val inactivityTime
+    get() = lastActivityTimeMark.elapsedNow()
 
-    val scrapeRequestBacklogSize: Int
-        get() = channelBacklogSize.get()
+  val scrapeRequestBacklogSize: Int
+    get() = channelBacklogSize.get()
 
-    init {
-        hostName = "Unassigned"
-        agentName = "Unassigned"
-        markActivity()
+  init {
+    hostName = "Unassigned"
+    agentName = "Unassigned"
+    markActivity()
+  }
+
+  suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
+    scrapeRequestChannel.send(scrapeRequest)
+    channelBacklogSize.incrementAndGet()
+  }
+
+  suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
+    scrapeRequestChannel.receiveOrNull()?.also {
+      channelBacklogSize.decrementAndGet()
     }
 
-    suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
-        scrapeRequestChannel.send(scrapeRequest)
-        channelBacklogSize.incrementAndGet()
+  fun isValid() = valid.get() && !scrapeRequestChannel.isClosedForReceive
+
+  fun invalidate() {
+    valid.set(false)
+    scrapeRequestChannel.close()
+  }
+
+  fun markActivity() {
+    lastActivityTimeMark = clock.markNow()
+  }
+
+  override fun toString() =
+    toStringElements {
+      add("agentId", agentId)
+      add("valid", valid.get())
+      add("remoteAddr", remoteAddr)
+      add("agentName", agentName)
+      add("hostName", hostName)
+      add("inactivityTime", inactivityTime)
     }
 
-    suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
-        scrapeRequestChannel.receiveOrNull()?.also {
-            channelBacklogSize.decrementAndGet()
-        }
-
-    fun isValid() = valid.get() && !scrapeRequestChannel.isClosedForReceive
-
-    fun invalidate() {
-        valid.set(false)
-        scrapeRequestChannel.close()
-    }
-
-    fun markActivity() {
-        lastActivityTimeMark = clock.markNow()
-    }
-
-    override fun toString() =
-        toStringElements {
-            add("agentId", agentId)
-            add("valid", valid.get())
-            add("remoteAddr", remoteAddr)
-            add("agentName", agentName)
-            add("hostName", hostName)
-            add("inactivityTime", inactivityTime)
-        }
-
-    companion object {
-        private val AGENT_ID_GENERATOR = AtomicLong(0)
-    }
+  companion object {
+    private val AGENT_ID_GENERATOR = AtomicLong(0)
+  }
 }

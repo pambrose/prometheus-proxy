@@ -31,54 +31,54 @@ import kotlin.system.exitProcess
 import kotlin.time.Duration
 
 val localHostName: String by lazy {
-    try {
-        InetAddress.getLocalHost().hostName
-    } catch (e: UnknownHostException) {
-        "Unknown"
-    }
+  try {
+    InetAddress.getLocalHost().hostName
+  } catch (e: UnknownHostException) {
+    "Unknown"
+  }
 }
 
 fun newBacklogHealthCheck(backlogSize: Int, size: Int) =
-    healthCheck {
-        if (backlogSize < size)
-            HealthCheck.Result.healthy()
-        else
-            HealthCheck.Result.unhealthy("Large size: $backlogSize")
-    }
+  healthCheck {
+    if (backlogSize < size)
+      HealthCheck.Result.healthy()
+    else
+      HealthCheck.Result.unhealthy("Large size: $backlogSize")
+  }
 
 fun newMapHealthCheck(map: Map<*, *>, size: Int) =
-    healthCheck {
-        if (map.size < size)
-            HealthCheck.Result.healthy()
-        else
-            HealthCheck.Result.unhealthy("Large size: ${map.size}")
-    }
+  healthCheck {
+    if (map.size < size)
+      HealthCheck.Result.healthy()
+    else
+      HealthCheck.Result.unhealthy("Large size: ${map.size}")
+  }
 
 fun getVersionDesc(asJson: Boolean): String {
-    val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
-    return if (asJson)
-        """{"Version": "${annotation.version}", "Release Date": "${annotation.date}"}"""
-    else
-        "Version: ${annotation.version} Release Date: ${annotation.date}"
+  val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
+  return if (asJson)
+    """{"Version": "${annotation.version}", "Release Date": "${annotation.date}"}"""
+  else
+    "Version: ${annotation.version} Release Date: ${annotation.date}"
 }
 
 fun shutDownHookAction(service: Service) =
-    Thread {
-        System.err.println("*** ${service.simpleClassName} shutting down ***")
-        service.stopAsync()
-        System.err.println("*** ${service.simpleClassName} shut down complete ***")
-    }
+  Thread {
+    System.err.println("*** ${service.simpleClassName} shutting down ***")
+    service.stopAsync()
+    System.err.println("*** ${service.simpleClassName} shut down complete ***")
+  }
 
 class VersionValidator : IParameterValidator {
-    override fun validate(name: String, value: String) {
-        val console = JCommander().console
-        console.println(getVersionDesc(false))
-        exitProcess(0)
-    }
+  override fun validate(name: String, value: String) {
+    val console = JCommander().console
+    console.println(getVersionDesc(false))
+    exitProcess(0)
+  }
 }
 
 suspend fun delay(duration: Duration) {
-    kotlinx.coroutines.delay(duration.toLongMilliseconds())
+  kotlinx.coroutines.delay(duration.toLongMilliseconds())
 }
 
 val HttpStatusCode.isSuccessful get() = value in (HttpStatusCode.OK.value..HttpStatusCode.MultipleChoices.value)
@@ -86,7 +86,7 @@ val HttpStatusCode.isSuccessful get() = value in (HttpStatusCode.OK.value..HttpS
 val HttpStatusCode.isNotSuccessful get() = !isSuccessful
 
 val <T : Any> T.simpleClassName: String
-    get() = this::class.simpleName ?: "None"
+  get() = this::class.simpleName ?: "None"
 
 fun <R> Boolean.thenElse(trueVal: () -> R, falseVal: () -> R): R = if (this) trueVal() else falseVal()
 

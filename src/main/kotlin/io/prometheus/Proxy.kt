@@ -50,128 +50,128 @@ class Proxy(options: ProxyOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,
             initBlock: (Proxy.() -> Unit)? = null) :
-    GenericService(options.configVals,
-                   newAdminConfig(options.adminEnabled,
-                                  options.adminPort,
-                                  options.configVals.proxy.admin),
-                   newMetricsConfig(options.metricsEnabled,
-                                    options.metricsPort,
-                                    options.configVals.proxy.metrics),
-                   newZipkinConfig(options.configVals.proxy.internal.zipkin),
-                   testMode) {
-    val configVals: ConfigVals.Proxy2.Internal2 = genericConfigVals.proxy.internal
-    val pathManager = ProxyPathManager(isTestMode)
-    val scrapeRequestManager = ScrapeRequestManager()
-    val agentContextManager = AgentContextManager()
-    var metrics: ProxyMetrics by notNull()
+  GenericService(options.configVals,
+                 newAdminConfig(options.adminEnabled,
+                                options.adminPort,
+                                options.configVals.proxy.admin),
+                 newMetricsConfig(options.metricsEnabled,
+                                  options.metricsPort,
+                                  options.configVals.proxy.metrics),
+                 newZipkinConfig(options.configVals.proxy.internal.zipkin),
+                 testMode) {
+  val configVals: ConfigVals.Proxy2.Internal2 = genericConfigVals.proxy.internal
+  val pathManager = ProxyPathManager(isTestMode)
+  val scrapeRequestManager = ScrapeRequestManager()
+  val agentContextManager = AgentContextManager()
+  var metrics: ProxyMetrics by notNull()
 
-    private val httpService = ProxyHttpService(this, proxyHttpPort)
-    private val grpcService =
-        if (inProcessServerName.isEmpty())
-            ProxyGrpcService(this, port = options.proxyAgentPort)
-        else
-            ProxyGrpcService(this, inProcessName = inProcessServerName)
+  private val httpService = ProxyHttpService(this, proxyHttpPort)
+  private val grpcService =
+    if (inProcessServerName.isEmpty())
+      ProxyGrpcService(this, port = options.proxyAgentPort)
+    else
+      ProxyGrpcService(this, inProcessName = inProcessServerName)
 
-    private var agentCleanupService: AgentContextCleanupService by notNull()
+  private var agentCleanupService: AgentContextCleanupService by notNull()
 
-    init {
-        if (isMetricsEnabled)
-            metrics = ProxyMetrics(this)
-        if (configVals.staleAgentCheckEnabled)
-            agentCleanupService = AgentContextCleanupService(this) { addServices(this) }
-        addServices(grpcService, httpService)
-        initService()
-        initBlock?.invoke(this)
+  init {
+    if (isMetricsEnabled)
+      metrics = ProxyMetrics(this)
+    if (configVals.staleAgentCheckEnabled)
+      agentCleanupService = AgentContextCleanupService(this) { addServices(this) }
+    addServices(grpcService, httpService)
+    initService()
+    initBlock?.invoke(this)
+  }
+
+  override fun startUp() {
+    super.startUp()
+
+    grpcService.startSync()
+    httpService.startSync()
+
+    if (configVals.staleAgentCheckEnabled)
+      agentCleanupService.startSync()
+    else
+      logger.info { "Agent eviction thread not started" }
+  }
+
+  override fun shutDown() {
+    grpcService.stopSync()
+    httpService.stopSync()
+    if (configVals.staleAgentCheckEnabled)
+      agentCleanupService.stopSync()
+    super.shutDown()
+  }
+
+  override fun run() {
+    runBlocking {
+      while (isRunning)
+        delay(500.milliseconds)
+    }
+  }
+
+  override fun registerHealthChecks() {
+    super.registerHealthChecks()
+    healthCheckRegistry
+      .apply {
+        register("grpc_service", grpcService.healthCheck)
+        register("scrape_response_map_check",
+                 newMapHealthCheck(scrapeRequestManager.scrapeRequestMap,
+                                   configVals.scrapeRequestMapUnhealthySize))
+        register("agent_scrape_request_backlog",
+                 healthCheck {
+                   val unhealthySize = configVals.scrapeRequestBacklogUnhealthySize
+                   val vals =
+                     agentContextManager.agentContextMap.entries
+                       .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
+                       .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
+                       .toList()
+                   if (vals.isEmpty()) {
+                     HealthCheck.Result.healthy()
+                   } else {
+                     val s = Joiner.on(", ").join(vals)
+                     HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
+                   }
+                 })
+      }
+  }
+
+  fun removeAgentContext(agentId: String?) =
+    if (agentId == null || agentId.isEmpty()) {
+      logger.error { "Missing agentId" }
+      null
+    } else {
+      val agentContext = agentContextManager.removeAgentContext(agentId)
+      if (agentContext == null) {
+        logger.error { "Missing AgentContext for agentId: $agentId" }
+      } else {
+        logger.info { "Removed $agentContext" }
+        agentContext.invalidate()
+      }
+      agentContext
     }
 
-    override fun startUp() {
-        super.startUp()
-
-        grpcService.startSync()
-        httpService.startSync()
-
-        if (configVals.staleAgentCheckEnabled)
-            agentCleanupService.startSync()
-        else
-            logger.info { "Agent eviction thread not started" }
+  override fun toString() =
+    toStringElements {
+      add("proxyPort", httpService.httpPort)
+      add("adminService", if (isAdminEnabled) adminService else "Disabled")
+      add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
     }
 
-    override fun shutDown() {
-        grpcService.stopSync()
-        httpService.stopSync()
-        if (configVals.staleAgentCheckEnabled)
-            agentCleanupService.stopSync()
-        super.shutDown()
+  companion object : KLogging() {
+    const val AGENT_ID = "agent-id"
+    val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
+
+    @JvmStatic
+    fun main(argv: Array<String>) {
+
+      logger.apply {
+        info { getBanner("banners/proxy.txt", logger) }
+        info { getVersionDesc(false) }
+      }
+
+      Proxy(options = ProxyOptions(argv)) { startSync() }
     }
-
-    override fun run() {
-        runBlocking {
-            while (isRunning)
-                delay(500.milliseconds)
-        }
-    }
-
-    override fun registerHealthChecks() {
-        super.registerHealthChecks()
-        healthCheckRegistry
-            .apply {
-                register("grpc_service", grpcService.healthCheck)
-                register("scrape_response_map_check",
-                         newMapHealthCheck(scrapeRequestManager.scrapeRequestMap,
-                                           configVals.scrapeRequestMapUnhealthySize))
-                register("agent_scrape_request_backlog",
-                         healthCheck {
-                             val unhealthySize = configVals.scrapeRequestBacklogUnhealthySize
-                             val vals =
-                                 agentContextManager.agentContextMap.entries
-                                     .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
-                                     .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
-                                     .toList()
-                             if (vals.isEmpty()) {
-                                 HealthCheck.Result.healthy()
-                             } else {
-                                 val s = Joiner.on(", ").join(vals)
-                                 HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
-                             }
-                         })
-            }
-    }
-
-    fun removeAgentContext(agentId: String?) =
-        if (agentId == null || agentId.isEmpty()) {
-            logger.error { "Missing agentId" }
-            null
-        } else {
-            val agentContext = agentContextManager.removeAgentContext(agentId)
-            if (agentContext == null) {
-                logger.error { "Missing AgentContext for agentId: $agentId" }
-            } else {
-                logger.info { "Removed $agentContext" }
-                agentContext.invalidate()
-            }
-            agentContext
-        }
-
-    override fun toString() =
-        toStringElements {
-            add("proxyPort", httpService.httpPort)
-            add("adminService", if (isAdminEnabled) adminService else "Disabled")
-            add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
-        }
-
-    companion object : KLogging() {
-        const val AGENT_ID = "agent-id"
-        val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
-
-        @JvmStatic
-        fun main(argv: Array<String>) {
-
-            logger.apply {
-                info { getBanner("banners/proxy.txt", logger) }
-                info { getVersionDesc(false) }
-            }
-
-            Proxy(options = ProxyOptions(argv)) { startSync() }
-        }
-    }
+  }
 }

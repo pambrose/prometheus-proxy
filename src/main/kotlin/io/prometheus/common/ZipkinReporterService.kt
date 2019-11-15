@@ -30,30 +30,30 @@ import zipkin2.reporter.okhttp3.OkHttpSender
 
 class ZipkinReporterService(private val url: String,
                             initBlock: (ZipkinReporterService.() -> Unit) = {}) : GenericIdleService() {
-    private val sender = OkHttpSender.create(url)
-    private val reporter = AsyncReporter.create(sender)
+  private val sender = OkHttpSender.create(url)
+  private val reporter = AsyncReporter.create(sender)
 
-    init {
-        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
-        initBlock(this)
+  init {
+    addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+    initBlock(this)
+  }
+
+  fun newTracing(serviceName: String): Tracing =
+    tracing {
+      localServiceName(serviceName)
+      spanReporter(reporter)
     }
 
-    fun newTracing(serviceName: String): Tracing =
-        tracing {
-            localServiceName(serviceName)
-            spanReporter(reporter)
-        }
+  override fun startUp() {
+    // Empty
+  }
 
-    override fun startUp() {
-        // Empty
-    }
+  override fun shutDown() {
+    reporter.close()
+    sender.close()
+  }
 
-    override fun shutDown() {
-        reporter.close()
-        sender.close()
-    }
+  override fun toString() = toStringElements { add("url", url) }
 
-    override fun toString() = toStringElements { add("url", url) }
-
-    companion object : KLogging()
+  companion object : KLogging()
 }
