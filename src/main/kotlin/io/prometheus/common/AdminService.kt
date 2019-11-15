@@ -25,8 +25,8 @@ import com.codahale.metrics.servlets.ThreadDumpServlet
 import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.dsl.JettyDsl.servletContextHandler
 import com.google.common.util.concurrent.MoreExecutors
-import io.prometheus.dsl.JettyDsl.servletContextHandler
 import mu.KLogging
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletHolder

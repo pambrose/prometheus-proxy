@@ -18,12 +18,11 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import io.ktor.http.HttpStatusCode
 import io.prometheus.agent.AgentPathManager
-import io.prometheus.dsl.KtorDsl.blockingGet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -35,8 +34,6 @@ import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
 import kotlin.time.seconds
 
-
-@InternalCoroutinesApi
 object SimpleTests : KLogging() {
 
     fun missingPathTest(caller: String) {

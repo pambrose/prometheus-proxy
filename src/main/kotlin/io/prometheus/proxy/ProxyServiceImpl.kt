@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.dsl.GrpcDsl.streamObserver
 import com.google.protobuf.Empty
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
@@ -28,7 +29,6 @@ import io.prometheus.common.GrpcObjects.Companion.newPathMapSizeResponse
 import io.prometheus.common.GrpcObjects.Companion.newRegisterAgentResponse
 import io.prometheus.common.GrpcObjects.Companion.newRegisterPathResponse
 import io.prometheus.common.GrpcObjects.Companion.newUnregisterPathResponseBuilder
-import io.prometheus.dsl.GrpcDsl.streamObserver
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.HeartBeatResponse

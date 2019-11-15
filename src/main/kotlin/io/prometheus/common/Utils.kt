@@ -21,10 +21,10 @@ package io.prometheus.common
 import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
 import com.codahale.metrics.health.HealthCheck
+import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.google.common.util.concurrent.Service
 import io.ktor.http.HttpStatusCode
 import io.prometheus.Proxy
-import io.prometheus.dsl.MetricsDsl.healthCheck
 import java.net.InetAddress
 import java.net.UnknownHostException
 import kotlin.system.exitProcess

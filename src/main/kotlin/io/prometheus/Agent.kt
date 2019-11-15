@@ -19,7 +19,10 @@
 package io.prometheus
 
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.dsl.GrpcDsl.streamObserver
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.dsl.KtorDsl.get
+import com.github.pambrose.common.dsl.KtorDsl.http
 import com.github.pambrose.common.util.getBanner
 import com.google.common.net.HttpHeaders
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
@@ -53,9 +56,6 @@ import io.prometheus.common.localHostName
 import io.prometheus.common.newBacklogHealthCheck
 import io.prometheus.common.simpleClassName
 import io.prometheus.common.thenElse
-import io.prometheus.dsl.GrpcDsl.streamObserver
-import io.prometheus.dsl.KtorDsl.get
-import io.prometheus.dsl.KtorDsl.http
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.Dispatchers

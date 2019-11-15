@@ -18,6 +18,10 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import com.github.pambrose.common.dsl.KtorDsl.get
+import com.github.pambrose.common.dsl.KtorDsl.http
+import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.application.call
@@ -35,12 +39,7 @@ import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.delay
-import io.prometheus.dsl.KtorDsl.blockingGet
-import io.prometheus.dsl.KtorDsl.get
-import io.prometheus.dsl.KtorDsl.http
-import io.prometheus.dsl.KtorDsl.newHttpClient
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -53,11 +52,14 @@ import org.amshove.kluent.shouldNotBeNull
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.collections.List
+import kotlin.collections.Map
+import kotlin.collections.forEach
+import kotlin.collections.set
 import kotlin.random.Random
 import kotlin.time.minutes
 import kotlin.time.seconds
 
-@InternalCoroutinesApi
 object ProxyTests : KLogging() {
 
     fun timeoutTest(pathManager: AgentPathManager,

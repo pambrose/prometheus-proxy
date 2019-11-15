@@ -22,11 +22,11 @@ import com.codahale.metrics.health.HealthCheck
 import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.dsl.JettyDsl.server
+import com.github.pambrose.common.dsl.JettyDsl.servletContextHandler
+import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.client.exporter.MetricsServlet
-import io.prometheus.dsl.JettyDsl.server
-import io.prometheus.dsl.JettyDsl.servletContextHandler
-import io.prometheus.dsl.MetricsDsl.healthCheck
 import mu.KLogging
 import org.eclipse.jetty.servlet.ServletHolder
 

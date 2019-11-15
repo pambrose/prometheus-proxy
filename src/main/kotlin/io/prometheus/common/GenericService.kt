@@ -27,11 +27,12 @@ import com.github.pambrose.common.concurrent.GenericExecutionThreadService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.serviceManager
 import com.github.pambrose.common.dsl.GuavaDsl.serviceManagerListener
+import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.github.pambrose.common.metrics.SystemMetrics
 import com.google.common.base.Joiner
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.Service
 import com.google.common.util.concurrent.ServiceManager
-import io.prometheus.dsl.MetricsDsl.healthCheck
 import mu.KLogging
 import java.io.Closeable
 import kotlin.properties.Delegates.notNull
