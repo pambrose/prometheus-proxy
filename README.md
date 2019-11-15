@@ -97,8 +97,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-docker pull pambrose/prometheus-proxy:1.4.1
-docker pull pambrose/prometheus-agent:1.4.1
+docker pull pambrose/prometheus-proxy:1.4.2
+docker pull pambrose/prometheus-agent:1.4.2
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
@@ -107,14 +107,14 @@ Start the proxy and an agent in separate shells on your local machine:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         -e HOSTNAME=${HOSTNAME} \
         -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.4.1
+        pambrose/prometheus-proxy:1.4.2
 ```
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.4.1
+        pambrose/prometheus-agent:1.4.2
 ```
 
 If you want to be able to externalize your `agent` config file on your local machine (or VM) file system (instead of the above HTTP served config file), you'll need to add the Docker `volume` definition to the command:
@@ -124,7 +124,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     -v ${PWD}/prom-agent.conf:/prom-agent.conf \
     -e HOSTNAME=${HOSTNAME} \
     -e AGENT_CONFIG=/prom-agent.conf \
-    pambrose/prometheus-agent:1.4.1
+    pambrose/prometheus-agent:1.4.2
 ```
 
 The above assumes that you have the file `prom-agent.conf` in the current directory from which you're running the `docker` command.
@@ -151,7 +151,7 @@ The only required argument is an Agent config value, which should have an `agent
 
 | Options             | Env Var         | Property               |Default | Description                            |
 |:--------------------|:----------------|:-----------------------|:-------|:---------------------------------------|
-| -c --config          | PROXY_CONFIG    |                        |        | Agent config file or url                 |
+| -c --config         | PROXY_CONFIG    |                        |        | Agent config file or url               |
 | -p --port           | PROXY_PORT      | proxy.http.port        | 8080   | Proxy listen port                      |
 | -a --agent_port     | AGENT_PORT      | proxy.agent.port       | 50051  | gRPC listen port for Agents            |
 | -r --admin          | ADMIN_ENABLED   | proxy.admin.enabled    | false  | Enable admin servlets                  |
@@ -167,7 +167,7 @@ The only required argument is an Agent config value, which should have an `agent
 
 | Options             | Env Var         | Property               |Default | Description                            |
 |:--------------------|:----------------|:-----------------------|:-------|:---------------------------------------|
-| -c --config          | AGENT_CONFIG    |                        |        | Agent config file or url (required)      |
+| -c --config         | AGENT_CONFIG    |                        |        | Agent config file or url (required)    |
 | -p --proxy          | PROXY_HOSTNAME  | agent.proxy.hostname   |        | Proxy hostname (can include :port)     |
 | -n --name           | AGENT_NAME      | agent.name             |        | Agent name                             |
 | -r --admin          | ADMIN_ENABLED   | agent.admin.enabled    | false  | Enable admin servlets                  |

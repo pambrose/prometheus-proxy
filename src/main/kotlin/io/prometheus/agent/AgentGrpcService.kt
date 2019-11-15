@@ -48,12 +48,21 @@ class AgentGrpcService(private val agent: Agent,
     val port: Int
 
     init {
-        if (options.proxyHostname.contains(":")) {
-            val vals = options.proxyHostname.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+        val schemeStripped =
+            options.proxyHostname.run {
+                when {
+                    startsWith("http://") -> removePrefix("http://")
+                    startsWith("https://") -> removePrefix("https://")
+                    else -> this
+                }
+            }
+
+        if (schemeStripped.contains(":")) {
+            val vals = schemeStripped.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
             hostName = vals[0]
             port = Integer.valueOf(vals[1])
         } else {
-            hostName = options.proxyHostname
+            hostName = schemeStripped
             port = 50051
         }
 
