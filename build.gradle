@@ -9,7 +9,7 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.4.1-SNAPSHOT'
+version = '1.4.2-SNAPSHOT'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
