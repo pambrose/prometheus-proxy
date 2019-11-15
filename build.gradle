@@ -1,8 +1,8 @@
 plugins {
     id 'idea'
     id 'java'
-    id 'org.jetbrains.kotlin.jvm' version '1.3.50'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '1.3.50'
+    id 'org.jetbrains.kotlin.jvm' version '1.3.60'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.3.60'
     id 'com.google.protobuf' version '0.8.10'
     id "com.github.ben-manes.versions" version '0.27.0'
     id 'com.github.johnrengelman.shadow' version '5.2.0'
@@ -14,7 +14,7 @@ version = '1.4.2-SNAPSHOT'
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
-def kotlinVersion = '1.3.50'
+def kotlinVersion = '1.3.60'
 def serializationVersion = '0.13.0'
 def coroutinesVersion = '1.3.2'
 def utilsVersion = '1.1.2'
