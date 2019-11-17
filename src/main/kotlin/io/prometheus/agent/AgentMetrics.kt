@@ -23,26 +23,24 @@ import com.github.pambrose.common.dsl.PrometheusDsl.gauge
 import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
-import io.prometheus.client.Counter
-import io.prometheus.client.Summary
 
 class AgentMetrics(agent: Agent) {
 
-  val scrapeRequests: Counter =
+  val scrapeRequests =
     counter {
       name("agent_scrape_requests")
       help("Agent scrape requests")
       labelNames("type")
     }
 
-  val connects: Counter =
+  val connects =
     counter {
       name("agent_connect_count")
       help("Agent connect counts")
       labelNames("type")
     }
 
-  val scrapeRequestLatency: Summary =
+  val scrapeRequestLatency =
     summary {
       name("agent_scrape_request_latency_seconds")
       help("Agent scrape request latency in seconds")

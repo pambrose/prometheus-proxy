@@ -23,37 +23,35 @@ import com.github.pambrose.common.dsl.PrometheusDsl.gauge
 import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Proxy
-import io.prometheus.client.Counter
-import io.prometheus.client.Summary
 
 class ProxyMetrics(proxy: Proxy) {
 
-  val scrapeRequests: Counter =
+  val scrapeRequests =
     counter {
       name("proxy_scrape_requests")
       help("Proxy scrape requests")
       labelNames("type")
     }
 
-  val connects: Counter =
+  val connects =
     counter {
       name("proxy_connect_count")
       help("Proxy connect count")
     }
 
-  val agentEvictions: Counter =
+  val agentEvictions =
     counter {
       name("proxy_eviction_count")
       help("Proxy eviction count")
     }
 
-  val heartbeats: Counter =
+  val heartbeats =
     counter {
       name("proxy_heartbeat_count")
       help("Proxy heartbeat count")
     }
 
-  val scrapeRequestLatency: Summary =
+  val scrapeRequestLatency =
     summary {
       name("proxy_scrape_request_latency_seconds")
       help("Proxy scrape request latency in seconds")
