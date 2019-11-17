@@ -26,6 +26,7 @@ import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.JettyDsl.servletContextHandler
+import com.github.pambrose.common.servlet.VersionServlet
 import com.google.common.util.concurrent.MoreExecutors
 import mu.KLogging
 import org.eclipse.jetty.server.Server
@@ -48,7 +49,7 @@ class AdminService(healthCheckRegistry: HealthCheckRegistry,
             if (pingPath.isNotBlank())
               addServlet(ServletHolder(PingServlet()), "/$pingPath")
             if (versionPath.isNotBlank())
-              addServlet(ServletHolder(VersionServlet()), "/$versionPath")
+              addServlet(ServletHolder(VersionServlet(getVersionDesc(true))), "/$versionPath")
             if (healthCheckPath.isNotBlank())
               addServlet(ServletHolder(HealthCheckServlet(healthCheckRegistry)), "/$healthCheckPath")
             if (threadDumpPath.isNotBlank())

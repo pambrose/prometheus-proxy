@@ -24,6 +24,7 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.http
 import com.github.pambrose.common.util.getBanner
+import com.github.pambrose.common.util.hostInfo
 import com.google.common.net.HttpHeaders
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.util.concurrent.RateLimiter
@@ -52,7 +53,6 @@ import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.common.delay
 import io.prometheus.common.getVersionDesc
 import io.prometheus.common.isSuccessful
-import io.prometheus.common.localHostName
 import io.prometheus.common.newBacklogHealthCheck
 import io.prometheus.common.simpleClassName
 import io.prometheus.common.thenElse
@@ -90,9 +90,9 @@ class Agent(options: AgentOptions,
                  testMode) {
   private val configVals = genericConfigVals.agent.internal
   private val initialConnectionLatch = CountDownLatch(1)
-  private val agentName = options.agentName.isBlank().thenElse("Unnamed-$localHostName", options.agentName)
-  private val reconnectLimiter =
-    RateLimiter.create(1.0 / configVals.reconectPauseSecs).apply { acquire() } // Prime the limiter
+  private val agentName = options.agentName.isBlank().thenElse("Unnamed-${hostInfo.hostName}", options.agentName)
+  // Prime the limiter
+  private val reconnectLimiter = RateLimiter.create(1.0 / configVals.reconectPauseSecs).apply { acquire() }
 
   private val clock = MonoClock
   private var lastMsgSentMark: ClockMark by nonNullableReference(clock.markNow())

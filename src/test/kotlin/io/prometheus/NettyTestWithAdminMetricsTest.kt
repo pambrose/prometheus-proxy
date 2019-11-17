@@ -68,7 +68,7 @@ class NettyTestWithAdminMetricsTest {
                                     pathCount = 25,
                                     sequentialQueryCount = 100,
                                     parallelQueryCount = 250,
-                                    startingPort = 10900,
+                                    startPort = 10900,
                                     caller = simpleClassName))
 
   companion object : KLogging() {

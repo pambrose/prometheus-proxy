@@ -25,18 +25,8 @@ import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.google.common.util.concurrent.Service
 import io.ktor.http.HttpStatusCode
 import io.prometheus.Proxy
-import java.net.InetAddress
-import java.net.UnknownHostException
 import kotlin.system.exitProcess
 import kotlin.time.Duration
-
-val localHostName: String by lazy {
-  try {
-    InetAddress.getLocalHost().hostName
-  } catch (e: UnknownHostException) {
-    "Unknown"
-  }
-}
 
 fun newBacklogHealthCheck(backlogSize: Int, size: Int) =
   healthCheck {
@@ -77,9 +67,7 @@ class VersionValidator : IParameterValidator {
   }
 }
 
-suspend fun delay(duration: Duration) {
-  kotlinx.coroutines.delay(duration.toLongMilliseconds())
-}
+suspend fun delay(duration: Duration) = kotlinx.coroutines.delay(duration.toLongMilliseconds())
 
 val HttpStatusCode.isSuccessful get() = value in (HttpStatusCode.OK.value..HttpStatusCode.MultipleChoices.value)
 

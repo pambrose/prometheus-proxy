@@ -66,7 +66,7 @@ class InProcessTestWithAdminMetricsTest {
                                     pathCount = 50,
                                     sequentialQueryCount = 500,
                                     parallelQueryCount = 250,
-                                    startingPort = 10700,
+                                    startPort = 10700,
                                     caller = simpleClassName))
 
   companion object : KLogging() {

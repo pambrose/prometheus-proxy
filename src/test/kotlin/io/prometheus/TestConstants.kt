@@ -18,20 +18,17 @@
 
 package io.prometheus
 
-import io.prometheus.common.localHostName
+import java.io.File
 
 object TestConstants {
   internal const val REPS = 1000
   internal const val PROXY_PORT = 9505
 
-  private val CI_TEST = !localHostName.contains("pleiku")
+  private const val travisFile = "etc/test-configs/travis.conf"
+  private const val junitFile = "etc/test-configs/junit-test.conf"
+  private const val ghPrefix = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/"
 
-  internal val args =
-    listOf("--config",
-           (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +
-               "etc/test-configs/travis.conf")
+  internal val args = listOf("--config", "${if (File(travisFile).exists()) "" else ghPrefix}$travisFile")
 
-  internal val OPTIONS_CONFIG =
-    (if (CI_TEST) "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/" else "") +
-        "etc/test-configs/junit-test.conf"
+  internal val OPTIONS_CONFIG = "${if (File(junitFile).exists()) ghPrefix else ""}$junitFile"
 }

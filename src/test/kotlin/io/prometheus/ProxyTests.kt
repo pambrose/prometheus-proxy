@@ -104,7 +104,7 @@ object ProxyTests : KLogging() {
                           val pathCount: Int,
                           val sequentialQueryCount: Int,
                           val parallelQueryCount: Int,
-                          val startingPort: Int = 9600,
+                          val startPort: Int = 9600,
                           val caller: String)
 
   private class HttpServerWrapper(val port: Int, val server: CIOApplicationEngine)
@@ -121,7 +121,7 @@ object ProxyTests : KLogging() {
     logger.info { "Creating ${args.httpServerCount} httpServers" }
     val httpServers =
       List(args.httpServerCount) { i ->
-        val port = args.startingPort + i
+        val port = args.startPort + i
         HttpServerWrapper(port = port,
                           server = embeddedServer(CIO, port = port) {
                             routing {
@@ -135,7 +135,7 @@ object ProxyTests : KLogging() {
     logger.debug { "Starting ${args.httpServerCount} httpServers" }
 
     runBlocking {
-      for (httpServer in httpServers) {
+      httpServers.forEach { httpServer ->
         launch(Dispatchers.Default) {
           logger.info { "Starting httpServer listening on ${httpServer.port}" }
           httpServer.server.start()
@@ -150,14 +150,14 @@ object ProxyTests : KLogging() {
     logger.debug { "Registering paths" }
     repeat(args.pathCount) { i ->
       val index = httpServers.size.random
-      args.pathManager.registerPath("proxy-$i", "${args.startingPort + index}/agent-$index".fixUrl())
+      args.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".fixUrl())
       pathMap[i] = index
     }
 
     args.pathManager.pathMapSize() shouldEqual originalSize + args.pathCount
 
     // Call the proxy sequentially
-    logger.debug { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
+    logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
     Executors.newSingleThreadExecutor().asCoroutineDispatcher()
       .use { dispatcher ->
         runBlocking {
@@ -183,8 +183,8 @@ object ProxyTests : KLogging() {
       }
 
     // Call the proxy in parallel
-    logger.debug { "Calling proxy in parallel ${args.parallelQueryCount} times" }
-    Executors.newFixedThreadPool(20).asCoroutineDispatcher()
+    logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
+    Executors.newFixedThreadPool(10).asCoroutineDispatcher()
       .use { dispatcher ->
         runBlocking {
           withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
