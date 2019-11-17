@@ -18,6 +18,7 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.util.simpleClassName
 import io.prometheus.ProxyTests.ProxyCallTestArgs
 import io.prometheus.ProxyTests.proxyCallTest
 import io.prometheus.ProxyTests.timeoutTest
@@ -30,7 +31,6 @@ import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.delay
-import io.prometheus.common.simpleClassName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking

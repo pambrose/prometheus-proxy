@@ -17,20 +17,16 @@ targetCompatibility = 1.8
 def kotlinVersion = '1.3.60'
 def serializationVersion = '0.13.0'
 def coroutinesVersion = '1.3.2'
-def utilsVersion = '1.1.4'
+def utilsVersion = '3119b86'
 
 def grpcVersion = '1.25.0'
 def protocVersion = '3.10.0'
 
 def ktorVersion = '1.2.4'
-def jettyVersion = '9.4.22.v20191022'
 def annotationVersion = '1.3.2'
-def prometheusVersion = '0.8.0'
-def loggingVersion = '1.7.6'
+def loggingVersion = '1.7.7'
 def dropwizardVersion = '4.1.1'
-def zipkinVersion = '5.9.0'
-def zipkenSenderVersion = '2.11.0'
-def kluentVersion = '1.56'
+def kluentVersion = '1.57'
 def tscfgVersion = '1.3.4'
 def contribVersion = '0.8.1'
 def jcommanderVersion = '1.78'
@@ -64,6 +60,7 @@ dependencies {
   implementation "com.github.pambrose.common-utils:ktor-client-utils:${utilsVersion}"
   implementation "com.github.pambrose.common-utils:jetty-utils:${utilsVersion}"
   implementation "com.github.pambrose.common-utils:prometheus-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:service-utils:${utilsVersion}"
   implementation "com.github.pambrose.common-utils:zipkin-utils:${utilsVersion}"
 
   implementation "javax.annotation:javax.annotation-api:${annotationVersion}"
@@ -71,26 +68,12 @@ dependencies {
   implementation "com.typesafe:config:${tscfgVersion}"
   implementation "com.salesforce.servicelibs:grpc-contrib:${contribVersion}"
 
-  implementation "io.prometheus:simpleclient:${prometheusVersion}"
-  implementation "io.prometheus:simpleclient_hotspot:${prometheusVersion}"
-  implementation "io.prometheus:simpleclient_servlet:${prometheusVersion}"
-
   implementation "io.ktor:ktor-server-core:${ktorVersion}"
   implementation "io.ktor:ktor-server-cio:${ktorVersion}"
   implementation "io.ktor:ktor-client-core:${ktorVersion}"
   implementation "io.ktor:ktor-client-cio:${ktorVersion}"
 
-  implementation "org.eclipse.jetty:jetty-server:${jettyVersion}"
-  implementation "org.eclipse.jetty:jetty-servlet:${jettyVersion}"
-
-  implementation "io.dropwizard.metrics:metrics-core:${dropwizardVersion}"
   implementation "io.dropwizard.metrics:metrics-healthchecks:${dropwizardVersion}"
-  implementation "io.dropwizard.metrics:metrics-servlets:${dropwizardVersion}"
-  implementation "io.dropwizard.metrics:metrics-jmx:${dropwizardVersion}"
-
-  implementation "io.zipkin.brave:brave-instrumentation-sparkjava:${zipkinVersion}"
-  implementation "io.zipkin.brave:brave-instrumentation-grpc:${zipkinVersion}"
-  implementation "io.zipkin.reporter2:zipkin-sender-okhttp3:${zipkenSenderVersion}"
 
   implementation "ch.qos.logback:logback-classic:${logbackVersion}"
   implementation "org.slf4j:jul-to-slf4j:${slf4jVersion}"

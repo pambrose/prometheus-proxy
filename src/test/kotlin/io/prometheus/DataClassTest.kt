@@ -21,10 +21,10 @@ package io.prometheus
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigSyntax
-import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.ConfigVals
-import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
-import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
+import io.prometheus.common.ConfigWrappers.newAdminConfig
+import io.prometheus.common.ConfigWrappers.newMetricsConfig
+import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import org.amshove.kluent.shouldBeFalse
 import org.amshove.kluent.shouldBeTrue
 import org.amshove.kluent.shouldEqual

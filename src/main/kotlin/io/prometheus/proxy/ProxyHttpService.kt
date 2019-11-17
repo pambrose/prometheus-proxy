@@ -32,6 +32,7 @@ import io.ktor.features.DefaultHeaders
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.isSuccess
 import io.ktor.request.ApplicationRequest
 import io.ktor.request.header
 import io.ktor.request.path
@@ -44,7 +45,6 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
 import io.prometheus.common.delay
-import io.prometheus.common.isNotSuccessful
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.TimeUnit
@@ -181,26 +181,30 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
     logger.debug { "Results returned from $agentContext for $scrapeRequest" }
 
-    val scrapeResponse = scrapeRequest.scrapeResponse
-    val statusCode = HttpStatusCode.fromValue(scrapeResponse.statusCode)
-    val contentTypeElems = scrapeResponse.contentType.split("/")
-    val contentType =
-      if (contentTypeElems.size == 2)
-        ContentType(contentTypeElems[0], contentTypeElems[1])
-      else
-        ContentType.Text.Plain
+    scrapeRequest.scrapeResponse.also { scrapeResponse ->
+      HttpStatusCode.fromValue(scrapeResponse.statusCode).also { statusCode ->
+        scrapeResponse.contentType.split("/").also { contentTypeElems ->
 
-    // Do not return content on error status codes
-    return if (statusCode.isNotSuccessful) {
-      ScrapeRequestResponse(contentType = contentType,
-                            statusCode = statusCode,
-                            updateMsg = "path_not_found")
-    } else {
-      req.header(ACCEPT_ENCODING)?.contains("gzip")?.let { res.header(CONTENT_ENCODING, "gzip") }
-      ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
-                            contentType = contentType,
-                            statusCode = statusCode,
-                            updateMsg = "success")
+          val contentType =
+            if (contentTypeElems.size == 2)
+              ContentType(contentTypeElems[0], contentTypeElems[1])
+            else
+              ContentType.Text.Plain
+
+          // Do not return content on error status codes
+          return if (!statusCode.isSuccess()) {
+            ScrapeRequestResponse(contentType = contentType,
+                                  statusCode = statusCode,
+                                  updateMsg = "path_not_found")
+          } else {
+            req.header(ACCEPT_ENCODING)?.contains("gzip")?.let { res.header(CONTENT_ENCODING, "gzip") }
+            ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
+                                  contentType = contentType,
+                                  statusCode = statusCode,
+                                  updateMsg = "success")
+          }
+        }
+      }
     }
   }
 

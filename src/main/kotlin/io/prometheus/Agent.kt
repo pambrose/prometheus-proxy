@@ -23,8 +23,11 @@ import com.github.pambrose.common.dsl.GrpcDsl.streamObserver
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.http
+import com.github.pambrose.common.service.GenericService
+import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
+import com.github.pambrose.common.util.simpleClassName
 import com.google.common.net.HttpHeaders
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.util.concurrent.RateLimiter
@@ -35,27 +38,24 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.response.HttpResponse
 import io.ktor.client.response.readText
+import io.ktor.http.isSuccess
 import io.prometheus.agent.AgentGrpcService
 import io.prometheus.agent.AgentMetrics
 import io.prometheus.agent.AgentOptions
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.common.AdminConfig.Companion.newAdminConfig
-import io.prometheus.common.GenericService
+import io.prometheus.common.ConfigVals
+import io.prometheus.common.ConfigWrappers.newAdminConfig
+import io.prometheus.common.ConfigWrappers.newMetricsConfig
+import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.GrpcObjects.Companion.ScrapeResponseArg
 import io.prometheus.common.GrpcObjects.Companion.newAgentInfo
 import io.prometheus.common.GrpcObjects.Companion.newHeartBeatRequest
 import io.prometheus.common.GrpcObjects.Companion.newRegisterAgentRequest
 import io.prometheus.common.GrpcObjects.Companion.newScrapeResponse
-import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
 import io.prometheus.common.ScrapeRequestAction
-import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
 import io.prometheus.common.delay
 import io.prometheus.common.getVersionDesc
-import io.prometheus.common.isSuccessful
-import io.prometheus.common.newBacklogHealthCheck
-import io.prometheus.common.simpleClassName
-import io.prometheus.common.thenElse
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.Dispatchers
@@ -79,18 +79,19 @@ class Agent(options: AgentOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,
             initBlock: (Agent.() -> Unit)? = null) :
-  GenericService(options.configVals,
-                 newAdminConfig(options.adminEnabled,
+  GenericService<ConfigVals>(options.configVals,
+                             newAdminConfig(options.adminEnabled,
                                 options.adminPort,
                                 options.configVals.agent.admin),
-                 newMetricsConfig(options.metricsEnabled,
-                                  options.metricsPort,
-                                  options.configVals.agent.metrics),
-                 newZipkinConfig(options.configVals.agent.internal.zipkin),
-                 testMode) {
+                             newMetricsConfig(options.metricsEnabled,
+                                              options.metricsPort,
+                                              options.configVals.agent.metrics),
+                             newZipkinConfig(options.configVals.agent.internal.zipkin),
+                             { getVersionDesc(true) },
+                             testMode) {
   private val configVals = genericConfigVals.agent.internal
   private val initialConnectionLatch = CountDownLatch(1)
-  private val agentName = options.agentName.isBlank().thenElse("Unnamed-${hostInfo.hostName}", options.agentName)
+  private val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
   // Prime the limiter
   private val reconnectLimiter = RateLimiter.create(1.0 / configVals.reconectPauseSecs).apply { acquire() }
 
@@ -224,7 +225,7 @@ class Agent(options: AgentOptions,
           //logger.info { "Fetching ${pathContext}" }
           responseArg.statusCode = resp.status
 
-          if (resp.status.isSuccessful) {
+          if (resp.status.isSuccess()) {
             responseArg.apply {
               contentText = resp.readText()
               contentType = resp.headers[CONTENT_TYPE].orEmpty()

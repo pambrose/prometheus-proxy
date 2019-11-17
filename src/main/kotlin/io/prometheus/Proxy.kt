@@ -21,17 +21,17 @@ package io.prometheus
 import com.codahale.metrics.health.HealthCheck
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.github.pambrose.common.service.GenericService
+import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
 import io.grpc.Attributes
-import io.prometheus.common.AdminConfig.Companion.newAdminConfig
 import io.prometheus.common.ConfigVals
-import io.prometheus.common.GenericService
-import io.prometheus.common.MetricsConfig.Companion.newMetricsConfig
-import io.prometheus.common.ZipkinConfig.Companion.newZipkinConfig
+import io.prometheus.common.ConfigWrappers.newAdminConfig
+import io.prometheus.common.ConfigWrappers.newMetricsConfig
+import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.delay
 import io.prometheus.common.getVersionDesc
-import io.prometheus.common.newMapHealthCheck
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
 import io.prometheus.proxy.ProxyGrpcService
@@ -50,15 +50,16 @@ class Proxy(options: ProxyOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,
             initBlock: (Proxy.() -> Unit)? = null) :
-  GenericService(options.configVals,
-                 newAdminConfig(options.adminEnabled,
+  GenericService<ConfigVals>(options.configVals,
+                             newAdminConfig(options.adminEnabled,
                                 options.adminPort,
                                 options.configVals.proxy.admin),
-                 newMetricsConfig(options.metricsEnabled,
-                                  options.metricsPort,
-                                  options.configVals.proxy.metrics),
-                 newZipkinConfig(options.configVals.proxy.internal.zipkin),
-                 testMode) {
+                             newMetricsConfig(options.metricsEnabled,
+                                              options.metricsPort,
+                                              options.configVals.proxy.metrics),
+                             newZipkinConfig(options.configVals.proxy.internal.zipkin),
+                             { getVersionDesc(true) },
+                             testMode) {
   val configVals: ConfigVals.Proxy2.Internal2 = genericConfigVals.proxy.internal
   val pathManager = ProxyPathManager(isTestMode)
   val scrapeRequestManager = ScrapeRequestManager()
