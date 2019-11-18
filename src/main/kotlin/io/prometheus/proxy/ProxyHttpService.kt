@@ -145,7 +145,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     apply {
       response.header("cache-control", "must-revalidate,no-cache,no-store")
       response.status(status)
-      respondText(text, contentType)
+      respondText(text, contentType, status)
     }
   }
 
