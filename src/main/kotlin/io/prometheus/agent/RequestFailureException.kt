@@ -19,7 +19,7 @@
 package io.prometheus.agent
 
 class RequestFailureException(message: String) : Exception(message) {
-    companion object {
-        private const val serialVersionUID = 8748724180953791199L
-    }
+  companion object {
+    private const val serialVersionUID = 8748724180953791199L
+  }
 }

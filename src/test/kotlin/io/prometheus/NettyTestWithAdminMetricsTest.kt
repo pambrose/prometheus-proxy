@@ -18,6 +18,7 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.util.simpleClassName
 import io.prometheus.ProxyTests.ProxyCallTestArgs
 import io.prometheus.ProxyTests.proxyCallTest
 import io.prometheus.ProxyTests.timeoutTest
@@ -30,7 +31,6 @@ import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.delay
-import io.prometheus.common.simpleClassName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -43,70 +43,70 @@ import kotlin.time.seconds
 
 class NettyTestWithAdminMetricsTest {
 
-    @Test
-    fun missingPathTest() = missingPathTest(simpleClassName)
+  @Test
+  fun missingPathTest() = missingPathTest(simpleClassName)
 
-    @Test
-    fun invalidPathTest() = invalidPathTest(simpleClassName)
+  @Test
+  fun invalidPathTest() = invalidPathTest(simpleClassName)
 
-    @Test
-    fun addRemovePathsTest() = addRemovePathsTest(agent.pathManager, simpleClassName)
+  @Test
+  fun addRemovePathsTest() = addRemovePathsTest(agent.pathManager, simpleClassName)
 
-    @Test
-    fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent.pathManager, simpleClassName)
+  @Test
+  fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent.pathManager, simpleClassName)
 
-    @Test
-    fun invalidAgentUrlTest() = invalidAgentUrlTest(agent.pathManager, simpleClassName)
+  @Test
+  fun invalidAgentUrlTest() = invalidAgentUrlTest(agent.pathManager, simpleClassName)
 
-    @Test
-    fun timeoutTest() = timeoutTest(agent.pathManager, simpleClassName)
+  @Test
+  fun timeoutTest() = timeoutTest(agent.pathManager, simpleClassName)
 
-    @Test
-    fun proxyCallTest() =
-        proxyCallTest(ProxyCallTestArgs(agent.pathManager,
-                                        httpServerCount = 5,
-                                        pathCount = 25,
-                                        sequentialQueryCount = 100,
-                                        parallelQueryCount = 250,
-                                        startingPort = 10900,
-                                        caller = simpleClassName))
+  @Test
+  fun proxyCallTest() =
+    proxyCallTest(ProxyCallTestArgs(agent.pathManager,
+                                    httpServerCount = 5,
+                                    pathCount = 25,
+                                    sequentialQueryCount = 100,
+                                    parallelQueryCount = 250,
+                                    startPort = 10900,
+                                    caller = simpleClassName))
 
-    companion object : KLogging() {
-        private lateinit var proxy: Proxy
-        private lateinit var agent: Agent
+  companion object : KLogging() {
+    private lateinit var proxy: Proxy
+    private lateinit var agent: Agent
 
-        @JvmStatic
-        @BeforeAll
-        fun setUp() {
-            CollectorRegistry.defaultRegistry.clear()
+    @JvmStatic
+    @BeforeAll
+    fun setUp() {
+      CollectorRegistry.defaultRegistry.clear()
 
-            runBlocking {
-                launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, metricsEnabled = true) }
-                launch(Dispatchers.Default) {
-                    agent = startAgent(adminEnabled = true, metricsEnabled = true)
-                        .apply { awaitInitialConnection(10.seconds) }
-                }
-            }
-
-            // Wait long enough to trigger heartbeat for code coverage
-            runBlocking {
-                delay(15.seconds)
-            }
-
-            logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+      runBlocking {
+        launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, metricsEnabled = true) }
+        launch(Dispatchers.Default) {
+          agent = startAgent(adminEnabled = true, metricsEnabled = true)
+            .apply { awaitInitialConnection(10.seconds) }
         }
+      }
 
-        @JvmStatic
-        @AfterAll
-        @Throws(InterruptedException::class, TimeoutException::class)
-        fun takeDown() {
-            runBlocking {
-                for (service in listOf(proxy, agent)) {
-                    logger.info { "Stopping ${service.simpleClassName}" }
-                    launch(Dispatchers.Default) { service.stopSync() }
-                }
-            }
-            logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-        }
+      // Wait long enough to trigger heartbeat for code coverage
+      runBlocking {
+        delay(15.seconds)
+      }
+
+      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
     }
+
+    @JvmStatic
+    @AfterAll
+    @Throws(InterruptedException::class, TimeoutException::class)
+    fun takeDown() {
+      runBlocking {
+        for (service in listOf(proxy, agent)) {
+          logger.info { "Stopping ${service.simpleClassName}" }
+          launch(Dispatchers.Default) { service.stopSync() }
+        }
+      }
+      logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+    }
+  }
 }

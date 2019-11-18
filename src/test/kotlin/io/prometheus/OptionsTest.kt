@@ -28,70 +28,70 @@ import org.junit.jupiter.api.Test
 
 class OptionsTest {
 
-    @Test
-    fun verifyDefaultValues() {
-        val configVals = readProxyOptions(listOf())
-        configVals.proxy
-            .apply {
-                http.port shouldEqual 8080
-                internal.zipkin.enabled.shouldBeFalse()
-            }
-    }
+  @Test
+  fun verifyDefaultValues() {
+    val configVals = readProxyOptions(listOf())
+    configVals.proxy
+      .apply {
+        http.port shouldEqual 8080
+        internal.zipkin.enabled.shouldBeFalse()
+      }
+  }
 
-    @Test
-    fun verifyConfValues() {
-        val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG))
-        configVals.proxy
-            .apply {
-                http.port shouldEqual 8181
-                internal.zipkin.enabled.shouldBeTrue()
-            }
-    }
+  @Test
+  fun verifyConfValues() {
+    val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG))
+    configVals.proxy
+      .apply {
+        http.port shouldEqual 8181
+        internal.zipkin.enabled.shouldBeTrue()
+      }
+  }
 
-    @Test
-    fun verifyUnquotedPropValue() {
-        val configVals = readProxyOptions(listOf("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"))
-        configVals.proxy
-            .apply {
-                http.port shouldEqual 9393
-                internal.zipkin.enabled.shouldBeTrue()
-            }
-    }
+  @Test
+  fun verifyUnquotedPropValue() {
+    val configVals = readProxyOptions(listOf("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"))
+    configVals.proxy
+      .apply {
+        http.port shouldEqual 9393
+        internal.zipkin.enabled.shouldBeTrue()
+      }
+  }
 
-    @Test
-    fun verifyQuotedPropValue() {
-        val configVals = readProxyOptions(listOf("-Dproxy.http.port=9394"))
-        configVals.proxy.http.port shouldEqual 9394
-    }
+  @Test
+  fun verifyQuotedPropValue() {
+    val configVals = readProxyOptions(listOf("-Dproxy.http.port=9394"))
+    configVals.proxy.http.port shouldEqual 9394
+  }
 
-    @Test
-    fun verifyPathConfigs() {
-        val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
-        configVals.agent.pathConfigs.size shouldEqual 3
-    }
+  @Test
+  fun verifyPathConfigs() {
+    val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
+    configVals.agent.pathConfigs.size shouldEqual 3
+  }
 
-    @Test
-    fun verifyProxyDefaults() {
-        ProxyOptions(listOf())
-            .apply {
-                proxyHttpPort shouldEqual 8080
-                proxyAgentPort shouldEqual 50051
-            }
-    }
+  @Test
+  fun verifyProxyDefaults() {
+    ProxyOptions(listOf())
+      .apply {
+        proxyHttpPort shouldEqual 8080
+        proxyAgentPort shouldEqual 50051
+      }
+  }
 
-    @Test
-    fun verifyAgentDefaults() {
-        val options = AgentOptions(listOf("--name", "test-name", "--proxy", "host5"), false)
-        options
-            .apply {
-                metricsEnabled shouldEqual false
-                dynamicParams.size shouldEqual 0
-                agentName shouldEqual "test-name"
-                proxyHostname shouldEqual "host5"
-            }
-    }
+  @Test
+  fun verifyAgentDefaults() {
+    val options = AgentOptions(listOf("--name", "test-name", "--proxy", "host5"), false)
+    options
+      .apply {
+        metricsEnabled shouldEqual false
+        dynamicParams.size shouldEqual 0
+        agentName shouldEqual "test-name"
+        proxyHostname shouldEqual "host5"
+      }
+  }
 
-    private fun readProxyOptions(argList: List<String>) = ProxyOptions(argList).configVals
+  private fun readProxyOptions(argList: List<String>) = ProxyOptions(argList).configVals
 
-    private fun readAgentOptions(argList: List<String>) = AgentOptions(argList, false).configVals
+  private fun readAgentOptions(argList: List<String>) = AgentOptions(argList, false).configVals
 }

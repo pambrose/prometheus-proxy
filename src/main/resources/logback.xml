@@ -28,6 +28,8 @@
     <logger name="spark.http.matching" level="WARN"/>
     <logger name="io.ktor.server.engine" level="WARN"/>
 
+    <logger name="io.prometheus.agent.AgentUtils" level="INFO"/>
+
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
     </root>

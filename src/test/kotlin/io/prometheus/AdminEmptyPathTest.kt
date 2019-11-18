@@ -19,12 +19,12 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import com.github.pambrose.common.util.simpleClassName
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.ConfigVals
-import io.prometheus.common.simpleClassName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -39,93 +39,93 @@ import kotlin.time.seconds
 
 class AdminEmptyPathTest {
 
-    private val proxyConfigVals: ConfigVals.Proxy2 = proxy.genericConfigVals.proxy
+  private val proxyConfigVals: ConfigVals.Proxy2 = proxy.genericConfigVals.proxy
 
-    @Test
-    fun proxyPingPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                admin.port shouldEqual 8098
-                admin.pingPath shouldEqual ""
+  @Test
+  fun proxyPingPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        admin.port shouldEqual 8098
+        admin.pingPath shouldEqual ""
 
-                blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.NotFound
-                }
-            }
-    }
-
-    @Test
-    fun proxyVersionPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                admin.port shouldEqual 8098
-                admin.versionPath shouldEqual ""
-
-                blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.NotFound
-                }
-            }
-    }
-
-    @Test
-    fun proxyHealthCheckPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                admin.healthCheckPath shouldEqual ""
-
-                blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.NotFound
-                }
-            }
-    }
-
-    @Test
-    fun proxyThreadDumpPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                admin.threadDumpPath shouldEqual ""
-
-                blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.NotFound
-                }
-            }
-    }
-
-    companion object : KLogging() {
-        private lateinit var proxy: Proxy
-        private lateinit var agent: Agent
-
-        @JvmStatic
-        @BeforeAll
-        @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
-        fun setUp() {
-            CollectorRegistry.defaultRegistry.clear()
-            val args = listOf("-Dproxy.admin.port=8098",
-                              "-Dproxy.admin.pingPath=\"\"",
-                              "-Dproxy.admin.versionPath=\"\"",
-                              "-Dproxy.admin.healthCheckPath=\"\"",
-                              "-Dproxy.admin.threadDumpPath=\"\"")
-
-            runBlocking {
-                launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = args) }
-                launch(Dispatchers.Default) {
-                    agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
-                }
-            }
-            logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+        blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.NotFound
         }
+      }
+  }
 
-        @JvmStatic
-        @AfterAll
-        @Throws(InterruptedException::class, TimeoutException::class)
-        fun takeDown() {
-            runBlocking {
-                for (service in listOf(proxy, agent)) {
-                    logger.info { "Stopping ${service.simpleClassName}" }
-                    launch(Dispatchers.Default) { service.stopSync() }
-                }
-            }
-            logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+  @Test
+  fun proxyVersionPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        admin.port shouldEqual 8098
+        admin.versionPath shouldEqual ""
+
+        blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.NotFound
         }
+      }
+  }
+
+  @Test
+  fun proxyHealthCheckPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        admin.healthCheckPath shouldEqual ""
+
+        blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.NotFound
+        }
+      }
+  }
+
+  @Test
+  fun proxyThreadDumpPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        admin.threadDumpPath shouldEqual ""
+
+        blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.NotFound
+        }
+      }
+  }
+
+  companion object : KLogging() {
+    private lateinit var proxy: Proxy
+    private lateinit var agent: Agent
+
+    @JvmStatic
+    @BeforeAll
+    @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
+    fun setUp() {
+      CollectorRegistry.defaultRegistry.clear()
+      val args = listOf("-Dproxy.admin.port=8098",
+                        "-Dproxy.admin.pingPath=\"\"",
+                        "-Dproxy.admin.versionPath=\"\"",
+                        "-Dproxy.admin.healthCheckPath=\"\"",
+                        "-Dproxy.admin.threadDumpPath=\"\"")
+
+      runBlocking {
+        launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = args) }
+        launch(Dispatchers.Default) {
+          agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
+        }
+      }
+      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
     }
+
+    @JvmStatic
+    @AfterAll
+    @Throws(InterruptedException::class, TimeoutException::class)
+    fun takeDown() {
+      runBlocking {
+        for (service in listOf(proxy, agent)) {
+          logger.info { "Stopping ${service.simpleClassName}" }
+          launch(Dispatchers.Default) { service.stopSync() }
+        }
+      }
+      logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+    }
+  }
 }

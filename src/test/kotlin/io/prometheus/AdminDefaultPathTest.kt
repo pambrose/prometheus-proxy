@@ -19,12 +19,12 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import com.github.pambrose.common.util.simpleClassName
 import io.ktor.client.response.readText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.simpleClassName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -42,121 +42,121 @@ import kotlin.time.seconds
 
 class AdminDefaultPathTest {
 
-    private val agentConfigVals = agent.genericConfigVals.agent
-    private val proxyConfigVals = proxy.genericConfigVals.proxy
+  private val agentConfigVals = agent.genericConfigVals.agent
+  private val proxyConfigVals = proxy.genericConfigVals.proxy
 
-    @Test
-    fun proxyPingPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.OK
-                    resp.readText() shouldStartWith "pong"
-                }
-            }
-    }
-
-    @Test
-    fun agentPingPathTest() {
-        agentConfigVals.admin
-            .also { admin ->
-                blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.OK
-                    resp.readText() shouldStartWith "pong"
-                }
-            }
-    }
-
-    @Test
-    fun proxyVersionPathTest() {
-        agentConfigVals.admin
-            .also { admin ->
-                blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.OK
-                    resp.readText() shouldContain "Version"
-                }
-            }
-    }
-
-    @Test
-    fun agentVersionPathTest() {
-        agentConfigVals.admin
-            .also { admin ->
-                blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.OK
-                    resp.readText() shouldContain "Version"
-                }
-            }
-    }
-
-    @Test
-    fun proxyHealthCheckPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
-                    resp.status shouldEqual HttpStatusCode.OK
-                    resp.readText().length shouldBeGreaterThan 10
-                }
-            }
-    }
-
-    @Test
-    fun agentHealthCheckPathTest() {
-        agentConfigVals.admin
-            .also { admin ->
-                blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
-                    resp.readText().length shouldBeGreaterThan 10
-                }
-            }
-    }
-
-    @Test
-    fun proxyThreadDumpPathTest() {
-        proxyConfigVals.admin
-            .also { admin ->
-                blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
-                    resp.readText().length shouldBeGreaterThan 10
-                }
-            }
-    }
-
-    @Test
-    fun agentThreadDumpPathTest() {
-        blockingGet("${agentConfigVals.admin.port}/${agentConfigVals.admin.threadDumpPath}".fixUrl()) { resp ->
-            resp.readText().length shouldBeGreaterThan 10
+  @Test
+  fun proxyPingPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.OK
+          resp.readText() shouldStartWith "pong"
         }
+      }
+  }
+
+  @Test
+  fun agentPingPathTest() {
+    agentConfigVals.admin
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.OK
+          resp.readText() shouldStartWith "pong"
+        }
+      }
+  }
+
+  @Test
+  fun proxyVersionPathTest() {
+    agentConfigVals.admin
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.OK
+          resp.readText() shouldContain "Version"
+        }
+      }
+  }
+
+  @Test
+  fun agentVersionPathTest() {
+    agentConfigVals.admin
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.OK
+          resp.readText() shouldContain "Version"
+        }
+      }
+  }
+
+  @Test
+  fun proxyHealthCheckPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
+          resp.status shouldEqual HttpStatusCode.OK
+          resp.readText().length shouldBeGreaterThan 10
+        }
+      }
+  }
+
+  @Test
+  fun agentHealthCheckPathTest() {
+    agentConfigVals.admin
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
+          resp.readText().length shouldBeGreaterThan 10
+        }
+      }
+  }
+
+  @Test
+  fun proxyThreadDumpPathTest() {
+    proxyConfigVals.admin
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
+          resp.readText().length shouldBeGreaterThan 10
+        }
+      }
+  }
+
+  @Test
+  fun agentThreadDumpPathTest() {
+    blockingGet("${agentConfigVals.admin.port}/${agentConfigVals.admin.threadDumpPath}".fixUrl()) { resp ->
+      resp.readText().length shouldBeGreaterThan 10
+    }
+  }
+
+  companion object : KLogging() {
+    private lateinit var proxy: Proxy
+    private lateinit var agent: Agent
+
+    @JvmStatic
+    @BeforeAll
+    @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
+    fun setUp() {
+      CollectorRegistry.defaultRegistry.clear()
+
+      runBlocking {
+        launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true) }
+        launch(Dispatchers.Default) {
+          agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
+        }
+      }
+      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
     }
 
-    companion object : KLogging() {
-        private lateinit var proxy: Proxy
-        private lateinit var agent: Agent
-
-        @JvmStatic
-        @BeforeAll
-        @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
-        fun setUp() {
-            CollectorRegistry.defaultRegistry.clear()
-
-            runBlocking {
-                launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true) }
-                launch(Dispatchers.Default) {
-                    agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
-                }
-            }
-            logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+    @JvmStatic
+    @AfterAll
+    @Throws(InterruptedException::class, TimeoutException::class)
+    fun takeDown() {
+      runBlocking {
+        for (service in listOf(proxy, agent)) {
+          logger.info { "Stopping ${service.simpleClassName}" }
+          launch(Dispatchers.Default) { service.stopSync() }
         }
-
-        @JvmStatic
-        @AfterAll
-        @Throws(InterruptedException::class, TimeoutException::class)
-        fun takeDown() {
-            runBlocking {
-                for (service in listOf(proxy, agent)) {
-                    logger.info { "Stopping ${service.simpleClassName}" }
-                    launch(Dispatchers.Default) { service.stopSync() }
-                }
-            }
-            logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-        }
+      }
+      logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
     }
+  }
 }

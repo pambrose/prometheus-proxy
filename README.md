@@ -97,24 +97,23 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-docker pull pambrose/prometheus-proxy:1.4.2
-docker pull pambrose/prometheus-agent:1.4.2
+docker pull pambrose/prometheus-proxy:1.4.3
+docker pull pambrose/prometheus-agent:1.4.3
 ```
 
 Start the proxy and an agent in separate shells on your local machine:
 
 ```bash
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
-        -e HOSTNAME=${HOSTNAME} \
+        -e ADMIN_ENABLED=true \
         -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.4.2
+        pambrose/prometheus-proxy:1.4.3
 ```
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
-        -e HOSTNAME=${HOSTNAME} \
         -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.4.2
+        pambrose/prometheus-agent:1.4.3
 ```
 
 If you want to be able to externalize your `agent` config file on your local machine (or VM) file system (instead of the above HTTP served config file), you'll need to add the Docker `volume` definition to the command:
@@ -122,17 +121,16 @@ If you want to be able to externalize your `agent` config file on your local mac
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
     -v ${PWD}/prom-agent.conf:/prom-agent.conf \
-    -e HOSTNAME=${HOSTNAME} \
     -e AGENT_CONFIG=/prom-agent.conf \
-    pambrose/prometheus-agent:1.4.2
+    pambrose/prometheus-agent:1.4.3
 ```
 
 The above assumes that you have the file `prom-agent.conf` in the current directory from which you're running the `docker` command.
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy on *localhost* at:
-*   http://localohost:8082/proxy_metrics
-*   http://localohost:8083/agent_metrics
+*   http://localhost:8082/proxy_metrics
+*   http://localhost:8083/agent_metrics
 
 ## Configuration
 

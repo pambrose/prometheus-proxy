@@ -31,64 +31,64 @@ import java.nio.channels.ClosedSelectorException
 import java.util.concurrent.TimeoutException
 
 object TestUtils : KLogging() {
-    @Throws(IOException::class, TimeoutException::class)
-    fun startProxy(serverName: String = "",
-                   adminEnabled: Boolean = false,
-                   metricsEnabled: Boolean = false,
-                   argv: List<String> = emptyList()): Proxy {
+  @Throws(IOException::class, TimeoutException::class)
+  fun startProxy(serverName: String = "",
+                 adminEnabled: Boolean = false,
+                 metricsEnabled: Boolean = false,
+                 argv: List<String> = emptyList()): Proxy {
 
-        logger.apply {
-            info { getBanner("banners/proxy.txt", logger) }
-            info { getVersionDesc(false) }
-        }
-
-        val proxyOptions = ProxyOptions(mutableListOf<String>()
-                                            .apply {
-                                                addAll(TestConstants.args)
-                                                addAll(argv)
-                                                add("-Dproxy.admin.enabled=$adminEnabled")
-                                                add("-Dproxy.metrics.enabled=$metricsEnabled")
-                                            })
-        return Proxy(options = proxyOptions,
-                     proxyHttpPort = PROXY_PORT,
-                     inProcessServerName = serverName,
-                     testMode = true) { startSync() }
+    logger.apply {
+      info { getBanner("banners/proxy.txt", logger) }
+      info { getVersionDesc(false) }
     }
 
-    @Throws(IOException::class, TimeoutException::class)
-    fun startAgent(serverName: String = "",
-                   adminEnabled: Boolean = false,
-                   metricsEnabled: Boolean = false,
-                   argv: List<String> = emptyList()): Agent {
+    val proxyOptions = ProxyOptions(mutableListOf<String>()
+                                      .apply {
+                                        addAll(TestConstants.args)
+                                        addAll(argv)
+                                        add("-Dproxy.admin.enabled=$adminEnabled")
+                                        add("-Dproxy.metrics.enabled=$metricsEnabled")
+                                      })
+    return Proxy(options = proxyOptions,
+                 proxyHttpPort = PROXY_PORT,
+                 inProcessServerName = serverName,
+                 testMode = true) { startSync() }
+  }
 
-        logger.apply {
-            info { getBanner("banners/agent.txt", logger) }
-            info { getVersionDesc(false) }
-        }
+  @Throws(IOException::class, TimeoutException::class)
+  fun startAgent(serverName: String = "",
+                 adminEnabled: Boolean = false,
+                 metricsEnabled: Boolean = false,
+                 argv: List<String> = emptyList()): Agent {
 
-        val agentOptions = AgentOptions(mutableListOf<String>()
-                                            .apply {
-                                                addAll(TestConstants.args)
-                                                addAll(argv)
-                                                add("-Dagent.admin.enabled=$adminEnabled")
-                                                add("-Dagent.metrics.enabled=$metricsEnabled")
-                                            },
-                                        false)
-        return Agent(options = agentOptions,
-                     inProcessServerName = serverName,
-                     testMode = true) { startSync() }
+    logger.apply {
+      info { getBanner("banners/agent.txt", logger) }
+      info { getVersionDesc(false) }
     }
+
+    val agentOptions = AgentOptions(mutableListOf<String>()
+                                      .apply {
+                                        addAll(TestConstants.args)
+                                        addAll(argv)
+                                        add("-Dagent.admin.enabled=$adminEnabled")
+                                        add("-Dagent.metrics.enabled=$metricsEnabled")
+                                      },
+                                    false)
+    return Agent(options = agentOptions,
+                 inProcessServerName = serverName,
+                 testMode = true) { startSync() }
+  }
 }
 
 fun coroutineExceptionHandler(logger: KLogger) =
-    CoroutineExceptionHandler { _, e ->
-        if (e is ClosedSelectorException)
-            logger.info { "CoroutineExceptionHandler caught: $e" }
-        else
-            logger.warn(e) { "CoroutineExceptionHandler caught: $e" }
-    }
+  CoroutineExceptionHandler { _, e ->
+    if (e is ClosedSelectorException)
+      logger.info { "CoroutineExceptionHandler caught: $e" }
+    else
+      logger.warn(e) { "CoroutineExceptionHandler caught: $e" }
+  }
 
 fun String.fixUrl(): String {
-    val prefix = "http://localhost:"
-    return if (this.startsWith(prefix)) this else (prefix + this)
+  val prefix = "http://localhost:"
+  return if (this.startsWith(prefix)) this else (prefix + this)
 }

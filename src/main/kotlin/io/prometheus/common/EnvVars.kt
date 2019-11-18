@@ -22,25 +22,25 @@ import java.lang.System.getenv
 
 enum class EnvVars {
 
-    // Proxy
-    PROXY_CONFIG,
-    PROXY_PORT,
-    AGENT_PORT,
+  // Proxy
+  PROXY_CONFIG,
+  PROXY_PORT,
+  AGENT_PORT,
 
-    // Agent
-    AGENT_CONFIG,
-    PROXY_HOSTNAME,
-    AGENT_NAME,
+  // Agent
+  AGENT_CONFIG,
+  PROXY_HOSTNAME,
+  AGENT_NAME,
 
-    // Common
-    METRICS_ENABLED,
-    METRICS_PORT,
-    ADMIN_ENABLED,
-    ADMIN_PORT;
+  // Common
+  METRICS_ENABLED,
+  METRICS_PORT,
+  ADMIN_ENABLED,
+  ADMIN_PORT;
 
-    fun getEnv(defaultVal: String) = getenv(name) ?: defaultVal
+  fun getEnv(defaultVal: String) = getenv(name) ?: defaultVal
 
-    fun getEnv(defaultVal: Boolean) = getenv(name)?.toBoolean() ?: defaultVal
+  fun getEnv(defaultVal: Boolean) = getenv(name)?.toBoolean() ?: defaultVal
 
-    fun getEnv(defaultVal: Int) = getenv(name)?.toInt() ?: defaultVal
+  fun getEnv(defaultVal: Int) = getenv(name)?.toInt() ?: defaultVal
 }

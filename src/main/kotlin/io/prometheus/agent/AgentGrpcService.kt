@@ -36,71 +36,71 @@ import kotlin.properties.Delegates.notNull
 class AgentGrpcService(private val agent: Agent,
                        options: AgentOptions,
                        private val inProcessServerName: String) {
-    private var grpcStarted = AtomicBoolean(false)
+  private var grpcStarted = AtomicBoolean(false)
 
-    private var tracing: Tracing by notNull()
-    var channel: ManagedChannel by nonNullableReference()
-    private var grpcTracing: GrpcTracing by notNull()
-    var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
-    var asyncStub: ProxyServiceStub by nonNullableReference()
+  private var tracing: Tracing by notNull()
+  var channel: ManagedChannel by nonNullableReference()
+  private var grpcTracing: GrpcTracing by notNull()
+  var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
+  var asyncStub: ProxyServiceStub by nonNullableReference()
 
-    val hostName: String
-    val port: Int
+  val hostName: String
+  val port: Int
 
-    init {
-        val schemeStripped =
-            options.proxyHostname.run {
-                when {
-                    startsWith("http://") -> removePrefix("http://")
-                    startsWith("https://") -> removePrefix("https://")
-                    else -> this
-                }
-            }
-
-        if (schemeStripped.contains(":")) {
-            val vals = schemeStripped.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-            hostName = vals[0]
-            port = Integer.valueOf(vals[1])
-        } else {
-            hostName = schemeStripped
-            port = 50051
+  init {
+    val schemeStripped =
+      options.proxyHostname.run {
+        when {
+          startsWith("http://") -> removePrefix("http://")
+          startsWith("https://") -> removePrefix("https://")
+          else -> this
         }
+      }
 
-        if (agent.isZipkinEnabled) {
-            tracing = agent.zipkinReporterService.newTracing("grpc_client")
-            grpcTracing = GrpcTracing.create(tracing)
-        }
-
-        resetGrpcStubs()
+    if (schemeStripped.contains(":")) {
+      val vals = schemeStripped.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+      hostName = vals[0]
+      port = Integer.valueOf(vals[1])
+    } else {
+      hostName = schemeStripped
+      port = 50051
     }
 
-    fun shutDown() {
+    if (agent.isZipkinEnabled) {
+      tracing = agent.zipkinReporterService.newTracing("grpc_client")
+      grpcTracing = GrpcTracing.create(tracing)
+    }
+
+    resetGrpcStubs()
+  }
+
+  fun shutDown() {
+    if (agent.isZipkinEnabled)
+      tracing.close()
+    if (grpcStarted.get())
+      channel.shutdownNow()
+  }
+
+  fun resetGrpcStubs() {
+    logger.info { "Creating gRPC stubs" }
+
+    if (grpcStarted.get())
+      shutDown()
+    else
+      grpcStarted.set(true)
+
+    channel =
+      channel(inProcessServerName = inProcessServerName,
+              hostName = hostName,
+              port = port) {
         if (agent.isZipkinEnabled)
-            tracing.close()
-        if (grpcStarted.get())
-            channel.shutdownNow()
-    }
+          intercept(grpcTracing.newClientInterceptor())
+        usePlaintext()
+      }
+    val interceptors: List<ClientInterceptor> = listOf(AgentClientInterceptor(agent))
+    blockingStub = ProxyServiceGrpc.newBlockingStub(ClientInterceptors.intercept(channel, interceptors))
+    asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(channel, interceptors))
+  }
 
-    fun resetGrpcStubs() {
-        logger.info { "Creating gRPC stubs" }
-
-        if (grpcStarted.get())
-            shutDown()
-        else
-            grpcStarted.set(true)
-
-        channel =
-            channel(inProcessServerName = inProcessServerName,
-                    hostName = hostName,
-                    port = port) {
-                if (agent.isZipkinEnabled)
-                    intercept(grpcTracing.newClientInterceptor())
-                usePlaintext()
-            }
-        val interceptors: List<ClientInterceptor> = listOf(AgentClientInterceptor(agent))
-        blockingStub = ProxyServiceGrpc.newBlockingStub(ClientInterceptors.intercept(channel, interceptors))
-        asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(channel, interceptors))
-    }
-
-    companion object : KLogging()
+  companion object : KLogging()
 }

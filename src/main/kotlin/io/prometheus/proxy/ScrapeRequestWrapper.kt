@@ -21,7 +21,7 @@ package io.prometheus.proxy
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.Proxy
-import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
+import io.prometheus.common.GrpcObjects.newScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
@@ -34,42 +34,42 @@ class ScrapeRequestWrapper(proxy: Proxy,
                            val agentContext: AgentContext,
                            path: String,
                            accept: String?) {
-    private val clock = MonoClock
-    private val createTimeMark = clock.markNow()
-    private val completeChannel = Channel<Boolean>()
-    private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
+  private val clock = MonoClock
+  private val createTimeMark = clock.markNow()
+  private val completeChannel = Channel<Boolean>()
+  private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
-    val scrapeRequest = newScrapeRequest(agentContext.agentId, SCRAPE_ID_GENERATOR.getAndIncrement(), path, accept)
-    var scrapeResponse: ScrapeResponse by nonNullableReference()
+  val scrapeRequest = newScrapeRequest(agentContext.agentId, SCRAPE_ID_GENERATOR.getAndIncrement(), path, accept)
+  var scrapeResponse: ScrapeResponse by nonNullableReference()
 
-    val scrapeId: Long
-        get() = scrapeRequest.scrapeId
+  val scrapeId: Long
+    get() = scrapeRequest.scrapeId
 
-    fun ageDuration() = createTimeMark.elapsedNow()
+  fun ageDuration() = createTimeMark.elapsedNow()
 
-    fun markComplete() {
-        requestTimer?.observeDuration()
-        completeChannel.close()
+  fun markComplete() {
+    requestTimer?.observeDuration()
+    completeChannel.close()
+  }
+
+  suspend fun suspendUntilComplete(waitMillis: Duration) =
+    withTimeoutOrNull(waitMillis.toLongMilliseconds()) {
+      // completeChannel will eventually close and never get a value, or timeout
+      try {
+        completeChannel.receive()
+        true
+      } catch (e: ClosedReceiveChannelException) {
+        true
+      }
+    } != null
+
+  override fun toString() =
+    toStringElements {
+      add("scrapeId", scrapeRequest.scrapeId)
+      add("path", scrapeRequest.path)
     }
 
-    suspend fun suspendUntilComplete(waitMillis: Duration) =
-        withTimeoutOrNull(waitMillis.toLongMilliseconds()) {
-            // completeChannel will eventually close and never get a value, or timeout
-            try {
-                completeChannel.receive()
-                true
-            } catch (e: ClosedReceiveChannelException) {
-                true
-            }
-        } != null
-
-    override fun toString() =
-        toStringElements {
-            add("scrapeId", scrapeRequest.scrapeId)
-            add("path", scrapeRequest.path)
-        }
-
-    companion object {
-        private val SCRAPE_ID_GENERATOR = AtomicLong(0)
-    }
+  companion object {
+    private val SCRAPE_ID_GENERATOR = AtomicLong(0)
+  }
 }

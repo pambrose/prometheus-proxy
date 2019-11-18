@@ -26,38 +26,38 @@ import mu.KLogging
 
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
-    private fun getRemoteAddr(attributes: Attributes) =
-        attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"
+  private fun getRemoteAddr(attributes: Attributes) =
+    attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"
 
-    override fun transportReady(attributes: Attributes): Attributes {
-        val agentContext = AgentContext(proxy, getRemoteAddr(attributes))
-        proxy.agentContextManager.addAgentContext(agentContext)
-        logger.info { "Connected to $agentContext" }
-        return attributes {
-            set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)
-            setAll(attributes)
-        }
+  override fun transportReady(attributes: Attributes): Attributes {
+    val agentContext = AgentContext(proxy, getRemoteAddr(attributes))
+    proxy.agentContextManager.addAgentContext(agentContext)
+    logger.info { "Connected to $agentContext" }
+    return attributes {
+      set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)
+      setAll(attributes)
     }
+  }
 
-    override fun transportTerminated(attributes: Attributes?) {
-        if (attributes == null) {
-            logger.error { "Null attributes" }
-        } else {
-            val agentId = attributes.get(Proxy.ATTRIB_AGENT_ID)
-            proxy.pathManager.removePathByAgentId(agentId)
-            val agentContext = proxy.removeAgentContext(agentId)
-            logger.info {
-                "Disconnected " +
-                        if (agentContext != null)
-                            "from $agentContext"
-                        else
-                            "with invalid agentId: $agentId"
-            }
-        }
-        super.transportTerminated(attributes)
+  override fun transportTerminated(attributes: Attributes?) {
+    if (attributes == null) {
+      logger.error { "Null attributes" }
+    } else {
+      val agentId = attributes.get(Proxy.ATTRIB_AGENT_ID)
+      proxy.pathManager.removePathByAgentId(agentId)
+      val agentContext = proxy.removeAgentContext(agentId)
+      logger.info {
+        "Disconnected " +
+            if (agentContext != null)
+              "from $agentContext"
+            else
+              "with invalid agentId: $agentId"
+      }
     }
+    super.transportTerminated(attributes)
+  }
 
-    companion object : KLogging() {
-        val REMOTE_ADDR_KEY: Attributes.Key<String> = Attributes.Key.create("remote-addr")
-    }
+  companion object : KLogging() {
+    val REMOTE_ADDR_KEY: Attributes.Key<String> = Attributes.Key.create("remote-addr")
+  }
 }

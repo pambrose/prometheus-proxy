@@ -40,59 +40,59 @@ import kotlin.time.seconds
 class ProxyGrpcService(private val proxy: Proxy,
                        private val port: Int = -1,
                        private val inProcessName: String = "") : GenericIdleService() {
-    val healthCheck =
-        healthCheck {
-            if (grpcServer.isShutdown || grpcServer.isShutdown)
-                HealthCheck.Result.unhealthy("gRPC server is not running")
-            else
-                HealthCheck.Result.healthy()
-        }
-
-    private var tracing: Tracing by notNull()
-    private var grpcTracing: GrpcTracing by notNull()
-    private val grpcServer: Server
-
-    init {
-        if (proxy.isZipkinEnabled) {
-            tracing = proxy.zipkinReporterService.newTracing("grpc_server")
-            grpcTracing = GrpcTracing.create(tracing)
-        }
-
-        grpcServer =
-            server(inProcessName, port) {
-                val proxyService = ProxyServiceImpl(proxy)
-                val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
-                if (proxy.isZipkinEnabled)
-                    interceptors += grpcTracing.newServerInterceptor()
-                addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
-                addTransportFilter(ProxyTransportFilter(proxy))
-            }
-        Servers.shutdownWithJvm(grpcServer, 2.seconds.toLongMilliseconds())
-
-        addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+  val healthCheck =
+    healthCheck {
+      if (grpcServer.isShutdown || grpcServer.isShutdown)
+        HealthCheck.Result.unhealthy("gRPC server is not running")
+      else
+        HealthCheck.Result.healthy()
     }
 
-    @Throws(IOException::class)
-    override fun startUp() {
-        grpcServer.start()
+  private var tracing: Tracing by notNull()
+  private var grpcTracing: GrpcTracing by notNull()
+  private val grpcServer: Server
+
+  init {
+    if (proxy.isZipkinEnabled) {
+      tracing = proxy.zipkinReporterService.newTracing("grpc_server")
+      grpcTracing = GrpcTracing.create(tracing)
     }
 
-    override fun shutDown() {
+    grpcServer =
+      server(inProcessName, port) {
+        val proxyService = ProxyServiceImpl(proxy)
+        val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
         if (proxy.isZipkinEnabled)
-            tracing.close()
-        Servers.shutdownGracefully(grpcServer, 2.seconds.toLongMilliseconds())
+          interceptors += grpcTracing.newServerInterceptor()
+        addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
+        addTransportFilter(ProxyTransportFilter(proxy))
+      }
+    Servers.shutdownWithJvm(grpcServer, 2.seconds.toLongMilliseconds())
+
+    addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+  }
+
+  @Throws(IOException::class)
+  override fun startUp() {
+    grpcServer.start()
+  }
+
+  override fun shutDown() {
+    if (proxy.isZipkinEnabled)
+      tracing.close()
+    Servers.shutdownGracefully(grpcServer, 2.seconds.toLongMilliseconds())
+  }
+
+  override fun toString() =
+    toStringElements {
+      if (inProcessName.isNotEmpty()) {
+        add("serverType", "InProcess")
+        add("serverName", inProcessName)
+      } else {
+        add("serverType", "Netty")
+        add("port", port)
+      }
     }
 
-    override fun toString() =
-        toStringElements {
-            if (inProcessName.isNotEmpty()) {
-                add("serverType", "InProcess")
-                add("serverName", inProcessName)
-            } else {
-                add("serverType", "Netty")
-                add("port", port)
-            }
-        }
-
-    companion object : KLogging()
+  companion object : KLogging()
 }

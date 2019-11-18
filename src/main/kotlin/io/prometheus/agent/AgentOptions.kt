@@ -27,36 +27,37 @@ import io.prometheus.common.EnvVars.AGENT_CONFIG
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
-    BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
-    constructor(args: List<String>, exitOnMissingConfig: Boolean) :
-            this(Iterables.toArray<String>(args, String::class.java), exitOnMissingConfig)
+  BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
 
-    @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
-    var proxyHostname = ""
-        private set
-    @Parameter(names = ["-n", "--name"], description = "Agent name")
-    var agentName = ""
-        private set
+  constructor(args: List<String>, exitOnMissingConfig: Boolean) :
+      this(Iterables.toArray<String>(args, String::class.java), exitOnMissingConfig)
 
-    init {
-        parseOptions()
+  @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
+  var proxyHostname = ""
+    private set
+  @Parameter(names = ["-n", "--name"], description = "Agent name")
+  var agentName = ""
+    private set
+
+  init {
+    parseOptions()
+  }
+
+  override fun assignConfigVals() {
+    if (proxyHostname.isEmpty()) {
+      val configHostname = configVals.agent.proxy.hostname
+      proxyHostname = PROXY_HOSTNAME.getEnv(if (configHostname.contains(":"))
+                                              configHostname
+                                            else
+                                              "$configHostname:${configVals.agent.proxy.port}")
     }
 
-    override fun assignConfigVals() {
-        if (proxyHostname.isEmpty()) {
-            val configHostname = configVals.agent.proxy.hostname
-            proxyHostname = PROXY_HOSTNAME.getEnv(if (configHostname.contains(":"))
-                                                      configHostname
-                                                  else
-                                                      "$configHostname:${configVals.agent.proxy.port}")
-        }
+    if (agentName.isEmpty())
+      agentName = EnvVars.AGENT_NAME.getEnv(configVals.agent.name)
 
-        if (agentName.isEmpty())
-            agentName = EnvVars.AGENT_NAME.getEnv(configVals.agent.name)
-
-        assignAdminEnabled(configVals.agent.admin.enabled)
-        assignAdminPort(configVals.agent.admin.port)
-        assignMetricsEnabled(configVals.agent.metrics.enabled)
-        assignMetricsPort(configVals.agent.metrics.port)
-    }
+    assignAdminEnabled(configVals.agent.admin.enabled)
+    assignAdminPort(configVals.agent.admin.port)
+    assignMetricsEnabled(configVals.agent.metrics.enabled)
+    assignMetricsPort(configVals.agent.metrics.port)
+  }
 }
