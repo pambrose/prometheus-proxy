@@ -62,9 +62,10 @@ class AgentContext(proxy: Proxy, private val remoteAddr: String) {
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
-    scrapeRequestChannel.receiveOrNull()?.also {
-      channelBacklogSize.decrementAndGet()
-    }
+    scrapeRequestChannel.receiveOrNull()
+      ?.also {
+        channelBacklogSize.decrementAndGet()
+      }
 
   fun isValid() = valid.get() && !scrapeRequestChannel.isClosedForReceive
 

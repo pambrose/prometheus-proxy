@@ -23,12 +23,15 @@ import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.google.common.net.HttpHeaders.ACCEPT
-import com.google.common.net.HttpHeaders.ACCEPT_ENCODING
-import com.google.common.net.HttpHeaders.CONTENT_ENCODING
 import com.google.common.util.concurrent.MoreExecutors
+import io.ktor.application.ApplicationCall
 import io.ktor.application.call
 import io.ktor.application.install
+import io.ktor.features.Compression
 import io.ktor.features.DefaultHeaders
+import io.ktor.features.deflate
+import io.ktor.features.gzip
+import io.ktor.features.minimumSize
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -65,6 +68,15 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
       install(DefaultHeaders)
       //install(CallLogging)
+      install(Compression) {
+        gzip {
+          priority = 1.0
+        }
+        deflate {
+          priority = 10.0
+          minimumSize(1024) // condition
+        }
+      }
 
       routing {
         get("/*") {
@@ -82,6 +94,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                 statusCode = HttpStatusCode.ServiceUnavailable
               }
             }
+
             path.isEmpty() -> {
               logger.info { "Request missing path" }
               arg.apply {
@@ -89,6 +102,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                 statusCode = HttpStatusCode.NotFound
               }
             }
+
             configVals.internal.blitz.enabled && path == configVals.internal.blitz.path ->
               arg.contentText = "42"
             agentContext == null -> {
@@ -98,6 +112,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                 statusCode = HttpStatusCode.NotFound
               }
             }
+
             !agentContext.isValid() -> {
               logger.error { "Invalid AgentContext" }
               arg.apply {
@@ -105,6 +120,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                 statusCode = HttpStatusCode.NotFound
               }
             }
+
             else -> {
               val resp = submitScrapeRequest(call.request, call.response, agentContext, path)
               arg.apply {
@@ -117,10 +133,21 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
           }
 
           updateScrapeRequests(arg.updateMsg)
-          call.respondText(text = arg.contentText, contentType = arg.contentType, status = arg.statusCode)
+
+          call.respondWith(text = arg.contentText, contentType = arg.contentType, status = arg.statusCode)
         }
       }
     }
+
+  suspend fun ApplicationCall.respondWith(text: String,
+                                          contentType: ContentType = ContentType.Text.Plain,
+                                          status: HttpStatusCode = HttpStatusCode.OK) {
+    apply {
+      response.header("cache-control", "must-revalidate,no-cache,no-store")
+      response.status(status)
+      respondText(text, contentType)
+    }
+  }
 
   class ResponseArg(var contentText: String = "",
                     var contentType: ContentType = ContentType.Text.Plain,
@@ -171,8 +198,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
       while (!scrapeRequest.suspendUntilComplete(checkTime)) {
         // Check if agent is disconnected or agent is hung
         if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
-          return ScrapeRequestResponse(statusCode = HttpStatusCode.ServiceUnavailable,
-                                       updateMsg = "timed_out")
+          return ScrapeRequestResponse(statusCode = HttpStatusCode.ServiceUnavailable, updateMsg = "timed_out")
       }
     } finally {
       proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeRequest)
@@ -181,31 +207,31 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
     logger.debug { "Results returned from $agentContext for $scrapeRequest" }
 
-    scrapeRequest.scrapeResponse.also { scrapeResponse ->
-      HttpStatusCode.fromValue(scrapeResponse.statusCode).also { statusCode ->
-        scrapeResponse.contentType.split("/").also { contentTypeElems ->
+    scrapeRequest.scrapeResponse
+      .also { scrapeResponse ->
+        HttpStatusCode.fromValue(scrapeResponse.statusCode).also { statusCode ->
+          scrapeResponse.contentType.split("/")
+            .also { contentTypeElems ->
+              val contentType =
+                if (contentTypeElems.size == 2)
+                  ContentType(contentTypeElems[0], contentTypeElems[1])
+                else
+                  ContentType.Text.Plain
 
-          val contentType =
-            if (contentTypeElems.size == 2)
-              ContentType(contentTypeElems[0], contentTypeElems[1])
-            else
-              ContentType.Text.Plain
-
-          // Do not return content on error status codes
-          return if (!statusCode.isSuccess()) {
-            ScrapeRequestResponse(contentType = contentType,
-                                  statusCode = statusCode,
-                                  updateMsg = "path_not_found")
-          } else {
-            req.header(ACCEPT_ENCODING)?.contains("gzip")?.let { res.header(CONTENT_ENCODING, "gzip") }
-            ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
-                                  contentType = contentType,
-                                  statusCode = statusCode,
-                                  updateMsg = "success")
-          }
+              // Do not return content on error status codes
+              return if (!statusCode.isSuccess()) {
+                ScrapeRequestResponse(contentType = contentType,
+                                      statusCode = statusCode,
+                                      updateMsg = "path_not_found")
+              } else {
+                ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
+                                      contentType = contentType,
+                                      statusCode = statusCode,
+                                      updateMsg = "success")
+              }
+            }
         }
       }
-    }
   }
 
   private fun updateScrapeRequests(type: String) {

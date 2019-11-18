@@ -24,11 +24,11 @@ import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
 import io.prometheus.Proxy
-import io.prometheus.common.GrpcObjects.Companion.newHeartBeatResponse
-import io.prometheus.common.GrpcObjects.Companion.newPathMapSizeResponse
-import io.prometheus.common.GrpcObjects.Companion.newRegisterAgentResponse
-import io.prometheus.common.GrpcObjects.Companion.newRegisterPathResponse
-import io.prometheus.common.GrpcObjects.Companion.newUnregisterPathResponseBuilder
+import io.prometheus.common.GrpcObjects.newHeartBeatResponse
+import io.prometheus.common.GrpcObjects.newPathMapSizeResponse
+import io.prometheus.common.GrpcObjects.newRegisterAgentResponse
+import io.prometheus.common.GrpcObjects.newRegisterPathResponse
+import io.prometheus.common.GrpcObjects.newUnregisterPathResponseBuilder
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.HeartBeatResponse
@@ -152,9 +152,10 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
         ?.also { agentContext ->
           runBlocking {
             while (proxy.isRunning && agentContext.isValid())
-              agentContext.readScrapeRequest()?.apply {
-                observer.onNext(scrapeRequest)
-              }
+              agentContext.readScrapeRequest()
+                ?.apply {
+                  observer.onNext(scrapeRequest)
+                }
           }
         }
       observer.onCompleted()

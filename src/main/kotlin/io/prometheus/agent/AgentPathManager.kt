@@ -42,7 +42,6 @@ class AgentPathManager(private val agent: Agent) {
               "url" to it.url)
       }
       .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
-      .toList()
 
   @Throws(RequestFailureException::class)
   fun registerPaths() =
@@ -109,5 +108,5 @@ class AgentPathManager(private val agent: Agent) {
 
   companion object : KLogging()
 
-  class PathContext(val pathId: Long, val path: String, val url: String)
+  data class PathContext(val pathId: Long, val path: String, val url: String)
 }

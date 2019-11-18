@@ -21,7 +21,7 @@ package io.prometheus.proxy
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.Proxy
-import io.prometheus.common.GrpcObjects.Companion.newScrapeRequest
+import io.prometheus.common.GrpcObjects.newScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException

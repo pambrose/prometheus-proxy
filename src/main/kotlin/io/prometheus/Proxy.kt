@@ -52,8 +52,8 @@ class Proxy(options: ProxyOptions,
             initBlock: (Proxy.() -> Unit)? = null) :
   GenericService<ConfigVals>(options.configVals,
                              newAdminConfig(options.adminEnabled,
-                                options.adminPort,
-                                options.configVals.proxy.admin),
+                                            options.adminPort,
+                                            options.configVals.proxy.admin),
                              newMetricsConfig(options.metricsEnabled,
                                               options.metricsPort,
                                               options.configVals.proxy.metrics),
@@ -78,8 +78,10 @@ class Proxy(options: ProxyOptions,
   init {
     if (isMetricsEnabled)
       metrics = ProxyMetrics(this)
+
     if (configVals.staleAgentCheckEnabled)
       agentCleanupService = AgentContextCleanupService(this) { addServices(this) }
+
     addServices(grpcService, httpService)
     initService()
     initBlock?.invoke(this)
@@ -118,8 +120,7 @@ class Proxy(options: ProxyOptions,
       .apply {
         register("grpc_service", grpcService.healthCheck)
         register("scrape_response_map_check",
-                 newMapHealthCheck(scrapeRequestManager.scrapeRequestMap,
-                                   configVals.scrapeRequestMapUnhealthySize))
+                 newMapHealthCheck(scrapeRequestManager.scrapeRequestMap, configVals.scrapeRequestMapUnhealthySize))
         register("agent_scrape_request_backlog",
                  healthCheck {
                    val unhealthySize = configVals.scrapeRequestBacklogUnhealthySize
@@ -127,7 +128,6 @@ class Proxy(options: ProxyOptions,
                      agentContextManager.agentContextMap.entries
                        .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
                        .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
-                       .toList()
                    if (vals.isEmpty()) {
                      HealthCheck.Result.healthy()
                    } else {
@@ -161,8 +161,8 @@ class Proxy(options: ProxyOptions,
     }
 
   companion object : KLogging() {
-    const val AGENT_ID = "agent-id"
-    val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
+    internal const val AGENT_ID = "agent-id"
+    internal val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
 
     @JvmStatic
     fun main(argv: Array<String>) {
