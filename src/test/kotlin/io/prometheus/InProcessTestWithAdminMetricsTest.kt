@@ -61,7 +61,7 @@ class InProcessTestWithAdminMetricsTest {
 
   @Test
   fun proxyCallTest() =
-    proxyCallTest(ProxyCallTestArgs(agent.pathManager,
+    proxyCallTest(ProxyCallTestArgs(agent,
                                     httpServerCount = 5,
                                     pathCount = 50,
                                     sequentialQueryCount = 500,

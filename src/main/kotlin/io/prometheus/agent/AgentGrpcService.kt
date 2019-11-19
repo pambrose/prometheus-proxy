@@ -21,15 +21,25 @@ package io.prometheus.agent
 import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.dsl.GrpcDsl
 import com.github.pambrose.common.dsl.GrpcDsl.channel
+import com.google.protobuf.Empty
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
+import io.grpc.Status
+import io.grpc.StatusRuntimeException
 import io.prometheus.Agent
+import io.prometheus.common.GrpcObjects
+import io.prometheus.common.GrpcObjects.newRegisterAgentRequest
+import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.properties.Delegates.notNull
 
@@ -41,8 +51,8 @@ class AgentGrpcService(private val agent: Agent,
   private var tracing: Tracing by notNull()
   var channel: ManagedChannel by nonNullableReference()
   private var grpcTracing: GrpcTracing by notNull()
-  var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
-  var asyncStub: ProxyServiceStub by nonNullableReference()
+  private var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
+  private var asyncStub: ProxyServiceStub by nonNullableReference()
 
   val hostName: String
   val port: Int
@@ -101,6 +111,149 @@ class AgentGrpcService(private val agent: Agent,
     blockingStub = ProxyServiceGrpc.newBlockingStub(ClientInterceptors.intercept(channel, interceptors))
     asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(channel, interceptors))
   }
+
+  // If successful, this will create an agentContxt on the Proxy and an interceptor will add an agent_id to the headers`
+  fun connectAgent() =
+    try {
+      logger.info { "Connecting to proxy at ${agent.proxyHost}..." }
+      blockingStub.connectAgent(Empty.getDefaultInstance())
+      logger.info { "Connected to proxy at ${agent.proxyHost}" }
+      if (agent.isMetricsEnabled)
+        agent.metrics.connects.labels("success")?.inc()
+      true
+    } catch (e: StatusRuntimeException) {
+      if (agent.isMetricsEnabled)
+        agent.metrics.connects.labels("failure")?.inc()
+      logger.info { "Cannot connect to proxy at ${agent.proxyHost} [${e.message}]" }
+      false
+    }
+
+  fun registerAgent(initialConnectionLatch: CountDownLatch) {
+    val request = newRegisterAgentRequest(agent.agentId, agent.agentName, hostName)
+    blockingStub.registerAgent(request)
+      .also { resp ->
+        agent.markMsgSent()
+        if (!resp.valid)
+          throw RequestFailureException("registerAgent() - ${resp.reason}")
+      }
+    initialConnectionLatch.countDown()
+  }
+
+  fun pathMapSize(): Int {
+    val request = GrpcObjects.newPathMapSizeRequest(agent.agentId)
+    return blockingStub.pathMapSize(request)
+      .let { resp ->
+        agent.markMsgSent()
+        resp.pathCount
+      }
+  }
+
+  fun registerPathOnProxy(path: String): Long {
+    val request = GrpcObjects.newRegisterPathRequest(agent.agentId, path)
+    return blockingStub.registerPath(request)
+      .let { resp ->
+        agent.markMsgSent()
+        if (!resp.valid)
+          throw RequestFailureException("registerPath() - ${resp.reason}")
+        resp.pathId
+      }
+  }
+
+  fun unregisterPathOnProxy(path: String) {
+    val request = GrpcObjects.newUnregisterPathRequest(agent.agentId, path)
+    blockingStub.unregisterPath(request)
+      .also { resp ->
+        agent.markMsgSent()
+        if (!resp.valid)
+          throw RequestFailureException("unregisterPath() - ${resp.reason}")
+      }
+  }
+
+  fun sendHeartBeat(disconnected: AtomicBoolean) {
+    if (agent.agentId.isEmpty())
+      return
+
+    try {
+      val request = GrpcObjects.newHeartBeatRequest(agent.agentId)
+      blockingStub
+        .sendHeartBeat(request)
+        .also { resp ->
+          agent.markMsgSent()
+          if (!resp.valid) {
+            logger.error { "AgentId ${agent.agentId} not found on proxy" }
+            throw StatusRuntimeException(Status.NOT_FOUND)
+          }
+        }
+    } catch (e: StatusRuntimeException) {
+      logger.error { "Hearbeat failed ${e.status}" }
+      disconnected.set(true)
+    }
+  }
+
+  fun readRequestsFromProxy(agentHttpService: AgentHttpService,
+                            scrapeRequestChannel: Channel<ScrapeRequestAction>,
+                            disconnected: AtomicBoolean) {
+    asyncStub
+      .readRequestsFromProxy(GrpcObjects.newAgentInfo(agent.agentId),
+                             GrpcDsl.streamObserver {
+                               onNext { req ->
+                                 // This will block, but only for the duration of the send.
+                                 // The actual fetch happens at the other end of the channel
+                                 runBlocking {
+                                   logger.debug { "readRequestsFromProxy(): \n$req" }
+                                   scrapeRequestChannel.send { agentHttpService.fetchScrapeUrl(req) }
+                                   agent.scrapeRequestBacklogSize.incrementAndGet()
+                                 }
+                               }
+
+                               onError { throwable ->
+                                 logger.error { "Error in readRequestsFromProxy(): ${Status.fromThrowable(throwable)}" }
+                                 disconnected.set(true)
+                                 scrapeRequestChannel.cancel()
+                               }
+
+                               onCompleted {
+                                 disconnected.set(true)
+                                 scrapeRequestChannel.close()
+                               }
+                             })
+  }
+
+  suspend fun writeResponsesToProxyUntilDisconnected(scrapeRequestChannel: Channel<ScrapeRequestAction>,
+                                                     disconnected: AtomicBoolean) {
+    val observer =
+      asyncStub
+        .writeResponsesToProxy(
+          GrpcDsl.streamObserver<Empty> {
+            onNext {
+              // Ignore Empty return value
+            }
+
+            onError { throwable ->
+              val s = Status.fromThrowable(throwable)
+              logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
+              disconnected.set(true)
+            }
+
+            onCompleted { disconnected.set(true) }
+          })
+
+    for (scrapeRequestAction in scrapeRequestChannel) {
+      // The fetch actually occurs here
+      val scrapeResponse = scrapeRequestAction.invoke()
+      logger.debug { "writeResponsesToProxyUntilDisconnected(): \n$scrapeResponse" }
+      observer.onNext(scrapeResponse)
+      agent.markMsgSent()
+      agent.scrapeRequestBacklogSize.decrementAndGet()
+      if (disconnected.get())
+        break
+    }
+
+    logger.info { "Disconnected from proxy at ${agent.proxyHost}" }
+
+    observer.onCompleted()
+  }
+
 
   companion object : KLogging()
 }

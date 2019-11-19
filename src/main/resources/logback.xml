@@ -25,10 +25,11 @@
     </appender>
 
     <logger name="io.grpc.internal" level="WARN"/>
-    <logger name="spark.http.matching" level="WARN"/>
     <logger name="io.ktor.server.engine" level="WARN"/>
+    <logger name="org.eclipse.jetty.server" level="WARN"/>
+    <logger name="ktor.application" level="WARN"/>
 
-    <logger name="io.prometheus.agent.AgentUtils" level="INFO"/>
+    <logger name="io.prometheus.agent.AgentHttpService" level="INFO"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT"/>

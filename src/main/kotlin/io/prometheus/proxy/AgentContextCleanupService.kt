@@ -37,7 +37,6 @@ class AgentContextCleanupService(private val proxy: Proxy,
     initBlock(this)
   }
 
-  @Throws(Exception::class)
   override fun run() {
     val maxInactivityTime = proxy.configVals.maxAgentInactivitySecs.seconds
     val pauseTime = proxy.configVals.staleAgentCheckPauseSecs.seconds

@@ -36,8 +36,6 @@ import org.amshove.kluent.shouldStartWith
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
-import java.io.IOException
-import java.util.concurrent.TimeoutException
 import kotlin.time.seconds
 
 class AdminDefaultPathTest {
@@ -133,7 +131,6 @@ class AdminDefaultPathTest {
 
     @JvmStatic
     @BeforeAll
-    @Throws(IOException::class, InterruptedException::class, TimeoutException::class)
     fun setUp() {
       CollectorRegistry.defaultRegistry.clear()
 
@@ -148,7 +145,6 @@ class AdminDefaultPathTest {
 
     @JvmStatic
     @AfterAll
-    @Throws(InterruptedException::class, TimeoutException::class)
     fun takeDown() {
       runBlocking {
         for (service in listOf(proxy, agent)) {

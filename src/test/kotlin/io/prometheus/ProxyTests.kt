@@ -99,7 +99,7 @@ object ProxyTests : KLogging() {
     }
   }
 
-  class ProxyCallTestArgs(val pathManager: AgentPathManager,
+  class ProxyCallTestArgs(val agent: Agent,
                           val httpServerCount: Int,
                           val pathCount: Int,
                           val sequentialQueryCount: Int,
@@ -115,7 +115,7 @@ object ProxyTests : KLogging() {
     val pathMap = newConcurrentMap<Int, Int>()
 
     // Take into account pre-existing paths already registered
-    val originalSize = args.pathManager.pathMapSize()
+    val originalSize = args.agent.grpcService.pathMapSize()
 
     // Create the endpoints
     logger.info { "Creating ${args.httpServerCount} httpServers" }
@@ -150,11 +150,11 @@ object ProxyTests : KLogging() {
     logger.debug { "Registering paths" }
     repeat(args.pathCount) { i ->
       val index = httpServers.size.random
-      args.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".fixUrl())
+      args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".fixUrl())
       pathMap[i] = index
     }
 
-    args.pathManager.pathMapSize() shouldEqual originalSize + args.pathCount
+    args.agent.grpcService.pathMapSize() shouldEqual originalSize + args.pathCount
 
     // Call the proxy sequentially
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
@@ -216,7 +216,7 @@ object ProxyTests : KLogging() {
     val errorCnt = AtomicInteger(0)
     pathMap.forEach { path ->
       try {
-        args.pathManager.unregisterPath("proxy-${path.key}")
+        args.agent.pathManager.unregisterPath("proxy-${path.key}")
         counter.incrementAndGet()
       } catch (e: RequestFailureException) {
         errorCnt.incrementAndGet()
@@ -225,7 +225,7 @@ object ProxyTests : KLogging() {
 
     counter.get() shouldEqual pathMap.size
     errorCnt.get() shouldEqual 0
-    args.pathManager.pathMapSize() shouldEqual originalSize
+    args.agent.grpcService.pathMapSize() shouldEqual originalSize
 
     logger.info { "Shutting down ${httpServers.size} httpServers" }
     runBlocking {
@@ -258,5 +258,3 @@ object ProxyTests : KLogging() {
     }
   }
 }
-
-

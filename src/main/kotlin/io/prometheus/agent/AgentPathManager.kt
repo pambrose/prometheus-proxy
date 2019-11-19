@@ -20,7 +20,6 @@ package io.prometheus.agent
 
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Agent
-import io.prometheus.common.GrpcObjects
 import mu.KLogging
 
 class AgentPathManager(private val agent: Agent) {
@@ -28,11 +27,13 @@ class AgentPathManager(private val agent: Agent) {
   private val configVals = agent.genericConfigVals.agent
   private val pathContextMap = newConcurrentMap<String, PathContext>()
 
+  operator fun get(path: String): PathContext? = pathContextMap[path]
+
   fun clear() {
     pathContextMap.clear()
   }
 
-  operator fun get(path: String): PathContext? = pathContextMap[path]
+  fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
   private val pathConfigs =
     configVals.pathConfigs
@@ -43,7 +44,6 @@ class AgentPathManager(private val agent: Agent) {
       }
       .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
 
-  @Throws(RequestFailureException::class)
   fun registerPaths() =
     pathConfigs.forEach {
       val path = it["path"]
@@ -54,56 +54,22 @@ class AgentPathManager(private val agent: Agent) {
         logger.error { "Null path/url values: $path/$url" }
     }
 
-  @Throws(RequestFailureException::class)
   fun registerPath(pathVal: String, url: String) {
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
-    val pathId = registerPathOnProxy(path)
+    val pathId = agent.grpcService.registerPathOnProxy(path)
     if (!agent.isTestMode)
       logger.info { "Registered $url as /$path" }
     pathContextMap[path] = PathContext(pathId, path, url)
   }
 
-  @Throws(RequestFailureException::class)
   fun unregisterPath(pathVal: String) {
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
-    unregisterPathOnProxy(path)
+    agent.grpcService.unregisterPathOnProxy(path)
     val pathContext = pathContextMap.remove(path)
     when {
       pathContext == null -> logger.info { "No path value /$path found in pathContextMap" }
       !agent.isTestMode -> logger.info { "Unregistered /$path for ${pathContext.url}" }
     }
-  }
-
-  fun pathMapSize(): Int {
-    val request = GrpcObjects.newPathMapSizeRequest(agent.agentId)
-    return agent.grpcService.blockingStub.pathMapSize(request)
-      .let { resp ->
-        agent.markMsgSent()
-        resp.pathCount
-      }
-  }
-
-  @Throws(RequestFailureException::class)
-  private fun registerPathOnProxy(path: String): Long {
-    val request = GrpcObjects.newRegisterPathRequest(agent.agentId, path)
-    return agent.grpcService.blockingStub.registerPath(request)
-      .let { resp ->
-        agent.markMsgSent()
-        if (!resp.valid)
-          throw RequestFailureException("registerPath() - ${resp.reason}")
-        resp.pathId
-      }
-  }
-
-  @Throws(RequestFailureException::class)
-  private fun unregisterPathOnProxy(path: String) {
-    val request = GrpcObjects.newUnregisterPathRequest(agent.agentId, path)
-    agent.grpcService.blockingStub.unregisterPath(request)
-      .also { resp ->
-        agent.markMsgSent()
-        if (!resp.valid)
-          throw RequestFailureException("unregisterPath() - ${resp.reason}")
-      }
   }
 
   companion object : KLogging()

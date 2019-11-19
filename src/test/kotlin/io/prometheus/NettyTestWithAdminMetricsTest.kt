@@ -38,7 +38,6 @@ import mu.KLogging
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
-import java.util.concurrent.TimeoutException
 import kotlin.time.seconds
 
 class NettyTestWithAdminMetricsTest {
@@ -63,7 +62,7 @@ class NettyTestWithAdminMetricsTest {
 
   @Test
   fun proxyCallTest() =
-    proxyCallTest(ProxyCallTestArgs(agent.pathManager,
+    proxyCallTest(ProxyCallTestArgs(agent,
                                     httpServerCount = 5,
                                     pathCount = 25,
                                     sequentialQueryCount = 100,
@@ -98,7 +97,6 @@ class NettyTestWithAdminMetricsTest {
 
     @JvmStatic
     @AfterAll
-    @Throws(InterruptedException::class, TimeoutException::class)
     fun takeDown() {
       runBlocking {
         for (service in listOf(proxy, agent)) {

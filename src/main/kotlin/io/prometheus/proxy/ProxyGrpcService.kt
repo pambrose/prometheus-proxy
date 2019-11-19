@@ -33,7 +33,6 @@ import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
 import mu.KLogging
-import java.io.IOException
 import kotlin.properties.Delegates.notNull
 import kotlin.time.seconds
 
@@ -72,7 +71,6 @@ class ProxyGrpcService(private val proxy: Proxy,
     addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
   }
 
-  @Throws(IOException::class)
   override fun startUp() {
     grpcServer.start()
   }
