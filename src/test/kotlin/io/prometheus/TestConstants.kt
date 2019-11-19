@@ -21,14 +21,14 @@ package io.prometheus
 import java.io.File
 
 object TestConstants {
-  internal const val REPS = 1000
-  internal const val PROXY_PORT = 9505
+  const val REPS = 1000
+  const val PROXY_PORT = 9505
 
   private const val travisFile = "etc/test-configs/travis.conf"
   private const val junitFile = "etc/test-configs/junit-test.conf"
   private const val ghPrefix = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/"
 
-  internal val args = listOf("--config", "${if (File(travisFile).exists()) "" else ghPrefix}$travisFile")
+  val args = listOf("--config", "${if (File(travisFile).exists()) "" else ghPrefix}$travisFile")
 
-  internal val OPTIONS_CONFIG = "${if (File(junitFile).exists()) ghPrefix else ""}$junitFile"
+  val OPTIONS_CONFIG = "${if (File(junitFile).exists()) ghPrefix else ""}$junitFile"
 }

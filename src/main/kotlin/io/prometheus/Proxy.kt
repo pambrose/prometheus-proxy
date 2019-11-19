@@ -60,12 +60,7 @@ class Proxy(options: ProxyOptions,
                              newZipkinConfig(options.configVals.proxy.internal.zipkin),
                              { getVersionDesc(true) },
                              testMode) {
-  val configVals: ConfigVals.Proxy2.Internal2 = genericConfigVals.proxy.internal
-  val pathManager = ProxyPathManager(isTestMode)
-  val scrapeRequestManager = ScrapeRequestManager()
-  val agentContextManager = AgentContextManager()
-  var metrics: ProxyMetrics by notNull()
-
+  private val configVals: ConfigVals.Proxy2.Internal2 = genericConfigVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort)
   private val grpcService =
     if (inProcessServerName.isEmpty())
@@ -75,12 +70,17 @@ class Proxy(options: ProxyOptions,
 
   private var agentCleanupService: AgentContextCleanupService by notNull()
 
+  val pathManager = ProxyPathManager(isTestMode)
+  val scrapeRequestManager = ScrapeRequestManager()
+  val agentContextManager = AgentContextManager()
+  var metrics: ProxyMetrics by notNull()
+
   init {
     if (isMetricsEnabled)
       metrics = ProxyMetrics(this)
 
     if (configVals.staleAgentCheckEnabled)
-      agentCleanupService = AgentContextCleanupService(this) { addServices(this) }
+      agentCleanupService = AgentContextCleanupService(this, configVals) { addServices(this) }
 
     addServices(grpcService, httpService)
     initService()
@@ -161,8 +161,8 @@ class Proxy(options: ProxyOptions,
     }
 
   companion object : KLogging() {
-    internal const val AGENT_ID = "agent-id"
-    internal val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
+    const val AGENT_ID = "agent-id"
+    val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
 
     @JvmStatic
     fun main(argv: Array<String>) {

@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 class AgentHttpService(val agent: Agent) {
 
-  internal suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResponse {
+  suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResponse {
     val responseArg = GrpcObjects.ScrapeResponseArg(agentId = request.agentId, scrapeId = request.scrapeId)
     val scrapeCounterMsg = AtomicReference("")
     val path = request.path

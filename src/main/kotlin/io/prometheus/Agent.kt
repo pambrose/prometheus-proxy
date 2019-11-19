@@ -78,12 +78,12 @@ class Agent(options: AgentOptions,
   private val reconnectLimiter = RateLimiter.create(1.0 / configVals.reconnectPauseSecs).apply { acquire() }
   private var lastMsgSentMark: ClockMark by nonNullableReference(clock.markNow())
 
-  internal val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
-  internal val scrapeRequestBacklogSize = AtomicInteger(0)
-  internal val pathManager = AgentPathManager(this)
-  internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
-  internal var metrics: AgentMetrics by notNull()
-  internal var agentId: String by nonNullableReference("")
+  val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
+  val scrapeRequestBacklogSize = AtomicInteger(0)
+  val pathManager = AgentPathManager(this)
+  val grpcService = AgentGrpcService(this, options, inProcessServerName)
+  var metrics: AgentMetrics by notNull()
+  var agentId: String by nonNullableReference("")
 
   init {
     logger.info { "Assigning proxy reconnect pause time to ${configVals.reconnectPauseSecs} secs" }
@@ -111,9 +111,9 @@ class Agent(options: AgentOptions,
     }
   }
 
-  internal val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
+  val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
 
-  internal fun startTimer(): Summary.Timer? = metrics.scrapeRequestLatency.labels(agentName).startTimer()
+  fun startTimer(): Summary.Timer? = metrics.scrapeRequestLatency.labels(agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"
 

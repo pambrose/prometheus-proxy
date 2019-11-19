@@ -24,10 +24,12 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
+import io.prometheus.common.ConfigVals
 import mu.KLogging
 import kotlin.time.seconds
 
 class AgentContextCleanupService(private val proxy: Proxy,
+                                 private val configVals: ConfigVals.Proxy2.Internal2,
                                  initBlock: (AgentContextCleanupService.() -> Unit) = {}) :
   GenericExecutionThreadService() {
 
@@ -37,8 +39,8 @@ class AgentContextCleanupService(private val proxy: Proxy,
   }
 
   override fun run() {
-    val maxInactivityTime = proxy.configVals.maxAgentInactivitySecs.seconds
-    val pauseTime = proxy.configVals.staleAgentCheckPauseSecs.seconds
+    val maxInactivityTime = configVals.maxAgentInactivitySecs.seconds
+    val pauseTime = configVals.staleAgentCheckPauseSecs.seconds
     while (isRunning) {
       proxy.agentContextManager.agentContextMap
         .forEach { (agentId, agentContext) ->
@@ -56,8 +58,8 @@ class AgentContextCleanupService(private val proxy: Proxy,
 
   override fun toString() =
     toStringElements {
-      add("max inactivity secs", proxy.configVals.maxAgentInactivitySecs)
-      add("pause secs", proxy.configVals.staleAgentCheckPauseSecs)
+      add("max inactivity secs", configVals.maxAgentInactivitySecs)
+      add("pause secs", configVals.staleAgentCheckPauseSecs)
     }
 
   companion object : KLogging()
