@@ -39,5 +39,3 @@ class VersionValidator : IParameterValidator {
     exitProcess(0)
   }
 }
-
-suspend fun delay(duration: Duration) = kotlinx.coroutines.delay(duration.toLongMilliseconds())

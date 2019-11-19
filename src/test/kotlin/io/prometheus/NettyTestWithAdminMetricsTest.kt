@@ -19,6 +19,7 @@
 package io.prometheus
 
 import com.github.pambrose.common.util.simpleClassName
+import com.github.pambrose.common.util.sleep
 import io.prometheus.ProxyTests.ProxyCallTestArgs
 import io.prometheus.ProxyTests.proxyCallTest
 import io.prometheus.ProxyTests.timeoutTest
@@ -30,7 +31,6 @@ import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -88,9 +88,7 @@ class NettyTestWithAdminMetricsTest {
       }
 
       // Wait long enough to trigger heartbeat for code coverage
-      runBlocking {
-        delay(15.seconds)
-      }
+      sleep(15.seconds)
 
       logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
     }

@@ -18,6 +18,7 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.http
@@ -38,10 +39,8 @@ import io.ktor.server.engine.embeddedServer
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.common.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -53,7 +52,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.set
-import kotlin.random.Random
+import kotlin.time.milliseconds
 import kotlin.time.minutes
 import kotlin.time.seconds
 
@@ -149,7 +148,7 @@ object ProxyTests : KLogging() {
     // Create the paths
     logger.debug { "Registering paths" }
     repeat(args.pathCount) { i ->
-      val index = httpServers.size.random
+      val index = httpServers.size.random()
       args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".fixUrl())
       pathMap[i] = index
     }
@@ -167,7 +166,7 @@ object ProxyTests : KLogging() {
                 val counter = AtomicInteger(0)
                 repeat(args.sequentialQueryCount) { cnt ->
                   val job = launch(dispatcher + coroutineExceptionHandler(logger)) {
-                    //delay(Random.nextLong(50, 100))
+                    //delay((50..100).random().milliseconds)
                     callProxy(httpClient, pathMap, "Sequential $cnt")
                     counter.incrementAndGet()
                   }
@@ -195,7 +194,7 @@ object ProxyTests : KLogging() {
                 val jobs =
                   List(args.parallelQueryCount) { cnt ->
                     launch(dispatcher + coroutineExceptionHandler(logger)) {
-                      delay(Random.nextLong(200, 400))
+                      delay((200..400).random().milliseconds)
                       callProxy(httpClient, pathMap, "Parallel $cnt")
                       counter.incrementAndGet()
                     }
@@ -246,7 +245,7 @@ object ProxyTests : KLogging() {
     logger.debug { "Launched $msg" }
 
     // Randomly choose one of the pathMap values
-    val index = pathMap.size.random
+    val index = pathMap.size.random()
     val httpVal = pathMap[index]
     httpVal.shouldNotBeNull()
 

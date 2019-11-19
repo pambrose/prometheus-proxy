@@ -21,7 +21,9 @@ package io.prometheus.proxy
 import brave.Tracing
 import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
+import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.util.sleep
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.util.concurrent.MoreExecutors
 import io.ktor.application.ApplicationCall
@@ -47,7 +49,6 @@ import io.ktor.routing.routing
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
-import io.prometheus.common.delay
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.TimeUnit
@@ -172,9 +173,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
     httpServer.stop(5, 5, TimeUnit.SECONDS)
 
-    runBlocking {
-      delay(2.seconds)
-    }
+    sleep(2.seconds)
   }
 
   private class ScrapeRequestResponse(var contentText: String = "",

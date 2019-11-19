@@ -18,6 +18,7 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.service.GenericService
@@ -39,7 +40,6 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.delay
 import io.prometheus.common.getVersionDesc
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
