@@ -18,8 +18,8 @@
 
 package io.prometheus.agent
 
-import com.github.pambrose.common.dsl.KtorDsl
 import com.github.pambrose.common.dsl.KtorDsl.get
+import com.github.pambrose.common.dsl.KtorDsl.http
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.net.HttpHeaders
 import io.ktor.client.request.HttpRequestBuilder
@@ -33,63 +33,68 @@ import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import mu.KLogging
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
 
 class AgentHttpService(val agent: Agent) {
 
   internal suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResponse {
     val responseArg = GrpcObjects.ScrapeResponseArg(agentId = request.agentId, scrapeId = request.scrapeId)
-    var scrapeCounterMsg = ""
+    val scrapeCounterMsg = AtomicReference("")
     val path = request.path
     val pathContext = agent.pathManager[path]
 
     if (pathContext == null) {
       logger.warn { "Invalid path in fetchScrapeUrl(): $path" }
-      scrapeCounterMsg = "invalid_path"
+      scrapeCounterMsg.set("invalid_path")
       responseArg.failureReason = "Invalid path: $path"
     } else {
       val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
+      val url = pathContext.url
+
+      logger.debug { "Fetching $pathContext" }
+
       try {
-        val setup: HttpRequestBuilder.() -> Unit = {
-          val accept: String? = request.accept
-          if (!accept.isNullOrEmpty())
-            header(HttpHeaders.ACCEPT, accept)
+        http {
+          get(url, getSetUp(request), getBlock(responseArg, scrapeCounterMsg))
         }
-
-        val block: suspend (HttpResponse) -> Unit = { resp ->
-          responseArg.statusCode = resp.status
-
-          if (resp.status.isSuccess()) {
-            responseArg.apply {
-              contentText = resp.readText()
-              contentType = resp.headers[HttpHeaders.CONTENT_TYPE].orEmpty()
-              validResponse = true
-            }
-            scrapeCounterMsg = "success"
-          } else {
-            responseArg.failureReason = "Unsucessful response code ${responseArg.statusCode}"
-            scrapeCounterMsg = "unsuccessful"
-          }
-        }
-
-        KtorDsl.http {
-          logger.debug { "Fetching $pathContext" }
-          get(pathContext.url, setup, block)
-        }
-
       } catch (e: IOException) {
-        logger.info { "Failed HTTP request: ${pathContext.url} [${e.simpleClassName}: ${e.message}]" }
+        logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
         responseArg.failureReason = "${e.simpleClassName} - ${e.message}"
-      } catch (e: Exception) {
-        logger.warn(e) { "fetchScrapeUrl() $e - ${pathContext.url}" }
+      } catch (e: Throwable) {
+        logger.warn(e) { "fetchScrapeUrl() $e - $url" }
         responseArg.failureReason = "${e.simpleClassName} - ${e.message}"
       } finally {
         requestTimer?.observeDuration()
       }
     }
 
-    agent.updateScrapeCounter(scrapeCounterMsg)
+    agent.updateScrapeCounter(scrapeCounterMsg.get())
     return GrpcObjects.newScrapeResponse(responseArg)
   }
+
+  private fun getSetUp(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
+    val accept: String? = request.accept
+    if (accept?.isNotEmpty() ?: false)
+      header(HttpHeaders.ACCEPT, accept)
+  }
+
+  private fun getBlock(responseArg: GrpcObjects.ScrapeResponseArg,
+                       scrapeCounterMsg: AtomicReference<String>): suspend (HttpResponse) -> Unit =
+    { resp ->
+      responseArg.statusCode = resp.status
+
+      if (resp.status.isSuccess()) {
+        responseArg.apply {
+          contentText = resp.readText()
+          contentType = resp.headers[HttpHeaders.CONTENT_TYPE].orEmpty()
+          validResponse = true
+        }
+        scrapeCounterMsg.set("success")
+      } else {
+        responseArg.failureReason = "Unsucessful response code ${responseArg.statusCode}"
+        scrapeCounterMsg.set("unsuccessful")
+      }
+    }
 
   companion object : KLogging()
 }
