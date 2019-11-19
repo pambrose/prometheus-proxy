@@ -45,7 +45,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val exitOnMissingConfig: Boolean = false) {
 
   @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
-  private var configName = ""
+  private var configSource = ""
 
   @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
   var adminEnabled = false
@@ -131,7 +131,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
   }
 
   private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-    config = readConfig(if (configName.isNotEmpty()) configName else System.getenv(envConfig).orEmpty(),
+    config = readConfig(if (configSource.isNotEmpty()) configSource else System.getenv(envConfig).orEmpty(),
                         envConfig,
                         ConfigParseOptions.defaults().setAllowMissing(false),
                         ConfigFactory.load().resolve(),

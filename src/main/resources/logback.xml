@@ -30,6 +30,7 @@
     <logger name="ktor.application" level="WARN"/>
 
     <logger name="io.prometheus.agent.AgentHttpService" level="INFO"/>
+    <logger name="io.prometheus.agent.Agent" level="INFO"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT"/>

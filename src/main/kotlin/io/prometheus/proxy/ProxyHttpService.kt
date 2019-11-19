@@ -83,6 +83,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
           call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
 
           val path = call.request.path().drop(1)
+          logger.debug { "Servicing request for path: $path" }
           val agentContext = proxy.pathManager[path]
           val arg = ResponseArg()
 
@@ -105,8 +106,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
             configVals.internal.blitz.enabled && path == configVals.internal.blitz.path ->
               arg.contentText = "42"
+
             agentContext == null -> {
-              logger.debug { "Invalid path request /\${path" }
+              logger.info { "Invalid path request /${path}" }
               arg.apply {
                 updateMsg = "invalid_path"
                 statusCode = HttpStatusCode.NotFound
@@ -139,9 +141,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
       }
     }
 
-  suspend fun ApplicationCall.respondWith(text: String,
-                                          contentType: ContentType = ContentType.Text.Plain,
-                                          status: HttpStatusCode = HttpStatusCode.OK) {
+  private suspend fun ApplicationCall.respondWith(text: String,
+                                                  contentType: ContentType = ContentType.Text.Plain,
+                                                  status: HttpStatusCode = HttpStatusCode.OK) {
     apply {
       response.header("cache-control", "must-revalidate,no-cache,no-store")
       response.status(status)

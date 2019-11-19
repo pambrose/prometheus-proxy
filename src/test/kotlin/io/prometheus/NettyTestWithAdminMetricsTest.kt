@@ -65,7 +65,7 @@ class NettyTestWithAdminMetricsTest {
     proxyCallTest(ProxyCallTestArgs(agent,
                                     httpServerCount = 5,
                                     pathCount = 25,
-                                    sequentialQueryCount = 100,
+                                    sequentialQueryCount = 500,
                                     parallelQueryCount = 250,
                                     startPort = 10900,
                                     caller = simpleClassName))

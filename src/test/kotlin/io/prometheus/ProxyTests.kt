@@ -110,7 +110,7 @@ object ProxyTests : KLogging() {
   private class HttpServerWrapper(val port: Int, val server: CIOApplicationEngine)
 
   fun proxyCallTest(args: ProxyCallTestArgs) {
-    logger.debug { "Calling proxyCallTest() from ${args.caller}" }
+    logger.info { "Calling proxyCallTest() from ${args.caller}" }
 
     val pathMap = newConcurrentMap<Int, Int>()
 
@@ -167,6 +167,7 @@ object ProxyTests : KLogging() {
                 val counter = AtomicInteger(0)
                 repeat(args.sequentialQueryCount) { cnt ->
                   val job = launch(dispatcher + coroutineExceptionHandler(logger)) {
+                    //delay(Random.nextLong(50, 100))
                     callProxy(httpClient, pathMap, "Sequential $cnt")
                     counter.incrementAndGet()
                   }
@@ -194,7 +195,7 @@ object ProxyTests : KLogging() {
                 val jobs =
                   List(args.parallelQueryCount) { cnt ->
                     launch(dispatcher + coroutineExceptionHandler(logger)) {
-                      delay(Random.nextLong(50, 300))
+                      delay(Random.nextLong(200, 400))
                       callProxy(httpClient, pathMap, "Parallel $cnt")
                       counter.incrementAndGet()
                     }

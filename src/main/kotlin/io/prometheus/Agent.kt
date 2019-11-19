@@ -27,6 +27,7 @@ import com.github.pambrose.common.util.hostInfo
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
 import io.grpc.StatusRuntimeException
+import io.prometheus.agent.AgentConnectionContext
 import io.prometheus.agent.AgentGrpcService
 import io.prometheus.agent.AgentHttpService
 import io.prometheus.agent.AgentMetrics
@@ -38,18 +39,16 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.delay
 import io.prometheus.common.getVersionDesc
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.roundToInt
 import kotlin.properties.Delegates.notNull
 import kotlin.time.ClockMark
 import kotlin.time.Duration
@@ -74,7 +73,7 @@ class Agent(options: AgentOptions,
   private val configVals = genericConfigVals.agent.internal
   internal val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
   // Prime the limiter
-  private val reconnectLimiter = RateLimiter.create(1.0 / configVals.reconectPauseSecs).apply { acquire() }
+  private val reconnectLimiter = RateLimiter.create(1.0 / configVals.reconnectPauseSecs).apply { acquire() }
 
   private val clock = MonoClock
   private val initialConnectionLatch = CountDownLatch(1)
@@ -85,10 +84,10 @@ class Agent(options: AgentOptions,
   internal val scrapeRequestBacklogSize = AtomicInteger(0)
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
-  private val agentUtils = AgentHttpService(this)
+  private val agentHttpService = AgentHttpService(this)
 
   init {
-    logger.info { "Assigning proxy reconnect pause time to ${configVals.reconectPauseSecs} secs" }
+    logger.info { "Assigning proxy reconnect pause time to ${configVals.reconnectPauseSecs} secs" }
 
     if (isMetricsEnabled)
       metrics = AgentMetrics(this)
@@ -108,8 +107,7 @@ class Agent(options: AgentOptions,
       } catch (e: Exception) {
         // Catch anything else to avoid exiting retry loop
       } finally {
-        val secsWaiting = reconnectLimiter.acquire()
-        logger.info { "Waited $secsWaiting secs to reconnect" }
+        logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
       }
     }
   }
@@ -128,8 +126,6 @@ class Agent(options: AgentOptions,
   }
 
   private fun connectToProxy() {
-    val disconnected = AtomicBoolean(false)
-
     // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != ""
     if (agentId.isNotEmpty()) {
       grpcService.resetGrpcStubs()
@@ -145,29 +141,35 @@ class Agent(options: AgentOptions,
       grpcService.registerAgent(initialConnectionLatch)
       pathManager.registerPaths()
 
-      val scrapeRequestChannel = Channel<ScrapeRequestAction>(configVals.scrapeRequestChannelSize)
-
-      grpcService.readRequestsFromProxy(agentUtils, scrapeRequestChannel, disconnected)
+      val connectionContext = AgentConnectionContext()
+      grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
 
       runBlocking {
-        launch(Dispatchers.Default) { startHeartBeat(disconnected) }
-        launch(Dispatchers.Default) {
-          grpcService.writeResponsesToProxyUntilDisconnected(scrapeRequestChannel, disconnected)
+        launch(Dispatchers.Default) { startHeartBeat(connectionContext) }
+
+        launch(Dispatchers.Default) { grpcService.writeResponsesToProxyUntilDisconnected(connectionContext) }
+
+        for (scrapeRequestAction in connectionContext.scrapeRequestChannel) {
+          launch(Dispatchers.Default) {
+            // The fetch actually occurs here
+            val scrapeResponse = scrapeRequestAction.invoke()
+            connectionContext.scrapeResultChannel.send(scrapeResponse)
+          }
         }
       }
     }
   }
 
-  private suspend fun startHeartBeat(disconnected: AtomicBoolean) =
+  private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) =
     if (configVals.heartbeatEnabled) {
       val heartbeatPauseTime = configVals.heartbeatCheckPauseMillis.milliseconds
       val maxInactivityTime = configVals.heartbeatMaxInactivitySecs.seconds
       logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
 
-      while (isRunning && !disconnected.get()) {
+      while (isRunning && connectionContext.connected) {
         val timeSinceLastWrite = lastMsgSentMark.elapsedNow()
         if (timeSinceLastWrite > maxInactivityTime)
-          grpcService.sendHeartBeat(disconnected)
+          grpcService.sendHeartBeat(connectionContext)
         delay(heartbeatPauseTime)
       }
       logger.info { "Heartbeat completed" }

@@ -43,6 +43,7 @@ class AgentPathManager(private val agent: Agent) {
               "url" to it.url)
       }
       .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
+      //.toList()
 
   fun registerPaths() =
     pathConfigs.forEach {
