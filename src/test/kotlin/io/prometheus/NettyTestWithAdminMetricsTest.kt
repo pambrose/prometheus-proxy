@@ -66,7 +66,7 @@ class NettyTestWithAdminMetricsTest {
                                     httpServerCount = 5,
                                     pathCount = 25,
                                     sequentialQueryCount = 500,
-                                    parallelQueryCount = 250,
+                                    parallelQueryCount = 0,
                                     startPort = 10900,
                                     caller = simpleClassName))
 
