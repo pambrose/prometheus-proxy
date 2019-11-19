@@ -20,12 +20,10 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.concurrent.GenericExecutionThreadService
 import com.github.pambrose.common.concurrent.genericServiceListener
-import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
-import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.time.seconds
 

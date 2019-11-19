@@ -71,20 +71,19 @@ class Agent(options: AgentOptions,
                              { getVersionDesc(true) },
                              testMode) {
   private val configVals = genericConfigVals.agent.internal
-  internal val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
+  private val clock = MonoClock
+  private val agentHttpService = AgentHttpService(this)
+  private val initialConnectionLatch = CountDownLatch(1)
   // Prime the limiter
   private val reconnectLimiter = RateLimiter.create(1.0 / configVals.reconnectPauseSecs).apply { acquire() }
-
-  private val clock = MonoClock
-  private val initialConnectionLatch = CountDownLatch(1)
   private var lastMsgSentMark: ClockMark by nonNullableReference(clock.markNow())
 
-  internal var metrics: AgentMetrics by notNull()
-  internal var agentId: String by nonNullableReference("")
+  internal val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
   internal val scrapeRequestBacklogSize = AtomicInteger(0)
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
-  private val agentHttpService = AgentHttpService(this)
+  internal var metrics: AgentMetrics by notNull()
+  internal var agentId: String by nonNullableReference("")
 
   init {
     logger.info { "Assigning proxy reconnect pause time to ${configVals.reconnectPauseSecs} secs" }
