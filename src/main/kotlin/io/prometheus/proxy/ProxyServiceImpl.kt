@@ -135,7 +135,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
   }
 
   override fun sendHeartBeat(request: HeartBeatRequest, responseObserver: StreamObserver<HeartBeatResponse>) {
-    if (proxy.isZipkinEnabled)
+    if (proxy.isMetricsEnabled)
       proxy.metrics.heartbeats.inc()
     val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
     agentContext?.markActivity()

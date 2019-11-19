@@ -42,7 +42,6 @@ import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRequestManager
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
-import kotlin.properties.Delegates.notNull
 import kotlin.time.milliseconds
 
 class Proxy(options: ProxyOptions,
@@ -59,8 +58,8 @@ class Proxy(options: ProxyOptions,
                                               options.configVals.proxy.metrics),
                              newZipkinConfig(options.configVals.proxy.internal.zipkin),
                              { getVersionDesc(true) },
-                             testMode) {
-  private val configVals: ConfigVals.Proxy2.Internal2 = genericConfigVals.proxy.internal
+                             isTestMode = testMode) {
+  private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort)
   private val grpcService =
     if (inProcessServerName.isEmpty())
@@ -68,19 +67,20 @@ class Proxy(options: ProxyOptions,
     else
       ProxyGrpcService(this, inProcessName = inProcessServerName)
 
-  private var agentCleanupService: AgentContextCleanupService by notNull()
+  private lateinit var agentCleanupService: AgentContextCleanupService
 
   val pathManager = ProxyPathManager(isTestMode)
   val scrapeRequestManager = ScrapeRequestManager()
   val agentContextManager = AgentContextManager()
-  var metrics: ProxyMetrics by notNull()
+
+  lateinit var metrics: ProxyMetrics
 
   init {
     if (isMetricsEnabled)
       metrics = ProxyMetrics(this)
 
-    if (configVals.staleAgentCheckEnabled)
-      agentCleanupService = AgentContextCleanupService(this, configVals) { addServices(this) }
+    if (proxyConfigVals.staleAgentCheckEnabled)
+      agentCleanupService = AgentContextCleanupService(this, proxyConfigVals) { addServices(this) }
 
     addServices(grpcService, httpService)
     initService()
@@ -93,7 +93,7 @@ class Proxy(options: ProxyOptions,
     grpcService.startSync()
     httpService.startSync()
 
-    if (configVals.staleAgentCheckEnabled)
+    if (proxyConfigVals.staleAgentCheckEnabled)
       agentCleanupService.startSync()
     else
       logger.info { "Agent eviction thread not started" }
@@ -102,7 +102,7 @@ class Proxy(options: ProxyOptions,
   override fun shutDown() {
     grpcService.stopSync()
     httpService.stopSync()
-    if (configVals.staleAgentCheckEnabled)
+    if (proxyConfigVals.staleAgentCheckEnabled)
       agentCleanupService.stopSync()
     super.shutDown()
   }
@@ -120,10 +120,11 @@ class Proxy(options: ProxyOptions,
       .apply {
         register("grpc_service", grpcService.healthCheck)
         register("scrape_response_map_check",
-                 newMapHealthCheck(scrapeRequestManager.scrapeRequestMap, configVals.scrapeRequestMapUnhealthySize))
+                 newMapHealthCheck(scrapeRequestManager.scrapeRequestMap,
+                                   proxyConfigVals.scrapeRequestMapUnhealthySize))
         register("agent_scrape_request_backlog",
                  healthCheck {
-                   val unhealthySize = configVals.scrapeRequestBacklogUnhealthySize
+                   val unhealthySize = proxyConfigVals.scrapeRequestBacklogUnhealthySize
                    val vals =
                      agentContextManager.agentContextMap.entries
                        .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }

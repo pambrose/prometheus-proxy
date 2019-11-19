@@ -21,7 +21,6 @@ package io.prometheus.proxy
 import brave.Tracing
 import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
-import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.net.HttpHeaders.ACCEPT
@@ -49,18 +48,17 @@ import io.ktor.routing.routing
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
-import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.TimeUnit
-import kotlin.properties.Delegates.notNull
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
-  private val configVals = proxy.genericConfigVals.proxy
-  private var tracing: Tracing by notNull()
+  private val proxyConfigVals = proxy.configVals.proxy
   private val idleTimeout =
-    if (configVals.http.idleTimeoutSecs == -1) 45.seconds else configVals.http.idleTimeoutSecs.seconds
+    if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
+
+  private lateinit var tracing: Tracing
 
   private val httpServer =
     embeddedServer(CIO,
@@ -105,7 +103,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
               }
             }
 
-            configVals.internal.blitz.enabled && path == configVals.internal.blitz.path ->
+            proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path ->
               arg.contentText = "42"
 
             agentContext == null -> {
@@ -189,8 +187,8 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext, path, req.header(ACCEPT))
 
     try {
-      val timeoutTime = configVals.internal.scrapeRequestTimeoutSecs.seconds
-      val checkTime = configVals.internal.scrapeRequestCheckMillis.milliseconds
+      val timeoutTime = proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
+      val checkTime = proxyConfigVals.internal.scrapeRequestCheckMillis.milliseconds
 
       proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
       agentContext.writeScrapeRequest(scrapeRequest)

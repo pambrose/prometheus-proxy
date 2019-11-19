@@ -39,16 +39,16 @@ import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.properties.Delegates.notNull
 
 class AgentGrpcService(private val agent: Agent,
                        options: AgentOptions,
                        private val inProcessServerName: String) {
   private var grpcStarted = AtomicBoolean(false)
-  private var tracing: Tracing by notNull()
-  private var grpcTracing: GrpcTracing by notNull()
   private var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
   private var asyncStub: ProxyServiceStub by nonNullableReference()
+
+  private lateinit var tracing: Tracing
+  private lateinit var grpcTracing: GrpcTracing
 
   var channel: ManagedChannel by nonNullableReference()
 

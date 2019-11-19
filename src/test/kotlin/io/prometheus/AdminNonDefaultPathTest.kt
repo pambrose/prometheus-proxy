@@ -41,7 +41,7 @@ import kotlin.time.seconds
 
 class AdminNonDefaultPathTest {
 
-  private val proxyConfigVals: ConfigVals.Proxy2 = proxy.genericConfigVals.proxy
+  private val proxyConfigVals: ConfigVals.Proxy2 = proxy.configVals.proxy
 
   @Test
   fun proxyPingPathTest() {

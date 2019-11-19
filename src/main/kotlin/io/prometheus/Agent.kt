@@ -22,6 +22,7 @@ import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.service.GenericService
+import com.github.pambrose.common.servlet.DynamicServlet
 import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
@@ -45,11 +46,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
+import org.eclipse.jetty.servlet.ServletHolder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
-import kotlin.properties.Delegates.notNull
 import kotlin.time.ClockMark
 import kotlin.time.Duration
 import kotlin.time.MonoClock
@@ -69,29 +70,33 @@ class Agent(options: AgentOptions,
                                               options.configVals.agent.metrics),
                              newZipkinConfig(options.configVals.agent.internal.zipkin),
                              { getVersionDesc(true) },
-                             testMode) {
-  private val configVals = genericConfigVals.agent.internal
+                             isTestMode = testMode) {
+  private val agentConfigVals = configVals.agent.internal
   private val clock = MonoClock
   private val agentHttpService = AgentHttpService(this)
   private val initialConnectionLatch = CountDownLatch(1)
   // Prime the limiter
-  private val reconnectLimiter = RateLimiter.create(1.0 / configVals.reconnectPauseSecs).apply { acquire() }
+  private val reconnectLimiter = RateLimiter.create(1.0 / agentConfigVals.reconnectPauseSecs).apply { acquire() }
   private var lastMsgSentMark: ClockMark by nonNullableReference(clock.markNow())
 
   val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
   val scrapeRequestBacklogSize = AtomicInteger(0)
   val pathManager = AgentPathManager(this)
   val grpcService = AgentGrpcService(this, options, inProcessServerName)
-  var metrics: AgentMetrics by notNull()
   var agentId: String by nonNullableReference("")
 
+  lateinit var metrics: AgentMetrics
+
   init {
-    logger.info { "Assigning proxy reconnect pause time to ${configVals.reconnectPauseSecs} secs" }
+    logger.info { "Assigning proxy reconnect pause time to ${agentConfigVals.reconnectPauseSecs} secs" }
 
     if (isMetricsEnabled)
       metrics = AgentMetrics(this)
 
-    initService()
+    initService {
+      addServlet(ServletHolder(DynamicServlet({ "Hello" })), "/test")
+    }
+
     initBlock?.invoke(this)
   }
 
@@ -121,7 +126,7 @@ class Agent(options: AgentOptions,
     super.registerHealthChecks()
     healthCheckRegistry.register("scrape_request_backlog_check",
                                  newBacklogHealthCheck(scrapeRequestBacklogSize.get(),
-                                                       configVals.scrapeRequestBacklogUnhealthySize))
+                                                       agentConfigVals.scrapeRequestBacklogUnhealthySize))
   }
 
   private fun connectToProxy() {
@@ -160,9 +165,9 @@ class Agent(options: AgentOptions,
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) =
-    if (configVals.heartbeatEnabled) {
-      val heartbeatPauseTime = configVals.heartbeatCheckPauseMillis.milliseconds
-      val maxInactivityTime = configVals.heartbeatMaxInactivitySecs.seconds
+    if (agentConfigVals.heartbeatEnabled) {
+      val heartbeatPauseTime = agentConfigVals.heartbeatCheckPauseMillis.milliseconds
+      val maxInactivityTime = agentConfigVals.heartbeatMaxInactivitySecs.seconds
       logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
 
       while (isRunning && connectionContext.connected) {

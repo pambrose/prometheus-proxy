@@ -17,7 +17,7 @@ targetCompatibility = 1.8
 def kotlinVersion = '1.3.60'
 def serializationVersion = '0.13.0'
 def coroutinesVersion = '1.3.2'
-def utilsVersion = '09a0907'
+def utilsVersion = '8aa1f4b'
 
 def grpcVersion = '1.25.0'
 def protocVersion = '3.10.0'
@@ -28,6 +28,7 @@ def prometheusVersion = '0.8.0'
 def loggingVersion = '1.7.7'
 def dropwizardVersion = '4.1.1'
 def zipkinVersion = '5.9.0'
+def jettyVersion = '9.4.22.v20191022'
 def kluentVersion = '1.57'
 def tscfgVersion = '1.3.4'
 def contribVersion = '0.8.1'
@@ -60,11 +61,13 @@ dependencies {
   implementation "com.github.pambrose.common-utils:dropwizard-utils:${utilsVersion}"
   implementation "com.github.pambrose.common-utils:guava-utils:${utilsVersion}"
   implementation "com.github.pambrose.common-utils:grpc-utils:${utilsVersion}"
-  implementation "com.github.pambrose.common-utils:ktor-client-utils:${utilsVersion}"
   implementation "com.github.pambrose.common-utils:jetty-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:ktor-client-utils:${utilsVersion}"
   implementation "com.github.pambrose.common-utils:prometheus-utils:${utilsVersion}"
   implementation "com.github.pambrose.common-utils:service-utils:${utilsVersion}"
   implementation "com.github.pambrose.common-utils:zipkin-utils:${utilsVersion}"
+
+  implementation "org.eclipse.jetty:jetty-servlet:${jettyVersion}"
 
   implementation "javax.annotation:javax.annotation-api:${annotationVersion}"
   implementation "com.beust:jcommander:${jcommanderVersion}"

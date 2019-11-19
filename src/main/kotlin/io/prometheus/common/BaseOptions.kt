@@ -36,7 +36,6 @@ import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
-import kotlin.properties.Delegates.notNull
 import kotlin.system.exitProcess
 
 abstract class BaseOptions protected constructor(private val progName: String,
@@ -76,9 +75,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
   var dynamicParams = mutableMapOf<String, String>()
     private set
 
-  private var config: Config by notNull()
+  private lateinit var config: Config
 
-  var configVals: ConfigVals by notNull()
+  lateinit var configVals: ConfigVals
     private set
 
   protected abstract fun assignConfigVals()

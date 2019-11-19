@@ -24,7 +24,7 @@ import mu.KLogging
 
 class AgentPathManager(private val agent: Agent) {
 
-  private val configVals = agent.genericConfigVals.agent
+  private val agentConfigVals = agent.configVals.agent
   private val pathContextMap = newConcurrentMap<String, PathContext>()
 
   operator fun get(path: String): PathContext? = pathContextMap[path]
@@ -36,7 +36,7 @@ class AgentPathManager(private val agent: Agent) {
   fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
   private val pathConfigs =
-    configVals.pathConfigs
+    agentConfigVals.pathConfigs
       .map {
         mapOf("name" to it.name,
               "path" to it.path,
