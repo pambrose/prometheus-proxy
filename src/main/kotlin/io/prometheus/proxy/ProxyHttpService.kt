@@ -84,12 +84,12 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
           val path = call.request.path().drop(1)
           logger.debug { "Servicing request for path: $path" }
           val agentContext = proxy.pathManager[path]
-          val responseArg = ResponseArg()
+          val responseResults = ResponseResults()
 
           when {
             !proxy.isRunning -> {
               logger.error { "Proxy stopped" }
-              responseArg.apply {
+              responseResults.apply {
                 updateMsg = "proxy_stopped"
                 statusCode = HttpStatusCode.ServiceUnavailable
               }
@@ -97,18 +97,18 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
             path.isEmpty() || path.isBlank() -> {
               logger.info { "Request missing path" }
-              responseArg.apply {
+              responseResults.apply {
                 updateMsg = "missing_path"
                 statusCode = HttpStatusCode.NotFound
               }
             }
 
             proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path ->
-              responseArg.contentText = "42"
+              responseResults.contentText = "42"
 
             agentContext == null -> {
               logger.info { "Invalid path request /${path}" }
-              responseArg.apply {
+              responseResults.apply {
                 updateMsg = "invalid_path"
                 statusCode = HttpStatusCode.NotFound
               }
@@ -116,7 +116,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
             agentContext.isNotValid() -> {
               logger.error { "Invalid AgentContext" }
-              responseArg.apply {
+              responseResults.apply {
                 updateMsg = "invalid_agent_context"
                 statusCode = HttpStatusCode.NotFound
               }
@@ -124,7 +124,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
             else -> {
               val response = submitScrapeRequest(path, agentContext, call.request, call.response)
-              responseArg.apply {
+              responseResults.apply {
                 contentText = response.contentText
                 contentType = response.contentType
                 statusCode = response.statusCode
@@ -133,11 +133,10 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             }
           }
 
-          updateScrapeRequests(responseArg.updateMsg)
-
-          call.respondWith(text = responseArg.contentText,
-                           contentType = responseArg.contentType,
-                           status = responseArg.statusCode)
+          responseResults.apply {
+            updateScrapeRequests(updateMsg)
+            call.respondWith(contentText, contentType, statusCode)
+          }
         }
       }
     }
@@ -152,10 +151,10 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     }
   }
 
-  class ResponseArg(var contentText: String = "",
-                    var contentType: ContentType = ContentType.Text.Plain,
-                    var statusCode: HttpStatusCode = HttpStatusCode.OK,
-                    var updateMsg: String = "")
+  class ResponseResults(var contentText: String = "",
+                        var contentType: ContentType = ContentType.Text.Plain,
+                        var statusCode: HttpStatusCode = HttpStatusCode.OK,
+                        var updateMsg: String = "")
 
   init {
     if (proxy.isZipkinEnabled)

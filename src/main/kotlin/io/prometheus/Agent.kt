@@ -96,7 +96,7 @@ class Agent(options: AgentOptions,
 
     initService {
       if (options.debugEnabled)
-        addServlet(DEBUG, LambdaServlet({ pathManager.toString() }))
+        addServlet(DEBUG, LambdaServlet({ toPlainText() + "\n" + pathManager.toPlainText() }))
     }
 
     initBlock?.invoke(this)
@@ -199,6 +199,20 @@ class Agent(options: AgentOptions,
     grpcService.shutDown()
     super.shutDown()
   }
+
+  fun toPlainText() =
+    """
+      AgentId:   $agentId 
+      AgentName: $agentName
+      ProxyHost: $proxyHost
+      
+      AdminService:
+      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
+      
+      MetricsService:
+      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
+      
+    """.trimIndent()
 
   override fun toString() =
     toStringElements {
