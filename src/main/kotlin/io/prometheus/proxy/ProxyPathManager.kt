@@ -21,10 +21,11 @@ package io.prometheus.proxy
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.grpc.UnregisterPathResponse
 import mu.KLogging
+import java.util.concurrent.ConcurrentMap
 
 class ProxyPathManager(private val isTestMode: Boolean) {
 
-  private val pathMap = newConcurrentMap<String, AgentContext>() // Map path to AgentContext
+  private val pathMap: ConcurrentMap<String, AgentContext> = newConcurrentMap() // Map path to AgentContext
 
   operator fun get(path: String) = pathMap[path]
 
@@ -89,6 +90,15 @@ class ProxyPathManager(private val isTestMode: Boolean) {
               ?: logger.error { "Missing path /$k for agentId: $agentId" }
         }
       }
+
+  override fun toString(): String {
+    val maxPath = pathMap.keys.map { it.length ?: 0 }.max() ?: 0
+
+    return "Proxy Path Map\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
+        pathMap.map { c ->
+          "/${c.key.padEnd(maxPath)} ${c.value}"
+        }.joinToString("\n")
+  }
 
   companion object : KLogging()
 }

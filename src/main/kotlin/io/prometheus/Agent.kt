@@ -22,7 +22,7 @@ import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.service.GenericService
-import com.github.pambrose.common.servlet.DynamicServlet
+import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
@@ -37,6 +37,7 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.client.Summary
+import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
@@ -46,7 +47,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
-import org.eclipse.jetty.servlet.ServletHolder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.atomic.AtomicInteger
@@ -71,6 +71,7 @@ class Agent(options: AgentOptions,
                              newZipkinConfig(options.configVals.agent.internal.zipkin),
                              { getVersionDesc(true) },
                              isTestMode = testMode) {
+
   private val agentConfigVals = configVals.agent.internal
   private val clock = MonoClock
   private val agentHttpService = AgentHttpService(this)
@@ -88,13 +89,14 @@ class Agent(options: AgentOptions,
   lateinit var metrics: AgentMetrics
 
   init {
-    logger.info { "Assigning proxy reconnect pause time to ${agentConfigVals.reconnectPauseSecs} secs" }
+    logger.info { "Assigning proxy reconnect pause time to ${agentConfigVals.reconnectPauseSecs.seconds}" }
 
     if (isMetricsEnabled)
       metrics = AgentMetrics(this)
 
     initService {
-      addServlet(ServletHolder(DynamicServlet({ "Hello" })), "/test")
+      if (options.debugEnabled)
+        addServlet(DEBUG, LambdaServlet({ pathManager.toString() }))
     }
 
     initBlock?.invoke(this)

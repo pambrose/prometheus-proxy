@@ -52,5 +52,6 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
     assignAdminPort(configVals.proxy.admin.port)
     assignMetricsEnabled(configVals.proxy.metrics.enabled)
     assignMetricsPort(configVals.proxy.metrics.port)
+    assignDebugEnabled(configVals.proxy.admin.debugEnabled)
   }
 }

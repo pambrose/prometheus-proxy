@@ -21,38 +21,37 @@ package io.prometheus.agent
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Agent
 import mu.KLogging
+import java.util.concurrent.ConcurrentMap
 
 class AgentPathManager(private val agent: Agent) {
 
   private val agentConfigVals = agent.configVals.agent
-  private val pathContextMap = newConcurrentMap<String, PathContext>()
+  private val pathContextMap: ConcurrentMap<String, PathContext> = newConcurrentMap()
 
   operator fun get(path: String): PathContext? = pathContextMap[path]
 
-  fun clear() {
-    pathContextMap.clear()
-  }
+  fun clear() = pathContextMap.clear()
 
   fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
   private val pathConfigs =
     agentConfigVals.pathConfigs
       .map {
-        mapOf("name" to it.name,
-              "path" to it.path,
-              "url" to it.url)
+        mapOf(NAME to "\"" + it.name + "\"",
+              PATH to it.path,
+              URL to it.url)
       }
       .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
-      //.toList()
 
   fun registerPaths() =
     pathConfigs.forEach {
       val path = it["path"]
       val url = it["url"]
-      if (path != null && url != null)
+      if (path != null && url != null) {
         registerPath(path, url)
-      else
+      } else {
         logger.error { "Null path/url values: $path/$url" }
+      }
     }
 
   fun registerPath(pathVal: String, url: String) {
@@ -73,7 +72,21 @@ class AgentPathManager(private val agent: Agent) {
     }
   }
 
-  companion object : KLogging()
+  override fun toString(): String {
+    val maxName = pathConfigs.map { it[NAME]?.length ?: 0 }.max() ?: 0
+    val maxPath = pathConfigs.map { it[PATH]?.length ?: 0 }.max() ?: 0
+
+    return "Agent Path Configs\n" + "Name".padEnd(maxName + 1) + "Path".padEnd(maxPath + 3) + "URL\n" +
+        pathConfigs.map { c ->
+          "${c[NAME]?.padEnd(maxName)} /${c[PATH]?.padEnd(maxPath)} ${c[URL]}"
+        }.joinToString("\n")
+  }
+
+  companion object : KLogging() {
+    private const val NAME = "name"
+    private const val PATH = "path"
+    private const val URL = "url"
+  }
 
   data class PathContext(val pathId: Long, val path: String, val url: String)
 }

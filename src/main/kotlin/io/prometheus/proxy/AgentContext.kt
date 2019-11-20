@@ -67,6 +67,8 @@ class AgentContext(private val remoteAddr: String) {
 
   fun isValid() = valid.get() && !scrapeRequestChannel.isClosedForReceive
 
+  fun isNotValid() = !isValid()
+
   fun invalidate() {
     valid.set(false)
     scrapeRequestChannel.close()

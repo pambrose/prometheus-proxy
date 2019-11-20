@@ -30,6 +30,7 @@ import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
 import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
+import io.prometheus.common.EnvVars.DEBUG_ENABLED
 import io.prometheus.common.EnvVars.METRICS_ENABLED
 import io.prometheus.common.EnvVars.METRICS_PORT
 import mu.KLogging
@@ -60,6 +61,10 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
   @Parameter(names = ["-m", "--metrics_port"], description = "Metrics listen port")
   var metricsPort = -1
+    private set
+
+  @Parameter(names = ["-d", "--debug"], description = "Debug option enabled")
+  var debugEnabled = false
     private set
 
   @Parameter(names = ["-v", "--version"],
@@ -122,6 +127,11 @@ abstract class BaseOptions protected constructor(private val progName: String,
   protected fun assignMetricsEnabled(defaultVal: Boolean) {
     if (!metricsEnabled)
       metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
+  }
+
+  protected fun assignDebugEnabled(defaultVal: Boolean) {
+    if (!debugEnabled)
+      debugEnabled = DEBUG_ENABLED.getEnv(defaultVal)
   }
 
   protected fun assignMetricsPort(defaultVal: Int) {
@@ -206,5 +216,6 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
   companion object : KLogging() {
     private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
+    const val DEBUG = "debug"
   }
 }

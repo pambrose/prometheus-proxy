@@ -23,10 +23,12 @@ import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.github.pambrose.common.service.GenericService
+import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
 import io.grpc.Attributes
+import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
@@ -59,6 +61,7 @@ class Proxy(options: ProxyOptions,
                              newZipkinConfig(options.configVals.proxy.internal.zipkin),
                              { getVersionDesc(true) },
                              isTestMode = testMode) {
+
   private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort)
   private val grpcService =
@@ -83,7 +86,12 @@ class Proxy(options: ProxyOptions,
       agentCleanupService = AgentContextCleanupService(this, proxyConfigVals) { addServices(this) }
 
     addServices(grpcService, httpService)
-    initService()
+
+    initService {
+      if (options.debugEnabled)
+        addServlet(DEBUG, LambdaServlet({ pathManager.toString() }))
+    }
+
     initBlock?.invoke(this)
   }
 

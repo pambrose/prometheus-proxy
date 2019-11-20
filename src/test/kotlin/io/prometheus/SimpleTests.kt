@@ -82,7 +82,7 @@ object SimpleTests : KLogging() {
 
   fun threadedAddRemovePathsTest(pathManager: AgentPathManager, caller: String) {
     logger.debug { "Calling threadedAddRemovePathsTest() from $caller" }
-    val paths = mutableListOf<String>()
+    val paths: MutableList<String> = mutableListOf()
 
     // Take into account pre-existing paths already registered
     val originalSize = pathManager.pathMapSize()

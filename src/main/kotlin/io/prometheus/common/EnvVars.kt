@@ -33,6 +33,7 @@ enum class EnvVars {
   AGENT_NAME,
 
   // Common
+  DEBUG_ENABLED,
   METRICS_ENABLED,
   METRICS_PORT,
   ADMIN_ENABLED,

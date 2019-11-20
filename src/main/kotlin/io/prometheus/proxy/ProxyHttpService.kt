@@ -84,58 +84,60 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
           val path = call.request.path().drop(1)
           logger.debug { "Servicing request for path: $path" }
           val agentContext = proxy.pathManager[path]
-          val arg = ResponseArg()
+          val responseArg = ResponseArg()
 
           when {
             !proxy.isRunning -> {
               logger.error { "Proxy stopped" }
-              arg.apply {
+              responseArg.apply {
                 updateMsg = "proxy_stopped"
                 statusCode = HttpStatusCode.ServiceUnavailable
               }
             }
 
-            path.isEmpty() -> {
+            path.isEmpty() || path.isBlank() -> {
               logger.info { "Request missing path" }
-              arg.apply {
+              responseArg.apply {
                 updateMsg = "missing_path"
                 statusCode = HttpStatusCode.NotFound
               }
             }
 
             proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path ->
-              arg.contentText = "42"
+              responseArg.contentText = "42"
 
             agentContext == null -> {
               logger.info { "Invalid path request /${path}" }
-              arg.apply {
+              responseArg.apply {
                 updateMsg = "invalid_path"
                 statusCode = HttpStatusCode.NotFound
               }
             }
 
-            !agentContext.isValid() -> {
+            agentContext.isNotValid() -> {
               logger.error { "Invalid AgentContext" }
-              arg.apply {
+              responseArg.apply {
                 updateMsg = "invalid_agent_context"
                 statusCode = HttpStatusCode.NotFound
               }
             }
 
             else -> {
-              val resp = submitScrapeRequest(call.request, call.response, agentContext, path)
-              arg.apply {
-                contentText = resp.contentText
-                contentType = resp.contentType
-                statusCode = resp.statusCode
-                updateMsg = resp.updateMsg
+              val response = submitScrapeRequest(path, agentContext, call.request, call.response)
+              responseArg.apply {
+                contentText = response.contentText
+                contentType = response.contentType
+                statusCode = response.statusCode
+                updateMsg = response.updateMsg
               }
             }
           }
 
-          updateScrapeRequests(arg.updateMsg)
+          updateScrapeRequests(responseArg.updateMsg)
 
-          call.respondWith(text = arg.contentText, contentType = arg.contentType, status = arg.statusCode)
+          call.respondWith(text = responseArg.contentText,
+                           contentType = responseArg.contentType,
+                           status = responseArg.statusCode)
         }
       }
     }
@@ -179,12 +181,12 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                                       val statusCode: HttpStatusCode,
                                       val updateMsg: String)
 
-  private suspend fun submitScrapeRequest(req: ApplicationRequest,
-                                          res: ApplicationResponse,
+  private suspend fun submitScrapeRequest(path: String,
                                           agentContext: AgentContext,
-                                          path: String): ScrapeRequestResponse {
+                                          request: ApplicationRequest,
+                                          response: ApplicationResponse): ScrapeRequestResponse {
 
-    val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext, path, req.header(ACCEPT))
+    val scrapeRequest = ScrapeRequestWrapper(proxy, path, agentContext, request.header(ACCEPT))
 
     try {
       val timeoutTime = proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
@@ -208,28 +210,29 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
     scrapeRequest.scrapeResponse
       .also { scrapeResponse ->
-        HttpStatusCode.fromValue(scrapeResponse.statusCode).also { statusCode ->
-          scrapeResponse.contentType.split("/")
-            .also { contentTypeElems ->
-              val contentType =
-                if (contentTypeElems.size == 2)
-                  ContentType(contentTypeElems[0], contentTypeElems[1])
-                else
-                  ContentType.Text.Plain
+        HttpStatusCode.fromValue(scrapeResponse.statusCode)
+          .also { statusCode ->
+            scrapeResponse.contentType.split("/")
+              .also { contentTypeElems ->
+                val contentType =
+                  if (contentTypeElems.size == 2)
+                    ContentType(contentTypeElems[0], contentTypeElems[1])
+                  else
+                    ContentType.Text.Plain
 
-              // Do not return content on error status codes
-              return if (!statusCode.isSuccess()) {
-                ScrapeRequestResponse(contentType = contentType,
-                                      statusCode = statusCode,
-                                      updateMsg = "path_not_found")
-              } else {
-                ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
-                                      contentType = contentType,
-                                      statusCode = statusCode,
-                                      updateMsg = "success")
+                // Do not return content on error status codes
+                return if (!statusCode.isSuccess()) {
+                  ScrapeRequestResponse(contentType = contentType,
+                                        statusCode = statusCode,
+                                        updateMsg = "path_not_found")
+                } else {
+                  ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
+                                        contentType = contentType,
+                                        statusCode = statusCode,
+                                        updateMsg = "success")
+                }
               }
-            }
-        }
+          }
       }
   }
 
