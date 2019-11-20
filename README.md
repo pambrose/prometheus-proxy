@@ -51,17 +51,17 @@ config file had these values:
 agent {
   pathConfigs: [
     {
-      name: app1
+      name: "app1 name"
       path: app1_metrics
       url: "http://app1.local:9100/metrics"
     },
     {
-      name: app2
+      name: "app2 name"
       path: app2_metrics
       url: "http://app2.local:9100/metrics"
     },
     {
-      name: app3
+      name: "app3 name"
       path: app3_metrics
       url: "http://app3.local:9100/metrics"
     }
