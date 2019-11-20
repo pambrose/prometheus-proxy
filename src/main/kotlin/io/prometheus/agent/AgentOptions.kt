@@ -59,5 +59,6 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
     assignAdminPort(configVals.agent.admin.port)
     assignMetricsEnabled(configVals.agent.metrics.enabled)
     assignMetricsPort(configVals.agent.metrics.port)
+    assignDebugEnabled(configVals.agent.admin.debugEnabled)
   }
 }

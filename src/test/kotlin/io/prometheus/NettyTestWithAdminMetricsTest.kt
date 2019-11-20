@@ -19,6 +19,7 @@
 package io.prometheus
 
 import com.github.pambrose.common.util.simpleClassName
+import com.github.pambrose.common.util.sleep
 import io.prometheus.ProxyTests.ProxyCallTestArgs
 import io.prometheus.ProxyTests.proxyCallTest
 import io.prometheus.ProxyTests.timeoutTest
@@ -30,7 +31,6 @@ import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -38,7 +38,6 @@ import mu.KLogging
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
-import java.util.concurrent.TimeoutException
 import kotlin.time.seconds
 
 class NettyTestWithAdminMetricsTest {
@@ -63,11 +62,11 @@ class NettyTestWithAdminMetricsTest {
 
   @Test
   fun proxyCallTest() =
-    proxyCallTest(ProxyCallTestArgs(agent.pathManager,
+    proxyCallTest(ProxyCallTestArgs(agent,
                                     httpServerCount = 5,
                                     pathCount = 25,
-                                    sequentialQueryCount = 100,
-                                    parallelQueryCount = 250,
+                                    sequentialQueryCount = 500,
+                                    parallelQueryCount = 0,
                                     startPort = 10900,
                                     caller = simpleClassName))
 
@@ -89,16 +88,13 @@ class NettyTestWithAdminMetricsTest {
       }
 
       // Wait long enough to trigger heartbeat for code coverage
-      runBlocking {
-        delay(15.seconds)
-      }
+      sleep(15.seconds)
 
       logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
     }
 
     @JvmStatic
     @AfterAll
-    @Throws(InterruptedException::class, TimeoutException::class)
     fun takeDown() {
       runBlocking {
         for (service in listOf(proxy, agent)) {

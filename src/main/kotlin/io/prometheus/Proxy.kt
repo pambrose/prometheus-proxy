@@ -19,18 +19,20 @@
 package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
+import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.github.pambrose.common.service.GenericService
+import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
 import io.grpc.Attributes
+import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.delay
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
@@ -42,7 +44,6 @@ import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRequestManager
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
-import kotlin.properties.Delegates.notNull
 import kotlin.time.milliseconds
 
 class Proxy(options: ProxyOptions,
@@ -59,13 +60,9 @@ class Proxy(options: ProxyOptions,
                                               options.configVals.proxy.metrics),
                              newZipkinConfig(options.configVals.proxy.internal.zipkin),
                              { getVersionDesc(true) },
-                             testMode) {
-  val configVals: ConfigVals.Proxy2.Internal2 = genericConfigVals.proxy.internal
-  val pathManager = ProxyPathManager(isTestMode)
-  val scrapeRequestManager = ScrapeRequestManager()
-  val agentContextManager = AgentContextManager()
-  var metrics: ProxyMetrics by notNull()
+                             isTestMode = testMode) {
 
+  private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort)
   private val grpcService =
     if (inProcessServerName.isEmpty())
@@ -73,17 +70,28 @@ class Proxy(options: ProxyOptions,
     else
       ProxyGrpcService(this, inProcessName = inProcessServerName)
 
-  private var agentCleanupService: AgentContextCleanupService by notNull()
+  private lateinit var agentCleanupService: AgentContextCleanupService
+
+  val pathManager = ProxyPathManager(isTestMode)
+  val scrapeRequestManager = ScrapeRequestManager()
+  val agentContextManager = AgentContextManager()
+
+  lateinit var metrics: ProxyMetrics
 
   init {
     if (isMetricsEnabled)
       metrics = ProxyMetrics(this)
 
-    if (configVals.staleAgentCheckEnabled)
-      agentCleanupService = AgentContextCleanupService(this) { addServices(this) }
+    if (proxyConfigVals.staleAgentCheckEnabled)
+      agentCleanupService = AgentContextCleanupService(this, proxyConfigVals) { addServices(this) }
 
     addServices(grpcService, httpService)
-    initService()
+
+    initService {
+      if (options.debugEnabled)
+        addServlet(DEBUG, LambdaServlet({ toPlainText() + "\n" + pathManager.toPlainText() }))
+    }
+
     initBlock?.invoke(this)
   }
 
@@ -93,7 +101,7 @@ class Proxy(options: ProxyOptions,
     grpcService.startSync()
     httpService.startSync()
 
-    if (configVals.staleAgentCheckEnabled)
+    if (proxyConfigVals.staleAgentCheckEnabled)
       agentCleanupService.startSync()
     else
       logger.info { "Agent eviction thread not started" }
@@ -102,7 +110,7 @@ class Proxy(options: ProxyOptions,
   override fun shutDown() {
     grpcService.stopSync()
     httpService.stopSync()
-    if (configVals.staleAgentCheckEnabled)
+    if (proxyConfigVals.staleAgentCheckEnabled)
       agentCleanupService.stopSync()
     super.shutDown()
   }
@@ -120,10 +128,11 @@ class Proxy(options: ProxyOptions,
       .apply {
         register("grpc_service", grpcService.healthCheck)
         register("scrape_response_map_check",
-                 newMapHealthCheck(scrapeRequestManager.scrapeRequestMap, configVals.scrapeRequestMapUnhealthySize))
+                 newMapHealthCheck(scrapeRequestManager.scrapeRequestMap,
+                                   proxyConfigVals.scrapeRequestMapUnhealthySize))
         register("agent_scrape_request_backlog",
                  healthCheck {
-                   val unhealthySize = configVals.scrapeRequestBacklogUnhealthySize
+                   val unhealthySize = proxyConfigVals.scrapeRequestBacklogUnhealthySize
                    val vals =
                      agentContextManager.agentContextMap.entries
                        .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
@@ -153,6 +162,18 @@ class Proxy(options: ProxyOptions,
       agentContext
     }
 
+  fun toPlainText() =
+    """
+      Proxy port: ${httpService.httpPort}
+      
+      AdminService:
+      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
+      
+      MetricsService:
+      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
+      
+    """.trimIndent()
+
   override fun toString() =
     toStringElements {
       add("proxyPort", httpService.httpPort)
@@ -161,8 +182,8 @@ class Proxy(options: ProxyOptions,
     }
 
   companion object : KLogging() {
-    internal const val AGENT_ID = "agent-id"
-    internal val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
+    const val AGENT_ID = "agent-id"
+    val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
 
     @JvmStatic
     fun main(argv: Array<String>) {

@@ -30,13 +30,13 @@ import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
 import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
+import io.prometheus.common.EnvVars.DEBUG_ENABLED
 import io.prometheus.common.EnvVars.METRICS_ENABLED
 import io.prometheus.common.EnvVars.METRICS_PORT
 import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
-import kotlin.properties.Delegates.notNull
 import kotlin.system.exitProcess
 
 abstract class BaseOptions protected constructor(private val progName: String,
@@ -45,7 +45,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val exitOnMissingConfig: Boolean = false) {
 
   @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
-  private var configName = ""
+  private var configSource = ""
 
   @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
   var adminEnabled = false
@@ -63,6 +63,10 @@ abstract class BaseOptions protected constructor(private val progName: String,
   var metricsPort = -1
     private set
 
+  @Parameter(names = ["-b", "--debug"], description = "Debug option enabled")
+  var debugEnabled = false
+    private set
+
   @Parameter(names = ["-v", "--version"],
              description = "Print version info and exit",
              validateWith = [VersionValidator::class])
@@ -76,9 +80,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
   var dynamicParams = mutableMapOf<String, String>()
     private set
 
-  private var config: Config by notNull()
+  private lateinit var config: Config
 
-  var configVals: ConfigVals by notNull()
+  lateinit var configVals: ConfigVals
     private set
 
   protected abstract fun assignConfigVals()
@@ -125,13 +129,18 @@ abstract class BaseOptions protected constructor(private val progName: String,
       metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
   }
 
+  protected fun assignDebugEnabled(defaultVal: Boolean) {
+    if (!debugEnabled)
+      debugEnabled = DEBUG_ENABLED.getEnv(defaultVal)
+  }
+
   protected fun assignMetricsPort(defaultVal: Int) {
     if (metricsPort == -1)
       metricsPort = METRICS_PORT.getEnv(defaultVal)
   }
 
   private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-    config = readConfig(if (configName.isNotEmpty()) configName else System.getenv(envConfig).orEmpty(),
+    config = readConfig(if (configSource.isNotEmpty()) configSource else System.getenv(envConfig).orEmpty(),
                         envConfig,
                         ConfigParseOptions.defaults().setAllowMissing(false),
                         ConfigFactory.load().resolve(),
@@ -207,5 +216,6 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
   companion object : KLogging() {
     private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
+    const val DEBUG = "debug"
   }
 }

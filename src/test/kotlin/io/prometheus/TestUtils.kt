@@ -26,12 +26,9 @@ import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
 import mu.KLogger
 import mu.KLogging
-import java.io.IOException
 import java.nio.channels.ClosedSelectorException
-import java.util.concurrent.TimeoutException
 
 object TestUtils : KLogging() {
-  @Throws(IOException::class, TimeoutException::class)
   fun startProxy(serverName: String = "",
                  adminEnabled: Boolean = false,
                  metricsEnabled: Boolean = false,
@@ -55,7 +52,6 @@ object TestUtils : KLogging() {
                  testMode = true) { startSync() }
   }
 
-  @Throws(IOException::class, TimeoutException::class)
   fun startAgent(serverName: String = "",
                  adminEnabled: Boolean = false,
                  metricsEnabled: Boolean = false,
@@ -74,9 +70,7 @@ object TestUtils : KLogging() {
                                         add("-Dagent.metrics.enabled=$metricsEnabled")
                                       },
                                     false)
-    return Agent(options = agentOptions,
-                 inProcessServerName = serverName,
-                 testMode = true) { startSync() }
+    return Agent(options = agentOptions, inProcessServerName = serverName, testMode = true) { startSync() }
   }
 }
 

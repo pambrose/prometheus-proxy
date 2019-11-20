@@ -31,8 +31,8 @@ import kotlin.time.Duration
 import kotlin.time.MonoClock
 
 class ScrapeRequestWrapper(proxy: Proxy,
-                           val agentContext: AgentContext,
                            path: String,
+                           val agentContext: AgentContext,
                            accept: String?) {
   private val clock = MonoClock
   private val createTimeMark = clock.markNow()

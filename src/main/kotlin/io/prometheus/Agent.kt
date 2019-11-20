@@ -18,41 +18,39 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.service.GenericService
+import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
-import com.google.protobuf.Empty
 import io.grpc.StatusRuntimeException
+import io.prometheus.agent.AgentConnectionContext
 import io.prometheus.agent.AgentGrpcService
+import io.prometheus.agent.AgentHttpService
 import io.prometheus.agent.AgentMetrics
 import io.prometheus.agent.AgentOptions
 import io.prometheus.agent.AgentPathManager
-import io.prometheus.agent.AgentUtils
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.client.Summary
+import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.GrpcObjects.newRegisterAgentRequest
-import io.prometheus.common.ScrapeRequestAction
-import io.prometheus.common.delay
 import io.prometheus.common.getVersionDesc
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.properties.Delegates.notNull
+import kotlin.math.roundToInt
 import kotlin.time.ClockMark
 import kotlin.time.Duration
 import kotlin.time.MonoClock
@@ -72,37 +70,36 @@ class Agent(options: AgentOptions,
                                               options.configVals.agent.metrics),
                              newZipkinConfig(options.configVals.agent.internal.zipkin),
                              { getVersionDesc(true) },
-                             testMode) {
-  private val configVals = genericConfigVals.agent.internal
-  private val agentUtils = AgentUtils(this)
-  private val initialConnectionLatch = CountDownLatch(1)
-  private val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
-  // Prime the limiter
-  private val reconnectLimiter = RateLimiter.create(1.0 / configVals.reconectPauseSecs).apply { acquire() }
+                             isTestMode = testMode) {
 
+  private val agentConfigVals = configVals.agent.internal
   private val clock = MonoClock
+  private val agentHttpService = AgentHttpService(this)
+  private val initialConnectionLatch = CountDownLatch(1)
+  // Prime the limiter
+  private val reconnectLimiter = RateLimiter.create(1.0 / agentConfigVals.reconnectPauseSecs).apply { acquire() }
   private var lastMsgSentMark: ClockMark by nonNullableReference(clock.markNow())
-  private var metrics: AgentMetrics by notNull()
 
-  internal var agentId: String by nonNullableReference("")
+  val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
+  val scrapeRequestBacklogSize = AtomicInteger(0)
+  val pathManager = AgentPathManager(this)
+  val grpcService = AgentGrpcService(this, options, inProcessServerName)
+  var agentId: String by nonNullableReference("")
 
-  internal val scrapeRequestBacklogSize = AtomicInteger(0)
-  internal val pathManager = AgentPathManager(this)
-  internal val grpcService: AgentGrpcService = AgentGrpcService(this, options, inProcessServerName)
+  lateinit var metrics: AgentMetrics
 
   init {
-    logger.info { "Assigning proxy reconnect pause time to ${configVals.reconectPauseSecs} secs" }
+    logger.info { "Assigning proxy reconnect pause time to ${agentConfigVals.reconnectPauseSecs.seconds}" }
 
     if (isMetricsEnabled)
       metrics = AgentMetrics(this)
 
-    initService()
-    initBlock?.invoke(this)
-  }
+    initService {
+      if (options.debugEnabled)
+        addServlet(DEBUG, LambdaServlet({ toPlainText() + "\n" + pathManager.toPlainText() }))
+    }
 
-  override fun shutDown() {
-    grpcService.shutDown()
-    super.shutDown()
+    initBlock?.invoke(this)
   }
 
   override fun run() {
@@ -116,15 +113,14 @@ class Agent(options: AgentOptions,
       } catch (e: Exception) {
         // Catch anything else to avoid exiting retry loop
       } finally {
-        val secsWaiting = reconnectLimiter.acquire()
-        logger.info { "Waited $secsWaiting secs to reconnect" }
+        logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
       }
     }
   }
 
-  internal val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
+  val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
 
-  internal fun startTimer(): Summary.Timer? = metrics.scrapeRequestLatency.labels(agentName).startTimer()
+  fun startTimer(): Summary.Timer? = metrics.scrapeRequestLatency.labels(agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"
 
@@ -132,12 +128,10 @@ class Agent(options: AgentOptions,
     super.registerHealthChecks()
     healthCheckRegistry.register("scrape_request_backlog_check",
                                  newBacklogHealthCheck(scrapeRequestBacklogSize.get(),
-                                                       configVals.scrapeRequestBacklogUnhealthySize))
+                                                       agentConfigVals.scrapeRequestBacklogUnhealthySize))
   }
 
   private fun connectToProxy() {
-    val disconnected = AtomicBoolean(false)
-
     // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != ""
     if (agentId.isNotEmpty()) {
       grpcService.resetGrpcStubs()
@@ -149,33 +143,39 @@ class Agent(options: AgentOptions,
     scrapeRequestBacklogSize.set(0)
     lastMsgSentMark = clock.markNow()
 
-    if (connectAgent()) {
-      registerAgent()
+    if (grpcService.connectAgent()) {
+      grpcService.registerAgent(initialConnectionLatch)
       pathManager.registerPaths()
 
-      val scrapeRequestChannel = Channel<ScrapeRequestAction>(configVals.scrapeRequestChannelSize)
-
-      agentUtils.readRequestsFromProxy(grpcService, scrapeRequestChannel, disconnected)
+      val connectionContext = AgentConnectionContext()
+      grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
 
       runBlocking {
-        launch(Dispatchers.Default) { startHeartBeat(disconnected) }
-        launch(Dispatchers.Default) {
-          agentUtils.writeResponsesToProxyUntilDisconnected(grpcService, scrapeRequestChannel, disconnected)
+        launch(Dispatchers.Default) { startHeartBeat(connectionContext) }
+
+        launch(Dispatchers.Default) { grpcService.writeResponsesToProxyUntilDisconnected(connectionContext) }
+
+        for (scrapeRequestAction in connectionContext.scrapeRequestChannel) {
+          launch(Dispatchers.Default) {
+            // The fetch actually occurs here
+            val scrapeResponse = scrapeRequestAction.invoke()
+            connectionContext.scrapeResultChannel.send(scrapeResponse)
+          }
         }
       }
     }
   }
 
-  private suspend fun startHeartBeat(disconnected: AtomicBoolean) =
-    if (configVals.heartbeatEnabled) {
-      val heartbeatPauseTime = configVals.heartbeatCheckPauseMillis.milliseconds
-      val maxInactivityTime = configVals.heartbeatMaxInactivitySecs.seconds
+  private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) =
+    if (agentConfigVals.heartbeatEnabled) {
+      val heartbeatPauseTime = agentConfigVals.heartbeatCheckPauseMillis.milliseconds
+      val maxInactivityTime = agentConfigVals.heartbeatMaxInactivitySecs.seconds
       logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
 
-      while (isRunning && !disconnected.get()) {
+      while (isRunning && connectionContext.connected) {
         val timeSinceLastWrite = lastMsgSentMark.elapsedNow()
         if (timeSinceLastWrite > maxInactivityTime)
-          agentUtils.sendHeartBeat(grpcService, disconnected)
+          grpcService.sendHeartBeat(connectionContext)
         delay(heartbeatPauseTime)
       }
       logger.info { "Heartbeat completed" }
@@ -183,46 +183,36 @@ class Agent(options: AgentOptions,
       logger.info { "Heartbeat disabled" }
     }
 
-  internal fun updateScrapeCounter(type: String) {
+  fun updateScrapeCounter(type: String) {
     if (isMetricsEnabled && type.isNotEmpty())
       metrics.scrapeRequests.labels(type).inc()
-  }
-
-  // If successful, this will create an agentContxt on the Proxy and an interceptor will add an agent_id to the headers`
-  private fun connectAgent() =
-    try {
-      logger.info { "Connecting to proxy at $proxyHost..." }
-      grpcService.blockingStub.connectAgent(Empty.getDefaultInstance())
-      logger.info { "Connected to proxy at $proxyHost" }
-      if (isMetricsEnabled)
-        metrics.connects.labels("success")?.inc()
-      true
-    } catch (e: StatusRuntimeException) {
-      if (isMetricsEnabled)
-        metrics.connects.labels("failure")?.inc()
-      logger.info { "Cannot connect to proxy at $proxyHost [${e.message}]" }
-      false
-    }
-
-  @Throws(RequestFailureException::class)
-  private fun registerAgent() {
-    val request = newRegisterAgentRequest(agentId, agentName, grpcService.hostName)
-    grpcService.blockingStub.registerAgent(request)
-      .also { resp ->
-        markMsgSent()
-        if (!resp.valid)
-          throw RequestFailureException("registerAgent() - ${resp.reason}")
-      }
-    initialConnectionLatch.countDown()
   }
 
   fun markMsgSent() {
     lastMsgSentMark = clock.markNow()
   }
 
-  @Throws(InterruptedException::class)
   fun awaitInitialConnection(timeout: Duration) =
     initialConnectionLatch.await(timeout.toLongMilliseconds(), MILLISECONDS)
+
+  override fun shutDown() {
+    grpcService.shutDown()
+    super.shutDown()
+  }
+
+  fun toPlainText() =
+    """
+      AgentId:   $agentId 
+      AgentName: $agentName
+      ProxyHost: $proxyHost
+      
+      AdminService:
+      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
+      
+      MetricsService:
+      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
+      
+    """.trimIndent()
 
   override fun toString() =
     toStringElements {

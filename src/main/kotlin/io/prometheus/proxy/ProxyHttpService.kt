@@ -22,6 +22,7 @@ import brave.Tracing
 import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.util.sleep
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.util.concurrent.MoreExecutors
 import io.ktor.application.ApplicationCall
@@ -47,19 +48,17 @@ import io.ktor.routing.routing
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
-import io.prometheus.common.delay
-import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.TimeUnit
-import kotlin.properties.Delegates.notNull
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
-  private val configVals = proxy.genericConfigVals.proxy
-  private var tracing: Tracing by notNull()
+  private val proxyConfigVals = proxy.configVals.proxy
   private val idleTimeout =
-    if (configVals.http.idleTimeoutSecs == -1) 45.seconds else configVals.http.idleTimeoutSecs.seconds
+    if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
+
+  private lateinit var tracing: Tracing
 
   private val httpServer =
     embeddedServer(CIO,
@@ -83,65 +82,68 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
           call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
 
           val path = call.request.path().drop(1)
+          logger.debug { "Servicing request for path: $path" }
           val agentContext = proxy.pathManager[path]
-          val arg = ResponseArg()
+          val responseResults = ResponseResults()
 
           when {
             !proxy.isRunning -> {
               logger.error { "Proxy stopped" }
-              arg.apply {
+              responseResults.apply {
                 updateMsg = "proxy_stopped"
                 statusCode = HttpStatusCode.ServiceUnavailable
               }
             }
 
-            path.isEmpty() -> {
+            path.isEmpty() || path.isBlank() -> {
               logger.info { "Request missing path" }
-              arg.apply {
+              responseResults.apply {
                 updateMsg = "missing_path"
                 statusCode = HttpStatusCode.NotFound
               }
             }
 
-            configVals.internal.blitz.enabled && path == configVals.internal.blitz.path ->
-              arg.contentText = "42"
+            proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path ->
+              responseResults.contentText = "42"
+
             agentContext == null -> {
-              logger.debug { "Invalid path request /\${path" }
-              arg.apply {
+              logger.info { "Invalid path request /${path}" }
+              responseResults.apply {
                 updateMsg = "invalid_path"
                 statusCode = HttpStatusCode.NotFound
               }
             }
 
-            !agentContext.isValid() -> {
+            agentContext.isNotValid() -> {
               logger.error { "Invalid AgentContext" }
-              arg.apply {
+              responseResults.apply {
                 updateMsg = "invalid_agent_context"
                 statusCode = HttpStatusCode.NotFound
               }
             }
 
             else -> {
-              val resp = submitScrapeRequest(call.request, call.response, agentContext, path)
-              arg.apply {
-                contentText = resp.contentText
-                contentType = resp.contentType
-                statusCode = resp.statusCode
-                updateMsg = resp.updateMsg
+              val response = submitScrapeRequest(path, agentContext, call.request, call.response)
+              responseResults.apply {
+                contentText = response.contentText
+                contentType = response.contentType
+                statusCode = response.statusCode
+                updateMsg = response.updateMsg
               }
             }
           }
 
-          updateScrapeRequests(arg.updateMsg)
-
-          call.respondWith(text = arg.contentText, contentType = arg.contentType, status = arg.statusCode)
+          responseResults.apply {
+            updateScrapeRequests(updateMsg)
+            call.respondWith(contentText, contentType, statusCode)
+          }
         }
       }
     }
 
-  suspend fun ApplicationCall.respondWith(text: String,
-                                          contentType: ContentType = ContentType.Text.Plain,
-                                          status: HttpStatusCode = HttpStatusCode.OK) {
+  private suspend fun ApplicationCall.respondWith(text: String,
+                                                  contentType: ContentType = ContentType.Text.Plain,
+                                                  status: HttpStatusCode = HttpStatusCode.OK) {
     apply {
       response.header("cache-control", "must-revalidate,no-cache,no-store")
       response.status(status)
@@ -149,10 +151,10 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     }
   }
 
-  class ResponseArg(var contentText: String = "",
-                    var contentType: ContentType = ContentType.Text.Plain,
-                    var statusCode: HttpStatusCode = HttpStatusCode.OK,
-                    var updateMsg: String = "")
+  class ResponseResults(var contentText: String = "",
+                        var contentType: ContentType = ContentType.Text.Plain,
+                        var statusCode: HttpStatusCode = HttpStatusCode.OK,
+                        var updateMsg: String = "")
 
   init {
     if (proxy.isZipkinEnabled)
@@ -170,9 +172,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
     httpServer.stop(5, 5, TimeUnit.SECONDS)
 
-    runBlocking {
-      delay(2.seconds)
-    }
+    sleep(2.seconds)
   }
 
   private class ScrapeRequestResponse(var contentText: String = "",
@@ -180,16 +180,16 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                                       val statusCode: HttpStatusCode,
                                       val updateMsg: String)
 
-  private suspend fun submitScrapeRequest(req: ApplicationRequest,
-                                          res: ApplicationResponse,
+  private suspend fun submitScrapeRequest(path: String,
                                           agentContext: AgentContext,
-                                          path: String): ScrapeRequestResponse {
+                                          request: ApplicationRequest,
+                                          response: ApplicationResponse): ScrapeRequestResponse {
 
-    val scrapeRequest = ScrapeRequestWrapper(proxy, agentContext, path, req.header(ACCEPT))
+    val scrapeRequest = ScrapeRequestWrapper(proxy, path, agentContext, request.header(ACCEPT))
 
     try {
-      val timeoutTime = configVals.internal.scrapeRequestTimeoutSecs.seconds
-      val checkTime = configVals.internal.scrapeRequestCheckMillis.milliseconds
+      val timeoutTime = proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
+      val checkTime = proxyConfigVals.internal.scrapeRequestCheckMillis.milliseconds
 
       proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
       agentContext.writeScrapeRequest(scrapeRequest)
@@ -209,28 +209,29 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
     scrapeRequest.scrapeResponse
       .also { scrapeResponse ->
-        HttpStatusCode.fromValue(scrapeResponse.statusCode).also { statusCode ->
-          scrapeResponse.contentType.split("/")
-            .also { contentTypeElems ->
-              val contentType =
-                if (contentTypeElems.size == 2)
-                  ContentType(contentTypeElems[0], contentTypeElems[1])
-                else
-                  ContentType.Text.Plain
+        HttpStatusCode.fromValue(scrapeResponse.statusCode)
+          .also { statusCode ->
+            scrapeResponse.contentType.split("/")
+              .also { contentTypeElems ->
+                val contentType =
+                  if (contentTypeElems.size == 2)
+                    ContentType(contentTypeElems[0], contentTypeElems[1])
+                  else
+                    ContentType.Text.Plain
 
-              // Do not return content on error status codes
-              return if (!statusCode.isSuccess()) {
-                ScrapeRequestResponse(contentType = contentType,
-                                      statusCode = statusCode,
-                                      updateMsg = "path_not_found")
-              } else {
-                ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
-                                      contentType = contentType,
-                                      statusCode = statusCode,
-                                      updateMsg = "success")
+                // Do not return content on error status codes
+                return if (!statusCode.isSuccess()) {
+                  ScrapeRequestResponse(contentType = contentType,
+                                        statusCode = statusCode,
+                                        updateMsg = "path_not_found")
+                } else {
+                  ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
+                                        contentType = contentType,
+                                        statusCode = statusCode,
+                                        updateMsg = "success")
+                }
               }
-            }
-        }
+          }
       }
   }
 

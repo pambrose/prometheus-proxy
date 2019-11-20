@@ -21,14 +21,15 @@ package io.prometheus.proxy
 import com.github.pambrose.common.concurrent.GenericExecutionThreadService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
-import io.prometheus.common.delay
-import kotlinx.coroutines.runBlocking
+import io.prometheus.common.ConfigVals
 import mu.KLogging
 import kotlin.time.seconds
 
 class AgentContextCleanupService(private val proxy: Proxy,
+                                 private val configVals: ConfigVals.Proxy2.Internal2,
                                  initBlock: (AgentContextCleanupService.() -> Unit) = {}) :
   GenericExecutionThreadService() {
 
@@ -37,31 +38,28 @@ class AgentContextCleanupService(private val proxy: Proxy,
     initBlock(this)
   }
 
-  @Throws(Exception::class)
   override fun run() {
-    val maxInactivityTime = proxy.configVals.maxAgentInactivitySecs.seconds
-    val pauseTime = proxy.configVals.staleAgentCheckPauseSecs.seconds
+    val maxInactivityTime = configVals.maxAgentInactivitySecs.seconds
+    val pauseTime = configVals.staleAgentCheckPauseSecs.seconds
     while (isRunning) {
       proxy.agentContextManager.agentContextMap
         .forEach { (agentId, agentContext) ->
           val inactivityTime = agentContext.inactivityTime
           if (inactivityTime > maxInactivityTime) {
-            logger.info { "Evicting agent after $inactivityTime secs of inactivty $agentContext" }
+            logger.info { "Evicting agent after $inactivityTime of inactivty $agentContext" }
             proxy.removeAgentContext(agentId)
             if (proxy.isMetricsEnabled)
               proxy.metrics.agentEvictions.inc()
           }
         }
-      runBlocking {
-        delay(pauseTime)
-      }
+      sleep(pauseTime)
     }
   }
 
   override fun toString() =
     toStringElements {
-      add("max inactivity secs", proxy.configVals.maxAgentInactivitySecs)
-      add("pause secs", proxy.configVals.staleAgentCheckPauseSecs)
+      add("max inactivity secs", configVals.maxAgentInactivitySecs)
+      add("pause secs", configVals.staleAgentCheckPauseSecs)
     }
 
   companion object : KLogging()

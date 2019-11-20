@@ -18,6 +18,7 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.http
@@ -38,10 +39,8 @@ import io.ktor.server.engine.embeddedServer
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.common.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -49,11 +48,12 @@ import mu.KLogging
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
+import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.set
-import kotlin.random.Random
+import kotlin.time.milliseconds
 import kotlin.time.minutes
 import kotlin.time.seconds
 
@@ -99,7 +99,7 @@ object ProxyTests : KLogging() {
     }
   }
 
-  class ProxyCallTestArgs(val pathManager: AgentPathManager,
+  class ProxyCallTestArgs(val agent: Agent,
                           val httpServerCount: Int,
                           val pathCount: Int,
                           val sequentialQueryCount: Int,
@@ -110,12 +110,12 @@ object ProxyTests : KLogging() {
   private class HttpServerWrapper(val port: Int, val server: CIOApplicationEngine)
 
   fun proxyCallTest(args: ProxyCallTestArgs) {
-    logger.debug { "Calling proxyCallTest() from ${args.caller}" }
+    logger.info { "Calling proxyCallTest() from ${args.caller}" }
 
-    val pathMap = newConcurrentMap<Int, Int>()
+    val pathMap: ConcurrentMap<Int, Int> = newConcurrentMap()
 
     // Take into account pre-existing paths already registered
-    val originalSize = args.pathManager.pathMapSize()
+    val originalSize = args.agent.grpcService.pathMapSize()
 
     // Create the endpoints
     logger.info { "Creating ${args.httpServerCount} httpServers" }
@@ -149,12 +149,12 @@ object ProxyTests : KLogging() {
     // Create the paths
     logger.debug { "Registering paths" }
     repeat(args.pathCount) { i ->
-      val index = httpServers.size.random
-      args.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".fixUrl())
+      val index = httpServers.size.random()
+      args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".fixUrl())
       pathMap[i] = index
     }
 
-    args.pathManager.pathMapSize() shouldEqual originalSize + args.pathCount
+    args.agent.grpcService.pathMapSize() shouldEqual originalSize + args.pathCount
 
     // Call the proxy sequentially
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
@@ -167,6 +167,7 @@ object ProxyTests : KLogging() {
                 val counter = AtomicInteger(0)
                 repeat(args.sequentialQueryCount) { cnt ->
                   val job = launch(dispatcher + coroutineExceptionHandler(logger)) {
+                    //delay((50..100).random().milliseconds)
                     callProxy(httpClient, pathMap, "Sequential $cnt")
                     counter.incrementAndGet()
                   }
@@ -194,7 +195,7 @@ object ProxyTests : KLogging() {
                 val jobs =
                   List(args.parallelQueryCount) { cnt ->
                     launch(dispatcher + coroutineExceptionHandler(logger)) {
-                      delay(Random.nextLong(50, 300))
+                      delay((200..400).random().milliseconds)
                       callProxy(httpClient, pathMap, "Parallel $cnt")
                       counter.incrementAndGet()
                     }
@@ -216,7 +217,7 @@ object ProxyTests : KLogging() {
     val errorCnt = AtomicInteger(0)
     pathMap.forEach { path ->
       try {
-        args.pathManager.unregisterPath("proxy-${path.key}")
+        args.agent.pathManager.unregisterPath("proxy-${path.key}")
         counter.incrementAndGet()
       } catch (e: RequestFailureException) {
         errorCnt.incrementAndGet()
@@ -225,7 +226,7 @@ object ProxyTests : KLogging() {
 
     counter.get() shouldEqual pathMap.size
     errorCnt.get() shouldEqual 0
-    args.pathManager.pathMapSize() shouldEqual originalSize
+    args.agent.grpcService.pathMapSize() shouldEqual originalSize
 
     logger.info { "Shutting down ${httpServers.size} httpServers" }
     runBlocking {
@@ -245,7 +246,7 @@ object ProxyTests : KLogging() {
     logger.debug { "Launched $msg" }
 
     // Randomly choose one of the pathMap values
-    val index = pathMap.size.random
+    val index = pathMap.size.random()
     val httpVal = pathMap[index]
     httpVal.shouldNotBeNull()
 
@@ -258,5 +259,3 @@ object ProxyTests : KLogging() {
     }
   }
 }
-
-

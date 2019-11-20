@@ -16,32 +16,23 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus.common
+package io.prometheus.agent
 
-import java.lang.System.getenv
+import io.prometheus.common.ScrapeRequestAction
+import io.prometheus.grpc.ScrapeResponse
+import kotlinx.coroutines.channels.Channel
+import java.util.concurrent.atomic.AtomicBoolean
 
-enum class EnvVars {
+class AgentConnectionContext {
+  val disconnected = AtomicBoolean(false)
+  val scrapeRequestChannel = Channel<ScrapeRequestAction>(Channel.UNLIMITED)
+  val scrapeResultChannel = Channel<ScrapeResponse>(Channel.UNLIMITED)
 
-  // Proxy
-  PROXY_CONFIG,
-  PROXY_PORT,
-  AGENT_PORT,
+  fun disconnect() {
+    disconnected.set(true)
+    scrapeRequestChannel.cancel()
+    scrapeResultChannel.cancel()
+  }
 
-  // Agent
-  AGENT_CONFIG,
-  PROXY_HOSTNAME,
-  AGENT_NAME,
-
-  // Common
-  DEBUG_ENABLED,
-  METRICS_ENABLED,
-  METRICS_PORT,
-  ADMIN_ENABLED,
-  ADMIN_PORT;
-
-  fun getEnv(defaultVal: String) = getenv(name) ?: defaultVal
-
-  fun getEnv(defaultVal: Boolean) = getenv(name)?.toBoolean() ?: defaultVal
-
-  fun getEnv(defaultVal: Int) = getenv(name)?.toInt() ?: defaultVal
+  val connected get() = !disconnected.get()
 }

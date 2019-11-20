@@ -33,8 +33,6 @@ import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
 import mu.KLogging
-import java.io.IOException
-import kotlin.properties.Delegates.notNull
 import kotlin.time.seconds
 
 class ProxyGrpcService(private val proxy: Proxy,
@@ -48,9 +46,10 @@ class ProxyGrpcService(private val proxy: Proxy,
         HealthCheck.Result.healthy()
     }
 
-  private var tracing: Tracing by notNull()
-  private var grpcTracing: GrpcTracing by notNull()
   private val grpcServer: Server
+
+  private lateinit var tracing: Tracing
+  private lateinit var grpcTracing: GrpcTracing
 
   init {
     if (proxy.isZipkinEnabled) {
@@ -72,7 +71,6 @@ class ProxyGrpcService(private val proxy: Proxy,
     addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
   }
 
-  @Throws(IOException::class)
   override fun startUp() {
     grpcServer.start()
   }
