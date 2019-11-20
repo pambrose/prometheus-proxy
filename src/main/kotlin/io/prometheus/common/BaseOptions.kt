@@ -63,7 +63,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
   var metricsPort = -1
     private set
 
-  @Parameter(names = ["-d", "--debug"], description = "Debug option enabled")
+  @Parameter(names = ["-b", "--debug"], description = "Debug option enabled")
   var debugEnabled = false
     private set
 

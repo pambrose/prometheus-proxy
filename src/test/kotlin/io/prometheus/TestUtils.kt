@@ -70,9 +70,7 @@ object TestUtils : KLogging() {
                                         add("-Dagent.metrics.enabled=$metricsEnabled")
                                       },
                                     false)
-    return Agent(options = agentOptions,
-                 inProcessServerName = serverName,
-                 testMode = true) { startSync() }
+    return Agent(options = agentOptions, inProcessServerName = serverName, testMode = true) { startSync() }
   }
 }
 

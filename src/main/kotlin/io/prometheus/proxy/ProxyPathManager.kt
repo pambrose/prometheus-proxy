@@ -92,12 +92,11 @@ class ProxyPathManager(private val isTestMode: Boolean) {
       }
 
   override fun toString(): String {
-    val maxPath = pathMap.keys.map { it.length ?: 0 }.max() ?: 0
-
+    val maxPath = pathMap.keys.map { it.length }.max() ?: 0
     return "Proxy Path Map\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
-        pathMap.map { c ->
-          "/${c.key.padEnd(maxPath)} ${c.value}"
-        }.joinToString("\n")
+        pathMap
+          .map { c -> "/${c.key.padEnd(maxPath)} ${c.value}" }
+          .joinToString("\n")
   }
 
   companion object : KLogging()
