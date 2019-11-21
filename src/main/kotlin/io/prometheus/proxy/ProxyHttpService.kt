@@ -107,7 +107,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
               responseResults.contentText = "42"
 
             agentContext == null -> {
-              logger.info { "Invalid path request /${path}" }
+              val msg = "Invalid path request /${path}"
+              proxy.logActivity(msg)
+              logger.info { msg }
               responseResults.apply {
                 updateMsg = "invalid_path"
                 statusCode = HttpStatusCode.NotFound
@@ -115,7 +117,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             }
 
             agentContext.isNotValid() -> {
-              logger.error { "Invalid AgentContext" }
+              val msg = "Invalid AgentContext for /${path}"
+              proxy.logActivity(msg)
+              logger.error { msg }
               responseResults.apply {
                 updateMsg = "invalid_agent_context"
                 statusCode = HttpStatusCode.NotFound
@@ -124,6 +128,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
             else -> {
               val response = submitScrapeRequest(path, agentContext, call.request, call.response)
+              proxy.logActivity("/${path} - ${response.updateMsg} - ${response.statusCode}")
               responseResults.apply {
                 contentText = response.contentText
                 contentType = response.contentType

@@ -24,9 +24,11 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
+import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
+import com.google.common.collect.EvictingQueue
 import io.grpc.Attributes
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
@@ -44,6 +46,8 @@ import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRequestManager
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import kotlin.time.milliseconds
 
 class Proxy(options: ProxyOptions,
@@ -64,6 +68,7 @@ class Proxy(options: ProxyOptions,
 
   private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort)
+  private val recentActions = EvictingQueue.create<String>(configVals.proxy.admin.recentActivityQueueSize)
   private val grpcService =
     if (inProcessServerName.isEmpty())
       ProxyGrpcService(this, port = options.proxyAgentPort)
@@ -89,7 +94,13 @@ class Proxy(options: ProxyOptions,
 
     initService {
       if (options.debugEnabled)
-        addServlet(DEBUG, LambdaServlet({ toPlainText() + "\n" + pathManager.toPlainText() }))
+        addServlet(DEBUG,
+                   LambdaServlet {
+                     listOf(toPlainText(),
+                            pathManager.toPlainText(),
+                            recentActions.joinToString("\n"))
+                       .joinToString("\n")
+                   })
     }
 
     initBlock?.invoke(this)
@@ -162,8 +173,17 @@ class Proxy(options: ProxyOptions,
       agentContext
     }
 
+  private val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
+
+  fun logActivity(desc: String) {
+    recentActions.add("${LocalDateTime.now().format(formatter)}: $desc")
+  }
+
   fun toPlainText() =
     """
+      Prometheus Proxy Info [${getVersionDesc(false)}]
+      
+      Uptime:     ${upTime.format(true)}
       Proxy port: ${httpService.httpPort}
       
       AdminService:

@@ -23,6 +23,7 @@ import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
+import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
@@ -96,7 +97,10 @@ class Agent(options: AgentOptions,
 
     initService {
       if (options.debugEnabled)
-        addServlet(DEBUG, LambdaServlet({ toPlainText() + "\n" + pathManager.toPlainText() }))
+        addServlet(DEBUG,
+                   LambdaServlet {
+                     listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n")
+                   })
     }
 
     initBlock?.invoke(this)
@@ -202,6 +206,9 @@ class Agent(options: AgentOptions,
 
   fun toPlainText() =
     """
+      Prometheus Agent Info [${getVersionDesc(false)}]
+      
+      Uptime:    ${upTime.format(true)}
       AgentId:   $agentId 
       AgentName: $agentName
       ProxyHost: $proxyHost
