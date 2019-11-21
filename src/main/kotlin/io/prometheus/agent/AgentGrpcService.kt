@@ -57,13 +57,14 @@ class AgentGrpcService(private val agent: Agent,
 
   init {
     val schemeStripped =
-      options.proxyHostname.run {
-        when {
-          startsWith("http://") -> removePrefix("http://")
-          startsWith("https://") -> removePrefix("https://")
-          else -> this
+      options.proxyHostname
+        .run {
+          when {
+            startsWith("http://") -> removePrefix("http://")
+            startsWith("https://") -> removePrefix("https://")
+            else -> this
+          }
         }
-      }
 
     if (schemeStripped.contains(":")) {
       val vals = schemeStripped.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()

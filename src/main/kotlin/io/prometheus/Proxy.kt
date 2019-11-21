@@ -98,7 +98,8 @@ class Proxy(options: ProxyOptions,
                    LambdaServlet {
                      listOf(toPlainText(),
                             pathManager.toPlainText(),
-                            recentActions.joinToString("\n"))
+                            if (recentActions.size > 0) "\nRecent Requests:" else "",
+                            recentActions.reversed().joinToString("\n"))
                        .joinToString("\n")
                    })
     }
@@ -173,6 +174,7 @@ class Proxy(options: ProxyOptions,
       agentContext
     }
 
+  //val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
   private val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
   fun logActivity(desc: String) {

@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.Maps.newConcurrentMap
+import mu.KLogging
 import java.util.concurrent.ConcurrentMap
 
 class ScrapeRequestManager {
@@ -28,11 +29,18 @@ class ScrapeRequestManager {
   val scrapeMapSize: Int
     get() = scrapeRequestMap.size
 
-  fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) =
-    scrapeRequestMap.put(scrapeRequest.scrapeId, scrapeRequest)
+  fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper): ScrapeRequestWrapper? {
+    val scrapeId = scrapeRequest.scrapeId
+    logger.debug { "Adding scrapeId: $scrapeId to scrapeRequestMap" }
+    return scrapeRequestMap.put(scrapeId, scrapeRequest)
+  }
 
   fun getFromScrapeRequestMap(scrapeId: Long) = scrapeRequestMap[scrapeId]
 
-  fun removeFromScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper) =
-    scrapeRequestMap.remove(scrapeRequest.scrapeId)
+  fun removeFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {
+    logger.debug { "Removing scrapeId: $scrapeId from scrapeRequestMap" }
+    return scrapeRequestMap.remove(scrapeId)
+  }
+
+  companion object : KLogging()
 }

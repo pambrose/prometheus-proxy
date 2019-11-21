@@ -96,9 +96,19 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             }
 
             path.isEmpty() || path.isBlank() -> {
-              logger.info { "Request missing path" }
+              val msg = "Request missing path"
+              proxy.logActivity(msg)
+              logger.info { msg }
               responseResults.apply {
                 updateMsg = "missing_path"
+                statusCode = HttpStatusCode.NotFound
+              }
+            }
+
+            path == "favicon.ico" -> {
+              //logger.info { "Invalid path request /${path}" }
+              responseResults.apply {
+                updateMsg = "invalid_request"
                 statusCode = HttpStatusCode.NotFound
               }
             }
@@ -127,14 +137,20 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             }
 
             else -> {
-              val response = submitScrapeRequest(path, agentContext, call.request, call.response)
-              proxy.logActivity("/${path} - ${response.updateMsg} - ${response.statusCode}")
-              responseResults.apply {
-                contentText = response.contentText
-                contentType = response.contentType
-                statusCode = response.statusCode
-                updateMsg = response.updateMsg
-              }
+              submitScrapeRequest(path, agentContext, call.request, call.response)
+                .also { resp ->
+                  var status = "/${path} - ${resp.updateMsg} - ${resp.statusCode}"
+                  if (resp.statusCode.isSuccess())
+                    status += " reason: ${resp.failureReason} url: ${resp.failureUrl}"
+                  proxy.logActivity(status)
+
+                  responseResults.also { results ->
+                    results.contentText = resp.contentText
+                    results.contentType = resp.contentType
+                    results.statusCode = resp.statusCode
+                    results.updateMsg = resp.updateMsg
+                  }
+                }
             }
           }
 
@@ -180,10 +196,12 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     sleep(2.seconds)
   }
 
-  private class ScrapeRequestResponse(var contentText: String = "",
+  private class ScrapeRequestResponse(val statusCode: HttpStatusCode,
+                                      val updateMsg: String,
                                       var contentType: ContentType = ContentType.Text.Plain,
-                                      val statusCode: HttpStatusCode,
-                                      val updateMsg: String)
+                                      var contentText: String = "",
+                                      val failureReason: String = "",
+                                      val failureUrl: String = "")
 
   private suspend fun submitScrapeRequest(path: String,
                                           agentContext: AgentContext,
@@ -206,8 +224,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
           return ScrapeRequestResponse(statusCode = HttpStatusCode.ServiceUnavailable, updateMsg = "timed_out")
       }
     } finally {
-      proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeRequest)
-        ?: logger.error { "Scrape request ${scrapeRequest.scrapeId} missing in map" }
+      val scrapeId = scrapeRequest.scrapeId
+      proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeId)
+        ?: logger.error { "Scrape request $scrapeId missing in map" }
     }
 
     logger.debug { "Results returned from $agentContext for $scrapeRequest" }
@@ -218,6 +237,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
           .also { statusCode ->
             scrapeResponse.contentType.split("/")
               .also { contentTypeElems ->
+
                 val contentType =
                   if (contentTypeElems.size == 2)
                     ContentType(contentTypeElems[0], contentTypeElems[1])
@@ -226,13 +246,15 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
                 // Do not return content on error status codes
                 return if (!statusCode.isSuccess()) {
-                  ScrapeRequestResponse(contentType = contentType,
-                                        statusCode = statusCode,
+                  ScrapeRequestResponse(statusCode = statusCode,
+                                        contentType = contentType,
+                                        failureReason = scrapeRequest.scrapeResponse.failureReason,
+                                        failureUrl = scrapeRequest.scrapeResponse.failureUrl,
                                         updateMsg = "path_not_found")
                 } else {
-                  ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
+                  ScrapeRequestResponse(statusCode = statusCode,
                                         contentType = contentType,
-                                        statusCode = statusCode,
+                                        contentText = scrapeRequest.scrapeResponse.contentText,
                                         updateMsg = "success")
                 }
               }
