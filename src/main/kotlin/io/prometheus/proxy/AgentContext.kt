@@ -93,7 +93,7 @@ class AgentContext(private val remoteAddr: String) {
       add("agentName", agentName)
       add("hostName", hostName)
       add("lastRequestDuration", lastRequestDuration)
-      add("inactivityDuration", inactivityDuration)
+      //add("inactivityDuration", inactivityDuration)
     }
 
   companion object {

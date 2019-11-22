@@ -142,7 +142,8 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                 .also { resp ->
 
                   var status = "/${path} - ${resp.updateMsg} - ${resp.statusCode}"
-                  if (!resp.statusCode.isSuccess()) status += " reason: ${resp.failureReason}"
+                  if (!resp.statusCode.isSuccess())
+                    status += " reason: [${resp.failureReason}]"
                   status += " time: ${resp.fetchDuration} url: ${resp.url}"
 
                   proxy.logActivity(status)
