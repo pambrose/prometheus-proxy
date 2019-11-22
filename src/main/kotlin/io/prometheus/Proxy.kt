@@ -50,7 +50,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.milliseconds
 
-class Proxy(options: ProxyOptions,
+class Proxy(val options: ProxyOptions,
             proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",
             testMode: Boolean = false,

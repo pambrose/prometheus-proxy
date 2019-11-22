@@ -49,7 +49,7 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
 import mu.KLogging
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
@@ -139,9 +139,11 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             else -> {
               submitScrapeRequest(path, agentContext, call.request, call.response)
                 .also { resp ->
+
                   var status = "/${path} - ${resp.updateMsg} - ${resp.statusCode}"
-                  if (resp.statusCode.isSuccess())
-                    status += " reason: ${resp.failureReason} url: ${resp.failureUrl}"
+                  if (!resp.statusCode.isSuccess()) status += " reason: ${resp.failureReason}"
+                  status += " url: ${resp.url}"
+
                   proxy.logActivity(status)
 
                   responseResults.also { results ->
@@ -180,7 +182,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
   init {
     if (proxy.isZipkinEnabled)
       tracing = proxy.zipkinReporterService.newTracing("proxy-http")
-    addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+    addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
   }
 
   override fun startUp() {
@@ -191,7 +193,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     if (proxy.isZipkinEnabled)
       tracing.close()
 
-    httpServer.stop(5, 5, TimeUnit.SECONDS)
+    httpServer.stop(5, 5, SECONDS)
 
     sleep(2.seconds)
   }
@@ -201,14 +203,18 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                                       var contentType: ContentType = ContentType.Text.Plain,
                                       var contentText: String = "",
                                       val failureReason: String = "",
-                                      val failureUrl: String = "")
+                                      val url: String = "")
 
   private suspend fun submitScrapeRequest(path: String,
                                           agentContext: AgentContext,
                                           request: ApplicationRequest,
                                           response: ApplicationResponse): ScrapeRequestResponse {
 
-    val scrapeRequest = ScrapeRequestWrapper(proxy, path, agentContext, request.header(ACCEPT))
+    val scrapeRequest = ScrapeRequestWrapper(proxy,
+                                             path,
+                                             agentContext,
+                                             request.header(ACCEPT),
+                                             proxy.options.debugEnabled)
 
     try {
       val timeoutTime = proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
@@ -249,12 +255,14 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                   ScrapeRequestResponse(statusCode = statusCode,
                                         contentType = contentType,
                                         failureReason = scrapeRequest.scrapeResponse.failureReason,
-                                        failureUrl = scrapeRequest.scrapeResponse.failureUrl,
+                                        url = scrapeRequest.scrapeResponse.url,
                                         updateMsg = "path_not_found")
                 } else {
                   ScrapeRequestResponse(statusCode = statusCode,
                                         contentType = contentType,
                                         contentText = scrapeRequest.scrapeResponse.contentText,
+                                        failureReason = scrapeRequest.scrapeResponse.failureReason,
+                                        url = scrapeRequest.scrapeResponse.url,
                                         updateMsg = "success")
                 }
               }

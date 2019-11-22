@@ -50,7 +50,7 @@ import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.set
 import kotlin.time.milliseconds
@@ -93,7 +93,7 @@ object ProxyTests : KLogging() {
     runBlocking {
       launch(Dispatchers.Default) {
         logger.info { "Stopping httpServer" }
-        httpServer.stop(5, 5, TimeUnit.SECONDS)
+        httpServer.stop(5, 5, SECONDS)
         delay(5.seconds)
       }
     }
@@ -233,7 +233,7 @@ object ProxyTests : KLogging() {
       httpServers.forEach { httpServer ->
         launch(Dispatchers.Default) {
           logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
-          httpServer.server.stop(5, 5, TimeUnit.SECONDS)
+          httpServer.server.stop(5, 5, SECONDS)
           delay(5.seconds)
         }
       }

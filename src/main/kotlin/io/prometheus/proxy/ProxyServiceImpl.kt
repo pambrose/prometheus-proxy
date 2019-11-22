@@ -67,7 +67,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
         valid = true
         agentName = request.agentName
         hostName = request.hostName
-        markActivity()
+        markActivityTime(false)
       } ?: logger.info { "registerAgent() missing AgentContext agentId: $agentId" }
 
     responseObserver.apply {
@@ -89,7 +89,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
       ?.apply {
         valid = true
         proxy.pathManager.addPath(path, this)
-        markActivity()
+        markActivityTime(false)
       } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
 
     responseObserver.apply {
@@ -118,7 +118,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
         }
     } else {
       proxy.pathManager.removePath(request.path, agentId, responseBuilder)
-      agentContext.markActivity()
+      agentContext.markActivityTime(false)
     }
 
     responseObserver.apply {
@@ -138,7 +138,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
     if (proxy.isMetricsEnabled)
       proxy.metrics.heartbeats.inc()
     val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
-    agentContext?.markActivity()
+    agentContext?.markActivityTime(false)
       ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
     responseObserver.apply {
       onNext(newHeartBeatResponse(agentContext != null, "Invalid agentId: ${request.agentId}"))
@@ -169,7 +169,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
           ?.apply {
             scrapeResponse = resp
             markComplete()
-            agentContext.markActivity()
+            agentContext.markActivityTime(true)
           } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${resp.scrapeId}" }
       }
 

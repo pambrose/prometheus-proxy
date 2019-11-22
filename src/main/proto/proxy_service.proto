@@ -58,6 +58,7 @@ message ScrapeRequest {
   int64 scrape_id = 2;
   string path = 3;
   string accept = 4;
+  bool debug_enabled = 5;
 }
 
 message ScrapeResponse {
@@ -68,7 +69,7 @@ message ScrapeResponse {
   string content_text = 5;
   string content_type = 6;
   string failure_reason = 7;
-  string failure_url = 8;
+  string url = 8;
 }
 
 message HeartBeatRequest {

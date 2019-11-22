@@ -46,26 +46,25 @@ class AgentHttpService(val agent: Agent) {
     if (pathContext == null) {
       logger.warn { "Invalid path in fetchScrapeUrl(): $path" }
       scrapeCounterMsg.set("invalid_path")
-      responseArg.failureReason = "Invalid path: $path"
-      responseArg.failureUrl = ""
+      if (request.debugEnabled)
+        responseArg.setDebugInfo("None", "Invalid path: $path")
     } else {
       val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
       val url = pathContext.url
-
       logger.debug { "Fetching $pathContext" }
 
       try {
         http {
-          get(url, getSetUp(request), getBlock(url, responseArg, scrapeCounterMsg))
+          get(url, getSetUp(request), getBlock(url, responseArg, scrapeCounterMsg, request.debugEnabled))
         }
       } catch (e: IOException) {
         logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
-        responseArg.failureReason = "${e.simpleClassName} - ${e.message}"
-        responseArg.failureUrl = url
+        if (request.debugEnabled)
+          responseArg.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
       } catch (e: Throwable) {
         logger.warn(e) { "fetchScrapeUrl() $e - $url" }
-        responseArg.failureReason = "${e.simpleClassName} - ${e.message}"
-        responseArg.failureUrl = url
+        if (request.debugEnabled)
+          responseArg.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
       } finally {
         requestTimer?.observeDuration()
       }
@@ -83,7 +82,8 @@ class AgentHttpService(val agent: Agent) {
 
   private fun getBlock(url: String,
                        responseArg: GrpcObjects.ScrapeResponseArg,
-                       scrapeCounterMsg: AtomicReference<String>): suspend (HttpResponse) -> Unit =
+                       scrapeCounterMsg: AtomicReference<String>,
+                       debugEnabled: Boolean): suspend (HttpResponse) -> Unit =
     { resp ->
       responseArg.statusCode = resp.status
 
@@ -93,10 +93,12 @@ class AgentHttpService(val agent: Agent) {
           contentType = resp.headers[HttpHeaders.CONTENT_TYPE].orEmpty()
           validResponse = true
         }
+        if (debugEnabled)
+          responseArg.setDebugInfo(url)
         scrapeCounterMsg.set("success")
       } else {
-        responseArg.failureReason = "Unsucessful response code ${responseArg.statusCode}"
-        responseArg.failureUrl = url
+        if (debugEnabled)
+          responseArg.setDebugInfo(url, "Unsucessful response code ${responseArg.statusCode}")
         scrapeCounterMsg.set("unsuccessful")
       }
     }

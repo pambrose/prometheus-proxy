@@ -103,12 +103,17 @@ object GrpcObjects {
         build()
       }
 
-  fun newScrapeRequest(agentId: String, scrapeId: Long, path: String, accept: String?): ScrapeRequest =
+  fun newScrapeRequest(agentId: String,
+                       scrapeId: Long,
+                       path: String,
+                       accept: String?,
+                       debugEnabled: Boolean): ScrapeRequest =
     ScrapeRequest.newBuilder()
       .let { builder ->
         builder.agentId = agentId
         builder.scrapeId = scrapeId
         builder.path = path
+        builder.debugEnabled = debugEnabled
         if (!accept.isNullOrBlank())
           builder.accept = accept
         builder.build()
@@ -121,7 +126,13 @@ object GrpcObjects {
                                var contentText: String = "",
                                var contentType: String = "",
                                var failureReason: String = "",
-                               var failureUrl: String = "")
+                               var url: String = "") {
+
+    fun setDebugInfo(url: String, failureReason: String = "") {
+      this.url = url
+      this.failureReason = failureReason
+    }
+  }
 
   fun newScrapeResponse(arg: ScrapeResponseArg): ScrapeResponse =
     ScrapeResponse.newBuilder()
@@ -133,7 +144,7 @@ object GrpcObjects {
         contentText = arg.contentText
         contentType = arg.contentType
         failureReason = arg.failureReason
-        failureUrl = arg.failureUrl
+        url = arg.url
         build()
       }
 

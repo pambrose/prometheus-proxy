@@ -37,13 +37,17 @@ class AgentContext(private val remoteAddr: String) {
 
   private val clock = MonoClock
   private var lastActivityTimeMark: ClockMark by nonNullableReference(clock.markNow())
+  private var lastRequestTimeMark: ClockMark by nonNullableReference(clock.markNow())
   private var valid = AtomicBoolean(true)
 
   var hostName: String by nonNullableReference()
   var agentName: String by nonNullableReference()
 
-  val inactivityTime
+  val inactivityDuration
     get() = lastActivityTimeMark.elapsedNow()
+
+  val lastRequestDuration
+    get() = lastRequestTimeMark.elapsedNow()
 
   val scrapeRequestBacklogSize: Int
     get() = channelBacklogSize.get()
@@ -51,7 +55,7 @@ class AgentContext(private val remoteAddr: String) {
   init {
     hostName = "Unassigned"
     agentName = "Unassigned"
-    markActivity()
+    markActivityTime(true)
   }
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
@@ -74,8 +78,11 @@ class AgentContext(private val remoteAddr: String) {
     scrapeRequestChannel.close()
   }
 
-  fun markActivity() {
+  fun markActivityTime(isRequest: Boolean) {
     lastActivityTimeMark = clock.markNow()
+
+    if (isRequest)
+      lastRequestTimeMark = clock.markNow()
   }
 
   override fun toString() =
@@ -85,7 +92,8 @@ class AgentContext(private val remoteAddr: String) {
       add("remoteAddr", remoteAddr)
       add("agentName", agentName)
       add("hostName", hostName)
-      add("inactivityTime", inactivityTime)
+      add("lastRequestDuration", lastRequestDuration)
+      add("inactivityDuration", inactivityDuration)
     }
 
   companion object {

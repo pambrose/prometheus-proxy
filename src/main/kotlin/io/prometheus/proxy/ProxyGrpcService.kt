@@ -69,7 +69,7 @@ class ProxyGrpcService(private val proxy: Proxy,
       }
     Servers.shutdownWithJvm(grpcServer, 2.seconds.toLongMilliseconds())
 
-    addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+    addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
   }
 
   override fun startUp() {
