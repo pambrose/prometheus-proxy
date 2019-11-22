@@ -50,6 +50,7 @@ import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
 import mu.KLogging
 import java.util.concurrent.TimeUnit.SECONDS
+import kotlin.time.Duration
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
@@ -142,7 +143,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
                   var status = "/${path} - ${resp.updateMsg} - ${resp.statusCode}"
                   if (!resp.statusCode.isSuccess()) status += " reason: ${resp.failureReason}"
-                  status += " url: ${resp.url}"
+                  status += " time: ${resp.fetchDuration} url: ${resp.url}"
 
                   proxy.logActivity(status)
 
@@ -203,7 +204,8 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                                       var contentType: ContentType = ContentType.Text.Plain,
                                       var contentText: String = "",
                                       val failureReason: String = "",
-                                      val url: String = "")
+                                      val url: String = "",
+                                      val fetchDuration: Duration)
 
   private suspend fun submitScrapeRequest(path: String,
                                           agentContext: AgentContext,
@@ -227,7 +229,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
       while (!scrapeRequest.suspendUntilComplete(checkTime)) {
         // Check if agent is disconnected or agent is hung
         if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
-          return ScrapeRequestResponse(statusCode = HttpStatusCode.ServiceUnavailable, updateMsg = "timed_out")
+          return ScrapeRequestResponse(statusCode = HttpStatusCode.ServiceUnavailable,
+                                       updateMsg = "timed_out",
+                                       fetchDuration = scrapeRequest.ageDuration())
       }
     } finally {
       val scrapeId = scrapeRequest.scrapeId
@@ -256,14 +260,16 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                                         contentType = contentType,
                                         failureReason = scrapeRequest.scrapeResponse.failureReason,
                                         url = scrapeRequest.scrapeResponse.url,
-                                        updateMsg = "path_not_found")
+                                        updateMsg = "path_not_found",
+                                        fetchDuration = scrapeRequest.ageDuration())
                 } else {
                   ScrapeRequestResponse(statusCode = statusCode,
                                         contentType = contentType,
                                         contentText = scrapeRequest.scrapeResponse.contentText,
                                         failureReason = scrapeRequest.scrapeResponse.failureReason,
                                         url = scrapeRequest.scrapeResponse.url,
-                                        updateMsg = "success")
+                                        updateMsg = "success",
+                                        fetchDuration = scrapeRequest.ageDuration())
                 }
               }
           }

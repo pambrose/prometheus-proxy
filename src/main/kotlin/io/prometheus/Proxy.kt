@@ -68,7 +68,7 @@ class Proxy(val options: ProxyOptions,
 
   private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort)
-  private val recentActions = EvictingQueue.create<String>(configVals.proxy.admin.recentActivityQueueSize)
+  private val recentActions = EvictingQueue.create<String>(configVals.proxy.admin.recentRequestsQueueSize)
   private val grpcService =
     if (inProcessServerName.isEmpty())
       ProxyGrpcService(this, port = options.proxyAgentPort)
@@ -93,15 +93,17 @@ class Proxy(val options: ProxyOptions,
     addServices(grpcService, httpService)
 
     initService {
-      if (options.debugEnabled)
+      if (options.debugEnabled) {
+        val cnt = configVals.proxy.admin.recentRequestsQueueSize
         addServlet(DEBUG,
                    LambdaServlet {
                      listOf(toPlainText(),
                             pathManager.toPlainText(),
-                            if (recentActions.size > 0) "\nRecent Requests:" else "",
+                            if (recentActions.size > 0) "\n$cnt most recent Requests:" else "",
                             recentActions.reversed().joinToString("\n"))
                        .joinToString("\n")
                    })
+      }
     }
 
     initBlock?.invoke(this)
@@ -188,10 +190,10 @@ class Proxy(val options: ProxyOptions,
       Uptime:     ${upTime.format(true)}
       Proxy port: ${httpService.httpPort}
       
-      AdminService:
+      Admin Service:
       ${if (isAdminEnabled) adminService.toString() else "Disabled"}
       
-      MetricsService:
+      Metrics Service:
       ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
       
     """.trimIndent()

@@ -213,10 +213,10 @@ class Agent(options: AgentOptions,
       AgentName: $agentName
       ProxyHost: $proxyHost
       
-      AdminService:
+      Admin Service:
       ${if (isAdminEnabled) adminService.toString() else "Disabled"}
       
-      MetricsService:
+      Metrics Service:
       ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
       
     """.trimIndent()
