@@ -17,7 +17,7 @@ targetCompatibility = 1.8
 def kotlinVersion = '1.3.60'
 def serializationVersion = '0.13.0'
 def coroutinesVersion = '1.3.2'
-def utilsVersion = 'c5d459f'
+def utilsVersion = '1.1.8'
 
 def grpcVersion = '1.25.0'
 def protocVersion = '3.10.0'
