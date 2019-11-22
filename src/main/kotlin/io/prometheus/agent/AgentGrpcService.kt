@@ -23,6 +23,7 @@ import brave.grpc.GrpcTracing
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GrpcDsl
 import com.github.pambrose.common.dsl.GrpcDsl.channel
+import com.github.pambrose.common.util.simpleClassName
 import com.google.protobuf.Empty
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
@@ -57,13 +58,14 @@ class AgentGrpcService(private val agent: Agent,
 
   init {
     val schemeStripped =
-      options.proxyHostname.run {
-        when {
-          startsWith("http://") -> removePrefix("http://")
-          startsWith("https://") -> removePrefix("https://")
-          else -> this
+      options.proxyHostname
+        .run {
+          when {
+            startsWith("http://") -> removePrefix("http://")
+            startsWith("https://") -> removePrefix("https://")
+            else -> this
+          }
         }
-      }
 
     if (schemeStripped.contains(":")) {
       val vals = schemeStripped.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
@@ -122,7 +124,7 @@ class AgentGrpcService(private val agent: Agent,
     } catch (e: StatusRuntimeException) {
       if (agent.isMetricsEnabled)
         agent.metrics.connects.labels("failure")?.inc()
-      logger.info { "Cannot connect to proxy at ${agent.proxyHost} [${e.message}]" }
+      logger.info { "Cannot connect to proxy at ${agent.proxyHost} - ${e.simpleClassName}: ${e.message}" }
       false
     }
 

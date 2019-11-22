@@ -34,7 +34,7 @@ class AgentContextCleanupService(private val proxy: Proxy,
   GenericExecutionThreadService() {
 
   init {
-    addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+    addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
     initBlock(this)
   }
 
@@ -44,9 +44,9 @@ class AgentContextCleanupService(private val proxy: Proxy,
     while (isRunning) {
       proxy.agentContextManager.agentContextMap
         .forEach { (agentId, agentContext) ->
-          val inactivityTime = agentContext.inactivityTime
-          if (inactivityTime > maxInactivityTime) {
-            logger.info { "Evicting agent after $inactivityTime of inactivty $agentContext" }
+          val inactivityDuration = agentContext.inactivityDuration
+          if (inactivityDuration > maxInactivityTime) {
+            logger.info { "Evicting agent after $inactivityDuration of inactivty $agentContext" }
             proxy.removeAgentContext(agentId)
             if (proxy.isMetricsEnabled)
               proxy.metrics.agentEvictions.inc()

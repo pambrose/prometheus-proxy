@@ -33,13 +33,18 @@ import kotlin.time.MonoClock
 class ScrapeRequestWrapper(proxy: Proxy,
                            path: String,
                            val agentContext: AgentContext,
-                           accept: String?) {
+                           accept: String?,
+                           debugEnabled: Boolean) {
   private val clock = MonoClock
   private val createTimeMark = clock.markNow()
   private val completeChannel = Channel<Boolean>()
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
-  val scrapeRequest = newScrapeRequest(agentContext.agentId, SCRAPE_ID_GENERATOR.getAndIncrement(), path, accept)
+  val scrapeRequest = newScrapeRequest(agentContext.agentId,
+                                       SCRAPE_ID_GENERATOR.getAndIncrement(),
+                                       path,
+                                       accept,
+                                       debugEnabled)
   var scrapeResponse: ScrapeResponse by nonNullableReference()
 
   val scrapeId: Long

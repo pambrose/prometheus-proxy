@@ -22,9 +22,8 @@ import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
 import io.prometheus.Proxy
 import kotlin.system.exitProcess
-import kotlin.time.Duration
 
-fun getVersionDesc(asJson: Boolean): String {
+fun getVersionDesc(asJson: Boolean = false): String {
   val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
   return if (asJson)
     """{"Version": "${annotation.version}", "Release Date": "${annotation.date}"}"""

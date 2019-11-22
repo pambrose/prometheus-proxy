@@ -18,6 +18,10 @@
 
 package io.prometheus.common
 
+import com.github.pambrose.common.service.AdminConfig
+import com.github.pambrose.common.service.MetricsConfig
+import com.github.pambrose.common.service.ZipkinConfig
+
 object ConfigWrappers {
   fun newAdminConfig(enabled: Boolean, port: Int, admin: ConfigVals.Proxy2.Admin2) =
     AdminConfig(enabled,

@@ -38,6 +38,7 @@ import kotlin.time.seconds
 class ProxyGrpcService(private val proxy: Proxy,
                        private val port: Int = -1,
                        private val inProcessName: String = "") : GenericIdleService() {
+
   val healthCheck =
     healthCheck {
       if (grpcServer.isShutdown || grpcServer.isShutdown)
@@ -68,7 +69,7 @@ class ProxyGrpcService(private val proxy: Proxy,
       }
     Servers.shutdownWithJvm(grpcServer, 2.seconds.toLongMilliseconds())
 
-    addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+    addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
   }
 
   override fun startUp() {

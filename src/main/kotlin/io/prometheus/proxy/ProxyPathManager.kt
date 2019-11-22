@@ -91,16 +91,17 @@ class ProxyPathManager(private val isTestMode: Boolean) {
         }
       }
 
-   fun toPlainText() =
-     if (pathMap.isEmpty()) {
-       "No agents connected..."
-     } else {
-       val maxPath = pathMap.keys.map { it.length }.max() ?: 0
-       "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
-           pathMap
-             .map { c -> "/${c.key.padEnd(maxPath)} ${c.value}" }
-             .joinToString("\n")
-     }
+  fun toPlainText() =
+    if (pathMap.isEmpty()) {
+      "No agents connected."
+    } else {
+      val maxPath = pathMap.keys.map { it.length }.max() ?: 0
+      "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
+          pathMap
+            .toSortedMap()
+            .map { c -> "/${c.key.padEnd(maxPath)} ${c.value}" }
+            .joinToString("\n")
+    }
 
   companion object : KLogging()
 }

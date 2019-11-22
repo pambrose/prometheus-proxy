@@ -49,7 +49,8 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
 import mu.KLogging
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeUnit.SECONDS
+import kotlin.time.Duration
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
@@ -96,9 +97,19 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             }
 
             path.isEmpty() || path.isBlank() -> {
-              logger.info { "Request missing path" }
+              val msg = "Request missing path"
+              proxy.logActivity(msg)
+              logger.info { msg }
               responseResults.apply {
                 updateMsg = "missing_path"
+                statusCode = HttpStatusCode.NotFound
+              }
+            }
+
+            path == "favicon.ico" -> {
+              //logger.info { "Invalid path request /${path}" }
+              responseResults.apply {
+                updateMsg = "invalid_request"
                 statusCode = HttpStatusCode.NotFound
               }
             }
@@ -107,7 +118,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
               responseResults.contentText = "42"
 
             agentContext == null -> {
-              logger.info { "Invalid path request /${path}" }
+              val msg = "Invalid path request /${path}"
+              proxy.logActivity(msg)
+              logger.info { msg }
               responseResults.apply {
                 updateMsg = "invalid_path"
                 statusCode = HttpStatusCode.NotFound
@@ -115,7 +128,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             }
 
             agentContext.isNotValid() -> {
-              logger.error { "Invalid AgentContext" }
+              val msg = "Invalid AgentContext for /${path}"
+              proxy.logActivity(msg)
+              logger.error { msg }
               responseResults.apply {
                 updateMsg = "invalid_agent_context"
                 statusCode = HttpStatusCode.NotFound
@@ -123,13 +138,23 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             }
 
             else -> {
-              val response = submitScrapeRequest(path, agentContext, call.request, call.response)
-              responseResults.apply {
-                contentText = response.contentText
-                contentType = response.contentType
-                statusCode = response.statusCode
-                updateMsg = response.updateMsg
-              }
+              submitScrapeRequest(path, agentContext, call.request, call.response)
+                .also { resp ->
+
+                  var status = "/${path} - ${resp.updateMsg} - ${resp.statusCode}"
+                  if (!resp.statusCode.isSuccess())
+                    status += " reason: [${resp.failureReason}]"
+                  status += " time: ${resp.fetchDuration} url: ${resp.url}"
+
+                  proxy.logActivity(status)
+
+                  responseResults.also { results ->
+                    results.contentText = resp.contentText
+                    results.contentType = resp.contentType
+                    results.statusCode = resp.statusCode
+                    results.updateMsg = resp.updateMsg
+                  }
+                }
             }
           }
 
@@ -159,7 +184,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
   init {
     if (proxy.isZipkinEnabled)
       tracing = proxy.zipkinReporterService.newTracing("proxy-http")
-    addListener(genericServiceListener(this, logger), MoreExecutors.directExecutor())
+    addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
   }
 
   override fun startUp() {
@@ -170,22 +195,29 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     if (proxy.isZipkinEnabled)
       tracing.close()
 
-    httpServer.stop(5, 5, TimeUnit.SECONDS)
+    httpServer.stop(5, 5, SECONDS)
 
     sleep(2.seconds)
   }
 
-  private class ScrapeRequestResponse(var contentText: String = "",
+  private class ScrapeRequestResponse(val statusCode: HttpStatusCode,
+                                      val updateMsg: String,
                                       var contentType: ContentType = ContentType.Text.Plain,
-                                      val statusCode: HttpStatusCode,
-                                      val updateMsg: String)
+                                      var contentText: String = "",
+                                      val failureReason: String = "",
+                                      val url: String = "",
+                                      val fetchDuration: Duration)
 
   private suspend fun submitScrapeRequest(path: String,
                                           agentContext: AgentContext,
                                           request: ApplicationRequest,
                                           response: ApplicationResponse): ScrapeRequestResponse {
 
-    val scrapeRequest = ScrapeRequestWrapper(proxy, path, agentContext, request.header(ACCEPT))
+    val scrapeRequest = ScrapeRequestWrapper(proxy,
+                                             path,
+                                             agentContext,
+                                             request.header(ACCEPT),
+                                             proxy.options.debugEnabled)
 
     try {
       val timeoutTime = proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
@@ -198,11 +230,14 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
       while (!scrapeRequest.suspendUntilComplete(checkTime)) {
         // Check if agent is disconnected or agent is hung
         if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
-          return ScrapeRequestResponse(statusCode = HttpStatusCode.ServiceUnavailable, updateMsg = "timed_out")
+          return ScrapeRequestResponse(statusCode = HttpStatusCode.ServiceUnavailable,
+                                       updateMsg = "timed_out",
+                                       fetchDuration = scrapeRequest.ageDuration())
       }
     } finally {
-      proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeRequest)
-        ?: logger.error { "Scrape request ${scrapeRequest.scrapeId} missing in map" }
+      val scrapeId = scrapeRequest.scrapeId
+      proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeId)
+        ?: logger.error { "Scrape request $scrapeId missing in map" }
     }
 
     logger.debug { "Results returned from $agentContext for $scrapeRequest" }
@@ -213,6 +248,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
           .also { statusCode ->
             scrapeResponse.contentType.split("/")
               .also { contentTypeElems ->
+
                 val contentType =
                   if (contentTypeElems.size == 2)
                     ContentType(contentTypeElems[0], contentTypeElems[1])
@@ -221,14 +257,20 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
                 // Do not return content on error status codes
                 return if (!statusCode.isSuccess()) {
-                  ScrapeRequestResponse(contentType = contentType,
-                                        statusCode = statusCode,
-                                        updateMsg = "path_not_found")
-                } else {
-                  ScrapeRequestResponse(contentText = scrapeRequest.scrapeResponse.contentText,
+                  ScrapeRequestResponse(statusCode = statusCode,
                                         contentType = contentType,
-                                        statusCode = statusCode,
-                                        updateMsg = "success")
+                                        failureReason = scrapeRequest.scrapeResponse.failureReason,
+                                        url = scrapeRequest.scrapeResponse.url,
+                                        updateMsg = "path_not_found",
+                                        fetchDuration = scrapeRequest.ageDuration())
+                } else {
+                  ScrapeRequestResponse(statusCode = statusCode,
+                                        contentType = contentType,
+                                        contentText = scrapeRequest.scrapeResponse.contentText,
+                                        failureReason = scrapeRequest.scrapeResponse.failureReason,
+                                        url = scrapeRequest.scrapeResponse.url,
+                                        updateMsg = "success",
+                                        fetchDuration = scrapeRequest.ageDuration())
                 }
               }
           }
