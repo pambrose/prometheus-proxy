@@ -22,27 +22,29 @@ def utilsVersion = '1.1.8'
 def grpcVersion = '1.25.0'
 def protocVersion = '3.10.0'
 
-def ktorVersion = '1.2.4'
+def ktorVersion = '1.2.5'
 def annotationVersion = '1.3.2'
 def prometheusVersion = '0.8.0'
-def loggingVersion = '1.7.7'
 def dropwizardVersion = '4.1.1'
-def zipkinVersion = '5.9.0'
+def zipkinVersion = '5.9.1'
 def jettyVersion = '9.4.22.v20191022'
-def kluentVersion = '1.57'
 def tscfgVersion = '1.3.4'
 def contribVersion = '0.8.1'
 def jcommanderVersion = '1.78'
+
+def loggingVersion = '1.7.8'
 def logbackVersion = '1.2.3'
 def slf4jVersion = '1.7.28'
+
+def kluentVersion = '1.57'
 def junitVersion = '5.5.2'
 
 repositories {
   maven { url = "https://kotlin.bintray.com/kotlinx" }
-  maven { url = 'https://dl.bintray.com/kotlin/kotlin-dev/' }
+  //maven { url = 'https://dl.bintray.com/kotlin/kotlin-dev/' }
   maven { url = 'https://maven-central.storage-download.googleapis.com/repos/central/data/' }
-  mavenCentral()
-  jcenter()
+  //mavenCentral()
+  //jcenter()
   maven { url = 'https://jitpack.io' }
 }
 
