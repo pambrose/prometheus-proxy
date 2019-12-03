@@ -24,6 +24,7 @@ import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GrpcDsl
 import com.github.pambrose.common.dsl.GrpcDsl.channel
 import com.github.pambrose.common.util.simpleClassName
+import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
 import com.google.protobuf.Empty
@@ -54,15 +55,11 @@ class AgentGrpcService(private val agent: Agent,
 
   private val tls = agent.options.configVals.agent.tls
 
-  private val useTls =
-      tls.certChainFilePath.isNotEmpty()
-          || tls.privateKeyFilePath.isNotEmpty()
-          || tls.trustCertCollectionFilePath.isNotEmpty()
-
   var channel: ManagedChannel by nonNullableReference()
 
   val hostName: String
   val port: Int
+  val tlsContext: TlsContext
 
   init {
     val schemeStripped =
@@ -90,6 +87,16 @@ class AgentGrpcService(private val agent: Agent,
       grpcTracing = GrpcTracing.create(tracing)
     }
 
+    tlsContext =
+        if (tls.certChainFilePath.isNotEmpty()
+            || tls.privateKeyFilePath.isNotEmpty()
+            || tls.trustCertCollectionFilePath.isNotEmpty())
+          buildClientTlsContext(certChainFilePath = tls.certChainFilePath,
+                                privateKeyFilePath = tls.privateKeyFilePath,
+                                trustCertCollectionFilePath = tls.trustCertCollectionFilePath)
+        else
+          PLAINTEXT_CONTEXT
+
     resetGrpcStubs()
   }
 
@@ -100,8 +107,6 @@ class AgentGrpcService(private val agent: Agent,
       channel.shutdownNow()
   }
 
-  private fun desc() = if (useTls) "TLS" else "plaintext"
-
   fun resetGrpcStubs() {
     logger.info { "Creating gRPC stubs" }
 
@@ -110,13 +115,6 @@ class AgentGrpcService(private val agent: Agent,
     else
       grpcStarted.set(true)
 
-    val tlsContext =
-        if (useTls)
-          buildClientTlsContext(certChainFilePath = tls.certChainFilePath,
-                                privateKeyFilePath = tls.privateKeyFilePath,
-                                trustCertCollectionFilePath = tls.trustCertCollectionFilePath)
-        else
-          PLAINTEXT_CONTEXT
 
     channel =
         channel(hostName = hostName,
@@ -137,16 +135,16 @@ class AgentGrpcService(private val agent: Agent,
   // If successful, this will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
   fun connectAgent() =
       try {
-        logger.info { "Connecting to proxy at ${agent.proxyHost} using ${desc()}..." }
+        logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
         blockingStub.connectAgent(Empty.getDefaultInstance())
-        logger.info { "Connected to proxy at ${agent.proxyHost} using ${desc()}" }
+        logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
         if (agent.isMetricsEnabled)
           agent.metrics.connects.labels("success")?.inc()
         true
       } catch (e: StatusRuntimeException) {
         if (agent.isMetricsEnabled)
           agent.metrics.connects.labels("failure")?.inc()
-        logger.info { "Cannot connect to proxy using ${desc()} at ${agent.proxyHost} - ${e.simpleClassName}: ${e.message}" }
+        logger.info { "Cannot connect to proxy using ${tlsContext.desc()} at ${agent.proxyHost} - ${e.simpleClassName}: ${e.message}" }
         false
       }
 
