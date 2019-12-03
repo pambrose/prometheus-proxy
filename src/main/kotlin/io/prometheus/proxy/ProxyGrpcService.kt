@@ -26,7 +26,8 @@ import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GrpcDsl.server
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
-import com.github.pambrose.common.utils.TlsUtils.buildServerSslContext
+import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
+import com.github.pambrose.common.utils.TlsUtils.buildServerTlsContext
 import com.google.common.util.concurrent.MoreExecutors
 import com.salesforce.grpc.contrib.Servers
 import io.grpc.Server
@@ -60,17 +61,17 @@ class ProxyGrpcService(private val proxy: Proxy,
     }
 
     val tls = proxy.options.configVals.proxy.tls
-    val sslContext =
+    val tlsContext =
         if (tls.certChainFilePath.isNotEmpty() || tls.privateKeyFilePath.isNotEmpty())
-          buildServerSslContext(certChainFilePath = tls.certChainFilePath,
+          buildServerTlsContext(certChainFilePath = tls.certChainFilePath,
                                 privateKeyFilePath = tls.privateKeyFilePath,
                                 trustCertCollectionFilePath = tls.trustCertCollectionFilePath)
         else
-          null
+          PLAINTEXT_CONTEXT
 
     grpcServer =
         server(port = port,
-               sslContext = sslContext,
+               tlsContext = tlsContext,
                inProcessServerName = inProcessName) {
           val proxyService = ProxyServiceImpl(proxy)
           val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())

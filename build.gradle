@@ -14,7 +14,7 @@ version = '1.4.6'
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
-def utilsVersion = 'db9dfee'
+def utilsVersion = '76123c8'
 def serializationVersion = '0.13.0'
 def coroutinesVersion = '1.3.2'
 

@@ -24,7 +24,8 @@ import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GrpcDsl
 import com.github.pambrose.common.dsl.GrpcDsl.channel
 import com.github.pambrose.common.util.simpleClassName
-import com.github.pambrose.common.utils.TlsUtils.buildClientSslContext
+import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
+import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
 import com.google.protobuf.Empty
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
@@ -109,18 +110,18 @@ class AgentGrpcService(private val agent: Agent,
     else
       grpcStarted.set(true)
 
-    val sslContext =
+    val tlsContext =
         if (useTls)
-          buildClientSslContext(certChainFilePath = tls.certChainFilePath,
+          buildClientTlsContext(certChainFilePath = tls.certChainFilePath,
                                 privateKeyFilePath = tls.privateKeyFilePath,
                                 trustCertCollectionFilePath = tls.trustCertCollectionFilePath)
         else
-          null
+          PLAINTEXT_CONTEXT
 
     channel =
         channel(hostName = hostName,
                 port = port,
-                sslContext = sslContext,
+                tlsContext = tlsContext,
                 overrideAuthority = tls.overrideAuthority,
                 inProcessServerName = inProcessServerName) {
           if (agent.isZipkinEnabled)
