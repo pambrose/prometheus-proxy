@@ -24,8 +24,8 @@ import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GrpcDsl
 import com.github.pambrose.common.dsl.GrpcDsl.channel
 import com.github.pambrose.common.util.simpleClassName
+import com.github.pambrose.common.utils.TlsUtils.buildClientSslContext
 import com.google.protobuf.Empty
-import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
 import io.grpc.Status
@@ -51,6 +51,13 @@ class AgentGrpcService(private val agent: Agent,
   private lateinit var tracing: Tracing
   private lateinit var grpcTracing: GrpcTracing
 
+  private val tls = agent.options.configVals.agent.tls
+
+  private val useTls =
+      tls.certChainFilePath.isNotEmpty()
+          || tls.privateKeyFilePath.isNotEmpty()
+          || tls.trustCertCollectionFilePath.isNotEmpty()
+
   var channel: ManagedChannel by nonNullableReference()
 
   val hostName: String
@@ -58,20 +65,21 @@ class AgentGrpcService(private val agent: Agent,
 
   init {
     val schemeStripped =
-      options.proxyHostname
-        .run {
-          when {
-            startsWith("http://") -> removePrefix("http://")
-            startsWith("https://") -> removePrefix("https://")
-            else -> this
-          }
-        }
+        options.proxyHostname
+            .run {
+              when {
+                startsWith("http://") -> removePrefix("http://")
+                startsWith("https://") -> removePrefix("https://")
+                else -> this
+              }
+            }
 
-    if (schemeStripped.contains(":")) {
+    if (":" in schemeStripped) {
       val vals = schemeStripped.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
       hostName = vals[0]
       port = Integer.valueOf(vals[1])
-    } else {
+    }
+    else {
       hostName = schemeStripped
       port = 50051
     }
@@ -91,6 +99,8 @@ class AgentGrpcService(private val agent: Agent,
       channel.shutdownNow()
   }
 
+  private fun desc() = if (useTls) "TLS" else "plaintext"
+
   fun resetGrpcStubs() {
     logger.info { "Creating gRPC stubs" }
 
@@ -99,74 +109,85 @@ class AgentGrpcService(private val agent: Agent,
     else
       grpcStarted.set(true)
 
+    val sslContext =
+        if (useTls)
+          buildClientSslContext(certChainFilePath = tls.certChainFilePath,
+                                privateKeyFilePath = tls.privateKeyFilePath,
+                                trustCertCollectionFilePath = tls.trustCertCollectionFilePath)
+        else
+          null
+
     channel =
-      channel(inProcessServerName = inProcessServerName,
-              hostName = hostName,
-              port = port) {
-        if (agent.isZipkinEnabled)
-          intercept(grpcTracing.newClientInterceptor())
-        usePlaintext()
-      }
-    val interceptors: List<ClientInterceptor> = listOf(AgentClientInterceptor(agent))
+        channel(hostName = hostName,
+                port = port,
+                sslContext = sslContext,
+                overrideAuthority = tls.overrideAuthority,
+                inProcessServerName = inProcessServerName) {
+          if (agent.isZipkinEnabled)
+            intercept(grpcTracing.newClientInterceptor())
+        }
+
+    val interceptors = listOf(AgentClientInterceptor(agent))
+
     blockingStub = ProxyServiceGrpc.newBlockingStub(ClientInterceptors.intercept(channel, interceptors))
     asyncStub = ProxyServiceGrpc.newStub(ClientInterceptors.intercept(channel, interceptors))
   }
 
-  // If successful, this will create an agentContxt on the Proxy and an interceptor will add an agent_id to the headers`
+  // If successful, this will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
   fun connectAgent() =
-    try {
-      logger.info { "Connecting to proxy at ${agent.proxyHost}..." }
-      blockingStub.connectAgent(Empty.getDefaultInstance())
-      logger.info { "Connected to proxy at ${agent.proxyHost}" }
-      if (agent.isMetricsEnabled)
-        agent.metrics.connects.labels("success")?.inc()
-      true
-    } catch (e: StatusRuntimeException) {
-      if (agent.isMetricsEnabled)
-        agent.metrics.connects.labels("failure")?.inc()
-      logger.info { "Cannot connect to proxy at ${agent.proxyHost} - ${e.simpleClassName}: ${e.message}" }
-      false
-    }
+      try {
+        logger.info { "Connecting to proxy at ${agent.proxyHost} using ${desc()}..." }
+        blockingStub.connectAgent(Empty.getDefaultInstance())
+        logger.info { "Connected to proxy at ${agent.proxyHost} using ${desc()}" }
+        if (agent.isMetricsEnabled)
+          agent.metrics.connects.labels("success")?.inc()
+        true
+      } catch (e: StatusRuntimeException) {
+        if (agent.isMetricsEnabled)
+          agent.metrics.connects.labels("failure")?.inc()
+        logger.info { "Cannot connect to proxy using ${desc()} at ${agent.proxyHost} - ${e.simpleClassName}: ${e.message}" }
+        false
+      }
 
   fun registerAgent(initialConnectionLatch: CountDownLatch) {
     val request = newRegisterAgentRequest(agent.agentId, agent.agentName, hostName)
     blockingStub.registerAgent(request)
-      .also { resp ->
-        agent.markMsgSent()
-        if (!resp.valid)
-          throw RequestFailureException("registerAgent() - ${resp.reason}")
-      }
+        .also { resp ->
+          agent.markMsgSent()
+          if (!resp.valid)
+            throw RequestFailureException("registerAgent() - ${resp.reason}")
+        }
     initialConnectionLatch.countDown()
   }
 
   fun pathMapSize(): Int {
     val request = GrpcObjects.newPathMapSizeRequest(agent.agentId)
     return blockingStub.pathMapSize(request)
-      .let { resp ->
-        agent.markMsgSent()
-        resp.pathCount
-      }
+        .let { resp ->
+          agent.markMsgSent()
+          resp.pathCount
+        }
   }
 
   fun registerPathOnProxy(path: String): Long {
     val request = GrpcObjects.newRegisterPathRequest(agent.agentId, path)
     return blockingStub.registerPath(request)
-      .let { resp ->
-        agent.markMsgSent()
-        if (!resp.valid)
-          throw RequestFailureException("registerPath() - ${resp.reason}")
-        resp.pathId
-      }
+        .let { resp ->
+          agent.markMsgSent()
+          if (!resp.valid)
+            throw RequestFailureException("registerPath() - ${resp.reason}")
+          resp.pathId
+        }
   }
 
   fun unregisterPathOnProxy(path: String) {
     val request = GrpcObjects.newUnregisterPathRequest(agent.agentId, path)
     blockingStub.unregisterPath(request)
-      .also { resp ->
-        agent.markMsgSent()
-        if (!resp.valid)
-          throw RequestFailureException("unregisterPath() - ${resp.reason}")
-      }
+        .also { resp ->
+          agent.markMsgSent()
+          if (!resp.valid)
+            throw RequestFailureException("unregisterPath() - ${resp.reason}")
+        }
   }
 
   fun sendHeartBeat(connectionContext: AgentConnectionContext) {
@@ -176,14 +197,14 @@ class AgentGrpcService(private val agent: Agent,
     try {
       val request = GrpcObjects.newHeartBeatRequest(agent.agentId)
       blockingStub
-        .sendHeartBeat(request)
-        .also { resp ->
-          agent.markMsgSent()
-          if (!resp.valid) {
-            logger.error { "AgentId ${agent.agentId} not found on proxy" }
-            throw StatusRuntimeException(Status.NOT_FOUND)
+          .sendHeartBeat(request)
+          .also { resp ->
+            agent.markMsgSent()
+            if (!resp.valid) {
+              logger.error { "AgentId ${agent.agentId} not found on proxy" }
+              throw StatusRuntimeException(Status.NOT_FOUND)
+            }
           }
-        }
     } catch (e: StatusRuntimeException) {
       logger.error { "Hearbeat failed ${e.status}" }
       connectionContext.disconnect()
@@ -192,49 +213,49 @@ class AgentGrpcService(private val agent: Agent,
 
   fun readRequestsFromProxy(agentHttpService: AgentHttpService, connectionContext: AgentConnectionContext) {
     asyncStub
-      .readRequestsFromProxy(GrpcObjects.newAgentInfo(agent.agentId),
-                             GrpcDsl.streamObserver {
-                               onNext { req ->
-                                 // This will block, but only for the duration of the send.
-                                 // The actual fetch happens at the other end of the channel
-                                 runBlocking {
-                                   logger.debug { "readRequestsFromProxy(): \n$req" }
-                                   connectionContext.scrapeRequestChannel.send({ agentHttpService.fetchScrapeUrl(req) })
-                                   agent.scrapeRequestBacklogSize.incrementAndGet()
+        .readRequestsFromProxy(GrpcObjects.newAgentInfo(agent.agentId),
+                               GrpcDsl.streamObserver {
+                                 onNext { req ->
+                                   // This will block, but only for the duration of the send.
+                                   // The actual fetch happens at the other end of the channel
+                                   runBlocking {
+                                     logger.debug { "readRequestsFromProxy(): \n$req" }
+                                     connectionContext.scrapeRequestChannel.send({ agentHttpService.fetchScrapeUrl(req) })
+                                     agent.scrapeRequestBacklogSize.incrementAndGet()
+                                   }
                                  }
-                               }
 
-                               onError { throwable ->
-                                 val s = Status.fromThrowable(throwable)
-                                 logger.error { "Error in readRequestsFromProxy(): ${s.code} ${s.description}" }
-                                 connectionContext.disconnect()
-                               }
+                                 onError { throwable ->
+                                   val s = Status.fromThrowable(throwable)
+                                   logger.error { "Error in readRequestsFromProxy(): ${s.code} ${s.description}" }
+                                   connectionContext.disconnect()
+                                 }
 
-                               onCompleted {
-                                 connectionContext.disconnect()
-                               }
-                             })
+                                 onCompleted {
+                                   connectionContext.disconnect()
+                                 }
+                               })
   }
 
   suspend fun writeResponsesToProxyUntilDisconnected(connectionContext: AgentConnectionContext) {
     val observer =
-      asyncStub
-        .writeResponsesToProxy(
-          GrpcDsl.streamObserver<Empty> {
-            onNext {
-              // Ignore Empty return value
-            }
+        asyncStub
+            .writeResponsesToProxy(
+                GrpcDsl.streamObserver<Empty> {
+                  onNext {
+                    // Ignore Empty return value
+                  }
 
-            onError { throwable ->
-              val s = Status.fromThrowable(throwable)
-              logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
-              connectionContext.disconnect()
-            }
+                  onError { throwable ->
+                    val s = Status.fromThrowable(throwable)
+                    logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
+                    connectionContext.disconnect()
+                  }
 
-            onCompleted {
-              connectionContext.disconnect()
-            }
-          })
+                  onCompleted {
+                    connectionContext.disconnect()
+                  }
+                })
 
     for (scrapeResponse in connectionContext.scrapeResultChannel) {
       logger.debug { "writeResponsesToProxyUntilDisconnected(): \n$scrapeResponse" }

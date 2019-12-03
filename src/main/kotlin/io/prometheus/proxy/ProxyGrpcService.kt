@@ -26,6 +26,7 @@ import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GrpcDsl.server
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.github.pambrose.common.utils.TlsUtils.buildServerSslContext
 import com.google.common.util.concurrent.MoreExecutors
 import com.salesforce.grpc.contrib.Servers
 import io.grpc.Server
@@ -40,12 +41,12 @@ class ProxyGrpcService(private val proxy: Proxy,
                        private val inProcessName: String = "") : GenericIdleService() {
 
   val healthCheck =
-    healthCheck {
-      if (grpcServer.isShutdown || grpcServer.isShutdown)
-        HealthCheck.Result.unhealthy("gRPC server is not running")
-      else
-        HealthCheck.Result.healthy()
-    }
+      healthCheck {
+        if (grpcServer.isShutdown || grpcServer.isShutdown)
+          HealthCheck.Result.unhealthy("gRPC server is not running")
+        else
+          HealthCheck.Result.healthy()
+      }
 
   private val grpcServer: Server
 
@@ -58,15 +59,27 @@ class ProxyGrpcService(private val proxy: Proxy,
       grpcTracing = GrpcTracing.create(tracing)
     }
 
+    val tls = proxy.options.configVals.proxy.tls
+    val sslContext =
+        if (tls.certChainFilePath.isNotEmpty() || tls.privateKeyFilePath.isNotEmpty())
+          buildServerSslContext(certChainFilePath = tls.certChainFilePath,
+                                privateKeyFilePath = tls.privateKeyFilePath,
+                                trustCertCollectionFilePath = tls.trustCertCollectionFilePath)
+        else
+          null
+
     grpcServer =
-      server(inProcessName, port) {
-        val proxyService = ProxyServiceImpl(proxy)
-        val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
-        if (proxy.isZipkinEnabled)
-          interceptors += grpcTracing.newServerInterceptor()
-        addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
-        addTransportFilter(ProxyTransportFilter(proxy))
-      }
+        server(port = port,
+               sslContext = sslContext,
+               inProcessServerName = inProcessName) {
+          val proxyService = ProxyServiceImpl(proxy)
+          val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
+          if (proxy.isZipkinEnabled)
+            interceptors += grpcTracing.newServerInterceptor()
+          addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
+          addTransportFilter(ProxyTransportFilter(proxy))
+        }
+
     Servers.shutdownWithJvm(grpcServer, 2.seconds.toLongMilliseconds())
 
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
@@ -83,15 +96,16 @@ class ProxyGrpcService(private val proxy: Proxy,
   }
 
   override fun toString() =
-    toStringElements {
-      if (inProcessName.isNotEmpty()) {
-        add("serverType", "InProcess")
-        add("serverName", inProcessName)
-      } else {
-        add("serverType", "Netty")
-        add("port", port)
+      toStringElements {
+        if (inProcessName.isNotEmpty()) {
+          add("serverType", "InProcess")
+          add("serverName", inProcessName)
+        }
+        else {
+          add("serverType", "Netty")
+          add("port", port)
+        }
       }
-    }
 
   companion object : KLogging()
 }
