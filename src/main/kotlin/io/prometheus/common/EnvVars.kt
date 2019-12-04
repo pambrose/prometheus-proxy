@@ -41,7 +41,8 @@ enum class EnvVars {
 
   CERT_CHAIN_FILE_PATH,
   PRIVATE_KEY_FILE_PATH,
-  TRUST_CERT_COLLECTION_FILE_PATH;
+  TRUST_CERT_COLLECTION_FILE_PATH,
+  OVERRIDE_AUTHORITY;
 
   fun getEnv(defaultVal: String) = getenv(name) ?: defaultVal
 

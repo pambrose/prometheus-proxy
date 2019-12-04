@@ -158,7 +158,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
       privateKeyFilePath = EnvVars.PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
   }
 
-  protected fun assignTrustCertCollectionFilePathh(defaultVal: String) {
+  protected fun assignTrustCertCollectionFilePath(defaultVal: String) {
     if (trustCertCollectionFilePath.isEmpty())
       trustCertCollectionFilePath = EnvVars.TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
   }

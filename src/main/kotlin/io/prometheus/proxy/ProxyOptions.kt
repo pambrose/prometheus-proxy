@@ -58,7 +58,7 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
 
       assignCertChainFilePath(proxy.tls.certChainFilePath)
       assignPrivateKeyFilePath(proxy.tls.privateKeyFilePath)
-      assignTrustCertCollectionFilePathh(proxy.tls.trustCertCollectionFilePath)
+      assignTrustCertCollectionFilePath(proxy.tls.trustCertCollectionFilePath)
     }
   }
 }

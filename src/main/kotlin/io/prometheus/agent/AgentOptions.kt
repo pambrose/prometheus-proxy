@@ -35,13 +35,24 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
   var proxyHostname = ""
     private set
+
   @Parameter(names = ["-n", "--name"], description = "Agent name")
   var agentName = ""
     private set
 
+  @Parameter(names = ["--over", "--override"], description = "Override Authority")
+  private var overrideAuthority = ""
+
+
   init {
     parseOptions()
   }
+
+  private fun assignOverrideAuthority(defaultVal: String) {
+    if (overrideAuthority.isEmpty())
+      overrideAuthority = EnvVars.OVERRIDE_AUTHORITY.getEnv(defaultVal)
+  }
+
 
   override fun assignConfigVals() {
     if (proxyHostname.isEmpty()) {
@@ -64,7 +75,9 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
 
       assignCertChainFilePath(agent.tls.certChainFilePath)
       assignPrivateKeyFilePath(agent.tls.privateKeyFilePath)
-      assignTrustCertCollectionFilePathh(agent.tls.trustCertCollectionFilePath)
+      assignTrustCertCollectionFilePath(agent.tls.trustCertCollectionFilePath)
+
+      assignOverrideAuthority(agent.tls.overrideAuthority)
     }
   }
 }
