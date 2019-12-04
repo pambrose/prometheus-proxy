@@ -53,8 +53,6 @@ class AgentGrpcService(private val agent: Agent,
   private lateinit var tracing: Tracing
   private lateinit var grpcTracing: GrpcTracing
 
-  private val tls = agent.options.configVals.agent.tls
-
   var channel: ManagedChannel by nonNullableReference()
 
   val hostName: String
@@ -87,13 +85,14 @@ class AgentGrpcService(private val agent: Agent,
       grpcTracing = GrpcTracing.create(tracing)
     }
 
+    val options = agent.options
     tlsContext =
-        if (tls.certChainFilePath.isNotEmpty()
-            || tls.privateKeyFilePath.isNotEmpty()
-            || tls.trustCertCollectionFilePath.isNotEmpty())
-          buildClientTlsContext(certChainFilePath = tls.certChainFilePath,
-                                privateKeyFilePath = tls.privateKeyFilePath,
-                                trustCertCollectionFilePath = tls.trustCertCollectionFilePath)
+        if (options.certChainFilePath.isNotEmpty()
+            || options.privateKeyFilePath.isNotEmpty()
+            || options.trustCertCollectionFilePath.isNotEmpty())
+          buildClientTlsContext(certChainFilePath = options.certChainFilePath,
+                                privateKeyFilePath = options.privateKeyFilePath,
+                                trustCertCollectionFilePath = options.trustCertCollectionFilePath)
         else
           PLAINTEXT_CONTEXT
 
@@ -120,7 +119,7 @@ class AgentGrpcService(private val agent: Agent,
         channel(hostName = hostName,
                 port = port,
                 tlsContext = tlsContext,
-                overrideAuthority = tls.overrideAuthority,
+                overrideAuthority = agent.options.overrideAuthority,
                 inProcessServerName = inProcessServerName) {
           if (agent.isZipkinEnabled)
             intercept(grpcTracing.newClientInterceptor())

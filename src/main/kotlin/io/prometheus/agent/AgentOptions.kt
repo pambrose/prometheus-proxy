@@ -41,32 +41,28 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
     private set
 
   @Parameter(names = ["--over", "--override"], description = "Override Authority")
-  private var overrideAuthority = ""
-
+  var overrideAuthority = ""
+    private set
 
   init {
     parseOptions()
   }
 
-  private fun assignOverrideAuthority(defaultVal: String) {
-    if (overrideAuthority.isEmpty())
-      overrideAuthority = EnvVars.OVERRIDE_AUTHORITY.getEnv(defaultVal)
-  }
-
-
   override fun assignConfigVals() {
-    if (proxyHostname.isEmpty()) {
-      val configHostname = configVals.agent.proxy.hostname
-      proxyHostname = PROXY_HOSTNAME.getEnv(if (":" in configHostname)
-                                              configHostname
-                                            else
-                                              "$configHostname:${configVals.agent.proxy.port}")
-    }
-
-    if (agentName.isEmpty())
-      agentName = EnvVars.AGENT_NAME.getEnv(configVals.agent.name)
 
     configVals.agent.also { agent ->
+      if (proxyHostname.isEmpty()) {
+        val configHostname = agent.proxy.hostname
+        proxyHostname = PROXY_HOSTNAME.getEnv(if (":" in configHostname)
+                                                configHostname
+                                              else
+                                                "$configHostname:${agent.proxy.port}")
+      }
+
+
+      if (agentName.isEmpty())
+        agentName = EnvVars.AGENT_NAME.getEnv(agent.name)
+
       assignAdminEnabled(agent.admin.enabled)
       assignAdminPort(agent.admin.port)
       assignMetricsEnabled(agent.metrics.enabled)
@@ -77,7 +73,8 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
       assignPrivateKeyFilePath(agent.tls.privateKeyFilePath)
       assignTrustCertCollectionFilePath(agent.tls.trustCertCollectionFilePath)
 
-      assignOverrideAuthority(agent.tls.overrideAuthority)
+      if (overrideAuthority.isEmpty())
+        overrideAuthority = EnvVars.OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)
     }
   }
 }

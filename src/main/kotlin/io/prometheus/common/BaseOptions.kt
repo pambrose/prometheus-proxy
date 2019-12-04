@@ -39,6 +39,7 @@ import java.io.FileNotFoundException
 import java.net.URL
 import kotlin.system.exitProcess
 
+//@Parameters(separators = "=")
 abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val argv: Array<String>,
                                                  private val envConfig: String,
@@ -68,13 +69,16 @@ abstract class BaseOptions protected constructor(private val progName: String,
     private set
 
   @Parameter(names = ["--cert"], description = "Certificate chain file path")
-  private var certChainFilePath = ""
+  var certChainFilePath = ""
+    private set
 
   @Parameter(names = ["--key"], description = "Private key file path")
-  private var privateKeyFilePath = ""
+  var privateKeyFilePath = ""
+    private set
 
   @Parameter(names = ["--trust"], description = "Trust certificate collection file path")
-  private var trustCertCollectionFilePath = ""
+  var trustCertCollectionFilePath = ""
+    private set
 
   @Parameter(names = ["-v", "--version"],
              description = "Print version info and exit",
@@ -106,12 +110,12 @@ abstract class BaseOptions protected constructor(private val progName: String,
   private fun parseArgs(argv: Array<String>?) {
     try {
       val jcom =
-        JCommander(this)
-          .apply {
-            programName = progName
-            setCaseSensitiveOptions(false)
-            parse(*argv ?: arrayOf())
-          }
+          JCommander(this)
+              .apply {
+                programName = progName
+                setCaseSensitiveOptions(false)
+                parse(*argv ?: arrayOf())
+              }
 
       if (usage) {
         jcom.usage()
@@ -201,7 +205,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
         try {
           val configSyntax = getConfigSyntax(configName)
           return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
-            .withFallback(fallback)
+              .withFallback(fallback)
         } catch (e: Exception) {
           if (e.cause is FileNotFoundException)
             logger.error { "Invalid getConfig url: $configName" }
@@ -226,11 +230,11 @@ abstract class BaseOptions protected constructor(private val progName: String,
   }
 
   private fun getConfigSyntax(configName: String) =
-    when {
-      configName.isJsonSuffix() -> ConfigSyntax.JSON
-      configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
-      else -> ConfigSyntax.CONF
-    }
+      when {
+        configName.isJsonSuffix() -> ConfigSyntax.JSON
+        configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
+        else -> ConfigSyntax.CONF
+      }
 
   private fun String.isUrlPrefix() = toLowerCase().startsWith("http://") || toLowerCase().startsWith("https://")
 

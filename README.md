@@ -157,6 +157,9 @@ The only required argument is an Agent config value, which should have an `agent
 | -e --metrics        | METRICS_ENABLED | proxy.metrics.enabled      | false  | Enable proxy metrics                   |
 | -m --metrics_port   | METRICS_PORT    | proxy.metrics.port         | 8082   | Proxy metrics listen port              |
 | -b --debug          | DEBUG_ENABLED   | proxy.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
+| --cert              | CERT_CHAIN_FILE_PATH | proxy.tls.certChainFilePath | "" | Certificate chain file path              |
+| --key               | PRIVATE_KEY_FILE_PATH | proxy.tls.privateKeyFilePath | "" | Private key file path              |
+| --trust             | TRUST_CERT_COLLECTION_FILE_PATH | proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
 | -v --version        |                 |                            |        | Print version info and exit            |
 | -u --usage          |                 |                            |        | Print usage message and exit           |
 | -D                  |                 |                            |        | Dynamic property assignment            |
@@ -174,6 +177,9 @@ The only required argument is an Agent config value, which should have an `agent
 | -e --metrics        | METRICS_ENABLED | agent.metrics.enabled      | false  | Enable agent metrics                   |
 | -m --metrics_port   | METRICS_PORT    | agent.metrics.port         | 8083   | Agent metrics listen port              |
 | -b --debug          | DEBUG_ENABLED   | agent.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
+| --cert              | CERT_CHAIN_FILE_PATH | proxy.tls.certChainFilePath | "" | Certificate chain file path              |
+| --key               | PRIVATE_KEY_FILE_PATH | proxy.tls.privateKeyFilePath | "" | Private key file path              |
+| --trust             | TRUST_CERT_COLLECTION_FILE_PATH | proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
 | -v --version        |                 |                            |        | Print version info and exit            |
 | -u --usage          |                 |                            |        | Print usage message and exit           |
 | -D                  |                 |                            |        | Dynamic property assignment            |

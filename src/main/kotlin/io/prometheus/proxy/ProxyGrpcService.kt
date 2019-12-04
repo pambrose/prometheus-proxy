@@ -60,12 +60,12 @@ class ProxyGrpcService(private val proxy: Proxy,
       grpcTracing = GrpcTracing.create(tracing)
     }
 
-    val tls = proxy.options.configVals.proxy.tls
+    val options = proxy.options
     val tlsContext =
-        if (tls.certChainFilePath.isNotEmpty() || tls.privateKeyFilePath.isNotEmpty())
-          buildServerTlsContext(certChainFilePath = tls.certChainFilePath,
-                                privateKeyFilePath = tls.privateKeyFilePath,
-                                trustCertCollectionFilePath = tls.trustCertCollectionFilePath)
+        if (options.certChainFilePath.isNotEmpty() || options.privateKeyFilePath.isNotEmpty())
+          buildServerTlsContext(certChainFilePath = options.certChainFilePath,
+                                privateKeyFilePath = options.privateKeyFilePath,
+                                trustCertCollectionFilePath = options.trustCertCollectionFilePath)
         else
           PLAINTEXT_CONTEXT
 
