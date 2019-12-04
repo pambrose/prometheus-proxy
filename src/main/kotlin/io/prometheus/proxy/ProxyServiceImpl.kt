@@ -63,12 +63,15 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
     val agentId = request.agentId
     var valid = false
     proxy.agentContextManager.getAgentContext(agentId)
-      ?.apply {
-        valid = true
-        agentName = request.agentName
-        hostName = request.hostName
-        markActivityTime(false)
-      } ?: logger.info { "registerAgent() missing AgentContext agentId: $agentId" }
+        ?.also { context ->
+          valid = true
+          context.agentName = request.agentName
+          context.hostName = request.hostName
+          context.markActivityTime(false)
+          logger.info { "Connected to $context" }
+        }
+        ?: logger.info { "registerAgent() missing AgentContext agentId: $agentId" }
+
 
     responseObserver.apply {
       onNext(newRegisterAgentResponse(valid, "Invalid agentId: $agentId", agentId))
@@ -86,18 +89,18 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
     var valid = false
 
     proxy.agentContextManager.getAgentContext(agentId)
-      ?.apply {
-        valid = true
-        proxy.pathManager.addPath(path, this)
-        markActivityTime(false)
-      } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
+        ?.apply {
+          valid = true
+          proxy.pathManager.addPath(path, this)
+          markActivityTime(false)
+        } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
 
     responseObserver.apply {
       onNext(
-        newRegisterPathResponse(valid,
-                                "Invalid agentId: $agentId",
-                                proxy.pathManager.pathMapSize,
-                                if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1)
+          newRegisterPathResponse(valid,
+                                  "Invalid agentId: $agentId",
+                                  proxy.pathManager.pathMapSize,
+                                  if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1)
       )
       onCompleted()
     }
@@ -112,11 +115,12 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
     if (agentContext == null) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
       responseBuilder
-        .apply {
-          this.valid = false
-          this.reason = "Invalid agentId: $agentId"
-        }
-    } else {
+          .apply {
+            this.valid = false
+            this.reason = "Invalid agentId: $agentId"
+          }
+    }
+    else {
       proxy.pathManager.removePath(request.path, agentId, responseBuilder)
       agentContext.markActivityTime(false)
     }
@@ -139,7 +143,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
       proxy.metrics.heartbeats.inc()
     val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
     agentContext?.markActivityTime(false)
-      ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
+        ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
     responseObserver.apply {
       onNext(newHeartBeatResponse(agentContext != null, "Invalid agentId: ${request.agentId}"))
       onCompleted()
@@ -149,55 +153,55 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
   override fun readRequestsFromProxy(agentInfo: AgentInfo, responseObserver: StreamObserver<ScrapeRequest>) {
     responseObserver.also { observer ->
       proxy.agentContextManager.getAgentContext(agentInfo.agentId)
-        ?.also { agentContext ->
-          runBlocking {
-            while (proxy.isRunning && agentContext.isValid())
-              agentContext.readScrapeRequest()
-                ?.apply {
-                  observer.onNext(scrapeRequest)
-                }
+          ?.also { agentContext ->
+            runBlocking {
+              while (proxy.isRunning && agentContext.isValid())
+                agentContext.readScrapeRequest()
+                    ?.apply {
+                      observer.onNext(scrapeRequest)
+                    }
+            }
           }
-        }
       observer.onCompleted()
     }
   }
 
   override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> =
-    streamObserver {
-      onNext { resp ->
-        proxy.scrapeRequestManager.getFromScrapeRequestMap(resp.scrapeId)
-          ?.apply {
-            scrapeResponse = resp
-            markComplete()
-            agentContext.markActivityTime(true)
-          } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${resp.scrapeId}" }
-      }
+      streamObserver {
+        onNext { resp ->
+          proxy.scrapeRequestManager.getFromScrapeRequestMap(resp.scrapeId)
+              ?.apply {
+                scrapeResponse = resp
+                markComplete()
+                agentContext.markActivityTime(true)
+              } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${resp.scrapeId}" }
+        }
 
-      onError { throwable ->
-        Status.fromThrowable(throwable)
-          .also { arg ->
-            if (arg !== Status.CANCELLED)
-              logger.info { "Error in writeResponsesToProxy(): $arg" }
+        onError { throwable ->
+          Status.fromThrowable(throwable)
+              .also { arg ->
+                if (arg !== Status.CANCELLED)
+                  logger.info { "Error in writeResponsesToProxy(): $arg" }
+              }
+
+          try {
+            responseObserver.apply {
+              onNext(Empty.getDefaultInstance())
+              onCompleted()
+            }
+          } catch (e: StatusRuntimeException) {
+            // logger.warn(e) {"StatusRuntimeException"};
+            // Ignore
           }
+        }
 
-        try {
+        onCompleted {
           responseObserver.apply {
             onNext(Empty.getDefaultInstance())
             onCompleted()
           }
-        } catch (e: StatusRuntimeException) {
-          // logger.warn(e) {"StatusRuntimeException"};
-          // Ignore
         }
       }
-
-      onCompleted {
-        responseObserver.apply {
-          onNext(Empty.getDefaultInstance())
-          onCompleted()
-        }
-      }
-    }
 
   companion object : KLogging() {
     private val PATH_ID_GENERATOR = AtomicLong(0)

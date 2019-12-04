@@ -105,24 +105,24 @@ Start the proxy and an agent in separate shells on your local machine:
 
 ```bash
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
-        -e ADMIN_ENABLED=true \
-        -e METRICS_ENABLED=true \
+        --env ADMIN_ENABLED=true \
+        --env METRICS_ENABLED=true \
         pambrose/prometheus-proxy:1.4.6
 ```
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
-        -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+        --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         pambrose/prometheus-agent:1.4.6
 ```
 
-If you want to be able to externalize your `agent` config file on your local machine (or VM) file system 
-(instead of the above HTTP served config file), you'll need to add the Docker `volume` definition to the command:
+If you want to externalize your `agent` config file on your local machine (or VM) file system 
+(instead of the above HTTP served config file), you'll need to use the Docker `mount` option:
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
-    -v ${PWD}/prom-agent.conf:/prom-agent.conf \
-    -e AGENT_CONFIG=/prom-agent.conf \
+    --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
+    --env AGENT_CONFIG=prom-agent.conf \
     pambrose/prometheus-agent:1.4.6
 ```
 
@@ -168,7 +168,25 @@ java -jar prometheus-proxy.jar --config examples/tls-no-mutual-auth.conf
 java -jar prometheus-agent.jar --config examples/tls-no-mutual-auth.conf
 ```
 
-The 
+The docker commands necessary to would be:
+```bash
+docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
+    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
+    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
+    --env PROXY_CONFIG=tls-no-mutual-auth.conf \
+    --env ADMIN_ENABLED=true \
+    --env METRICS_ENABLED=true \
+    pambrose/prometheus-proxy:1.4.6
+
+and
+
+docker run --rm -p 8083:8083 -p 8093:8093 \
+    --name docker-agent \
+    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
+    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
+    --env AGENT_CONFIG=tls-no-mutual-auth.conf \
+    pambrose/prometheus-agent:1.4.6
+```
 
 ### Proxy CLI Options
 

@@ -90,7 +90,8 @@ class Agent(val options: AgentOptions,
   lateinit var metrics: AgentMetrics
 
   init {
-    logger.info { "Assigning proxy reconnect pause time to ${agentConfigVals.reconnectPauseSecs.seconds}" }
+    logger.info { "Assigning agent name: $agentName" }
+    logger.info { "Assigning proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
 
     if (isMetricsEnabled)
       metrics = AgentMetrics(this)

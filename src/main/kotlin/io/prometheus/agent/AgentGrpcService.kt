@@ -143,7 +143,7 @@ class AgentGrpcService(private val agent: Agent,
       } catch (e: StatusRuntimeException) {
         if (agent.isMetricsEnabled)
           agent.metrics.connects.labels("failure")?.inc()
-        logger.info { "Cannot connect to proxy using ${tlsContext.desc()} at ${agent.proxyHost} - ${e.simpleClassName}: ${e.message}" }
+        logger.info { "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}" }
         false
       }
 
