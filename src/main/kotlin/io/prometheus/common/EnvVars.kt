@@ -37,7 +37,11 @@ enum class EnvVars {
   METRICS_ENABLED,
   METRICS_PORT,
   ADMIN_ENABLED,
-  ADMIN_PORT;
+  ADMIN_PORT,
+
+  CERT_CHAIN_FILE_PATH,
+  PRIVATE_KEY_FILE_PATH,
+  TRUST_CERT_COLLECTION_FILE_PATH;
 
   fun getEnv(defaultVal: String) = getenv(name) ?: defaultVal
 

@@ -67,6 +67,15 @@ abstract class BaseOptions protected constructor(private val progName: String,
   var debugEnabled = false
     private set
 
+  @Parameter(names = ["--cert"], description = "Certificate chain file path")
+  private var certChainFilePath = ""
+
+  @Parameter(names = ["--key"], description = "Private key file path")
+  private var privateKeyFilePath = ""
+
+  @Parameter(names = ["--trust"], description = "Trust certificate collection file path")
+  private var trustCertCollectionFilePath = ""
+
   @Parameter(names = ["-v", "--version"],
              description = "Print version info and exit",
              validateWith = [VersionValidator::class])
@@ -139,14 +148,29 @@ abstract class BaseOptions protected constructor(private val progName: String,
       metricsPort = METRICS_PORT.getEnv(defaultVal)
   }
 
+  protected fun assignCertChainFilePath(defaultVal: String) {
+    if (certChainFilePath.isEmpty())
+      certChainFilePath = EnvVars.CERT_CHAIN_FILE_PATH.getEnv(defaultVal)
+  }
+
+  protected fun assignPrivateKeyFilePath(defaultVal: String) {
+    if (privateKeyFilePath.isEmpty())
+      privateKeyFilePath = EnvVars.PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
+  }
+
+  protected fun assignTrustCertCollectionFilePathh(defaultVal: String) {
+    if (trustCertCollectionFilePath.isEmpty())
+      trustCertCollectionFilePath = EnvVars.TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
+  }
+
   private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
     config = readConfig(if (configSource.isNotEmpty()) configSource else System.getenv(envConfig).orEmpty(),
                         envConfig,
                         ConfigParseOptions.defaults().setAllowMissing(false),
                         ConfigFactory.load().resolve(),
                         exitOnMissingConfig)
-      .resolve(ConfigResolveOptions.defaults())
-      .resolve()
+        .resolve(ConfigResolveOptions.defaults())
+        .resolve()
 
     dynamicParams.forEach { (k, v) ->
       // Strip quotes
