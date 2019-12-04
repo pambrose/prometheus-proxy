@@ -116,7 +116,8 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
         pambrose/prometheus-agent:1.4.6
 ```
 
-If you want to be able to externalize your `agent` config file on your local machine (or VM) file system (instead of the above HTTP served config file), you'll need to add the Docker `volume` definition to the command:
+If you want to be able to externalize your `agent` config file on your local machine (or VM) file system 
+(instead of the above HTTP served config file), you'll need to add the Docker `volume` definition to the command:
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
@@ -144,6 +145,30 @@ Highlights include:
 The Proxy and Agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
 The only required argument is an Agent config value, which should have an `agent.pathConfigs` value.
 
+## Adding TLS to Agent-Proxy connections
+
+Agents connect to a Proxy using [gRPC](https://grpc.io). gRPC supports TLS with or without mutual authentication. The
+necessary certificate amd key file paths can spcified via CLI args, environment variables and configuration file settings.
+
+The gRPC docs describe how to setup TLS [here](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
+The certificates and keys necessary to test TLS support are included in this 
+[repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs).
+
+To run TLS without mutual authentication the following must be defined:
+* certChainFilePath and privateKeyFilePath on the Proxy
+* trustCertCollectionFilePath on the Agent
+
+To run TLS with mutual authentication the following must be defined:
+* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the Proxy
+* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the Agent
+
+Run the Agent and Proxy using the testing certs with:
+```bash
+java -jar prometheus-proxy.jar --config examples/tls-no-mutual-auth.conf
+java -jar prometheus-agent.jar --config examples/tls-no-mutual-auth.conf
+```
+
+The 
 
 ### Proxy CLI Options
 
@@ -180,6 +205,7 @@ The only required argument is an Agent config value, which should have an `agent
 | --cert              | CERT_CHAIN_FILE_PATH | proxy.tls.certChainFilePath | "" | Certificate chain file path              |
 | --key               | PRIVATE_KEY_FILE_PATH | proxy.tls.privateKeyFilePath | "" | Private key file path              |
 | --trust             | TRUST_CERT_COLLECTION_FILE_PATH | proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
+| --override          | OVERRIDE_AUTHORITY | proxy.tls.overrideAuthority | "" | Override authority (for testing) |
 | -v --version        |                 |                            |        | Print version info and exit            |
 | -u --usage          |                 |                            |        | Print usage message and exit           |
 | -D                  |                 |                            |        | Dynamic property assignment            |

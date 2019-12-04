@@ -208,7 +208,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
               .withFallback(fallback)
         } catch (e: Exception) {
           if (e.cause is FileNotFoundException)
-            logger.error { "Invalid getConfig url: $configName" }
+            logger.error { "Invalid config url: $configName" }
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
@@ -219,7 +219,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
           return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
         } catch (e: Exception) {
           if (e.cause is FileNotFoundException)
-            logger.error { "Invalid getConfig filename: $configName" }
+            logger.error { "Invalid config filename: $configName" }
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
