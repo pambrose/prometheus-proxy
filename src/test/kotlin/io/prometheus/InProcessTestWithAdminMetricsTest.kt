@@ -21,12 +21,6 @@ package io.prometheus
 import com.github.pambrose.common.util.simpleClassName
 import io.prometheus.ProxyTests.ProxyCallTestArgs
 import io.prometheus.ProxyTests.proxyCallTest
-import io.prometheus.ProxyTests.timeoutTest
-import io.prometheus.SimpleTests.addRemovePathsTest
-import io.prometheus.SimpleTests.invalidAgentUrlTest
-import io.prometheus.SimpleTests.invalidPathTest
-import io.prometheus.SimpleTests.missingPathTest
-import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
@@ -39,35 +33,17 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
-class InProcessTestWithAdminMetricsTest {
-
-  @Test
-  fun missingPathTest() = missingPathTest(simpleClassName)
-
-  @Test
-  fun invalidPathTest() = invalidPathTest(simpleClassName)
-
-  @Test
-  fun addRemovePathsTest() = addRemovePathsTest(agent.pathManager, simpleClassName)
-
-  @Test
-  fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent.pathManager, simpleClassName)
-
-  @Test
-  fun invalidAgentUrlTest() = invalidAgentUrlTest(agent.pathManager, simpleClassName)
-
-  @Test
-  fun timeoutTest() = timeoutTest(agent.pathManager, simpleClassName)
+class InProcessTestWithAdminMetricsTest : CommonTests(agent) {
 
   @Test
   fun proxyCallTest() =
-    proxyCallTest(ProxyCallTestArgs(agent,
-                                    httpServerCount = 5,
-                                    pathCount = 50,
-                                    sequentialQueryCount = 500,
-                                    parallelQueryCount = 0,
-                                    startPort = 10700,
-                                    caller = simpleClassName))
+      proxyCallTest(ProxyCallTestArgs(agent,
+                                      httpServerCount = 5,
+                                      pathCount = 50,
+                                      sequentialQueryCount = 500,
+                                      parallelQueryCount = 0,
+                                      startPort = 10700,
+                                      caller = simpleClassName))
 
   companion object : KLogging() {
     private lateinit var proxy: Proxy
@@ -84,7 +60,7 @@ class InProcessTestWithAdminMetricsTest {
         }
         launch(Dispatchers.Default) {
           agent = startAgent("withmetrics", adminEnabled = true, metricsEnabled = true)
-            .apply { awaitInitialConnection(10.seconds) }
+              .apply { awaitInitialConnection(10.seconds) }
         }
       }
       logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
