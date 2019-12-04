@@ -38,7 +38,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
-class NoMutualAuthTest {
+class TlsWithMutualAuthTest {
 
   @Test
   fun missingPathTest() = missingPathTest(simpleClassName)
@@ -81,11 +81,14 @@ class NoMutualAuthTest {
         launch(Dispatchers.Default) {
           proxy = startProxy(argv = listOf("--agent_port", "50440",
                                            "--cert", "testing/certs/server1.pem",
-                                           "--key", "testing/certs/server1.key"))
+                                           "--key", "testing/certs/server1.key",
+                                           "--trust", "testing/certs/ca.pem"))
         }
 
         launch(Dispatchers.Default) {
           agent = startAgent(argv = listOf("--proxy", "localhost:50440",
+                                           "--cert", "testing/certs/client.pem",
+                                           "--key", "testing/certs/client.key",
                                            "--trust", "testing/certs/ca.pem",
                                            "--override", "foo.test.google.fr"))
               .apply { awaitInitialConnection(10.seconds) }
