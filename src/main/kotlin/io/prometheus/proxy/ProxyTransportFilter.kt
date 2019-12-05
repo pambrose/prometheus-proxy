@@ -31,7 +31,7 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
   override fun transportReady(attributes: Attributes): Attributes {
     val agentContext = AgentContext(getRemoteAddr(attributes))
     proxy.agentContextManager.addAgentContext(agentContext)
-    logger.info { "Connected to ${agentContext.agentId}" }
+    logger.debug { "Registering agentId: ${agentContext.agentId}" }
 
     return attributes {
       set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)

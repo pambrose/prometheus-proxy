@@ -170,7 +170,7 @@ class Proxy(val options: ProxyOptions,
       if (agentContext == null) {
         logger.error { "Missing AgentContext for agentId: $agentId" }
       } else {
-        logger.info { "Removed $agentContext" }
+        logger.debug { "Removed $agentContext" }
         agentContext.invalidate()
       }
       agentContext

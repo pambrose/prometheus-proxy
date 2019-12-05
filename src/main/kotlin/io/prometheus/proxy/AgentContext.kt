@@ -89,9 +89,9 @@ class AgentContext(private val remoteAddr: String) {
     toStringElements {
       add("agentId", agentId)
       add("valid", valid.get())
-      add("remoteAddr", remoteAddr)
       add("agentName", agentName)
       add("hostName", hostName)
+      add("remoteAddr", remoteAddr)
       add("lastRequestDuration", lastRequestDuration)
       //add("inactivityDuration", inactivityDuration)
     }

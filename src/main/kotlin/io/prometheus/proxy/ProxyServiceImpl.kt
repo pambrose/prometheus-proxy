@@ -52,6 +52,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
   override fun connectAgent(request: Empty, responseObserver: StreamObserver<Empty>) {
     if (proxy.isMetricsEnabled)
       proxy.metrics.connects.inc()
+
     responseObserver.apply {
       onNext(Empty.getDefaultInstance())
       onCompleted()
@@ -63,15 +64,13 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
     val agentId = request.agentId
     var valid = false
     proxy.agentContextManager.getAgentContext(agentId)
-        ?.also { context ->
+        ?.apply {
           valid = true
-          context.agentName = request.agentName
-          context.hostName = request.hostName
-          context.markActivityTime(false)
-          logger.info { "Connected to $context" }
-        }
-        ?: logger.info { "registerAgent() missing AgentContext agentId: $agentId" }
-
+          agentName = request.agentName
+          hostName = request.hostName
+          markActivityTime(false)
+          logger.info { "Connected to $this" }
+        } ?: logger.info { "registerAgent() missing AgentContext agentId: $agentId" }
 
     responseObserver.apply {
       onNext(newRegisterAgentResponse(valid, "Invalid agentId: $agentId", agentId))
@@ -180,7 +179,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
         onError { throwable ->
           Status.fromThrowable(throwable)
               .also { arg ->
-                if (arg !== Status.CANCELLED)
+                if (arg.code != Status.Code.CANCELLED)
                   logger.info { "Error in writeResponsesToProxy(): $arg" }
               }
 
