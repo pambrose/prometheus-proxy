@@ -126,7 +126,9 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     pambrose/prometheus-agent:1.4.6
 ```
 
-The above assumes that you have the file `prom-agent.conf` in the current directory from which you're running the `docker` command.
+The above assumes that you have the file `prom-agent.conf` in the current directory from which you're 
+running the `docker` command. The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
+to use /app as the base directory in the target for `--mount` options.
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy on *localhost* at:
@@ -137,10 +139,10 @@ the proxy and the agent metrics would be available from the proxy on *localhost*
 
 The Proxy and Agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
 Highlights include:
-*   supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
-*   config files can be files or urls
-*   config values can come from CLI options, environment vars, Java system properties, and/or config files.
-*   config files can reference environment variables
+* supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
+* config files can be files or urls
+* config values can come from CLI options, environment vars, Java system properties, and/or config files.
+* config files can reference environment variables
   
 The Proxy and Agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
 The only required argument is an Agent config value, which should have an `agent.pathConfigs` value.
@@ -171,8 +173,8 @@ java -jar prometheus-agent.jar --config examples/tls-no-mutual-auth.conf
 The docker commands necessary to would be:
 ```bash
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
-    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
+    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
@@ -181,11 +183,31 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
 and
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
-    --name docker-agent \
-    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
+    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
+    --env PROXY_HOSTNAME=mymachine.lan:50440 \
+    --name docker-agent \
     pambrose/prometheus-agent:1.4.6
+
+docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
+    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
+    --mount type=bind,source="$(pwd)"/examples/tls-with-mutual-auth.conf,target=/app/tls-with-mutual-auth.conf \
+    --env PROXY_CONFIG=tls-with-mutual-auth.conf \
+    --env ADMIN_ENABLED=true \
+    --env METRICS_ENABLED=true \
+    pambrose/prometheus-proxy:1.4.6
+
+and
+
+docker run --rm -p 8083:8083 -p 8093:8093 \
+    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
+    --mount type=bind,source="$(pwd)"/examples/tls-with-mutual-auth.conf,target=/app/tls-with-mutual-auth.conf \
+    --env AGENT_CONFIG=tls-with-mutual-auth.conf \
+    --env PROXY_HOSTNAME=mymachine.lan:50440 \
+    --name docker-agent \
+    pambrose/prometheus-agent:1.4.6
+
 ```
 
 ### Proxy CLI Options
@@ -200,9 +222,9 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 | -e --metrics        | METRICS_ENABLED | proxy.metrics.enabled      | false  | Enable proxy metrics                   |
 | -m --metrics_port   | METRICS_PORT    | proxy.metrics.port         | 8082   | Proxy metrics listen port              |
 | -b --debug          | DEBUG_ENABLED   | proxy.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
-| --cert              | CERT_CHAIN_FILE_PATH | proxy.tls.certChainFilePath | "" | Certificate chain file path              |
-| --key               | PRIVATE_KEY_FILE_PATH | proxy.tls.privateKeyFilePath | "" | Private key file path              |
-| --trust             | TRUST_CERT_COLLECTION_FILE_PATH | proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
+| -t --cert           | CERT_CHAIN_FILE_PATH | proxy.tls.certChainFilePath | "" | Certificate chain file path              |
+| -k --key            | PRIVATE_KEY_FILE_PATH | proxy.tls.privateKeyFilePath | "" | Private key file path              |
+| -s --trust          | TRUST_CERT_COLLECTION_FILE_PATH | proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
 | -v --version        |                 |                            |        | Print version info and exit            |
 | -u --usage          |                 |                            |        | Print usage message and exit           |
 | -D                  |                 |                            |        | Dynamic property assignment            |
@@ -220,9 +242,9 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 | -e --metrics        | METRICS_ENABLED | agent.metrics.enabled      | false  | Enable agent metrics                   |
 | -m --metrics_port   | METRICS_PORT    | agent.metrics.port         | 8083   | Agent metrics listen port              |
 | -b --debug          | DEBUG_ENABLED   | agent.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
-| --cert              | CERT_CHAIN_FILE_PATH | proxy.tls.certChainFilePath | "" | Certificate chain file path              |
-| --key               | PRIVATE_KEY_FILE_PATH | proxy.tls.privateKeyFilePath | "" | Private key file path              |
-| --trust             | TRUST_CERT_COLLECTION_FILE_PATH | proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
+| -t --cert           | CERT_CHAIN_FILE_PATH | proxy.tls.certChainFilePath | "" | Certificate chain file path              |
+| -k --key            | PRIVATE_KEY_FILE_PATH | proxy.tls.privateKeyFilePath | "" | Private key file path              |
+| -s --trust          | TRUST_CERT_COLLECTION_FILE_PATH | proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
 | --override          | OVERRIDE_AUTHORITY | proxy.tls.overrideAuthority | "" | Override authority (for testing) |
 | -v --version        |                 |                            |        | Print version info and exit            |
 | -u --usage          |                 |                            |        | Print usage message and exit           |

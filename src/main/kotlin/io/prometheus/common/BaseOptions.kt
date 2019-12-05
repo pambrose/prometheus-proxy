@@ -68,15 +68,15 @@ abstract class BaseOptions protected constructor(private val progName: String,
   var debugEnabled = false
     private set
 
-  @Parameter(names = ["--cert"], description = "Certificate chain file path")
+  @Parameter(names = ["-t", "--cert"], description = "Certificate chain file path")
   var certChainFilePath = ""
     private set
 
-  @Parameter(names = ["--key"], description = "Private key file path")
+  @Parameter(names = ["-k", "--key"], description = "Private key file path")
   var privateKeyFilePath = ""
     private set
 
-  @Parameter(names = ["--trust"], description = "Trust certificate collection file path")
+  @Parameter(names = ["-s", "--trust"], description = "Trust certificate collection file path")
   var trustCertCollectionFilePath = ""
     private set
 
