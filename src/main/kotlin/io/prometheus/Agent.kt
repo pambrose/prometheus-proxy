@@ -58,17 +58,17 @@ import kotlin.time.MonoClock
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
-class Agent(options: AgentOptions,
+class Agent(val options: AgentOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,
             initBlock: (Agent.() -> Unit)? = null) :
-  GenericService<ConfigVals>(options.configVals,
-                             newAdminConfig(options.adminEnabled,
-                                            options.adminPort,
-                                            options.configVals.agent.admin),
-                             newMetricsConfig(options.metricsEnabled,
-                                              options.metricsPort,
-                                              options.configVals.agent.metrics),
+    GenericService<ConfigVals>(options.configVals,
+                               newAdminConfig(options.adminEnabled,
+                                              options.adminPort,
+                                              options.configVals.agent.admin),
+                               newMetricsConfig(options.metricsEnabled,
+                                                options.metricsPort,
+                                                options.configVals.agent.metrics),
                              newZipkinConfig(options.configVals.agent.internal.zipkin),
                              { getVersionDesc(true) },
                              isTestMode = testMode) {
@@ -90,7 +90,8 @@ class Agent(options: AgentOptions,
   lateinit var metrics: AgentMetrics
 
   init {
-    logger.info { "Assigning proxy reconnect pause time to ${agentConfigVals.reconnectPauseSecs.seconds}" }
+    logger.info { "Assigning agent name: $agentName" }
+    logger.info { "Assigning proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
 
     if (isMetricsEnabled)
       metrics = AgentMetrics(this)
@@ -204,8 +205,8 @@ class Agent(options: AgentOptions,
     super.shutDown()
   }
 
-  fun toPlainText() =
-    """
+  private fun toPlainText() =
+      """
       Prometheus Agent Info [${getVersionDesc(false)}]
       
       Uptime:    ${upTime.format(true)}

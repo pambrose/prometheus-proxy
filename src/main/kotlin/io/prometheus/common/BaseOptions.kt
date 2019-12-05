@@ -39,6 +39,7 @@ import java.io.FileNotFoundException
 import java.net.URL
 import kotlin.system.exitProcess
 
+//@Parameters(separators = "=")
 abstract class BaseOptions protected constructor(private val progName: String,
                                                  private val argv: Array<String>,
                                                  private val envConfig: String,
@@ -65,6 +66,18 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
   @Parameter(names = ["-b", "--debug"], description = "Debug option enabled")
   var debugEnabled = false
+    private set
+
+  @Parameter(names = ["-t", "--cert"], description = "Certificate chain file path")
+  var certChainFilePath = ""
+    private set
+
+  @Parameter(names = ["-k", "--key"], description = "Private key file path")
+  var privateKeyFilePath = ""
+    private set
+
+  @Parameter(names = ["-s", "--trust"], description = "Trust certificate collection file path")
+  var trustCertCollectionFilePath = ""
     private set
 
   @Parameter(names = ["-v", "--version"],
@@ -97,12 +110,12 @@ abstract class BaseOptions protected constructor(private val progName: String,
   private fun parseArgs(argv: Array<String>?) {
     try {
       val jcom =
-        JCommander(this)
-          .apply {
-            programName = progName
-            setCaseSensitiveOptions(false)
-            parse(*argv ?: arrayOf())
-          }
+          JCommander(this)
+              .apply {
+                programName = progName
+                setCaseSensitiveOptions(false)
+                parse(*argv ?: arrayOf())
+              }
 
       if (usage) {
         jcom.usage()
@@ -139,14 +152,29 @@ abstract class BaseOptions protected constructor(private val progName: String,
       metricsPort = METRICS_PORT.getEnv(defaultVal)
   }
 
+  protected fun assignCertChainFilePath(defaultVal: String) {
+    if (certChainFilePath.isEmpty())
+      certChainFilePath = EnvVars.CERT_CHAIN_FILE_PATH.getEnv(defaultVal)
+  }
+
+  protected fun assignPrivateKeyFilePath(defaultVal: String) {
+    if (privateKeyFilePath.isEmpty())
+      privateKeyFilePath = EnvVars.PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
+  }
+
+  protected fun assignTrustCertCollectionFilePath(defaultVal: String) {
+    if (trustCertCollectionFilePath.isEmpty())
+      trustCertCollectionFilePath = EnvVars.TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
+  }
+
   private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
     config = readConfig(if (configSource.isNotEmpty()) configSource else System.getenv(envConfig).orEmpty(),
                         envConfig,
                         ConfigParseOptions.defaults().setAllowMissing(false),
                         ConfigFactory.load().resolve(),
                         exitOnMissingConfig)
-      .resolve(ConfigResolveOptions.defaults())
-      .resolve()
+        .resolve(ConfigResolveOptions.defaults())
+        .resolve()
 
     dynamicParams.forEach { (k, v) ->
       // Strip quotes
@@ -177,10 +205,10 @@ abstract class BaseOptions protected constructor(private val progName: String,
         try {
           val configSyntax = getConfigSyntax(configName)
           return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
-            .withFallback(fallback)
+              .withFallback(fallback)
         } catch (e: Exception) {
           if (e.cause is FileNotFoundException)
-            logger.error { "Invalid getConfig url: $configName" }
+            logger.error { "Invalid config url: $configName" }
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
@@ -191,7 +219,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
           return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
         } catch (e: Exception) {
           if (e.cause is FileNotFoundException)
-            logger.error { "Invalid getConfig filename: $configName" }
+            logger.error { "Invalid config filename: $configName" }
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
@@ -202,11 +230,11 @@ abstract class BaseOptions protected constructor(private val progName: String,
   }
 
   private fun getConfigSyntax(configName: String) =
-    when {
-      configName.isJsonSuffix() -> ConfigSyntax.JSON
-      configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
-      else -> ConfigSyntax.CONF
-    }
+      when {
+        configName.isJsonSuffix() -> ConfigSyntax.JSON
+        configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
+        else -> ConfigSyntax.CONF
+      }
 
   private fun String.isUrlPrefix() = toLowerCase().startsWith("http://") || toLowerCase().startsWith("https://")
 

@@ -22,12 +22,6 @@ import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
 import io.prometheus.ProxyTests.ProxyCallTestArgs
 import io.prometheus.ProxyTests.proxyCallTest
-import io.prometheus.ProxyTests.timeoutTest
-import io.prometheus.SimpleTests.addRemovePathsTest
-import io.prometheus.SimpleTests.invalidAgentUrlTest
-import io.prometheus.SimpleTests.invalidPathTest
-import io.prometheus.SimpleTests.missingPathTest
-import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
@@ -40,35 +34,17 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
-class NettyTestWithAdminMetricsTest {
-
-  @Test
-  fun missingPathTest() = missingPathTest(simpleClassName)
-
-  @Test
-  fun invalidPathTest() = invalidPathTest(simpleClassName)
-
-  @Test
-  fun addRemovePathsTest() = addRemovePathsTest(agent.pathManager, simpleClassName)
-
-  @Test
-  fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent.pathManager, simpleClassName)
-
-  @Test
-  fun invalidAgentUrlTest() = invalidAgentUrlTest(agent.pathManager, simpleClassName)
-
-  @Test
-  fun timeoutTest() = timeoutTest(agent.pathManager, simpleClassName)
+class NettyTestWithAdminMetricsTest : CommonTests(agent) {
 
   @Test
   fun proxyCallTest() =
-    proxyCallTest(ProxyCallTestArgs(agent,
-                                    httpServerCount = 5,
-                                    pathCount = 25,
-                                    sequentialQueryCount = 500,
-                                    parallelQueryCount = 0,
-                                    startPort = 10900,
-                                    caller = simpleClassName))
+      proxyCallTest(ProxyCallTestArgs(agent,
+                                      httpServerCount = 5,
+                                      pathCount = 25,
+                                      sequentialQueryCount = 500,
+                                      parallelQueryCount = 0,
+                                      startPort = 10900,
+                                      caller = simpleClassName))
 
   companion object : KLogging() {
     private lateinit var proxy: Proxy
@@ -83,7 +59,7 @@ class NettyTestWithAdminMetricsTest {
         launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, metricsEnabled = true) }
         launch(Dispatchers.Default) {
           agent = startAgent(adminEnabled = true, metricsEnabled = true)
-            .apply { awaitInitialConnection(10.seconds) }
+              .apply { awaitInitialConnection(10.seconds) }
         }
       }
 

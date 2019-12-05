@@ -5,7 +5,6 @@
 [![Coverage Status](https://coveralls.io/repos/github/pambrose/prometheus-proxy/badge.svg?branch=master)](https://coveralls.io/github/pambrose/prometheus-proxy?branch=master)
 [![codebeat badge](https://codebeat.co/badges/8dbe1dc6-628e-44a4-99f9-d468831ff0cc)](https://codebeat.co/projects/github-com-pambrose-prometheus-proxy-master)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/422df508473443df9fbd8ea00fdee973)](https://www.codacy.com/app/pambrose/prometheus-proxy?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=pambrose/prometheus-proxy&amp;utm_campaign=Badge_Grade)
-[![Code Climate](https://codeclimate.com/github/pambrose/prometheus-proxy/badges/gpa.svg)](https://codeclimate.com/github/pambrose/prometheus-proxy)
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for 
@@ -13,10 +12,10 @@ collecting metrics. The pull model is problematic when a Prometheus server and i
 firewall. [Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints 
 running behind a firewall and preserves the pull model.
 
-`prometheus-proxy` runtime is broken up into 2 microservices:
+The `prometheus-proxy` runtime comprises 2 services:
 
-*   `proxy`: Runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
-*   `agent`: Runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
+* `proxy`: runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
+* `agent`: runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
 
 Here's a simplified network diagram of how the deployed `proxy` and `agent` work:
 
@@ -31,21 +30,21 @@ One proxy can work one or many agents.
 
 Download the proxy and agent uber-jars from [here](https://github.com/pambrose/prometheus-proxy/releases).
 
-Start a proxy with:
+Start a `proxy` with:
 
 ```bash
 java -jar prometheus-proxy.jar
 ```
 
-Start an agent with: 
+Start an `agent` with: 
 
 ```bash
-java -jar prometheus-agent.jar -Dagent.proxy.hostname=proxy.local --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
+java -jar prometheus-agent.jar -Dagent.proxy.hostname=mymachine.local --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
 ```
 
-If prometheus-proxy were running on a machine named *proxy.local* and the
+If prometheus-proxy were running on a machine named *mymachine.local* and the
 `agent.pathConfigs` value in the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) 
-config file had these values:
+config file were defined as:
 
 ```hocon
 agent {
@@ -69,11 +68,11 @@ agent {
 }
 ```
 
-then the *prometheus.yml* scrape_config would target the three apps at:
+then the *prometheus.yml* scrape_config would target the three apps with:
 
-*   http://proxy.local:8080/app1_metrics
-*   http://proxy.local:8080/app2_metrics
-*   http://proxy.local:8080/app3_metrics
+*   http://mymachine.local:8080/app1_metrics
+*   http://mymachine.local:8080/app2_metrics
+*   http://mymachine.local:8080/app3_metrics
 
 The `prometheus.yml` file would include:
 
@@ -82,101 +81,112 @@ scrape_configs:
   - job_name: 'app1'
     metrics_path: '/app1_metrics'
     static_configs:
-      - targets: ['proxy.local:8080']
+      - targets: ['mymachine.local:8080']
   - job_name: 'app2'
     metrics_path: '/app2_metrics'
     static_configs:
-      - targets: ['proxy.local:8080']
+      - targets: ['mymachine.local:8080']
   - job_name: 'app3'
     metrics_path: '/app3_metrics'
     static_configs:
-      - targets: ['proxy.local:8080']
+      - targets: ['mymachine.local:8080']
 ```
 
 ## Docker Usage
 
 The docker images are available via:
 ```bash
-docker pull pambrose/prometheus-proxy:1.4.5
-docker pull pambrose/prometheus-agent:1.4.5
+docker pull pambrose/prometheus-proxy:1.5.0
+docker pull pambrose/prometheus-agent:1.5.0
 ```
 
-Start the proxy and an agent in separate shells on your local machine:
+Start a proxy container with:
 
 ```bash
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
-        -e ADMIN_ENABLED=true \
-        -e METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.4.5
+        --env ADMIN_ENABLED=true \
+        --env METRICS_ENABLED=true \
+        pambrose/prometheus-proxy:1.5.0
 ```
+
+Start an agent container with:
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
-        -e AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.4.5
+        --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+        pambrose/prometheus-agent:1.5.0
 ```
-
-If you want to be able to externalize your `agent` config file on your local machine (or VM) file system (instead of the above HTTP served config file), you'll need to add the Docker `volume` definition to the command:
-
-```bash
-docker run --rm -p 8083:8083 -p 8093:8093 \
-    -v ${PWD}/prom-agent.conf:/prom-agent.conf \
-    -e AGENT_CONFIG=/prom-agent.conf \
-    pambrose/prometheus-agent:1.4.5
-```
-
-The above assumes that you have the file `prom-agent.conf` in the current directory from which you're running the `docker` command.
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy on *localhost* at:
 *   http://localhost:8082/proxy_metrics
 *   http://localhost:8083/agent_metrics
 
+If you want to use a local config file with a docker container (instead of the above HTTP-served config file), 
+use the docker [mount](https://docs.docker.com/storage/bind-mounts/) option. Assuming the config file `prom-agent.conf` 
+is in your current directory, run an agent container with:
+
+```bash
+docker run --rm -p 8083:8083 -p 8093:8093 \
+    --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
+    --env AGENT_CONFIG=prom-agent.conf \
+    pambrose/prometheus-agent:1.5.0
+```
+
+**Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
+to use `/app` as the base directory in the target for `--mount` options.
+
 ## Configuration
 
-The Proxy and Agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
+The proxy and agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
 Highlights include:
-*   supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
-*   config files can be files or urls
-*   config values can come from CLI options, environment vars, Java system properties, and/or config files.
-*   config files can reference environment variables
+* supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
+* config files can be files or urls
+* config values can come from CLI options, environment vars, Java system properties, and/or config files.
+* config files can reference environment variables
   
-The Proxy and Agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
-The only required argument is an Agent config value, which should have an `agent.pathConfigs` value.
-
+The proxy and agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
+The only required argument is an agent config value, which should have an `agent.pathConfigs` value.
 
 ### Proxy CLI Options
 
-| Options             | Env Var         | Property                   |Default | Description                            |
-|:--------------------|:----------------|:---------------------------|:-------|:---------------------------------------|
-| -c --config         | PROXY_CONFIG    |                            |        | Agent config file or url                 |
-| -p --port           | PROXY_PORT      | proxy.http.port            | 8080   | Proxy listen port                      |
-| -a --agent_port     | AGENT_PORT      | proxy.agent.port           | 50051  | gRPC listen port for Agents            |
-| -r --admin          | ADMIN_ENABLED   | proxy.admin.enabled        | false  | Enable admin servlets                  |
-| -i --admin_port     | ADMIN_PORT      | proxy.admin.port           | 8092   | Admin servlets port                    |
-| -e --metrics        | METRICS_ENABLED | proxy.metrics.enabled      | false  | Enable proxy metrics                   |
-| -m --metrics_port   | METRICS_PORT    | proxy.metrics.port         | 8082   | Proxy metrics listen port              |
-| -b --debug          | DEBUG_ENABLED   | proxy.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
-| -v --version        |                 |                            |        | Print version info and exit            |
-| -u --usage          |                 |                            |        | Print usage message and exit           |
-| -D                  |                 |                            |        | Dynamic property assignment            |
+| Options               | ENV VAR<br>Property                             |Default | Description                         |
+|-----------------------|-------------------------------------------------|--------|-------------------------------------|
+| --config, -c           | PROXY_CONFIG                                    |        | Agent config file or url              |
+| --port, -p            | PROXY_PORT      <br> proxy.http.port            | 8080   | Proxy listen port                   |
+| --agent_port, -a      | AGENT_PORT      <br> proxy.agent.port           | 50051  | gRPC listen port for agents         |
+| --admin, -r           | ADMIN_ENABLED   <br> proxy.admin.enabled        | false  | Enable admin servlets               |
+| --admin_port, -i      | ADMIN_PORT      <br> proxy.admin.port           | 8092   | Admin servlets port                 |
+| --metrics, -e         | METRICS_ENABLED <br> proxy.metrics.enabled      | false  | Enable proxy metrics                |
+| --metrics_port, -m    | METRICS_PORT    <br> proxy.metrics.port         | 8082   | Proxy metrics listen port           |
+| --debug, -b           | DEBUG_ENABLED   <br> proxy.metrics.debugEnabled | false  | Enable proxy debug servlet<br>on admin port|
+| --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath   | "" | Certificate chain file path       |
+| --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath | "" | Private key file path            |
+| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
+| --version, -v         |                                                 |        | Print version info and exit         |
+| --usage, -u           |                                                 |        | Print usage message and exit        |
+| -D                    |                                                 |        | Dynamic property assignment         |
 
 
 ### Agent CLI Options
 
-| Options             | Env Var         | Property                   |Default | Description                            |
-|:--------------------|:----------------|:---------------------------|:-------|:---------------------------------------|
-| -c --config         | AGENT_CONFIG    |                            |        | Agent config file or url (required)      |
-| -p --proxy          | PROXY_HOSTNAME  | agent.proxy.hostname       |        | Proxy hostname (can include :port)     |
-| -n --name           | AGENT_NAME      | agent.name                 |        | Agent name                             |
-| -r --admin          | ADMIN_ENABLED   | agent.admin.enabled        | false  | Enable admin servlets                  |
-| -i --admin_port     | ADMIN_PORT      | agent.admin.port           | 8093   | Admin servlets port                    |
-| -e --metrics        | METRICS_ENABLED | agent.metrics.enabled      | false  | Enable agent metrics                   |
-| -m --metrics_port   | METRICS_PORT    | agent.metrics.port         | 8083   | Agent metrics listen port              |
-| -b --debug          | DEBUG_ENABLED   | agent.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
-| -v --version        |                 |                            |        | Print version info and exit            |
-| -u --usage          |                 |                            |        | Print usage message and exit           |
-| -D                  |                 |                            |        | Dynamic property assignment            |
+| Options               | ENV VAR<br>Property                             |Default | Description                         |
+|:----------------------|:------------------------------------------------|:-------|:------------------------------------|
+| --config, -c           | AGENT_CONFIG                                    |        | Agent config file or url (required)   |
+| --proxy, -p           | PROXY_HOSTNAME  <br> agent.proxy.hostname       |        | Proxy hostname (can include :port)  |
+| --name, -n            | AGENT_NAME      <br> agent.name                 |        | Agent name                          |
+| --admin, -r           | ADMIN_ENABLED   <br> agent.admin.enabled        | false  | Enable admin servlets               |
+| --admin_port, -i      | ADMIN_PORT      <br> agent.admin.port           | 8093   | Admin servlets port                 |
+| --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
+| --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
+| --debug, -b           | DEBUG_ENABLED   <br> agent.metrics.debugEnabled | false  | Enable agent debug servlet<br>on admin port|
+| --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath | "" | Certificate chain file path         |
+| --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath | "" | Private key file path            |
+| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
+| --override            | OVERRIDE_AUTHORITY <br> proxy.tls.overrideAuthority | "" | Override authority (for testing)    |
+| --version, -v         |                                              |        | Print version info and exit            |
+| --usage, -u           |                                              |        | Print usage message and exit           |
+| -D                    |                                              |        | Dynamic property assignment            |
 
 Misc notes:
 *   If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
@@ -194,30 +204,69 @@ These admin servlets are available when the admin servlet is enabled:
 *   /healthcheck
 *   /version
 
-The admin servlets can be enabled with the ``ADMIN_ENABLED`` environment var, the ``--admin`` CLI option, or with the 
+The admin servlets can be enabled with the `ADMIN_ENABLED` environment var, the `--admin` CLI option, or with the 
 `proxy.admin.enabled` and `agent.admin.enabled` properties.
 
-The debug servlet can be enabled with ``DEBUG_ENABLED`` environment var, ``--debug``CLI option , or with the 
-proxy.admin.debugEnabled` and `agent.admin.debugEnabled` properties. The debug servlet requires that the
-admin servlets are enabled. The debug servlet is at: /debug on the admin port.
+The debug servlet can be enabled with the `DEBUG_ENABLED` env var, `--debug` CLI option , or with the 
+`proxy.admin.debugEnabled` and `agent.admin.debugEnabled` properties. The debug servlet requires that the
+admin servlets are enabled. The debug servlet is at: `/debug` on the admin port.
 
 Descriptions of the servlets are [here](http://metrics.dropwizard.io/3.2.2/manual/servlets.html).
 The path names can be changed in the configuration file. To disable an admin servlet, assign its property path to "".
 
+## Adding TLS to Agent-Proxy connections
+
+Agents connect to a proxy using [gRPC](https://grpc.io). gRPC supports TLS with or without mutual authentication. The
+necessary certificate and key file paths can be specified via CLI args, environment variables and configuration file settings.
+
+The gRPC docs describe [how to setup TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
+The certificates and keys necessary to test TLS support are included in the 
+[repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs).
+
+These settings are required to run TLS without mutual authentication:
+* certChainFilePath and privateKeyFilePath on the proxy
+* trustCertCollectionFilePath on the agent
+
+These settings are required to run TLS with mutual authentication:
+* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the proxy
+* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the agent
+
+### Running with TLS
+
+Run a proxy and an agent with TLS (no mutual auth) using the included testing certs and keys with:
+```bash
+java -jar prometheus-proxy.jar --config examples/tls-no-mutual-auth.conf
+java -jar prometheus-agent.jar --config examples/tls-no-mutual-auth.conf
+```
+
+Run a proxy and an agent docker container with TLS (no mutual auth) using the included testing certs and keys with:
+```bash
+docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
+    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
+    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
+    --env PROXY_CONFIG=tls-no-mutual-auth.conf \
+    --env ADMIN_ENABLED=true \
+    --env METRICS_ENABLED=true \
+    pambrose/prometheus-proxy:1.5.0
+
+docker run --rm -p 8083:8083 -p 8093:8093 \
+    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
+    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
+    --env AGENT_CONFIG=tls-no-mutual-auth.conf \
+    --env PROXY_HOSTNAME=mymachine.lan:50440 \
+    --name docker-agent \
+    pambrose/prometheus-agent:1.5.0
+```
+
+**Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
+to use `/app` as the base directory in the target for `--mount` options.
+
 ## Grafana 
 
-[Grafana](https://grafana.com) dashboards for the Proxy and Agent are [here](https://github.com/pambrose/prometheus-proxy/tree/master/grafana).
+[Grafana](https://grafana.com) dashboards for the proxy and agent are [here](https://github.com/pambrose/prometheus-proxy/tree/master/grafana).
 
 ## Related Links
 
 *   [Prometheus.io](http://prometheus.io)
 *   [gRPC](http://grpc.io)
 *   [Typesafe Config](https://github.com/typesafehub/config)
-*   [Zipkin]()
-
-## Zipkin 
-
-*   Run a Zipkin server with: `docker run -d -p 9411:9411 openzipkin/zipkin`
-*   View Zipkin info at http://localhost:9411
-
-Details on the Zipkin container are [here](https://github.com/openzipkin/docker-zipkin).

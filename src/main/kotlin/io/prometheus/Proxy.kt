@@ -170,7 +170,7 @@ class Proxy(val options: ProxyOptions,
       if (agentContext == null) {
         logger.error { "Missing AgentContext for agentId: $agentId" }
       } else {
-        logger.info { "Removed $agentContext" }
+        logger.debug { "Removed $agentContext" }
         agentContext.invalidate()
       }
       agentContext
@@ -183,8 +183,8 @@ class Proxy(val options: ProxyOptions,
     recentActions.add("${LocalDateTime.now().format(formatter)}: $desc")
   }
 
-  fun toPlainText() =
-    """
+  private fun toPlainText() =
+      """
       Prometheus Proxy Info [${getVersionDesc(false)}]
       
       Uptime:     ${upTime.format(true)}
