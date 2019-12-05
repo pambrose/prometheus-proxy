@@ -212,43 +212,43 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 
 ### Proxy CLI Options
 
-| Options             | Env Var         | Property                   |Default | Description                            |
-|:--------------------|:----------------|:---------------------------|:-------|:---------------------------------------|
-| -c --config         | PROXY_CONFIG    |                            |        | Agent config file or url                 |
-| -p --port           | PROXY_PORT      | proxy.http.port            | 8080   | Proxy listen port                      |
-| -a --agent_port     | AGENT_PORT      | proxy.agent.port           | 50051  | gRPC listen port for Agents            |
-| -r --admin          | ADMIN_ENABLED   | proxy.admin.enabled        | false  | Enable admin servlets                  |
-| -i --admin_port     | ADMIN_PORT      | proxy.admin.port           | 8092   | Admin servlets port                    |
-| -e --metrics        | METRICS_ENABLED | proxy.metrics.enabled      | false  | Enable proxy metrics                   |
-| -m --metrics_port   | METRICS_PORT    | proxy.metrics.port         | 8082   | Proxy metrics listen port              |
-| -b --debug          | DEBUG_ENABLED   | proxy.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
-| -t --cert           | CERT_CHAIN_FILE_PATH | proxy.tls.certChainFilePath | "" | Certificate chain file path              |
-| -k --key            | PRIVATE_KEY_FILE_PATH | proxy.tls.privateKeyFilePath | "" | Private key file path              |
-| -s --trust          | TRUST_CERT_COLLECTION_FILE_PATH | proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
-| -v --version        |                 |                            |        | Print version info and exit            |
-| -u --usage          |                 |                            |        | Print usage message and exit           |
-| -D                  |                 |                            |        | Dynamic property assignment            |
+| Options             | Env Var/Property                             |Default | Description                            |
+|:--------------------|:---------------------------------------------|:-------|:---------------------------------------|
+| -c --config          | PROXY_CONFIG                                 |        | Agent config file or url                 |
+| -p --port           | PROXY_PORT      / proxy.http.port            | 8080   | Proxy listen port                      |
+| -a --agent_port     | AGENT_PORT      / proxy.agent.port           | 50051  | gRPC listen port for Agents            |
+| -r --admin          | ADMIN_ENABLED   / proxy.admin.enabled        | false  | Enable admin servlets                  |
+| -i --admin_port     | ADMIN_PORT      / proxy.admin.port           | 8092   | Admin servlets port                    |
+| -e --metrics        | METRICS_ENABLED / proxy.metrics.enabled      | false  | Enable proxy metrics                   |
+| -m --metrics_port   | METRICS_PORT    / proxy.metrics.port         | 8082   | Proxy metrics listen port              |
+| -b --debug          | DEBUG_ENABLED   / proxy.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
+| -t --cert           | CERT_CHAIN_FILE_PATH / proxy.tls.certChainFilePath | "" | Certificate chain file path              |
+| -k --key            | PRIVATE_KEY_FILE_PATH / proxy.tls.privateKeyFilePath | "" | Private key file path              |
+| -s --trust          | TRUST_CERT_COLLECTION_FILE_PATH / proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
+| -v --version        |                                             |        | Print version info and exit            |
+| -u --usage          |                                             |        | Print usage message and exit           |
+| -D                  |                                             |        | Dynamic property assignment            |
 
 
 ### Agent CLI Options
 
-| Options             | Env Var         | Property                   |Default | Description                            |
-|:--------------------|:----------------|:---------------------------|:-------|:---------------------------------------|
-| -c --config         | AGENT_CONFIG    |                            |        | Agent config file or url (required)      |
-| -p --proxy          | PROXY_HOSTNAME  | agent.proxy.hostname       |        | Proxy hostname (can include :port)     |
-| -n --name           | AGENT_NAME      | agent.name                 |        | Agent name                             |
-| -r --admin          | ADMIN_ENABLED   | agent.admin.enabled        | false  | Enable admin servlets                  |
-| -i --admin_port     | ADMIN_PORT      | agent.admin.port           | 8093   | Admin servlets port                    |
-| -e --metrics        | METRICS_ENABLED | agent.metrics.enabled      | false  | Enable agent metrics                   |
-| -m --metrics_port   | METRICS_PORT    | agent.metrics.port         | 8083   | Agent metrics listen port              |
-| -b --debug          | DEBUG_ENABLED   | agent.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
-| -t --cert           | CERT_CHAIN_FILE_PATH | proxy.tls.certChainFilePath | "" | Certificate chain file path              |
-| -k --key            | PRIVATE_KEY_FILE_PATH | proxy.tls.privateKeyFilePath | "" | Private key file path              |
-| -s --trust          | TRUST_CERT_COLLECTION_FILE_PATH | proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
-| --override          | OVERRIDE_AUTHORITY | proxy.tls.overrideAuthority | "" | Override authority (for testing) |
-| -v --version        |                 |                            |        | Print version info and exit            |
-| -u --usage          |                 |                            |        | Print usage message and exit           |
-| -D                  |                 |                            |        | Dynamic property assignment            |
+| Options             | Env Var         /Property                   |Default | Description                            |
+|:--------------------|:--------------------------------------------|:-------|:---------------------------------------|
+| -c --config          | AGENT_CONFIG                                |        | Agent config file or url (required)      |
+| -p --proxy          | PROXY_HOSTNAME  / agent.proxy.hostname       |        | Proxy hostname (can include :port)     |
+| -n --name           | AGENT_NAME      / agent.name                 |        | Agent name                             |
+| -r --admin          | ADMIN_ENABLED   / agent.admin.enabled        | false  | Enable admin servlets                  |
+| -i --admin_port     | ADMIN_PORT      / agent.admin.port           | 8093   | Admin servlets port                    |
+| -e --metrics        | METRICS_ENABLED / agent.metrics.enabled      | false  | Enable agent metrics                   |
+| -m --metrics_port   | METRICS_PORT    / agent.metrics.port         | 8083   | Agent metrics listen port              |
+| -b --debug          | DEBUG_ENABLED   / agent.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
+| -t --cert           | CERT_CHAIN_FILE_PATH / proxy.tls.certChainFilePath | "" | Certificate chain file path              |
+| -k --key            | PRIVATE_KEY_FILE_PATH / proxy.tls.privateKeyFilePath | "" | Private key file path              |
+| -s --trust          | TRUST_CERT_COLLECTION_FILE_PATH / proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
+| --override          | OVERRIDE_AUTHORITY / proxy.tls.overrideAuthority | "" | Override authority (for testing) |
+| -v --version        |                                              |        | Print version info and exit            |
+| -u --usage          |                                              |        | Print usage message and exit           |
+| -D                  |                                              |        | Dynamic property assignment            |
 
 Misc notes:
 *   If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`

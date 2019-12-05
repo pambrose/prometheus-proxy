@@ -1,4 +1,4 @@
-FROM adoptopenjdk/openjdk11
+FROM adoptopenjdk/openjdk11:alpine-jre
 MAINTAINER Paul Ambrose "pambrose@mac.com"
 
 # Define the user to use in this instance to prevent using root that even in a container, can be a security risk.
