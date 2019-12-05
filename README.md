@@ -5,7 +5,6 @@
 [![Coverage Status](https://coveralls.io/repos/github/pambrose/prometheus-proxy/badge.svg?branch=master)](https://coveralls.io/github/pambrose/prometheus-proxy?branch=master)
 [![codebeat badge](https://codebeat.co/badges/8dbe1dc6-628e-44a4-99f9-d468831ff0cc)](https://codebeat.co/projects/github-com-pambrose-prometheus-proxy-master)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/422df508473443df9fbd8ea00fdee973)](https://www.codacy.com/app/pambrose/prometheus-proxy?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=pambrose/prometheus-proxy&amp;utm_campaign=Badge_Grade)
-[![Code Climate](https://codeclimate.com/github/pambrose/prometheus-proxy/badges/gpa.svg)](https://codeclimate.com/github/pambrose/prometheus-proxy)
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for 
@@ -31,21 +30,21 @@ One proxy can work one or many agents.
 
 Download the proxy and agent uber-jars from [here](https://github.com/pambrose/prometheus-proxy/releases).
 
-Start a proxy with:
+Start a `proxy` with:
 
 ```bash
 java -jar prometheus-proxy.jar
 ```
 
-Start an agent with: 
+Start an `agent` with: 
 
 ```bash
-java -jar prometheus-agent.jar -Dagent.proxy.hostname=proxy.local --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
+java -jar prometheus-agent.jar -Dagent.proxy.hostname=mymachine.local --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
 ```
 
-If prometheus-proxy were running on a machine named *proxy.local* and the
+If prometheus-proxy were running on a machine named *mymachine.local* and the
 `agent.pathConfigs` value in the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) 
-config file had these values:
+config file were defined as:
 
 ```hocon
 agent {
@@ -69,11 +68,11 @@ agent {
 }
 ```
 
-then the *prometheus.yml* scrape_config would target the three apps at:
+then the *prometheus.yml* scrape_config would target the three apps with:
 
-*   http://proxy.local:8080/app1_metrics
-*   http://proxy.local:8080/app2_metrics
-*   http://proxy.local:8080/app3_metrics
+*   http://mymachine.local:8080/app1_metrics
+*   http://mymachine.local:8080/app2_metrics
+*   http://mymachine.local:8080/app3_metrics
 
 The `prometheus.yml` file would include:
 
@@ -82,15 +81,15 @@ scrape_configs:
   - job_name: 'app1'
     metrics_path: '/app1_metrics'
     static_configs:
-      - targets: ['proxy.local:8080']
+      - targets: ['mymachine.local:8080']
   - job_name: 'app2'
     metrics_path: '/app2_metrics'
     static_configs:
-      - targets: ['proxy.local:8080']
+      - targets: ['mymachine.local:8080']
   - job_name: 'app3'
     metrics_path: '/app3_metrics'
     static_configs:
-      - targets: ['proxy.local:8080']
+      - targets: ['mymachine.local:8080']
 ```
 
 ## Docker Usage
@@ -122,8 +121,8 @@ the proxy and the agent metrics would be available from the proxy on *localhost*
 *   http://localhost:8083/agent_metrics
 
 If you want to use a local config file with a docker container (instead of the above HTTP-served config file), 
-use the docker `mount` option. Assuming the config file `prom-agent.conf` is in your current
-directory, run an agent with:
+use the docker [mount](https://docs.docker.com/storage/bind-mounts/) option. Assuming the config file `prom-agent.conf` 
+is in your current directory, run an agent container with:
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
@@ -208,7 +207,7 @@ The admin servlets can be enabled with the ``ADMIN_ENABLED`` environment var, th
 
 The debug servlet can be enabled with ``DEBUG_ENABLED`` environment var, ``--debug``CLI option , or with the 
 proxy.admin.debugEnabled` and `agent.admin.debugEnabled` properties. The debug servlet requires that the
-admin servlets are enabled. The debug servlet is at: /debug on the admin port.
+admin servlets are enabled. The debug servlet is at: `/debug` on the admin port.
 
 Descriptions of the servlets are [here](http://metrics.dropwizard.io/3.2.2/manual/servlets.html).
 The path names can be changed in the configuration file. To disable an admin servlet, assign its property path to "".
@@ -222,23 +221,23 @@ The gRPC docs describe [how to setup TLS](https://github.com/grpc/grpc-java/tree
 The certificates and keys necessary to test TLS support are included in the 
 [repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs).
 
-To run TLS without mutual authentication these values must be defined:
+To run TLS without mutual authentication these are required values:
 * certChainFilePath and privateKeyFilePath on the proxy
 * trustCertCollectionFilePath on the agent
 
-To run TLS with mutual authentication these values must be defined:
+To run TLS with mutual authentication these are required values:
 * certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the proxy
 * certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the agent
 
 ### Running with TLS
 
-Run a proxy and an agent with TLS (no mutual auth) using the testing certs and keys with:
+Run a proxy and an agent with TLS (no mutual auth) using the included testing certs and keys with:
 ```bash
 java -jar prometheus-proxy.jar --config examples/tls-no-mutual-auth.conf
 java -jar prometheus-agent.jar --config examples/tls-no-mutual-auth.conf
 ```
 
-Run a proxy and an agent docker container with TLS (no mutual auth) using the testing certs and keys with:
+Run a proxy and an agent docker container with TLS (no mutual auth) using the included testing certs and keys with:
 ```bash
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
