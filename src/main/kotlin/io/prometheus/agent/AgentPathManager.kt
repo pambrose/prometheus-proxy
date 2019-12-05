@@ -35,24 +35,25 @@ class AgentPathManager(private val agent: Agent) {
   fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
   private val pathConfigs =
-    agentConfigVals.pathConfigs
-      .map {
-        mapOf(NAME to "\"" + it.name + "\"",
-              PATH to it.path,
-              URL to it.url)
-      }
-      .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
+      agentConfigVals.pathConfigs
+          .map {
+            mapOf(NAME to "\"" + it.name + "\"",
+                  PATH to it.path,
+                  URL to it.url)
+          }
+          .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
 
   fun registerPaths() =
-    pathConfigs.forEach {
-      val path = it["path"]
-      val url = it["url"]
-      if (path != null && url != null) {
-        registerPath(path, url)
-      } else {
-        logger.error { "Null path/url values: $path/$url" }
+      pathConfigs.forEach {
+        val path = it["path"]
+        val url = it["url"]
+        if (path != null && url != null) {
+          registerPath(path, url)
+        }
+        else {
+          logger.error { "Null path/url values: $path/$url" }
+        }
       }
-    }
 
   fun registerPath(pathVal: String, url: String) {
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
@@ -76,9 +77,7 @@ class AgentPathManager(private val agent: Agent) {
     val maxName = pathConfigs.map { it[NAME]?.length ?: 0 }.max() ?: 0
     val maxPath = pathConfigs.map { it[PATH]?.length ?: 0 }.max() ?: 0
     return "Agent Path Configs:\n" + "Name".padEnd(maxName + 1) + "Path".padEnd(maxPath + 2) + "URL\n" +
-        pathConfigs
-          .map { c -> "${c[NAME]?.padEnd(maxName)} /${c[PATH]?.padEnd(maxPath)} ${c[URL]}" }
-          .joinToString("\n")
+        pathConfigs.joinToString("\n") { c -> "${c[NAME]?.padEnd(maxName)} /${c[PATH]?.padEnd(maxPath)} ${c[URL]}" }
   }
 
   companion object : KLogging() {

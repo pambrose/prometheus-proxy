@@ -57,7 +57,7 @@ class AgentGrpcService(private val agent: Agent,
 
   val hostName: String
   val port: Int
-  val tlsContext: TlsContext
+  private val tlsContext: TlsContext
 
   init {
     val schemeStripped =
@@ -218,7 +218,7 @@ class AgentGrpcService(private val agent: Agent,
                                    // The actual fetch happens at the other end of the channel
                                    runBlocking {
                                      logger.debug { "readRequestsFromProxy(): \n$req" }
-                                     connectionContext.scrapeRequestChannel.send({ agentHttpService.fetchScrapeUrl(req) })
+                                     connectionContext.scrapeRequestChannel.send { agentHttpService.fetchScrapeUrl(req) }
                                      agent.scrapeRequestBacklogSize.incrementAndGet()
                                    }
                                  }

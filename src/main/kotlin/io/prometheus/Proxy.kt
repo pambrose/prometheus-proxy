@@ -183,8 +183,8 @@ class Proxy(val options: ProxyOptions,
     recentActions.add("${LocalDateTime.now().format(formatter)}: $desc")
   }
 
-  fun toPlainText() =
-    """
+  private fun toPlainText() =
+      """
       Prometheus Proxy Info [${getVersionDesc(false)}]
       
       Uptime:     ${upTime.format(true)}

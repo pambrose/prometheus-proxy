@@ -14,8 +14,8 @@ running behind a firewall and preserves the pull model.
 
 `prometheus-proxy` runtime is broken up into 2 services:
 
-*   `proxy`: Runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
-*   `agent`: Runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
+* `proxy`: Runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
+* `agent`: Runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
 
 Here's a simplified network diagram of how the deployed `proxy` and `agent` work:
 
@@ -96,8 +96,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-docker pull pambrose/prometheus-proxy:1.4.6
-docker pull pambrose/prometheus-agent:1.4.6
+docker pull pambrose/prometheus-proxy:1.5.0
+docker pull pambrose/prometheus-agent:1.5.0
 ```
 
 Start a proxy and an agent in separate shells with:
@@ -106,13 +106,13 @@ Start a proxy and an agent in separate shells with:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.4.6
+        pambrose/prometheus-proxy:1.5.0
 ```
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.4.6
+        pambrose/prometheus-agent:1.5.0
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
@@ -128,11 +128,11 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:1.4.6
+    pambrose/prometheus-agent:1.5.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
-to use /app as the base directory in the target for `--mount` options.
+to use `/app` as the base directory in the target for `--mount` options.
 
 ## Configuration
 
@@ -245,7 +245,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.4.6
+    pambrose/prometheus-proxy:1.5.0
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -253,11 +253,11 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:1.4.6
+    pambrose/prometheus-agent:1.5.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
-to use /app as the base directory in the target for `--mount` options.
+to use `/app` as the base directory in the target for `--mount` options.
 
 ## Grafana 
 

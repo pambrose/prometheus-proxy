@@ -205,8 +205,8 @@ class Agent(val options: AgentOptions,
     super.shutDown()
   }
 
-  fun toPlainText() =
-    """
+  private fun toPlainText() =
+      """
       Prometheus Agent Info [${getVersionDesc(false)}]
       
       Uptime:    ${upTime.format(true)}

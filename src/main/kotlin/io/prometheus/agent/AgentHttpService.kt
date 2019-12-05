@@ -76,7 +76,7 @@ class AgentHttpService(val agent: Agent) {
 
   private fun getSetUp(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
     val accept: String? = request.accept
-    if (accept?.isNotEmpty() ?: false)
+    if (accept?.isNotEmpty() == true)
       header(HttpHeaders.ACCEPT, accept)
   }
 
