@@ -12,10 +12,10 @@ collecting metrics. The pull model is problematic when a Prometheus server and i
 firewall. [Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints 
 running behind a firewall and preserves the pull model.
 
-`prometheus-proxy` runtime is broken up into 2 services:
+The `prometheus-proxy` runtime comprises 2 services:
 
-* `proxy`: Runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
-* `agent`: Runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
+* `proxy`: runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
+* `agent`: runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
 
 Here's a simplified network diagram of how the deployed `proxy` and `agent` work:
 
@@ -100,7 +100,7 @@ docker pull pambrose/prometheus-proxy:1.5.0
 docker pull pambrose/prometheus-agent:1.5.0
 ```
 
-Start a proxy and an agent in separate shells with:
+Start a proxy container with:
 
 ```bash
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
@@ -108,6 +108,8 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env METRICS_ENABLED=true \
         pambrose/prometheus-proxy:1.5.0
 ```
+
+Start an agent container with:
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
@@ -202,11 +204,11 @@ These admin servlets are available when the admin servlet is enabled:
 *   /healthcheck
 *   /version
 
-The admin servlets can be enabled with the ``ADMIN_ENABLED`` environment var, the ``--admin`` CLI option, or with the 
+The admin servlets can be enabled with the `ADMIN_ENABLED` environment var, the `--admin` CLI option, or with the 
 `proxy.admin.enabled` and `agent.admin.enabled` properties.
 
-The debug servlet can be enabled with ``DEBUG_ENABLED`` environment var, ``--debug``CLI option , or with the 
-proxy.admin.debugEnabled` and `agent.admin.debugEnabled` properties. The debug servlet requires that the
+The debug servlet can be enabled with the `DEBUG_ENABLED` env var, `--debug` CLI option , or with the 
+`proxy.admin.debugEnabled` and `agent.admin.debugEnabled` properties. The debug servlet requires that the
 admin servlets are enabled. The debug servlet is at: `/debug` on the admin port.
 
 Descriptions of the servlets are [here](http://metrics.dropwizard.io/3.2.2/manual/servlets.html).
@@ -221,11 +223,11 @@ The gRPC docs describe [how to setup TLS](https://github.com/grpc/grpc-java/tree
 The certificates and keys necessary to test TLS support are included in the 
 [repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs).
 
-To run TLS without mutual authentication these are required values:
+These settings are required to run TLS without mutual authentication:
 * certChainFilePath and privateKeyFilePath on the proxy
 * trustCertCollectionFilePath on the agent
 
-To run TLS with mutual authentication these are required values:
+These settings are required to run TLS with mutual authentication:
 * certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the proxy
 * certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the agent
 
