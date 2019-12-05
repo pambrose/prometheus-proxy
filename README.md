@@ -116,8 +116,14 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
         pambrose/prometheus-agent:1.4.6
 ```
 
-If you want to externalize your `agent` config file on your local machine (or VM) file system 
-(instead of the above HTTP served config file), you'll need to use the Docker `mount` option:
+Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
+the proxy and the agent metrics would be available from the proxy on *localhost* at:
+*   http://localhost:8082/proxy_metrics
+*   http://localhost:8083/agent_metrics
+
+If you want to use a local config file with a docker container (instead of the above HTTP-served config file), 
+use the docker `mount` option. Assuming you have the config file `prom-agent.conf` in your current
+director, run an agent container with:
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
@@ -126,14 +132,8 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     pambrose/prometheus-agent:1.4.6
 ```
 
-The above assumes that you have the file `prom-agent.conf` in the current directory from which you're 
-running the `docker` command. The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
+**Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
 to use /app as the base directory in the target for `--mount` options.
-
-Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
-the proxy and the agent metrics would be available from the proxy on *localhost* at:
-*   http://localhost:8082/proxy_metrics
-*   http://localhost:8083/agent_metrics
 
 ## Configuration
 
@@ -147,108 +147,45 @@ Highlights include:
 The Proxy and Agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
 The only required argument is an Agent config value, which should have an `agent.pathConfigs` value.
 
-## Adding TLS to Agent-Proxy connections
-
-Agents connect to a Proxy using [gRPC](https://grpc.io). gRPC supports TLS with or without mutual authentication. The
-necessary certificate amd key file paths can spcified via CLI args, environment variables and configuration file settings.
-
-The gRPC docs describe how to setup TLS [here](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
-The certificates and keys necessary to test TLS support are included in this 
-[repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs).
-
-To run TLS without mutual authentication the following must be defined:
-* certChainFilePath and privateKeyFilePath on the Proxy
-* trustCertCollectionFilePath on the Agent
-
-To run TLS with mutual authentication the following must be defined:
-* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the Proxy
-* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the Agent
-
-Run the Agent and Proxy using the testing certs with:
-```bash
-java -jar prometheus-proxy.jar --config examples/tls-no-mutual-auth.conf
-java -jar prometheus-agent.jar --config examples/tls-no-mutual-auth.conf
-```
-
-The docker commands necessary to would be:
-```bash
-docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
-    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
-    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
-    --env PROXY_CONFIG=tls-no-mutual-auth.conf \
-    --env ADMIN_ENABLED=true \
-    --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.4.6
-
-and
-
-docker run --rm -p 8083:8083 -p 8093:8093 \
-    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
-    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
-    --env AGENT_CONFIG=tls-no-mutual-auth.conf \
-    --env PROXY_HOSTNAME=mymachine.lan:50440 \
-    --name docker-agent \
-    pambrose/prometheus-agent:1.4.6
-
-docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
-    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
-    --mount type=bind,source="$(pwd)"/examples/tls-with-mutual-auth.conf,target=/app/tls-with-mutual-auth.conf \
-    --env PROXY_CONFIG=tls-with-mutual-auth.conf \
-    --env ADMIN_ENABLED=true \
-    --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.4.6
-
-and
-
-docker run --rm -p 8083:8083 -p 8093:8093 \
-    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
-    --mount type=bind,source="$(pwd)"/examples/tls-with-mutual-auth.conf,target=/app/tls-with-mutual-auth.conf \
-    --env AGENT_CONFIG=tls-with-mutual-auth.conf \
-    --env PROXY_HOSTNAME=mymachine.lan:50440 \
-    --name docker-agent \
-    pambrose/prometheus-agent:1.4.6
-
-```
-
 ### Proxy CLI Options
 
-| Options             | Env Var<br>Property                             |Default | Description                         |
-|---------------------|-------------------------------------------------|--------|-------------------------------------|
-| --config, -c         | PROXY_CONFIG                                    |        | Agent config file or url              |
-| --port, -p          | PROXY_PORT      <br> proxy.http.port            | 8080   | Proxy listen port                   |
-| --agent_port, -a    | AGENT_PORT      <br> proxy.agent.port           | 50051  | gRPC listen port for Agents         |
-| --admin, -r         | ADMIN_ENABLED   <br> proxy.admin.enabled        | false  | Enable admin servlets               |
-| --admin_port, -i    | ADMIN_PORT      <br> proxy.admin.port           | 8092   | Admin servlets port                 |
-| --metrics, -e       | METRICS_ENABLED <br> proxy.metrics.enabled      | false  | Enable proxy metrics                |
-| --metrics_port, -m  | METRICS_PORT    <br> proxy.metrics.port         | 8082   | Proxy metrics listen port           |
-| --debug, -b         | DEBUG_ENABLED   <br> proxy.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
-| --cert, -t          | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath   | "" | Certificate chain file path       |
-| --key, -k           | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath | "" | Private key file path            |
-| --trust, -s         | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
-| --version, -v       |                                                 |        | Print version info and exit         |
-| --usage, -u         |                                                 |        | Print usage message and exit        |
-| -D                  |                                                 |        | Dynamic property assignment         |
+| Options               | ENV VAR<br>Property                             |Default | Description                         |
+|-----------------------|-------------------------------------------------|--------|-------------------------------------|
+| --config, -c           | PROXY_CONFIG                                    |        | Agent config file or url              |
+| --port, -p            | PROXY_PORT      <br> proxy.http.port            | 8080   | Proxy listen port                   |
+| --agent_port, -a      | AGENT_PORT      <br> proxy.agent.port           | 50051  | gRPC listen port for Agents         |
+| --admin, -r           | ADMIN_ENABLED   <br> proxy.admin.enabled        | false  | Enable admin servlets               |
+| --admin_port, -i      | ADMIN_PORT      <br> proxy.admin.port           | 8092   | Admin servlets port                 |
+| --metrics, -e         | METRICS_ENABLED <br> proxy.metrics.enabled      | false  | Enable proxy metrics                |
+| --metrics_port, -m    | METRICS_PORT    <br> proxy.metrics.port         | 8082   | Proxy metrics listen port           |
+| --debug, -b           | DEBUG_ENABLED   <br> proxy.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
+| --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath   | "" | Certificate chain file path       |
+| --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath | "" | Private key file path            |
+| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
+| --version, -v         |                                                 |        | Print version info and exit         |
+| --usage, -u           |                                                 |        | Print usage message and exit        |
+| -D                    |                                                 |        | Dynamic property assignment         |
 
 
 ### Agent CLI Options
 
-| Options             | Env Var<br>Property                             |Default | Description                         |
-|:--------------------|:------------------------------------------------|:-------|:------------------------------------|
-| --config, -c         | AGENT_CONFIG                                    |        | Agent config file or url (required)   |
-| --proxy, -p         | PROXY_HOSTNAME  <br> agent.proxy.hostname       |        | Proxy hostname (can include :port)  |
-| --name, -n          | AGENT_NAME      <br> agent.name                 |        | Agent name                          |
-| --admin, -r         | ADMIN_ENABLED   <br> agent.admin.enabled        | false  | Enable admin servlets               |
-| --admin_port, -i    | ADMIN_PORT      <br> agent.admin.port           | 8093   | Admin servlets port                 |
-| --metrics, -e       | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
-| --metrics_port, -m  | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
-| --debug, -b         | DEBUG_ENABLED   <br> agent.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
-| --cert, -t          | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath | "" | Certificate chain file path         |
-| --key, -k           | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath | "" | Private key file path            |
-| --trust, -s         | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
-| --override          | OVERRIDE_AUTHORITY <br> proxy.tls.overrideAuthority | "" | Override authority (for testing)    |
-| --version, -v       |                                              |        | Print version info and exit            |
-| --usage, -u         |                                              |        | Print usage message and exit           |
-| -D                  |                                              |        | Dynamic property assignment            |
+| Options               | ENV VAR<br>Property                             |Default | Description                         |
+|:----------------------|:------------------------------------------------|:-------|:------------------------------------|
+| --config, -c           | AGENT_CONFIG                                    |        | Agent config file or url (required)   |
+| --proxy, -p           | PROXY_HOSTNAME  <br> agent.proxy.hostname       |        | Proxy hostname (can include :port)  |
+| --name, -n            | AGENT_NAME      <br> agent.name                 |        | Agent name                          |
+| --admin, -r           | ADMIN_ENABLED   <br> agent.admin.enabled        | false  | Enable admin servlets               |
+| --admin_port, -i      | ADMIN_PORT      <br> agent.admin.port           | 8093   | Admin servlets port                 |
+| --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
+| --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
+| --debug, -b           | DEBUG_ENABLED   <br> agent.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
+| --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath | "" | Certificate chain file path         |
+| --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath | "" | Private key file path            |
+| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
+| --override            | OVERRIDE_AUTHORITY <br> proxy.tls.overrideAuthority | "" | Override authority (for testing)    |
+| --version, -v         |                                              |        | Print version info and exit            |
+| --usage, -u           |                                              |        | Print usage message and exit           |
+| -D                    |                                              |        | Dynamic property assignment            |
 
 Misc notes:
 *   If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
@@ -276,6 +213,57 @@ admin servlets are enabled. The debug servlet is at: /debug on the admin port.
 Descriptions of the servlets are [here](http://metrics.dropwizard.io/3.2.2/manual/servlets.html).
 The path names can be changed in the configuration file. To disable an admin servlet, assign its property path to "".
 
+## Adding TLS to Agent-Proxy connections
+
+Agents connect to a Proxy using [gRPC](https://grpc.io). gRPC supports TLS with or without mutual authentication. The
+necessary certificate and key file paths can be specified via CLI args, environment variables and configuration file settings.
+
+The gRPC docs describe [how to setup TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
+The certificates and keys necessary to test TLS support are included in the 
+[repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs).
+
+To run TLS without mutual authentication these values must be defined:
+* certChainFilePath and privateKeyFilePath on the Proxy
+* trustCertCollectionFilePath on the Agent
+
+To run TLS with mutual authentication these values must be defined:
+* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the Proxy
+* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the Agent
+
+### Running with TLS
+
+Run Proxy and Agent uberjars using the testing certs and keys with:
+```bash
+java -jar prometheus-proxy.jar --config examples/tls-no-mutual-auth.conf
+java -jar prometheus-agent.jar --config examples/tls-no-mutual-auth.conf
+```
+
+Run Proxy and Agent docker containers using the testing certs and keys with:
+```bash
+docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
+    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
+    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
+    --env PROXY_CONFIG=tls-no-mutual-auth.conf \
+    --env ADMIN_ENABLED=true \
+    --env METRICS_ENABLED=true \
+    pambrose/prometheus-proxy:1.4.6
+```
+
+and
+
+```bash
+docker run --rm -p 8083:8083 -p 8093:8093 \
+    --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
+    --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
+    --env AGENT_CONFIG=tls-no-mutual-auth.conf \
+    --env PROXY_HOSTNAME=mymachine.lan:50440 \
+    --name docker-agent \
+    pambrose/prometheus-agent:1.4.6
+```
+
+**Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
+to use /app as the base directory in the target for `--mount` options.
+
 ## Grafana 
 
 [Grafana](https://grafana.com) dashboards for the Proxy and Agent are [here](https://github.com/pambrose/prometheus-proxy/tree/master/grafana).
@@ -285,11 +273,3 @@ The path names can be changed in the configuration file. To disable an admin ser
 *   [Prometheus.io](http://prometheus.io)
 *   [gRPC](http://grpc.io)
 *   [Typesafe Config](https://github.com/typesafehub/config)
-*   [Zipkin]()
-
-## Zipkin 
-
-*   Run a Zipkin server with: `docker run -d -p 9411:9411 openzipkin/zipkin`
-*   View Zipkin info at http://localhost:9411
-
-Details on the Zipkin container are [here](https://github.com/openzipkin/docker-zipkin).
