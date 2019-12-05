@@ -13,7 +13,7 @@ collecting metrics. The pull model is problematic when a Prometheus server and i
 firewall. [Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints 
 running behind a firewall and preserves the pull model.
 
-`prometheus-proxy` runtime is broken up into 2 microservices:
+`prometheus-proxy` runtime is broken up into 2 services:
 
 *   `proxy`: Runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus to the `agent` behind the firewall.
 *   `agent`: Runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
@@ -101,7 +101,7 @@ docker pull pambrose/prometheus-proxy:1.4.6
 docker pull pambrose/prometheus-agent:1.4.6
 ```
 
-Start the proxy and an agent in separate shells on your local machine:
+Start a proxy and an agent in separate shells with:
 
 ```bash
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
@@ -122,8 +122,8 @@ the proxy and the agent metrics would be available from the proxy on *localhost*
 *   http://localhost:8083/agent_metrics
 
 If you want to use a local config file with a docker container (instead of the above HTTP-served config file), 
-use the docker `mount` option. Assuming you have the config file `prom-agent.conf` in your current
-director, run an agent container with:
+use the docker `mount` option. Assuming the config file `prom-agent.conf` is in your current
+directory, run an agent with:
 
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
@@ -137,15 +137,15 @@ to use /app as the base directory in the target for `--mount` options.
 
 ## Configuration
 
-The Proxy and Agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
+The proxy and agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
 Highlights include:
 * supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
 * config files can be files or urls
 * config values can come from CLI options, environment vars, Java system properties, and/or config files.
 * config files can reference environment variables
   
-The Proxy and Agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
-The only required argument is an Agent config value, which should have an `agent.pathConfigs` value.
+The proxy and agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
+The only required argument is an agent config value, which should have an `agent.pathConfigs` value.
 
 ### Proxy CLI Options
 
@@ -153,12 +153,12 @@ The only required argument is an Agent config value, which should have an `agent
 |-----------------------|-------------------------------------------------|--------|-------------------------------------|
 | --config, -c           | PROXY_CONFIG                                    |        | Agent config file or url              |
 | --port, -p            | PROXY_PORT      <br> proxy.http.port            | 8080   | Proxy listen port                   |
-| --agent_port, -a      | AGENT_PORT      <br> proxy.agent.port           | 50051  | gRPC listen port for Agents         |
+| --agent_port, -a      | AGENT_PORT      <br> proxy.agent.port           | 50051  | gRPC listen port for agents         |
 | --admin, -r           | ADMIN_ENABLED   <br> proxy.admin.enabled        | false  | Enable admin servlets               |
 | --admin_port, -i      | ADMIN_PORT      <br> proxy.admin.port           | 8092   | Admin servlets port                 |
 | --metrics, -e         | METRICS_ENABLED <br> proxy.metrics.enabled      | false  | Enable proxy metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> proxy.metrics.port         | 8082   | Proxy metrics listen port           |
-| --debug, -b           | DEBUG_ENABLED   <br> proxy.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
+| --debug, -b           | DEBUG_ENABLED   <br> proxy.metrics.debugEnabled | false  | Enable proxy debug servlet<br>on admin port|
 | --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath   | "" | Certificate chain file path       |
 | --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath | "" | Private key file path            |
 | --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
@@ -178,7 +178,7 @@ The only required argument is an Agent config value, which should have an `agent
 | --admin_port, -i      | ADMIN_PORT      <br> agent.admin.port           | 8093   | Admin servlets port                 |
 | --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
-| --debug, -b           | DEBUG_ENABLED   <br> agent.metrics.debugEnabled | false  | Enable proxy debug servlet on admin port|
+| --debug, -b           | DEBUG_ENABLED   <br> agent.metrics.debugEnabled | false  | Enable agent debug servlet<br>on admin port|
 | --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath | "" | Certificate chain file path         |
 | --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath | "" | Private key file path            |
 | --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
@@ -215,7 +215,7 @@ The path names can be changed in the configuration file. To disable an admin ser
 
 ## Adding TLS to Agent-Proxy connections
 
-Agents connect to a Proxy using [gRPC](https://grpc.io). gRPC supports TLS with or without mutual authentication. The
+Agents connect to a proxy using [gRPC](https://grpc.io). gRPC supports TLS with or without mutual authentication. The
 necessary certificate and key file paths can be specified via CLI args, environment variables and configuration file settings.
 
 The gRPC docs describe [how to setup TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
@@ -223,22 +223,22 @@ The certificates and keys necessary to test TLS support are included in the
 [repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs).
 
 To run TLS without mutual authentication these values must be defined:
-* certChainFilePath and privateKeyFilePath on the Proxy
-* trustCertCollectionFilePath on the Agent
+* certChainFilePath and privateKeyFilePath on the proxy
+* trustCertCollectionFilePath on the agent
 
 To run TLS with mutual authentication these values must be defined:
-* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the Proxy
-* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the Agent
+* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the proxy
+* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the agent
 
 ### Running with TLS
 
-Run Proxy and Agent uberjars using the testing certs and keys with:
+Run a proxy and an agent with TLS (no mutual auth) using the testing certs and keys with:
 ```bash
 java -jar prometheus-proxy.jar --config examples/tls-no-mutual-auth.conf
 java -jar prometheus-agent.jar --config examples/tls-no-mutual-auth.conf
 ```
 
-Run Proxy and Agent docker containers using the testing certs and keys with:
+Run a proxy and an agent docker container with TLS (no mutual auth) using the testing certs and keys with:
 ```bash
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -247,11 +247,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
     pambrose/prometheus-proxy:1.4.6
-```
 
-and
-
-```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
     --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
@@ -266,7 +262,7 @@ to use /app as the base directory in the target for `--mount` options.
 
 ## Grafana 
 
-[Grafana](https://grafana.com) dashboards for the Proxy and Agent are [here](https://github.com/pambrose/prometheus-proxy/tree/master/grafana).
+[Grafana](https://grafana.com) dashboards for the proxy and agent are [here](https://github.com/pambrose/prometheus-proxy/tree/master/grafana).
 
 ## Related Links
 
