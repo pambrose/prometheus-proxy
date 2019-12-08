@@ -94,6 +94,8 @@ dependencies {
   testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
 }
 
+compileKotlin.dependsOn ':generateProto'
+
 protobuf {
   protoc {
     artifact = "com.google.protobuf:protoc:${protocVersion}"
@@ -122,8 +124,6 @@ sourceSets {
     }
   }
 }
-
-compileKotlin.dependsOn ':generateProto'
 
 //startScripts.enabled = false
 
