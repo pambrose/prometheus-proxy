@@ -114,17 +114,6 @@ configurations.all {
   resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
 }
 
-sourceSets {
-  main {
-    java {
-      srcDirs 'src/main/java'
-      srcDirs 'src/main/kotlin'
-      srcDirs 'build/generated/source/proto/main/grpc'
-      srcDirs 'build/generated/source/proto/main/java'
-    }
-  }
-}
-
 //startScripts.enabled = false
 
 task sourcesJar(type: Jar, dependsOn: classes) {
