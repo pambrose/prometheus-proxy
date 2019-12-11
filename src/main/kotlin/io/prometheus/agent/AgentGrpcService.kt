@@ -20,7 +20,7 @@ package io.prometheus.agent
 
 import brave.Tracing
 import brave.grpc.GrpcTracing
-import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.github.pambrose.common.dsl.GrpcDsl
 import com.github.pambrose.common.dsl.GrpcDsl.channel
 import com.github.pambrose.common.util.simpleClassName
@@ -41,19 +41,19 @@ import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.properties.Delegates.notNull
 
 class AgentGrpcService(private val agent: Agent,
                        options: AgentOptions,
                        private val inProcessServerName: String) {
-  private var grpcStarted = AtomicBoolean(false)
-  private var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
-  private var asyncStub: ProxyServiceStub by nonNullableReference()
+  private var grpcStarted by atomicBoolean(false)
+  private var blockingStub: ProxyServiceBlockingStub by notNull()
+  private var asyncStub: ProxyServiceStub by notNull()
 
   private lateinit var tracing: Tracing
   private lateinit var grpcTracing: GrpcTracing
 
-  var channel: ManagedChannel by nonNullableReference()
+  var channel: ManagedChannel by notNull()
 
   val hostName: String
   val port: Int
@@ -102,17 +102,18 @@ class AgentGrpcService(private val agent: Agent,
   fun shutDown() {
     if (agent.isZipkinEnabled)
       tracing.close()
-    if (grpcStarted.get())
+    if (grpcStarted)
       channel.shutdownNow()
   }
 
+  @Synchronized
   fun resetGrpcStubs() {
     logger.info { "Creating gRPC stubs" }
 
-    if (grpcStarted.get())
+    if (grpcStarted)
       shutDown()
     else
-      grpcStarted.set(true)
+      grpcStarted = true
 
 
     channel =

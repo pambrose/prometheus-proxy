@@ -18,11 +18,11 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.receiveOrNull
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.ClockMark
@@ -38,7 +38,7 @@ class AgentContext(private val remoteAddr: String) {
   private val clock = MonoClock
   private var lastActivityTimeMark: ClockMark by nonNullableReference(clock.markNow())
   private var lastRequestTimeMark: ClockMark by nonNullableReference(clock.markNow())
-  private var valid = AtomicBoolean(true)
+  private var valid by atomicBoolean(true)
 
   var hostName: String by nonNullableReference()
   var agentName: String by nonNullableReference()
@@ -64,17 +64,17 @@ class AgentContext(private val remoteAddr: String) {
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
-    scrapeRequestChannel.receiveOrNull()
-      ?.also {
-        channelBacklogSize.decrementAndGet()
-      }
+      scrapeRequestChannel.receiveOrNull()
+          ?.also {
+            channelBacklogSize.decrementAndGet()
+          }
 
-  fun isValid() = valid.get() && !scrapeRequestChannel.isClosedForReceive
+  fun isValid() = valid && !scrapeRequestChannel.isClosedForReceive
 
   fun isNotValid() = !isValid()
 
   fun invalidate() {
-    valid.set(false)
+    valid = false
     scrapeRequestChannel.close()
   }
 
@@ -86,15 +86,15 @@ class AgentContext(private val remoteAddr: String) {
   }
 
   override fun toString() =
-    toStringElements {
-      add("agentId", agentId)
-      add("valid", valid.get())
-      add("agentName", agentName)
-      add("hostName", hostName)
-      add("remoteAddr", remoteAddr)
-      add("lastRequestDuration", lastRequestDuration)
-      //add("inactivityDuration", inactivityDuration)
-    }
+      toStringElements {
+        add("agentId", agentId)
+        add("valid", valid)
+        add("agentName", agentName)
+        add("hostName", hostName)
+        add("remoteAddr", remoteAddr)
+        add("lastRequestDuration", lastRequestDuration)
+        //add("inactivityDuration", inactivityDuration)
+      }
 
   companion object {
     private val AGENT_ID_GENERATOR = AtomicLong(0)

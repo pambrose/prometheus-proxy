@@ -16,7 +16,7 @@ targetCompatibility = 1.8
 
 def coroutinesVersion = '1.3.2'
 def serializationVersion = '0.13.0'
-def utilsVersion = '1.1.11'
+def utilsVersion = '556e5c2'
 
 def grpcVersion = '1.25.0'
 def protocVersion = '3.10.0'
