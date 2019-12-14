@@ -9,7 +9,10 @@ import io.prometheus.SimpleTests.missingPathTest
 import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import org.junit.jupiter.api.Test
 
-abstract class CommonTests(val agent: Agent) {
+abstract class CommonTests(val agent: Agent, val args: ProxyCallTestArgs) {
+
+  @Test
+  fun proxyCallTest() = ProxyTests.proxyCallTest(args)
 
   @Test
   fun missingPathTest() = missingPathTest(simpleClassName)

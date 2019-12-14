@@ -29,15 +29,15 @@ import io.ktor.client.response.readText
 import io.ktor.http.isSuccess
 import io.prometheus.Agent
 import io.prometheus.common.GrpcObjects
+import io.prometheus.grpc.NonChunkedScrapeResponse
 import io.prometheus.grpc.ScrapeRequest
-import io.prometheus.grpc.ScrapeResponse
 import mu.KLogging
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicReference
 
 class AgentHttpService(val agent: Agent) {
 
-  suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResponse {
+  suspend fun fetchScrapeUrl(request: ScrapeRequest): NonChunkedScrapeResponse {
     val responseArg = GrpcObjects.ScrapeResponseArg(agentId = request.agentId, scrapeId = request.scrapeId)
     val scrapeCounterMsg = AtomicReference("")
     val path = request.path

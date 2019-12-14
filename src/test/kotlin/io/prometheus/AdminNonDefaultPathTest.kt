@@ -104,14 +104,14 @@ class AdminNonDefaultPathTest {
     @BeforeAll
     fun setUp() {
       CollectorRegistry.defaultRegistry.clear()
-      val args = listOf("-Dproxy.admin.port=8099",
-                        "-Dproxy.admin.pingPath=pingPath2",
-                        "-Dproxy.admin.versionPath=versionPath2",
-                        "-Dproxy.admin.healthCheckPath=healthCheckPath2",
-                        "-Dproxy.admin.threadDumpPath=threadDumpPath2")
+      val proxyArgs = listOf("-Dproxy.admin.port=8099",
+                             "-Dproxy.admin.pingPath=pingPath2",
+                             "-Dproxy.admin.versionPath=versionPath2",
+                             "-Dproxy.admin.healthCheckPath=healthCheckPath2",
+                             "-Dproxy.admin.threadDumpPath=threadDumpPath2")
 
       runBlocking {
-        launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = args) }
+        launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = proxyArgs) }
         launch(Dispatchers.Default) {
           agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
         }

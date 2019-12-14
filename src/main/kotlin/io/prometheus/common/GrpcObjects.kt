@@ -22,6 +22,7 @@ import io.ktor.http.HttpStatusCode
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.HeartBeatResponse
+import io.prometheus.grpc.NonChunkedScrapeResponse
 import io.prometheus.grpc.PathMapSizeRequest
 import io.prometheus.grpc.PathMapSizeResponse
 import io.prometheus.grpc.RegisterAgentRequest
@@ -29,14 +30,10 @@ import io.prometheus.grpc.RegisterAgentResponse
 import io.prometheus.grpc.RegisterPathRequest
 import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.ScrapeRequest
-import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
 
 object GrpcObjects {
-
-  // See: https://github.com/grpc/grpc.github.io/issues/371
-  const val MAX_MSG_SIZE = 32 * 1024
 
   fun newHeartBeatRequest(agentId: String): HeartBeatRequest =
       HeartBeatRequest.newBuilder()
@@ -137,18 +134,18 @@ object GrpcObjects {
     }
   }
 
-  fun newScrapeResponse(arg: ScrapeResponseArg): ScrapeResponse =
-    ScrapeResponse.newBuilder()
-      .run {
-        agentId = arg.agentId
-        scrapeId = arg.scrapeId
-        validResponse = arg.validResponse
-        statusCode = arg.statusCode.value
-        contentText = arg.contentText
-        contentType = arg.contentType
-        failureReason = arg.failureReason
-        url = arg.url
-        build()
+  fun newScrapeResponse(arg: ScrapeResponseArg): NonChunkedScrapeResponse =
+      NonChunkedScrapeResponse.newBuilder()
+          .run {
+            agentId = arg.agentId
+            scrapeId = arg.scrapeId
+            validResponse = arg.validResponse
+            statusCode = arg.statusCode.value
+            contentText = arg.contentText
+            contentType = arg.contentType
+            failureReason = arg.failureReason
+            url = arg.url
+            build()
       }
 
   fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest =

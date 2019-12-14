@@ -236,7 +236,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
         else -> ConfigSyntax.CONF
       }
 
-  private fun String.isUrlPrefix() = toLowerCase().startsWith("http://") || toLowerCase().startsWith("https://")
+  private fun String.isUrlPrefix() = toLowerCase().startsWith(HTTP_PREFIX) || toLowerCase().startsWith(HTTPS_PREFIX)
 
   private fun String.isJsonSuffix() = toLowerCase().endsWith(".json") || toLowerCase().endsWith(".jsn")
 
@@ -245,5 +245,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
   companion object : KLogging() {
     private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
     const val DEBUG = "debug"
+    const val HTTP_PREFIX = "http://"
+    const val HTTPS_PREFIX = "https://"
   }
 }

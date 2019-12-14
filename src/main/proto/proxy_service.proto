@@ -54,22 +54,22 @@ message AgentInfo {
 }
 
 message ScrapeRequest {
-  string agent_id = 1;
-  int64 scrape_id = 2;
-  string path = 3;
-  string accept = 4;
-  bool debug_enabled = 5;
+    string agent_id = 1;
+    int64 scrape_id = 2;
+    string path = 3;
+    string accept = 4;
+    bool debug_enabled = 5;
 }
 
-message ScrapeResponse {
-  bool valid_response = 1;
-  string agent_id = 2;
-  int64 scrape_id = 3;
-  int32 status_code = 4;
-  string failure_reason = 5;
-  string url = 6;
-  string content_type = 7;
-  string content_text = 8;
+message NonChunkedScrapeResponse {
+    bool valid_response = 1;
+    string agent_id = 2;
+    int64 scrape_id = 3;
+    int32 status_code = 4;
+    string failure_reason = 5;
+    string url = 6;
+    string content_type = 7;
+    string content_text = 8;
 }
 
 message ChunkedScrapeResponse {
@@ -82,30 +82,32 @@ message ChunkedScrapeResponse {
 }
 
 message HeaderData {
-  bool header_valid_response = 1;
-  string header_agent_id = 2;
-  int64 header_scrape_id = 3;
-  int32 header_status_code = 4;
-  string header_failure_reason = 5;
-  string header_url = 6;
-  string header_content_type = 7;
+    bool header_valid_response = 1;
+    string header_agent_id = 2;
+    int64 header_scrape_id = 3;
+    int32 header_status_code = 4;
+    string header_failure_reason = 5;
+    string header_url = 6;
+    string header_content_type = 7;
 }
 
 message ChunkData {
-  int32 chunk_count = 1;
-  int32 chunk_byte_count = 2;
-  int64 chunk_checksum = 3;
-  bytes chunk_bytes = 4;
+    int64 chunk_scrape_id = 1;
+    int32 chunk_count = 2;
+    int32 chunk_byte_count = 3;
+    int64 chunk_checksum = 4;
+    bytes chunk_bytes = 5;
 }
 
 message SummaryData {
-  int32 summary_chunk_count = 1;
-  int32 summary_byte_count = 2;
-  int64 summary_checksum = 3;
+    int64 summary_scrape_id = 1;
+    int32 summary_chunk_count = 2;
+    int32 summary_byte_count = 3;
+    int64 summary_checksum = 4;
 }
 
 message HeartBeatRequest {
-  string agent_id = 1;
+    string agent_id = 1;
 }
 
 message HeartBeatResponse {
@@ -114,31 +116,31 @@ message HeartBeatResponse {
 }
 
 service ProxyService {
-  rpc connectAgent (google.protobuf.Empty) returns (google.protobuf.Empty) {
+    rpc connectAgent (google.protobuf.Empty) returns (google.protobuf.Empty) {
+    }
+
+    rpc registerAgent (RegisterAgentRequest) returns (RegisterAgentResponse) {
   }
 
-  rpc registerAgent (RegisterAgentRequest) returns (RegisterAgentResponse) {
-  }
+    rpc registerPath (RegisterPathRequest) returns (RegisterPathResponse) {
+    }
 
-  rpc registerPath (RegisterPathRequest) returns (RegisterPathResponse) {
-  }
+    rpc unregisterPath (UnregisterPathRequest) returns (UnregisterPathResponse) {
+    }
 
-  rpc unregisterPath (UnregisterPathRequest) returns (UnregisterPathResponse) {
-  }
+    rpc pathMapSize (PathMapSizeRequest) returns (PathMapSizeResponse) {
+    }
 
-  rpc pathMapSize (PathMapSizeRequest) returns (PathMapSizeResponse) {
-  }
+    rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {
+    }
 
-  rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {
-  }
+    rpc writeNonChunkedResponsesToProxy (stream NonChunkedScrapeResponse) returns (google.protobuf.Empty) {
+    }
 
-  rpc writeResponsesToProxy (stream ScrapeResponse) returns (google.protobuf.Empty) {
-  }
+    rpc writeChunkedResponsesToProxy (stream ChunkedScrapeResponse) returns (google.protobuf.Empty) {
+    }
 
-  rpc writeChunkedResponsesToProxy (stream ChunkedScrapeResponse) returns (google.protobuf.Empty) {
-  }
-
-  rpc sendHeartBeat (HeartBeatRequest) returns (HeartBeatResponse) {
-  }
+    rpc sendHeartBeat (HeartBeatRequest) returns (HeartBeatResponse) {
+    }
 }
 

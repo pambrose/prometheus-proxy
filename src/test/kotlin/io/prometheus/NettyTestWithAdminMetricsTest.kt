@@ -20,8 +20,6 @@ package io.prometheus
 
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
-import io.prometheus.ProxyTests.ProxyCallTestArgs
-import io.prometheus.ProxyTests.proxyCallTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
@@ -31,20 +29,16 @@ import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
-class NettyTestWithAdminMetricsTest : CommonTests(agent) {
-
-  @Test
-  fun proxyCallTest() =
-      proxyCallTest(ProxyCallTestArgs(agent,
-                                      httpServerCount = 5,
-                                      pathCount = 25,
-                                      sequentialQueryCount = 500,
-                                      parallelQueryCount = 0,
-                                      startPort = 10900,
-                                      caller = simpleClassName))
+class NettyTestWithAdminMetricsTest : CommonTests(agent,
+                                                  ProxyCallTestArgs(agent,
+                                                                    httpServerCount = 5,
+                                                                    pathCount = 25,
+                                                                    sequentialQueryCount = 500,
+                                                                    parallelQueryCount = 0,
+                                                                    startPort = 10900,
+                                                                    caller = simpleClassName)) {
 
   companion object : KLogging() {
     private lateinit var proxy: Proxy

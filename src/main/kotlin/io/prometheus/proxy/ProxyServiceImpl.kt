@@ -19,6 +19,8 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GrpcDsl.streamObserver
+import com.github.pambrose.common.util.unzip
+import com.google.common.collect.Maps
 import com.google.protobuf.Empty
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
@@ -30,8 +32,10 @@ import io.prometheus.common.GrpcObjects.newRegisterAgentResponse
 import io.prometheus.common.GrpcObjects.newRegisterPathResponse
 import io.prometheus.common.GrpcObjects.newUnregisterPathResponseBuilder
 import io.prometheus.grpc.AgentInfo
+import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.HeartBeatResponse
+import io.prometheus.grpc.NonChunkedScrapeResponse
 import io.prometheus.grpc.PathMapSizeRequest
 import io.prometheus.grpc.PathMapSizeResponse
 import io.prometheus.grpc.ProxyServiceGrpc
@@ -40,12 +44,14 @@ import io.prometheus.grpc.RegisterAgentResponse
 import io.prometheus.grpc.RegisterPathRequest
 import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.ScrapeRequest
-import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
+import java.util.zip.CRC32
 
 class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
 
@@ -165,7 +171,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
     }
   }
 
-  override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> =
+  override fun writeNonChunkedResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<NonChunkedScrapeResponse> =
       streamObserver {
         onNext { resp ->
           proxy.scrapeRequestManager.getFromScrapeRequestMap(resp.scrapeId)
@@ -180,7 +186,107 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
           Status.fromThrowable(throwable)
               .also { arg ->
                 if (arg.code != Status.Code.CANCELLED)
-                  logger.error { "Error in writeResponsesToProxy(): $arg" }
+                  logger.error(throwable) { "Error in writeNonChunkedResponsesToProxy(): $arg" }
+              }
+
+          try {
+            responseObserver.apply {
+              onNext(Empty.getDefaultInstance())
+              onCompleted()
+            }
+          } catch (e: StatusRuntimeException) {
+            // logger.warn(e) {"StatusRuntimeException"};
+            // Ignore
+          }
+        }
+
+        onCompleted {
+          responseObserver.apply {
+            onNext(Empty.getDefaultInstance())
+            onCompleted()
+          }
+        }
+      }
+
+  override fun writeChunkedResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ChunkedScrapeResponse> =
+      streamObserver {
+        class ChunkedContext {
+          var totalChunckCount = 0
+          var totalByteCount = 0
+          val crcChecksum = CRC32()
+          val baos = ByteArrayOutputStream()
+          val responseBuilder = NonChunkedScrapeResponse.newBuilder()
+        }
+
+        val chunkedContextMap = Maps.newConcurrentMap<Long, ChunkedContext>()
+
+        onNext { resp ->
+          val ooc = resp.testOneofCase
+          when (ooc.name.toLowerCase()) {
+            "header" -> {
+              logger.info { "Reading header for scrapeId: ${resp.header.headerScrapeId}" }
+              val context = ChunkedContext()
+              chunkedContextMap[resp.header.headerScrapeId] = context
+              context.responseBuilder.apply {
+                resp.header.apply {
+                  validResponse = headerValidResponse
+                  agentId = headerAgentId
+                  scrapeId = headerScrapeId
+                  statusCode = headerStatusCode
+                  failureReason = headerFailureReason
+                  url = headerUrl
+                  contentType = headerContentType
+                }
+              }
+            }
+            "chunk" -> {
+              logger.info { "Reading chunk ${resp.chunk.chunkCount} for scrapeId: ${resp.chunk.chunkScrapeId}" }
+              val context = chunkedContextMap[resp.chunk.chunkScrapeId]!!
+              context.totalChunckCount++
+              context.totalByteCount += resp.chunk.chunkByteCount
+
+              val data = resp.chunk.chunkBytes.toByteArray()
+              context.crcChecksum.update(data, 0, data.size)
+
+              check(resp.chunk.chunkChecksum == context.crcChecksum.value)
+              check(resp.chunk.chunkCount == context.totalChunckCount)
+
+              context.baos.write(data, 0, resp.chunk.chunkByteCount)
+            }
+            "summary" -> {
+              logger.info { "Reading summary for scrapeId: ${resp.summary.summaryScrapeId}" }
+              val context = chunkedContextMap.remove(resp.summary.summaryScrapeId)!!
+
+              resp.summary.apply {
+                check(context.crcChecksum.value == summaryChecksum)
+                check(context.totalChunckCount == summaryChunkCount)
+                check(context.totalByteCount == summaryByteCount)
+                logger.info { "Final chunkCount/byteCount: ${context.totalChunckCount}/${context.totalByteCount}" }
+              }
+
+              val nonChunkedResponse =
+                  context.responseBuilder.run {
+                    context.baos.flush()
+                    contentText = context.baos.toByteArray().unzip()
+                    build()
+                  }
+
+              proxy.scrapeRequestManager.getFromScrapeRequestMap(nonChunkedResponse.scrapeId)
+                  ?.apply {
+                    scrapeResponse = nonChunkedResponse
+                    markComplete()
+                    agentContext.markActivityTime(true)
+                  } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${nonChunkedResponse.scrapeId}" }
+            }
+            else -> throw IOException("Invalid field name in writeChunkedResponsesToProxy()")
+          }
+        }
+
+        onError { throwable ->
+          Status.fromThrowable(throwable)
+              .also { arg ->
+                if (arg.code != Status.Code.CANCELLED)
+                  logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
               }
 
           try {

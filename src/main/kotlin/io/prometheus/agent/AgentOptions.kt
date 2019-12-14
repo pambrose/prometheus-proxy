@@ -25,6 +25,7 @@ import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars
 import io.prometheus.common.EnvVars.AGENT_CONFIG
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
+import kotlin.properties.Delegates
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
     BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
@@ -44,9 +45,16 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   var overrideAuthority = ""
     private set
 
+  var chunkThresholdKbs: Int by Delegates.notNull()
+    private set
+
+  var chunkBufferSizeKbs: Int by Delegates.notNull()
+    private set
+
   init {
     parseOptions()
   }
+
 
   override fun assignConfigVals() {
 
@@ -58,7 +66,6 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
                                               else
                                                 "$configHostname:${agent.proxy.port}")
       }
-
 
       if (agentName.isEmpty())
         agentName = EnvVars.AGENT_NAME.getEnv(agent.name)
@@ -72,6 +79,9 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
       assignCertChainFilePath(agent.tls.certChainFilePath)
       assignPrivateKeyFilePath(agent.tls.privateKeyFilePath)
       assignTrustCertCollectionFilePath(agent.tls.trustCertCollectionFilePath)
+
+      chunkThresholdKbs = EnvVars.CHUNK_THRESHOLD_KBS.getEnv(agent.chunkThresholdKbs) * 1024
+      chunkBufferSizeKbs = EnvVars.CHUNK_BUFFER_KBS.getEnv(agent.chunkBufferSizeKbs) * 1024
 
       if (overrideAuthority.isEmpty())
         overrideAuthority = EnvVars.OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)

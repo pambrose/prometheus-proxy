@@ -35,8 +35,9 @@ import io.grpc.ManagedChannel
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.prometheus.Agent
+import io.prometheus.common.BaseOptions.Companion.HTTPS_PREFIX
+import io.prometheus.common.BaseOptions.Companion.HTTP_PREFIX
 import io.prometheus.common.GrpcObjects
-import io.prometheus.common.GrpcObjects.MAX_MSG_SIZE
 import io.prometheus.common.GrpcObjects.newRegisterAgentRequest
 import io.prometheus.grpc.ChunkData
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -53,7 +54,7 @@ import java.util.zip.CRC32
 import kotlin.properties.Delegates.notNull
 
 class AgentGrpcService(private val agent: Agent,
-                       options: AgentOptions,
+                       private val options: AgentOptions,
                        private val inProcessServerName: String) {
   private var grpcStarted by atomicBoolean(false)
   private var blockingStub: ProxyServiceBlockingStub by notNull()
@@ -73,8 +74,8 @@ class AgentGrpcService(private val agent: Agent,
         options.proxyHostname
             .run {
               when {
-                startsWith("http://") -> removePrefix("http://")
-                startsWith("https://") -> removePrefix("https://")
+                startsWith(HTTP_PREFIX) -> removePrefix(HTTP_PREFIX)
+                startsWith(HTTPS_PREFIX) -> removePrefix(HTTPS_PREFIX)
                 else -> this
               }
             }
@@ -124,7 +125,6 @@ class AgentGrpcService(private val agent: Agent,
       shutDown()
     else
       grpcStarted = true
-
 
     channel =
         channel(hostName = hostName,
@@ -248,7 +248,7 @@ class AgentGrpcService(private val agent: Agent,
 
   suspend fun writeResponsesToProxyUntilDisconnected(connectionContext: AgentConnectionContext) {
     val nonchunkedObserver =
-        asyncStub.writeResponsesToProxy(
+        asyncStub.writeNonChunkedResponsesToProxy(
             GrpcDsl.streamObserver<Empty> {
               onNext {
                 // Ignore Empty return value
@@ -284,13 +284,12 @@ class AgentGrpcService(private val agent: Agent,
             })
 
     for (scrapeResponse in connectionContext.scrapeResultChannel) {
-      if (scrapeResponse.contentText.length < MAX_MSG_SIZE) {
-        logger.debug { "writeResponsesToProxyUntilDisconnected(): \n$scrapeResponse" }
+      logger.debug { "Comparing ${scrapeResponse.contentText.length} and ${options.chunkThresholdKbs}" }
+      if (scrapeResponse.contentText.length < (options.chunkThresholdKbs)) {
+        logger.info { "Writing non-chunked msg scrapeId: ${scrapeResponse.scrapeId} length: ${scrapeResponse.contentText.length}" }
         nonchunkedObserver.onNext(scrapeResponse)
       }
       else {
-        logger.info { "Writing chunked message with length: ${scrapeResponse.contentText.length}" }
-
         ChunkedScrapeResponse.newBuilder()
             .let { builder ->
               builder.header =
@@ -309,38 +308,39 @@ class AgentGrpcService(private val agent: Agent,
                       }
               builder.build()
             }.also {
-              logger.info { "Writing header data" }
+              logger.info { "Writing header for scrapeId: ${scrapeResponse.scrapeId} length: ${scrapeResponse.contentText.length}" }
               chunkedObserver.onNext(it)
             }
 
         var totalByteCount = 0
         var totalChunkCount = 0
-        val checksum = CRC32()
-        val zippedData = scrapeResponse.contentText.zip()
-        val bais = ByteArrayInputStream(zippedData)
-        val buffer = ByteArray(MAX_MSG_SIZE)
-        var byteCount: Int
+        val crcChecksum = CRC32()
 
-        while (bais.read(buffer).also { bytesRead -> byteCount = bytesRead } > 0) {
+        val bais = ByteArrayInputStream(scrapeResponse.contentText.zip())
+        // See: https://github.com/grpc/grpc.github.io/issues/371
+        val buffer = ByteArray(options.chunkBufferSizeKbs)
+        var readByteCount: Int
+
+        while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
           totalChunkCount++
-          totalByteCount += byteCount
-          checksum.update(buffer, 0, buffer.size);
-          val byteString: ByteString = ByteString.copyFrom(buffer)
+          totalByteCount += readByteCount
+          crcChecksum.update(buffer, 0, buffer.size);
 
           ChunkedScrapeResponse.newBuilder()
               .let { builder ->
                 builder.chunk =
                     ChunkData.newBuilder()
                         .run {
+                          chunkScrapeId = scrapeResponse.scrapeId
                           chunkCount = totalChunkCount
-                          chunkByteCount = byteCount
-                          chunkChecksum = checksum.value
-                          chunkBytes = byteString
+                          chunkByteCount = readByteCount
+                          chunkChecksum = crcChecksum.value
+                          chunkBytes = ByteString.copyFrom(buffer)
                           build()
                         }
                 builder.build()
               }.also {
-                logger.info { "Writing chunk data" }
+                logger.info { "Writing chunk for scrapeID: ${scrapeResponse.scrapeId}" }
                 chunkedObserver.onNext(it)
               }
         }
@@ -350,14 +350,15 @@ class AgentGrpcService(private val agent: Agent,
               builder.summary =
                   SummaryData.newBuilder()
                       .run {
+                        summaryScrapeId = scrapeResponse.scrapeId
                         summaryChunkCount = totalChunkCount
                         summaryByteCount = totalByteCount
-                        summaryChecksum = checksum.value
+                        summaryChecksum = crcChecksum.value
                         build()
                       }
               builder.build()
             }.also {
-              logger.info { "Writing summary data" }
+              logger.info { "Writing summary for scrapeID: ${scrapeResponse.scrapeId}" }
               chunkedObserver.onNext(it)
             }
       }

@@ -16,6 +16,6 @@
 
 package io.prometheus.common
 
-import io.prometheus.grpc.ScrapeResponse
+import io.prometheus.grpc.NonChunkedScrapeResponse
 
-typealias ScrapeRequestAction = suspend () -> ScrapeResponse
+typealias ScrapeRequestAction = suspend () -> NonChunkedScrapeResponse
