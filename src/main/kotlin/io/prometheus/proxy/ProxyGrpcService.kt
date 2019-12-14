@@ -28,8 +28,9 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildServerTlsContext
+import com.github.pambrose.common.utils.shutdownGracefully
+import com.github.pambrose.common.utils.shutdownWithJvm
 import com.google.common.util.concurrent.MoreExecutors
-import com.salesforce.grpc.contrib.Servers
 import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
@@ -43,7 +44,7 @@ class ProxyGrpcService(private val proxy: Proxy,
 
   val healthCheck =
       healthCheck {
-        if (grpcServer.isShutdown || grpcServer.isShutdown)
+        if (grpcServer.isShutdown || grpcServer.isTerminated)
           HealthCheck.Result.unhealthy("gRPC server is not running")
         else
           HealthCheck.Result.healthy()
@@ -81,7 +82,7 @@ class ProxyGrpcService(private val proxy: Proxy,
           addTransportFilter(ProxyTransportFilter(proxy))
         }
 
-    Servers.shutdownWithJvm(grpcServer, 2.seconds.toLongMilliseconds())
+    grpcServer.shutdownWithJvm(2.seconds)
 
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
   }
@@ -93,7 +94,7 @@ class ProxyGrpcService(private val proxy: Proxy,
   override fun shutDown() {
     if (proxy.isZipkinEnabled)
       tracing.close()
-    Servers.shutdownGracefully(grpcServer, 2.seconds.toLongMilliseconds())
+    grpcServer.shutdownGracefully(2.seconds)
   }
 
   override fun toString() =

@@ -35,15 +35,18 @@ import io.prometheus.grpc.UnregisterPathResponse
 
 object GrpcObjects {
 
+  // See: https://github.com/grpc/grpc.github.io/issues/371
+  const val MAX_MSG_SIZE = 32 * 1024
+
   fun newHeartBeatRequest(agentId: String): HeartBeatRequest =
-    HeartBeatRequest.newBuilder()
-      .run {
-        this.agentId = agentId
-        build()
-      }
+      HeartBeatRequest.newBuilder()
+          .run {
+            this.agentId = agentId
+            build()
+          }
 
   fun newHeartBeatResponse(valid: Boolean, reason: String): HeartBeatResponse =
-    HeartBeatResponse.newBuilder()
+      HeartBeatResponse.newBuilder()
       .run {
         this.valid = valid
         this.reason = reason

@@ -66,10 +66,42 @@ message ScrapeResponse {
   string agent_id = 2;
   int64 scrape_id = 3;
   int32 status_code = 4;
-  string content_text = 5;
-  string content_type = 6;
-  string failure_reason = 7;
-  string url = 8;
+  string failure_reason = 5;
+  string url = 6;
+  string content_type = 7;
+  string content_text = 8;
+}
+
+message ChunkedScrapeResponse {
+  oneof test_oneof {
+    // Changes to the field names meta, data, and summary are hard-coded in the impl code
+    HeaderData header = 1;
+    ChunkData chunk = 2;
+    SummaryData summary = 3;
+  }
+}
+
+message HeaderData {
+  bool header_valid_response = 1;
+  string header_agent_id = 2;
+  int64 header_scrape_id = 3;
+  int32 header_status_code = 4;
+  string header_failure_reason = 5;
+  string header_url = 6;
+  string header_content_type = 7;
+}
+
+message ChunkData {
+  int32 chunk_count = 1;
+  int32 chunk_byte_count = 2;
+  int64 chunk_checksum = 3;
+  bytes chunk_bytes = 4;
+}
+
+message SummaryData {
+  int32 summary_chunk_count = 1;
+  int32 summary_byte_count = 2;
+  int64 summary_checksum = 3;
 }
 
 message HeartBeatRequest {
@@ -101,6 +133,9 @@ service ProxyService {
   }
 
   rpc writeResponsesToProxy (stream ScrapeResponse) returns (google.protobuf.Empty) {
+  }
+
+  rpc writeChunkedResponsesToProxy (stream ChunkedScrapeResponse) returns (google.protobuf.Empty) {
   }
 
   rpc sendHeartBeat (HeartBeatRequest) returns (HeartBeatResponse) {

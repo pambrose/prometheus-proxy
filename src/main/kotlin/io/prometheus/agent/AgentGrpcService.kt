@@ -27,6 +27,7 @@ import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
+import com.google.protobuf.ByteString
 import com.google.protobuf.Empty
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
@@ -34,13 +35,20 @@ import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.prometheus.Agent
 import io.prometheus.common.GrpcObjects
+import io.prometheus.common.GrpcObjects.MAX_MSG_SIZE
 import io.prometheus.common.GrpcObjects.newRegisterAgentRequest
+import io.prometheus.grpc.ChunkData
+import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.HeaderData
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
+import io.prometheus.grpc.SummaryData
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
+import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
+import java.util.zip.CRC32
 import kotlin.properties.Delegates.notNull
 
 class AgentGrpcService(private val agent: Agent,
@@ -85,16 +93,17 @@ class AgentGrpcService(private val agent: Agent,
       grpcTracing = GrpcTracing.create(tracing)
     }
 
-    val options = agent.options
     tlsContext =
-        if (options.certChainFilePath.isNotEmpty()
-            || options.privateKeyFilePath.isNotEmpty()
-            || options.trustCertCollectionFilePath.isNotEmpty())
-          buildClientTlsContext(certChainFilePath = options.certChainFilePath,
-                                privateKeyFilePath = options.privateKeyFilePath,
-                                trustCertCollectionFilePath = options.trustCertCollectionFilePath)
-        else
-          PLAINTEXT_CONTEXT
+        agent.options.run {
+          if (certChainFilePath.isNotEmpty()
+              || privateKeyFilePath.isNotEmpty()
+              || trustCertCollectionFilePath.isNotEmpty())
+            buildClientTlsContext(certChainFilePath = certChainFilePath,
+                                  privateKeyFilePath = privateKeyFilePath,
+                                  trustCertCollectionFilePath = trustCertCollectionFilePath)
+          else
+            PLAINTEXT_CONTEXT
+        }
 
     resetGrpcStubs()
   }
@@ -211,63 +220,156 @@ class AgentGrpcService(private val agent: Agent,
   }
 
   fun readRequestsFromProxy(agentHttpService: AgentHttpService, connectionContext: AgentConnectionContext) {
-    asyncStub
-        .readRequestsFromProxy(GrpcObjects.newAgentInfo(agent.agentId),
-                               GrpcDsl.streamObserver {
-                                 onNext { req ->
-                                   // This will block, but only for the duration of the send.
-                                   // The actual fetch happens at the other end of the channel
-                                   runBlocking {
-                                     logger.debug { "readRequestsFromProxy(): \n$req" }
-                                     connectionContext.scrapeRequestChannel.send { agentHttpService.fetchScrapeUrl(req) }
-                                     agent.scrapeRequestBacklogSize.incrementAndGet()
-                                   }
-                                 }
+    asyncStub.readRequestsFromProxy(
+        GrpcObjects.newAgentInfo(agent.agentId),
+        GrpcDsl.streamObserver {
+          onNext { req ->
+            // This will block, but only for the duration of the send.
+            // The actual fetch happens at the other end of the channel
+            runBlocking {
+              logger.debug { "readRequestsFromProxy(): \n$req" }
+              connectionContext.scrapeRequestChannel.send { agentHttpService.fetchScrapeUrl(req) }
+              agent.scrapeRequestBacklogSize.incrementAndGet()
+            }
+          }
 
-                                 onError { throwable ->
-                                   val s = Status.fromThrowable(throwable)
-                                   logger.error { "Error in readRequestsFromProxy(): ${s.code} ${s.description}" }
-                                   connectionContext.disconnect()
-                                 }
+          onError { throwable ->
+            val s = Status.fromThrowable(throwable)
+            logger.error { "Error in readRequestsFromProxy(): ${s.code} ${s.description}" }
+            connectionContext.disconnect()
+          }
 
-                                 onCompleted {
-                                   connectionContext.disconnect()
-                                 }
-                               })
+          onCompleted {
+            connectionContext.disconnect()
+          }
+        })
   }
 
   suspend fun writeResponsesToProxyUntilDisconnected(connectionContext: AgentConnectionContext) {
-    val observer =
-        asyncStub
-            .writeResponsesToProxy(
-                GrpcDsl.streamObserver<Empty> {
-                  onNext {
-                    // Ignore Empty return value
-                  }
+    val nonchunkedObserver =
+        asyncStub.writeResponsesToProxy(
+            GrpcDsl.streamObserver<Empty> {
+              onNext {
+                // Ignore Empty return value
+              }
 
-                  onError { throwable ->
-                    val s = Status.fromThrowable(throwable)
-                    logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
-                    connectionContext.disconnect()
-                  }
+              onError { throwable ->
+                val s = Status.fromThrowable(throwable)
+                logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
+                connectionContext.disconnect()
+              }
 
-                  onCompleted {
-                    connectionContext.disconnect()
-                  }
-                })
+              onCompleted {
+                connectionContext.disconnect()
+              }
+            })
+
+    val chunkedObserver =
+        asyncStub.writeChunkedResponsesToProxy(
+            GrpcDsl.streamObserver<Empty> {
+              onNext {
+                // Ignore Empty return value
+              }
+
+              onError { throwable ->
+                val s = Status.fromThrowable(throwable)
+                logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
+                connectionContext.disconnect()
+              }
+
+              onCompleted {
+                connectionContext.disconnect()
+              }
+            })
 
     for (scrapeResponse in connectionContext.scrapeResultChannel) {
-      logger.debug { "writeResponsesToProxyUntilDisconnected(): \n$scrapeResponse" }
-      observer.onNext(scrapeResponse)
+      if (scrapeResponse.contentText.length < MAX_MSG_SIZE) {
+        logger.debug { "writeResponsesToProxyUntilDisconnected(): \n$scrapeResponse" }
+        nonchunkedObserver.onNext(scrapeResponse)
+      }
+      else {
+        logger.info { "Writing chunked message with length: ${scrapeResponse.contentText.length}" }
+
+        ChunkedScrapeResponse.newBuilder()
+            .let { builder ->
+              builder.header =
+                  HeaderData.newBuilder()
+                      .run {
+                        scrapeResponse.apply {
+                          headerValidResponse = validResponse
+                          headerAgentId = agentId
+                          headerScrapeId = scrapeId
+                          headerStatusCode = statusCode
+                          headerFailureReason = failureReason
+                          headerUrl = url
+                          headerContentType = contentType
+                        }
+                        build()
+                      }
+              builder.build()
+            }.also {
+              logger.info { "Writing header data" }
+              chunkedObserver.onNext(it)
+            }
+
+        var totalByteCount = 0
+        var totalChunkCount = 0
+        val checksum = CRC32()
+        val zippedData = scrapeResponse.contentText.zip()
+        val bais = ByteArrayInputStream(zippedData)
+        val buffer = ByteArray(MAX_MSG_SIZE)
+        var byteCount: Int
+
+        while (bais.read(buffer).also { bytesRead -> byteCount = bytesRead } > 0) {
+          totalChunkCount++
+          totalByteCount += byteCount
+          checksum.update(buffer, 0, buffer.size);
+          val byteString: ByteString = ByteString.copyFrom(buffer)
+
+          ChunkedScrapeResponse.newBuilder()
+              .let { builder ->
+                builder.chunk =
+                    ChunkData.newBuilder()
+                        .run {
+                          chunkCount = totalChunkCount
+                          chunkByteCount = byteCount
+                          chunkChecksum = checksum.value
+                          chunkBytes = byteString
+                          build()
+                        }
+                builder.build()
+              }.also {
+                logger.info { "Writing chunk data" }
+                chunkedObserver.onNext(it)
+              }
+        }
+
+        ChunkedScrapeResponse.newBuilder()
+            .let { builder ->
+              builder.summary =
+                  SummaryData.newBuilder()
+                      .run {
+                        summaryChunkCount = totalChunkCount
+                        summaryByteCount = totalByteCount
+                        summaryChecksum = checksum.value
+                        build()
+                      }
+              builder.build()
+            }.also {
+              logger.info { "Writing summary data" }
+              chunkedObserver.onNext(it)
+            }
+      }
+
       agent.markMsgSent()
       agent.scrapeRequestBacklogSize.decrementAndGet()
     }
 
     logger.info { "Disconnected from proxy at ${agent.proxyHost}" }
 
-    observer.onCompleted()
+    nonchunkedObserver.onCompleted()
+    chunkedObserver.onCompleted()
   }
-
 
   companion object : KLogging()
 }

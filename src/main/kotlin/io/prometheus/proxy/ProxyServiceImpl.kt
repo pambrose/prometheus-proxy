@@ -180,7 +180,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
           Status.fromThrowable(throwable)
               .also { arg ->
                 if (arg.code != Status.Code.CANCELLED)
-                  logger.info { "Error in writeResponsesToProxy(): $arg" }
+                  logger.error { "Error in writeResponsesToProxy(): $arg" }
               }
 
           try {
