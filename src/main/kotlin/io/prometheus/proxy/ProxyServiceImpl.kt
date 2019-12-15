@@ -173,13 +173,13 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
 
   override fun writeNonChunkedResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<NonChunkedScrapeResponse> =
       streamObserver {
-        onNext { resp ->
-          proxy.scrapeRequestManager.getFromScrapeRequestMap(resp.scrapeId)
+        onNext { response ->
+          proxy.scrapeRequestManager.getFromScrapeRequestMap(response.scrapeId)
               ?.apply {
-                scrapeResponse = resp
+                scrapeResponse = response
                 markComplete()
                 agentContext.markActivityTime(true)
-              } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${resp.scrapeId}" }
+              } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}" }
         }
 
         onError { throwable ->
@@ -211,7 +211,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
   override fun writeChunkedResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ChunkedScrapeResponse> =
       streamObserver {
         class ChunkedContext {
-          var totalChunckCount = 0
+          var totalChunkCount = 0
           var totalByteCount = 0
           val crcChecksum = CRC32()
           val baos = ByteArrayOutputStream()
@@ -220,15 +220,14 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
 
         val chunkedContextMap = Maps.newConcurrentMap<Long, ChunkedContext>()
 
-        onNext { resp ->
-          val ooc = resp.testOneofCase
+        onNext { response ->
+          val ooc = response.testOneofCase
           when (ooc.name.toLowerCase()) {
             "header" -> {
-              logger.info { "Reading header for scrapeId: ${resp.header.headerScrapeId}" }
               val context = ChunkedContext()
-              chunkedContextMap[resp.header.headerScrapeId] = context
+              chunkedContextMap[response.header.headerScrapeId] = context
               context.responseBuilder.apply {
-                resp.header.apply {
+                response.header.apply {
                   validResponse = headerValidResponse
                   agentId = headerAgentId
                   scrapeId = headerScrapeId
@@ -236,47 +235,52 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
                   failureReason = headerFailureReason
                   url = headerUrl
                   contentType = headerContentType
+                  logger.info { "Reading header for scrapeId: $headerScrapeId" }
                 }
               }
             }
             "chunk" -> {
-              logger.info { "Reading chunk ${resp.chunk.chunkCount} for scrapeId: ${resp.chunk.chunkScrapeId}" }
-              val context = chunkedContextMap[resp.chunk.chunkScrapeId]!!
-              context.totalChunckCount++
-              context.totalByteCount += resp.chunk.chunkByteCount
+              response.chunk.apply {
+                logger.info { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
 
-              val data = resp.chunk.chunkBytes.toByteArray()
-              context.crcChecksum.update(data, 0, data.size)
+                val context = chunkedContextMap[chunkScrapeId]
+                check(context != null) { "Missing chunked context with scrapeId: $chunkScrapeId" }
 
-              check(resp.chunk.chunkChecksum == context.crcChecksum.value)
-              check(resp.chunk.chunkCount == context.totalChunckCount)
+                val data = chunkBytes.toByteArray()
 
-              context.baos.write(data, 0, resp.chunk.chunkByteCount)
+                context.totalChunkCount++
+                context.totalByteCount += chunkByteCount
+                context.crcChecksum.update(data, 0, data.size)
+                context.baos.write(data, 0, chunkByteCount)
+
+                check(context.totalChunkCount == chunkCount)
+                check(context.crcChecksum.value == chunkChecksum)
+              }
             }
             "summary" -> {
-              logger.info { "Reading summary for scrapeId: ${resp.summary.summaryScrapeId}" }
-              val context = chunkedContextMap.remove(resp.summary.summaryScrapeId)!!
+              response.summary.apply {
+                val context = chunkedContextMap.remove(summaryScrapeId)
+                check(context != null) { "Missing chunked context with scrapeId: $summaryScrapeId" }
 
-              resp.summary.apply {
                 check(context.crcChecksum.value == summaryChecksum)
-                check(context.totalChunckCount == summaryChunkCount)
+                check(context.totalChunkCount == summaryChunkCount)
                 check(context.totalByteCount == summaryByteCount)
-                logger.info { "Final chunkCount/byteCount: ${context.totalChunckCount}/${context.totalByteCount}" }
+                logger.info { "Reading summary chunkCount: ${context.totalChunkCount} byteCount: ${context.totalByteCount} for scrapeId: ${response.summary.summaryScrapeId}" }
+
+                val nonChunkedResponse =
+                    context.responseBuilder.run {
+                      context.baos.flush()
+                      contentText = context.baos.toByteArray().unzip()
+                      build()
+                    }
+
+                proxy.scrapeRequestManager.getFromScrapeRequestMap(nonChunkedResponse.scrapeId)
+                    ?.apply {
+                      scrapeResponse = nonChunkedResponse
+                      markComplete()
+                      agentContext.markActivityTime(true)
+                    } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${nonChunkedResponse.scrapeId}" }
               }
-
-              val nonChunkedResponse =
-                  context.responseBuilder.run {
-                    context.baos.flush()
-                    contentText = context.baos.toByteArray().unzip()
-                    build()
-                  }
-
-              proxy.scrapeRequestManager.getFromScrapeRequestMap(nonChunkedResponse.scrapeId)
-                  ?.apply {
-                    scrapeResponse = nonChunkedResponse
-                    markComplete()
-                    agentContext.markActivityTime(true)
-                  } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${nonChunkedResponse.scrapeId}" }
             }
             else -> throw IOException("Invalid field name in writeChunkedResponsesToProxy()")
           }

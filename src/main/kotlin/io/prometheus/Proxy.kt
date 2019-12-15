@@ -179,6 +179,7 @@ class Proxy(val options: ProxyOptions,
   //val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
   private val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
+  @Synchronized
   fun logActivity(desc: String) {
     recentActions.add("${LocalDateTime.now().format(formatter)}: $desc")
   }

@@ -93,8 +93,8 @@ object ProxyTests : KLogging() {
     }
 
     pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".fixUrl())
-    blockingGet("$PROXY_PORT/$proxyPath".fixUrl()) { resp ->
-      resp.status shouldEqual HttpStatusCode.ServiceUnavailable
+    blockingGet("$PROXY_PORT/$proxyPath".fixUrl()) { response ->
+      response.status shouldEqual HttpStatusCode.ServiceUnavailable
     }
     pathManager.unregisterPath("/$proxyPath")
 
@@ -177,7 +177,6 @@ object ProxyTests : KLogging() {
                     val counter = AtomicInteger(0)
                     repeat(args.sequentialQueryCount) { cnt ->
                       val job = launch(dispatcher + coroutineExceptionHandler(logger)) {
-                        //delay((50..100).random().milliseconds)
                         callProxy(httpClient, pathMap, "Sequential $cnt")
                         counter.incrementAndGet()
                       }
@@ -261,10 +260,10 @@ object ProxyTests : KLogging() {
     httpIndex.shouldNotBeNull()
 
     http(httpClient) {
-      get("$PROXY_PORT/proxy-$index".fixUrl()) { resp ->
-        val body = resp.readText()
+      get("$PROXY_PORT/proxy-$index".fixUrl()) { response ->
+        val body = response.readText()
         body shouldEqual contentMap[httpIndex]
-        resp.status shouldEqual HttpStatusCode.OK
+        response.status shouldEqual HttpStatusCode.OK
       }
     }
   }

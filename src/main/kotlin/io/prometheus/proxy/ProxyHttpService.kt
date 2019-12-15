@@ -139,22 +139,22 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
             else -> {
               submitScrapeRequest(path, agentContext, call.request, call.response)
-                .also { resp ->
+                  .also { response ->
 
-                  var status = "/${path} - ${resp.updateMsg} - ${resp.statusCode}"
-                  if (!resp.statusCode.isSuccess())
-                    status += " reason: [${resp.failureReason}]"
-                  status += " time: ${resp.fetchDuration} url: ${resp.url}"
+                    var status = "/${path} - ${response.updateMsg} - ${response.statusCode}"
+                    if (!response.statusCode.isSuccess())
+                      status += " reason: [${response.failureReason}]"
+                    status += " time: ${response.fetchDuration} url: ${response.url}"
 
-                  proxy.logActivity(status)
+                    proxy.logActivity(status)
 
-                  responseResults.also { results ->
-                    results.contentText = resp.contentText
-                    results.contentType = resp.contentType
-                    results.statusCode = resp.statusCode
-                    results.updateMsg = resp.updateMsg
+                    responseResults.apply {
+                      contentText = response.contentText
+                      contentType = response.contentType
+                      statusCode = response.statusCode
+                      updateMsg = response.updateMsg
+                    }
                   }
-                }
             }
           }
 

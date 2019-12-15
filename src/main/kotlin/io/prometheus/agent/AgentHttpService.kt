@@ -84,20 +84,21 @@ class AgentHttpService(val agent: Agent) {
                        responseArg: GrpcObjects.ScrapeResponseArg,
                        scrapeCounterMsg: AtomicReference<String>,
                        debugEnabled: Boolean): suspend (HttpResponse) -> Unit =
-    { resp ->
-      responseArg.statusCode = resp.status
+      { response ->
+        responseArg.statusCode = response.status
 
-      if (resp.status.isSuccess()) {
-        responseArg.apply {
-          contentText = resp.readText()
-          contentType = resp.headers[HttpHeaders.CONTENT_TYPE].orEmpty()
-          validResponse = true
+        if (response.status.isSuccess()) {
+          responseArg.apply {
+            contentText = response.readText()
+            contentType = response.headers[HttpHeaders.CONTENT_TYPE].orEmpty()
+            validResponse = true
+          }
+          if (debugEnabled)
+            responseArg.setDebugInfo(url)
+          scrapeCounterMsg.set("success")
         }
-        if (debugEnabled)
-          responseArg.setDebugInfo(url)
-        scrapeCounterMsg.set("success")
-      } else {
-        if (debugEnabled)
+        else {
+          if (debugEnabled)
           responseArg.setDebugInfo(url, "Unsucessful response code ${responseArg.statusCode}")
         scrapeCounterMsg.set("unsuccessful")
       }

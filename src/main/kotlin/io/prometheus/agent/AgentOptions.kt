@@ -45,16 +45,12 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   var overrideAuthority = ""
     private set
 
-  var chunkThresholdKbs: Int by Delegates.notNull()
-    private set
-
-  var chunkBufferSizeKbs: Int by Delegates.notNull()
+  var maxContentSizeKbs: Int by Delegates.notNull()
     private set
 
   init {
     parseOptions()
   }
-
 
   override fun assignConfigVals() {
 
@@ -80,8 +76,7 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
       assignPrivateKeyFilePath(agent.tls.privateKeyFilePath)
       assignTrustCertCollectionFilePath(agent.tls.trustCertCollectionFilePath)
 
-      chunkThresholdKbs = EnvVars.CHUNK_THRESHOLD_KBS.getEnv(agent.chunkThresholdKbs) * 1024
-      chunkBufferSizeKbs = EnvVars.CHUNK_BUFFER_KBS.getEnv(agent.chunkBufferSizeKbs) * 1024
+      maxContentSizeKbs = EnvVars.MAX_CONTENT_SIZE_KBS.getEnv(agent.maxContentSizeKbs) * 1024
 
       if (overrideAuthority.isEmpty())
         overrideAuthority = EnvVars.OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)

@@ -46,8 +46,8 @@ class AdminEmptyPathTest {
         admin.port shouldEqual 8098
         admin.pingPath shouldEqual ""
 
-        blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { resp ->
-          resp.status shouldEqual HttpStatusCode.NotFound
+        blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { response ->
+          response.status shouldEqual HttpStatusCode.NotFound
         }
       }
   }
@@ -59,8 +59,8 @@ class AdminEmptyPathTest {
         admin.port shouldEqual 8098
         admin.versionPath shouldEqual ""
 
-        blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { resp ->
-          resp.status shouldEqual HttpStatusCode.NotFound
+        blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { response ->
+          response.status shouldEqual HttpStatusCode.NotFound
         }
       }
   }
@@ -71,8 +71,8 @@ class AdminEmptyPathTest {
       .also { admin ->
         admin.healthCheckPath shouldEqual ""
 
-        blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { resp ->
-          resp.status shouldEqual HttpStatusCode.NotFound
+        blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { response ->
+          response.status shouldEqual HttpStatusCode.NotFound
         }
       }
   }
@@ -83,8 +83,8 @@ class AdminEmptyPathTest {
       .also { admin ->
         admin.threadDumpPath shouldEqual ""
 
-        blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { resp ->
-          resp.status shouldEqual HttpStatusCode.NotFound
+        blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { response ->
+          response.status shouldEqual HttpStatusCode.NotFound
         }
       }
   }

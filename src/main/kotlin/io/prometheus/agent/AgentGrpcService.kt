@@ -161,10 +161,10 @@ class AgentGrpcService(private val agent: Agent,
   fun registerAgent(initialConnectionLatch: CountDownLatch) {
     val request = newRegisterAgentRequest(agent.agentId, agent.agentName, hostName)
     blockingStub.registerAgent(request)
-        .also { resp ->
+        .also { response ->
           agent.markMsgSent()
-          if (!resp.valid)
-            throw RequestFailureException("registerAgent() - ${resp.reason}")
+          if (!response.valid)
+            throw RequestFailureException("registerAgent() - ${response.reason}")
         }
     initialConnectionLatch.countDown()
   }
@@ -172,30 +172,30 @@ class AgentGrpcService(private val agent: Agent,
   fun pathMapSize(): Int {
     val request = GrpcObjects.newPathMapSizeRequest(agent.agentId)
     return blockingStub.pathMapSize(request)
-        .let { resp ->
+        .run {
           agent.markMsgSent()
-          resp.pathCount
+          pathCount
         }
   }
 
   fun registerPathOnProxy(path: String): Long {
     val request = GrpcObjects.newRegisterPathRequest(agent.agentId, path)
     return blockingStub.registerPath(request)
-        .let { resp ->
+        .run {
           agent.markMsgSent()
-          if (!resp.valid)
-            throw RequestFailureException("registerPath() - ${resp.reason}")
-          resp.pathId
+          if (!valid)
+            throw RequestFailureException("registerPath() - $reason")
+          pathId
         }
   }
 
   fun unregisterPathOnProxy(path: String) {
     val request = GrpcObjects.newUnregisterPathRequest(agent.agentId, path)
     blockingStub.unregisterPath(request)
-        .also { resp ->
+        .apply {
           agent.markMsgSent()
-          if (!resp.valid)
-            throw RequestFailureException("unregisterPath() - ${resp.reason}")
+          if (!valid)
+            throw RequestFailureException("unregisterPath() - $reason")
         }
   }
 
@@ -207,9 +207,9 @@ class AgentGrpcService(private val agent: Agent,
       val request = GrpcObjects.newHeartBeatRequest(agent.agentId)
       blockingStub
           .sendHeartBeat(request)
-          .also { resp ->
+          .apply {
             agent.markMsgSent()
-            if (!resp.valid) {
+            if (!valid) {
               logger.error { "AgentId ${agent.agentId} not found on proxy" }
               throw StatusRuntimeException(Status.NOT_FOUND)
             }
@@ -224,12 +224,12 @@ class AgentGrpcService(private val agent: Agent,
     asyncStub.readRequestsFromProxy(
         GrpcObjects.newAgentInfo(agent.agentId),
         GrpcDsl.streamObserver {
-          onNext { req ->
+          onNext { request ->
             // This will block, but only for the duration of the send.
             // The actual fetch happens at the other end of the channel
             runBlocking {
-              logger.debug { "readRequestsFromProxy(): \n$req" }
-              connectionContext.scrapeRequestChannel.send { agentHttpService.fetchScrapeUrl(req) }
+              logger.debug { "readRequestsFromProxy(): \n$request" }
+              connectionContext.scrapeRequestChannel.send { agentHttpService.fetchScrapeUrl(request) }
               agent.scrapeRequestBacklogSize.incrementAndGet()
             }
           }
@@ -284,8 +284,8 @@ class AgentGrpcService(private val agent: Agent,
             })
 
     for (scrapeResponse in connectionContext.scrapeResultChannel) {
-      logger.debug { "Comparing ${scrapeResponse.contentText.length} and ${options.chunkThresholdKbs}" }
-      if (scrapeResponse.contentText.length < (options.chunkThresholdKbs)) {
+      logger.debug { "Comparing ${scrapeResponse.contentText.length} and ${options.maxContentSizeKbs}" }
+      if (scrapeResponse.contentText.length < (options.maxContentSizeKbs)) {
         logger.info { "Writing non-chunked msg scrapeId: ${scrapeResponse.scrapeId} length: ${scrapeResponse.contentText.length}" }
         nonchunkedObserver.onNext(scrapeResponse)
       }
@@ -308,7 +308,7 @@ class AgentGrpcService(private val agent: Agent,
                       }
               builder.build()
             }.also {
-              logger.info { "Writing header for scrapeId: ${scrapeResponse.scrapeId} length: ${scrapeResponse.contentText.length}" }
+              logger.info { "Writing header length: ${scrapeResponse.contentText.length} for scrapeId: ${scrapeResponse.scrapeId} " }
               chunkedObserver.onNext(it)
             }
 
@@ -317,8 +317,7 @@ class AgentGrpcService(private val agent: Agent,
         val crcChecksum = CRC32()
 
         val bais = ByteArrayInputStream(scrapeResponse.contentText.zip())
-        // See: https://github.com/grpc/grpc.github.io/issues/371
-        val buffer = ByteArray(options.chunkBufferSizeKbs)
+        val buffer = ByteArray(options.maxContentSizeKbs)
         var readByteCount: Int
 
         while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
@@ -340,7 +339,7 @@ class AgentGrpcService(private val agent: Agent,
                         }
                 builder.build()
               }.also {
-                logger.info { "Writing chunk for scrapeID: ${scrapeResponse.scrapeId}" }
+                logger.info { "Writing chunk ${totalChunkCount} for scrapeId: ${scrapeResponse.scrapeId}" }
                 chunkedObserver.onNext(it)
               }
         }
