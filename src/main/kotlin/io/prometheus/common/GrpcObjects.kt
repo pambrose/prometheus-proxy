@@ -19,7 +19,6 @@
 package io.prometheus.common
 
 import com.google.protobuf.ByteString
-import io.ktor.http.HttpStatusCode
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkData
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -116,47 +115,43 @@ object GrpcObjects {
         builder.build()
       }
 
-  data class ScrapeResponseArg(val agentId: String,
-                               val scrapeId: Long,
-                               var validResponse: Boolean = false,
-                               var statusCode: HttpStatusCode = HttpStatusCode.NotFound,
-                               var contentText: String = "",
-                               var contentType: String = "",
-                               var failureReason: String = "",
-                               var url: String = "") {
 
-    fun setDebugInfo(url: String, failureReason: String = "") {
-      this.url = url
-      this.failureReason = failureReason
-    }
-  }
+  fun NonChunkedScrapeResponse.toScrapeResults(): ScrapeResults =
+      ScrapeResults(
+          agentId = agentId,
+          scrapeId = scrapeId,
+          validResponse = validResponse,
+          statusCode = statusCode,
+          contentType = contentType,
+          contentZipped = contentZipped.toByteArray(),
+          failureReason = failureReason,
+          url = url
+      )
 
-  fun newScrapeResponse(arg: ScrapeResponseArg): NonChunkedScrapeResponse =
-      NonChunkedScrapeResponse.newBuilder().run {
-        agentId = arg.agentId
-        scrapeId = arg.scrapeId
-        validResponse = arg.validResponse
-        statusCode = arg.statusCode.value
-        contentText = arg.contentText
-        contentType = arg.contentType
-        failureReason = arg.failureReason
-        url = arg.url
-        build()
+  fun ScrapeResults.toScrapeResponse(): NonChunkedScrapeResponse =
+      NonChunkedScrapeResponse.newBuilder().let { builder ->
+        builder.agentId = agentId
+        builder.scrapeId = scrapeId
+        builder.validResponse = validResponse
+        builder.statusCode = statusCode
+        builder.contentType = contentType
+        builder.contentZipped = ByteString.copyFrom(contentZipped)
+        builder.failureReason = failureReason
+        builder.url = url
+        builder.build()
       }
 
-  fun newScrapeResponseHeader(scrapeResponse: NonChunkedScrapeResponse): ChunkedScrapeResponse =
+  fun ScrapeResults.toScrapeResponseHeader(): ChunkedScrapeResponse =
       ChunkedScrapeResponse.newBuilder().let { builder ->
         builder.header =
             HeaderData.newBuilder().run {
-              scrapeResponse.apply {
-                headerValidResponse = validResponse
-                headerAgentId = agentId
-                headerScrapeId = scrapeId
-                headerStatusCode = statusCode
-                headerFailureReason = failureReason
-                headerUrl = url
-                headerContentType = contentType
-              }
+              headerAgentId = agentId
+              headerScrapeId = scrapeId
+              headerValidResponse = validResponse
+              headerStatusCode = statusCode
+              headerContentType = contentType
+              headerFailureReason = failureReason
+              headerUrl = url
               build()
             }
         builder.build()
@@ -165,7 +160,7 @@ object GrpcObjects {
   fun newScrapeResponseChunk(scrapeId: Long,
                              totalChunkCount: Int,
                              readByteCount: Int,
-                             crcChecksum: CRC32,
+                             checksum: CRC32,
                              buffer: ByteArray): ChunkedScrapeResponse =
       ChunkedScrapeResponse.newBuilder().let { builder ->
         builder.chunk =
@@ -173,7 +168,7 @@ object GrpcObjects {
               chunkScrapeId = scrapeId
               chunkCount = totalChunkCount
               chunkByteCount = readByteCount
-              chunkChecksum = crcChecksum.value
+              chunkChecksum = checksum.value
               chunkBytes = ByteString.copyFrom(buffer)
               build()
             }
@@ -183,14 +178,14 @@ object GrpcObjects {
   fun newScrapeResponseSummary(scrapeId: Long,
                                totalChunkCount: Int,
                                totalByteCount: Int,
-                               crcChecksum: CRC32): ChunkedScrapeResponse =
+                               checksum: CRC32): ChunkedScrapeResponse =
       ChunkedScrapeResponse.newBuilder().let { builder ->
         builder.summary =
             SummaryData.newBuilder().run {
               summaryScrapeId = scrapeId
               summaryChunkCount = totalChunkCount
               summaryByteCount = totalByteCount
-              summaryChecksum = crcChecksum.value
+              summaryChecksum = checksum.value
               build()
             }
         builder.build()

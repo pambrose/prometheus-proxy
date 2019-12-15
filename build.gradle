@@ -30,7 +30,7 @@ def protocVersion = '3.10.0'
 def serializationVersion = '0.13.0'
 def slf4jVersion = '1.7.28'
 def tscfgVersion = '1.3.4'
-def utilsVersion = '1.1.12'
+def utilsVersion = '1.1.13'
 def zipkinVersion = '5.9.1'
 
 repositories {

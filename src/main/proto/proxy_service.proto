@@ -1,5 +1,4 @@
 syntax = "proto3";
-package proxy_service;
 
 import public "google/protobuf/empty.proto";
 
@@ -69,7 +68,7 @@ message NonChunkedScrapeResponse {
     string failure_reason = 5;
     string url = 6;
     string content_type = 7;
-    string content_text = 8;
+    bytes content_zipped = 8;
 }
 
 message ChunkedScrapeResponse {

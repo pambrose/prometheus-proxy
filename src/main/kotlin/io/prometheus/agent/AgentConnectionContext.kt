@@ -20,18 +20,18 @@ package io.prometheus.agent
 
 import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import io.prometheus.common.ScrapeRequestAction
-import io.prometheus.grpc.NonChunkedScrapeResponse
+import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
 
 class AgentConnectionContext {
   private var disconnected by atomicBoolean(false)
-  val scrapeRequestChannel = Channel<ScrapeRequestAction>(Channel.UNLIMITED)
-  val scrapeResultChannel = Channel<NonChunkedScrapeResponse>(Channel.UNLIMITED)
+  val scrapeRequestsChannel = Channel<ScrapeRequestAction>(Channel.UNLIMITED)
+  val scrapeResultsChannel = Channel<ScrapeResults>(Channel.UNLIMITED)
 
   fun disconnect() {
     disconnected = true
-    scrapeRequestChannel.cancel()
-    scrapeResultChannel.cancel()
+    scrapeRequestsChannel.cancel()
+    scrapeResultsChannel.cancel()
   }
 
   val connected get() = !disconnected

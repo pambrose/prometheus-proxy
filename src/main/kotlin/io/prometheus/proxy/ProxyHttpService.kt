@@ -23,6 +23,7 @@ import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
+import com.github.pambrose.common.util.unzip
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.util.concurrent.MoreExecutors
 import io.ktor.application.ApplicationCall
@@ -57,114 +58,114 @@ import kotlin.time.seconds
 class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
   private val proxyConfigVals = proxy.configVals.proxy
   private val idleTimeout =
-    if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
+      if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
 
   private lateinit var tracing: Tracing
 
   private val httpServer =
-    embeddedServer(CIO,
-                   port = httpPort,
-                   configure = { connectionIdleTimeoutSeconds = idleTimeout.inSeconds.toInt() }) {
+      embeddedServer(CIO,
+                     port = httpPort,
+                     configure = { connectionIdleTimeoutSeconds = idleTimeout.inSeconds.toInt() }) {
 
-      install(DefaultHeaders)
-      //install(CallLogging)
-      install(Compression) {
-        gzip {
-          priority = 1.0
+        install(DefaultHeaders)
+        //install(CallLogging)
+        install(Compression) {
+          gzip {
+            priority = 1.0
+          }
+          deflate {
+            priority = 10.0
+            minimumSize(1024) // condition
+          }
         }
-        deflate {
-          priority = 10.0
-          minimumSize(1024) // condition
-        }
-      }
 
-      routing {
-        get("/*") {
-          call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
+        routing {
+          get("/*") {
+            call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
 
-          val path = call.request.path().drop(1)
-          logger.debug { "Servicing request for path: $path" }
-          val agentContext = proxy.pathManager[path]
-          val responseResults = ResponseResults()
+            val path = call.request.path().drop(1)
+            logger.debug { "Servicing request for path: $path" }
+            val agentContext = proxy.pathManager[path]
+            val responseResults = ResponseResults()
 
-          when {
-            !proxy.isRunning -> {
-              logger.error { "Proxy stopped" }
-              responseResults.apply {
-                updateMsg = "proxy_stopped"
-                statusCode = HttpStatusCode.ServiceUnavailable
+            when {
+              !proxy.isRunning -> {
+                logger.error { "Proxy stopped" }
+                responseResults.apply {
+                  updateMsg = "proxy_stopped"
+                  statusCode = HttpStatusCode.ServiceUnavailable
+                }
               }
-            }
 
-            path.isEmpty() || path.isBlank() -> {
-              val msg = "Request missing path"
-              proxy.logActivity(msg)
-              logger.info { msg }
-              responseResults.apply {
-                updateMsg = "missing_path"
-                statusCode = HttpStatusCode.NotFound
+              path.isEmpty() || path.isBlank() -> {
+                val msg = "Request missing path"
+                proxy.logActivity(msg)
+                logger.info { msg }
+                responseResults.apply {
+                  updateMsg = "missing_path"
+                  statusCode = HttpStatusCode.NotFound
+                }
               }
-            }
 
-            path == "favicon.ico" -> {
-              //logger.info { "Invalid path request /${path}" }
-              responseResults.apply {
-                updateMsg = "invalid_request"
-                statusCode = HttpStatusCode.NotFound
+              path == "favicon.ico" -> {
+                //logger.info { "Invalid path request /${path}" }
+                responseResults.apply {
+                  updateMsg = "invalid_request"
+                  statusCode = HttpStatusCode.NotFound
+                }
               }
-            }
 
-            proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path ->
-              responseResults.contentText = "42"
+              proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path ->
+                responseResults.contentText = "42"
 
-            agentContext == null -> {
-              val msg = "Invalid path request /${path}"
-              proxy.logActivity(msg)
-              logger.info { msg }
-              responseResults.apply {
-                updateMsg = "invalid_path"
-                statusCode = HttpStatusCode.NotFound
+              agentContext == null -> {
+                val msg = "Invalid path request /${path}"
+                proxy.logActivity(msg)
+                logger.info { msg }
+                responseResults.apply {
+                  updateMsg = "invalid_path"
+                  statusCode = HttpStatusCode.NotFound
+                }
               }
-            }
 
-            agentContext.isNotValid() -> {
-              val msg = "Invalid AgentContext for /${path}"
-              proxy.logActivity(msg)
-              logger.error { msg }
-              responseResults.apply {
-                updateMsg = "invalid_agent_context"
-                statusCode = HttpStatusCode.NotFound
+              agentContext.isNotValid() -> {
+                val msg = "Invalid AgentContext for /${path}"
+                proxy.logActivity(msg)
+                logger.error { msg }
+                responseResults.apply {
+                  updateMsg = "invalid_agent_context"
+                  statusCode = HttpStatusCode.NotFound
+                }
               }
-            }
 
-            else -> {
-              submitScrapeRequest(path, agentContext, call.request, call.response)
-                  .also { response ->
+              else -> {
+                submitScrapeRequest(path, agentContext, call.request, call.response)
+                    .also { response ->
 
-                    var status = "/${path} - ${response.updateMsg} - ${response.statusCode}"
-                    if (!response.statusCode.isSuccess())
-                      status += " reason: [${response.failureReason}]"
-                    status += " time: ${response.fetchDuration} url: ${response.url}"
+                      var status = "/${path} - ${response.updateMsg} - ${response.statusCode}"
+                      if (!response.statusCode.isSuccess())
+                        status += " reason: [${response.failureReason}]"
+                      status += " time: ${response.fetchDuration} url: ${response.url}"
 
-                    proxy.logActivity(status)
+                      proxy.logActivity(status)
 
-                    responseResults.apply {
-                      contentText = response.contentText
-                      contentType = response.contentType
-                      statusCode = response.statusCode
-                      updateMsg = response.updateMsg
+                      responseResults.apply {
+                        contentText = response.contentText
+                        contentType = response.contentType
+                        statusCode = response.statusCode
+                        updateMsg = response.updateMsg
+                      }
                     }
-                  }
+              }
             }
-          }
 
-          responseResults.apply {
-            updateScrapeRequests(updateMsg)
-            call.respondWith(contentText, contentType, statusCode)
+            responseResults.apply {
+              updateScrapeRequests(updateMsg)
+              call.respondWith(contentText, contentType, statusCode)
+            }
           }
         }
       }
-    }
 
   private suspend fun ApplicationCall.respondWith(text: String,
                                                   contentType: ContentType = ContentType.Text.Plain,
@@ -176,9 +177,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     }
   }
 
-  class ResponseResults(var contentText: String = "",
+  class ResponseResults(var statusCode: HttpStatusCode = HttpStatusCode.OK,
                         var contentType: ContentType = ContentType.Text.Plain,
-                        var statusCode: HttpStatusCode = HttpStatusCode.OK,
+                        var contentText: String = "",
                         var updateMsg: String = "")
 
   init {
@@ -237,44 +238,46 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
     } finally {
       val scrapeId = scrapeRequest.scrapeId
       proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeId)
-        ?: logger.error { "Scrape request $scrapeId missing in map" }
+          ?: logger.error { "Scrape request $scrapeId missing in map" }
     }
 
     logger.debug { "Results returned from $agentContext for $scrapeRequest" }
 
-    scrapeRequest.scrapeResponse
-      .also { scrapeResponse ->
-        HttpStatusCode.fromValue(scrapeResponse.statusCode)
-          .also { statusCode ->
-            scrapeResponse.contentType.split("/")
-              .also { contentTypeElems ->
+    scrapeRequest.scrapeResults
+        .also { scrapeResults ->
+          HttpStatusCode.fromValue(scrapeResults.statusCode)
+              .also { statusCode ->
+                scrapeResults.contentType.split("/")
+                    .also { contentTypeElems ->
 
-                val contentType =
-                  if (contentTypeElems.size == 2)
-                    ContentType(contentTypeElems[0], contentTypeElems[1])
-                  else
-                    ContentType.Text.Plain
+                      val contentType =
+                          if (contentTypeElems.size == 2)
+                            ContentType(contentTypeElems[0], contentTypeElems[1])
+                          else
+                            ContentType.Text.Plain
 
-                // Do not return content on error status codes
-                return if (!statusCode.isSuccess()) {
-                  ScrapeRequestResponse(statusCode = statusCode,
-                                        contentType = contentType,
-                                        failureReason = scrapeRequest.scrapeResponse.failureReason,
-                                        url = scrapeRequest.scrapeResponse.url,
-                                        updateMsg = "path_not_found",
-                                        fetchDuration = scrapeRequest.ageDuration())
-                } else {
-                  ScrapeRequestResponse(statusCode = statusCode,
-                                        contentType = contentType,
-                                        contentText = scrapeRequest.scrapeResponse.contentText,
-                                        failureReason = scrapeRequest.scrapeResponse.failureReason,
-                                        url = scrapeRequest.scrapeResponse.url,
-                                        updateMsg = "success",
-                                        fetchDuration = scrapeRequest.ageDuration())
-                }
+                      // Do not return content on error status codes
+                      return if (!statusCode.isSuccess()) {
+                        ScrapeRequestResponse(statusCode = statusCode,
+                                              contentType = contentType,
+                                              failureReason = scrapeRequest.scrapeResults.failureReason,
+                                              url = scrapeRequest.scrapeResults.url,
+                                              updateMsg = "path_not_found",
+                                              fetchDuration = scrapeRequest.ageDuration())
+                      }
+                      else {
+                        ScrapeRequestResponse(statusCode = statusCode,
+                                              contentType = contentType,
+                            // Unzip content here
+                                              contentText = scrapeRequest.scrapeResults.contentZipped.unzip(),
+                                              failureReason = scrapeRequest.scrapeResults.failureReason,
+                                              url = scrapeRequest.scrapeResults.url,
+                                              updateMsg = "success",
+                                              fetchDuration = scrapeRequest.ageDuration())
+                      }
+                    }
               }
-          }
-      }
+        }
   }
 
   private fun updateScrapeRequests(type: String) {

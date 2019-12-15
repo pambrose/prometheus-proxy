@@ -160,11 +160,11 @@ class Agent(val options: AgentOptions,
 
         launch(Dispatchers.Default) { grpcService.writeResponsesToProxyUntilDisconnected(connectionContext) }
 
-        for (scrapeRequestAction in connectionContext.scrapeRequestChannel) {
+        for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
           launch(Dispatchers.Default) {
-            // The fetch actually occurs here
+            // The fetch occurs during the invoke()
             val scrapeResponse = scrapeRequestAction.invoke()
-            connectionContext.scrapeResultChannel.send(scrapeResponse)
+            connectionContext.scrapeResultsChannel.send(scrapeResponse)
           }
         }
       }
