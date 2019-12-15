@@ -28,7 +28,6 @@ import com.github.pambrose.common.util.zip
 import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
-import com.google.protobuf.ByteString
 import com.google.protobuf.Empty
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
@@ -39,13 +38,12 @@ import io.prometheus.common.BaseOptions.Companion.HTTPS_PREFIX
 import io.prometheus.common.BaseOptions.Companion.HTTP_PREFIX
 import io.prometheus.common.GrpcObjects
 import io.prometheus.common.GrpcObjects.newRegisterAgentRequest
-import io.prometheus.grpc.ChunkData
-import io.prometheus.grpc.ChunkedScrapeResponse
-import io.prometheus.grpc.HeaderData
+import io.prometheus.common.GrpcObjects.newScrapeResponseChunk
+import io.prometheus.common.GrpcObjects.newScrapeResponseHeader
+import io.prometheus.common.GrpcObjects.newScrapeResponseSummary
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
-import io.prometheus.grpc.SummaryData
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.io.ByteArrayInputStream
@@ -290,24 +288,8 @@ class AgentGrpcService(private val agent: Agent,
         nonchunkedObserver.onNext(scrapeResponse)
       }
       else {
-        ChunkedScrapeResponse.newBuilder()
-            .let { builder ->
-              builder.header =
-                  HeaderData.newBuilder()
-                      .run {
-                        scrapeResponse.apply {
-                          headerValidResponse = validResponse
-                          headerAgentId = agentId
-                          headerScrapeId = scrapeId
-                          headerStatusCode = statusCode
-                          headerFailureReason = failureReason
-                          headerUrl = url
-                          headerContentType = contentType
-                        }
-                        build()
-                      }
-              builder.build()
-            }.also {
+        newScrapeResponseHeader(scrapeResponse)
+            .also {
               logger.debug { "Writing header length: ${scrapeResponse.contentText.length} for scrapeId: ${scrapeResponse.scrapeId} " }
               chunkedObserver.onNext(it)
             }
@@ -325,38 +307,15 @@ class AgentGrpcService(private val agent: Agent,
           totalByteCount += readByteCount
           crcChecksum.update(buffer, 0, buffer.size);
 
-          ChunkedScrapeResponse.newBuilder()
-              .let { builder ->
-                builder.chunk =
-                    ChunkData.newBuilder()
-                        .run {
-                          chunkScrapeId = scrapeResponse.scrapeId
-                          chunkCount = totalChunkCount
-                          chunkByteCount = readByteCount
-                          chunkChecksum = crcChecksum.value
-                          chunkBytes = ByteString.copyFrom(buffer)
-                          build()
-                        }
-                builder.build()
-              }.also {
+          newScrapeResponseChunk(scrapeResponse.scrapeId, totalChunkCount, readByteCount, crcChecksum, buffer)
+              .also {
                 logger.debug { "Writing chunk ${totalChunkCount} for scrapeId: ${scrapeResponse.scrapeId}" }
                 chunkedObserver.onNext(it)
               }
         }
 
-        ChunkedScrapeResponse.newBuilder()
-            .let { builder ->
-              builder.summary =
-                  SummaryData.newBuilder()
-                      .run {
-                        summaryScrapeId = scrapeResponse.scrapeId
-                        summaryChunkCount = totalChunkCount
-                        summaryByteCount = totalByteCount
-                        summaryChecksum = crcChecksum.value
-                        build()
-                      }
-              builder.build()
-            }.also {
+        newScrapeResponseSummary(scrapeResponse.scrapeId, totalChunkCount, totalByteCount, crcChecksum)
+            .also {
               logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: ${scrapeResponse.scrapeId}" }
               chunkedObserver.onNext(it)
             }
