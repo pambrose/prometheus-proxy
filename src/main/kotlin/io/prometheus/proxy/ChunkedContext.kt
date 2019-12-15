@@ -1,3 +1,5 @@
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
 package io.prometheus.proxy
 
 import com.github.pambrose.common.util.unzip
