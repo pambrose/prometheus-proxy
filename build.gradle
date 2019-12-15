@@ -9,14 +9,14 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.5.1'
+version = '1.6.0'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 def annotationVersion = '1.3.2'
-def coroutinesVersion = '1.3.2'
-def dropwizardVersion = '4.1.1'
+def coroutinesVersion = '1.3.3'
+def dropwizardVersion = '4.1.2'
 def grpcVersion = '1.25.0'
 def prometheusVersion = '0.8.0'
 def jcommanderVersion = '1.78'
@@ -30,7 +30,7 @@ def protocVersion = '3.10.0'
 def serializationVersion = '0.13.0'
 def slf4jVersion = '1.7.28'
 def tscfgVersion = '1.3.4'
-def utilsVersion = '4cc1960'
+def utilsVersion = '1.1.12'
 def zipkinVersion = '5.9.1'
 
 repositories {
