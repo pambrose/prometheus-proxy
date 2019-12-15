@@ -69,9 +69,9 @@ class Agent(val options: AgentOptions,
                                newMetricsConfig(options.metricsEnabled,
                                                 options.metricsPort,
                                                 options.configVals.agent.metrics),
-                             newZipkinConfig(options.configVals.agent.internal.zipkin),
-                             { getVersionDesc(true) },
-                             isTestMode = testMode) {
+                               newZipkinConfig(options.configVals.agent.internal.zipkin),
+                               { getVersionDesc(true) },
+                               isTestMode = testMode) {
 
   private val agentConfigVals = configVals.agent.internal
   private val clock = MonoClock
@@ -115,7 +115,7 @@ class Agent(val options: AgentOptions,
         logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
       } catch (e: StatusRuntimeException) {
         logger.info { "Disconnected from proxy at $proxyHost" }
-      } catch (e: Exception) {
+      } catch (e: Throwable) {
         // Catch anything else to avoid exiting retry loop
       } finally {
         logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
@@ -172,21 +172,22 @@ class Agent(val options: AgentOptions,
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) =
-    if (agentConfigVals.heartbeatEnabled) {
-      val heartbeatPauseTime = agentConfigVals.heartbeatCheckPauseMillis.milliseconds
-      val maxInactivityTime = agentConfigVals.heartbeatMaxInactivitySecs.seconds
-      logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
+      if (agentConfigVals.heartbeatEnabled) {
+        val heartbeatPauseTime = agentConfigVals.heartbeatCheckPauseMillis.milliseconds
+        val maxInactivityTime = agentConfigVals.heartbeatMaxInactivitySecs.seconds
+        logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
 
-      while (isRunning && connectionContext.connected) {
-        val timeSinceLastWrite = lastMsgSentMark.elapsedNow()
-        if (timeSinceLastWrite > maxInactivityTime)
-          grpcService.sendHeartBeat(connectionContext)
-        delay(heartbeatPauseTime)
+        while (isRunning && connectionContext.connected) {
+          val timeSinceLastWrite = lastMsgSentMark.elapsedNow()
+          if (timeSinceLastWrite > maxInactivityTime)
+            grpcService.sendHeartBeat(connectionContext)
+          delay(heartbeatPauseTime)
+        }
+        logger.info { "Heartbeat completed" }
       }
-      logger.info { "Heartbeat completed" }
-    } else {
-      logger.info { "Heartbeat disabled" }
-    }
+      else {
+        logger.info { "Heartbeat disabled" }
+      }
 
   fun updateScrapeCounter(type: String) {
     if (isMetricsEnabled && type.isNotEmpty())
@@ -198,7 +199,7 @@ class Agent(val options: AgentOptions,
   }
 
   fun awaitInitialConnection(timeout: Duration) =
-    initialConnectionLatch.await(timeout.toLongMilliseconds(), MILLISECONDS)
+      initialConnectionLatch.await(timeout.toLongMilliseconds(), MILLISECONDS)
 
   override fun shutDown() {
     grpcService.shutDown()
@@ -223,13 +224,13 @@ class Agent(val options: AgentOptions,
     """.trimIndent()
 
   override fun toString() =
-    toStringElements {
-      add("agentId", agentId)
-      add("agentName", agentName)
-      add("proxyHost", proxyHost)
-      add("adminService", if (isAdminEnabled) adminService else "Disabled")
-      add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
-    }
+      toStringElements {
+        add("agentId", agentId)
+        add("agentName", agentName)
+        add("proxyHost", proxyHost)
+        add("adminService", if (isAdminEnabled) adminService else "Disabled")
+        add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
+      }
 
   companion object : KLogging() {
     @JvmStatic

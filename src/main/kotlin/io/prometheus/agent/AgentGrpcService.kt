@@ -20,10 +20,11 @@ package io.prometheus.agent
 
 import brave.Tracing
 import brave.grpc.GrpcTracing
-import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
-import com.github.pambrose.common.dsl.GrpcDsl
+import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.github.pambrose.common.dsl.GrpcDsl.channel
+import com.github.pambrose.common.dsl.GrpcDsl.streamObserver
 import com.github.pambrose.common.util.simpleClassName
+import com.github.pambrose.common.util.zip
 import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
@@ -33,27 +34,35 @@ import io.grpc.ManagedChannel
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.prometheus.Agent
+import io.prometheus.common.BaseOptions.Companion.HTTPS_PREFIX
+import io.prometheus.common.BaseOptions.Companion.HTTP_PREFIX
 import io.prometheus.common.GrpcObjects
+import io.prometheus.common.GrpcObjects.newAgentInfo
 import io.prometheus.common.GrpcObjects.newRegisterAgentRequest
+import io.prometheus.common.GrpcObjects.newScrapeResponseChunk
+import io.prometheus.common.GrpcObjects.newScrapeResponseHeader
+import io.prometheus.common.GrpcObjects.newScrapeResponseSummary
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
+import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.zip.CRC32
+import kotlin.properties.Delegates.notNull
 
 class AgentGrpcService(private val agent: Agent,
-                       options: AgentOptions,
+                       private val options: AgentOptions,
                        private val inProcessServerName: String) {
-  private var grpcStarted = AtomicBoolean(false)
-  private var blockingStub: ProxyServiceBlockingStub by nonNullableReference()
-  private var asyncStub: ProxyServiceStub by nonNullableReference()
+  private var grpcStarted by atomicBoolean(false)
+  private var blockingStub: ProxyServiceBlockingStub by notNull()
+  private var asyncStub: ProxyServiceStub by notNull()
 
   private lateinit var tracing: Tracing
   private lateinit var grpcTracing: GrpcTracing
 
-  var channel: ManagedChannel by nonNullableReference()
+  var channel: ManagedChannel by notNull()
 
   val hostName: String
   val port: Int
@@ -64,8 +73,8 @@ class AgentGrpcService(private val agent: Agent,
         options.proxyHostname
             .run {
               when {
-                startsWith("http://") -> removePrefix("http://")
-                startsWith("https://") -> removePrefix("https://")
+                startsWith(HTTP_PREFIX) -> removePrefix(HTTP_PREFIX)
+                startsWith(HTTPS_PREFIX) -> removePrefix(HTTPS_PREFIX)
                 else -> this
               }
             }
@@ -85,16 +94,17 @@ class AgentGrpcService(private val agent: Agent,
       grpcTracing = GrpcTracing.create(tracing)
     }
 
-    val options = agent.options
     tlsContext =
-        if (options.certChainFilePath.isNotEmpty()
-            || options.privateKeyFilePath.isNotEmpty()
-            || options.trustCertCollectionFilePath.isNotEmpty())
-          buildClientTlsContext(certChainFilePath = options.certChainFilePath,
-                                privateKeyFilePath = options.privateKeyFilePath,
-                                trustCertCollectionFilePath = options.trustCertCollectionFilePath)
-        else
-          PLAINTEXT_CONTEXT
+        agent.options.run {
+          if (certChainFilePath.isNotEmpty()
+              || privateKeyFilePath.isNotEmpty()
+              || trustCertCollectionFilePath.isNotEmpty())
+            buildClientTlsContext(certChainFilePath = certChainFilePath,
+                                  privateKeyFilePath = privateKeyFilePath,
+                                  trustCertCollectionFilePath = trustCertCollectionFilePath)
+          else
+            PLAINTEXT_CONTEXT
+        }
 
     resetGrpcStubs()
   }
@@ -102,18 +112,18 @@ class AgentGrpcService(private val agent: Agent,
   fun shutDown() {
     if (agent.isZipkinEnabled)
       tracing.close()
-    if (grpcStarted.get())
+    if (grpcStarted)
       channel.shutdownNow()
   }
 
+  @Synchronized
   fun resetGrpcStubs() {
     logger.info { "Creating gRPC stubs" }
 
-    if (grpcStarted.get())
+    if (grpcStarted)
       shutDown()
     else
-      grpcStarted.set(true)
-
+      grpcStarted = true
 
     channel =
         channel(hostName = hostName,
@@ -150,10 +160,10 @@ class AgentGrpcService(private val agent: Agent,
   fun registerAgent(initialConnectionLatch: CountDownLatch) {
     val request = newRegisterAgentRequest(agent.agentId, agent.agentName, hostName)
     blockingStub.registerAgent(request)
-        .also { resp ->
+        .also { response ->
           agent.markMsgSent()
-          if (!resp.valid)
-            throw RequestFailureException("registerAgent() - ${resp.reason}")
+          if (!response.valid)
+            throw RequestFailureException("registerAgent() - ${response.reason}")
         }
     initialConnectionLatch.countDown()
   }
@@ -161,30 +171,30 @@ class AgentGrpcService(private val agent: Agent,
   fun pathMapSize(): Int {
     val request = GrpcObjects.newPathMapSizeRequest(agent.agentId)
     return blockingStub.pathMapSize(request)
-        .let { resp ->
+        .run {
           agent.markMsgSent()
-          resp.pathCount
+          pathCount
         }
   }
 
   fun registerPathOnProxy(path: String): Long {
     val request = GrpcObjects.newRegisterPathRequest(agent.agentId, path)
     return blockingStub.registerPath(request)
-        .let { resp ->
+        .run {
           agent.markMsgSent()
-          if (!resp.valid)
-            throw RequestFailureException("registerPath() - ${resp.reason}")
-          resp.pathId
+          if (!valid)
+            throw RequestFailureException("registerPath() - $reason")
+          pathId
         }
   }
 
   fun unregisterPathOnProxy(path: String) {
     val request = GrpcObjects.newUnregisterPathRequest(agent.agentId, path)
     blockingStub.unregisterPath(request)
-        .also { resp ->
+        .apply {
           agent.markMsgSent()
-          if (!resp.valid)
-            throw RequestFailureException("unregisterPath() - ${resp.reason}")
+          if (!valid)
+            throw RequestFailureException("unregisterPath() - $reason")
         }
   }
 
@@ -196,9 +206,9 @@ class AgentGrpcService(private val agent: Agent,
       val request = GrpcObjects.newHeartBeatRequest(agent.agentId)
       blockingStub
           .sendHeartBeat(request)
-          .also { resp ->
+          .apply {
             agent.markMsgSent()
-            if (!resp.valid) {
+            if (!valid) {
               logger.error { "AgentId ${agent.agentId} not found on proxy" }
               throw StatusRuntimeException(Status.NOT_FOUND)
             }
@@ -210,63 +220,101 @@ class AgentGrpcService(private val agent: Agent,
   }
 
   fun readRequestsFromProxy(agentHttpService: AgentHttpService, connectionContext: AgentConnectionContext) {
-    asyncStub
-        .readRequestsFromProxy(GrpcObjects.newAgentInfo(agent.agentId),
-                               GrpcDsl.streamObserver {
-                                 onNext { req ->
-                                   // This will block, but only for the duration of the send.
-                                   // The actual fetch happens at the other end of the channel
-                                   runBlocking {
-                                     logger.debug { "readRequestsFromProxy(): \n$req" }
-                                     connectionContext.scrapeRequestChannel.send { agentHttpService.fetchScrapeUrl(req) }
-                                     agent.scrapeRequestBacklogSize.incrementAndGet()
-                                   }
-                                 }
+    asyncStub.readRequestsFromProxy(
+        newAgentInfo(agent.agentId),
+        streamObserver {
+          onNext { request ->
+            // This will block, but only for the duration of the send.
+            // The actual fetch happens at the other end of the channel
+            runBlocking {
+              logger.debug { "readRequestsFromProxy(): \n$request" }
+              connectionContext.scrapeRequestChannel.send { agentHttpService.fetchScrapeUrl(request) }
+              agent.scrapeRequestBacklogSize.incrementAndGet()
+            }
+          }
 
-                                 onError { throwable ->
-                                   val s = Status.fromThrowable(throwable)
-                                   logger.error { "Error in readRequestsFromProxy(): ${s.code} ${s.description}" }
-                                   connectionContext.disconnect()
-                                 }
+          onError { throwable ->
+            val s = Status.fromThrowable(throwable)
+            logger.error { "Error in readRequestsFromProxy(): ${s.code} ${s.description}" }
+            connectionContext.disconnect()
+          }
 
-                                 onCompleted {
-                                   connectionContext.disconnect()
-                                 }
-                               })
+          onCompleted {
+            connectionContext.disconnect()
+          }
+        })
   }
 
   suspend fun writeResponsesToProxyUntilDisconnected(connectionContext: AgentConnectionContext) {
-    val observer =
-        asyncStub
-            .writeResponsesToProxy(
-                GrpcDsl.streamObserver<Empty> {
-                  onNext {
-                    // Ignore Empty return value
-                  }
 
-                  onError { throwable ->
-                    val s = Status.fromThrowable(throwable)
-                    logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
-                    connectionContext.disconnect()
-                  }
+    val emptyResponseObserver =
+        streamObserver<Empty> {
+          onNext {
+            // Ignore Empty return value
+          }
 
-                  onCompleted {
-                    connectionContext.disconnect()
-                  }
-                })
+          onError { throwable ->
+            val s = Status.fromThrowable(throwable)
+            logger.error { "Error in writeResponsesToProxyUntilDisconnected(): ${s.code} ${s.description}" }
+            connectionContext.disconnect()
+          }
 
-    for (scrapeResponse in connectionContext.scrapeResultChannel) {
-      logger.debug { "writeResponsesToProxyUntilDisconnected(): \n$scrapeResponse" }
-      observer.onNext(scrapeResponse)
+          onCompleted {
+            connectionContext.disconnect()
+          }
+        }
+
+    val nonchunkedObserver = asyncStub.writeNonChunkedResponsesToProxy(emptyResponseObserver)
+    val chunkedObserver = asyncStub.writeChunkedResponsesToProxy(emptyResponseObserver)
+
+    for (ncsr in connectionContext.scrapeResultChannel) {
+      val scrapedId = ncsr.scrapeId
+      val content = ncsr.contentText
+
+      logger.debug { "Comparing ${content.length} and ${options.maxContentSizeKbs}" }
+      if (content.length < (options.maxContentSizeKbs)) {
+        logger.debug { "Writing non-chunked msg scrapeId: $scrapedId length: ${content.length}" }
+        nonchunkedObserver.onNext(ncsr)
+      }
+      else {
+        newScrapeResponseHeader(ncsr).also {
+          logger.debug { "Writing header length: ${content.length} for scrapeId: $scrapedId " }
+          chunkedObserver.onNext(it)
+        }
+
+        var totalByteCount = 0
+        var totalChunkCount = 0
+        val crcChecksum = CRC32()
+        val bais = ByteArrayInputStream(content.zip())
+        val buffer = ByteArray(options.maxContentSizeKbs)
+        var readByteCount: Int
+
+        while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
+          totalChunkCount++
+          totalByteCount += readByteCount
+          crcChecksum.update(buffer, 0, buffer.size);
+
+          newScrapeResponseChunk(ncsr.scrapeId, totalChunkCount, readByteCount, crcChecksum, buffer).also {
+            logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapedId" }
+            chunkedObserver.onNext(it)
+          }
+        }
+
+        newScrapeResponseSummary(ncsr.scrapeId, totalChunkCount, totalByteCount, crcChecksum).also {
+          logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapedId" }
+          chunkedObserver.onNext(it)
+        }
+      }
+
       agent.markMsgSent()
       agent.scrapeRequestBacklogSize.decrementAndGet()
     }
 
     logger.info { "Disconnected from proxy at ${agent.proxyHost}" }
 
-    observer.onCompleted()
+    nonchunkedObserver.onCompleted()
+    chunkedObserver.onCompleted()
   }
-
 
   companion object : KLogging()
 }

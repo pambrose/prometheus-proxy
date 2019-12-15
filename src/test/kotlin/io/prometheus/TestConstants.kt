@@ -28,7 +28,7 @@ object TestConstants {
   private const val junitFile = "etc/test-configs/junit-test.conf"
   private const val ghPrefix = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/"
 
-  val args = listOf("--config", "${if (File(travisFile).exists()) "" else ghPrefix}$travisFile")
+  val CONFIG_ARG = listOf("--config", "${if (File(travisFile).exists()) "" else ghPrefix}$travisFile")
 
   val OPTIONS_CONFIG = "${if (File(junitFile).exists()) ghPrefix else ""}$junitFile"
 }

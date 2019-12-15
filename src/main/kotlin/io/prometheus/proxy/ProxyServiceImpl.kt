@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GrpcDsl.streamObserver
+import com.google.common.collect.Maps.newConcurrentMap
 import com.google.protobuf.Empty
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
@@ -30,8 +31,10 @@ import io.prometheus.common.GrpcObjects.newRegisterAgentResponse
 import io.prometheus.common.GrpcObjects.newRegisterPathResponse
 import io.prometheus.common.GrpcObjects.newUnregisterPathResponseBuilder
 import io.prometheus.grpc.AgentInfo
+import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.HeartBeatResponse
+import io.prometheus.grpc.NonChunkedScrapeResponse
 import io.prometheus.grpc.PathMapSizeRequest
 import io.prometheus.grpc.PathMapSizeResponse
 import io.prometheus.grpc.ProxyServiceGrpc
@@ -40,11 +43,11 @@ import io.prometheus.grpc.RegisterAgentResponse
 import io.prometheus.grpc.RegisterPathRequest
 import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.ScrapeRequest
-import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
+import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.atomic.AtomicLong
 
 class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
@@ -165,22 +168,90 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
     }
   }
 
-  override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> =
+  override fun writeNonChunkedResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<NonChunkedScrapeResponse> =
       streamObserver {
-        onNext { resp ->
-          proxy.scrapeRequestManager.getFromScrapeRequestMap(resp.scrapeId)
+        onNext { response ->
+          proxy.scrapeRequestManager.getFromScrapeRequestMap(response.scrapeId)
               ?.apply {
-                scrapeResponse = resp
+                scrapeResponse = response
                 markComplete()
                 agentContext.markActivityTime(true)
-              } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${resp.scrapeId}" }
+              } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}" }
         }
 
         onError { throwable ->
           Status.fromThrowable(throwable)
               .also { arg ->
                 if (arg.code != Status.Code.CANCELLED)
-                  logger.info { "Error in writeResponsesToProxy(): $arg" }
+                  logger.error(throwable) { "Error in writeNonChunkedResponsesToProxy(): $arg" }
+              }
+
+          try {
+            responseObserver.apply {
+              onNext(Empty.getDefaultInstance())
+              onCompleted()
+            }
+          } catch (e: StatusRuntimeException) {
+            // logger.warn(e) {"StatusRuntimeException"};
+            // Ignore
+          }
+        }
+
+        onCompleted {
+          responseObserver.apply {
+            onNext(Empty.getDefaultInstance())
+            onCompleted()
+          }
+        }
+      }
+
+  override fun writeChunkedResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ChunkedScrapeResponse> =
+      streamObserver {
+
+        val chunkedContextMap: ConcurrentMap<Long, ChunkedContext> = newConcurrentMap()
+
+        onNext { response ->
+          val ooc = response.testOneofCase
+          when (ooc.name.toLowerCase()) {
+            "header" -> {
+              val scrapeId = response.header.headerScrapeId
+              logger.debug { "Reading header for scrapeId: $scrapeId}" }
+              chunkedContextMap[scrapeId] = ChunkedContext(response)
+            }
+            "chunk" -> {
+              response.chunk.apply {
+                logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
+                val context = chunkedContextMap[chunkScrapeId]
+                check(context != null) { "Missing chunked context with scrapeId: $chunkScrapeId" }
+                context.addChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
+              }
+            }
+            "summary" -> {
+              response.summary.apply {
+                val context = chunkedContextMap.remove(summaryScrapeId)
+                check(context != null) { "Missing chunked context with scrapeId: $summaryScrapeId" }
+
+                logger.debug { "Reading summary chunkCount: ${context.totalChunkCount} byteCount: ${context.totalByteCount} for scrapeId: ${response.summary.summaryScrapeId}" }
+
+                val nonChunkedResponse = context.summary(summaryChunkCount, summaryByteCount, summaryChecksum)
+                val scrapeId = nonChunkedResponse.scrapeId
+                proxy.scrapeRequestManager.getFromScrapeRequestMap(scrapeId)
+                    ?.apply {
+                      scrapeResponse = nonChunkedResponse
+                      markComplete()
+                      agentContext.markActivityTime(true)
+                    } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
+              }
+            }
+            else -> throw IllegalStateException("Invalid field name in writeChunkedResponsesToProxy()")
+          }
+        }
+
+        onError { throwable ->
+          Status.fromThrowable(throwable)
+              .also { arg ->
+                if (arg.code != Status.Code.CANCELLED)
+                  logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
               }
 
           try {

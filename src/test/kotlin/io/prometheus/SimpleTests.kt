@@ -38,15 +38,15 @@ object SimpleTests : KLogging() {
 
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
-    blockingGet("${TestConstants.PROXY_PORT}/".fixUrl()) { resp ->
-      resp.status shouldEqual HttpStatusCode.NotFound
+    blockingGet("${TestConstants.PROXY_PORT}/".fixUrl()) { response ->
+      response.status shouldEqual HttpStatusCode.NotFound
     }
   }
 
   fun invalidPathTest(caller: String) {
     logger.debug { "Calling invalidPathTest() from $caller" }
-    blockingGet("${TestConstants.PROXY_PORT}/invalid_path".fixUrl()) { resp ->
-      resp.status shouldEqual HttpStatusCode.NotFound
+    blockingGet("${TestConstants.PROXY_PORT}/invalid_path".fixUrl()) { response ->
+      response.status shouldEqual HttpStatusCode.NotFound
     }
   }
 
@@ -74,8 +74,8 @@ object SimpleTests : KLogging() {
     logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
     pathManager.registerPath(badPath, "33/metrics".fixUrl())
-    blockingGet("${TestConstants.PROXY_PORT}/$badPath".fixUrl()) { resp ->
-      resp.status shouldEqual HttpStatusCode.NotFound
+    blockingGet("${TestConstants.PROXY_PORT}/$badPath".fixUrl()) { response ->
+      response.status shouldEqual HttpStatusCode.NotFound
     }
     pathManager.unregisterPath(badPath)
   }

@@ -23,13 +23,13 @@ import com.beust.jcommander.JCommander
 import io.prometheus.Proxy
 import kotlin.system.exitProcess
 
-fun getVersionDesc(asJson: Boolean = false): String {
-  val annotation = Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java)
-  return if (asJson)
-    """{"Version": "${annotation.version}", "Release Date": "${annotation.date}"}"""
-  else
-    "Version: ${annotation.version} Release Date: ${annotation.date}"
-}
+fun getVersionDesc(asJson: Boolean = false): String =
+    Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java).run {
+      if (asJson)
+        """{"Version": "$version", "Release Date": "$date"}"""
+      else
+        "Version: $version Release Date: $date"
+    }
 
 class VersionValidator : IParameterValidator {
   override fun validate(name: String, value: String) {

@@ -28,7 +28,7 @@ import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.application.call
 import io.ktor.client.HttpClient
 import io.ktor.client.response.readText
-import io.ktor.http.ContentType
+import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpStatusCode
 import io.ktor.response.respondText
 import io.ktor.routing.get
@@ -57,6 +57,14 @@ import kotlin.time.milliseconds
 import kotlin.time.minutes
 import kotlin.time.seconds
 
+class ProxyCallTestArgs(val agent: Agent,
+                        val httpServerCount: Int,
+                        val pathCount: Int,
+                        val sequentialQueryCount: Int,
+                        val parallelQueryCount: Int,
+                        val startPort: Int = 9600,
+                        val caller: String)
+
 object ProxyTests : KLogging() {
 
   fun timeoutTest(pathManager: AgentPathManager,
@@ -67,14 +75,14 @@ object ProxyTests : KLogging() {
     logger.debug { "Calling timeoutTest() from $caller" }
 
     val httpServer =
-      embeddedServer(CIO, port = agentPort) {
-        routing {
-          get("/$agentPath") {
-            delay(10.seconds)
-            call.respondText("I got back a value", ContentType.Text.Plain)
+        embeddedServer(CIO, port = agentPort) {
+          routing {
+            get("/$agentPath") {
+              delay(10.seconds)
+              call.respondText("This is never reached", Text.Plain)
+            }
           }
         }
-      }
 
     runBlocking {
       launch(Dispatchers.Default) {
@@ -85,8 +93,8 @@ object ProxyTests : KLogging() {
     }
 
     pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".fixUrl())
-    blockingGet("$PROXY_PORT/$proxyPath".fixUrl()) { resp ->
-      resp.status shouldEqual HttpStatusCode.ServiceUnavailable
+    blockingGet("$PROXY_PORT/$proxyPath".fixUrl()) { response ->
+      response.status shouldEqual HttpStatusCode.ServiceUnavailable
     }
     pathManager.unregisterPath("/$proxyPath")
 
@@ -99,15 +107,10 @@ object ProxyTests : KLogging() {
     }
   }
 
-  class ProxyCallTestArgs(val agent: Agent,
-                          val httpServerCount: Int,
-                          val pathCount: Int,
-                          val sequentialQueryCount: Int,
-                          val parallelQueryCount: Int,
-                          val startPort: Int = 9600,
-                          val caller: String)
 
   private class HttpServerWrapper(val port: Int, val server: CIOApplicationEngine)
+
+  private val contentMap = mutableMapOf<Int, String>()
 
   fun proxyCallTest(args: ProxyCallTestArgs) {
     logger.info { "Calling proxyCallTest() from ${args.caller}" }
@@ -120,17 +123,24 @@ object ProxyTests : KLogging() {
     // Create the endpoints
     logger.info { "Creating ${args.httpServerCount} httpServers" }
     val httpServers =
-      List(args.httpServerCount) { i ->
-        val port = args.startPort + i
-        HttpServerWrapper(port = port,
-                          server = embeddedServer(CIO, port = port) {
-                            routing {
-                              get("/agent-$i") {
-                                call.respondText("value: $i", ContentType.Text.Plain)
+        List(args.httpServerCount) { i ->
+          val port = args.startPort + i
+
+          val s = "This is the content for an endpoint for server# $i on $port"
+          val builder = StringBuilder()
+          val len = if (i % 2 == 0) 100_000 else 10
+          repeat(len) { builder.append(s) }
+          contentMap[i] = builder.toString()
+
+          HttpServerWrapper(port = port,
+                            server = embeddedServer(CIO, port = port) {
+                              routing {
+                                get("/agent-$i") {
+                                  call.respondText(contentMap[i]!!, Text.Plain)
+                                }
                               }
-                            }
-                          })
-      }
+                            })
+        }
 
     logger.debug { "Starting ${args.httpServerCount} httpServers" }
 
@@ -159,58 +169,57 @@ object ProxyTests : KLogging() {
     // Call the proxy sequentially
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
     Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-      .use { dispatcher ->
-        runBlocking {
-          withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
-            newHttpClient()
-              .use { httpClient ->
-                val counter = AtomicInteger(0)
-                repeat(args.sequentialQueryCount) { cnt ->
-                  val job = launch(dispatcher + coroutineExceptionHandler(logger)) {
-                    //delay((50..100).random().milliseconds)
-                    callProxy(httpClient, pathMap, "Sequential $cnt")
-                    counter.incrementAndGet()
+        .use { dispatcher ->
+          runBlocking {
+            withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
+              newHttpClient()
+                  .use { httpClient ->
+                    val counter = AtomicInteger(0)
+                    repeat(args.sequentialQueryCount) { cnt ->
+                      val job = launch(dispatcher + coroutineExceptionHandler(logger)) {
+                        callProxy(httpClient, pathMap, "Sequential $cnt")
+                        counter.incrementAndGet()
+                      }
+
+                      job.join()
+                      job.getCancellationException().cause.shouldBeNull()
+
+                    }
+
+                    counter.get() shouldEqual args.sequentialQueryCount
                   }
-
-                  job.join()
-                  job.getCancellationException().cause.shouldBeNull()
-
-                }
-
-                counter.get() shouldEqual args.sequentialQueryCount
-              }
+            }
           }
         }
-      }
 
     // Call the proxy in parallel
     logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
     Executors.newFixedThreadPool(10).asCoroutineDispatcher()
-      .use { dispatcher ->
-        runBlocking {
-          withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
-            newHttpClient()
-              .use { httpClient ->
-                val counter = AtomicInteger(0)
-                val jobs =
-                  List(args.parallelQueryCount) { cnt ->
-                    launch(dispatcher + coroutineExceptionHandler(logger)) {
-                      delay((200..400).random().milliseconds)
-                      callProxy(httpClient, pathMap, "Parallel $cnt")
-                      counter.incrementAndGet()
+        .use { dispatcher ->
+          runBlocking {
+            withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
+              newHttpClient()
+                  .use { httpClient ->
+                    val counter = AtomicInteger(0)
+                    val jobs =
+                        List(args.parallelQueryCount) { cnt ->
+                          launch(dispatcher + coroutineExceptionHandler(logger)) {
+                            delay((200..400).random().milliseconds)
+                            callProxy(httpClient, pathMap, "Parallel $cnt")
+                            counter.incrementAndGet()
+                          }
+                        }
+
+                    jobs.forEach { job ->
+                      job.join()
+                      job.getCancellationException().cause.shouldBeNull()
                     }
+
+                    counter.get() shouldEqual args.parallelQueryCount
                   }
-
-                jobs.forEach { job ->
-                  job.join()
-                  job.getCancellationException().cause.shouldBeNull()
-                }
-
-                counter.get() shouldEqual args.parallelQueryCount
-              }
+            }
           }
         }
-      }
 
     logger.debug { "Unregistering paths" }
     val counter = AtomicInteger(0)
@@ -247,14 +256,14 @@ object ProxyTests : KLogging() {
 
     // Randomly choose one of the pathMap values
     val index = pathMap.size.random()
-    val httpVal = pathMap[index]
-    httpVal.shouldNotBeNull()
+    val httpIndex = pathMap[index]
+    httpIndex.shouldNotBeNull()
 
     http(httpClient) {
-      get("$PROXY_PORT/proxy-$index".fixUrl()) { resp ->
-        val body = resp.readText()
-        body shouldEqual "value: $httpVal"
-        resp.status shouldEqual HttpStatusCode.OK
+      get("$PROXY_PORT/proxy-$index".fixUrl()) { response ->
+        val body = response.readText()
+        body shouldEqual contentMap[httpIndex]
+        response.status shouldEqual HttpStatusCode.OK
       }
     }
   }

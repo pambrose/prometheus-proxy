@@ -31,6 +31,7 @@ enum class EnvVars {
   AGENT_CONFIG,
   PROXY_HOSTNAME,
   AGENT_NAME,
+  MAX_CONTENT_SIZE_KBS,
 
   // Common
   DEBUG_ENABLED,

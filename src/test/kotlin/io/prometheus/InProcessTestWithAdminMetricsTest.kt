@@ -19,8 +19,6 @@
 package io.prometheus
 
 import com.github.pambrose.common.util.simpleClassName
-import io.prometheus.ProxyTests.ProxyCallTestArgs
-import io.prometheus.ProxyTests.proxyCallTest
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
@@ -30,20 +28,16 @@ import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
-class InProcessTestWithAdminMetricsTest : CommonTests(agent) {
-
-  @Test
-  fun proxyCallTest() =
-      proxyCallTest(ProxyCallTestArgs(agent,
-                                      httpServerCount = 5,
-                                      pathCount = 50,
-                                      sequentialQueryCount = 500,
-                                      parallelQueryCount = 0,
-                                      startPort = 10700,
-                                      caller = simpleClassName))
+class InProcessTestWithAdminMetricsTest : CommonTests(agent,
+                                                      ProxyCallTestArgs(agent,
+                                                                        httpServerCount = 5,
+                                                                        pathCount = 50,
+                                                                        sequentialQueryCount = 200,
+                                                                        parallelQueryCount = 20,
+                                                                        startPort = 10700,
+                                                                        caller = simpleClassName)) {
 
   companion object : KLogging() {
     private lateinit var proxy: Proxy
@@ -59,7 +53,7 @@ class InProcessTestWithAdminMetricsTest : CommonTests(agent) {
           proxy = startProxy("withmetrics", adminEnabled = true, metricsEnabled = true)
         }
         launch(Dispatchers.Default) {
-          agent = startAgent("withmetrics", adminEnabled = true, metricsEnabled = true)
+          agent = startAgent(serverName = "withmetrics", adminEnabled = true, metricsEnabled = true, maxContentSizeKbs = 5)
               .apply { awaitInitialConnection(10.seconds) }
         }
       }

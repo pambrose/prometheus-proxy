@@ -44,6 +44,10 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   var overrideAuthority = ""
     private set
 
+  @Parameter(names = ["--max"], description = "Maximum content size KBs")
+  var maxContentSizeKbs = -1
+    private set
+
   init {
     parseOptions()
   }
@@ -59,9 +63,16 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
                                                 "$configHostname:${agent.proxy.port}")
       }
 
-
       if (agentName.isEmpty())
         agentName = EnvVars.AGENT_NAME.getEnv(agent.name)
+
+      if (overrideAuthority.isEmpty())
+        overrideAuthority = EnvVars.OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)
+
+      if (maxContentSizeKbs == -1)
+        maxContentSizeKbs = EnvVars.MAX_CONTENT_SIZE_KBS.getEnv(agent.maxContentSizeKbs)
+      // Multiply the value time KB
+      maxContentSizeKbs = maxContentSizeKbs * 1024
 
       assignAdminEnabled(agent.admin.enabled)
       assignAdminPort(agent.admin.port)
@@ -72,9 +83,6 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
       assignCertChainFilePath(agent.tls.certChainFilePath)
       assignPrivateKeyFilePath(agent.tls.privateKeyFilePath)
       assignTrustCertCollectionFilePath(agent.tls.trustCertCollectionFilePath)
-
-      if (overrideAuthority.isEmpty())
-        overrideAuthority = EnvVars.OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)
     }
   }
 }

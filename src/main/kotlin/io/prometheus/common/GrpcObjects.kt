@@ -18,10 +18,15 @@
 
 package io.prometheus.common
 
+import com.google.protobuf.ByteString
 import io.ktor.http.HttpStatusCode
 import io.prometheus.grpc.AgentInfo
+import io.prometheus.grpc.ChunkData
+import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.HeaderData
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.HeartBeatResponse
+import io.prometheus.grpc.NonChunkedScrapeResponse
 import io.prometheus.grpc.PathMapSizeRequest
 import io.prometheus.grpc.PathMapSizeResponse
 import io.prometheus.grpc.RegisterAgentRequest
@@ -29,30 +34,28 @@ import io.prometheus.grpc.RegisterAgentResponse
 import io.prometheus.grpc.RegisterPathRequest
 import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.ScrapeRequest
-import io.prometheus.grpc.ScrapeResponse
+import io.prometheus.grpc.SummaryData
 import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
+import java.util.zip.CRC32
 
 object GrpcObjects {
 
   fun newHeartBeatRequest(agentId: String): HeartBeatRequest =
-    HeartBeatRequest.newBuilder()
-      .run {
+      HeartBeatRequest.newBuilder().run {
         this.agentId = agentId
         build()
       }
 
   fun newHeartBeatResponse(valid: Boolean, reason: String): HeartBeatResponse =
-    HeartBeatResponse.newBuilder()
-      .run {
+      HeartBeatResponse.newBuilder().run {
         this.valid = valid
         this.reason = reason
         build()
       }
 
   fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest =
-    RegisterAgentRequest.newBuilder()
-      .run {
+      RegisterAgentRequest.newBuilder().run {
         this.agentId = agentId
         this.agentName = agentName
         this.hostName = hostName
@@ -60,8 +63,7 @@ object GrpcObjects {
       }
 
   fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse =
-    RegisterAgentResponse.newBuilder()
-      .run {
+      RegisterAgentResponse.newBuilder().run {
         this.valid = valid
         this.reason = reason
         this.agentId = agentId
@@ -69,22 +71,19 @@ object GrpcObjects {
       }
 
   fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest =
-    PathMapSizeRequest.newBuilder()
-      .run {
+      PathMapSizeRequest.newBuilder().run {
         this.agentId = agentId
         build()
       }
 
   fun newPathMapSizeResponse(pathCount: Int): PathMapSizeResponse =
-    PathMapSizeResponse.newBuilder()
-      .run {
+      PathMapSizeResponse.newBuilder().run {
         this.pathCount = pathCount
         build()
       }
 
   fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest =
-    RegisterPathRequest.newBuilder()
-      .run {
+      RegisterPathRequest.newBuilder().run {
         this.agentId = agentId
         this.path = path
         build()
@@ -94,8 +93,7 @@ object GrpcObjects {
                               reason: String,
                               pathCount: Int,
                               pathId: Long): RegisterPathResponse =
-    RegisterPathResponse.newBuilder()
-      .run {
+      RegisterPathResponse.newBuilder().run {
         this.valid = valid
         this.reason = reason
         this.pathCount = pathCount
@@ -108,8 +106,7 @@ object GrpcObjects {
                        path: String,
                        accept: String?,
                        debugEnabled: Boolean): ScrapeRequest =
-    ScrapeRequest.newBuilder()
-      .let { builder ->
+      ScrapeRequest.newBuilder().let { builder ->
         builder.agentId = agentId
         builder.scrapeId = scrapeId
         builder.path = path
@@ -134,9 +131,8 @@ object GrpcObjects {
     }
   }
 
-  fun newScrapeResponse(arg: ScrapeResponseArg): ScrapeResponse =
-    ScrapeResponse.newBuilder()
-      .run {
+  fun newScrapeResponse(arg: ScrapeResponseArg): NonChunkedScrapeResponse =
+      NonChunkedScrapeResponse.newBuilder().run {
         agentId = arg.agentId
         scrapeId = arg.scrapeId
         validResponse = arg.validResponse
@@ -148,9 +144,60 @@ object GrpcObjects {
         build()
       }
 
+  fun newScrapeResponseHeader(scrapeResponse: NonChunkedScrapeResponse): ChunkedScrapeResponse =
+      ChunkedScrapeResponse.newBuilder().let { builder ->
+        builder.header =
+            HeaderData.newBuilder().run {
+              scrapeResponse.apply {
+                headerValidResponse = validResponse
+                headerAgentId = agentId
+                headerScrapeId = scrapeId
+                headerStatusCode = statusCode
+                headerFailureReason = failureReason
+                headerUrl = url
+                headerContentType = contentType
+              }
+              build()
+            }
+        builder.build()
+      }
+
+  fun newScrapeResponseChunk(scrapeId: Long,
+                             totalChunkCount: Int,
+                             readByteCount: Int,
+                             crcChecksum: CRC32,
+                             buffer: ByteArray): ChunkedScrapeResponse =
+      ChunkedScrapeResponse.newBuilder().let { builder ->
+        builder.chunk =
+            ChunkData.newBuilder().run {
+              chunkScrapeId = scrapeId
+              chunkCount = totalChunkCount
+              chunkByteCount = readByteCount
+              chunkChecksum = crcChecksum.value
+              chunkBytes = ByteString.copyFrom(buffer)
+              build()
+            }
+        builder.build()
+      }
+
+  fun newScrapeResponseSummary(scrapeId: Long,
+                               totalChunkCount: Int,
+                               totalByteCount: Int,
+                               crcChecksum: CRC32): ChunkedScrapeResponse =
+      ChunkedScrapeResponse.newBuilder().let { builder ->
+        builder.summary =
+            SummaryData.newBuilder().run {
+              summaryScrapeId = scrapeId
+              summaryChunkCount = totalChunkCount
+              summaryByteCount = totalByteCount
+              summaryChecksum = crcChecksum.value
+              build()
+            }
+        builder.build()
+      }
+
   fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest =
-    UnregisterPathRequest.newBuilder()
-      .run {
+      UnregisterPathRequest.newBuilder().run {
         this.agentId = agentId
         this.path = path
         build()
@@ -159,8 +206,7 @@ object GrpcObjects {
   fun newUnregisterPathResponseBuilder(): UnregisterPathResponse.Builder = UnregisterPathResponse.newBuilder()
 
   fun newAgentInfo(agentId: String): AgentInfo =
-    AgentInfo.newBuilder()
-      .run {
+      AgentInfo.newBuilder().run {
         this.agentId = agentId
         build()
       }

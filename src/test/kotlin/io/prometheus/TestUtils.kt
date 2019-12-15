@@ -40,12 +40,12 @@ object TestUtils : KLogging() {
     }
 
     val proxyOptions = ProxyOptions(mutableListOf<String>()
-                                      .apply {
-                                        addAll(TestConstants.args)
-                                        addAll(argv)
-                                        add("-Dproxy.admin.enabled=$adminEnabled")
-                                        add("-Dproxy.metrics.enabled=$metricsEnabled")
-                                      })
+                                        .apply {
+                                          addAll(TestConstants.CONFIG_ARG)
+                                          addAll(argv)
+                                          add("-Dproxy.admin.enabled=$adminEnabled")
+                                          add("-Dproxy.metrics.enabled=$metricsEnabled")
+                                        })
     return Proxy(options = proxyOptions,
                  proxyHttpPort = PROXY_PORT,
                  inProcessServerName = serverName,
@@ -55,6 +55,7 @@ object TestUtils : KLogging() {
   fun startAgent(serverName: String = "",
                  adminEnabled: Boolean = false,
                  metricsEnabled: Boolean = false,
+                 maxContentSizeKbs: Int = -1,
                  argv: List<String> = emptyList()): Agent {
 
     logger.apply {
@@ -63,24 +64,26 @@ object TestUtils : KLogging() {
     }
 
     val agentOptions = AgentOptions(mutableListOf<String>()
-                                      .apply {
-                                        addAll(TestConstants.args)
-                                        addAll(argv)
-                                        add("-Dagent.admin.enabled=$adminEnabled")
-                                        add("-Dagent.metrics.enabled=$metricsEnabled")
-                                      },
+                                        .apply {
+                                          addAll(TestConstants.CONFIG_ARG)
+                                          addAll(argv)
+                                          add("-Dagent.admin.enabled=$adminEnabled")
+                                          add("-Dagent.metrics.enabled=$metricsEnabled")
+                                          if (maxContentSizeKbs != -1)
+                                            add("-Dagent.maxContentSizeKbs=$maxContentSizeKbs")
+                                        },
                                     false)
     return Agent(options = agentOptions, inProcessServerName = serverName, testMode = true) { startSync() }
   }
 }
 
 fun coroutineExceptionHandler(logger: KLogger) =
-  CoroutineExceptionHandler { _, e ->
-    if (e is ClosedSelectorException)
-      logger.info { "CoroutineExceptionHandler caught: $e" }
-    else
-      logger.warn(e) { "CoroutineExceptionHandler caught: $e" }
-  }
+    CoroutineExceptionHandler { _, e ->
+      if (e is ClosedSelectorException)
+        logger.info { "CoroutineExceptionHandler caught: $e" }
+      else
+        logger.warn(e) { "CoroutineExceptionHandler caught: $e" }
+    }
 
 fun String.fixUrl(): String {
   val prefix = "http://localhost:"
