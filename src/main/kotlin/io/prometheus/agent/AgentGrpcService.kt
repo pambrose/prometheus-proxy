@@ -286,7 +286,7 @@ class AgentGrpcService(private val agent: Agent,
     for (scrapeResponse in connectionContext.scrapeResultChannel) {
       logger.debug { "Comparing ${scrapeResponse.contentText.length} and ${options.maxContentSizeKbs}" }
       if (scrapeResponse.contentText.length < (options.maxContentSizeKbs)) {
-        logger.info { "Writing non-chunked msg scrapeId: ${scrapeResponse.scrapeId} length: ${scrapeResponse.contentText.length}" }
+        logger.debug { "Writing non-chunked msg scrapeId: ${scrapeResponse.scrapeId} length: ${scrapeResponse.contentText.length}" }
         nonchunkedObserver.onNext(scrapeResponse)
       }
       else {
@@ -308,7 +308,7 @@ class AgentGrpcService(private val agent: Agent,
                       }
               builder.build()
             }.also {
-              logger.info { "Writing header length: ${scrapeResponse.contentText.length} for scrapeId: ${scrapeResponse.scrapeId} " }
+              logger.debug { "Writing header length: ${scrapeResponse.contentText.length} for scrapeId: ${scrapeResponse.scrapeId} " }
               chunkedObserver.onNext(it)
             }
 
@@ -339,7 +339,7 @@ class AgentGrpcService(private val agent: Agent,
                         }
                 builder.build()
               }.also {
-                logger.info { "Writing chunk ${totalChunkCount} for scrapeId: ${scrapeResponse.scrapeId}" }
+                logger.debug { "Writing chunk ${totalChunkCount} for scrapeId: ${scrapeResponse.scrapeId}" }
                 chunkedObserver.onNext(it)
               }
         }
@@ -357,7 +357,7 @@ class AgentGrpcService(private val agent: Agent,
                       }
               builder.build()
             }.also {
-              logger.info { "Writing summary for scrapeID: ${scrapeResponse.scrapeId}" }
+              logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: ${scrapeResponse.scrapeId}" }
               chunkedObserver.onNext(it)
             }
       }

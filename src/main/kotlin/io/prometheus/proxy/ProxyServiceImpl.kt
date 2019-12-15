@@ -225,9 +225,10 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
           when (ooc.name.toLowerCase()) {
             "header" -> {
               val context = ChunkedContext()
-              chunkedContextMap[response.header.headerScrapeId] = context
               context.responseBuilder.apply {
                 response.header.apply {
+                  logger.debug { "Reading header for scrapeId: $headerScrapeId" }
+                  chunkedContextMap[headerScrapeId] = context
                   validResponse = headerValidResponse
                   agentId = headerAgentId
                   scrapeId = headerScrapeId
@@ -235,13 +236,12 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
                   failureReason = headerFailureReason
                   url = headerUrl
                   contentType = headerContentType
-                  logger.info { "Reading header for scrapeId: $headerScrapeId" }
                 }
               }
             }
             "chunk" -> {
               response.chunk.apply {
-                logger.info { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
+                logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
 
                 val context = chunkedContextMap[chunkScrapeId]
                 check(context != null) { "Missing chunked context with scrapeId: $chunkScrapeId" }
@@ -265,7 +265,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
                 check(context.crcChecksum.value == summaryChecksum)
                 check(context.totalChunkCount == summaryChunkCount)
                 check(context.totalByteCount == summaryByteCount)
-                logger.info { "Reading summary chunkCount: ${context.totalChunkCount} byteCount: ${context.totalByteCount} for scrapeId: ${response.summary.summaryScrapeId}" }
+                logger.debug { "Reading summary chunkCount: ${context.totalChunkCount} byteCount: ${context.totalByteCount} for scrapeId: ${response.summary.summaryScrapeId}" }
 
                 val nonChunkedResponse =
                     context.responseBuilder.run {
