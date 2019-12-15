@@ -30,6 +30,7 @@ import io.prometheus.common.GrpcObjects.newPathMapSizeResponse
 import io.prometheus.common.GrpcObjects.newRegisterAgentResponse
 import io.prometheus.common.GrpcObjects.newRegisterPathResponse
 import io.prometheus.common.GrpcObjects.newUnregisterPathResponseBuilder
+import io.prometheus.common.GrpcObjects.toScrapeResults
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeartBeatRequest
@@ -171,20 +172,15 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
   override fun writeNonChunkedResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<NonChunkedScrapeResponse> =
       streamObserver {
         onNext { response ->
-          proxy.scrapeRequestManager.getFromScrapeRequestMap(response.scrapeId)
-              ?.apply {
-                scrapeResponse = response
-                markComplete()
-                agentContext.markActivityTime(true)
-              } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${response.scrapeId}" }
+          val scrapeResults = response.toScrapeResults()
+          proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
         }
 
         onError { throwable ->
-          Status.fromThrowable(throwable)
-              .also { arg ->
-                if (arg.code != Status.Code.CANCELLED)
-                  logger.error(throwable) { "Error in writeNonChunkedResponsesToProxy(): $arg" }
-              }
+          Status.fromThrowable(throwable).also { arg ->
+            if (arg.code != Status.Code.CANCELLED)
+              logger.error(throwable) { "Error in writeNonChunkedResponsesToProxy(): $arg" }
+          }
 
           try {
             responseObserver.apply {
@@ -223,24 +219,16 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
                 logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
                 val context = chunkedContextMap[chunkScrapeId]
                 check(context != null) { "Missing chunked context with scrapeId: $chunkScrapeId" }
-                context.addChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
+                context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
               }
             }
             "summary" -> {
               response.summary.apply {
                 val context = chunkedContextMap.remove(summaryScrapeId)
                 check(context != null) { "Missing chunked context with scrapeId: $summaryScrapeId" }
-
                 logger.debug { "Reading summary chunkCount: ${context.totalChunkCount} byteCount: ${context.totalByteCount} for scrapeId: ${response.summary.summaryScrapeId}" }
-
-                val nonChunkedResponse = context.summary(summaryChunkCount, summaryByteCount, summaryChecksum)
-                val scrapeId = nonChunkedResponse.scrapeId
-                proxy.scrapeRequestManager.getFromScrapeRequestMap(scrapeId)
-                    ?.apply {
-                      scrapeResponse = nonChunkedResponse
-                      markComplete()
-                      agentContext.markActivityTime(true)
-                    } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
+                context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
+                proxy.scrapeRequestManager.assignScrapeResults(context.scrapeResults)
               }
             }
             else -> throw IllegalStateException("Invalid field name in writeChunkedResponsesToProxy()")
@@ -248,11 +236,10 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
         }
 
         onError { throwable ->
-          Status.fromThrowable(throwable)
-              .also { arg ->
-                if (arg.code != Status.Code.CANCELLED)
-                  logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
-              }
+          Status.fromThrowable(throwable).also { arg ->
+            if (arg.code != Status.Code.CANCELLED)
+              logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
+          }
 
           try {
             responseObserver.apply {

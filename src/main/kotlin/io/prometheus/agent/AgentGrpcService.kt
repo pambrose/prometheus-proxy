@@ -24,7 +24,6 @@ import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.github.pambrose.common.dsl.GrpcDsl.channel
 import com.github.pambrose.common.dsl.GrpcDsl.streamObserver
 import com.github.pambrose.common.util.simpleClassName
-import com.github.pambrose.common.util.zip
 import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
@@ -40,8 +39,10 @@ import io.prometheus.common.GrpcObjects
 import io.prometheus.common.GrpcObjects.newAgentInfo
 import io.prometheus.common.GrpcObjects.newRegisterAgentRequest
 import io.prometheus.common.GrpcObjects.newScrapeResponseChunk
-import io.prometheus.common.GrpcObjects.newScrapeResponseHeader
 import io.prometheus.common.GrpcObjects.newScrapeResponseSummary
+import io.prometheus.common.GrpcObjects.toScrapeResponse
+import io.prometheus.common.GrpcObjects.toScrapeResponseHeader
+import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceBlockingStub
 import io.prometheus.grpc.ProxyServiceGrpc.ProxyServiceStub
@@ -224,11 +225,11 @@ class AgentGrpcService(private val agent: Agent,
         newAgentInfo(agent.agentId),
         streamObserver {
           onNext { request ->
-            // This will block, but only for the duration of the send.
-            // The actual fetch happens at the other end of the channel
+            // This will block, but only very briefly for the duration of the send.
+            // The actual fetch happens at the other end of the channel, not here.
             runBlocking {
               logger.debug { "readRequestsFromProxy(): \n$request" }
-              connectionContext.scrapeRequestChannel.send { agentHttpService.fetchScrapeUrl(request) }
+              connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(request) }
               agent.scrapeRequestBacklogSize.incrementAndGet()
             }
           }
@@ -267,40 +268,41 @@ class AgentGrpcService(private val agent: Agent,
     val nonchunkedObserver = asyncStub.writeNonChunkedResponsesToProxy(emptyResponseObserver)
     val chunkedObserver = asyncStub.writeChunkedResponsesToProxy(emptyResponseObserver)
 
-    for (ncsr in connectionContext.scrapeResultChannel) {
-      val scrapedId = ncsr.scrapeId
-      val content = ncsr.contentText
+    for (scrapeResults: ScrapeResults in connectionContext.scrapeResultsChannel) {
+      val scrapedId = scrapeResults.scrapeId
+      val zipped = scrapeResults.contentZipped
 
-      logger.debug { "Comparing ${content.length} and ${options.maxContentSizeKbs}" }
-      if (content.length < (options.maxContentSizeKbs)) {
-        logger.debug { "Writing non-chunked msg scrapeId: $scrapedId length: ${content.length}" }
-        nonchunkedObserver.onNext(ncsr)
+      logger.debug { "Comparing ${zipped.size} and ${options.maxContentSizeKbs}" }
+      if (zipped.size < options.maxContentSizeKbs) {
+        logger.debug { "Writing non-chunked msg scrapeId: $scrapedId length: ${zipped.size}" }
+        val scrapeResponse = scrapeResults.toScrapeResponse()
+        nonchunkedObserver.onNext(scrapeResponse)
       }
       else {
-        newScrapeResponseHeader(ncsr).also {
-          logger.debug { "Writing header length: ${content.length} for scrapeId: $scrapedId " }
+        scrapeResults.toScrapeResponseHeader().also {
+          logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapedId " }
           chunkedObserver.onNext(it)
         }
 
         var totalByteCount = 0
         var totalChunkCount = 0
-        val crcChecksum = CRC32()
-        val bais = ByteArrayInputStream(content.zip())
+        val checksum = CRC32()
+        val bais = ByteArrayInputStream(zipped)
         val buffer = ByteArray(options.maxContentSizeKbs)
         var readByteCount: Int
 
         while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
           totalChunkCount++
           totalByteCount += readByteCount
-          crcChecksum.update(buffer, 0, buffer.size);
+          checksum.update(buffer, 0, buffer.size);
 
-          newScrapeResponseChunk(ncsr.scrapeId, totalChunkCount, readByteCount, crcChecksum, buffer).also {
+          newScrapeResponseChunk(scrapeResults.scrapeId, totalChunkCount, readByteCount, checksum, buffer).also {
             logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapedId" }
             chunkedObserver.onNext(it)
           }
         }
 
-        newScrapeResponseSummary(ncsr.scrapeId, totalChunkCount, totalByteCount, crcChecksum).also {
+        newScrapeResponseSummary(scrapeResults.scrapeId, totalChunkCount, totalByteCount, checksum).also {
           logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapedId" }
           chunkedObserver.onNext(it)
         }

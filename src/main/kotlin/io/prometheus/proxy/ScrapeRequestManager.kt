@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.Maps.newConcurrentMap
+import io.prometheus.common.ScrapeResults
 import mu.KLogging
 import java.util.concurrent.ConcurrentMap
 
@@ -35,7 +36,14 @@ class ScrapeRequestManager {
     return scrapeRequestMap.put(scrapeId, scrapeRequest)
   }
 
-  fun getFromScrapeRequestMap(scrapeId: Long) = scrapeRequestMap[scrapeId]
+  fun assignScrapeResults(scrapeResults: ScrapeResults) {
+    scrapeRequestMap[scrapeResults.scrapeId]
+        ?.also { wrapper ->
+          wrapper.scrapeResults = scrapeResults
+          wrapper.markComplete()
+          wrapper.agentContext.markActivityTime(true)
+        } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${scrapeResults.scrapeId}" }
+  }
 
   fun removeFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {
     logger.debug { "Removing scrapeId: $scrapeId from scrapeRequestMap" }

@@ -96,8 +96,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-docker pull pambrose/prometheus-proxy:1.6.0
-docker pull pambrose/prometheus-agent:1.6.0
+docker pull pambrose/prometheus-proxy:1.6.1
+docker pull pambrose/prometheus-agent:1.6.1
 ```
 
 Start a proxy container with:
@@ -106,7 +106,7 @@ Start a proxy container with:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.6.0
+        pambrose/prometheus-proxy:1.6.1
 ```
 
 Start an agent container with:
@@ -114,7 +114,7 @@ Start an agent container with:
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.6.0
+        pambrose/prometheus-agent:1.6.1
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
@@ -130,7 +130,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:1.6.0
+    pambrose/prometheus-agent:1.6.1
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
@@ -248,7 +248,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.6.0
+    pambrose/prometheus-proxy:1.6.1
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -256,7 +256,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:1.6.0
+    pambrose/prometheus-agent:1.6.1
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 

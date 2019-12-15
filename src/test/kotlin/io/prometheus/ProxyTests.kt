@@ -126,7 +126,8 @@ object ProxyTests : KLogging() {
         List(args.httpServerCount) { i ->
           val port = args.startPort + i
 
-          val s = "This is the content for an endpoint for server# $i on $port"
+          // Create fake content
+          val s = "This is the content for an endpoint for server# $i on $port\n"
           val builder = StringBuilder()
           val len = if (i % 2 == 0) 100_000 else 10
           repeat(len) { builder.append(s) }
@@ -251,7 +252,6 @@ object ProxyTests : KLogging() {
   }
 
   private suspend fun callProxy(httpClient: HttpClient, pathMap: Map<Int, Int>, msg: String) {
-
     logger.debug { "Launched $msg" }
 
     // Randomly choose one of the pathMap values
