@@ -1,3 +1,5 @@
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
 package io.prometheus
 
 import com.github.pambrose.common.util.simpleClassName

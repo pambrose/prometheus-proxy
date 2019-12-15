@@ -160,9 +160,9 @@ The only required argument is an agent config value, which should have an `agent
 | --metrics, -e         | METRICS_ENABLED <br> proxy.metrics.enabled      | false  | Enable proxy metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> proxy.metrics.port         | 8082   | Proxy metrics listen port           |
 | --debug, -b           | DEBUG_ENABLED   <br> proxy.metrics.debugEnabled | false  | Enable proxy debug servlet<br>on admin port|
-| --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath   | "" | Certificate chain file path       |
-| --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath | "" | Private key file path            |
-| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
+| --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath   |  | Certificate chain file path       |
+| --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath |  | Private key file path            |
+| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |  | Trust certificate collection file path |
 | --version, -v         |                                                 |        | Print version info and exit         |
 | --usage, -u           |                                                 |        | Print usage message and exit        |
 | -D                    |                                                 |        | Dynamic property assignment         |
@@ -180,11 +180,11 @@ The only required argument is an agent config value, which should have an `agent
 | --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
 | --debug, -b           | DEBUG_ENABLED   <br> agent.metrics.debugEnabled | false  | Enable agent debug servlet<br>on admin port|
-| --max                 | MAX_CONTENT_SIZE_KBS <br> agent.maxContentSizeKbs | "32" | Threshold for chunking data to Proxy and buffer size    |
-| --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath | "" | Certificate chain file path         |
-| --key, -k             | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath | "" | Private key file path            |
-| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath | "" | Trust certificate collection file path |
-| --override            | OVERRIDE_AUTHORITY <br> agent.tls.overrideAuthority | "" | Override authority (for testing)    |
+| --max                 | MAX_CONTENT_SIZE_KBS <br> agent.maxContentSizeKbs | 32 | Threshold for chunking data to Proxy and buffer size    |
+| --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath |  | Certificate chain file path         |
+| --key, -k             | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath |  | Private key file path            |
+| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |  | Trust certificate collection file path |
+| --override            | OVERRIDE_AUTHORITY <br> agent.tls.overrideAuthority |  | Override authority (for testing)    |
 | --version, -v         |                                              |        | Print version info and exit            |
 | --usage, -u           |                                              |        | Print usage message and exit           |
 | -D                    |                                              |        | Dynamic property assignment            |
