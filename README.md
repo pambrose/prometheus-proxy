@@ -70,9 +70,9 @@ agent {
 
 then the *prometheus.yml* scrape_config would target the three apps with:
 
-*   http://mymachine.local:8080/app1_metrics
-*   http://mymachine.local:8080/app2_metrics
-*   http://mymachine.local:8080/app3_metrics
+* http://mymachine.local:8080/app1_metrics
+* http://mymachine.local:8080/app2_metrics
+* http://mymachine.local:8080/app3_metrics
 
 The `prometheus.yml` file would include:
 
@@ -119,8 +119,8 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
 the proxy and the agent metrics would be available from the proxy on *localhost* at:
-*   http://localhost:8082/proxy_metrics
-*   http://localhost:8083/agent_metrics
+* http://localhost:8082/proxy_metrics
+* http://localhost:8083/agent_metrics
 
 If you want to use a local config file with a docker container (instead of the above HTTP-served config file), 
 use the docker [mount](https://docs.docker.com/storage/bind-mounts/) option. Assuming the config file `prom-agent.conf` 
@@ -145,7 +145,7 @@ Highlights include:
 * config values can come from CLI options, environment vars, Java system properties, and/or config files.
 * config files can reference environment variables
   
-The proxy and agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
+All the proxy and agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
 The only required argument is an agent config value, which should have an `agent.pathConfigs` value.
 
 ### Proxy CLI Options
@@ -190,20 +190,20 @@ The only required argument is an agent config value, which should have an `agent
 | -D                    |                                              |        | Dynamic property assignment            |
 
 Misc notes:
-*   If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
-*   JSON config files must have a *.json* suffix
-*   Java Properties config files must have a *.properties*  or *.prop* suffix
-*   HOCON config files must have a *.conf* suffix
-*   Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
-*   Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
+* If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
+* JSON config files must have a *.json* suffix
+* Java Properties config files must have a *.properties*  or *.prop* suffix
+* HOCON config files must have a *.conf* suffix
+* Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
+* Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
 
 ### Admin Servlets
 
 These admin servlets are available when the admin servlet is enabled:
-*   /ping 
-*   /threaddump
-*   /healthcheck
-*   /version
+* /ping 
+* /threaddump
+* /healthcheck
+* /version
 
 The admin servlets can be enabled with the `ADMIN_ENABLED` environment var, the `--admin` CLI option, or with the 
 `proxy.admin.enabled` and `agent.admin.enabled` properties.
@@ -268,6 +268,6 @@ to use `/app` as the base directory in the target for `--mount` options.
 
 ## Related Links
 
-*   [Prometheus.io](http://prometheus.io)
-*   [gRPC](http://grpc.io)
-*   [Typesafe Config](https://github.com/typesafehub/config)
+* [Prometheus.io](http://prometheus.io)
+* [gRPC](http://grpc.io)
+* [Typesafe Config](https://github.com/typesafehub/config)
