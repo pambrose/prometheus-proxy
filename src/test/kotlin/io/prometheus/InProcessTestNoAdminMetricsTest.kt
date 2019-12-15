@@ -34,8 +34,8 @@ class InProcessTestNoAdminMetricsTest : CommonTests(agent,
                                                     ProxyCallTestArgs(agent,
                                                                       httpServerCount = 5,
                                                                       pathCount = 25,
-                                                                      sequentialQueryCount = 500,
-                                                                      parallelQueryCount = 0,
+                                                                      sequentialQueryCount = 200,
+                                                                      parallelQueryCount = 20,
                                                                       startPort = 10100,
                                                                       caller = simpleClassName)) {
 
@@ -51,7 +51,7 @@ class InProcessTestNoAdminMetricsTest : CommonTests(agent,
       runBlocking {
         launch(Dispatchers.Default) { proxy = startProxy("nometrics") }
         launch(Dispatchers.Default) {
-          agent = startAgent(serverName = "nometrics").apply { awaitInitialConnection(10.seconds) }
+          agent = startAgent(serverName = "nometrics", maxContentSizeKbs = 5).apply { awaitInitialConnection(10.seconds) }
         }
       }
       logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }

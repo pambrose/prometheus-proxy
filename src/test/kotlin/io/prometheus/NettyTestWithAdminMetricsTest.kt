@@ -35,8 +35,8 @@ class NettyTestWithAdminMetricsTest : CommonTests(agent,
                                                   ProxyCallTestArgs(agent,
                                                                     httpServerCount = 5,
                                                                     pathCount = 25,
-                                                                    sequentialQueryCount = 500,
-                                                                    parallelQueryCount = 0,
+                                                                    sequentialQueryCount = 200,
+                                                                    parallelQueryCount = 20,
                                                                     startPort = 10900,
                                                                     caller = simpleClassName)) {
 
@@ -52,7 +52,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(agent,
       runBlocking {
         launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, metricsEnabled = true) }
         launch(Dispatchers.Default) {
-          agent = startAgent(adminEnabled = true, metricsEnabled = true)
+          agent = startAgent(adminEnabled = true, metricsEnabled = true, maxContentSizeKbs = 5)
               .apply { awaitInitialConnection(10.seconds) }
         }
       }

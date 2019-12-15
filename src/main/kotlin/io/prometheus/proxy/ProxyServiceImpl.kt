@@ -49,7 +49,6 @@ import io.prometheus.grpc.UnregisterPathResponse
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.io.ByteArrayOutputStream
-import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.CRC32
 
@@ -282,7 +281,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
                     } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: ${nonChunkedResponse.scrapeId}" }
               }
             }
-            else -> throw IOException("Invalid field name in writeChunkedResponsesToProxy()")
+            else -> throw IllegalStateException("Invalid field name in writeChunkedResponsesToProxy()")
           }
         }
 

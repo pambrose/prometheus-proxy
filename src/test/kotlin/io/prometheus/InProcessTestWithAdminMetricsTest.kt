@@ -34,8 +34,8 @@ class InProcessTestWithAdminMetricsTest : CommonTests(agent,
                                                       ProxyCallTestArgs(agent,
                                                                         httpServerCount = 5,
                                                                         pathCount = 50,
-                                                                        sequentialQueryCount = 500,
-                                                                        parallelQueryCount = 0,
+                                                                        sequentialQueryCount = 200,
+                                                                        parallelQueryCount = 20,
                                                                         startPort = 10700,
                                                                         caller = simpleClassName)) {
 
@@ -53,7 +53,7 @@ class InProcessTestWithAdminMetricsTest : CommonTests(agent,
           proxy = startProxy("withmetrics", adminEnabled = true, metricsEnabled = true)
         }
         launch(Dispatchers.Default) {
-          agent = startAgent(serverName = "withmetrics", adminEnabled = true, metricsEnabled = true)
+          agent = startAgent(serverName = "withmetrics", adminEnabled = true, metricsEnabled = true, maxContentSizeKbs = 5)
               .apply { awaitInitialConnection(10.seconds) }
         }
       }

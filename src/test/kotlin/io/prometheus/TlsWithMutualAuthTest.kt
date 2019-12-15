@@ -34,8 +34,8 @@ class TlsWithMutualAuthTest : CommonTests(agent,
                                           ProxyCallTestArgs(agent,
                                                             httpServerCount = 5,
                                                             pathCount = 50,
-                                                            sequentialQueryCount = 500,
-                                                            parallelQueryCount = 0,
+                                                            sequentialQueryCount = 200,
+                                                            parallelQueryCount = 20,
                                                             startPort = 10500,
                                                             caller = simpleClassName)) {
 
@@ -50,18 +50,21 @@ class TlsWithMutualAuthTest : CommonTests(agent,
 
       runBlocking {
         launch(Dispatchers.Default) {
-          proxy = startProxy("withmutualauth", argv = listOf("--agent_port", "50440",
-                                                             "--cert", "testing/certs/server1.pem",
-                                                             "--key", "testing/certs/server1.key",
-                                                             "--trust", "testing/certs/ca.pem"))
+          proxy = startProxy(serverName = "withmutualauth",
+                             argv = listOf("--agent_port", "50440",
+                                           "--cert", "testing/certs/server1.pem",
+                                           "--key", "testing/certs/server1.key",
+                                           "--trust", "testing/certs/ca.pem"))
         }
 
         launch(Dispatchers.Default) {
-          agent = startAgent("withmutualauth", argv = listOf("--proxy", "localhost:50440",
-                                                             "--cert", "testing/certs/client.pem",
-                                                             "--key", "testing/certs/client.key",
-                                                             "--trust", "testing/certs/ca.pem",
-                                                             "--override", "foo.test.google.fr"))
+          agent = startAgent(serverName = "withmutualauth",
+                             maxContentSizeKbs = 5,
+                             argv = listOf("--proxy", "localhost:50440",
+                                           "--cert", "testing/certs/client.pem",
+                                           "--key", "testing/certs/client.key",
+                                           "--trust", "testing/certs/ca.pem",
+                                           "--override", "foo.test.google.fr"))
               .apply { awaitInitialConnection(10.seconds) }
         }
       }

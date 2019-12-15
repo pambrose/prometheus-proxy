@@ -34,7 +34,7 @@ class NettyTestNoAdminMetricsTest : CommonTests(agent,
                                                 ProxyCallTestArgs(agent,
                                                                   httpServerCount = 5,
                                                                   pathCount = 50,
-                                                                  sequentialQueryCount = 500,
+                                                                  sequentialQueryCount = 200,
                                                                   parallelQueryCount = 20,
                                                                   startPort = 10500,
                                                                   caller = simpleClassName)) {

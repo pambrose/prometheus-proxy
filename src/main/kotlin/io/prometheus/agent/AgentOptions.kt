@@ -25,7 +25,6 @@ import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars
 import io.prometheus.common.EnvVars.AGENT_CONFIG
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
-import kotlin.properties.Delegates
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
     BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
@@ -45,7 +44,8 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   var overrideAuthority = ""
     private set
 
-  var maxContentSizeKbs: Int by Delegates.notNull()
+  @Parameter(names = ["--max"], description = "Maximum content size KBs")
+  var maxContentSizeKbs = -1
     private set
 
   init {
@@ -66,6 +66,14 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
       if (agentName.isEmpty())
         agentName = EnvVars.AGENT_NAME.getEnv(agent.name)
 
+      if (overrideAuthority.isEmpty())
+        overrideAuthority = EnvVars.OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)
+
+      if (maxContentSizeKbs == -1)
+        maxContentSizeKbs = EnvVars.MAX_CONTENT_SIZE_KBS.getEnv(agent.maxContentSizeKbs)
+      // Multiply the value time KB
+      maxContentSizeKbs = maxContentSizeKbs * 1024
+
       assignAdminEnabled(agent.admin.enabled)
       assignAdminPort(agent.admin.port)
       assignMetricsEnabled(agent.metrics.enabled)
@@ -75,11 +83,6 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
       assignCertChainFilePath(agent.tls.certChainFilePath)
       assignPrivateKeyFilePath(agent.tls.privateKeyFilePath)
       assignTrustCertCollectionFilePath(agent.tls.trustCertCollectionFilePath)
-
-      maxContentSizeKbs = EnvVars.MAX_CONTENT_SIZE_KBS.getEnv(agent.maxContentSizeKbs) * 1024
-
-      if (overrideAuthority.isEmpty())
-        overrideAuthority = EnvVars.OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)
     }
   }
 }
