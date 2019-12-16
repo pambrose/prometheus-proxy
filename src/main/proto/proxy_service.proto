@@ -60,7 +60,7 @@ message ScrapeRequest {
     bool debug_enabled = 5;
 }
 
-message NonChunkedScrapeResponse {
+message ScrapeResponse {
     bool valid_response = 1;
     string agent_id = 2;
     int64 scrape_id = 3;
@@ -133,7 +133,7 @@ service ProxyService {
     rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {
     }
 
-    rpc writeNonChunkedResponsesToProxy (stream NonChunkedScrapeResponse) returns (google.protobuf.Empty) {
+    rpc writeResponsesToProxy (stream ScrapeResponse) returns (google.protobuf.Empty) {
     }
 
     rpc writeChunkedResponsesToProxy (stream ChunkedScrapeResponse) returns (google.protobuf.Empty) {

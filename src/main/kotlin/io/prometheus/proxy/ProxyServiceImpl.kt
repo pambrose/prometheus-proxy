@@ -35,7 +35,6 @@ import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.HeartBeatResponse
-import io.prometheus.grpc.NonChunkedScrapeResponse
 import io.prometheus.grpc.PathMapSizeRequest
 import io.prometheus.grpc.PathMapSizeResponse
 import io.prometheus.grpc.ProxyServiceGrpc
@@ -44,6 +43,7 @@ import io.prometheus.grpc.RegisterAgentResponse
 import io.prometheus.grpc.RegisterPathRequest
 import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
 import kotlinx.coroutines.runBlocking
@@ -169,7 +169,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
     }
   }
 
-  override fun writeNonChunkedResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<NonChunkedScrapeResponse> =
+  override fun writeResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ScrapeResponse> =
       streamObserver {
         onNext { response ->
           val scrapeResults = response.toScrapeResults()
@@ -179,7 +179,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
         onError { throwable ->
           Status.fromThrowable(throwable).also { arg ->
             if (arg.code != Status.Code.CANCELLED)
-              logger.error(throwable) { "Error in writeNonChunkedResponsesToProxy(): $arg" }
+              logger.error(throwable) { "Error in writeResponsesToProxy(): $arg" }
           }
 
           try {

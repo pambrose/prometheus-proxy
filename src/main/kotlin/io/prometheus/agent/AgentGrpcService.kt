@@ -265,7 +265,7 @@ class AgentGrpcService(private val agent: Agent,
           }
         }
 
-    val nonchunkedObserver = asyncStub.writeNonChunkedResponsesToProxy(emptyResponseObserver)
+    val nonchunkedObserver = asyncStub.writeResponsesToProxy(emptyResponseObserver)
     val chunkedObserver = asyncStub.writeChunkedResponsesToProxy(emptyResponseObserver)
 
     for (scrapeResults: ScrapeResults in connectionContext.scrapeResultsChannel) {

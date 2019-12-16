@@ -25,7 +25,6 @@ import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeaderData
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.HeartBeatResponse
-import io.prometheus.grpc.NonChunkedScrapeResponse
 import io.prometheus.grpc.PathMapSizeRequest
 import io.prometheus.grpc.PathMapSizeResponse
 import io.prometheus.grpc.RegisterAgentRequest
@@ -33,6 +32,7 @@ import io.prometheus.grpc.RegisterAgentResponse
 import io.prometheus.grpc.RegisterPathRequest
 import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.SummaryData
 import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
@@ -116,7 +116,7 @@ object GrpcObjects {
       }
 
 
-  fun NonChunkedScrapeResponse.toScrapeResults(): ScrapeResults =
+  fun ScrapeResponse.toScrapeResults(): ScrapeResults =
       ScrapeResults(
           agentId = agentId,
           scrapeId = scrapeId,
@@ -128,8 +128,8 @@ object GrpcObjects {
           url = url
       )
 
-  fun ScrapeResults.toScrapeResponse(): NonChunkedScrapeResponse =
-      NonChunkedScrapeResponse.newBuilder().let { builder ->
+  fun ScrapeResults.toScrapeResponse(): ScrapeResponse =
+      ScrapeResponse.newBuilder().let { builder ->
         builder.agentId = agentId
         builder.scrapeId = scrapeId
         builder.validResponse = validResponse
