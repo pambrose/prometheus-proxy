@@ -207,7 +207,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
         val chunkedContextMap: ConcurrentMap<Long, ChunkedContext> = newConcurrentMap()
 
         onNext { response ->
-          val ooc = response.testOneofCase
+          val ooc = response.chunkOneOfCase
           when (ooc.name.toLowerCase()) {
             "header" -> {
               val scrapeId = response.header.headerScrapeId

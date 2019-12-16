@@ -92,7 +92,12 @@ class AgentHttpService(val agent: Agent) {
           responseArg.apply {
             contentType = response.headers[HttpHeaders.CONTENT_TYPE].orEmpty()
             // Zip the content here
-            contentZipped = response.readText().zip()
+            val content = response.readText()
+            zipped = content.length > 1024
+            if (zipped)
+              contentAsZipped = content.zip()
+            else
+              contentAsText = content
             validResponse = true
           }
           if (debugEnabled)

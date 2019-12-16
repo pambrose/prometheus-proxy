@@ -8,7 +8,9 @@ data class ScrapeResults(val agentId: String,
                          var validResponse: Boolean = false,
                          var statusCode: Int = HttpStatusCode.NotFound.value,
                          var contentType: String = "",
-                         var contentZipped: ByteArray = EMPTY_BYTE_ARRAY,
+                         var zipped: Boolean = false,
+                         var contentAsText: String = "",
+                         var contentAsZipped: ByteArray = EMPTY_BYTE_ARRAY,
                          var failureReason: String = "",
                          var url: String = "") {
 

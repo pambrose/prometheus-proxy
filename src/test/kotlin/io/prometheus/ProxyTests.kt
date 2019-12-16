@@ -130,7 +130,7 @@ object ProxyTests : KLogging() {
           val s = "This is the content for an endpoint for server# $i on $port\n"
           val builder = StringBuilder()
           val len = if (i % 2 == 0) 100_000 else 10
-          repeat(len) { builder.append(s) }
+          repeat(len) { builder.append(s + "${it}\n") }
           contentMap[i] = builder.toString()
 
           HttpServerWrapper(port = port,

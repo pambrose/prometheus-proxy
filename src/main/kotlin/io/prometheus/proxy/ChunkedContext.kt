@@ -19,6 +19,7 @@ class ChunkedContext(response: ChunkedScrapeResponse) {
             scrapeId = headerScrapeId,
             agentId = headerAgentId,
             statusCode = headerStatusCode,
+            zipped = true,
             failureReason = headerFailureReason,
             url = headerUrl,
             contentType = headerContentType
@@ -41,6 +42,6 @@ class ChunkedContext(response: ChunkedScrapeResponse) {
     check(checksum.value == summaryChecksum)
 
     baos.flush()
-    scrapeResults.contentZipped = baos.toByteArray()
+    scrapeResults.contentAsZipped = baos.toByteArray()
   }
 }

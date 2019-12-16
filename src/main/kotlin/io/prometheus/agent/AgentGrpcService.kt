@@ -270,41 +270,47 @@ class AgentGrpcService(private val agent: Agent,
 
     for (scrapeResults: ScrapeResults in connectionContext.scrapeResultsChannel) {
       val scrapedId = scrapeResults.scrapeId
-      val zipped = scrapeResults.contentZipped
 
-      logger.debug { "Comparing ${zipped.size} and ${options.maxContentSizeKbs}" }
-      if (zipped.size < options.maxContentSizeKbs) {
-        logger.debug { "Writing non-chunked msg scrapeId: $scrapedId length: ${zipped.size}" }
-        val scrapeResponse = scrapeResults.toScrapeResponse()
-        nonchunkedObserver.onNext(scrapeResponse)
+      if (!scrapeResults.zipped) {
+        logger.debug { "Writing non-chunked msg scrapeId: $scrapedId length: ${scrapeResults.contentAsText.length}" }
+        nonchunkedObserver.onNext(scrapeResults.toScrapeResponse())
       }
       else {
-        scrapeResults.toScrapeResponseHeader().also {
-          logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapedId " }
-          chunkedObserver.onNext(it)
+        val zipped = scrapeResults.contentAsZipped
+        logger.debug { "Comparing ${zipped.size} and ${options.maxContentSizeKbs}" }
+
+        if (zipped.size < options.maxContentSizeKbs) {
+          logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapedId length: ${zipped.size}" }
+          nonchunkedObserver.onNext(scrapeResults.toScrapeResponse())
         }
-
-        var totalByteCount = 0
-        var totalChunkCount = 0
-        val checksum = CRC32()
-        val bais = ByteArrayInputStream(zipped)
-        val buffer = ByteArray(options.maxContentSizeKbs)
-        var readByteCount: Int
-
-        while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
-          totalChunkCount++
-          totalByteCount += readByteCount
-          checksum.update(buffer, 0, buffer.size);
-
-          newScrapeResponseChunk(scrapeResults.scrapeId, totalChunkCount, readByteCount, checksum, buffer).also {
-            logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapedId" }
+        else {
+          scrapeResults.toScrapeResponseHeader().also {
+            logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapedId " }
             chunkedObserver.onNext(it)
           }
-        }
 
-        newScrapeResponseSummary(scrapeResults.scrapeId, totalChunkCount, totalByteCount, checksum).also {
-          logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapedId" }
-          chunkedObserver.onNext(it)
+          var totalByteCount = 0
+          var totalChunkCount = 0
+          val checksum = CRC32()
+          val bais = ByteArrayInputStream(zipped)
+          val buffer = ByteArray(options.maxContentSizeKbs)
+          var readByteCount: Int
+
+          while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
+            totalChunkCount++
+            totalByteCount += readByteCount
+            checksum.update(buffer, 0, buffer.size);
+
+            newScrapeResponseChunk(scrapeResults.scrapeId, totalChunkCount, readByteCount, checksum, buffer).also {
+              logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapedId" }
+              chunkedObserver.onNext(it)
+            }
+          }
+
+          newScrapeResponseSummary(scrapeResults.scrapeId, totalChunkCount, totalByteCount, checksum).also {
+            logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapedId" }
+            chunkedObserver.onNext(it)
+          }
         }
       }
 

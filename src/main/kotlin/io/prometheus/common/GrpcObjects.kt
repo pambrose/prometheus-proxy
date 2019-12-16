@@ -123,10 +123,15 @@ object GrpcObjects {
           validResponse = validResponse,
           statusCode = statusCode,
           contentType = contentType,
-          contentZipped = contentZipped.toByteArray(),
+          zipped = zipped,
           failureReason = failureReason,
           url = url
-      )
+      ).also { results ->
+        if (zipped)
+          results.contentAsZipped = contentAsZipped.toByteArray()
+        else
+          results.contentAsText = contentAsText
+      }
 
   fun ScrapeResults.toScrapeResponse(): ScrapeResponse =
       ScrapeResponse.newBuilder().let { builder ->
@@ -135,7 +140,11 @@ object GrpcObjects {
         builder.validResponse = validResponse
         builder.statusCode = statusCode
         builder.contentType = contentType
-        builder.contentZipped = ByteString.copyFrom(contentZipped)
+        builder.zipped = zipped
+        if (zipped)
+          builder.contentAsZipped = ByteString.copyFrom(contentAsZipped)
+        else
+          builder.contentAsText = contentAsText
         builder.failureReason = failureReason
         builder.url = url
         builder.build()
