@@ -22,8 +22,11 @@ import com.beust.jcommander.Parameter
 import com.google.common.collect.Iterables
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
-import io.prometheus.common.EnvVars
 import io.prometheus.common.EnvVars.AGENT_CONFIG
+import io.prometheus.common.EnvVars.AGENT_NAME
+import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
+import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
+import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
@@ -44,8 +47,12 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   var overrideAuthority = ""
     private set
 
-  @Parameter(names = ["--max"], description = "Maximum content size KBs")
-  var maxContentSizeKbs = -1
+  @Parameter(names = ["--chunk"], description = "Threshold for chunking content to Proxy and buffer size (KBs)")
+  var chunkContentSizeKbs = -1
+    private set
+
+  @Parameter(names = ["--gzip"], description = "Minimum size for content to be gzipped (Bytes)")
+  var minGzipSizeBytes = -1
     private set
 
   init {
@@ -64,15 +71,18 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
       }
 
       if (agentName.isEmpty())
-        agentName = EnvVars.AGENT_NAME.getEnv(agent.name)
+        agentName = AGENT_NAME.getEnv(agent.name)
 
       if (overrideAuthority.isEmpty())
-        overrideAuthority = EnvVars.OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)
+        overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)
 
-      if (maxContentSizeKbs == -1)
-        maxContentSizeKbs = EnvVars.MAX_CONTENT_SIZE_KBS.getEnv(agent.maxContentSizeKbs)
+      if (chunkContentSizeKbs == -1)
+        chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agent.chunkContentSizeKbs)
       // Multiply the value time KB
-      maxContentSizeKbs = maxContentSizeKbs * 1024
+      chunkContentSizeKbs = chunkContentSizeKbs * 1024
+
+      if (minGzipSizeBytes == -1)
+        minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agent.minGzipSizeBytes)
 
       assignAdminEnabled(agent.admin.enabled)
       assignAdminPort(agent.admin.port)

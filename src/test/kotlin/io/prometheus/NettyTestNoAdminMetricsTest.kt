@@ -50,7 +50,7 @@ class NettyTestNoAdminMetricsTest : CommonTests(agent,
 
       runBlocking {
         launch(Dispatchers.Default) { proxy = startProxy() }
-        launch(Dispatchers.Default) { agent = startAgent(maxContentSizeKbs = 5).apply { awaitInitialConnection(10.seconds) } }
+        launch(Dispatchers.Default) { agent = startAgent(chunkContentSizeKbs = 5).apply { awaitInitialConnection(10.seconds) } }
       }
       logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
     }

@@ -277,9 +277,9 @@ class AgentGrpcService(private val agent: Agent,
       }
       else {
         val zipped = scrapeResults.contentAsZipped
-        logger.debug { "Comparing ${zipped.size} and ${options.maxContentSizeKbs}" }
+        logger.debug { "Comparing ${zipped.size} and ${options.chunkContentSizeKbs}" }
 
-        if (zipped.size < options.maxContentSizeKbs) {
+        if (zipped.size < options.chunkContentSizeKbs) {
           logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapedId length: ${zipped.size}" }
           nonchunkedObserver.onNext(scrapeResults.toScrapeResponse())
         }
@@ -293,7 +293,7 @@ class AgentGrpcService(private val agent: Agent,
           var totalChunkCount = 0
           val checksum = CRC32()
           val bais = ByteArrayInputStream(zipped)
-          val buffer = ByteArray(options.maxContentSizeKbs)
+          val buffer = ByteArray(options.chunkContentSizeKbs)
           var readByteCount: Int
 
           while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {

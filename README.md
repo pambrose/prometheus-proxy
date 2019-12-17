@@ -180,7 +180,8 @@ The only required argument is an agent config value, which should have an `agent
 | --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
 | --debug, -b           | DEBUG_ENABLED   <br> agent.metrics.debugEnabled | false  | Enable agent debug servlet<br>on admin port|
-| --max                 | MAX_CONTENT_SIZE_KBS <br> agent.maxContentSizeKbs | 32 | Threshold for chunking data to Proxy and buffer size    |
+| --chunk               | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs | 32 | Threshold for chunking data to Proxy and buffer size (KBs) |
+| --gzip                | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes | 1024 | Minimum size for content to be gzipped (Bytes) |
 | --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath |  | Certificate chain file path         |
 | --key, -k             | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath |  | Private key file path            |
 | --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |  | Trust certificate collection file path |

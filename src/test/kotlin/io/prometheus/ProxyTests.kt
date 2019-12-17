@@ -129,7 +129,12 @@ object ProxyTests : KLogging() {
           // Create fake content
           val s = "This is the content for an endpoint for server# $i on $port\n"
           val builder = StringBuilder()
-          val len = if (i % 2 == 0) 100_000 else 10
+          val len =
+              when (i % 3) {
+                0 -> 100_000
+                1 -> 1000
+                else -> 1
+              }
           repeat(len) { builder.append(s + "${it}\n") }
           contentMap[i] = builder.toString()
 

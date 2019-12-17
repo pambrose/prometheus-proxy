@@ -53,7 +53,10 @@ class InProcessTestWithAdminMetricsTest : CommonTests(agent,
           proxy = startProxy("withmetrics", adminEnabled = true, metricsEnabled = true)
         }
         launch(Dispatchers.Default) {
-          agent = startAgent(serverName = "withmetrics", adminEnabled = true, metricsEnabled = true, maxContentSizeKbs = 5)
+          agent = startAgent(serverName = "withmetrics",
+                             adminEnabled = true,
+                             metricsEnabled = true,
+                             chunkContentSizeKbs = 5)
               .apply { awaitInitialConnection(10.seconds) }
         }
       }
