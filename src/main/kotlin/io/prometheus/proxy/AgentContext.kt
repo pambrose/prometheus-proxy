@@ -43,11 +43,11 @@ class AgentContext(private val remoteAddr: String) {
   var hostName: String by nonNullableReference()
   var agentName: String by nonNullableReference()
 
+  private val lastRequestDuration
+    get() = lastRequestTimeMark.elapsedNow()
+
   val inactivityDuration
     get() = lastActivityTimeMark.elapsedNow()
-
-  val lastRequestDuration
-    get() = lastRequestTimeMark.elapsedNow()
 
   val scrapeRequestBacklogSize: Int
     get() = channelBacklogSize.get()
