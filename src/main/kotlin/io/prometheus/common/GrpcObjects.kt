@@ -40,6 +40,9 @@ import java.util.zip.CRC32
 
 object GrpcObjects {
 
+  const val EMPTY_AGENTID = "Empty agentId"
+  const val EMPTY_PATH = "Empty path"
+
   fun newHeartBeatRequest(agentId: String): HeartBeatRequest =
       HeartBeatRequest.newBuilder().run {
         this.agentId = agentId
@@ -54,7 +57,7 @@ object GrpcObjects {
       }
 
   fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest {
-    require(agentId.isNotEmpty()) { "Empty agentId" }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     return RegisterAgentRequest.newBuilder().run {
       this.agentId = agentId
       this.agentName = agentName
@@ -64,7 +67,7 @@ object GrpcObjects {
   }
 
   fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse {
-    require(agentId.isNotEmpty()) { "Empty agentId" }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     return RegisterAgentResponse.newBuilder().run {
       this.valid = valid
       this.reason = reason
@@ -74,7 +77,7 @@ object GrpcObjects {
   }
 
   fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest {
-    require(agentId.isNotEmpty()) { "Empty agentId" }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     return PathMapSizeRequest.newBuilder().run {
       this.agentId = agentId
       build()
@@ -88,8 +91,8 @@ object GrpcObjects {
       }
 
   fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest {
-    require(agentId.isNotEmpty()) { "Empty agentId" }
-    require(path.isNotEmpty()) { "Empty path" }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(path.isNotEmpty()) { EMPTY_PATH }
     return RegisterPathRequest.newBuilder().run {
       this.agentId = agentId
       this.path = path
@@ -114,7 +117,7 @@ object GrpcObjects {
                        path: String,
                        accept: String?,
                        debugEnabled: Boolean): ScrapeRequest {
-    require(agentId.isNotEmpty()) { "Empty agentId" }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     return ScrapeRequest.newBuilder().let { builder ->
       builder.agentId = agentId
       builder.scrapeId = scrapeId
@@ -212,8 +215,8 @@ object GrpcObjects {
       }
 
   fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest {
-    require(agentId.isNotEmpty()) { "Empty agentId" }
-    require(path.isNotEmpty()) { "Empty path" }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(path.isNotEmpty()) { EMPTY_PATH }
     return UnregisterPathRequest.newBuilder().run {
       this.agentId = agentId
       this.path = path
@@ -224,7 +227,7 @@ object GrpcObjects {
   fun newUnregisterPathResponseBuilder(): UnregisterPathResponse.Builder = UnregisterPathResponse.newBuilder()
 
   fun newAgentInfo(agentId: String): AgentInfo {
-    require(agentId.isNotEmpty()) { "Empty agentId" }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     return AgentInfo.newBuilder().run {
       this.agentId = agentId
       build()

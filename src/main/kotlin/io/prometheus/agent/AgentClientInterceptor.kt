@@ -28,6 +28,7 @@ import io.grpc.Metadata
 import io.grpc.MethodDescriptor
 import io.prometheus.Agent
 import io.prometheus.Proxy
+import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
 import mu.KLogging
 
 class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
@@ -52,7 +53,7 @@ class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
                     if (agent.agentId.isEmpty()) {
                       headers.get(Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER))?.also {
                         agent.agentId = it
-                        check(agent.agentId.isNotEmpty()) { "Empty agentId" }
+                        check(agent.agentId.isNotEmpty()) { EMPTY_AGENTID }
                         logger.debug { "Assigned agentId to $agent" }
                       } ?: logger.error { "Headers missing AGENT_ID key" }
                     }

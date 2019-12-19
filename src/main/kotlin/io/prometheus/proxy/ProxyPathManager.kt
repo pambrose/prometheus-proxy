@@ -19,6 +19,8 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.Maps.newConcurrentMap
+import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
+import io.prometheus.common.GrpcObjects.EMPTY_PATH
 import io.prometheus.grpc.UnregisterPathResponse
 import mu.KLogging
 import java.util.concurrent.ConcurrentMap
@@ -35,7 +37,7 @@ class ProxyPathManager(private val isTestMode: Boolean) {
     get() = pathMap.size
 
   fun addPath(path: String, agentContext: AgentContext) {
-    require(path.isNotEmpty()) { "Empty path" }
+    require(path.isNotEmpty()) { EMPTY_PATH }
     synchronized(pathMap) {
       pathMap[path] = agentContext
       if (!isTestMode)
@@ -44,8 +46,8 @@ class ProxyPathManager(private val isTestMode: Boolean) {
   }
 
   fun removePath(path: String, agentId: String, responseBuilder: UnregisterPathResponse.Builder) {
-    require(path.isNotEmpty()) { "Empty path" }
-    require(agentId.isNotEmpty()) { "Empty agentId" }
+    require(path.isNotEmpty()) { EMPTY_PATH }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     synchronized(pathMap) {
       val agentContext = pathMap[path]
       when {
@@ -79,7 +81,7 @@ class ProxyPathManager(private val isTestMode: Boolean) {
   }
 
   fun removePathByAgentId(agentId: String) {
-    require(agentId.isNotEmpty()) { "Empty agentId" }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     synchronized(pathMap) {
       pathMap.forEach { (k, v) ->
         if (v.agentId == agentId)

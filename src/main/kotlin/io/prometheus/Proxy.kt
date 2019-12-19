@@ -35,6 +35,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
+import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
@@ -167,7 +168,7 @@ class Proxy(val options: ProxyOptions,
   }
 
   fun removeAgentContext(agentId: String): AgentContext? {
-    require(agentId.isNotEmpty()) { "Empty agentId" }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     return agentContextManager.removeAgentContext(agentId).let { agentContext ->
       if (agentContext == null)
         logger.error { "Missing AgentContext for agentId: $agentId" }
