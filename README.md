@@ -96,8 +96,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-docker pull pambrose/prometheus-proxy:1.6.1
-docker pull pambrose/prometheus-agent:1.6.1
+docker pull pambrose/prometheus-proxy:1.6.2
+docker pull pambrose/prometheus-agent:1.6.2
 ```
 
 Start a proxy container with:
@@ -106,7 +106,7 @@ Start a proxy container with:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.6.1
+        pambrose/prometheus-proxy:1.6.2
 ```
 
 Start an agent container with:
@@ -114,7 +114,7 @@ Start an agent container with:
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.6.1
+        pambrose/prometheus-agent:1.6.2
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
@@ -130,7 +130,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:1.6.1
+    pambrose/prometheus-agent:1.6.2
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
@@ -180,7 +180,8 @@ The only required argument is an agent config value, which should have an `agent
 | --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
 | --debug, -b           | DEBUG_ENABLED   <br> agent.metrics.debugEnabled | false  | Enable agent debug servlet<br>on admin port|
-| --max                 | MAX_CONTENT_SIZE_KBS <br> agent.maxContentSizeKbs | 32 | Threshold for chunking data to Proxy and buffer size    |
+| --chunk               | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs | 32 | Threshold for chunking data to Proxy and buffer size (KBs) |
+| --gzip                | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes | 1024 | Minimum size for content to be gzipped (Bytes) |
 | --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath |  | Certificate chain file path         |
 | --key, -k             | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath |  | Private key file path            |
 | --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |  | Trust certificate collection file path |
@@ -248,7 +249,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.6.1
+    pambrose/prometheus-proxy:1.6.2
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -256,7 +257,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:1.6.1
+    pambrose/prometheus-agent:1.6.2
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 

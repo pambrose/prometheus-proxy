@@ -6,50 +6,50 @@ option java_multiple_files = true;
 option java_package = "io.prometheus.grpc";
 
 message RegisterAgentRequest {
-  string agent_id = 1;
-  string agent_name = 2;
-  string host_name = 3;
+    string agent_id = 1;
+    string agent_name = 2;
+    string host_name = 3;
 }
 
 message RegisterAgentResponse {
-  bool valid = 1;
-  string reason = 2;
-  string agent_id = 3;
-  string proxy_url = 4;
+    bool valid = 1;
+    string reason = 2;
+    string agent_id = 3;
+    string proxy_url = 4;
 }
 
 message RegisterPathRequest {
-  string agent_id = 1;
-  string path = 2;
+    string agent_id = 1;
+    string path = 2;
 }
 
 message RegisterPathResponse {
-  bool valid = 1;
-  string reason = 2;
-  int32 path_count = 3;
-  int64 path_id = 4;
+    bool valid = 1;
+    string reason = 2;
+    int32 path_count = 3;
+    int64 path_id = 4;
 }
 
 message UnregisterPathRequest {
-  string agent_id = 1;
-  string path = 2;
+    string agent_id = 1;
+    string path = 2;
 }
 
 message UnregisterPathResponse {
-  bool valid = 1;
-  string reason = 2;
+    bool valid = 1;
+    string reason = 2;
 }
 
 message PathMapSizeRequest {
-  string agent_id = 1;
+    string agent_id = 1;
 }
 
 message PathMapSizeResponse {
-  int32 path_count = 1;
+    int32 path_count = 1;
 }
 
 message AgentInfo {
-  string agent_id = 1;
+    string agent_id = 1;
 }
 
 message ScrapeRequest {
@@ -60,7 +60,7 @@ message ScrapeRequest {
     bool debug_enabled = 5;
 }
 
-message NonChunkedScrapeResponse {
+message ScrapeResponse {
     bool valid_response = 1;
     string agent_id = 2;
     int64 scrape_id = 3;
@@ -68,16 +68,20 @@ message NonChunkedScrapeResponse {
     string failure_reason = 5;
     string url = 6;
     string content_type = 7;
-    bytes content_zipped = 8;
+    bool zipped = 8;
+    oneof content_one_of {
+        string content_as_text = 9;
+        bytes content_as_zipped = 10;
+    }
 }
 
 message ChunkedScrapeResponse {
-  oneof test_oneof {
-    // Changes to the field names meta, data, and summary are hard-coded in the impl code
-    HeaderData header = 1;
-    ChunkData chunk = 2;
-    SummaryData summary = 3;
-  }
+    oneof chunk_one_of {
+        // Changes to the field names meta, data, and summary are hard-coded in the impl code
+        HeaderData header = 1;
+        ChunkData chunk = 2;
+        SummaryData summary = 3;
+    }
 }
 
 message HeaderData {
@@ -110,8 +114,8 @@ message HeartBeatRequest {
 }
 
 message HeartBeatResponse {
-  bool valid = 1;
-  string reason = 2;
+    bool valid = 1;
+    string reason = 2;
 }
 
 service ProxyService {
@@ -119,7 +123,7 @@ service ProxyService {
     }
 
     rpc registerAgent (RegisterAgentRequest) returns (RegisterAgentResponse) {
-  }
+    }
 
     rpc registerPath (RegisterPathRequest) returns (RegisterPathResponse) {
     }
@@ -133,7 +137,7 @@ service ProxyService {
     rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {
     }
 
-    rpc writeNonChunkedResponsesToProxy (stream NonChunkedScrapeResponse) returns (google.protobuf.Empty) {
+    rpc writeResponsesToProxy (stream ScrapeResponse) returns (google.protobuf.Empty) {
     }
 
     rpc writeChunkedResponsesToProxy (stream ChunkedScrapeResponse) returns (google.protobuf.Empty) {

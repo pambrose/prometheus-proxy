@@ -31,7 +31,7 @@ import kotlin.time.seconds
 class AgentContextCleanupService(private val proxy: Proxy,
                                  private val configVals: ConfigVals.Proxy2.Internal2,
                                  initBlock: (AgentContextCleanupService.() -> Unit) = {}) :
-  GenericExecutionThreadService() {
+    GenericExecutionThreadService() {
 
   init {
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
@@ -43,24 +43,23 @@ class AgentContextCleanupService(private val proxy: Proxy,
     val pauseTime = configVals.staleAgentCheckPauseSecs.seconds
     while (isRunning) {
       proxy.agentContextManager.agentContextMap
-        .forEach { (agentId, agentContext) ->
-          val inactivityDuration = agentContext.inactivityDuration
-          if (inactivityDuration > maxInactivityTime) {
-            logger.info { "Evicting agent after $inactivityDuration of inactivty $agentContext" }
-            proxy.removeAgentContext(agentId)
-            if (proxy.isMetricsEnabled)
-              proxy.metrics.agentEvictions.inc()
+          .forEach { (agentId, agentContext) ->
+            val inactivityDuration = agentContext.inactivityDuration
+            if (inactivityDuration > maxInactivityTime) {
+              logger.info { "Evicting agent after $inactivityDuration of inactivty $agentContext" }
+              proxy.removeAgentContext(agentId)
+              proxy.metrics { agentEvictionCount.inc() }
+            }
           }
-        }
       sleep(pauseTime)
     }
   }
 
   override fun toString() =
-    toStringElements {
-      add("max inactivity secs", configVals.maxAgentInactivitySecs)
-      add("pause secs", configVals.staleAgentCheckPauseSecs)
-    }
+      toStringElements {
+        add("max inactivity secs", configVals.maxAgentInactivitySecs)
+        add("pause secs", configVals.staleAgentCheckPauseSecs)
+      }
 
   companion object : KLogging()
 }

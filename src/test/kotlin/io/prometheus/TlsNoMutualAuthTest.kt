@@ -58,7 +58,7 @@ class TlsNoMutualAuthTest : CommonTests(agent,
 
         launch(Dispatchers.Default) {
           agent = startAgent(serverName = "nomutualauth",
-                             maxContentSizeKbs = 5,
+                             chunkContentSizeKbs = 5,
                              argv = listOf("--proxy", "localhost:50440",
                                            "--trust", "testing/certs/ca.pem",
                                            "--override", "foo.test.google.fr"))

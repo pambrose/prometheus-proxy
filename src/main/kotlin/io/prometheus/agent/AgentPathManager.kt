@@ -20,6 +20,7 @@ package io.prometheus.agent
 
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Agent
+import io.prometheus.common.GrpcObjects.EMPTY_PATH
 import mu.KLogging
 import java.util.concurrent.ConcurrentMap
 
@@ -56,6 +57,8 @@ class AgentPathManager(private val agent: Agent) {
       }
 
   fun registerPath(pathVal: String, url: String) {
+    require(pathVal.isNotEmpty()) { EMPTY_PATH }
+    require(url.isNotEmpty()) { "Empty URL" }
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
     val pathId = agent.grpcService.registerPathOnProxy(path)
     if (!agent.isTestMode)
@@ -64,6 +67,7 @@ class AgentPathManager(private val agent: Agent) {
   }
 
   fun unregisterPath(pathVal: String) {
+    require(pathVal.isNotEmpty()) { EMPTY_PATH }
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
     agent.grpcService.unregisterPathOnProxy(path)
     val pathContext = pathContextMap.remove(path)

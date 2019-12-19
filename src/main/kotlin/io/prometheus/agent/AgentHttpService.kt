@@ -92,7 +92,12 @@ class AgentHttpService(val agent: Agent) {
           responseArg.apply {
             contentType = response.headers[HttpHeaders.CONTENT_TYPE].orEmpty()
             // Zip the content here
-            contentZipped = response.readText().zip()
+            val content = response.readText()
+            zipped = content.length > agent.configVals.agent.minGzipSizeBytes
+            if (zipped)
+              contentAsZipped = content.zip()
+            else
+              contentAsText = content
             validResponse = true
           }
           if (debugEnabled)
@@ -101,7 +106,7 @@ class AgentHttpService(val agent: Agent) {
         }
         else {
           if (debugEnabled)
-            responseArg.setDebugInfo(url, "Unsucessful response code ${responseArg.statusCode}")
+            responseArg.setDebugInfo(url, "Unsuccessful response code ${responseArg.statusCode}")
           scrapeCounterMsg.set("unsuccessful")
         }
       }

@@ -150,9 +150,9 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                       proxy.logActivity(status)
 
                       responseResults.apply {
-                        contentText = response.contentText
-                        contentType = response.contentType
                         statusCode = response.statusCode
+                        contentType = response.contentType
+                        contentText = response.contentText
                         updateMsg = response.updateMsg
                       }
                     }
@@ -258,22 +258,26 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
 
                       // Do not return content on error status codes
                       return if (!statusCode.isSuccess()) {
-                        ScrapeRequestResponse(statusCode = statusCode,
-                                              contentType = contentType,
-                                              failureReason = scrapeRequest.scrapeResults.failureReason,
-                                              url = scrapeRequest.scrapeResults.url,
-                                              updateMsg = "path_not_found",
-                                              fetchDuration = scrapeRequest.ageDuration())
+                        scrapeRequest.scrapeResults.run {
+                          ScrapeRequestResponse(statusCode = statusCode,
+                                                contentType = contentType,
+                                                failureReason = failureReason,
+                                                url = url,
+                                                updateMsg = "path_not_found",
+                                                fetchDuration = scrapeRequest.ageDuration())
+                        }
                       }
                       else {
-                        ScrapeRequestResponse(statusCode = statusCode,
-                                              contentType = contentType,
-                            // Unzip content here
-                                              contentText = scrapeRequest.scrapeResults.contentZipped.unzip(),
-                                              failureReason = scrapeRequest.scrapeResults.failureReason,
-                                              url = scrapeRequest.scrapeResults.url,
-                                              updateMsg = "success",
-                                              fetchDuration = scrapeRequest.ageDuration())
+                        scrapeRequest.scrapeResults.run {
+                          // Unzip content here
+                          ScrapeRequestResponse(statusCode = statusCode,
+                                                contentType = contentType,
+                                                contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
+                                                failureReason = failureReason,
+                                                url = url,
+                                                updateMsg = "success",
+                                                fetchDuration = scrapeRequest.ageDuration())
+                        }
                       }
                     }
               }
@@ -281,8 +285,8 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
   }
 
   private fun updateScrapeRequests(type: String) {
-    if (proxy.isMetricsEnabled && type.isNotEmpty())
-      proxy.metrics.scrapeRequests.labels(type).inc()
+    if (type.isNotEmpty())
+      proxy.metrics { scrapeRequestCount.labels(type).inc() }
   }
 
   override fun toString() = toStringElements { add("port", httpPort) }

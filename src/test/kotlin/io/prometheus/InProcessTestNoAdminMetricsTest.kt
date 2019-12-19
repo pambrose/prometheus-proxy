@@ -51,7 +51,7 @@ class InProcessTestNoAdminMetricsTest : CommonTests(agent,
       runBlocking {
         launch(Dispatchers.Default) { proxy = startProxy("nometrics") }
         launch(Dispatchers.Default) {
-          agent = startAgent(serverName = "nometrics", maxContentSizeKbs = 5).apply { awaitInitialConnection(10.seconds) }
+          agent = startAgent(serverName = "nometrics", chunkContentSizeKbs = 5).apply { awaitInitialConnection(10.seconds) }
         }
       }
       logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }

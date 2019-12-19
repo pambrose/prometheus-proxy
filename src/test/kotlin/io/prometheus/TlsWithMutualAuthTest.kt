@@ -59,7 +59,7 @@ class TlsWithMutualAuthTest : CommonTests(agent,
 
         launch(Dispatchers.Default) {
           agent = startAgent(serverName = "withmutualauth",
-                             maxContentSizeKbs = 5,
+                             chunkContentSizeKbs = 5,
                              argv = listOf("--proxy", "localhost:50440",
                                            "--cert", "testing/certs/client.pem",
                                            "--key", "testing/certs/client.key",

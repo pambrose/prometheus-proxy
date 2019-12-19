@@ -24,8 +24,11 @@ import java.util.concurrent.ConcurrentMap
 class AgentContextManager {
   // Map agent_id to AgentContext
   val agentContextMap: ConcurrentMap<String, AgentContext> = newConcurrentMap()
-
   val agentContextSize: Int get() = agentContextMap.size
+
+  // Map scrape_id to ChunkedContext
+  val chunkedContextMap: ConcurrentMap<Long, ChunkedContext> = newConcurrentMap()
+  val chunkedContextSize: Int get() = chunkedContextMap.size
 
   val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.map { it.scrapeRequestBacklogSize }.sum()
 

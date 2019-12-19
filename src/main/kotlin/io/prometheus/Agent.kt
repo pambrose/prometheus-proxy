@@ -117,6 +117,7 @@ class Agent(val options: AgentOptions,
         logger.info { "Disconnected from proxy at $proxyHost" }
       } catch (e: Throwable) {
         // Catch anything else to avoid exiting retry loop
+        logger.warn(e) { "Throwable caught" }
       } finally {
         logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
       }
@@ -140,6 +141,7 @@ class Agent(val options: AgentOptions,
     // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != ""
     if (agentId.isNotEmpty()) {
       grpcService.resetGrpcStubs()
+      logger.info { "Resetting agentId" }
       agentId = ""
     }
 
@@ -190,8 +192,8 @@ class Agent(val options: AgentOptions,
       }
 
   fun updateScrapeCounter(type: String) {
-    if (isMetricsEnabled && type.isNotEmpty())
-      metrics.scrapeRequests.labels(type).inc()
+    if (type.isNotEmpty())
+      metrics { scrapeRequestCount.labels(type).inc() }
   }
 
   fun markMsgSent() {
@@ -200,6 +202,11 @@ class Agent(val options: AgentOptions,
 
   fun awaitInitialConnection(timeout: Duration) =
       initialConnectionLatch.await(timeout.toLongMilliseconds(), MILLISECONDS)
+
+  fun metrics(args: AgentMetrics.() -> Unit) {
+    if (isMetricsEnabled)
+      args.invoke(metrics)
+  }
 
   override fun shutDown() {
     grpcService.shutDown()
@@ -235,12 +242,10 @@ class Agent(val options: AgentOptions,
   companion object : KLogging() {
     @JvmStatic
     fun main(argv: Array<String>) {
-
       logger.apply {
         info { getBanner("banners/agent.txt", this) }
         info { getVersionDesc(false) }
       }
-
       Agent(options = AgentOptions(argv, true)) { startSync() }
     }
   }

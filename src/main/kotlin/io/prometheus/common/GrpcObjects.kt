@@ -25,7 +25,6 @@ import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeaderData
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.HeartBeatResponse
-import io.prometheus.grpc.NonChunkedScrapeResponse
 import io.prometheus.grpc.PathMapSizeRequest
 import io.prometheus.grpc.PathMapSizeResponse
 import io.prometheus.grpc.RegisterAgentRequest
@@ -33,12 +32,16 @@ import io.prometheus.grpc.RegisterAgentResponse
 import io.prometheus.grpc.RegisterPathRequest
 import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.SummaryData
 import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
 import java.util.zip.CRC32
 
 object GrpcObjects {
+
+  const val EMPTY_AGENTID = "Empty agentId"
+  const val EMPTY_PATH = "Empty path"
 
   fun newHeartBeatRequest(agentId: String): HeartBeatRequest =
       HeartBeatRequest.newBuilder().run {
@@ -53,27 +56,33 @@ object GrpcObjects {
         build()
       }
 
-  fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest =
-      RegisterAgentRequest.newBuilder().run {
-        this.agentId = agentId
-        this.agentName = agentName
-        this.hostName = hostName
-        build()
-      }
+  fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest {
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    return RegisterAgentRequest.newBuilder().run {
+      this.agentId = agentId
+      this.agentName = agentName
+      this.hostName = hostName
+      build()
+    }
+  }
 
-  fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse =
-      RegisterAgentResponse.newBuilder().run {
-        this.valid = valid
-        this.reason = reason
-        this.agentId = agentId
-        build()
-      }
+  fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse {
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    return RegisterAgentResponse.newBuilder().run {
+      this.valid = valid
+      this.reason = reason
+      this.agentId = agentId
+      build()
+    }
+  }
 
-  fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest =
-      PathMapSizeRequest.newBuilder().run {
-        this.agentId = agentId
-        build()
-      }
+  fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest {
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    return PathMapSizeRequest.newBuilder().run {
+      this.agentId = agentId
+      build()
+    }
+  }
 
   fun newPathMapSizeResponse(pathCount: Int): PathMapSizeResponse =
       PathMapSizeResponse.newBuilder().run {
@@ -81,12 +90,15 @@ object GrpcObjects {
         build()
       }
 
-  fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest =
-      RegisterPathRequest.newBuilder().run {
-        this.agentId = agentId
-        this.path = path
-        build()
-      }
+  fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest {
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(path.isNotEmpty()) { EMPTY_PATH }
+    return RegisterPathRequest.newBuilder().run {
+      this.agentId = agentId
+      this.path = path
+      build()
+    }
+  }
 
   fun newRegisterPathResponse(valid: Boolean,
                               reason: String,
@@ -104,38 +116,49 @@ object GrpcObjects {
                        scrapeId: Long,
                        path: String,
                        accept: String?,
-                       debugEnabled: Boolean): ScrapeRequest =
-      ScrapeRequest.newBuilder().let { builder ->
-        builder.agentId = agentId
-        builder.scrapeId = scrapeId
-        builder.path = path
-        builder.debugEnabled = debugEnabled
-        if (!accept.isNullOrBlank())
-          builder.accept = accept
-        builder.build()
-      }
+                       debugEnabled: Boolean): ScrapeRequest {
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    return ScrapeRequest.newBuilder().let { builder ->
+      builder.agentId = agentId
+      builder.scrapeId = scrapeId
+      builder.path = path
+      builder.debugEnabled = debugEnabled
+      if (!accept.isNullOrBlank())
+        builder.accept = accept
+      builder.build()
+    }
+  }
 
 
-  fun NonChunkedScrapeResponse.toScrapeResults(): ScrapeResults =
+  fun ScrapeResponse.toScrapeResults(): ScrapeResults =
       ScrapeResults(
           agentId = agentId,
           scrapeId = scrapeId,
           validResponse = validResponse,
           statusCode = statusCode,
           contentType = contentType,
-          contentZipped = contentZipped.toByteArray(),
+          zipped = zipped,
           failureReason = failureReason,
           url = url
-      )
+      ).also { results ->
+        if (zipped)
+          results.contentAsZipped = contentAsZipped.toByteArray()
+        else
+          results.contentAsText = contentAsText
+      }
 
-  fun ScrapeResults.toScrapeResponse(): NonChunkedScrapeResponse =
-      NonChunkedScrapeResponse.newBuilder().let { builder ->
+  fun ScrapeResults.toScrapeResponse(): ScrapeResponse =
+      ScrapeResponse.newBuilder().let { builder ->
         builder.agentId = agentId
         builder.scrapeId = scrapeId
         builder.validResponse = validResponse
         builder.statusCode = statusCode
         builder.contentType = contentType
-        builder.contentZipped = ByteString.copyFrom(contentZipped)
+        builder.zipped = zipped
+        if (zipped)
+          builder.contentAsZipped = ByteString.copyFrom(contentAsZipped)
+        else
+          builder.contentAsText = contentAsText
         builder.failureReason = failureReason
         builder.url = url
         builder.build()
@@ -191,18 +214,23 @@ object GrpcObjects {
         builder.build()
       }
 
-  fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest =
-      UnregisterPathRequest.newBuilder().run {
-        this.agentId = agentId
-        this.path = path
-        build()
-      }
+  fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest {
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(path.isNotEmpty()) { EMPTY_PATH }
+    return UnregisterPathRequest.newBuilder().run {
+      this.agentId = agentId
+      this.path = path
+      build()
+    }
+  }
 
   fun newUnregisterPathResponseBuilder(): UnregisterPathResponse.Builder = UnregisterPathResponse.newBuilder()
 
-  fun newAgentInfo(agentId: String): AgentInfo =
-      AgentInfo.newBuilder().run {
-        this.agentId = agentId
-        build()
-      }
+  fun newAgentInfo(agentId: String): AgentInfo {
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    return AgentInfo.newBuilder().run {
+      this.agentId = agentId
+      build()
+    }
+  }
 }

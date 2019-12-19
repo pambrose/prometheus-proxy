@@ -19,6 +19,8 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.Maps.newConcurrentMap
+import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
+import io.prometheus.common.GrpcObjects.EMPTY_PATH
 import io.prometheus.grpc.UnregisterPathResponse
 import mu.KLogging
 import java.util.concurrent.ConcurrentMap
@@ -35,6 +37,7 @@ class ProxyPathManager(private val isTestMode: Boolean) {
     get() = pathMap.size
 
   fun addPath(path: String, agentContext: AgentContext) {
+    require(path.isNotEmpty()) { EMPTY_PATH }
     synchronized(pathMap) {
       pathMap[path] = agentContext
       if (!isTestMode)
@@ -43,65 +46,63 @@ class ProxyPathManager(private val isTestMode: Boolean) {
   }
 
   fun removePath(path: String, agentId: String, responseBuilder: UnregisterPathResponse.Builder) {
+    require(path.isNotEmpty()) { EMPTY_PATH }
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     synchronized(pathMap) {
       val agentContext = pathMap[path]
       when {
         agentContext == null -> {
           val msg = "Unable to remove path /$path - path not found"
           logger.error { msg }
-          responseBuilder
-            .apply {
-              this.valid = false
-              this.reason = msg
-            }
+          responseBuilder.apply {
+            valid = false
+            reason = msg
+          }
         }
         agentContext.agentId != agentId -> {
-          val msg =
-            "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
+          val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
           logger.error { msg }
-          responseBuilder
-            .apply {
-              this.valid = false
-              this.reason = msg
-            }
+          responseBuilder.apply {
+            valid = false
+            reason = msg
+          }
         }
         else -> {
           pathMap.remove(path)
           if (!isTestMode)
             logger.info { "Removed path /$path for $agentContext" }
-          responseBuilder
-            .apply {
-              this.valid = true
-              this.reason = ""
-            }
+          responseBuilder.apply {
+            valid = true
+            reason = ""
+          }
         }
       }
     }
   }
 
-  fun removePathByAgentId(agentId: String?) =
-    if (agentId.isNullOrEmpty())
-      logger.error { "Missing agentId" }
-    else
-      synchronized(pathMap) {
-        pathMap.forEach { (k, v) ->
-          if (v.agentId == agentId)
-            pathMap.remove(k)?.also { logger.info { "Removed path /$k for $it" } }
+  fun removePathByAgentId(agentId: String) {
+    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    synchronized(pathMap) {
+      pathMap.forEach { (k, v) ->
+        if (v.agentId == agentId)
+          pathMap.remove(k)?.also { if (!isTestMode) logger.info { "Removed path /$k for context: $it" } }
               ?: logger.error { "Missing path /$k for agentId: $agentId" }
-        }
       }
+    }
+  }
 
   fun toPlainText() =
-    if (pathMap.isEmpty()) {
-      "No agents connected."
-    } else {
-      val maxPath = pathMap.keys.map { it.length }.max() ?: 0
-      "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
-          pathMap
-            .toSortedMap()
-            .map { c -> "/${c.key.padEnd(maxPath)} ${c.value}" }
-            .joinToString("\n")
-    }
+      if (pathMap.isEmpty()) {
+        "No agents connected."
+      }
+      else {
+        val maxPath = pathMap.keys.map { it.length }.max() ?: 0
+        "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
+            pathMap
+                .toSortedMap()
+                .map { c -> "/${c.key.padEnd(maxPath)} ${c.value}" }
+                .joinToString("\n")
+      }
 
   companion object : KLogging()
 }

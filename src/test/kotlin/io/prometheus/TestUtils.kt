@@ -55,7 +55,7 @@ object TestUtils : KLogging() {
   fun startAgent(serverName: String = "",
                  adminEnabled: Boolean = false,
                  metricsEnabled: Boolean = false,
-                 maxContentSizeKbs: Int = -1,
+                 chunkContentSizeKbs: Int = -1,
                  argv: List<String> = emptyList()): Agent {
 
     logger.apply {
@@ -69,8 +69,8 @@ object TestUtils : KLogging() {
                                           addAll(argv)
                                           add("-Dagent.admin.enabled=$adminEnabled")
                                           add("-Dagent.metrics.enabled=$metricsEnabled")
-                                          if (maxContentSizeKbs != -1)
-                                            add("-Dagent.maxContentSizeKbs=$maxContentSizeKbs")
+                                          if (chunkContentSizeKbs != -1)
+                                            add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
                                         },
                                     false)
     return Agent(options = agentOptions, inProcessServerName = serverName, testMode = true) { startSync() }

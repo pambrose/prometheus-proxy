@@ -52,7 +52,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(agent,
       runBlocking {
         launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, metricsEnabled = true) }
         launch(Dispatchers.Default) {
-          agent = startAgent(adminEnabled = true, metricsEnabled = true, maxContentSizeKbs = 5)
+          agent = startAgent(adminEnabled = true, metricsEnabled = true, chunkContentSizeKbs = 5)
               .apply { awaitInitialConnection(10.seconds) }
         }
       }
