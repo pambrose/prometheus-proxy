@@ -8,22 +8,24 @@ import java.io.ByteArrayOutputStream
 import java.util.zip.CRC32
 
 class ChunkedContext(response: ChunkedScrapeResponse) {
+  private val checksum = CRC32()
+  private val baos = ByteArrayOutputStream()
+
   var totalChunkCount = 0
+    private set
   var totalByteCount = 0
-  val checksum = CRC32()
-  val baos = ByteArrayOutputStream()
+    private set
+
   val scrapeResults =
       response.header.run {
-        ScrapeResults(
-            validResponse = headerValidResponse,
-            scrapeId = headerScrapeId,
-            agentId = headerAgentId,
-            statusCode = headerStatusCode,
-            zipped = true,
-            failureReason = headerFailureReason,
-            url = headerUrl,
-            contentType = headerContentType
-        )
+        ScrapeResults(validResponse = headerValidResponse,
+                      scrapeId = headerScrapeId,
+                      agentId = headerAgentId,
+                      statusCode = headerStatusCode,
+                      zipped = true,
+                      failureReason = headerFailureReason,
+                      url = headerUrl,
+                      contentType = headerContentType)
       }
 
   fun applyChunk(data: ByteArray, chunkByteCount: Int, chunkCount: Int, chunkChecksum: Long) {

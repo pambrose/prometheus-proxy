@@ -36,6 +36,7 @@ import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.getVersionDesc
+import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
 import io.prometheus.proxy.ProxyGrpcService
@@ -141,6 +142,9 @@ class Proxy(val options: ProxyOptions,
     healthCheckRegistry
         .apply {
           register("grpc_service", grpcService.healthCheck)
+          register("chunking_map_check",
+                   newMapHealthCheck(agentContextManager.chunkedContextMap,
+                                     proxyConfigVals.chunkContextMapUnhealthySize))
           register("scrape_response_map_check",
                    newMapHealthCheck(scrapeRequestManager.scrapeRequestMap,
                                      proxyConfigVals.scrapeRequestMapUnhealthySize))
@@ -162,22 +166,23 @@ class Proxy(val options: ProxyOptions,
         }
   }
 
-  fun removeAgentContext(agentId: String?) =
-      if (agentId == null || agentId.isEmpty()) {
-        logger.error { "Missing agentId" }
-        null
-      }
+  fun removeAgentContext(agentId: String): AgentContext? {
+    require(agentId.isNotEmpty()) { "Empty agentId" }
+    return agentContextManager.removeAgentContext(agentId).let { agentContext ->
+      if (agentContext == null)
+        logger.error { "Missing AgentContext for agentId: $agentId" }
       else {
-        val agentContext = agentContextManager.removeAgentContext(agentId)
-        if (agentContext == null) {
-          logger.error { "Missing AgentContext for agentId: $agentId" }
-        }
-        else {
-          logger.debug { "Removed $agentContext" }
-          agentContext.invalidate()
-        }
-        agentContext
+        logger.debug { "Removed $agentContext" }
+        agentContext.invalidate()
       }
+      agentContext
+    }
+  }
+
+  fun metrics(args: ProxyMetrics.() -> Unit) {
+    if (isMetricsEnabled)
+      args.invoke(metrics)
+  }
 
   //val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
   private val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
@@ -216,12 +221,10 @@ class Proxy(val options: ProxyOptions,
 
     @JvmStatic
     fun main(argv: Array<String>) {
-
       logger.apply {
         info { getBanner("banners/proxy.txt", logger) }
         info { getVersionDesc(false) }
       }
-
       Proxy(options = ProxyOptions(argv)) { startSync() }
     }
   }

@@ -44,10 +44,11 @@ class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
       logger.error { "Null attributes" }
     }
     else {
-      val agentId = attributes.get(Proxy.ATTRIB_AGENT_ID)
-      proxy.pathManager.removePathByAgentId(agentId)
-      val context = proxy.removeAgentContext(agentId)
-      logger.info { "Disconnected ${if (context != null) "from $context" else "with invalid agentId: $agentId"}" }
+      attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { agentId ->
+        proxy.pathManager.removePathByAgentId(agentId)
+        val context = proxy.removeAgentContext(agentId)
+        logger.info { "Disconnected ${if (context != null) "from $context" else "with invalid agentId: $agentId"}" }
+      } ?: logger.error { "Missing agentId in transportTerminated()" }
     }
     super.transportTerminated(attributes)
   }

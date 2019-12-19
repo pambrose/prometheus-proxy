@@ -285,8 +285,8 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
   }
 
   private fun updateScrapeRequests(type: String) {
-    if (proxy.isMetricsEnabled && type.isNotEmpty())
-      proxy.metrics.scrapeRequests.labels(type).inc()
+    if (type.isNotEmpty())
+      proxy.metrics { scrapeRequestCount.labels(type).inc() }
   }
 
   override fun toString() = toStringElements { add("port", httpPort) }

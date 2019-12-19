@@ -19,7 +19,6 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GrpcDsl.streamObserver
-import com.google.common.collect.Maps.newConcurrentMap
 import com.google.protobuf.Empty
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
@@ -48,14 +47,12 @@ import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
-import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.atomic.AtomicLong
 
 class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
 
   override fun connectAgent(request: Empty, responseObserver: StreamObserver<Empty>) {
-    if (proxy.isMetricsEnabled)
-      proxy.metrics.connects.inc()
+    proxy.metrics { connectCount.inc() }
 
     responseObserver.apply {
       onNext(Empty.getDefaultInstance())
@@ -91,12 +88,11 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
     val agentId = request.agentId
     var valid = false
 
-    proxy.agentContextManager.getAgentContext(agentId)
-        ?.apply {
-          valid = true
-          proxy.pathManager.addPath(path, this)
-          markActivityTime(false)
-        } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
+    proxy.agentContextManager.getAgentContext(agentId)?.apply {
+      valid = true
+      proxy.pathManager.addPath(path, this)
+      markActivityTime(false)
+    } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
 
     responseObserver.apply {
       onNext(
@@ -117,11 +113,10 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
 
     if (agentContext == null) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
-      responseBuilder
-          .apply {
-            this.valid = false
-            this.reason = "Invalid agentId: $agentId"
-          }
+      responseBuilder.apply {
+        valid = false
+        reason = "Invalid agentId: $agentId"
+      }
     }
     else {
       proxy.pathManager.removePath(request.path, agentId, responseBuilder)
@@ -142,8 +137,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
   }
 
   override fun sendHeartBeat(request: HeartBeatRequest, responseObserver: StreamObserver<HeartBeatResponse>) {
-    if (proxy.isMetricsEnabled)
-      proxy.metrics.heartbeats.inc()
+    proxy.metrics { heartbeatCount.inc() }
     val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
     agentContext?.markActivityTime(false)
         ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
@@ -204,10 +198,9 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
   override fun writeChunkedResponsesToProxy(responseObserver: StreamObserver<Empty>): StreamObserver<ChunkedScrapeResponse> =
       streamObserver {
 
-        val chunkedContextMap: ConcurrentMap<Long, ChunkedContext> = newConcurrentMap()
-
         onNext { response ->
           val ooc = response.chunkOneOfCase
+          val chunkedContextMap = proxy.agentContextManager.chunkedContextMap
           when (ooc.name.toLowerCase()) {
             "header" -> {
               val scrapeId = response.header.headerScrapeId
@@ -226,7 +219,7 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
               response.summary.apply {
                 val context = chunkedContextMap.remove(summaryScrapeId)
                 check(context != null) { "Missing chunked context with scrapeId: $summaryScrapeId" }
-                logger.debug { "Reading summary chunkCount: ${context.totalChunkCount} byteCount: ${context.totalByteCount} for scrapeId: ${response.summary.summaryScrapeId}" }
+                logger.debug { "Reading summary chunkCount: ${context.totalChunkCount} byteCount: ${context.totalByteCount} for scrapeId: $summaryScrapeId" }
                 context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
                 proxy.scrapeRequestManager.assignScrapeResults(context.scrapeResults)
               }

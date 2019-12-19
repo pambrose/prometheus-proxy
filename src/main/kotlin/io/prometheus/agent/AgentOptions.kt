@@ -79,7 +79,7 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
       if (chunkContentSizeKbs == -1)
         chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agent.chunkContentSizeKbs)
       // Multiply the value time KB
-      chunkContentSizeKbs = chunkContentSizeKbs * 1024
+      chunkContentSizeKbs *= 1024
 
       if (minGzipSizeBytes == -1)
         minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agent.minGzipSizeBytes)

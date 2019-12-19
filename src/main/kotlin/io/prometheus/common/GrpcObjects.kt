@@ -53,27 +53,33 @@ object GrpcObjects {
         build()
       }
 
-  fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest =
-      RegisterAgentRequest.newBuilder().run {
-        this.agentId = agentId
-        this.agentName = agentName
-        this.hostName = hostName
-        build()
-      }
+  fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest {
+    require(agentId.isNotEmpty()) { "Empty agentId" }
+    return RegisterAgentRequest.newBuilder().run {
+      this.agentId = agentId
+      this.agentName = agentName
+      this.hostName = hostName
+      build()
+    }
+  }
 
-  fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse =
-      RegisterAgentResponse.newBuilder().run {
-        this.valid = valid
-        this.reason = reason
-        this.agentId = agentId
-        build()
-      }
+  fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse {
+    require(agentId.isNotEmpty()) { "Empty agentId" }
+    return RegisterAgentResponse.newBuilder().run {
+      this.valid = valid
+      this.reason = reason
+      this.agentId = agentId
+      build()
+    }
+  }
 
-  fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest =
-      PathMapSizeRequest.newBuilder().run {
-        this.agentId = agentId
-        build()
-      }
+  fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest {
+    require(agentId.isNotEmpty()) { "Empty agentId" }
+    return PathMapSizeRequest.newBuilder().run {
+      this.agentId = agentId
+      build()
+    }
+  }
 
   fun newPathMapSizeResponse(pathCount: Int): PathMapSizeResponse =
       PathMapSizeResponse.newBuilder().run {
@@ -81,12 +87,15 @@ object GrpcObjects {
         build()
       }
 
-  fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest =
-      RegisterPathRequest.newBuilder().run {
-        this.agentId = agentId
-        this.path = path
-        build()
-      }
+  fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest {
+    require(agentId.isNotEmpty()) { "Empty agentId" }
+    require(path.isNotEmpty()) { "Empty path" }
+    return RegisterPathRequest.newBuilder().run {
+      this.agentId = agentId
+      this.path = path
+      build()
+    }
+  }
 
   fun newRegisterPathResponse(valid: Boolean,
                               reason: String,
@@ -104,16 +113,18 @@ object GrpcObjects {
                        scrapeId: Long,
                        path: String,
                        accept: String?,
-                       debugEnabled: Boolean): ScrapeRequest =
-      ScrapeRequest.newBuilder().let { builder ->
-        builder.agentId = agentId
-        builder.scrapeId = scrapeId
-        builder.path = path
-        builder.debugEnabled = debugEnabled
-        if (!accept.isNullOrBlank())
-          builder.accept = accept
-        builder.build()
-      }
+                       debugEnabled: Boolean): ScrapeRequest {
+    require(agentId.isNotEmpty()) { "Empty agentId" }
+    return ScrapeRequest.newBuilder().let { builder ->
+      builder.agentId = agentId
+      builder.scrapeId = scrapeId
+      builder.path = path
+      builder.debugEnabled = debugEnabled
+      if (!accept.isNullOrBlank())
+        builder.accept = accept
+      builder.build()
+    }
+  }
 
 
   fun ScrapeResponse.toScrapeResults(): ScrapeResults =
@@ -200,18 +211,23 @@ object GrpcObjects {
         builder.build()
       }
 
-  fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest =
-      UnregisterPathRequest.newBuilder().run {
-        this.agentId = agentId
-        this.path = path
-        build()
-      }
+  fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest {
+    require(agentId.isNotEmpty()) { "Empty agentId" }
+    require(path.isNotEmpty()) { "Empty path" }
+    return UnregisterPathRequest.newBuilder().run {
+      this.agentId = agentId
+      this.path = path
+      build()
+    }
+  }
 
   fun newUnregisterPathResponseBuilder(): UnregisterPathResponse.Builder = UnregisterPathResponse.newBuilder()
 
-  fun newAgentInfo(agentId: String): AgentInfo =
-      AgentInfo.newBuilder().run {
-        this.agentId = agentId
-        build()
-      }
+  fun newAgentInfo(agentId: String): AgentInfo {
+    require(agentId.isNotEmpty()) { "Empty agentId" }
+    return AgentInfo.newBuilder().run {
+      this.agentId = agentId
+      build()
+    }
+  }
 }

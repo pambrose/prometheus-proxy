@@ -26,30 +26,30 @@ import io.prometheus.Proxy
 
 class ProxyMetrics(proxy: Proxy) {
 
-  val scrapeRequests =
-    counter {
-      name("proxy_scrape_requests")
-      help("Proxy scrape requests")
-      labelNames("type")
-    }
+  val scrapeRequestCount =
+      counter {
+        name("proxy_scrape_requests")
+        help("Proxy scrape requests")
+        labelNames("type")
+      }
 
-  val connects =
-    counter {
-      name("proxy_connect_count")
-      help("Proxy connect count")
-    }
+  val connectCount =
+      counter {
+        name("proxy_connect_count")
+        help("Proxy connect count")
+      }
 
-  val agentEvictions =
-    counter {
-      name("proxy_eviction_count")
-      help("Proxy eviction count")
-    }
+  val agentEvictionCount =
+      counter {
+        name("proxy_eviction_count")
+        help("Proxy eviction count")
+      }
 
-  val heartbeats =
-    counter {
-      name("proxy_heartbeat_count")
-      help("Proxy heartbeat count")
-    }
+  val heartbeatCount =
+      counter {
+        name("proxy_heartbeat_count")
+        help("Proxy heartbeat count")
+      }
 
   val scrapeRequestLatency =
     summary {
@@ -66,6 +66,10 @@ class ProxyMetrics(proxy: Proxy) {
     SamplerGaugeCollector(name = "proxy_agent_map_size",
                           help = "Proxy connected agents",
                           data = { proxy.agentContextManager.agentContextSize.toDouble() })
+
+    SamplerGaugeCollector(name = "proxy_chunk_context_map_size",
+                          help = "Proxy chunk context map size",
+                          data = { proxy.agentContextManager.chunkedContextSize.toDouble() })
 
     SamplerGaugeCollector(name = "proxy_path_map_size",
                           help = "Proxy path map size",
