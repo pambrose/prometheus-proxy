@@ -86,6 +86,20 @@ class Proxy(val options: ProxyOptions,
   lateinit var metrics: ProxyMetrics
 
   init {
+    fun toPlainText() = """
+      Prometheus Proxy Info [${getVersionDesc(false)}]
+      
+      Uptime:     ${upTime.format(true)}
+      Proxy port: ${httpService.httpPort}
+      
+      Admin Service:
+      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
+      
+      Metrics Service:
+      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
+      
+    """.trimIndent()
+
     if (isMetricsEnabled)
       metrics = ProxyMetrics(this)
 
@@ -193,21 +207,6 @@ class Proxy(val options: ProxyOptions,
       recentActions.add("${LocalDateTime.now().format(formatter)}: $desc")
     }
   }
-
-  private fun toPlainText() =
-      """
-      Prometheus Proxy Info [${getVersionDesc(false)}]
-      
-      Uptime:     ${upTime.format(true)}
-      Proxy port: ${httpService.httpPort}
-      
-      Admin Service:
-      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
-      
-      Metrics Service:
-      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
-      
-    """.trimIndent()
 
   override fun toString() =
       toStringElements {

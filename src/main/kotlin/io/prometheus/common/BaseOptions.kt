@@ -101,30 +101,30 @@ abstract class BaseOptions protected constructor(private val progName: String,
   protected abstract fun assignConfigVals()
 
   protected fun parseOptions() {
+    fun parseArgs(argv: Array<String>?) {
+      try {
+        val jcom =
+            JCommander(this)
+                .apply {
+                  programName = progName
+                  setCaseSensitiveOptions(false)
+                  parse(*argv ?: arrayOf())
+                }
+
+        if (usage) {
+          jcom.usage()
+          exitProcess(0)
+        }
+      } catch (e: ParameterException) {
+        logger.error(e) { e.message }
+        exitProcess(1)
+      }
+    }
+
     parseArgs(argv)
     readConfig(envConfig, exitOnMissingConfig)
     configVals = ConfigVals(config)
     assignConfigVals()
-  }
-
-  private fun parseArgs(argv: Array<String>?) {
-    try {
-      val jcom =
-          JCommander(this)
-              .apply {
-                programName = progName
-                setCaseSensitiveOptions(false)
-                parse(*argv ?: arrayOf())
-              }
-
-      if (usage) {
-        jcom.usage()
-        exitProcess(0)
-      }
-    } catch (e: ParameterException) {
-      logger.error(e) { e.message }
-      exitProcess(1)
-    }
   }
 
   protected fun assignAdminEnabled(defaultVal: Boolean) {
@@ -192,6 +192,19 @@ abstract class BaseOptions protected constructor(private val progName: String,
                          fallback: Config,
                          exitOnMissingConfig: Boolean): Config {
 
+    fun String.isUrlPrefix() = toLowerCase().startsWith(HTTP_PREFIX) || toLowerCase().startsWith(HTTPS_PREFIX)
+
+    fun String.isJsonSuffix() = toLowerCase().endsWith(".json") || toLowerCase().endsWith(".jsn")
+
+    fun String.isPropertiesSuffix() = toLowerCase().endsWith(".properties") || toLowerCase().endsWith(".props")
+
+    fun getConfigSyntax(configName: String) =
+        when {
+          configName.isJsonSuffix() -> ConfigSyntax.JSON
+          configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
+          else -> ConfigSyntax.CONF
+        }
+
     when {
       configName.isBlank() -> {
         if (exitOnMissingConfig) {
@@ -228,19 +241,6 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
     exitProcess(1)
   }
-
-  private fun getConfigSyntax(configName: String) =
-      when {
-        configName.isJsonSuffix() -> ConfigSyntax.JSON
-        configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
-        else -> ConfigSyntax.CONF
-      }
-
-  private fun String.isUrlPrefix() = toLowerCase().startsWith(HTTP_PREFIX) || toLowerCase().startsWith(HTTPS_PREFIX)
-
-  private fun String.isJsonSuffix() = toLowerCase().endsWith(".json") || toLowerCase().endsWith(".jsn")
-
-  private fun String.isPropertiesSuffix() = toLowerCase().endsWith(".properties") || toLowerCase().endsWith(".props")
 
   companion object : KLogging() {
     private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
