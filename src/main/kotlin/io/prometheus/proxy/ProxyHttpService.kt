@@ -18,7 +18,6 @@
 
 package io.prometheus.proxy
 
-import brave.Tracing
 import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
@@ -60,7 +59,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
   private val idleTimeout =
       if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
 
-  private lateinit var tracing: Tracing
+  private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
   private val httpServer =
       embeddedServer(CIO,
@@ -183,8 +182,6 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                         var updateMsg: String = "")
 
   init {
-    if (proxy.isZipkinEnabled)
-      tracing = proxy.zipkinReporterService.newTracing("proxy-http")
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
   }
 

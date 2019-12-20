@@ -86,8 +86,7 @@ class Agent(val options: AgentOptions,
   val pathManager = AgentPathManager(this)
   val grpcService = AgentGrpcService(this, options, inProcessServerName)
   var agentId: String by nonNullableReference("")
-
-  lateinit var metrics: AgentMetrics
+  val metrics by lazy { AgentMetrics(this) }
 
   init {
     fun toPlainText() = """
@@ -108,9 +107,6 @@ class Agent(val options: AgentOptions,
 
     logger.info { "Assigning agent name: $agentName" }
     logger.info { "Assigning proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
-
-    if (isMetricsEnabled)
-      metrics = AgentMetrics(this)
 
     initService {
       if (options.debugEnabled)

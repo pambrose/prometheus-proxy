@@ -77,13 +77,12 @@ class Proxy(val options: ProxyOptions,
       else
         ProxyGrpcService(this, inProcessName = inProcessServerName)
 
-  private lateinit var agentCleanupService: AgentContextCleanupService
+  private val agentCleanupService by lazy { AgentContextCleanupService(this, proxyConfigVals) { addServices(this) } }
 
   val pathManager = ProxyPathManager(isTestMode)
   val scrapeRequestManager = ScrapeRequestManager()
   val agentContextManager = AgentContextManager()
-
-  lateinit var metrics: ProxyMetrics
+  val metrics by lazy { ProxyMetrics(this) }
 
   init {
     fun toPlainText() = """
@@ -99,12 +98,6 @@ class Proxy(val options: ProxyOptions,
       ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
       
     """.trimIndent()
-
-    if (isMetricsEnabled)
-      metrics = ProxyMetrics(this)
-
-    if (proxyConfigVals.staleAgentCheckEnabled)
-      agentCleanupService = AgentContextCleanupService(this, proxyConfigVals) { addServices(this) }
 
     addServices(grpcService, httpService)
 

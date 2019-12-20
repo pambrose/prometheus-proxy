@@ -18,7 +18,6 @@
 
 package io.prometheus.agent
 
-import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.github.pambrose.common.dsl.GrpcDsl.channel
@@ -59,9 +58,8 @@ class AgentGrpcService(private val agent: Agent,
   private var grpcStarted by atomicBoolean(false)
   private var blockingStub: ProxyServiceBlockingStub by notNull()
   private var asyncStub: ProxyServiceStub by notNull()
-
-  private lateinit var tracing: Tracing
-  private lateinit var grpcTracing: GrpcTracing
+  private val tracing by lazy { agent.zipkinReporterService.newTracing("grpc_client") }
+  private val grpcTracing by lazy { GrpcTracing.create(tracing) }
 
   var channel: ManagedChannel by notNull()
 
@@ -88,11 +86,6 @@ class AgentGrpcService(private val agent: Agent,
     else {
       hostName = schemeStripped
       port = 50051
-    }
-
-    if (agent.isZipkinEnabled) {
-      tracing = agent.zipkinReporterService.newTracing("grpc_client")
-      grpcTracing = GrpcTracing.create(tracing)
     }
 
     tlsContext =

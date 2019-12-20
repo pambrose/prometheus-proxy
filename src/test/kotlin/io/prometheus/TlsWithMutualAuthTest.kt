@@ -18,6 +18,7 @@
 
 package io.prometheus
 
+import CommonCompanion
 import com.github.pambrose.common.util.simpleClassName
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
@@ -25,7 +26,6 @@ import io.prometheus.client.CollectorRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mu.KLogging
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import kotlin.time.seconds
@@ -39,9 +39,7 @@ class TlsWithMutualAuthTest : CommonTests(agent,
                                                             startPort = 10500,
                                                             caller = simpleClassName)) {
 
-  companion object : KLogging() {
-    private lateinit var proxy: Proxy
-    private lateinit var agent: Agent
+  companion object : CommonCompanion() {
 
     @JvmStatic
     @BeforeAll
@@ -73,14 +71,6 @@ class TlsWithMutualAuthTest : CommonTests(agent,
 
     @JvmStatic
     @AfterAll
-    fun takeDown() {
-      runBlocking {
-        for (service in listOf(proxy, agent)) {
-          logger.info { "Stopping ${service.simpleClassName}" }
-          launch(Dispatchers.Default) { service.stopSync() }
-        }
-      }
-      logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-    }
+    fun takeDown() = takeItDown()
   }
 }

@@ -49,3 +49,5 @@ tree:
 versioncheck:
 	./gradlew dependencyUpdates
 
+depends:
+	./gradlew dependencies
