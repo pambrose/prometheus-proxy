@@ -20,16 +20,11 @@ package io.prometheus
 
 import CommonCompanion
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import com.github.pambrose.common.util.simpleClassName
 import io.ktor.client.response.readText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
-import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.ConfigVals
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.amshove.kluent.shouldBeGreaterThan
 import org.amshove.kluent.shouldContain
 import org.amshove.kluent.shouldEqual
@@ -100,22 +95,14 @@ class AdminNonDefaultPathTest {
 
     @JvmStatic
     @BeforeAll
-    fun setUp() {
-      CollectorRegistry.defaultRegistry.clear()
-      val proxyArgs = listOf("-Dproxy.admin.port=8099",
-                             "-Dproxy.admin.pingPath=pingPath2",
-                             "-Dproxy.admin.versionPath=versionPath2",
-                             "-Dproxy.admin.healthCheckPath=healthCheckPath2",
-                             "-Dproxy.admin.threadDumpPath=threadDumpPath2")
-
-      runBlocking {
-        launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, argv = proxyArgs) }
-        launch(Dispatchers.Default) {
-          agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
-        }
-      }
-      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-    }
+    fun setUp() = setItUp({
+                            startProxy(adminEnabled = true, argv = listOf("-Dproxy.admin.port=8099",
+                                                                          "-Dproxy.admin.pingPath=pingPath2",
+                                                                          "-Dproxy.admin.versionPath=versionPath2",
+                                                                          "-Dproxy.admin.healthCheckPath=healthCheckPath2",
+                                                                          "-Dproxy.admin.threadDumpPath=threadDumpPath2"))
+                          },
+                          { startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) } })
 
     @JvmStatic
     @AfterAll

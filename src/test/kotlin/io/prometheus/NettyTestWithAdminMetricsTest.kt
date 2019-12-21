@@ -23,10 +23,6 @@ import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
-import io.prometheus.client.CollectorRegistry
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import kotlin.time.seconds
@@ -44,22 +40,15 @@ class NettyTestWithAdminMetricsTest : CommonTests(agent,
 
     @JvmStatic
     @BeforeAll
-    fun setUp() {
-      CollectorRegistry.defaultRegistry.clear()
-
-      runBlocking {
-        launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, metricsEnabled = true) }
-        launch(Dispatchers.Default) {
-          agent = startAgent(adminEnabled = true, metricsEnabled = true, chunkContentSizeKbs = 5)
-              .apply { awaitInitialConnection(10.seconds) }
-        }
-      }
-
-      // Wait long enough to trigger heartbeat for code coverage
-      sleep(15.seconds)
-
-      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-    }
+    fun setUp() = setItUp({ startProxy(adminEnabled = true, metricsEnabled = true) },
+                          {
+                            startAgent(adminEnabled = true, metricsEnabled = true, chunkContentSizeKbs = 5)
+                                .apply { awaitInitialConnection(10.seconds) }
+                          },
+                          {
+                            // Wait long enough to trigger heartbeat for code coverage
+                            sleep(15.seconds)
+                          })
 
     @JvmStatic
     @AfterAll

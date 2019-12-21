@@ -22,10 +22,6 @@ import CommonCompanion
 import com.github.pambrose.common.util.simpleClassName
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
-import io.prometheus.client.CollectorRegistry
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import kotlin.time.seconds
@@ -43,17 +39,8 @@ class InProcessTestNoAdminMetricsTest : CommonTests(agent,
 
     @JvmStatic
     @BeforeAll
-    fun setUp() {
-      CollectorRegistry.defaultRegistry.clear()
-
-      runBlocking {
-        launch(Dispatchers.Default) { proxy = startProxy("nometrics") }
-        launch(Dispatchers.Default) {
-          agent = startAgent(serverName = "nometrics", chunkContentSizeKbs = 5).apply { awaitInitialConnection(10.seconds) }
-        }
-      }
-      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-    }
+    fun setUp() = setItUp({ startProxy("nometrics") },
+                          { startAgent(serverName = "nometrics", chunkContentSizeKbs = 5).apply { awaitInitialConnection(10.seconds) } })
 
     @JvmStatic
     @AfterAll

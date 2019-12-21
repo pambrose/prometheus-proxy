@@ -20,15 +20,10 @@ package io.prometheus
 
 import CommonCompanion
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import com.github.pambrose.common.util.simpleClassName
 import io.ktor.client.response.readText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
-import io.prometheus.client.CollectorRegistry
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.amshove.kluent.shouldBeGreaterThan
 import org.amshove.kluent.shouldContain
 import org.amshove.kluent.shouldEqual
@@ -129,17 +124,8 @@ class AdminDefaultPathTest {
 
     @JvmStatic
     @BeforeAll
-    fun setUp() {
-      CollectorRegistry.defaultRegistry.clear()
-
-      runBlocking {
-        launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true) }
-        launch(Dispatchers.Default) {
-          agent = startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) }
-        }
-      }
-      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-    }
+    fun setUp() = setItUp({ startProxy(adminEnabled = true) },
+                          { startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) } })
 
     @JvmStatic
     @AfterAll
