@@ -32,7 +32,6 @@ import org.amshove.kluent.shouldStartWith
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
-import kotlin.time.seconds
 
 class AdminNonDefaultPathTest {
 
@@ -102,7 +101,7 @@ class AdminNonDefaultPathTest {
                                                                           "-Dproxy.admin.healthCheckPath=healthCheckPath2",
                                                                           "-Dproxy.admin.threadDumpPath=threadDumpPath2"))
                           },
-                          { startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) } })
+                          { startAgent(adminEnabled = true) })
 
     @JvmStatic
     @AfterAll

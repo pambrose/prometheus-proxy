@@ -24,7 +24,6 @@ import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
-import kotlin.time.seconds
 
 class TlsWithMutualAuthTest : CommonTests(agent,
                                           ProxyCallTestArgs(agent,
@@ -54,7 +53,6 @@ class TlsWithMutualAuthTest : CommonTests(agent,
                                                      "--key", "testing/certs/client.key",
                                                      "--trust", "testing/certs/ca.pem",
                                                      "--override", "foo.test.google.fr"))
-                                .apply { awaitInitialConnection(10.seconds) }
                           })
 
     @JvmStatic

@@ -24,7 +24,6 @@ import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
-import kotlin.time.seconds
 
 class InProcessTestNoAdminMetricsTest : CommonTests(agent,
                                                     ProxyCallTestArgs(agent,
@@ -40,7 +39,7 @@ class InProcessTestNoAdminMetricsTest : CommonTests(agent,
     @JvmStatic
     @BeforeAll
     fun setUp() = setItUp({ startProxy("nometrics") },
-                          { startAgent(serverName = "nometrics", chunkContentSizeKbs = 5).apply { awaitInitialConnection(10.seconds) } })
+                          { startAgent(serverName = "nometrics", chunkContentSizeKbs = 5) })
 
     @JvmStatic
     @AfterAll

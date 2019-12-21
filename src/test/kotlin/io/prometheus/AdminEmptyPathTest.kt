@@ -28,7 +28,6 @@ import org.amshove.kluent.shouldEqual
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
-import kotlin.time.seconds
 
 class AdminEmptyPathTest {
 
@@ -95,7 +94,7 @@ class AdminEmptyPathTest {
                                                                           "-Dproxy.admin.healthCheckPath=\"\"",
                                                                           "-Dproxy.admin.threadDumpPath=\"\""))
                           },
-                          { startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) } })
+                          { startAgent(adminEnabled = true) })
 
     @JvmStatic
     @AfterAll

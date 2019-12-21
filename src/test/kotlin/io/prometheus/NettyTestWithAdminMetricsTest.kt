@@ -41,10 +41,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(agent,
     @JvmStatic
     @BeforeAll
     fun setUp() = setItUp({ startProxy(adminEnabled = true, metricsEnabled = true) },
-                          {
-                            startAgent(adminEnabled = true, metricsEnabled = true, chunkContentSizeKbs = 5)
-                                .apply { awaitInitialConnection(10.seconds) }
-                          },
+                          { startAgent(adminEnabled = true, metricsEnabled = true, chunkContentSizeKbs = 5) },
                           {
                             // Wait long enough to trigger heartbeat for code coverage
                             sleep(15.seconds)

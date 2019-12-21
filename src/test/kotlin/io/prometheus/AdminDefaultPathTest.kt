@@ -31,7 +31,6 @@ import org.amshove.kluent.shouldStartWith
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
-import kotlin.time.seconds
 
 class AdminDefaultPathTest {
 
@@ -124,8 +123,7 @@ class AdminDefaultPathTest {
 
     @JvmStatic
     @BeforeAll
-    fun setUp() = setItUp({ startProxy(adminEnabled = true) },
-                          { startAgent(adminEnabled = true).apply { awaitInitialConnection(5.seconds) } })
+    fun setUp() = setItUp({ startProxy(adminEnabled = true) }, { startAgent(adminEnabled = true) })
 
     @JvmStatic
     @AfterAll

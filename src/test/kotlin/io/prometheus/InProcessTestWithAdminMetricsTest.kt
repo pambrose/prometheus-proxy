@@ -24,7 +24,6 @@ import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
-import kotlin.time.seconds
 
 class InProcessTestWithAdminMetricsTest : CommonTests(agent,
                                                       ProxyCallTestArgs(agent,
@@ -45,7 +44,6 @@ class InProcessTestWithAdminMetricsTest : CommonTests(agent,
                                        adminEnabled = true,
                                        metricsEnabled = true,
                                        chunkContentSizeKbs = 5)
-                                .apply { awaitInitialConnection(10.seconds) }
                           })
 
     @JvmStatic
