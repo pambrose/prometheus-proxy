@@ -18,7 +18,6 @@
 
 package io.prometheus
 
-import CommonCompanion
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import io.ktor.client.response.readText
 import io.ktor.http.HttpStatusCode

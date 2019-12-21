@@ -18,7 +18,6 @@
 
 package io.prometheus
 
-import CommonCompanion
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
 import io.prometheus.TestUtils.startAgent

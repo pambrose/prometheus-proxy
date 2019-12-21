@@ -1,6 +1,8 @@
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
+package io.prometheus
+
 import com.github.pambrose.common.util.simpleClassName
-import io.prometheus.Agent
-import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

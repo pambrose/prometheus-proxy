@@ -18,7 +18,6 @@
 
 package io.prometheus
 
-import CommonCompanion
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
