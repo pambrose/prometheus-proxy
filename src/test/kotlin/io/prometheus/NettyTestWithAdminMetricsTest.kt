@@ -18,12 +18,21 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.dsl.KtorDsl.get
+import com.github.pambrose.common.dsl.KtorDsl.http
+import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
+import io.ktor.client.response.readText
+import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
+import kotlinx.coroutines.runBlocking
+import org.amshove.kluent.shouldBeGreaterThan
+import org.amshove.kluent.shouldEqual
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
 class NettyTestWithAdminMetricsTest : CommonTests(agent,
@@ -35,12 +44,46 @@ class NettyTestWithAdminMetricsTest : CommonTests(agent,
                                                                     startPort = 10900,
                                                                     caller = simpleClassName)) {
 
+  @Test
+  fun adminDebugCallsTest() {
+    newHttpClient()
+        .use { httpClient ->
+          runBlocking {
+            http(httpClient) {
+              get("8093/debug".fixUrl()) { response ->
+                val body = response.readText()
+                body.length shouldBeGreaterThan 100
+                response.status shouldEqual HttpStatusCode.OK
+              }
+            }
+
+            http(httpClient) {
+              get("8092/debug".fixUrl()) { response ->
+                val body = response.readText()
+                body.length shouldBeGreaterThan 100
+                response.status shouldEqual HttpStatusCode.OK
+              }
+            }
+          }
+        }
+  }
+
+
   companion object : CommonCompanion() {
 
     @JvmStatic
     @BeforeAll
-    fun setUp() = setItUp({ startProxy(adminEnabled = true, metricsEnabled = true) },
-                          { startAgent(adminEnabled = true, metricsEnabled = true, chunkContentSizeKbs = 5) },
+    fun setUp() = setItUp({
+                            startProxy(adminEnabled = true,
+                                       debugEnabled = true,
+                                       metricsEnabled = true)
+                          },
+                          {
+                            startAgent(adminEnabled = true,
+                                       debugEnabled = true,
+                                       metricsEnabled = true,
+                                       chunkContentSizeKbs = 5)
+                          },
                           {
                             // Wait long enough to trigger heartbeat for code coverage
                             sleep(15.seconds)

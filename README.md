@@ -157,9 +157,9 @@ The only required argument is an agent config value, which should have an `agent
 | --agent_port, -a      | AGENT_PORT      <br> proxy.agent.port           | 50051  | gRPC listen port for agents         |
 | --admin, -r           | ADMIN_ENABLED   <br> proxy.admin.enabled        | false  | Enable admin servlets               |
 | --admin_port, -i      | ADMIN_PORT      <br> proxy.admin.port           | 8092   | Admin servlets port                 |
+| --debug, -b           | DEBUG_ENABLED   <br> proxy.admin.debugEnabled   | false  | Enable proxy debug servlet<br>on admin port|
 | --metrics, -e         | METRICS_ENABLED <br> proxy.metrics.enabled      | false  | Enable proxy metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> proxy.metrics.port         | 8082   | Proxy metrics listen port           |
-| --debug, -b           | DEBUG_ENABLED   <br> proxy.metrics.debugEnabled | false  | Enable proxy debug servlet<br>on admin port|
 | --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath   |  | Certificate chain file path       |
 | --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath |  | Private key file path            |
 | --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |  | Trust certificate collection file path |
@@ -177,9 +177,9 @@ The only required argument is an agent config value, which should have an `agent
 | --name, -n            | AGENT_NAME      <br> agent.name                 |        | Agent name                          |
 | --admin, -r           | ADMIN_ENABLED   <br> agent.admin.enabled        | false  | Enable admin servlets               |
 | --admin_port, -i      | ADMIN_PORT      <br> agent.admin.port           | 8093   | Admin servlets port                 |
+| --debug, -b           | DEBUG_ENABLED   <br> agent.admin.debugEnabled   | false  | Enable agent debug servlet<br>on admin port|
 | --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
-| --debug, -b           | DEBUG_ENABLED   <br> agent.metrics.debugEnabled | false  | Enable agent debug servlet<br>on admin port|
 | --chunk               | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs | 32 | Threshold for chunking data to Proxy and buffer size (KBs) |
 | --gzip                | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes | 1024 | Minimum size for content to be gzipped (Bytes) |
 | --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath |  | Certificate chain file path         |

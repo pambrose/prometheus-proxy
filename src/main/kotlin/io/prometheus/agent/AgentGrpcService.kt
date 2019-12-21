@@ -224,7 +224,7 @@ class AgentGrpcService(private val agent: Agent,
           }
 
           onError { throwable ->
-            if (!agent.isRunning)
+            if (agent.isRunning)
               Status.fromThrowable(throwable).apply {
                 logger.error { "Error in readRequestsFromProxy(): $code $description" }
               }
@@ -246,7 +246,7 @@ class AgentGrpcService(private val agent: Agent,
           }
 
           onError { throwable ->
-            if (!agent.isRunning)
+            if (agent.isRunning)
               Status.fromThrowable(throwable).apply {
                 logger.error { "Error in writeResponsesToProxyUntilDisconnected(): $code $description" }
               }

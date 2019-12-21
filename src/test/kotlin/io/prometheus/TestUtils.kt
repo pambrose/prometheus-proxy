@@ -31,6 +31,7 @@ import java.nio.channels.ClosedSelectorException
 object TestUtils : KLogging() {
   fun startProxy(serverName: String = "",
                  adminEnabled: Boolean = false,
+                 debugEnabled: Boolean = false,
                  metricsEnabled: Boolean = false,
                  argv: List<String> = emptyList()): Proxy {
 
@@ -44,6 +45,7 @@ object TestUtils : KLogging() {
                                           addAll(TestConstants.CONFIG_ARG)
                                           addAll(argv)
                                           add("-Dproxy.admin.enabled=$adminEnabled")
+                                          add("-Dproxy.admin.debugEnabled=$debugEnabled")
                                           add("-Dproxy.metrics.enabled=$metricsEnabled")
                                         })
     return Proxy(options = proxyOptions,
@@ -54,6 +56,7 @@ object TestUtils : KLogging() {
 
   fun startAgent(serverName: String = "",
                  adminEnabled: Boolean = false,
+                 debugEnabled: Boolean = false,
                  metricsEnabled: Boolean = false,
                  chunkContentSizeKbs: Int = -1,
                  argv: List<String> = emptyList()): Agent {
@@ -68,6 +71,7 @@ object TestUtils : KLogging() {
                                           addAll(TestConstants.CONFIG_ARG)
                                           addAll(argv)
                                           add("-Dagent.admin.enabled=$adminEnabled")
+                                          add("-Dagent.admin.debugEnabled=$debugEnabled")
                                           add("-Dagent.metrics.enabled=$metricsEnabled")
                                           if (chunkContentSizeKbs != -1)
                                             add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
