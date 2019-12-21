@@ -35,6 +35,6 @@ open class CommonCompanion : KLogging() {
         launch(Dispatchers.Default) { service.stopSync() }
       }
     }
-    logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+    logger.info { "Stopped ${proxy.simpleClassName} and ${agent.simpleClassName}" }
   }
 }

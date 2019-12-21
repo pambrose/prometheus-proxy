@@ -6,6 +6,7 @@ plugins {
   id 'com.google.protobuf' version '0.8.10'
   id "com.github.ben-manes.versions" version '0.27.0'
   id 'com.github.johnrengelman.shadow' version '5.2.0'
+  id 'jacoco'
 }
 
 group = 'io.prometheus'
@@ -125,14 +126,14 @@ artifacts {
 //archives javadocJar
 }
 
-/*
 jacocoTestReport {
-    reports {
-        xml.enabled = true // coveralls plugin depends on xml format report
-        html.enabled = true
-    }
+  reports {
+    xml.enabled true
+    html.enabled true
+  }
 }
-*/
+
+check.dependsOn jacocoTestReport
 
 tasks.withType(JavaCompile) {
   options.encoding = 'UTF-8'
