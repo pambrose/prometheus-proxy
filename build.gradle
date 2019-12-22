@@ -127,8 +127,6 @@ artifacts {
 //archives javadocJar
 }
 
-cobertura.coverageFormats = ['html', 'xml'] // coveralls plugin depends on xml format report
-
 jacocoTestReport {
   reports {
     xml.enabled true
