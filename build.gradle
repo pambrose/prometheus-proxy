@@ -11,7 +11,7 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.6.3'
+version = '1.6.4'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
