@@ -14,7 +14,7 @@ jars:
 	./gradlew agentJar proxyJar
 
 tests:
-	./gradlew check
+	./gradlew check jacocoTestReport
 
 config:
 	java -jar ./etc/jars/tscfg-0.9.95.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common

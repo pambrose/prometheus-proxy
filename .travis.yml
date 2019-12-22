@@ -1,20 +1,15 @@
 language: java
 
 jdk:
+  #- openjdk8
   #- oraclejdk11
   - openjdk11
-  #- openjdk8
-
-#after_success:
-#  - ./gradlew jacocoTestReport coveralls
-#  - ./mvnw jacoco:report coveralls:report
 
 before_script:
   - chmod +x gradlew
 
 script:
-  - ./gradlew check
-  - ./gradlew jacocoTestReport
+  - ./gradlew check jacocoTestReport
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
