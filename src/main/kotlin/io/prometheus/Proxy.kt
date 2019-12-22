@@ -77,20 +77,27 @@ class Proxy(val options: ProxyOptions,
       else
         ProxyGrpcService(this, inProcessName = inProcessServerName)
 
-  private lateinit var agentCleanupService: AgentContextCleanupService
+  private val agentCleanupService by lazy { AgentContextCleanupService(this, proxyConfigVals) { addServices(this) } }
 
   val pathManager = ProxyPathManager(isTestMode)
   val scrapeRequestManager = ScrapeRequestManager()
   val agentContextManager = AgentContextManager()
-
-  lateinit var metrics: ProxyMetrics
+  val metrics by lazy { ProxyMetrics(this) }
 
   init {
-    if (isMetricsEnabled)
-      metrics = ProxyMetrics(this)
-
-    if (proxyConfigVals.staleAgentCheckEnabled)
-      agentCleanupService = AgentContextCleanupService(this, proxyConfigVals) { addServices(this) }
+    fun toPlainText() = """
+      Prometheus Proxy Info [${getVersionDesc(false)}]
+      
+      Uptime:     ${upTime.format(true)}
+      Proxy port: ${httpService.httpPort}
+      
+      Admin Service:
+      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
+      
+      Metrics Service:
+      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
+      
+    """.trimIndent()
 
     addServices(grpcService, httpService)
 
@@ -193,21 +200,6 @@ class Proxy(val options: ProxyOptions,
       recentActions.add("${LocalDateTime.now().format(formatter)}: $desc")
     }
   }
-
-  private fun toPlainText() =
-      """
-      Prometheus Proxy Info [${getVersionDesc(false)}]
-      
-      Uptime:     ${upTime.format(true)}
-      Proxy port: ${httpService.httpPort}
-      
-      Admin Service:
-      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
-      
-      Metrics Service:
-      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
-      
-    """.trimIndent()
 
   override fun toString() =
       toStringElements {

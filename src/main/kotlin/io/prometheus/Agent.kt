@@ -86,15 +86,27 @@ class Agent(val options: AgentOptions,
   val pathManager = AgentPathManager(this)
   val grpcService = AgentGrpcService(this, options, inProcessServerName)
   var agentId: String by nonNullableReference("")
-
-  lateinit var metrics: AgentMetrics
+  val metrics by lazy { AgentMetrics(this) }
 
   init {
+    fun toPlainText() = """
+      Prometheus Agent Info [${getVersionDesc(false)}]
+      
+      Uptime:    ${upTime.format(true)}
+      AgentId:   $agentId 
+      AgentName: $agentName
+      ProxyHost: $proxyHost
+      
+      Admin Service:
+      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
+      
+      Metrics Service:
+      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
+      
+    """.trimIndent()
+
     logger.info { "Assigning agent name: $agentName" }
     logger.info { "Assigning proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
-
-    if (isMetricsEnabled)
-      metrics = AgentMetrics(this)
 
     initService {
       if (options.debugEnabled)
@@ -108,6 +120,43 @@ class Agent(val options: AgentOptions,
   }
 
   override fun run() {
+
+    fun connectToProxy() {
+      // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != ""
+      if (agentId.isNotEmpty()) {
+        grpcService.resetGrpcStubs()
+        logger.info { "Resetting agentId" }
+        agentId = ""
+      }
+
+      // Reset values for each connection attempt
+      pathManager.clear()
+      scrapeRequestBacklogSize.set(0)
+      lastMsgSentMark = clock.markNow()
+
+      if (grpcService.connectAgent()) {
+        grpcService.registerAgent(initialConnectionLatch)
+        pathManager.registerPaths()
+
+        val connectionContext = AgentConnectionContext()
+        grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
+
+        runBlocking {
+          launch(Dispatchers.Default) { startHeartBeat(connectionContext) }
+
+          launch(Dispatchers.Default) { grpcService.writeResponsesToProxyUntilDisconnected(connectionContext) }
+
+          for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
+            launch(Dispatchers.Default) {
+              // The fetch occurs during the invoke()
+              val scrapeResponse = scrapeRequestAction.invoke()
+              connectionContext.scrapeResultsChannel.send(scrapeResponse)
+            }
+          }
+        }
+      }
+    }
+
     while (isRunning) {
       try {
         connectToProxy()
@@ -117,7 +166,7 @@ class Agent(val options: AgentOptions,
         logger.info { "Disconnected from proxy at $proxyHost" }
       } catch (e: Throwable) {
         // Catch anything else to avoid exiting retry loop
-        logger.warn(e) { "Throwable caught" }
+        logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
       } finally {
         logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
       }
@@ -135,42 +184,6 @@ class Agent(val options: AgentOptions,
     healthCheckRegistry.register("scrape_request_backlog_check",
                                  newBacklogHealthCheck(scrapeRequestBacklogSize.get(),
                                                        agentConfigVals.scrapeRequestBacklogUnhealthySize))
-  }
-
-  private fun connectToProxy() {
-    // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != ""
-    if (agentId.isNotEmpty()) {
-      grpcService.resetGrpcStubs()
-      logger.info { "Resetting agentId" }
-      agentId = ""
-    }
-
-    // Reset values for each connection attempt
-    pathManager.clear()
-    scrapeRequestBacklogSize.set(0)
-    lastMsgSentMark = clock.markNow()
-
-    if (grpcService.connectAgent()) {
-      grpcService.registerAgent(initialConnectionLatch)
-      pathManager.registerPaths()
-
-      val connectionContext = AgentConnectionContext()
-      grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
-
-      runBlocking {
-        launch(Dispatchers.Default) { startHeartBeat(connectionContext) }
-
-        launch(Dispatchers.Default) { grpcService.writeResponsesToProxyUntilDisconnected(connectionContext) }
-
-        for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
-          launch(Dispatchers.Default) {
-            // The fetch occurs during the invoke()
-            val scrapeResponse = scrapeRequestAction.invoke()
-            connectionContext.scrapeResultsChannel.send(scrapeResponse)
-          }
-        }
-      }
-    }
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) =
@@ -212,23 +225,6 @@ class Agent(val options: AgentOptions,
     grpcService.shutDown()
     super.shutDown()
   }
-
-  private fun toPlainText() =
-      """
-      Prometheus Agent Info [${getVersionDesc(false)}]
-      
-      Uptime:    ${upTime.format(true)}
-      AgentId:   $agentId 
-      AgentName: $agentName
-      ProxyHost: $proxyHost
-      
-      Admin Service:
-      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
-      
-      Metrics Service:
-      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
-      
-    """.trimIndent()
 
   override fun toString() =
       toStringElements {

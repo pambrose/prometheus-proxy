@@ -21,14 +21,8 @@ package io.prometheus
 import com.github.pambrose.common.util.simpleClassName
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
-import io.prometheus.client.CollectorRegistry
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import mu.KLogging
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
-import kotlin.time.seconds
 
 class NettyTestNoAdminMetricsTest : CommonTests(agent,
                                                 ProxyCallTestArgs(agent,
@@ -39,32 +33,14 @@ class NettyTestNoAdminMetricsTest : CommonTests(agent,
                                                                   startPort = 10500,
                                                                   caller = simpleClassName)) {
 
-  companion object : KLogging() {
-    private lateinit var proxy: Proxy
-    private lateinit var agent: Agent
+  companion object : CommonCompanion() {
 
     @JvmStatic
     @BeforeAll
-    fun setUp() {
-      CollectorRegistry.defaultRegistry.clear()
-
-      runBlocking {
-        launch(Dispatchers.Default) { proxy = startProxy() }
-        launch(Dispatchers.Default) { agent = startAgent(chunkContentSizeKbs = 5).apply { awaitInitialConnection(10.seconds) } }
-      }
-      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-    }
+    fun setUp() = setItUp({ startProxy() }, { startAgent(chunkContentSizeKbs = 5) })
 
     @JvmStatic
     @AfterAll
-    fun takeDown() {
-      runBlocking {
-        for (service in listOf(proxy, agent)) {
-          logger.info { "Stopping ${service.simpleClassName}" }
-          launch(Dispatchers.Default) { service.stopSync() }
-        }
-      }
-      logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-    }
+    fun takeDown() = takeItDown()
   }
 }

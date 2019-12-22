@@ -171,10 +171,11 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
         }
 
         onError { throwable ->
-          Status.fromThrowable(throwable).also { arg ->
-            if (arg.code != Status.Code.CANCELLED)
-              logger.error(throwable) { "Error in writeResponsesToProxy(): $arg" }
-          }
+          if (proxy.isRunning)
+            Status.fromThrowable(throwable).also { arg ->
+              if (arg.code != Status.Code.CANCELLED)
+                logger.error(throwable) { "Error in writeResponsesToProxy(): $arg" }
+            }
 
           try {
             responseObserver.apply {
@@ -229,10 +230,11 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
         }
 
         onError { throwable ->
-          Status.fromThrowable(throwable).also { arg ->
-            if (arg.code != Status.Code.CANCELLED)
-              logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
-          }
+          if (proxy.isRunning)
+            Status.fromThrowable(throwable).also { arg ->
+              if (arg.code != Status.Code.CANCELLED)
+                logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
+            }
 
           try {
             responseObserver.apply {

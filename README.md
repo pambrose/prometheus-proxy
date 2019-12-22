@@ -2,9 +2,10 @@
 
 [![JitPack](https://jitpack.io/v/pambrose/prometheus-proxy.svg)](https://jitpack.io/#pambrose/prometheus-proxy)
 [![Build Status](https://travis-ci.org/pambrose/prometheus-proxy.svg?branch=master)](https://travis-ci.org/pambrose/prometheus-proxy)
-[![Coverage Status](https://coveralls.io/repos/github/pambrose/prometheus-proxy/badge.svg?branch=master)](https://coveralls.io/github/pambrose/prometheus-proxy?branch=master)
 [![codebeat badge](https://codebeat.co/badges/8dbe1dc6-628e-44a4-99f9-d468831ff0cc)](https://codebeat.co/projects/github-com-pambrose-prometheus-proxy-master)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/422df508473443df9fbd8ea00fdee973)](https://www.codacy.com/app/pambrose/prometheus-proxy?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=pambrose/prometheus-proxy&amp;utm_campaign=Badge_Grade)
+[![codecov](https://codecov.io/gh/pambrose/prometheus-proxy/branch/master/graph/badge.svg)](https://codecov.io/gh/pambrose/prometheus-proxy)
+[![Coverage Status](https://coveralls.io/repos/github/pambrose/prometheus-proxy/badge.svg?branch=master)](https://coveralls.io/github/pambrose/prometheus-proxy?branch=master)
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for 
@@ -96,8 +97,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-docker pull pambrose/prometheus-proxy:1.6.2
-docker pull pambrose/prometheus-agent:1.6.2
+docker pull pambrose/prometheus-proxy:1.6.3
+docker pull pambrose/prometheus-agent:1.6.3
 ```
 
 Start a proxy container with:
@@ -106,7 +107,7 @@ Start a proxy container with:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.6.2
+        pambrose/prometheus-proxy:1.6.3
 ```
 
 Start an agent container with:
@@ -114,7 +115,7 @@ Start an agent container with:
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.6.2
+        pambrose/prometheus-agent:1.6.3
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
@@ -130,7 +131,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:1.6.2
+    pambrose/prometheus-agent:1.6.3
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
@@ -157,9 +158,9 @@ The only required argument is an agent config value, which should have an `agent
 | --agent_port, -a      | AGENT_PORT      <br> proxy.agent.port           | 50051  | gRPC listen port for agents         |
 | --admin, -r           | ADMIN_ENABLED   <br> proxy.admin.enabled        | false  | Enable admin servlets               |
 | --admin_port, -i      | ADMIN_PORT      <br> proxy.admin.port           | 8092   | Admin servlets port                 |
+| --debug, -b           | DEBUG_ENABLED   <br> proxy.admin.debugEnabled   | false  | Enable proxy debug servlet<br>on admin port|
 | --metrics, -e         | METRICS_ENABLED <br> proxy.metrics.enabled      | false  | Enable proxy metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> proxy.metrics.port         | 8082   | Proxy metrics listen port           |
-| --debug, -b           | DEBUG_ENABLED   <br> proxy.metrics.debugEnabled | false  | Enable proxy debug servlet<br>on admin port|
 | --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath   |  | Certificate chain file path       |
 | --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath |  | Private key file path            |
 | --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |  | Trust certificate collection file path |
@@ -177,9 +178,9 @@ The only required argument is an agent config value, which should have an `agent
 | --name, -n            | AGENT_NAME      <br> agent.name                 |        | Agent name                          |
 | --admin, -r           | ADMIN_ENABLED   <br> agent.admin.enabled        | false  | Enable admin servlets               |
 | --admin_port, -i      | ADMIN_PORT      <br> agent.admin.port           | 8093   | Admin servlets port                 |
+| --debug, -b           | DEBUG_ENABLED   <br> agent.admin.debugEnabled   | false  | Enable agent debug servlet<br>on admin port|
 | --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
-| --debug, -b           | DEBUG_ENABLED   <br> agent.metrics.debugEnabled | false  | Enable agent debug servlet<br>on admin port|
 | --chunk               | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs | 32 | Threshold for chunking data to Proxy and buffer size (KBs) |
 | --gzip                | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes | 1024 | Minimum size for content to be gzipped (Bytes) |
 | --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath |  | Certificate chain file path         |
@@ -249,7 +250,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.6.2
+    pambrose/prometheus-proxy:1.6.3
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -257,7 +258,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:1.6.2
+    pambrose/prometheus-agent:1.6.3
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 

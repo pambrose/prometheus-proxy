@@ -18,17 +18,21 @@
 
 package io.prometheus
 
+import com.github.pambrose.common.dsl.KtorDsl.get
+import com.github.pambrose.common.dsl.KtorDsl.http
+import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
+import io.ktor.client.response.readText
+import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
-import io.prometheus.client.CollectorRegistry
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mu.KLogging
+import org.amshove.kluent.shouldBeGreaterThan
+import org.amshove.kluent.shouldEqual
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
 class NettyTestWithAdminMetricsTest : CommonTests(agent,
@@ -40,39 +44,53 @@ class NettyTestWithAdminMetricsTest : CommonTests(agent,
                                                                     startPort = 10900,
                                                                     caller = simpleClassName)) {
 
-  companion object : KLogging() {
-    private lateinit var proxy: Proxy
-    private lateinit var agent: Agent
+  @Test
+  fun adminDebugCallsTest() {
+    newHttpClient()
+        .use { httpClient ->
+          runBlocking {
+            http(httpClient) {
+              get("8093/debug".fixUrl()) { response ->
+                val body = response.readText()
+                body.length shouldBeGreaterThan 100
+                response.status shouldEqual HttpStatusCode.OK
+              }
+            }
+
+            http(httpClient) {
+              get("8092/debug".fixUrl()) { response ->
+                val body = response.readText()
+                body.length shouldBeGreaterThan 100
+                response.status shouldEqual HttpStatusCode.OK
+              }
+            }
+          }
+        }
+  }
+
+
+  companion object : CommonCompanion() {
 
     @JvmStatic
     @BeforeAll
-    fun setUp() {
-      CollectorRegistry.defaultRegistry.clear()
-
-      runBlocking {
-        launch(Dispatchers.Default) { proxy = startProxy(adminEnabled = true, metricsEnabled = true) }
-        launch(Dispatchers.Default) {
-          agent = startAgent(adminEnabled = true, metricsEnabled = true, chunkContentSizeKbs = 5)
-              .apply { awaitInitialConnection(10.seconds) }
-        }
-      }
-
-      // Wait long enough to trigger heartbeat for code coverage
-      sleep(15.seconds)
-
-      logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-    }
+    fun setUp() = setItUp({
+                            startProxy(adminEnabled = true,
+                                       debugEnabled = true,
+                                       metricsEnabled = true)
+                          },
+                          {
+                            startAgent(adminEnabled = true,
+                                       debugEnabled = true,
+                                       metricsEnabled = true,
+                                       chunkContentSizeKbs = 5)
+                          },
+                          {
+                            // Wait long enough to trigger heartbeat for code coverage
+                            sleep(15.seconds)
+                          })
 
     @JvmStatic
     @AfterAll
-    fun takeDown() {
-      runBlocking {
-        for (service in listOf(proxy, agent)) {
-          logger.info { "Stopping ${service.simpleClassName}" }
-          launch(Dispatchers.Default) { service.stopSync() }
-        }
-      }
-      logger.info { "Finished stopping ${proxy.simpleClassName} and ${agent.simpleClassName}" }
-    }
+    fun takeDown() = takeItDown()
   }
 }

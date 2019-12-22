@@ -18,7 +18,6 @@
 
 package io.prometheus.proxy
 
-import brave.Tracing
 import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
 import com.github.pambrose.common.concurrent.GenericIdleService
@@ -52,15 +51,10 @@ class ProxyGrpcService(private val proxy: Proxy,
 
   private val grpcServer: Server
 
-  private lateinit var tracing: Tracing
-  private lateinit var grpcTracing: GrpcTracing
+  private val tracing by lazy { proxy.zipkinReporterService.newTracing("grpc_server") }
+  private val grpcTracing by lazy { GrpcTracing.create(tracing) }
 
   init {
-    if (proxy.isZipkinEnabled) {
-      tracing = proxy.zipkinReporterService.newTracing("grpc_server")
-      grpcTracing = GrpcTracing.create(tracing)
-    }
-
     val options = proxy.options
     val tlsContext =
         if (options.certChainFilePath.isNotEmpty() || options.privateKeyFilePath.isNotEmpty())

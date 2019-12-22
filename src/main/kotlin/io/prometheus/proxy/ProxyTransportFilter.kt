@@ -26,9 +26,9 @@ import mu.KLogging
 
 class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
-  private fun getRemoteAddr(attributes: Attributes) = attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"
-
   override fun transportReady(attributes: Attributes): Attributes {
+    fun getRemoteAddr(attributes: Attributes) = attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"
+
     val agentContext = AgentContext(getRemoteAddr(attributes))
     proxy.agentContextManager.addAgentContext(agentContext)
     logger.debug { "Registering agentId: ${agentContext.agentId}" }
