@@ -153,10 +153,9 @@ class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyService
           ?.also { agentContext ->
             runBlocking {
               while (proxy.isRunning && agentContext.isValid())
-                agentContext.readScrapeRequest()
-                    ?.apply {
-                      observer.onNext(scrapeRequest)
-                    }
+                agentContext.readScrapeRequest()?.apply {
+                  observer.onNext(scrapeRequest)
+                }
             }
           }
       observer.onCompleted()

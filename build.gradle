@@ -136,10 +136,10 @@ jacocoTestReport {
   afterEvaluate {
     getClassDirectories().setFrom(files(classDirectories.files.collect {
       fileTree(dir: it,
-              excludes: [
-                      '**/ConfigVals*',
-                      'io/prometheus/grpc/**'
-              ])
+          excludes: [
+              '**/ConfigVals*',
+              'io/prometheus/grpc/**'
+          ])
     }))
   }
 }

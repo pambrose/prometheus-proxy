@@ -192,9 +192,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
   override fun shutDown() {
     if (proxy.isZipkinEnabled)
       tracing.close()
-
     httpServer.stop(5, 5, SECONDS)
-
     sleep(2.seconds)
   }
 

@@ -148,7 +148,7 @@ class Agent(val options: AgentOptions,
 
           for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
             launch(Dispatchers.Default) {
-              // The fetch occurs during the invoke()
+              // The url fetch occurs during the invoke() on the scrapeRequestAction
               val scrapeResponse = scrapeRequestAction.invoke()
               connectionContext.scrapeResultsChannel.send(scrapeResponse)
             }
