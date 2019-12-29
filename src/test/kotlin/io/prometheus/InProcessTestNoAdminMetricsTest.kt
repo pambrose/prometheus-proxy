@@ -24,12 +24,7 @@ import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class InProcessTestNoAdminMetricsTest : CommonTests(agent,
-                                                    ProxyCallTestArgs(agent,
-                                                                      httpServerCount = 5,
-                                                                      pathCount = 25,
-                                                                      sequentialQueryCount = 200,
-                                                                      parallelQueryCount = 20,
+class InProcessTestNoAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent,
                                                                       startPort = 10100,
                                                                       caller = simpleClassName)) {
 

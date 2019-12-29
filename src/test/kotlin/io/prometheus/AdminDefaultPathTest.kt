@@ -40,7 +40,7 @@ class AdminDefaultPathTest {
   fun proxyPingPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
             response.status shouldEqual HttpStatusCode.OK
             response.readText() shouldStartWith "pong"
           }
@@ -51,7 +51,7 @@ class AdminDefaultPathTest {
   fun agentPingPathTest() {
     agentConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
             response.status shouldEqual HttpStatusCode.OK
             response.readText() shouldStartWith "pong"
           }
@@ -62,7 +62,7 @@ class AdminDefaultPathTest {
   fun proxyVersionPathTest() {
     agentConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
             response.status shouldEqual HttpStatusCode.OK
             response.readText() shouldContain "Version"
           }
@@ -73,7 +73,7 @@ class AdminDefaultPathTest {
   fun agentVersionPathTest() {
     agentConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
             response.status shouldEqual HttpStatusCode.OK
             response.readText() shouldContain "Version"
           }
@@ -84,7 +84,7 @@ class AdminDefaultPathTest {
   fun proxyHealthCheckPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
             response.status shouldEqual HttpStatusCode.OK
             response.readText().length shouldBeGreaterThan 10
           }
@@ -95,7 +95,7 @@ class AdminDefaultPathTest {
   fun agentHealthCheckPathTest() {
     agentConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
             response.readText().length shouldBeGreaterThan 10
           }
         }
@@ -105,7 +105,7 @@ class AdminDefaultPathTest {
   fun proxyThreadDumpPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
             response.readText().length shouldBeGreaterThan 10
           }
         }
@@ -113,7 +113,7 @@ class AdminDefaultPathTest {
 
   @Test
   fun agentThreadDumpPathTest() {
-    blockingGet("${agentConfigVals.admin.port}/${agentConfigVals.admin.threadDumpPath}".fixUrl()) { response ->
+    blockingGet("${agentConfigVals.admin.port}/${agentConfigVals.admin.threadDumpPath}".addPrefix()) { response ->
       response.readText().length shouldBeGreaterThan 10
     }
   }

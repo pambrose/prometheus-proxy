@@ -38,14 +38,14 @@ object SimpleTests : KLogging() {
 
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
-    blockingGet("${TestConstants.PROXY_PORT}/".fixUrl()) { response ->
+    blockingGet("${TestConstants.PROXY_PORT}/".addPrefix()) { response ->
       response.status shouldEqual HttpStatusCode.NotFound
     }
   }
 
   fun invalidPathTest(caller: String) {
     logger.debug { "Calling invalidPathTest() from $caller" }
-    blockingGet("${TestConstants.PROXY_PORT}/invalid_path".fixUrl()) { response ->
+    blockingGet("${TestConstants.PROXY_PORT}/invalid_path".addPrefix()) { response ->
       response.status shouldEqual HttpStatusCode.NotFound
     }
   }
@@ -60,7 +60,7 @@ object SimpleTests : KLogging() {
     repeat(TestConstants.REPS) { i ->
       val path = "test-$i"
       pathManager.let { manager ->
-        manager.registerPath(path, "${TestConstants.PROXY_PORT}/$path".fixUrl())
+        manager.registerPath(path, "${TestConstants.PROXY_PORT}/$path".addPrefix())
         cnt++
         manager.pathMapSize() shouldEqual originalSize + cnt
         manager.unregisterPath(path)
@@ -73,8 +73,8 @@ object SimpleTests : KLogging() {
   fun invalidAgentUrlTest(pathManager: AgentPathManager, caller: String, badPath: String = "badPath") {
     logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
-    pathManager.registerPath(badPath, "33/metrics".fixUrl())
-    blockingGet("${TestConstants.PROXY_PORT}/$badPath".fixUrl()) { response ->
+    pathManager.registerPath(badPath, "33/metrics".addPrefix())
+    blockingGet("${TestConstants.PROXY_PORT}/$badPath".addPrefix()) { response ->
       response.status shouldEqual HttpStatusCode.NotFound
     }
     pathManager.unregisterPath(badPath)
@@ -94,7 +94,7 @@ object SimpleTests : KLogging() {
           List(TestConstants.REPS) { i ->
             GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
               val path = "test-$i}"
-              val url = "${TestConstants.PROXY_PORT}/$path".fixUrl()
+              val url = "${TestConstants.PROXY_PORT}/$path".addPrefix()
               mutex.withLock { paths += path }
               pathManager.registerPath(path, url)
             }

@@ -35,12 +35,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
-class NettyTestWithAdminMetricsTest : CommonTests(agent,
-                                                  ProxyCallTestArgs(agent,
-                                                                    httpServerCount = 5,
-                                                                    pathCount = 25,
-                                                                    sequentialQueryCount = 200,
-                                                                    parallelQueryCount = 20,
+class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent,
                                                                     startPort = 10900,
                                                                     caller = simpleClassName)) {
 
@@ -50,7 +45,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(agent,
         .use { httpClient ->
           runBlocking {
             http(httpClient) {
-              get("8093/debug".fixUrl()) { response ->
+              get("8093/debug".addPrefix()) { response ->
                 val body = response.readText()
                 body.length shouldBeGreaterThan 100
                 response.status shouldEqual HttpStatusCode.OK
@@ -58,7 +53,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(agent,
             }
 
             http(httpClient) {
-              get("8092/debug".fixUrl()) { response ->
+              get("8092/debug".addPrefix()) { response ->
                 val body = response.readText()
                 body.length shouldBeGreaterThan 100
                 response.status shouldEqual HttpStatusCode.OK

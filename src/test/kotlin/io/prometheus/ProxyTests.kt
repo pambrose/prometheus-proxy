@@ -36,6 +36,10 @@ import io.ktor.routing.routing
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.embeddedServer
+import io.prometheus.CommonTests.Companion.HTTP_SERVER_COUNT
+import io.prometheus.CommonTests.Companion.PARALLEL_QUERY_COUNT
+import io.prometheus.CommonTests.Companion.PATH_COUNT
+import io.prometheus.CommonTests.Companion.SEQUENTIAL_QUERY_COUNT
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
@@ -57,10 +61,10 @@ import kotlin.time.minutes
 import kotlin.time.seconds
 
 class ProxyCallTestArgs(val agent: Agent,
-                        val httpServerCount: Int,
-                        val pathCount: Int,
-                        val sequentialQueryCount: Int,
-                        val parallelQueryCount: Int,
+                        val httpServerCount: Int = HTTP_SERVER_COUNT,
+                        val pathCount: Int = PATH_COUNT,
+                        val sequentialQueryCount: Int = SEQUENTIAL_QUERY_COUNT,
+                        val parallelQueryCount: Int = PARALLEL_QUERY_COUNT,
                         val startPort: Int = 9600,
                         val caller: String)
 
@@ -91,8 +95,8 @@ object ProxyTests : KLogging() {
       }
     }
 
-    pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".fixUrl())
-    blockingGet("$PROXY_PORT/$proxyPath".fixUrl()) { response ->
+    pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".addPrefix())
+    blockingGet("$PROXY_PORT/$proxyPath".addPrefix()) { response ->
       response.status shouldEqual HttpStatusCode.ServiceUnavailable
     }
     pathManager.unregisterPath("/$proxyPath")
@@ -165,7 +169,7 @@ object ProxyTests : KLogging() {
     logger.debug { "Registering paths" }
     repeat(args.pathCount) { i ->
       val index = httpServers.size.random()
-      args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".fixUrl())
+      args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".addPrefix())
       pathMap[i] = index
     }
 
@@ -181,10 +185,11 @@ object ProxyTests : KLogging() {
                   .use { httpClient ->
                     val counter = AtomicInteger(0)
                     repeat(args.sequentialQueryCount) { cnt ->
-                      val job = launch(dispatcher + coroutineExceptionHandler(logger)) {
-                        callProxy(httpClient, pathMap, "Sequential $cnt")
-                        counter.incrementAndGet()
-                      }
+                      val job =
+                          launch(dispatcher + coroutineExceptionHandler(logger)) {
+                            callProxy(httpClient, pathMap, "Sequential $cnt")
+                            counter.incrementAndGet()
+                          }
 
                       job.join()
                       job.getCancellationException().cause.shouldBeNull()
@@ -264,7 +269,7 @@ object ProxyTests : KLogging() {
     httpIndex.shouldNotBeNull()
 
     http(httpClient) {
-      get("$PROXY_PORT/proxy-$index".fixUrl()) { response ->
+      get("$PROXY_PORT/proxy-$index".addPrefix()) { response ->
         val body = response.readText()
         body shouldEqual contentMap[httpIndex]
         response.status shouldEqual HttpStatusCode.OK

@@ -24,12 +24,7 @@ import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class TlsWithMutualAuthTest : CommonTests(agent,
-                                          ProxyCallTestArgs(agent,
-                                                            httpServerCount = 5,
-                                                            pathCount = 50,
-                                                            sequentialQueryCount = 200,
-                                                            parallelQueryCount = 20,
+class TlsWithMutualAuthTest : CommonTests(ProxyCallTestArgs(agent,
                                                             startPort = 10500,
                                                             caller = simpleClassName)) {
 

@@ -43,7 +43,7 @@ class AdminNonDefaultPathTest {
           admin.port shouldEqual 8099
           admin.pingPath shouldEqual "pingPath2"
 
-          blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
             response.status shouldEqual HttpStatusCode.OK
             response.readText() shouldStartWith "pong"
           }
@@ -57,7 +57,7 @@ class AdminNonDefaultPathTest {
           admin.port shouldEqual 8099
           admin.versionPath shouldEqual "versionPath2"
 
-          blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
             response.status shouldEqual HttpStatusCode.OK
             response.readText() shouldContain "Version"
           }
@@ -70,7 +70,7 @@ class AdminNonDefaultPathTest {
         .also { admin ->
           admin.healthCheckPath shouldEqual "healthCheckPath2"
 
-          blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
             response.status shouldEqual HttpStatusCode.OK
             response.readText().length shouldBeGreaterThan 10
           }
@@ -83,7 +83,7 @@ class AdminNonDefaultPathTest {
         .also { admin ->
           admin.threadDumpPath shouldEqual "threadDumpPath2"
 
-          blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
             response.readText().length shouldBeGreaterThan 10
           }
         }
