@@ -27,7 +27,7 @@ import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.application.call
 import io.ktor.client.HttpClient
-import io.ktor.client.response.readText
+import io.ktor.client.statement.readText
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpStatusCode
 import io.ktor.response.respondText
@@ -50,7 +50,6 @@ import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.set
 import kotlin.time.milliseconds
@@ -101,7 +100,7 @@ object ProxyTests : KLogging() {
     runBlocking {
       launch(Dispatchers.Default) {
         logger.info { "Stopping httpServer" }
-        httpServer.stop(5, 5, SECONDS)
+        httpServer.stop(5.seconds.toLongMilliseconds(), 5.seconds.toLongMilliseconds())
         delay(5.seconds)
       }
     }
@@ -248,7 +247,7 @@ object ProxyTests : KLogging() {
       httpServers.forEach { httpServer ->
         launch(Dispatchers.Default) {
           logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
-          httpServer.server.stop(5, 5, SECONDS)
+          httpServer.server.stop(5.seconds.toLongMilliseconds(), 5.seconds.toLongMilliseconds())
           delay(5.seconds)
         }
       }

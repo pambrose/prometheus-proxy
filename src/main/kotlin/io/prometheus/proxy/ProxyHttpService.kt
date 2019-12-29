@@ -49,7 +49,6 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
 import mu.KLogging
-import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.time.Duration
 import kotlin.time.milliseconds
 import kotlin.time.seconds
@@ -192,7 +191,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
   override fun shutDown() {
     if (proxy.isZipkinEnabled)
       tracing.close()
-    httpServer.stop(5, 5, SECONDS)
+    httpServer.stop(5.seconds.toLongMilliseconds(), 5.seconds.toLongMilliseconds())
     sleep(2.seconds)
   }
 

@@ -25,8 +25,8 @@ import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
-import io.ktor.client.response.HttpResponse
-import io.ktor.client.response.readText
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.readText
 import io.ktor.http.isSuccess
 import io.prometheus.Agent
 import io.prometheus.common.ScrapeResults

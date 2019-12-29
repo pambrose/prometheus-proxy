@@ -19,7 +19,7 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.ktor.client.response.readText
+import io.ktor.client.statement.readText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy

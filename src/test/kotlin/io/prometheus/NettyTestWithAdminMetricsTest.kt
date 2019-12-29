@@ -23,7 +23,7 @@ import com.github.pambrose.common.dsl.KtorDsl.http
 import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
-import io.ktor.client.response.readText
+import io.ktor.client.statement.readText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
