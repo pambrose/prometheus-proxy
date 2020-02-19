@@ -23,9 +23,9 @@ import io.ktor.client.statement.readText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeGreaterThan
 import org.amshove.kluent.shouldContain
-import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldStartWith
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -41,7 +41,7 @@ class AdminDefaultPathTest {
     proxyConfigVals.admin
         .also { admin ->
           blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
-            response.status shouldEqual HttpStatusCode.OK
+            response.status shouldBeEqualTo HttpStatusCode.OK
             response.readText() shouldStartWith "pong"
           }
         }
@@ -52,7 +52,7 @@ class AdminDefaultPathTest {
     agentConfigVals.admin
         .also { admin ->
           blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
-            response.status shouldEqual HttpStatusCode.OK
+            response.status shouldBeEqualTo HttpStatusCode.OK
             response.readText() shouldStartWith "pong"
           }
         }
@@ -63,7 +63,7 @@ class AdminDefaultPathTest {
     agentConfigVals.admin
         .also { admin ->
           blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
-            response.status shouldEqual HttpStatusCode.OK
+            response.status shouldBeEqualTo HttpStatusCode.OK
             response.readText() shouldContain "Version"
           }
         }
@@ -74,7 +74,7 @@ class AdminDefaultPathTest {
     agentConfigVals.admin
         .also { admin ->
           blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
-            response.status shouldEqual HttpStatusCode.OK
+            response.status shouldBeEqualTo HttpStatusCode.OK
             response.readText() shouldContain "Version"
           }
         }
@@ -85,7 +85,7 @@ class AdminDefaultPathTest {
     proxyConfigVals.admin
         .also { admin ->
           blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
-            response.status shouldEqual HttpStatusCode.OK
+            response.status shouldBeEqualTo HttpStatusCode.OK
             response.readText().length shouldBeGreaterThan 10
           }
         }

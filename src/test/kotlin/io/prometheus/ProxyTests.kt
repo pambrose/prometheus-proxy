@@ -49,8 +49,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import mu.KLogging
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
-import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
@@ -97,7 +97,7 @@ object ProxyTests : KLogging() {
 
     pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".addPrefix())
     blockingGet("$PROXY_PORT/$proxyPath".addPrefix()) { response ->
-      response.status shouldEqual HttpStatusCode.ServiceUnavailable
+      response.status shouldBeEqualTo HttpStatusCode.ServiceUnavailable
     }
     pathManager.unregisterPath("/$proxyPath")
 
@@ -173,7 +173,7 @@ object ProxyTests : KLogging() {
       pathMap[i] = index
     }
 
-    args.agent.grpcService.pathMapSize() shouldEqual originalSize + args.pathCount
+    args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize + args.pathCount
 
     // Call the proxy sequentially
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
@@ -196,7 +196,7 @@ object ProxyTests : KLogging() {
 
                     }
 
-                    counter.get() shouldEqual args.sequentialQueryCount
+                    counter.get() shouldBeEqualTo args.sequentialQueryCount
                   }
             }
           }
@@ -225,7 +225,7 @@ object ProxyTests : KLogging() {
                       job.getCancellationException().cause.shouldBeNull()
                     }
 
-                    counter.get() shouldEqual args.parallelQueryCount
+                    counter.get() shouldBeEqualTo args.parallelQueryCount
                   }
             }
           }
@@ -243,9 +243,9 @@ object ProxyTests : KLogging() {
       }
     }
 
-    counter.get() shouldEqual pathMap.size
-    errorCnt.get() shouldEqual 0
-    args.agent.grpcService.pathMapSize() shouldEqual originalSize
+    counter.get() shouldBeEqualTo pathMap.size
+    errorCnt.get() shouldBeEqualTo 0
+    args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize
 
     logger.info { "Shutting down ${httpServers.size} httpServers" }
     runBlocking {
@@ -271,8 +271,8 @@ object ProxyTests : KLogging() {
     http(httpClient) {
       get("$PROXY_PORT/proxy-$index".addPrefix()) { response ->
         val body = response.readText()
-        body shouldEqual contentMap[httpIndex]
-        response.status shouldEqual HttpStatusCode.OK
+        body shouldBeEqualTo contentMap[httpIndex]
+        response.status shouldBeEqualTo HttpStatusCode.OK
       }
     }
   }

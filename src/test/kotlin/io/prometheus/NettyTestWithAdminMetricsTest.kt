@@ -28,8 +28,8 @@ import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import kotlinx.coroutines.runBlocking
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeGreaterThan
-import org.amshove.kluent.shouldEqual
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -48,7 +48,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent,
               get("8093/debug".addPrefix()) { response ->
                 val body = response.readText()
                 body.length shouldBeGreaterThan 100
-                response.status shouldEqual HttpStatusCode.OK
+                response.status shouldBeEqualTo HttpStatusCode.OK
               }
             }
 
@@ -56,7 +56,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent,
               get("8092/debug".addPrefix()) { response ->
                 val body = response.readText()
                 body.length shouldBeGreaterThan 100
-                response.status shouldEqual HttpStatusCode.OK
+                response.status shouldBeEqualTo HttpStatusCode.OK
               }
             }
           }

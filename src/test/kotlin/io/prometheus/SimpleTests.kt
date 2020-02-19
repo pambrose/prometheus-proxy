@@ -29,8 +29,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import mu.KLogging
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
-import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
 import kotlin.time.seconds
 
@@ -39,14 +39,14 @@ object SimpleTests : KLogging() {
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
     blockingGet("${TestConstants.PROXY_PORT}/".addPrefix()) { response ->
-      response.status shouldEqual HttpStatusCode.NotFound
+      response.status shouldBeEqualTo HttpStatusCode.NotFound
     }
   }
 
   fun invalidPathTest(caller: String) {
     logger.debug { "Calling invalidPathTest() from $caller" }
     blockingGet("${TestConstants.PROXY_PORT}/invalid_path".addPrefix()) { response ->
-      response.status shouldEqual HttpStatusCode.NotFound
+      response.status shouldBeEqualTo HttpStatusCode.NotFound
     }
   }
 
@@ -62,10 +62,10 @@ object SimpleTests : KLogging() {
       pathManager.let { manager ->
         manager.registerPath(path, "${TestConstants.PROXY_PORT}/$path".addPrefix())
         cnt++
-        manager.pathMapSize() shouldEqual originalSize + cnt
+        manager.pathMapSize() shouldBeEqualTo originalSize + cnt
         manager.unregisterPath(path)
         cnt--
-        manager.pathMapSize() shouldEqual originalSize + cnt
+        manager.pathMapSize() shouldBeEqualTo originalSize + cnt
       }
     }
   }
@@ -75,7 +75,7 @@ object SimpleTests : KLogging() {
 
     pathManager.registerPath(badPath, "33/metrics".addPrefix())
     blockingGet("${TestConstants.PROXY_PORT}/$badPath".addPrefix()) { response ->
-      response.status shouldEqual HttpStatusCode.NotFound
+      response.status shouldBeEqualTo HttpStatusCode.NotFound
     }
     pathManager.unregisterPath(badPath)
   }
@@ -107,17 +107,17 @@ object SimpleTests : KLogging() {
       }.shouldNotBeNull()
     }
 
-    paths.size shouldEqual TestConstants.REPS
-    pathManager.pathMapSize() shouldEqual (originalSize + TestConstants.REPS)
+    paths.size shouldBeEqualTo TestConstants.REPS
+    pathManager.pathMapSize() shouldBeEqualTo (originalSize + TestConstants.REPS)
 
     runBlocking {
       withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
         val jobs =
-          List(paths.size) {
-            GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
-              pathManager.unregisterPath(paths[it])
+            List(paths.size) {
+              GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
+                pathManager.unregisterPath(paths[it])
+              }
             }
-          }
         jobs.forEach { job ->
           job.join()
           job.getCancellationException().cause.shouldBeNull()
@@ -125,6 +125,6 @@ object SimpleTests : KLogging() {
       }
     }
 
-    pathManager.pathMapSize() shouldEqual originalSize
+    pathManager.pathMapSize() shouldBeEqualTo originalSize
   }
 }

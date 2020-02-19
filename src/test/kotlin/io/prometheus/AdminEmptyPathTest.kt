@@ -23,7 +23,7 @@ import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.ConfigVals
-import org.amshove.kluent.shouldEqual
+import org.amshove.kluent.shouldBeEqualTo
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -36,11 +36,11 @@ class AdminEmptyPathTest {
   fun proxyPingPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          admin.port shouldEqual 8098
-          admin.pingPath shouldEqual ""
+          admin.port shouldBeEqualTo 8098
+          admin.pingPath shouldBeEqualTo ""
 
           blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
-            response.status shouldEqual HttpStatusCode.NotFound
+            response.status shouldBeEqualTo HttpStatusCode.NotFound
           }
         }
   }
@@ -49,11 +49,11 @@ class AdminEmptyPathTest {
   fun proxyVersionPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          admin.port shouldEqual 8098
-          admin.versionPath shouldEqual ""
+          admin.port shouldBeEqualTo 8098
+          admin.versionPath shouldBeEqualTo ""
 
           blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
-            response.status shouldEqual HttpStatusCode.NotFound
+            response.status shouldBeEqualTo HttpStatusCode.NotFound
           }
         }
   }
@@ -62,10 +62,10 @@ class AdminEmptyPathTest {
   fun proxyHealthCheckPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          admin.healthCheckPath shouldEqual ""
+          admin.healthCheckPath shouldBeEqualTo ""
 
           blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
-            response.status shouldEqual HttpStatusCode.NotFound
+            response.status shouldBeEqualTo HttpStatusCode.NotFound
           }
         }
   }
@@ -74,10 +74,10 @@ class AdminEmptyPathTest {
   fun proxyThreadDumpPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          admin.threadDumpPath shouldEqual ""
+          admin.threadDumpPath shouldBeEqualTo ""
 
           blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
-            response.status shouldEqual HttpStatusCode.NotFound
+            response.status shouldBeEqualTo HttpStatusCode.NotFound
           }
         }
   }
