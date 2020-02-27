@@ -32,8 +32,8 @@ def protocVersion = '3.11.3'
 def serializationVersion = '0.13.0'
 def slf4jVersion = '1.7.28'
 def typesafeVersion = '1.4.0'
-def utilsVersion = 'a723ef3'
-def zipkinVersion = '5.9.5'
+def utilsVersion = '7acdaec'
+def zipkinVersion = '5.10.0'
 
 repositories {
   maven { url = "https://kotlin.bintray.com/kotlinx" }
