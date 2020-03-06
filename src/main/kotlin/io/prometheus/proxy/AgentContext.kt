@@ -25,8 +25,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.receiveOrNull
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.time.ClockMark
-import kotlin.time.MonoClock
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource.Monotonic
 
 class AgentContext(private val remoteAddr: String) {
 
@@ -35,9 +35,9 @@ class AgentContext(private val remoteAddr: String) {
   private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(Channel.UNLIMITED)
   private val channelBacklogSize = AtomicInteger(0)
 
-  private val clock = MonoClock
-  private var lastActivityTimeMark: ClockMark by nonNullableReference(clock.markNow())
-  private var lastRequestTimeMark: ClockMark by nonNullableReference(clock.markNow())
+  private val clock = Monotonic
+  private var lastActivityTimeMark: TimeMark by nonNullableReference(clock.markNow())
+  private var lastRequestTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var valid by atomicBoolean(true)
 
   var hostName: String by nonNullableReference()

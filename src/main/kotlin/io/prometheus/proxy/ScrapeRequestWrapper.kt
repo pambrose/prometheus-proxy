@@ -28,14 +28,14 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
-import kotlin.time.MonoClock
+import kotlin.time.TimeSource.Monotonic
 
 class ScrapeRequestWrapper(proxy: Proxy,
                            path: String,
                            val agentContext: AgentContext,
                            accept: String?,
                            debugEnabled: Boolean) {
-  private val clock = MonoClock
+  private val clock = Monotonic
   private val createTimeMark = clock.markNow()
   private val completeChannel = Channel<Boolean>()
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null

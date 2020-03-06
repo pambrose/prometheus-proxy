@@ -52,9 +52,9 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
-import kotlin.time.ClockMark
 import kotlin.time.Duration
-import kotlin.time.MonoClock
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource.Monotonic
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
@@ -74,12 +74,13 @@ class Agent(val options: AgentOptions,
                                isTestMode = testMode) {
 
   private val agentConfigVals = configVals.agent.internal
-  private val clock = MonoClock
+  private val clock = Monotonic
   private val agentHttpService = AgentHttpService(this)
   private val initialConnectionLatch = CountDownLatch(1)
+
   // Prime the limiter
   private val reconnectLimiter = RateLimiter.create(1.0 / agentConfigVals.reconnectPauseSecs).apply { acquire() }
-  private var lastMsgSentMark: ClockMark by nonNullableReference(clock.markNow())
+  private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
   val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
   val scrapeRequestBacklogSize = AtomicInteger(0)
