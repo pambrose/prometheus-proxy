@@ -17,7 +17,7 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 def annotationVersion = '1.3.2'
-def coroutinesVersion = '1.3.3'
+def coroutinesVersion = '1.3.4'
 def dropwizardVersion = '4.1.2'
 def grpcVersion = '1.27.1'
 def jcommanderVersion = '1.78'
@@ -32,7 +32,7 @@ def protocVersion = '3.11.4'
 def serializationVersion = '0.13.0'
 def slf4jVersion = '1.7.28'
 def typesafeVersion = '1.4.0'
-def utilsVersion = '7acdaec'
+def utilsVersion = 'a36f6be'
 def zipkinVersion = '5.10.1'
 
 repositories {
