@@ -24,8 +24,8 @@ import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class NettyTestNoAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent,
-                                                                  startPort = 10500,
+class NettyTestNoAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
+                                                                  startPort = 10900,
                                                                   caller = simpleClassName)) {
 
   companion object : CommonCompanion() {

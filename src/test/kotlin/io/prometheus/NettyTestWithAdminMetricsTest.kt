@@ -35,8 +35,8 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
-class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent,
-                                                                    startPort = 10900,
+class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
+                                                                    startPort = 10300,
                                                                     caller = simpleClassName)) {
 
   @Test

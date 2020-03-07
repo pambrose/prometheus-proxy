@@ -24,7 +24,7 @@ import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class InProcessTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent,
+class InProcessTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
                                                                         startPort = 10700,
                                                                         caller = simpleClassName)) {
 

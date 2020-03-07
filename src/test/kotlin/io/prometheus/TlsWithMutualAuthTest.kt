@@ -25,7 +25,7 @@ import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
 class TlsWithMutualAuthTest : CommonTests(ProxyCallTestArgs(agent = agent,
-                                                            startPort = 10500,
+                                                            startPort = 10800,
                                                             caller = simpleClassName)) {
 
   companion object : CommonCompanion() {
