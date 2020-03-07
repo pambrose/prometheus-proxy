@@ -2,7 +2,6 @@
 
 package io.prometheus
 
-import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.util.simpleClassName
 import io.prometheus.client.CollectorRegistry
 import kotlinx.coroutines.Dispatchers
@@ -35,9 +34,11 @@ open class CommonCompanion : KLogging() {
         logger.info { "Stopping ${service.simpleClassName}" }
         launch(Dispatchers.Default) { service.stopSync() }
       }
-      // Give stopSync() a chance to finish (travis issue)
-      delay(2.seconds)
     }
+
+    // Give stopSync() a chance to finish (travis issue)
+    Thread.sleep(2.seconds.toLongMilliseconds())
+
     logger.info { "Stopped ${proxy.simpleClassName} and ${agent.simpleClassName}" }
   }
 }
