@@ -36,9 +36,6 @@ open class CommonCompanion : KLogging() {
       }
     }
 
-    // Give stopSync() a chance to finish (travis issue)
-    Thread.sleep(2.seconds.toLongMilliseconds())
-
     logger.info { "Stopped ${proxy.simpleClassName} and ${agent.simpleClassName}" }
   }
 }
