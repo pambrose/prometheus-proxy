@@ -27,58 +27,58 @@ dependencies {
   implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
   implementation "org.jetbrains.kotlin:kotlin-reflect"
 
-  implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime:${serializationVersion}"
-  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${coroutinesVersion}"
-  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:${coroutinesVersion}"
-  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:${coroutinesVersion}"
+  implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime:${serialization_version}"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${coroutines_version}"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:${coroutines_version}"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:${coroutines_version}"
 
-  implementation "io.grpc:grpc-all:${grpcVersion}"
+  implementation "io.grpc:grpc-all:${grpc_version}"
 
-  implementation "com.github.pambrose.common-utils:core-utils:${utilsVersion}"
-  implementation "com.github.pambrose.common-utils:corex-utils:${utilsVersion}"
-  implementation "com.github.pambrose.common-utils:dropwizard-utils:${utilsVersion}"
-  implementation "com.github.pambrose.common-utils:guava-utils:${utilsVersion}"
-  implementation "com.github.pambrose.common-utils:grpc-utils:${utilsVersion}"
-  implementation "com.github.pambrose.common-utils:jetty-utils:${utilsVersion}"
-  implementation "com.github.pambrose.common-utils:ktor-client-utils:${utilsVersion}"
-  implementation "com.github.pambrose.common-utils:prometheus-utils:${utilsVersion}"
-  implementation "com.github.pambrose.common-utils:service-utils:${utilsVersion}"
-  implementation "com.github.pambrose.common-utils:zipkin-utils:${utilsVersion}"
+  implementation "com.github.pambrose.common-utils:core-utils:${utils_version}"
+  implementation "com.github.pambrose.common-utils:corex-utils:${utils_version}"
+  implementation "com.github.pambrose.common-utils:dropwizard-utils:${utils_version}"
+  implementation "com.github.pambrose.common-utils:guava-utils:${utils_version}"
+  implementation "com.github.pambrose.common-utils:grpc-utils:${utils_version}"
+  implementation "com.github.pambrose.common-utils:jetty-utils:${utils_version}"
+  implementation "com.github.pambrose.common-utils:ktor-client-utils:${utils_version}"
+  implementation "com.github.pambrose.common-utils:prometheus-utils:${utils_version}"
+  implementation "com.github.pambrose.common-utils:service-utils:${utils_version}"
+  implementation "com.github.pambrose.common-utils:zipkin-utils:${utils_version}"
 
-  implementation "org.eclipse.jetty:jetty-servlet:${jettyVersion}"
+  implementation "org.eclipse.jetty:jetty-servlet:${jetty_version}"
 
-  implementation "javax.annotation:javax.annotation-api:${annotationVersion}"
-  implementation "com.beust:jcommander:${jcommanderVersion}"
-  implementation "com.typesafe:config:${typesafeVersion}"
+  implementation "javax.annotation:javax.annotation-api:${annotation_version}"
+  implementation "com.beust:jcommander:${jcommander_version}"
+  implementation "com.typesafe:config:${typesafe_version}"
 
-  implementation "io.prometheus:simpleclient:${prometheusVersion}"
+  implementation "io.prometheus:simpleclient:${prometheus_version}"
 
-  implementation "io.ktor:ktor-server-core:${ktorVersion}"
-  implementation "io.ktor:ktor-server-cio:${ktorVersion}"
-  implementation "io.ktor:ktor-client-core:${ktorVersion}"
-  implementation "io.ktor:ktor-client-cio:${ktorVersion}"
+  implementation "io.ktor:ktor-server-core:${ktor_version}"
+  implementation "io.ktor:ktor-server-cio:${ktor_version}"
+  implementation "io.ktor:ktor-client-core:${ktor_version}"
+  implementation "io.ktor:ktor-client-cio:${ktor_version}"
 
-  implementation "io.dropwizard.metrics:metrics-healthchecks:${dropwizardVersion}"
+  implementation "io.dropwizard.metrics:metrics-healthchecks:${dropwizard_version}"
 
-  implementation "io.zipkin.brave:brave-instrumentation-grpc:${zipkinVersion}"
+  implementation "io.zipkin.brave:brave-instrumentation-grpc:${zipkin_version}"
 
-  implementation "ch.qos.logback:logback-classic:${logbackVersion}"
-  implementation "org.slf4j:jul-to-slf4j:${slf4jVersion}"
-  implementation "io.github.microutils:kotlin-logging:${loggingVersion}"
+  implementation "ch.qos.logback:logback-classic:${logback_version}"
+  implementation "org.slf4j:jul-to-slf4j:${slf4j_version}"
+  implementation "io.github.microutils:kotlin-logging:${logging_version}"
 
-  testImplementation "org.amshove.kluent:kluent:${kluentVersion}"
-  testImplementation "org.junit.jupiter:junit-jupiter-api:$junitVersion"
-  testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
+  testImplementation "org.amshove.kluent:kluent:${kluent_version}"
+  testImplementation "org.junit.jupiter:junit-jupiter-api:$junit_version"
+  testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junit_version"
 }
 
 compileKotlin.dependsOn ':generateProto'
 
 protobuf {
   protoc {
-    artifact = "com.google.protobuf:protoc:${protocVersion}"
+    artifact = "com.google.protobuf:protoc:${protoc_version}"
   }
   plugins {
-    grpc { artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}" }
+    grpc { artifact = "io.grpc:protoc-gen-grpc-java:${grpc_version}" }
   }
   generateProtoTasks {
     all()*.plugins {
