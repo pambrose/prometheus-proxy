@@ -48,7 +48,12 @@ internal fun Application.configServer(proxy: Proxy) {
 
   install(DefaultHeaders)
 
-  //install(CallLogging)
+  /*
+  install(CallLogging){
+    level = Level.INFO
+    filter { call -> call.request.path().startsWith("/") }
+  }
+  */
 
   install(Compression) {
     gzip {
