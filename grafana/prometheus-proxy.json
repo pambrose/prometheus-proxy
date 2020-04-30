@@ -981,7 +981,7 @@
           },
           "targets": [
             {
-              "expr": "proxy_cummulative_agent_backlog_size",
+              "expr": "proxy_cumulative_agent_backlog_size",
               "intervalFactor": 2,
               "legendFormat": "",
               "metric": "proxy_connected_agents",
@@ -1145,7 +1145,7 @@
           },
           "targets": [
             {
-              "expr": "proxy_cummulative_agent_backlog_size",
+              "expr": "proxy_cumulative_agent_backlog_size",
               "intervalFactor": 2,
               "legendFormat": "",
               "metric": "proxy_connected_agents",
@@ -1154,7 +1154,7 @@
             }
           ],
           "thresholds": "",
-          "title": "Cummulative Agent Backlog Size",
+          "title": "Cumulative Agent Backlog Size",
           "type": "singlestat",
           "valueFontSize": "80%",
           "valueMaps": [

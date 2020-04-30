@@ -9,8 +9,8 @@
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for 
-collecting metrics. The pull model is problematic when a Prometheus server and its metrics endpoints are separated by a 
-firewall. [Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints 
+collecting metrics. The pull model is problematic when a firewall separates a Prometheus server and its metrics endpoints. 
+[Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints 
 running behind a firewall and preserves the pull model.
 
 The `prometheus-proxy` runtime comprises 2 services:
@@ -45,7 +45,7 @@ java -jar prometheus-agent.jar -Dagent.proxy.hostname=mymachine.local --config h
 
 If prometheus-proxy were running on a machine named *mymachine.local* and the
 `agent.pathConfigs` value in the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) 
-config file were defined as:
+config file had the contents:
 
 ```hocon
 agent {
@@ -141,7 +141,7 @@ to use `/app` as the base directory in the target for `--mount` options.
 
 The proxy and agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
 Highlights include:
-* supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
+* support for files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
 * config files can be files or urls
 * config values can come from CLI options, environment vars, Java system properties, and/or config files.
 * config files can reference environment variables
@@ -196,7 +196,7 @@ Misc notes:
 * JSON config files must have a *.json* suffix
 * Java Properties config files must have a *.properties*  or *.prop* suffix
 * HOCON config files must have a *.conf* suffix
-* Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
+* Option values are evaluated in the order: CLI, environment vars, and finally config file vals
 * Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
 
 ### Admin Servlets
@@ -223,8 +223,8 @@ Agents connect to a proxy using [gRPC](https://grpc.io). gRPC supports TLS with 
 necessary certificate and key file paths can be specified via CLI args, environment variables and configuration file settings.
 
 The gRPC docs describe [how to setup TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
-The certificates and keys necessary to test TLS support are included in the 
-[repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs).
+The [repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs) includes the
+certificates and keys necessary to test TLS support. 
 
 These settings are required to run TLS without mutual authentication:
 * certChainFilePath and privateKeyFilePath on the proxy
