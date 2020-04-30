@@ -9,8 +9,8 @@
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for 
-collecting metrics. The pull model is problematic when a Prometheus server and its metrics endpoints are separated by a 
-firewall. [Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints 
+collecting metrics. The pull model is problematic when a firewall separates a Prometheus server and its metrics endpoints. 
+[Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints 
 running behind a firewall and preserves the pull model.
 
 The `prometheus-proxy` runtime comprises 2 services:
@@ -45,7 +45,7 @@ java -jar prometheus-agent.jar -Dagent.proxy.hostname=mymachine.local --config h
 
 If prometheus-proxy were running on a machine named *mymachine.local* and the
 `agent.pathConfigs` value in the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) 
-config file were defined as:
+config file had the contents:
 
 ```hocon
 agent {
@@ -97,8 +97,8 @@ scrape_configs:
 
 The docker images are available via:
 ```bash
-docker pull pambrose/prometheus-proxy:1.6.3
-docker pull pambrose/prometheus-agent:1.6.3
+docker pull pambrose/prometheus-proxy:1.6.4
+docker pull pambrose/prometheus-agent:1.6.4
 ```
 
 Start a proxy container with:
@@ -107,7 +107,7 @@ Start a proxy container with:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.6.3
+        pambrose/prometheus-proxy:1.6.4
 ```
 
 Start an agent container with:
@@ -115,7 +115,7 @@ Start an agent container with:
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.6.3
+        pambrose/prometheus-agent:1.6.4
 ```
 
 Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
@@ -131,7 +131,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:1.6.3
+    pambrose/prometheus-agent:1.6.4
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
@@ -141,7 +141,7 @@ to use `/app` as the base directory in the target for `--mount` options.
 
 The proxy and agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
 Highlights include:
-* supports files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
+* support for files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
 * config files can be files or urls
 * config values can come from CLI options, environment vars, Java system properties, and/or config files.
 * config files can reference environment variables
@@ -196,7 +196,7 @@ Misc notes:
 * JSON config files must have a *.json* suffix
 * Java Properties config files must have a *.properties*  or *.prop* suffix
 * HOCON config files must have a *.conf* suffix
-* Option values are evaluated in the order: CLI, enviroment vars, and finally config file vals
+* Option values are evaluated in the order: CLI, environment vars, and finally config file vals
 * Property values can be set as a java -D arg to  or as a proxy or agent jar -D arg.
 
 ### Admin Servlets
@@ -223,8 +223,8 @@ Agents connect to a proxy using [gRPC](https://grpc.io). gRPC supports TLS with 
 necessary certificate and key file paths can be specified via CLI args, environment variables and configuration file settings.
 
 The gRPC docs describe [how to setup TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
-The certificates and keys necessary to test TLS support are included in the 
-[repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs).
+The [repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs) includes the
+certificates and keys necessary to test TLS support. 
 
 These settings are required to run TLS without mutual authentication:
 * certChainFilePath and privateKeyFilePath on the proxy
@@ -250,7 +250,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.6.3
+    pambrose/prometheus-proxy:1.6.4
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -258,7 +258,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:1.6.3
+    pambrose/prometheus-agent:1.6.4
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 

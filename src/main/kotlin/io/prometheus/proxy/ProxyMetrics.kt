@@ -1,11 +1,11 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,7 +24,7 @@ import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Proxy
 
-class ProxyMetrics(proxy: Proxy) {
+internal class ProxyMetrics(proxy: Proxy) {
 
   val scrapeRequestCount =
       counter {
@@ -79,8 +79,8 @@ class ProxyMetrics(proxy: Proxy) {
                           help = "Proxy scrape map size",
                           data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() })
 
-    SamplerGaugeCollector(name = "proxy_cummulative_agent_backlog_size",
-                          help = "Proxy cummulative agent backlog size",
+    SamplerGaugeCollector(name = "proxy_cumulative_agent_backlog_size",
+                          help = "Proxy cumulative agent backlog size",
                           data = { proxy.agentContextManager.totalAgentScrapeRequestBacklogSize.toDouble() })
   }
 }

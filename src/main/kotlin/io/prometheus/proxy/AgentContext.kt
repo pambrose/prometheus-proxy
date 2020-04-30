@@ -1,11 +1,11 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,19 +25,19 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.receiveOrNull
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.time.ClockMark
-import kotlin.time.MonoClock
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource.Monotonic
 
-class AgentContext(private val remoteAddr: String) {
+internal class AgentContext(private val remoteAddr: String) {
 
   val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
 
   private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(Channel.UNLIMITED)
   private val channelBacklogSize = AtomicInteger(0)
 
-  private val clock = MonoClock
-  private var lastActivityTimeMark: ClockMark by nonNullableReference(clock.markNow())
-  private var lastRequestTimeMark: ClockMark by nonNullableReference(clock.markNow())
+  private val clock = Monotonic
+  private var lastActivityTimeMark: TimeMark by nonNullableReference(clock.markNow())
+  private var lastRequestTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var valid by atomicBoolean(true)
 
   var hostName: String by nonNullableReference()
@@ -64,10 +64,9 @@ class AgentContext(private val remoteAddr: String) {
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
-      scrapeRequestChannel.receiveOrNull()
-          ?.also {
-            channelBacklogSize.decrementAndGet()
-          }
+      scrapeRequestChannel.receiveOrNull()?.apply {
+        channelBacklogSize.decrementAndGet()
+      }
 
   fun isValid() = valid && !scrapeRequestChannel.isClosedForReceive
 

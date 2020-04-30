@@ -1,11 +1,11 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,22 +25,24 @@ import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
-import io.ktor.client.response.HttpResponse
-import io.ktor.client.response.readText
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.readText
 import io.ktor.http.isSuccess
 import io.prometheus.Agent
 import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.ScrapeRequest
 import mu.KLogging
 import java.io.IOException
+import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicReference
 
-class AgentHttpService(val agent: Agent) {
+internal class AgentHttpService(val agent: Agent) {
 
   suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResults =
       ScrapeResults(agentId = request.agentId, scrapeId = request.scrapeId).also { scrapeResults ->
         val scrapeMsg = AtomicReference("")
         val path = request.path
+        val encodedQueryParams = request.encodedQueryParams
         val pathContext = agent.pathManager[path]
 
         if (pathContext == null) {
@@ -51,13 +53,20 @@ class AgentHttpService(val agent: Agent) {
         }
         else {
           val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
-          val url = pathContext.url
+          // Add the incoming query params to the url
+          val url = pathContext.url +
+              (if (encodedQueryParams.isNotEmpty())
+                "?${URLDecoder.decode(encodedQueryParams, Charsets.UTF_8.name())}"
+              else "")
+
           logger.debug { "Fetching $pathContext" }
+          if (encodedQueryParams.isNotEmpty())
+            logger.debug { "URL: $url" }
 
           // Content is fetched here
           try {
             http {
-              get(url, getSetUp(request), getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
+              get(url, setup(request), getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
             }
           } catch (e: IOException) {
             logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
@@ -75,7 +84,7 @@ class AgentHttpService(val agent: Agent) {
         agent.updateScrapeCounter(scrapeMsg.get())
       }
 
-  private fun getSetUp(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
+  private fun setup(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
     val accept: String? = request.accept
     if (accept?.isNotEmpty() == true)
       header(HttpHeaders.ACCEPT, accept)

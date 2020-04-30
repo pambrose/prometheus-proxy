@@ -1,12 +1,12 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ *  
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *  
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,9 +25,9 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeFalse
 import org.amshove.kluent.shouldBeTrue
-import org.amshove.kluent.shouldEqual
 import org.junit.jupiter.api.Test
 
 class DataClassTest {
@@ -49,27 +49,27 @@ class DataClassTest {
     newAdminConfig(vals.agent.admin.enabled, vals.agent.admin.port, vals.agent.admin)
       .also {
         it.enabled.shouldBeFalse()
-        it.port shouldEqual 888
+        it.port shouldBeEqualTo 888
       }
 
     newAdminConfig(true, 444, configVals("agent.admin.pingPath=a pingpath val").agent.admin)
       .also {
-        it.pingPath shouldEqual "a pingpath val"
+        it.pingPath shouldBeEqualTo "a pingpath val"
       }
 
     newAdminConfig(true, 444, configVals("agent.admin.versionPath=a versionpath val").agent.admin)
       .also {
-        it.versionPath shouldEqual "a versionpath val"
+        it.versionPath shouldBeEqualTo "a versionpath val"
       }
 
     newAdminConfig(true, 444, configVals("agent.admin.healthCheckPath=a healthCheckPath val").agent.admin)
       .also {
-        it.healthCheckPath shouldEqual "a healthCheckPath val"
+        it.healthCheckPath shouldBeEqualTo "a healthCheckPath val"
       }
 
     newAdminConfig(true, 444, configVals("agent.admin.threadDumpPath=a threadDumpPath val").agent.admin)
       .also {
-        it.threadDumpPath shouldEqual "a threadDumpPath val"
+        it.threadDumpPath shouldBeEqualTo "a threadDumpPath val"
       }
   }
 
@@ -82,12 +82,12 @@ class DataClassTest {
 
     newMetricsConfig(true, 555, configVals("agent.metrics.hostname=testval").agent.metrics)
       .also {
-        it.port shouldEqual 555
+        it.port shouldBeEqualTo 555
       }
 
     newMetricsConfig(true, 555, configVals("agent.metrics.path=a path val").agent.metrics)
       .also {
-        it.path shouldEqual "a path val"
+        it.path shouldBeEqualTo "a path val"
       }
 
     newMetricsConfig(true, 555, configVals("agent.metrics.standardExportsEnabled=true").agent.metrics)
@@ -130,22 +130,22 @@ class DataClassTest {
 
     newZipkinConfig(configVals("agent.internal.zipkin.hostname=testval").agent.internal.zipkin)
       .also {
-        it.hostname shouldEqual "testval"
+        it.hostname shouldBeEqualTo "testval"
       }
 
     newZipkinConfig(configVals("agent.internal.zipkin.port=999").agent.internal.zipkin)
       .also {
-        it.port shouldEqual 999
+        it.port shouldBeEqualTo 999
       }
 
     newZipkinConfig(configVals("agent.internal.zipkin.path=a path val").agent.internal.zipkin)
       .also {
-        it.path shouldEqual "a path val"
+        it.path shouldBeEqualTo "a path val"
       }
 
     newZipkinConfig(configVals("agent.internal.zipkin.serviceName=a service name").agent.internal.zipkin)
       .also {
-        it.serviceName shouldEqual "a service name"
+        it.serviceName shouldBeEqualTo "a service name"
       }
   }
 }

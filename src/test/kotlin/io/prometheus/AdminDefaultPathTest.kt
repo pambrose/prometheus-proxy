@@ -1,12 +1,12 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ *  
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *  
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,13 +19,13 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.ktor.client.response.readText
+import io.ktor.client.statement.readText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeGreaterThan
 import org.amshove.kluent.shouldContain
-import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldStartWith
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -40,8 +40,8 @@ class AdminDefaultPathTest {
   fun proxyPingPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { response ->
-            response.status shouldEqual HttpStatusCode.OK
+          blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
+            response.status shouldBeEqualTo HttpStatusCode.OK
             response.readText() shouldStartWith "pong"
           }
         }
@@ -51,8 +51,8 @@ class AdminDefaultPathTest {
   fun agentPingPathTest() {
     agentConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { response ->
-            response.status shouldEqual HttpStatusCode.OK
+          blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
+            response.status shouldBeEqualTo HttpStatusCode.OK
             response.readText() shouldStartWith "pong"
           }
         }
@@ -62,8 +62,8 @@ class AdminDefaultPathTest {
   fun proxyVersionPathTest() {
     agentConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { response ->
-            response.status shouldEqual HttpStatusCode.OK
+          blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
+            response.status shouldBeEqualTo HttpStatusCode.OK
             response.readText() shouldContain "Version"
           }
         }
@@ -73,8 +73,8 @@ class AdminDefaultPathTest {
   fun agentVersionPathTest() {
     agentConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { response ->
-            response.status shouldEqual HttpStatusCode.OK
+          blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
+            response.status shouldBeEqualTo HttpStatusCode.OK
             response.readText() shouldContain "Version"
           }
         }
@@ -84,8 +84,8 @@ class AdminDefaultPathTest {
   fun proxyHealthCheckPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { response ->
-            response.status shouldEqual HttpStatusCode.OK
+          blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
+            response.status shouldBeEqualTo HttpStatusCode.OK
             response.readText().length shouldBeGreaterThan 10
           }
         }
@@ -95,7 +95,7 @@ class AdminDefaultPathTest {
   fun agentHealthCheckPathTest() {
     agentConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
             response.readText().length shouldBeGreaterThan 10
           }
         }
@@ -105,7 +105,7 @@ class AdminDefaultPathTest {
   fun proxyThreadDumpPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { response ->
+          blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
             response.readText().length shouldBeGreaterThan 10
           }
         }
@@ -113,7 +113,7 @@ class AdminDefaultPathTest {
 
   @Test
   fun agentThreadDumpPathTest() {
-    blockingGet("${agentConfigVals.admin.port}/${agentConfigVals.admin.threadDumpPath}".fixUrl()) { response ->
+    blockingGet("${agentConfigVals.admin.port}/${agentConfigVals.admin.threadDumpPath}".addPrefix()) { response ->
       response.readText().length shouldBeGreaterThan 10
     }
   }

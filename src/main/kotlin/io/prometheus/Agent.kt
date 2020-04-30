@@ -1,11 +1,11 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -52,9 +52,9 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
-import kotlin.time.ClockMark
 import kotlin.time.Duration
-import kotlin.time.MonoClock
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource.Monotonic
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
@@ -74,19 +74,20 @@ class Agent(val options: AgentOptions,
                                isTestMode = testMode) {
 
   private val agentConfigVals = configVals.agent.internal
-  private val clock = MonoClock
+  private val clock = Monotonic
   private val agentHttpService = AgentHttpService(this)
   private val initialConnectionLatch = CountDownLatch(1)
+
   // Prime the limiter
   private val reconnectLimiter = RateLimiter.create(1.0 / agentConfigVals.reconnectPauseSecs).apply { acquire() }
-  private var lastMsgSentMark: ClockMark by nonNullableReference(clock.markNow())
+  private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
-  val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
-  val scrapeRequestBacklogSize = AtomicInteger(0)
-  val pathManager = AgentPathManager(this)
-  val grpcService = AgentGrpcService(this, options, inProcessServerName)
-  var agentId: String by nonNullableReference("")
-  val metrics by lazy { AgentMetrics(this) }
+  internal val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
+  internal val scrapeRequestBacklogSize = AtomicInteger(0)
+  internal val pathManager = AgentPathManager(this)
+  internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
+  internal var agentId: String by nonNullableReference("")
+  internal val metrics by lazy { AgentMetrics(this) }
 
   init {
     fun toPlainText() = """
@@ -148,7 +149,7 @@ class Agent(val options: AgentOptions,
 
           for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
             launch(Dispatchers.Default) {
-              // The fetch occurs during the invoke()
+              // The url fetch occurs during the invoke() on the scrapeRequestAction
               val scrapeResponse = scrapeRequestAction.invoke()
               connectionContext.scrapeResultsChannel.send(scrapeResponse)
             }
@@ -173,9 +174,9 @@ class Agent(val options: AgentOptions,
     }
   }
 
-  val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
+  internal val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
 
-  fun startTimer(): Summary.Timer? = metrics.scrapeRequestLatency.labels(agentName).startTimer()
+  internal fun startTimer(): Summary.Timer? = metrics.scrapeRequestLatency.labels(agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"
 
@@ -204,19 +205,19 @@ class Agent(val options: AgentOptions,
         logger.info { "Heartbeat disabled" }
       }
 
-  fun updateScrapeCounter(type: String) {
+  internal fun updateScrapeCounter(type: String) {
     if (type.isNotEmpty())
       metrics { scrapeRequestCount.labels(type).inc() }
   }
 
-  fun markMsgSent() {
+  internal fun markMsgSent() {
     lastMsgSentMark = clock.markNow()
   }
 
-  fun awaitInitialConnection(timeout: Duration) =
+  internal fun awaitInitialConnection(timeout: Duration) =
       initialConnectionLatch.await(timeout.toLongMilliseconds(), MILLISECONDS)
 
-  fun metrics(args: AgentMetrics.() -> Unit) {
+  internal fun metrics(args: AgentMetrics.() -> Unit) {
     if (isMetricsEnabled)
       args.invoke(metrics)
   }

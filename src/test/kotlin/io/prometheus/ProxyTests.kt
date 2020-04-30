@@ -1,11 +1,11 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,7 +27,7 @@ import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.application.call
 import io.ktor.client.HttpClient
-import io.ktor.client.response.readText
+import io.ktor.client.statement.readText
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpStatusCode
 import io.ktor.response.respondText
@@ -36,6 +36,10 @@ import io.ktor.routing.routing
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.embeddedServer
+import io.prometheus.CommonTests.Companion.HTTP_SERVER_COUNT
+import io.prometheus.CommonTests.Companion.PARALLEL_QUERY_COUNT
+import io.prometheus.CommonTests.Companion.PATH_COUNT
+import io.prometheus.CommonTests.Companion.SEQUENTIAL_QUERY_COUNT
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
@@ -45,12 +49,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import mu.KLogging
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
-import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldNotBeNull
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.set
 import kotlin.time.milliseconds
@@ -58,14 +61,14 @@ import kotlin.time.minutes
 import kotlin.time.seconds
 
 class ProxyCallTestArgs(val agent: Agent,
-                        val httpServerCount: Int,
-                        val pathCount: Int,
-                        val sequentialQueryCount: Int,
-                        val parallelQueryCount: Int,
+                        val httpServerCount: Int = HTTP_SERVER_COUNT,
+                        val pathCount: Int = PATH_COUNT,
+                        val sequentialQueryCount: Int = SEQUENTIAL_QUERY_COUNT,
+                        val parallelQueryCount: Int = PARALLEL_QUERY_COUNT,
                         val startPort: Int = 9600,
                         val caller: String)
 
-object ProxyTests : KLogging() {
+internal object ProxyTests : KLogging() {
 
   fun timeoutTest(pathManager: AgentPathManager,
                   caller: String,
@@ -92,16 +95,16 @@ object ProxyTests : KLogging() {
       }
     }
 
-    pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".fixUrl())
-    blockingGet("$PROXY_PORT/$proxyPath".fixUrl()) { response ->
-      response.status shouldEqual HttpStatusCode.ServiceUnavailable
+    pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".addPrefix())
+    blockingGet("$PROXY_PORT/$proxyPath".addPrefix()) { response ->
+      response.status shouldBeEqualTo HttpStatusCode.ServiceUnavailable
     }
     pathManager.unregisterPath("/$proxyPath")
 
     runBlocking {
       launch(Dispatchers.Default) {
         logger.info { "Stopping httpServer" }
-        httpServer.stop(5, 5, SECONDS)
+        httpServer.stop(5.seconds.toLongMilliseconds(), 5.seconds.toLongMilliseconds())
         delay(5.seconds)
       }
     }
@@ -166,11 +169,11 @@ object ProxyTests : KLogging() {
     logger.debug { "Registering paths" }
     repeat(args.pathCount) { i ->
       val index = httpServers.size.random()
-      args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".fixUrl())
+      args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".addPrefix())
       pathMap[i] = index
     }
 
-    args.agent.grpcService.pathMapSize() shouldEqual originalSize + args.pathCount
+    args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize + args.pathCount
 
     // Call the proxy sequentially
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
@@ -178,22 +181,22 @@ object ProxyTests : KLogging() {
         .use { dispatcher ->
           runBlocking {
             withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
-              newHttpClient()
-                  .use { httpClient ->
-                    val counter = AtomicInteger(0)
-                    repeat(args.sequentialQueryCount) { cnt ->
-                      val job = launch(dispatcher + coroutineExceptionHandler(logger)) {
+              newHttpClient().also { httpClient ->
+                val counter = AtomicInteger(0)
+                repeat(args.sequentialQueryCount) { cnt ->
+                  val job =
+                      launch(dispatcher + coroutineExceptionHandler(logger)) {
                         callProxy(httpClient, pathMap, "Sequential $cnt")
                         counter.incrementAndGet()
                       }
 
-                      job.join()
-                      job.getCancellationException().cause.shouldBeNull()
+                  job.join()
+                  job.getCancellationException().cause.shouldBeNull()
 
-                    }
+                }
 
-                    counter.get() shouldEqual args.sequentialQueryCount
-                  }
+                counter.get() shouldBeEqualTo args.sequentialQueryCount
+              }
             }
           }
         }
@@ -205,7 +208,7 @@ object ProxyTests : KLogging() {
           runBlocking {
             withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
               newHttpClient()
-                  .use { httpClient ->
+                  .also { httpClient ->
                     val counter = AtomicInteger(0)
                     val jobs =
                         List(args.parallelQueryCount) { cnt ->
@@ -221,7 +224,7 @@ object ProxyTests : KLogging() {
                       job.getCancellationException().cause.shouldBeNull()
                     }
 
-                    counter.get() shouldEqual args.parallelQueryCount
+                    counter.get() shouldBeEqualTo args.parallelQueryCount
                   }
             }
           }
@@ -239,16 +242,16 @@ object ProxyTests : KLogging() {
       }
     }
 
-    counter.get() shouldEqual pathMap.size
-    errorCnt.get() shouldEqual 0
-    args.agent.grpcService.pathMapSize() shouldEqual originalSize
+    counter.get() shouldBeEqualTo pathMap.size
+    errorCnt.get() shouldBeEqualTo 0
+    args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize
 
     logger.info { "Shutting down ${httpServers.size} httpServers" }
     runBlocking {
       httpServers.forEach { httpServer ->
         launch(Dispatchers.Default) {
           logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
-          httpServer.server.stop(5, 5, SECONDS)
+          httpServer.server.stop(5.seconds.toLongMilliseconds(), 5.seconds.toLongMilliseconds())
           delay(5.seconds)
         }
       }
@@ -265,10 +268,10 @@ object ProxyTests : KLogging() {
     httpIndex.shouldNotBeNull()
 
     http(httpClient) {
-      get("$PROXY_PORT/proxy-$index".fixUrl()) { response ->
+      get("$PROXY_PORT/proxy-$index".addPrefix()) { response ->
         val body = response.readText()
-        body shouldEqual contentMap[httpIndex]
-        response.status shouldEqual HttpStatusCode.OK
+        body shouldBeEqualTo contentMap[httpIndex]
+        response.status shouldBeEqualTo HttpStatusCode.OK
       }
     }
   }

@@ -1,12 +1,12 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ *  
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *  
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,25 +23,20 @@ import com.github.pambrose.common.dsl.KtorDsl.http
 import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
-import io.ktor.client.response.readText
+import io.ktor.client.statement.readText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import kotlinx.coroutines.runBlocking
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeGreaterThan
-import org.amshove.kluent.shouldEqual
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
-class NettyTestWithAdminMetricsTest : CommonTests(agent,
-                                                  ProxyCallTestArgs(agent,
-                                                                    httpServerCount = 5,
-                                                                    pathCount = 25,
-                                                                    sequentialQueryCount = 200,
-                                                                    parallelQueryCount = 20,
-                                                                    startPort = 10900,
+class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
+                                                                    startPort = 10300,
                                                                     caller = simpleClassName)) {
 
   @Test
@@ -50,18 +45,18 @@ class NettyTestWithAdminMetricsTest : CommonTests(agent,
         .use { httpClient ->
           runBlocking {
             http(httpClient) {
-              get("8093/debug".fixUrl()) { response ->
+              get("8093/debug".addPrefix()) { response ->
                 val body = response.readText()
                 body.length shouldBeGreaterThan 100
-                response.status shouldEqual HttpStatusCode.OK
+                response.status shouldBeEqualTo HttpStatusCode.OK
               }
             }
 
             http(httpClient) {
-              get("8092/debug".fixUrl()) { response ->
+              get("8092/debug".addPrefix()) { response ->
                 val body = response.readText()
                 body.length shouldBeGreaterThan 100
-                response.status shouldEqual HttpStatusCode.OK
+                response.status shouldBeEqualTo HttpStatusCode.OK
               }
             }
           }

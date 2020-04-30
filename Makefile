@@ -1,4 +1,4 @@
-VERSION=1.6.3
+VERSION=1.6.4
 
 default: compile
 
@@ -23,11 +23,15 @@ distro: clean compile jars
 
 docker-build:
 	docker build -f ./etc/docker/proxy.df -t pambrose/prometheus-proxy:${VERSION} .
+	docker build -f ./etc/docker/proxy.df -t pambrose/prometheus-proxy:latest .
 	docker build -f ./etc/docker/agent.df -t pambrose/prometheus-agent:${VERSION} .
+	docker build -f ./etc/docker/agent.df -t pambrose/prometheus-agent:latest .
 
 docker-push:
 	docker push pambrose/prometheus-proxy:${VERSION}
+	docker push pambrose/prometheus-proxy:latest
 	docker push pambrose/prometheus-agent:${VERSION}
+	docker push pambrose/prometheus-agent:latest
 
 all: distro docker-build docker-push
 
@@ -48,6 +52,9 @@ tree:
 
 versioncheck:
 	./gradlew dependencyUpdates
+
+refresh:
+	./gradlew --refresh-dependencies
 
 depends:
 	./gradlew dependencies

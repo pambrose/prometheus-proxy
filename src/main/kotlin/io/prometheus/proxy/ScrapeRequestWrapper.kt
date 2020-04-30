@@ -1,11 +1,11 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,14 +28,15 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
-import kotlin.time.MonoClock
+import kotlin.time.TimeSource.Monotonic
 
-class ScrapeRequestWrapper(proxy: Proxy,
-                           path: String,
-                           val agentContext: AgentContext,
-                           accept: String?,
-                           debugEnabled: Boolean) {
-  private val clock = MonoClock
+internal class ScrapeRequestWrapper(proxy: Proxy,
+                                    path: String,
+                                    encodedQueryParams: String,
+                                    val agentContext: AgentContext,
+                                    accept: String?,
+                                    debugEnabled: Boolean) {
+  private val clock = Monotonic
   private val createTimeMark = clock.markNow()
   private val completeChannel = Channel<Boolean>()
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
@@ -43,6 +44,7 @@ class ScrapeRequestWrapper(proxy: Proxy,
   val scrapeRequest = newScrapeRequest(agentContext.agentId,
                                        SCRAPE_ID_GENERATOR.getAndIncrement(),
                                        path,
+                                       encodedQueryParams,
                                        accept,
                                        debugEnabled)
 

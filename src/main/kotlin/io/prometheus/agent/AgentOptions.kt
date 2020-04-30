@@ -1,11 +1,11 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,17 +29,17 @@ import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
 import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
 
-class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
-    BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
+ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
+     BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
 
-  constructor(args: List<String>, exitOnMissingConfig: Boolean) :
-      this(Iterables.toArray<String>(args, String::class.java), exitOnMissingConfig)
+   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
+       this(Iterables.toArray<String>(args, String::class.java), exitOnMissingConfig)
 
-  @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
-  var proxyHostname = ""
-    private set
+   @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
+   var proxyHostname = ""
+     private set
 
-  @Parameter(names = ["-n", "--name"], description = "Agent name")
+   @Parameter(names = ["-n", "--name"], description = "Agent name")
   var agentName = ""
     private set
 

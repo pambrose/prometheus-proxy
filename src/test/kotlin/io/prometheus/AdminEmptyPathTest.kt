@@ -1,12 +1,12 @@
 /*
- * Copyright © 2019 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ *  
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *  
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,7 +23,7 @@ import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.ConfigVals
-import org.amshove.kluent.shouldEqual
+import org.amshove.kluent.shouldBeEqualTo
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -36,11 +36,11 @@ class AdminEmptyPathTest {
   fun proxyPingPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          admin.port shouldEqual 8098
-          admin.pingPath shouldEqual ""
+          admin.port shouldBeEqualTo 8098
+          admin.pingPath shouldBeEqualTo ""
 
-          blockingGet("${admin.port}/${admin.pingPath}".fixUrl()) { response ->
-            response.status shouldEqual HttpStatusCode.NotFound
+          blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
+            response.status shouldBeEqualTo HttpStatusCode.NotFound
           }
         }
   }
@@ -49,11 +49,11 @@ class AdminEmptyPathTest {
   fun proxyVersionPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          admin.port shouldEqual 8098
-          admin.versionPath shouldEqual ""
+          admin.port shouldBeEqualTo 8098
+          admin.versionPath shouldBeEqualTo ""
 
-          blockingGet("${admin.port}/${admin.versionPath}".fixUrl()) { response ->
-            response.status shouldEqual HttpStatusCode.NotFound
+          blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
+            response.status shouldBeEqualTo HttpStatusCode.NotFound
           }
         }
   }
@@ -62,10 +62,10 @@ class AdminEmptyPathTest {
   fun proxyHealthCheckPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          admin.healthCheckPath shouldEqual ""
+          admin.healthCheckPath shouldBeEqualTo ""
 
-          blockingGet("${admin.port}/${admin.healthCheckPath}".fixUrl()) { response ->
-            response.status shouldEqual HttpStatusCode.NotFound
+          blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
+            response.status shouldBeEqualTo HttpStatusCode.NotFound
           }
         }
   }
@@ -74,10 +74,10 @@ class AdminEmptyPathTest {
   fun proxyThreadDumpPathTest() {
     proxyConfigVals.admin
         .also { admin ->
-          admin.threadDumpPath shouldEqual ""
+          admin.threadDumpPath shouldBeEqualTo ""
 
-          blockingGet("${admin.port}/${admin.threadDumpPath}".fixUrl()) { response ->
-            response.status shouldEqual HttpStatusCode.NotFound
+          blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
+            response.status shouldBeEqualTo HttpStatusCode.NotFound
           }
         }
   }

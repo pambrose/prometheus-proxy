@@ -1,3 +1,19 @@
+/*
+ * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *  
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
 package io.prometheus
@@ -11,7 +27,7 @@ import io.prometheus.SimpleTests.missingPathTest
 import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import org.junit.jupiter.api.Test
 
-abstract class CommonTests(val agent: Agent, private val args: ProxyCallTestArgs) {
+abstract class CommonTests(private val args: ProxyCallTestArgs) {
 
   @Test
   fun proxyCallTest() = ProxyTests.proxyCallTest(args)
@@ -23,14 +39,21 @@ abstract class CommonTests(val agent: Agent, private val args: ProxyCallTestArgs
   fun invalidPathTest() = invalidPathTest(simpleClassName)
 
   @Test
-  fun addRemovePathsTest() = addRemovePathsTest(agent.pathManager, simpleClassName)
+  fun addRemovePathsTest() = addRemovePathsTest(args.agent.pathManager, simpleClassName)
 
   @Test
-  fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(agent.pathManager, simpleClassName)
+  fun threadedAddRemovePathsTest() = threadedAddRemovePathsTest(args.agent.pathManager, simpleClassName)
 
   @Test
-  fun invalidAgentUrlTest() = invalidAgentUrlTest(agent.pathManager, simpleClassName)
+  fun invalidAgentUrlTest() = invalidAgentUrlTest(args.agent.pathManager, simpleClassName)
 
   @Test
-  fun timeoutTest() = timeoutTest(agent.pathManager, simpleClassName)
+  fun timeoutTest() = timeoutTest(args.agent.pathManager, simpleClassName)
+
+  companion object {
+    const val HTTP_SERVER_COUNT = 5
+    const val PATH_COUNT = 50
+    const val SEQUENTIAL_QUERY_COUNT = 200
+    const val PARALLEL_QUERY_COUNT = 25
+  }
 }
