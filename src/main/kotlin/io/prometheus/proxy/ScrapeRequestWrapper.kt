@@ -32,6 +32,7 @@ import kotlin.time.TimeSource.Monotonic
 
 class ScrapeRequestWrapper(proxy: Proxy,
                            path: String,
+                           encodedQueryParams: String,
                            val agentContext: AgentContext,
                            accept: String?,
                            debugEnabled: Boolean) {
@@ -43,6 +44,7 @@ class ScrapeRequestWrapper(proxy: Proxy,
   val scrapeRequest = newScrapeRequest(agentContext.agentId,
                                        SCRAPE_ID_GENERATOR.getAndIncrement(),
                                        path,
+                                       encodedQueryParams,
                                        accept,
                                        debugEnabled)
 

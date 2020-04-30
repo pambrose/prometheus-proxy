@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction", "UnstableApiUsage")
 
 package io.prometheus.proxy
 
@@ -36,6 +36,7 @@ import io.ktor.features.minimumSize
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.formUrlEncode
 import io.ktor.http.isSuccess
 import io.ktor.request.ApplicationRequest
 import io.ktor.request.header
@@ -82,9 +83,14 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
             call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
 
             val path = call.request.path().drop(1)
-            logger.debug { "Servicing request for path: $path" }
+            val encodedQueryParams = call.request.queryParameters.formUrlEncode()
             val agentContext = proxy.pathManager[path]
             val responseResults = ResponseResults()
+
+            logger.debug {
+              "Servicing request for path: $path" +
+                  (if (encodedQueryParams.isNotEmpty()) " with query params $encodedQueryParams" else "")
+            }
 
             when {
               !proxy.isRunning -> {
@@ -108,7 +114,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
               path == "favicon.ico" -> {
                 //logger.info { "Invalid path request /${path}" }
                 responseResults.apply {
-                  updateMsg = "invalid_request"
+                  updateMsg = "invalid_path"
                   statusCode = HttpStatusCode.NotFound
                 }
               }
@@ -137,7 +143,7 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
               }
 
               else -> {
-                submitScrapeRequest(path, agentContext, call.request, call.response)
+                submitScrapeRequest(path, encodedQueryParams, agentContext, call.request, call.response)
                     .also { response ->
 
                       var status = "/${path} - ${response.updateMsg} - ${response.statusCode}"
@@ -204,12 +210,14 @@ class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdl
                                       val fetchDuration: Duration)
 
   private suspend fun submitScrapeRequest(path: String,
+                                          encodedQueryParams: String,
                                           agentContext: AgentContext,
                                           request: ApplicationRequest,
                                           response: ApplicationResponse): ScrapeRequestResponse {
 
     val scrapeRequest = ScrapeRequestWrapper(proxy,
                                              path,
+                                             encodedQueryParams,
                                              agentContext,
                                              request.header(ACCEPT),
                                              proxy.options.debugEnabled)

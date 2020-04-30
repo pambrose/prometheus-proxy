@@ -115,6 +115,7 @@ object GrpcObjects {
   fun newScrapeRequest(agentId: String,
                        scrapeId: Long,
                        path: String,
+                       encodedQueryParams: String,
                        accept: String?,
                        debugEnabled: Boolean): ScrapeRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
@@ -122,6 +123,7 @@ object GrpcObjects {
       builder.agentId = agentId
       builder.scrapeId = scrapeId
       builder.path = path
+      builder.encodedQueryParams = encodedQueryParams
       builder.debugEnabled = debugEnabled
       if (!accept.isNullOrBlank())
         builder.accept = accept

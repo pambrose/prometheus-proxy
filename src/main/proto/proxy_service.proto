@@ -58,6 +58,7 @@ message ScrapeRequest {
     string path = 3;
     string accept = 4;
     bool debug_enabled = 5;
+    string encodedQueryParams = 6;
 }
 
 message ScrapeResponse {

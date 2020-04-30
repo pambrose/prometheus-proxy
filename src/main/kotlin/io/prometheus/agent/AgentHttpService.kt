@@ -33,6 +33,7 @@ import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.ScrapeRequest
 import mu.KLogging
 import java.io.IOException
+import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicReference
 
 class AgentHttpService(val agent: Agent) {
@@ -41,6 +42,7 @@ class AgentHttpService(val agent: Agent) {
       ScrapeResults(agentId = request.agentId, scrapeId = request.scrapeId).also { scrapeResults ->
         val scrapeMsg = AtomicReference("")
         val path = request.path
+        val encodedQueryParams = request.encodedQueryParams
         val pathContext = agent.pathManager[path]
 
         if (pathContext == null) {
@@ -51,7 +53,10 @@ class AgentHttpService(val agent: Agent) {
         }
         else {
           val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
-          val url = pathContext.url
+          val url = pathContext.url +
+              (if (encodedQueryParams.isNotEmpty())
+                "?${URLDecoder.decode(encodedQueryParams, Charsets.UTF_8)}"
+              else "")
           logger.debug { "Fetching $pathContext" }
 
           // Content is fetched here
