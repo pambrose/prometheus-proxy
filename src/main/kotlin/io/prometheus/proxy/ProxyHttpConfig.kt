@@ -44,7 +44,7 @@ import kotlin.time.Duration
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
-fun Application.configServer(proxy: Proxy) {
+internal fun Application.configServer(proxy: Proxy) {
 
   install(DefaultHeaders)
 

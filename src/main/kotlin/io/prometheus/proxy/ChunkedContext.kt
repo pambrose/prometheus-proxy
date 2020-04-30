@@ -23,7 +23,7 @@ import io.prometheus.grpc.ChunkedScrapeResponse
 import java.io.ByteArrayOutputStream
 import java.util.zip.CRC32
 
-class ChunkedContext(response: ChunkedScrapeResponse) {
+internal class ChunkedContext(response: ChunkedScrapeResponse) {
   private val checksum = CRC32()
   private val baos = ByteArrayOutputStream()
 

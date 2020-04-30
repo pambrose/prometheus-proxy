@@ -79,10 +79,10 @@ class Proxy(val options: ProxyOptions,
 
   private val agentCleanupService by lazy { AgentContextCleanupService(this, proxyConfigVals) { addServices(this) } }
 
-  val pathManager = ProxyPathManager(isTestMode)
-  val scrapeRequestManager = ScrapeRequestManager()
-  val agentContextManager = AgentContextManager()
-  val metrics by lazy { ProxyMetrics(this) }
+  internal val pathManager = ProxyPathManager(isTestMode)
+  internal val scrapeRequestManager = ScrapeRequestManager()
+  internal val agentContextManager = AgentContextManager()
+  internal val metrics by lazy { ProxyMetrics(this) }
 
   init {
     fun toPlainText() = """
@@ -174,7 +174,7 @@ class Proxy(val options: ProxyOptions,
         }
   }
 
-  fun removeAgentContext(agentId: String): AgentContext? {
+  internal fun removeAgentContext(agentId: String): AgentContext? {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     return agentContextManager.removeAgentContext(agentId).let { agentContext ->
       if (agentContext == null)
@@ -187,7 +187,7 @@ class Proxy(val options: ProxyOptions,
     }
   }
 
-  fun metrics(args: ProxyMetrics.() -> Unit) {
+  internal fun metrics(args: ProxyMetrics.() -> Unit) {
     if (isMetricsEnabled)
       args.invoke(metrics)
   }
@@ -195,7 +195,7 @@ class Proxy(val options: ProxyOptions,
   //val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
   private val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
-  fun logActivity(desc: String) {
+  internal fun logActivity(desc: String) {
     synchronized(recentActions) {
       recentActions.add("${LocalDateTime.now().format(formatter)}: $desc")
     }
@@ -209,8 +209,8 @@ class Proxy(val options: ProxyOptions,
       }
 
   companion object : KLogging() {
-    const val AGENT_ID = "agent-id"
-    val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
+    internal const val AGENT_ID = "agent-id"
+    internal val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
 
     @JvmStatic
     fun main(argv: Array<String>) {

@@ -34,7 +34,7 @@ import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
 import kotlin.time.seconds
 
-object SimpleTests : KLogging() {
+internal object SimpleTests : KLogging() {
 
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
@@ -91,14 +91,14 @@ object SimpleTests : KLogging() {
       withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
         val mutex = Mutex()
         val jobs =
-          List(TestConstants.REPS) { i ->
-            GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
-              val path = "test-$i}"
-              val url = "${TestConstants.PROXY_PORT}/$path".addPrefix()
-              mutex.withLock { paths += path }
-              pathManager.registerPath(path, url)
+            List(TestConstants.REPS) { i ->
+              GlobalScope.launch(Dispatchers.Default + coroutineExceptionHandler(logger)) {
+                val path = "test-$i}"
+                val url = "${TestConstants.PROXY_PORT}/$path".addPrefix()
+                mutex.withLock { paths += path }
+                pathManager.registerPath(path, url)
+              }
             }
-          }
 
         jobs.forEach { job ->
           job.join()

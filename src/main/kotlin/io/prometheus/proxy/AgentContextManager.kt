@@ -21,7 +21,7 @@ package io.prometheus.proxy
 import com.google.common.collect.Maps.newConcurrentMap
 import java.util.concurrent.ConcurrentMap
 
-class AgentContextManager {
+internal class AgentContextManager {
   // Map agent_id to AgentContext
   val agentContextMap: ConcurrentMap<String, AgentContext> = newConcurrentMap()
   val agentContextSize: Int get() = agentContextMap.size

@@ -36,7 +36,7 @@ import java.io.IOException
 import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicReference
 
-class AgentHttpService(val agent: Agent) {
+internal class AgentHttpService(val agent: Agent) {
 
   suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResults =
       ScrapeResults(agentId = request.agentId, scrapeId = request.scrapeId).also { scrapeResults ->
@@ -53,16 +53,20 @@ class AgentHttpService(val agent: Agent) {
         }
         else {
           val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
+          // Add the incoming query params to the url
           val url = pathContext.url +
               (if (encodedQueryParams.isNotEmpty())
-                "?${URLDecoder.decode(encodedQueryParams, Charsets.UTF_8)}"
+                "?${URLDecoder.decode(encodedQueryParams, Charsets.UTF_8.name())}"
               else "")
+
           logger.debug { "Fetching $pathContext" }
+          if (encodedQueryParams.isNotEmpty())
+            logger.debug { "URL: $url" }
 
           // Content is fetched here
           try {
             http {
-              get(url, getSetUp(request), getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
+              get(url, setup(request), getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
             }
           } catch (e: IOException) {
             logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
@@ -80,7 +84,7 @@ class AgentHttpService(val agent: Agent) {
         agent.updateScrapeCounter(scrapeMsg.get())
       }
 
-  private fun getSetUp(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
+  private fun setup(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
     val accept: String? = request.accept
     if (accept?.isNotEmpty() == true)
       header(HttpHeaders.ACCEPT, accept)

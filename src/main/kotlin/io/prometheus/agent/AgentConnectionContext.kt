@@ -23,7 +23,7 @@ import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
 
-class AgentConnectionContext {
+internal class AgentConnectionContext {
   private var disconnected by atomicBoolean(false)
   val scrapeRequestsChannel = Channel<ScrapeRequestAction>(Channel.UNLIMITED)
   val scrapeResultsChannel = Channel<ScrapeResults>(Channel.UNLIMITED)

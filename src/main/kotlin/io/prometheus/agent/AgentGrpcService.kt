@@ -52,9 +52,9 @@ import java.util.concurrent.CountDownLatch
 import java.util.zip.CRC32
 import kotlin.properties.Delegates.notNull
 
-class AgentGrpcService(private val agent: Agent,
-                       private val options: AgentOptions,
-                       private val inProcessServerName: String) {
+internal class AgentGrpcService(private val agent: Agent,
+                                private val options: AgentOptions,
+                                private val inProcessServerName: String) {
   private var grpcStarted by atomicBoolean(false)
   private var blockingStub: ProxyServiceBlockingStub by notNull()
   private var asyncStub: ProxyServiceStub by notNull()

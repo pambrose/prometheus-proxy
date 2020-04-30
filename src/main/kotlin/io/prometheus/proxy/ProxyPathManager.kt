@@ -25,7 +25,7 @@ import io.prometheus.grpc.UnregisterPathResponse
 import mu.KLogging
 import java.util.concurrent.ConcurrentMap
 
-class ProxyPathManager(private val isTestMode: Boolean) {
+internal class ProxyPathManager(private val isTestMode: Boolean) {
 
   private val pathMap: ConcurrentMap<String, AgentContext> = newConcurrentMap() // Map path to AgentContext
 

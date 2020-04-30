@@ -23,7 +23,7 @@ import io.prometheus.common.ScrapeResults
 import mu.KLogging
 import java.util.concurrent.ConcurrentMap
 
-class ScrapeRequestManager {
+internal class ScrapeRequestManager {
   // Map scrape_id to agent_id
   val scrapeRequestMap: ConcurrentMap<Long, ScrapeRequestWrapper> = newConcurrentMap()
 

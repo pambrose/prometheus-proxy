@@ -22,17 +22,17 @@ import com.github.pambrose.common.service.AdminConfig
 import com.github.pambrose.common.service.MetricsConfig
 import com.github.pambrose.common.service.ZipkinConfig
 
-object ConfigWrappers {
+internal object ConfigWrappers {
   fun newAdminConfig(enabled: Boolean, port: Int, admin: ConfigVals.Proxy2.Admin2) =
-    AdminConfig(enabled,
-                port,
-                admin.pingPath,
-                admin.versionPath,
-                admin.healthCheckPath,
-                admin.threadDumpPath)
+      AdminConfig(enabled,
+                  port,
+                  admin.pingPath,
+                  admin.versionPath,
+                  admin.healthCheckPath,
+                  admin.threadDumpPath)
 
   fun newAdminConfig(enabled: Boolean, port: Int, admin: ConfigVals.Agent.Admin) =
-    AdminConfig(enabled,
+      AdminConfig(enabled,
                 port,
                 admin.pingPath,
                 admin.versionPath,

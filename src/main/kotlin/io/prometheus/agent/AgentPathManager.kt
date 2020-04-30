@@ -24,7 +24,7 @@ import io.prometheus.common.GrpcObjects.EMPTY_PATH
 import mu.KLogging
 import java.util.concurrent.ConcurrentMap
 
-class AgentPathManager(private val agent: Agent) {
+internal class AgentPathManager(private val agent: Agent) {
 
   private val agentConfigVals = agent.configVals.agent
   private val pathContextMap: ConcurrentMap<String, PathContext> = newConcurrentMap()

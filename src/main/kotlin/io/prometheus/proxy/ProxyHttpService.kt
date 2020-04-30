@@ -30,7 +30,7 @@ import io.prometheus.Proxy
 import mu.KLogging
 import kotlin.time.seconds
 
-class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
+internal class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
   private val proxyConfigVals = proxy.configVals.proxy
   private val idleTimeout =
       if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds

@@ -82,12 +82,12 @@ class Agent(val options: AgentOptions,
   private val reconnectLimiter = RateLimiter.create(1.0 / agentConfigVals.reconnectPauseSecs).apply { acquire() }
   private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
-  val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
-  val scrapeRequestBacklogSize = AtomicInteger(0)
-  val pathManager = AgentPathManager(this)
-  val grpcService = AgentGrpcService(this, options, inProcessServerName)
-  var agentId: String by nonNullableReference("")
-  val metrics by lazy { AgentMetrics(this) }
+  internal val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
+  internal val scrapeRequestBacklogSize = AtomicInteger(0)
+  internal val pathManager = AgentPathManager(this)
+  internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
+  internal var agentId: String by nonNullableReference("")
+  internal val metrics by lazy { AgentMetrics(this) }
 
   init {
     fun toPlainText() = """
@@ -174,9 +174,9 @@ class Agent(val options: AgentOptions,
     }
   }
 
-  val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
+  internal val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
 
-  fun startTimer(): Summary.Timer? = metrics.scrapeRequestLatency.labels(agentName).startTimer()
+  internal fun startTimer(): Summary.Timer? = metrics.scrapeRequestLatency.labels(agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"
 
@@ -205,19 +205,19 @@ class Agent(val options: AgentOptions,
         logger.info { "Heartbeat disabled" }
       }
 
-  fun updateScrapeCounter(type: String) {
+  internal fun updateScrapeCounter(type: String) {
     if (type.isNotEmpty())
       metrics { scrapeRequestCount.labels(type).inc() }
   }
 
-  fun markMsgSent() {
+  internal fun markMsgSent() {
     lastMsgSentMark = clock.markNow()
   }
 
-  fun awaitInitialConnection(timeout: Duration) =
+  internal fun awaitInitialConnection(timeout: Duration) =
       initialConnectionLatch.await(timeout.toLongMilliseconds(), MILLISECONDS)
 
-  fun metrics(args: AgentMetrics.() -> Unit) {
+  internal fun metrics(args: AgentMetrics.() -> Unit) {
     if (isMetricsEnabled)
       args.invoke(metrics)
   }

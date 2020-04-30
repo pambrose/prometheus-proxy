@@ -49,7 +49,7 @@ import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.atomic.AtomicLong
 
-class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
+internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.ProxyServiceImplBase() {
 
   override fun connectAgent(request: Empty, responseObserver: StreamObserver<Empty>) {
     proxy.metrics { connectCount.inc() }

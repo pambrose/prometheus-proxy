@@ -30,12 +30,12 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.TimeSource.Monotonic
 
-class ScrapeRequestWrapper(proxy: Proxy,
-                           path: String,
-                           encodedQueryParams: String,
-                           val agentContext: AgentContext,
-                           accept: String?,
-                           debugEnabled: Boolean) {
+internal class ScrapeRequestWrapper(proxy: Proxy,
+                                    path: String,
+                                    encodedQueryParams: String,
+                                    val agentContext: AgentContext,
+                                    accept: String?,
+                                    debugEnabled: Boolean) {
   private val clock = Monotonic
   private val createTimeMark = clock.markNow()
   private val completeChannel = Channel<Boolean>()

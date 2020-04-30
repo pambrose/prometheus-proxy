@@ -37,9 +37,9 @@ import io.prometheus.Proxy
 import mu.KLogging
 import kotlin.time.seconds
 
-class ProxyGrpcService(private val proxy: Proxy,
-                       private val port: Int = -1,
-                       private val inProcessName: String = "") : GenericIdleService() {
+internal class ProxyGrpcService(private val proxy: Proxy,
+                                private val port: Int = -1,
+                                private val inProcessName: String = "") : GenericIdleService() {
 
   val healthCheck =
       healthCheck {

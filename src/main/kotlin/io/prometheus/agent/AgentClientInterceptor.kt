@@ -31,7 +31,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
 import mu.KLogging
 
-class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
+internal class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
   override fun <ReqT, RespT> interceptCall(method: MethodDescriptor<ReqT, RespT>,
                                            callOptions: CallOptions,

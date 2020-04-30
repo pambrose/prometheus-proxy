@@ -28,9 +28,9 @@ import io.prometheus.common.ConfigVals
 import mu.KLogging
 import kotlin.time.seconds
 
-class AgentContextCleanupService(private val proxy: Proxy,
-                                 private val configVals: ConfigVals.Proxy2.Internal2,
-                                 initBlock: (AgentContextCleanupService.() -> Unit) = {}) :
+internal class AgentContextCleanupService(private val proxy: Proxy,
+                                          private val configVals: ConfigVals.Proxy2.Internal2,
+                                          initBlock: (AgentContextCleanupService.() -> Unit) = {}) :
     GenericExecutionThreadService() {
 
   init {

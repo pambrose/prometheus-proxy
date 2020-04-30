@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
 
-class AgentContext(private val remoteAddr: String) {
+internal class AgentContext(private val remoteAddr: String) {
 
   val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
 

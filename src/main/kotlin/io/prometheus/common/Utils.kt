@@ -23,7 +23,7 @@ import com.beust.jcommander.JCommander
 import io.prometheus.Proxy
 import kotlin.system.exitProcess
 
-fun getVersionDesc(asJson: Boolean = false): String =
+internal fun getVersionDesc(asJson: Boolean = false): String =
     Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java).run {
       if (asJson)
         """{"Version": "$version", "Release Date": "$date"}"""
@@ -31,7 +31,7 @@ fun getVersionDesc(asJson: Boolean = false): String =
         "Version: $version Release Date: $date"
     }
 
-class VersionValidator : IParameterValidator {
+internal class VersionValidator : IParameterValidator {
   override fun validate(name: String, value: String) {
     val console = JCommander().console
     console.println(getVersionDesc(false))

@@ -24,7 +24,7 @@ import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
 import mu.KLogging
 
-class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
+internal class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
   override fun transportReady(attributes: Attributes): Attributes {
     fun getRemoteAddr(attributes: Attributes) = attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"

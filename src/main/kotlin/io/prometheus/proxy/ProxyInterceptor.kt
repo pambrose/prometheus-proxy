@@ -25,7 +25,7 @@ import io.grpc.ServerCallHandler
 import io.grpc.ServerInterceptor
 import io.prometheus.Proxy
 
-class ProxyInterceptor : ServerInterceptor {
+internal class ProxyInterceptor : ServerInterceptor {
 
   override fun <ReqT, RespT> interceptCall(call: ServerCall<ReqT, RespT>,
                                            requestHeaders: Metadata,

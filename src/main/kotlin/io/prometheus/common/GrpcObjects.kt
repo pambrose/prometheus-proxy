@@ -38,7 +38,7 @@ import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
 import java.util.zip.CRC32
 
-object GrpcObjects {
+internal object GrpcObjects {
 
   const val EMPTY_AGENTID = "Empty agentId"
   const val EMPTY_PATH = "Empty path"

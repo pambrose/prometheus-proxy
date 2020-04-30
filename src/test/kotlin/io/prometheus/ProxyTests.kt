@@ -68,7 +68,7 @@ class ProxyCallTestArgs(val agent: Agent,
                         val startPort: Int = 9600,
                         val caller: String)
 
-object ProxyTests : KLogging() {
+internal object ProxyTests : KLogging() {
 
   fun timeoutTest(pathManager: AgentPathManager,
                   caller: String,
@@ -181,23 +181,22 @@ object ProxyTests : KLogging() {
         .use { dispatcher ->
           runBlocking {
             withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
-              newHttpClient()
-                  .use { httpClient ->
-                    val counter = AtomicInteger(0)
-                    repeat(args.sequentialQueryCount) { cnt ->
-                      val job =
-                          launch(dispatcher + coroutineExceptionHandler(logger)) {
-                            callProxy(httpClient, pathMap, "Sequential $cnt")
-                            counter.incrementAndGet()
-                          }
+              newHttpClient().also { httpClient ->
+                val counter = AtomicInteger(0)
+                repeat(args.sequentialQueryCount) { cnt ->
+                  val job =
+                      launch(dispatcher + coroutineExceptionHandler(logger)) {
+                        callProxy(httpClient, pathMap, "Sequential $cnt")
+                        counter.incrementAndGet()
+                      }
 
-                      job.join()
-                      job.getCancellationException().cause.shouldBeNull()
+                  job.join()
+                  job.getCancellationException().cause.shouldBeNull()
 
-                    }
+                }
 
-                    counter.get() shouldBeEqualTo args.sequentialQueryCount
-                  }
+                counter.get() shouldBeEqualTo args.sequentialQueryCount
+              }
             }
           }
         }
@@ -209,7 +208,7 @@ object ProxyTests : KLogging() {
           runBlocking {
             withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
               newHttpClient()
-                  .use { httpClient ->
+                  .also { httpClient ->
                     val counter = AtomicInteger(0)
                     val jobs =
                         List(args.parallelQueryCount) { cnt ->

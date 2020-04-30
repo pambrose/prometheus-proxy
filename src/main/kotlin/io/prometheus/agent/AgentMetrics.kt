@@ -24,7 +24,7 @@ import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
 
-class AgentMetrics(agent: Agent) {
+internal class AgentMetrics(agent: Agent) {
 
   val scrapeResultCount =
       counter {
