@@ -19,6 +19,7 @@
 package io.prometheus.common
 
 import com.google.protobuf.ByteString
+import io.prometheus.common.GrpcObjects.toScrapeResponse
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkData
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -44,59 +45,52 @@ internal object GrpcObjects {
   const val EMPTY_PATH = "Empty path"
 
   fun newHeartBeatRequest(agentId: String): HeartBeatRequest =
-      HeartBeatRequest.newBuilder().run {
+      heartBeatRequest {
         this.agentId = agentId
-        build()
       }
 
   fun newHeartBeatResponse(valid: Boolean, reason: String): HeartBeatResponse =
-      HeartBeatResponse.newBuilder().run {
+      heartBeatResponse {
         this.valid = valid
         this.reason = reason
-        build()
       }
 
   fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
-    return RegisterAgentRequest.newBuilder().run {
+    return registerAgentRequest {
       this.agentId = agentId
       this.agentName = agentName
       this.hostName = hostName
-      build()
     }
   }
 
   fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
-    return RegisterAgentResponse.newBuilder().run {
+    return registerAgentResponse {
       this.valid = valid
       this.reason = reason
       this.agentId = agentId
-      build()
     }
   }
 
   fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
-    return PathMapSizeRequest.newBuilder().run {
+    return pathMapSizeRequest {
       this.agentId = agentId
-      build()
     }
   }
 
   fun newPathMapSizeResponse(pathCount: Int): PathMapSizeResponse =
-      PathMapSizeResponse.newBuilder().run {
+      pathMapSizeResponse {
         this.pathCount = pathCount
-        build()
       }
 
   fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     require(path.isNotEmpty()) { EMPTY_PATH }
-    return RegisterPathRequest.newBuilder().run {
+    return registerPathRequest {
       this.agentId = agentId
       this.path = path
-      build()
     }
   }
 
@@ -104,12 +98,11 @@ internal object GrpcObjects {
                               reason: String,
                               pathCount: Int,
                               pathId: Long): RegisterPathResponse =
-      RegisterPathResponse.newBuilder().run {
+      registerPathResponse {
         this.valid = valid
         this.reason = reason
         this.pathCount = pathCount
         this.pathId = pathId
-        build()
       }
 
   fun newScrapeRequest(agentId: String,
@@ -119,15 +112,14 @@ internal object GrpcObjects {
                        accept: String?,
                        debugEnabled: Boolean): ScrapeRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
-    return ScrapeRequest.newBuilder().let { builder ->
-      builder.agentId = agentId
-      builder.scrapeId = scrapeId
-      builder.path = path
-      builder.encodedQueryParams = encodedQueryParams
-      builder.debugEnabled = debugEnabled
+    return scrapeRequest {
+      this.agentId = agentId
+      this.scrapeId = scrapeId
+      this.path = path
+      this.encodedQueryParams = encodedQueryParams
+      this.debugEnabled = debugEnabled
       if (!accept.isNullOrBlank())
-        builder.accept = accept
-      builder.build()
+        this.accept = accept
     }
   }
 
@@ -150,36 +142,35 @@ internal object GrpcObjects {
       }
 
   fun ScrapeResults.toScrapeResponse(): ScrapeResponse =
-      ScrapeResponse.newBuilder().let { builder ->
-        builder.agentId = agentId
-        builder.scrapeId = scrapeId
-        builder.validResponse = validResponse
-        builder.statusCode = statusCode
-        builder.contentType = contentType
-        builder.zipped = zipped
+      scrapeResponse {
+        val other = this@toScrapeResponse
+        agentId = other.agentId
+        scrapeId = other.scrapeId
+        validResponse = other.validResponse
+        statusCode = other.statusCode
+        contentType = other.contentType
+        zipped = other.zipped
         if (zipped)
-          builder.contentAsZipped = ByteString.copyFrom(contentAsZipped)
+          contentAsZipped = ByteString.copyFrom(other.contentAsZipped)
         else
-          builder.contentAsText = contentAsText
-        builder.failureReason = failureReason
-        builder.url = url
-        builder.build()
+          contentAsText = other.contentAsText
+        failureReason = other.failureReason
+        url = other.url
       }
 
   fun ScrapeResults.toScrapeResponseHeader(): ChunkedScrapeResponse =
-      ChunkedScrapeResponse.newBuilder().let { builder ->
-        builder.header =
-            HeaderData.newBuilder().run {
-              headerAgentId = agentId
-              headerScrapeId = scrapeId
-              headerValidResponse = validResponse
-              headerStatusCode = statusCode
-              headerContentType = contentType
-              headerFailureReason = failureReason
-              headerUrl = url
-              build()
+      chunkedScrapeResponse {
+        header =
+            headerData {
+              val other = this@toScrapeResponseHeader
+              headerAgentId = other.agentId
+              headerScrapeId = other.scrapeId
+              headerValidResponse = other.validResponse
+              headerStatusCode = other.statusCode
+              headerContentType = other.contentType
+              headerFailureReason = other.failureReason
+              headerUrl = other.url
             }
-        builder.build()
       }
 
   fun newScrapeResponseChunk(scrapeId: Long,
@@ -187,52 +178,144 @@ internal object GrpcObjects {
                              readByteCount: Int,
                              checksum: CRC32,
                              buffer: ByteArray): ChunkedScrapeResponse =
-      ChunkedScrapeResponse.newBuilder().let { builder ->
-        builder.chunk =
-            ChunkData.newBuilder().run {
+      chunkedScrapeResponse {
+        chunk =
+            chunkData {
               chunkScrapeId = scrapeId
               chunkCount = totalChunkCount
               chunkByteCount = readByteCount
               chunkChecksum = checksum.value
               chunkBytes = ByteString.copyFrom(buffer)
-              build()
             }
-        builder.build()
       }
 
   fun newScrapeResponseSummary(scrapeId: Long,
                                totalChunkCount: Int,
                                totalByteCount: Int,
                                checksum: CRC32): ChunkedScrapeResponse =
-      ChunkedScrapeResponse.newBuilder().let { builder ->
-        builder.summary =
-            SummaryData.newBuilder().run {
+      chunkedScrapeResponse {
+        summary =
+            summaryData {
               summaryScrapeId = scrapeId
               summaryChunkCount = totalChunkCount
               summaryByteCount = totalByteCount
               summaryChecksum = checksum.value
-              build()
             }
-        builder.build()
       }
 
   fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     require(path.isNotEmpty()) { EMPTY_PATH }
-    return UnregisterPathRequest.newBuilder().run {
+    return unregisterPathRequest {
       this.agentId = agentId
       this.path = path
-      build()
     }
   }
-
-  fun newUnregisterPathResponseBuilder(): UnregisterPathResponse.Builder = UnregisterPathResponse.newBuilder()
 
   fun newAgentInfo(agentId: String): AgentInfo {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
-    return AgentInfo.newBuilder().run {
-      this.agentId = agentId
-      build()
-    }
+    return agentInfo { this.agentId = agentId }
   }
+
+  fun heartBeatRequest(block: HeartBeatRequest.Builder.() -> Unit): HeartBeatRequest =
+      HeartBeatRequest.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun heartBeatResponse(block: HeartBeatResponse.Builder.() -> Unit): HeartBeatResponse =
+      HeartBeatResponse.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun registerAgentRequest(block: RegisterAgentRequest.Builder.() -> Unit): RegisterAgentRequest =
+      RegisterAgentRequest.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun registerAgentResponse(block: RegisterAgentResponse.Builder.() -> Unit): RegisterAgentResponse =
+      RegisterAgentResponse.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun pathMapSizeRequest(block: PathMapSizeRequest.Builder.() -> Unit): PathMapSizeRequest =
+      PathMapSizeRequest.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun pathMapSizeResponse(block: PathMapSizeResponse.Builder.() -> Unit): PathMapSizeResponse =
+      PathMapSizeResponse.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun registerPathRequest(block: RegisterPathRequest.Builder.() -> Unit): RegisterPathRequest =
+      RegisterPathRequest.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun registerPathResponse(block: RegisterPathResponse.Builder.() -> Unit): RegisterPathResponse =
+      RegisterPathResponse.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun scrapeRequest(block: ScrapeRequest.Builder.() -> Unit): ScrapeRequest =
+      ScrapeRequest.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun scrapeResponse(block: ScrapeResponse.Builder.() -> Unit): ScrapeResponse =
+      ScrapeResponse.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun headerData(block: HeaderData.Builder.() -> Unit): HeaderData =
+      HeaderData.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun chunkData(block: ChunkData.Builder.() -> Unit): ChunkData =
+      ChunkData.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun summaryData(block: SummaryData.Builder.() -> Unit): SummaryData =
+      SummaryData.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun chunkedScrapeResponse(block: ChunkedScrapeResponse.Builder.() -> Unit): ChunkedScrapeResponse =
+      ChunkedScrapeResponse.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun unregisterPathRequest(block: UnregisterPathRequest.Builder.() -> Unit): UnregisterPathRequest =
+      UnregisterPathRequest.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun unregisterPathResponse(block: UnregisterPathResponse.Builder.() -> Unit): UnregisterPathResponse =
+      UnregisterPathResponse.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
+
+  fun agentInfo(block: AgentInfo.Builder.() -> Unit): AgentInfo =
+      AgentInfo.newBuilder().let {
+        block.invoke(it)
+        it.build()
+      }
 }

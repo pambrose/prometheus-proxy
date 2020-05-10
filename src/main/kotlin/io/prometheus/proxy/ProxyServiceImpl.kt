@@ -28,8 +28,8 @@ import io.prometheus.common.GrpcObjects.newHeartBeatResponse
 import io.prometheus.common.GrpcObjects.newPathMapSizeResponse
 import io.prometheus.common.GrpcObjects.newRegisterAgentResponse
 import io.prometheus.common.GrpcObjects.newRegisterPathResponse
-import io.prometheus.common.GrpcObjects.newUnregisterPathResponseBuilder
 import io.prometheus.common.GrpcObjects.toScrapeResults
+import io.prometheus.common.GrpcObjects.unregisterPathResponse
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeartBeatRequest
@@ -94,37 +94,37 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpc.Pro
       markActivityTime(false)
     } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
 
-    responseObserver.apply {
-      onNext(
-          newRegisterPathResponse(valid,
-                                  "Invalid agentId: $agentId",
-                                  proxy.pathManager.pathMapSize,
-                                  if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1)
-      )
-      onCompleted()
-    }
+    responseObserver
+        .apply {
+          onNext(
+              newRegisterPathResponse(valid,
+                                      "Invalid agentId: $agentId",
+                                      proxy.pathManager.pathMapSize,
+                                      if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1)
+          )
+          onCompleted()
+        }
   }
 
   override fun unregisterPath(request: UnregisterPathRequest,
                               responseObserver: StreamObserver<UnregisterPathResponse>) {
     val agentId = request.agentId
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-    val responseBuilder = newUnregisterPathResponseBuilder()
 
-    if (agentContext == null) {
-      logger.error { "Missing AgentContext for agentId: $agentId" }
-      responseBuilder.apply {
-        valid = false
-        reason = "Invalid agentId: $agentId"
-      }
-    }
-    else {
-      proxy.pathManager.removePath(request.path, agentId, responseBuilder)
-      agentContext.markActivityTime(false)
-    }
+    val response =
+        if (agentContext == null) {
+          logger.error { "Missing AgentContext for agentId: $agentId" }
+          unregisterPathResponse {
+            valid = false
+            reason = "Invalid agentId: $agentId"
+          }
+        }
+        else {
+          proxy.pathManager.removePath(request.path, agentId).apply { agentContext.markActivityTime(false) }
+        }
 
     responseObserver.apply {
-      onNext(responseBuilder.build())
+      onNext(response)
       onCompleted()
     }
   }

@@ -73,12 +73,12 @@ dependencies {
 
 /*
 sourceSets {
-  main.java.srcDirs = ['src/main/java']
-  main.kotlin.srcDirs = ['src/main/kotlin']
-  test.java.srcDirs = ['src/test/java']
-  test.kotlin.srcDirs = ['src/test/kotlin']
-  main.resources.srcDirs = ['src/main/resources']
-  test.resources.srcDirs = ['src/main/testresources']
+  main.java.srcDirs += ['src/main/java']
+  main.kotlin.srcDirs += ['src/main/kotlin']
+  test.java.srcDirs += ['src/test/java']
+  test.kotlin.srcDirs += ['src/test/kotlin']
+  main.resources.srcDirs += ['src/main/resources']
+  test.resources.srcDirs += ['src/main/testresources']
 }
 */
 

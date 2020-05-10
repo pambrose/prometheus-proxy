@@ -152,30 +152,33 @@ internal class AgentGrpcService(private val agent: Agent,
 
   fun registerAgent(initialConnectionLatch: CountDownLatch) {
     val request = newRegisterAgentRequest(agent.agentId, agent.agentName, hostName)
-    blockingStub.registerAgent(request).also { response ->
-      agent.markMsgSent()
-      if (!response.valid)
-        throw RequestFailureException("registerAgent() - ${response.reason}")
-    }
+    blockingStub.registerAgent(request)
+        .also { response ->
+          agent.markMsgSent()
+          if (!response.valid)
+            throw RequestFailureException("registerAgent() - ${response.reason}")
+        }
     initialConnectionLatch.countDown()
   }
 
   fun pathMapSize(): Int {
     val request = GrpcObjects.newPathMapSizeRequest(agent.agentId)
-    return blockingStub.pathMapSize(request).run {
-      agent.markMsgSent()
-      pathCount
-    }
+    return blockingStub.pathMapSize(request)
+        .run {
+          agent.markMsgSent()
+          pathCount
+        }
   }
 
   fun registerPathOnProxy(path: String): Long {
     val request = GrpcObjects.newRegisterPathRequest(agent.agentId, path)
-    return blockingStub.registerPath(request).run {
-      agent.markMsgSent()
-      if (!valid)
-        throw RequestFailureException("registerPath() - $reason")
-      pathId
-    }
+    return blockingStub.registerPath(request)
+        .run {
+          agent.markMsgSent()
+          if (!valid)
+            throw RequestFailureException("registerPath() - $reason")
+          pathId
+        }
   }
 
   fun unregisterPathOnProxy(path: String) {

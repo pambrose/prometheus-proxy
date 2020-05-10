@@ -21,6 +21,7 @@ package io.prometheus.proxy
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
 import io.prometheus.common.GrpcObjects.EMPTY_PATH
+import io.prometheus.common.GrpcObjects.unregisterPathResponse
 import io.prometheus.grpc.UnregisterPathResponse
 import mu.KLogging
 import java.util.concurrent.ConcurrentMap
@@ -45,16 +46,16 @@ internal class ProxyPathManager(private val isTestMode: Boolean) {
     }
   }
 
-  fun removePath(path: String, agentId: String, responseBuilder: UnregisterPathResponse.Builder) {
+  fun removePath(path: String, agentId: String): UnregisterPathResponse {
     require(path.isNotEmpty()) { EMPTY_PATH }
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     synchronized(pathMap) {
       val agentContext = pathMap[path]
-      when {
+      return when {
         agentContext == null -> {
           val msg = "Unable to remove path /$path - path not found"
           logger.error { msg }
-          responseBuilder.apply {
+          unregisterPathResponse {
             valid = false
             reason = msg
           }
@@ -62,7 +63,7 @@ internal class ProxyPathManager(private val isTestMode: Boolean) {
         agentContext.agentId != agentId -> {
           val msg = "Unable to remove path /$path - invalid agentId: $agentId (owner is ${agentContext.agentId})"
           logger.error { msg }
-          responseBuilder.apply {
+          unregisterPathResponse {
             valid = false
             reason = msg
           }
@@ -71,7 +72,7 @@ internal class ProxyPathManager(private val isTestMode: Boolean) {
           pathMap.remove(path)
           if (!isTestMode)
             logger.info { "Removed path /$path for $agentContext" }
-          responseBuilder.apply {
+          unregisterPathResponse {
             valid = true
             reason = ""
           }
