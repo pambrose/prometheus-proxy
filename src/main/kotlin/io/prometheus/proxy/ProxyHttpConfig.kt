@@ -69,7 +69,7 @@ internal fun Application.configServer(proxy: Proxy) {
 
       ProxyHttpService.logger.debug {
         "Servicing request for path: $path" +
-            (if (encodedQueryParams.isNotEmpty()) " with query params $encodedQueryParams" else "")
+        (if (encodedQueryParams.isNotEmpty()) " with query params $encodedQueryParams" else "")
       }
 
       when {
@@ -174,11 +174,11 @@ private suspend fun submitScrapeRequest(proxy: Proxy,
                                         response: ApplicationResponse): ScrapeRequestResponse {
 
   val scrapeRequest = ScrapeRequestWrapper(proxy,
-      path,
-      encodedQueryParams,
-      agentContext,
-      request.header(com.google.common.net.HttpHeaders.ACCEPT),
-      proxy.options.debugEnabled)
+                                           path,
+                                           encodedQueryParams,
+                                           agentContext,
+                                           request.header(com.google.common.net.HttpHeaders.ACCEPT),
+                                           proxy.options.debugEnabled)
 
   try {
     val proxyConfigVals = proxy.configVals.proxy
@@ -193,14 +193,14 @@ private suspend fun submitScrapeRequest(proxy: Proxy,
       // Check if agent is disconnected or agent is hung
       if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
         return ScrapeRequestResponse(statusCode = HttpStatusCode.ServiceUnavailable,
-            updateMsg = "timed_out",
-            fetchDuration = scrapeRequest.ageDuration())
+                                     updateMsg = "timed_out",
+                                     fetchDuration = scrapeRequest.ageDuration())
     }
   }
   finally {
     val scrapeId = scrapeRequest.scrapeId
     proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeId)
-      ?: ProxyHttpService.logger.error { "Scrape request $scrapeId missing in map" }
+    ?: ProxyHttpService.logger.error { "Scrape request $scrapeId missing in map" }
   }
 
   ProxyHttpService.logger.debug { "Results returned from $agentContext for $scrapeRequest" }
@@ -222,23 +222,23 @@ private suspend fun submitScrapeRequest(proxy: Proxy,
               return if (!statusCode.isSuccess()) {
                 scrapeRequest.scrapeResults.run {
                   ScrapeRequestResponse(statusCode = statusCode,
-                      contentType = contentType,
-                      failureReason = failureReason,
-                      url = url,
-                      updateMsg = "path_not_found",
-                      fetchDuration = scrapeRequest.ageDuration())
+                                        contentType = contentType,
+                                        failureReason = failureReason,
+                                        url = url,
+                                        updateMsg = "path_not_found",
+                                        fetchDuration = scrapeRequest.ageDuration())
                 }
               }
               else {
                 scrapeRequest.scrapeResults.run {
                   // Unzip content here
                   ScrapeRequestResponse(statusCode = statusCode,
-                      contentType = contentType,
-                      contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
-                      failureReason = failureReason,
-                      url = url,
-                      updateMsg = "success",
-                      fetchDuration = scrapeRequest.ageDuration())
+                                        contentType = contentType,
+                                        contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
+                                        failureReason = failureReason,
+                                        url = url,
+                                        updateMsg = "success",
+                                        fetchDuration = scrapeRequest.ageDuration())
                 }
               }
             }

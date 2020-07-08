@@ -35,13 +35,13 @@ internal class ChunkedContext(response: ChunkedScrapeResponse) {
   val scrapeResults =
     response.header.run {
       ScrapeResults(validResponse = headerValidResponse,
-          scrapeId = headerScrapeId,
-          agentId = headerAgentId,
-          statusCode = headerStatusCode,
-          zipped = true,
-          failureReason = headerFailureReason,
-          url = headerUrl,
-          contentType = headerContentType)
+                    scrapeId = headerScrapeId,
+                    agentId = headerAgentId,
+                    statusCode = headerStatusCode,
+                    zipped = true,
+                    failureReason = headerFailureReason,
+                    url = headerUrl,
+                    contentType = headerContentType)
     }
 
   fun applyChunk(data: ByteArray, chunkByteCount: Int, chunkCount: Int, chunkChecksum: Long) {

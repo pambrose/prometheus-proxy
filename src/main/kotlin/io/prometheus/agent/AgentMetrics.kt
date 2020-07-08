@@ -61,7 +61,7 @@ internal class AgentMetrics(agent: Agent) {
     }.setToCurrentTime()
 
     SamplerGaugeCollector("agent_scrape_backlog_size",
-        "Agent scrape backlog size",
-        data = { agent.scrapeRequestBacklogSize.get().toDouble() })
+                          "Agent scrape backlog size",
+                          data = { agent.scrapeRequestBacklogSize.get().toDouble() })
   }
 }

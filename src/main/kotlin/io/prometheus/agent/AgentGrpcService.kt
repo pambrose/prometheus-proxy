@@ -93,8 +93,8 @@ internal class AgentGrpcService(internal val agent: Agent,
     tlsContext =
       agent.options.run {
         if (certChainFilePath.isNotEmpty()
-          || privateKeyFilePath.isNotEmpty()
-          || trustCertCollectionFilePath.isNotEmpty()
+            || privateKeyFilePath.isNotEmpty()
+            || trustCertCollectionFilePath.isNotEmpty()
         )
           buildClientTlsContext(
               certChainFilePath = certChainFilePath,
@@ -127,10 +127,10 @@ internal class AgentGrpcService(internal val agent: Agent,
 
     channel =
       channel(hostName = hostName,
-          port = port,
-          tlsContext = tlsContext,
-          overrideAuthority = agent.options.overrideAuthority,
-          inProcessServerName = inProcessServerName) {
+              port = port,
+              tlsContext = tlsContext,
+              overrideAuthority = agent.options.overrideAuthority,
+              inProcessServerName = inProcessServerName) {
         if (agent.isZipkinEnabled)
           intercept(grpcTracing.newClientInterceptor())
       }

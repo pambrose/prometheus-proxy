@@ -24,9 +24,8 @@ import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class InProcessTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
-    startPort = 10700,
-    caller = simpleClassName)) {
+class InProcessTestWithAdminMetricsTest :
+    CommonTests(ProxyCallTestArgs(agent = agent, startPort = 10700, caller = simpleClassName)) {
 
   companion object : CommonCompanion() {
     @JvmStatic
@@ -36,9 +35,9 @@ class InProcessTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = 
           { startProxy("withmetrics", adminEnabled = true, metricsEnabled = true) },
           {
             startAgent(serverName = "withmetrics",
-                adminEnabled = true,
-                metricsEnabled = true,
-                chunkContentSizeKbs = 5)
+                       adminEnabled = true,
+                       metricsEnabled = true,
+                       chunkContentSizeKbs = 5)
           })
 
     @JvmStatic

@@ -55,9 +55,9 @@ internal class AgentHttpService(val agent: Agent) {
         val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
         // Add the incoming query params to the url
         val url = pathContext.url +
-            (if (encodedQueryParams.isNotEmpty())
-              "?${URLDecoder.decode(encodedQueryParams, Charsets.UTF_8.name())}"
-            else "")
+                  (if (encodedQueryParams.isNotEmpty())
+                    "?${URLDecoder.decode(encodedQueryParams, Charsets.UTF_8.name())}"
+                  else "")
 
         logger.debug { "Fetching $pathContext" }
         if (encodedQueryParams.isNotEmpty())

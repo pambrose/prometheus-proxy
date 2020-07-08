@@ -36,8 +36,8 @@ import org.junit.jupiter.api.Test
 import kotlin.time.seconds
 
 class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
-    startPort = 10300,
-    caller = simpleClassName)) {
+                                                                    startPort = 10300,
+                                                                    caller = simpleClassName)) {
 
   @Test
   fun adminDebugCallsTest() {
@@ -69,20 +69,20 @@ class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agen
     @JvmStatic
     @BeforeAll
     fun setUp() = setItUp({
-      startProxy(adminEnabled = true,
-          debugEnabled = true,
-          metricsEnabled = true)
-    },
-        {
-          startAgent(adminEnabled = true,
-              debugEnabled = true,
-              metricsEnabled = true,
-              chunkContentSizeKbs = 5)
-        },
-        {
-          // Wait long enough to trigger heartbeat for code coverage
-          sleep(15.seconds)
-        })
+                            startProxy(adminEnabled = true,
+                                       debugEnabled = true,
+                                       metricsEnabled = true)
+                          },
+                          {
+                            startAgent(adminEnabled = true,
+                                       debugEnabled = true,
+                                       metricsEnabled = true,
+                                       chunkContentSizeKbs = 5)
+                          },
+                          {
+                            // Wait long enough to trigger heartbeat for code coverage
+                            sleep(15.seconds)
+                          })
 
     @JvmStatic
     @AfterAll

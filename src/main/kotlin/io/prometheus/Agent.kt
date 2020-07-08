@@ -56,11 +56,13 @@ class Agent(val options: AgentOptions,
             testMode: Boolean = false,
             initBlock: (Agent.() -> Unit)? = null) :
     GenericService<ConfigVals>(options.configVals,
-        newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
-        newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.agent.metrics),
-        newZipkinConfig(options.configVals.agent.internal.zipkin),
-        { getVersionDesc(true) },
-        isTestMode = testMode) {
+                               newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
+                               newMetricsConfig(options.metricsEnabled,
+                                                options.metricsPort,
+                                                options.configVals.agent.metrics),
+                               newZipkinConfig(options.configVals.agent.internal.zipkin),
+                               { getVersionDesc(true) },
+                               isTestMode = testMode) {
 
   private val agentConfigVals = configVals.agent.internal
   private val clock = Monotonic
@@ -101,9 +103,9 @@ class Agent(val options: AgentOptions,
     initService {
       if (options.debugEnabled)
         addServlet(DEBUG,
-            LambdaServlet {
-              listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n")
-            })
+                   LambdaServlet {
+                     listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n")
+                   })
     }
 
     initBlock?.invoke(this)

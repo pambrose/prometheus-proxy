@@ -25,26 +25,26 @@ import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
 class TlsNoMutualAuthTest : CommonTests(ProxyCallTestArgs(agent = agent,
-    startPort = 10200,
-    caller = simpleClassName)) {
+                                                          startPort = 10200,
+                                                          caller = simpleClassName)) {
 
   companion object : CommonCompanion() {
 
     @JvmStatic
     @BeforeAll
     fun setUp() = setItUp({
-      startProxy(serverName = "nomutualauth",
-          argv = listOf("--agent_port", "50440",
-              "--cert", "testing/certs/server1.pem",
-              "--key", "testing/certs/server1.key"))
-    },
-        {
-          startAgent(serverName = "nomutualauth",
-              chunkContentSizeKbs = 5,
-              argv = listOf("--proxy", "localhost:50440",
-                  "--trust", "testing/certs/ca.pem",
-                  "--override", "foo.test.google.fr"))
-        })
+                            startProxy(serverName = "nomutualauth",
+                                       argv = listOf("--agent_port", "50440",
+                                                     "--cert", "testing/certs/server1.pem",
+                                                     "--key", "testing/certs/server1.key"))
+                          },
+                          {
+                            startAgent(serverName = "nomutualauth",
+                                       chunkContentSizeKbs = 5,
+                                       argv = listOf("--proxy", "localhost:50440",
+                                                     "--trust", "testing/certs/ca.pem",
+                                                     "--override", "foo.test.google.fr"))
+                          })
 
     @JvmStatic
     @AfterAll

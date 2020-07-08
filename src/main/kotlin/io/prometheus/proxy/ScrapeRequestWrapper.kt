@@ -42,11 +42,11 @@ internal class ScrapeRequestWrapper(proxy: Proxy,
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
   val scrapeRequest = newScrapeRequest(agentContext.agentId,
-      SCRAPE_ID_GENERATOR.getAndIncrement(),
-      path,
-      encodedQueryParams,
-      accept,
-      debugEnabled)
+                                       SCRAPE_ID_GENERATOR.getAndIncrement(),
+                                       path,
+                                       encodedQueryParams,
+                                       accept,
+                                       debugEnabled)
 
   var scrapeResults: ScrapeResults by nonNullableReference()
 

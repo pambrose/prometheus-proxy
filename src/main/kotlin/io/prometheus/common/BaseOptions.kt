@@ -74,8 +74,8 @@ abstract class BaseOptions protected constructor(private val progName: String,
     private set
 
   @Parameter(names = ["-v", "--version"],
-      description = "Print version info and exit",
-      validateWith = [VersionValidator::class])
+             description = "Print version info and exit",
+             validateWith = [VersionValidator::class])
 
   private var version = false
 
@@ -163,10 +163,10 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
   private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
     config = readConfig(if (configSource.isNotEmpty()) configSource else System.getenv(envConfig).orEmpty(),
-        envConfig,
-        ConfigParseOptions.defaults().setAllowMissing(false),
-        ConfigFactory.load().resolve(),
-        exitOnMissingConfig)
+                        envConfig,
+                        ConfigParseOptions.defaults().setAllowMissing(false),
+                        ConfigFactory.load().resolve(),
+                        exitOnMissingConfig)
       .resolve(ConfigResolveOptions.defaults())
       .resolve()
 

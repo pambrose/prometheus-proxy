@@ -59,15 +59,15 @@ internal class ProxyGrpcService(private val proxy: Proxy,
     val tlsContext =
       if (options.certChainFilePath.isNotEmpty() || options.privateKeyFilePath.isNotEmpty())
         buildServerTlsContext(certChainFilePath = options.certChainFilePath,
-            privateKeyFilePath = options.privateKeyFilePath,
-            trustCertCollectionFilePath = options.trustCertCollectionFilePath)
+                              privateKeyFilePath = options.privateKeyFilePath,
+                              trustCertCollectionFilePath = options.trustCertCollectionFilePath)
       else
         PLAINTEXT_CONTEXT
 
     grpcServer =
       server(port = port,
-          tlsContext = tlsContext,
-          inProcessServerName = inProcessName) {
+             tlsContext = tlsContext,
+             inProcessServerName = inProcessName) {
         val proxyService = ProxyServiceImpl(proxy)
         val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
         if (proxy.isZipkinEnabled)

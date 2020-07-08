@@ -25,8 +25,8 @@ import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
 class InProcessTestNoAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
-    startPort = 10100,
-    caller = simpleClassName)) {
+                                                                      startPort = 10100,
+                                                                      caller = simpleClassName)) {
 
   companion object : CommonCompanion() {
     @JvmStatic

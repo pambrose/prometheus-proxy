@@ -87,7 +87,7 @@ internal class ProxyPathManager(private val isTestMode: Boolean) {
       pathMap.forEach { (k, v) ->
         if (v.agentId == agentId)
           pathMap.remove(k)?.also { if (!isTestMode) logger.info { "Removed path /$k for context: $it" } }
-            ?: logger.error { "Missing path /$k for agentId: $agentId" }
+          ?: logger.error { "Missing path /$k for agentId: $agentId" }
       }
     }
   }
@@ -99,10 +99,10 @@ internal class ProxyPathManager(private val isTestMode: Boolean) {
     else {
       val maxPath = pathMap.keys.map { it.length }.max() ?: 0
       "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
-          pathMap
-            .toSortedMap()
-            .map { c -> "/${c.key.padEnd(maxPath)} ${c.value}" }
-            .joinToString("\n")
+      pathMap
+        .toSortedMap()
+        .map { c -> "/${c.key.padEnd(maxPath)} ${c.value}" }
+        .joinToString("\n")
     }
 
   companion object : KLogging()

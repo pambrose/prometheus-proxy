@@ -81,7 +81,7 @@ internal class AgentPathManager(private val agent: Agent) {
     val maxName = pathConfigs.map { it[NAME]?.length ?: 0 }.max() ?: 0
     val maxPath = pathConfigs.map { it[PATH]?.length ?: 0 }.max() ?: 0
     return "Agent Path Configs:\n" + "Name".padEnd(maxName + 1) + "Path".padEnd(maxPath + 2) + "URL\n" +
-        pathConfigs.joinToString("\n") { c -> "${c[NAME]?.padEnd(maxName)} /${c[PATH]?.padEnd(maxPath)} ${c[URL]}" }
+           pathConfigs.joinToString("\n") { c -> "${c[NAME]?.padEnd(maxName)} /${c[PATH]?.padEnd(maxPath)} ${c[URL]}" }
   }
 
   companion object : KLogging() {

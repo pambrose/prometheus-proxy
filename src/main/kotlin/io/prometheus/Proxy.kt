@@ -50,15 +50,15 @@ class Proxy(val options: ProxyOptions,
             testMode: Boolean = false,
             initBlock: (Proxy.() -> Unit)? = null) :
     GenericService<ConfigVals>(options.configVals,
-        newAdminConfig(options.adminEnabled,
-            options.adminPort,
-            options.configVals.proxy.admin),
-        newMetricsConfig(options.metricsEnabled,
-            options.metricsPort,
-            options.configVals.proxy.metrics),
-        newZipkinConfig(options.configVals.proxy.internal.zipkin),
-        { getVersionDesc(true) },
-        isTestMode = testMode) {
+                               newAdminConfig(options.adminEnabled,
+                                              options.adminPort,
+                                              options.configVals.proxy.admin),
+                               newMetricsConfig(options.metricsEnabled,
+                                                options.metricsPort,
+                                                options.configVals.proxy.metrics),
+                               newZipkinConfig(options.configVals.proxy.internal.zipkin),
+                               { getVersionDesc(true) },
+                               isTestMode = testMode) {
 
   private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort)
@@ -98,13 +98,13 @@ class Proxy(val options: ProxyOptions,
       if (options.debugEnabled) {
         val cnt = configVals.proxy.admin.recentRequestsQueueSize
         addServlet(DEBUG,
-            LambdaServlet {
-              listOf(toPlainText(),
-                  pathManager.toPlainText(),
-                  if (recentActions.size > 0) "\n$cnt most recent Requests:" else "",
-                  recentActions.reversed().joinToString("\n"))
-                .joinToString("\n")
-            })
+                   LambdaServlet {
+                     listOf(toPlainText(),
+                            pathManager.toPlainText(),
+                            if (recentActions.size > 0) "\n$cnt most recent Requests:" else "",
+                            recentActions.reversed().joinToString("\n"))
+                       .joinToString("\n")
+                   })
       }
     }
 
@@ -144,26 +144,26 @@ class Proxy(val options: ProxyOptions,
       .apply {
         register("grpc_service", grpcService.healthCheck)
         register("chunking_map_check",
-            newMapHealthCheck(agentContextManager.chunkedContextMap,
-                proxyConfigVals.chunkContextMapUnhealthySize))
+                 newMapHealthCheck(agentContextManager.chunkedContextMap,
+                                   proxyConfigVals.chunkContextMapUnhealthySize))
         register("scrape_response_map_check",
-            newMapHealthCheck(scrapeRequestManager.scrapeRequestMap,
-                proxyConfigVals.scrapeRequestMapUnhealthySize))
+                 newMapHealthCheck(scrapeRequestManager.scrapeRequestMap,
+                                   proxyConfigVals.scrapeRequestMapUnhealthySize))
         register("agent_scrape_request_backlog",
-            healthCheck {
-              val unhealthySize = proxyConfigVals.scrapeRequestBacklogUnhealthySize
-              val vals =
-                agentContextManager.agentContextMap.entries
-                  .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
-                  .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
-              if (vals.isEmpty()) {
-                HealthCheck.Result.healthy()
-              }
-              else {
-                val s = Joiner.on(", ").join(vals)
-                HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
-              }
-            })
+                 healthCheck {
+                   val unhealthySize = proxyConfigVals.scrapeRequestBacklogUnhealthySize
+                   val vals =
+                     agentContextManager.agentContextMap.entries
+                       .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
+                       .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
+                   if (vals.isEmpty()) {
+                     HealthCheck.Result.healthy()
+                   }
+                   else {
+                     val s = Joiner.on(", ").join(vals)
+                     HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
+                   }
+                 })
       }
   }
 

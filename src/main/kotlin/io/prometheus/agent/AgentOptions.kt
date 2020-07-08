@@ -60,9 +60,9 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
       if (proxyHostname.isEmpty()) {
         val configHostname = agent.proxy.hostname
         proxyHostname = PROXY_HOSTNAME.getEnv(if (":" in configHostname)
-          configHostname
-        else
-          "$configHostname:${agent.proxy.port}")
+                                                configHostname
+                                              else
+                                                "$configHostname:${agent.proxy.port}")
       }
 
       if (agentName.isEmpty())

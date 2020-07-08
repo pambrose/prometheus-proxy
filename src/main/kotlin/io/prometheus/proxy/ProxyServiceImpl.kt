@@ -71,9 +71,9 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
 
     return newRegisterPathResponse(valid,
-        "Invalid agentId: $agentId",
-        proxy.pathManager.pathMapSize,
-        if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1)
+                                   "Invalid agentId: $agentId",
+                                   proxy.pathManager.pathMapSize,
+                                   if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1)
   }
 
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {
@@ -99,7 +99,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     proxy.metrics { heartbeatCount.inc() }
     val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
     agentContext?.markActivityTime(false)
-      ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
+    ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
     return newHeartBeatResponse(agentContext != null, "Invalid agentId: ${request.agentId}")
   }
 
