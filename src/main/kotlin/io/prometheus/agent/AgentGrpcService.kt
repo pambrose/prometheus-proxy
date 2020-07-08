@@ -197,7 +197,7 @@ internal class AgentGrpcService(internal val agent: Agent,
       }
   }
 
-  suspend fun sendHeartBeat(connectionContext: AgentConnectionContext) {
+  suspend fun sendHeartBeat() {
     if (agent.agentId.isEmpty())
       return
 
@@ -218,19 +218,17 @@ internal class AgentGrpcService(internal val agent: Agent,
   }
 
   suspend fun readRequestsFromProxy(agentHttpService: AgentHttpService, connectionContext: AgentConnectionContext) {
-    try {
-      val agentInfo = newAgentInfo(agent.agentId)
-      val replies = stub.readRequestsFromProxy(agentInfo)
-      replies.collect { request: ScrapeRequest ->
-        // The actual fetch happens at the other end of the channel, not here.
-        logger.debug { "readRequestsFromProxy():\n$request" }
-        connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(request) }
-        agent.scrapeRequestBacklogSize.incrementAndGet()
+    connectionContext
+      .use {
+        val agentInfo = newAgentInfo(agent.agentId)
+        val replies = stub.readRequestsFromProxy(agentInfo)
+        replies.collect { request: ScrapeRequest ->
+          // The actual fetch happens at the other end of the channel, not here.
+          logger.debug { "readRequestsFromProxy():\n$request" }
+          connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(request) }
+          agent.scrapeRequestBacklogSize.incrementAndGet()
+        }
       }
-    }
-    finally {
-      connectionContext.disconnect()
-    }
   }
 
   private suspend fun processScrapeResults(scrapeResultsChannel: Channel<ScrapeResults>,
@@ -316,21 +314,20 @@ internal class AgentGrpcService(internal val agent: Agent,
         processScrapeResults(connectionContext.scrapeResultsChannel, nonChunkedChannel, chunkedChannel)
       }
 
-      try {
-        coroutineScope {
-          launch(Dispatchers.Default + exceptionHandler()) {
-            stub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
+      connectionContext
+        .use {
+          coroutineScope {
+            launch(Dispatchers.Default + exceptionHandler()) {
+              stub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
+            }
+
+            launch(Dispatchers.Default + exceptionHandler()) {
+              stub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
+            }
           }
 
-          launch(Dispatchers.Default + exceptionHandler()) {
-            stub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
-          }
+          logger.info { "Disconnected from proxy at ${agent.proxyHost}" }
         }
-      }
-      finally {
-        logger.info { "Disconnected from proxy at ${agent.proxyHost}" }
-        connectionContext.disconnect()
-      }
     }
   }
 

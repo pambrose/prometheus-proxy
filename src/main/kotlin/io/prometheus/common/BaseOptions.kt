@@ -148,17 +148,17 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
   protected fun assignCertChainFilePath(defaultVal: String) {
     if (certChainFilePath.isEmpty())
-      certChainFilePath = EnvVars.CERT_CHAIN_FILE_PATH.getEnv(defaultVal)
+      certChainFilePath = CERT_CHAIN_FILE_PATH.getEnv(defaultVal)
   }
 
   protected fun assignPrivateKeyFilePath(defaultVal: String) {
     if (privateKeyFilePath.isEmpty())
-      privateKeyFilePath = EnvVars.PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
+      privateKeyFilePath = PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
   }
 
   protected fun assignTrustCertCollectionFilePath(defaultVal: String) {
     if (trustCertCollectionFilePath.isEmpty())
-      trustCertCollectionFilePath = EnvVars.TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
+      trustCertCollectionFilePath = TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
   }
 
   private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {

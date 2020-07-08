@@ -177,21 +177,22 @@ internal object ProxyTests : KLogging() {
     Executors.newSingleThreadExecutor().asCoroutineDispatcher()
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
-          newHttpClient().also { httpClient ->
-            val counter = AtomicInteger(0)
-            repeat(args.sequentialQueryCount) { cnt ->
-              val job =
-                launch(dispatcher + exceptionHandler(logger)) {
-                  callProxy(httpClient, pathMap, "Sequential $cnt")
-                  counter.incrementAndGet()
-                }
+          newHttpClient()
+            .use { httpClient ->
+              val counter = AtomicInteger(0)
+              repeat(args.sequentialQueryCount) { cnt ->
+                val job =
+                  launch(dispatcher + exceptionHandler(logger)) {
+                    callProxy(httpClient, pathMap, "Sequential $cnt")
+                    counter.incrementAndGet()
+                  }
 
-              job.join()
-              job.getCancellationException().cause.shouldBeNull()
+                job.join()
+                job.getCancellationException().cause.shouldBeNull()
+              }
+
+              counter.get() shouldBeEqualTo args.sequentialQueryCount
             }
-
-            counter.get() shouldBeEqualTo args.sequentialQueryCount
-          }
         }
       }
 
@@ -201,7 +202,7 @@ internal object ProxyTests : KLogging() {
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
           newHttpClient()
-            .also { httpClient ->
+            .use { httpClient ->
               val counter = AtomicInteger(0)
               val jobs =
                 List(args.parallelQueryCount) { cnt ->

@@ -156,7 +156,7 @@ class Agent(val options: AgentOptions,
           }
 
           launch(Dispatchers.Default + exceptionHandler("scrapeResultsChannel.send")) {
-            // This is terminated by connectionContext.disconnect()
+            // This is terminated by connectionContext.close()
             for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
               // The url fetch occurs during the invoke() on the scrapeRequestAction
               val scrapeResponse = scrapeRequestAction.invoke()
@@ -215,7 +215,7 @@ class Agent(val options: AgentOptions,
       while (isRunning && connectionContext.connected) {
         val timeSinceLastWrite = lastMsgSentMark.elapsedNow()
         if (timeSinceLastWrite > maxInactivityTime)
-          grpcService.sendHeartBeat(connectionContext)
+          grpcService.sendHeartBeat()
         delay(heartbeatPauseTime)
       }
       logger.info { "Heartbeat completed" }

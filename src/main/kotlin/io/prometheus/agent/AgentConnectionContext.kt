@@ -19,16 +19,17 @@
 package io.prometheus.agent
 
 import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
+import io.ktor.utils.io.core.Closeable
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
 
-internal class AgentConnectionContext {
+internal class AgentConnectionContext : Closeable {
   private var disconnected by atomicBoolean(false)
   val scrapeRequestsChannel = Channel<ScrapeRequestAction>(Channel.UNLIMITED)
   val scrapeResultsChannel = Channel<ScrapeResults>(Channel.UNLIMITED)
 
-  fun disconnect() {
+  override fun close() {
     disconnected = true
     scrapeRequestsChannel.cancel()
     scrapeResultsChannel.cancel()

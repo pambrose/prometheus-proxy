@@ -103,9 +103,9 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     return newHeartBeatResponse(agentContext != null, "Invalid agentId: ${request.agentId}")
   }
 
-  override fun readRequestsFromProxy(agentInfo: AgentInfo): Flow<ScrapeRequest> {
+  override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> {
     return flow {
-      proxy.agentContextManager.getAgentContext(agentInfo.agentId)
+      proxy.agentContextManager.getAgentContext(request.agentId)
         ?.also { agentContext ->
           while (proxy.isRunning && agentContext.isValid())
             agentContext.readScrapeRequest()?.apply { emit(scrapeRequest) }
