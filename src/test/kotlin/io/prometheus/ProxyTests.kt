@@ -21,8 +21,8 @@ package io.prometheus
 import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import com.github.pambrose.common.dsl.KtorDsl.get
-import com.github.pambrose.common.dsl.KtorDsl.http
-import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
+import com.github.pambrose.common.dsl.KtorDsl.httpClient
+import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
 import io.ktor.application.call
@@ -177,22 +177,21 @@ internal object ProxyTests : KLogging() {
     Executors.newSingleThreadExecutor().asCoroutineDispatcher()
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
-          newHttpClient()
-            .use { httpClient ->
-              val counter = AtomicInteger(0)
-              repeat(args.sequentialQueryCount) { cnt ->
-                val job =
-                  launch(dispatcher + exceptionHandler(logger)) {
-                    callProxy(httpClient, pathMap, "Sequential $cnt")
-                    counter.incrementAndGet()
-                  }
+          httpClient { client ->
+            val counter = AtomicInteger(0)
+            repeat(args.sequentialQueryCount) { cnt ->
+              val job =
+                launch(dispatcher + exceptionHandler(logger)) {
+                  callProxy(client, pathMap, "Sequential $cnt")
+                  counter.incrementAndGet()
+                }
 
-                job.join()
-                job.getCancellationException().cause.shouldBeNull()
-              }
-
-              counter.get() shouldBeEqualTo args.sequentialQueryCount
+              job.join()
+              job.getCancellationException().cause.shouldBeNull()
             }
+
+            counter.get() shouldBeEqualTo args.sequentialQueryCount
+          }
         }
       }
 
@@ -201,25 +200,24 @@ internal object ProxyTests : KLogging() {
     Executors.newFixedThreadPool(5).asCoroutineDispatcher()
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
-          newHttpClient()
-            .use { httpClient ->
-              val counter = AtomicInteger(0)
-              val jobs =
-                List(args.parallelQueryCount) { cnt ->
-                  launch(dispatcher + exceptionHandler(logger)) {
-                    delay((300..500).random().milliseconds)
-                    callProxy(httpClient, pathMap, "Parallel $cnt")
-                    counter.incrementAndGet()
-                  }
+          httpClient { client ->
+            val counter = AtomicInteger(0)
+            val jobs =
+              List(args.parallelQueryCount) { cnt ->
+                launch(dispatcher + exceptionHandler(logger)) {
+                  delay((300..500).random().milliseconds)
+                  callProxy(client, pathMap, "Parallel $cnt")
+                  counter.incrementAndGet()
                 }
-
-              jobs.forEach { job ->
-                job.join()
-                job.getCancellationException().cause.shouldBeNull()
               }
 
-              counter.get() shouldBeEqualTo args.parallelQueryCount
+            jobs.forEach { job ->
+              job.join()
+              job.getCancellationException().cause.shouldBeNull()
             }
+
+            counter.get() shouldBeEqualTo args.parallelQueryCount
+          }
         }
       }
 
@@ -261,7 +259,7 @@ internal object ProxyTests : KLogging() {
     val httpIndex = pathMap[index]
     httpIndex.shouldNotBeNull()
 
-    http(httpClient) {
+    withHttpClient(httpClient) {
       get("$PROXY_PORT/proxy-$index".addPrefix()) { response ->
         val body = response.readText()
         body shouldBeEqualTo contentMap[httpIndex]

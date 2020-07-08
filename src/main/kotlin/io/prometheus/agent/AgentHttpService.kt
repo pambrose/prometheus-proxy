@@ -19,7 +19,7 @@
 package io.prometheus.agent
 
 import com.github.pambrose.common.dsl.KtorDsl.get
-import com.github.pambrose.common.dsl.KtorDsl.http
+import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders
@@ -65,7 +65,7 @@ internal class AgentHttpService(val agent: Agent) {
 
         // Content is fetched here
         try {
-          http {
+          withHttpClient {
             get(url, setup(request), getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
           }
         }
