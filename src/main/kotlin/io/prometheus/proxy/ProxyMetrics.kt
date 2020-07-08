@@ -27,29 +27,29 @@ import io.prometheus.Proxy
 internal class ProxyMetrics(proxy: Proxy) {
 
   val scrapeRequestCount =
-      counter {
-        name("proxy_scrape_requests")
-        help("Proxy scrape requests")
-        labelNames("type")
-      }
+    counter {
+      name("proxy_scrape_requests")
+      help("Proxy scrape requests")
+      labelNames("type")
+    }
 
   val connectCount =
-      counter {
-        name("proxy_connect_count")
-        help("Proxy connect count")
-      }
+    counter {
+      name("proxy_connect_count")
+      help("Proxy connect count")
+    }
 
   val agentEvictionCount =
-      counter {
-        name("proxy_eviction_count")
-        help("Proxy eviction count")
-      }
+    counter {
+      name("proxy_eviction_count")
+      help("Proxy eviction count")
+    }
 
   val heartbeatCount =
-      counter {
-        name("proxy_heartbeat_count")
-        help("Proxy heartbeat count")
-      }
+    counter {
+      name("proxy_heartbeat_count")
+      help("Proxy heartbeat count")
+    }
 
   val scrapeRequestLatency =
     summary {
@@ -64,23 +64,23 @@ internal class ProxyMetrics(proxy: Proxy) {
     }.setToCurrentTime()
 
     SamplerGaugeCollector(name = "proxy_agent_map_size",
-                          help = "Proxy connected agents",
-                          data = { proxy.agentContextManager.agentContextSize.toDouble() })
+        help = "Proxy connected agents",
+        data = { proxy.agentContextManager.agentContextSize.toDouble() })
 
     SamplerGaugeCollector(name = "proxy_chunk_context_map_size",
-                          help = "Proxy chunk context map size",
-                          data = { proxy.agentContextManager.chunkedContextSize.toDouble() })
+        help = "Proxy chunk context map size",
+        data = { proxy.agentContextManager.chunkedContextSize.toDouble() })
 
     SamplerGaugeCollector(name = "proxy_path_map_size",
-                          help = "Proxy path map size",
-                          data = { proxy.pathManager.pathMapSize.toDouble() })
+        help = "Proxy path map size",
+        data = { proxy.pathManager.pathMapSize.toDouble() })
 
     SamplerGaugeCollector(name = "proxy_scrape_map_size",
-                          help = "Proxy scrape map size",
-                          data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() })
+        help = "Proxy scrape map size",
+        data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() })
 
     SamplerGaugeCollector(name = "proxy_cumulative_agent_backlog_size",
-                          help = "Proxy cumulative agent backlog size",
-                          data = { proxy.agentContextManager.totalAgentScrapeRequestBacklogSize.toDouble() })
+        help = "Proxy cumulative agent backlog size",
+        data = { proxy.agentContextManager.totalAgentScrapeRequestBacklogSize.toDouble() })
   }
 }

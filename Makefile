@@ -5,7 +5,10 @@ default: compile
 clean:
 	./gradlew clean
 
-compile:
+stubs:
+	./gradlew generateProto
+
+compile: stubs
 	./gradlew build -xtest
 
 build: compile

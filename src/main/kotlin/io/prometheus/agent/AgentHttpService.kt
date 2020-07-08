@@ -39,50 +39,53 @@ import java.util.concurrent.atomic.AtomicReference
 internal class AgentHttpService(val agent: Agent) {
 
   suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResults =
-      ScrapeResults(agentId = request.agentId, scrapeId = request.scrapeId).also { scrapeResults ->
-        val scrapeMsg = AtomicReference("")
-        val path = request.path
-        val encodedQueryParams = request.encodedQueryParams
-        val pathContext = agent.pathManager[path]
+    ScrapeResults(agentId = request.agentId, scrapeId = request.scrapeId).also { scrapeResults ->
+      val scrapeMsg = AtomicReference("")
+      val path = request.path
+      val encodedQueryParams = request.encodedQueryParams
+      val pathContext = agent.pathManager[path]
 
-        if (pathContext == null) {
-          logger.warn { "Invalid path in fetchScrapeUrl(): $path" }
-          scrapeMsg.set("invalid_path")
-          if (request.debugEnabled)
-            scrapeResults.setDebugInfo("None", "Invalid path: $path")
-        }
-        else {
-          val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
-          // Add the incoming query params to the url
-          val url = pathContext.url +
-              (if (encodedQueryParams.isNotEmpty())
-                "?${URLDecoder.decode(encodedQueryParams, Charsets.UTF_8.name())}"
-              else "")
+      if (pathContext == null) {
+        logger.warn { "Invalid path in fetchScrapeUrl(): $path" }
+        scrapeMsg.set("invalid_path")
+        if (request.debugEnabled)
+          scrapeResults.setDebugInfo("None", "Invalid path: $path")
+      }
+      else {
+        val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
+        // Add the incoming query params to the url
+        val url = pathContext.url +
+            (if (encodedQueryParams.isNotEmpty())
+              "?${URLDecoder.decode(encodedQueryParams, Charsets.UTF_8.name())}"
+            else "")
 
-          logger.debug { "Fetching $pathContext" }
-          if (encodedQueryParams.isNotEmpty())
-            logger.debug { "URL: $url" }
+        logger.debug { "Fetching $pathContext" }
+        if (encodedQueryParams.isNotEmpty())
+          logger.debug { "URL: $url" }
 
-          // Content is fetched here
-          try {
-            http {
-              get(url, setup(request), getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
-            }
-          } catch (e: IOException) {
-            logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
-            if (request.debugEnabled)
-              scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-          } catch (e: Throwable) {
-            logger.warn(e) { "fetchScrapeUrl() $e - $url" }
-            if (request.debugEnabled)
-              scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-          } finally {
-            requestTimer?.observeDuration()
+        // Content is fetched here
+        try {
+          http {
+            get(url, setup(request), getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
           }
         }
-
-        agent.updateScrapeCounter(scrapeMsg.get())
+        catch (e: IOException) {
+          logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
+          if (request.debugEnabled)
+            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
+        }
+        catch (e: Throwable) {
+          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+          if (request.debugEnabled)
+            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
+        }
+        finally {
+          requestTimer?.observeDuration()
+        }
       }
+
+      agent.updateScrapeCounter(scrapeMsg.get())
+    }
 
   private fun setup(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
     val accept: String? = request.accept
@@ -94,31 +97,31 @@ internal class AgentHttpService(val agent: Agent) {
                        responseArg: ScrapeResults,
                        scrapeCounterMsg: AtomicReference<String>,
                        debugEnabled: Boolean): suspend (HttpResponse) -> Unit =
-      { response ->
-        responseArg.statusCode = response.status.value
+    { response ->
+      responseArg.statusCode = response.status.value
 
-        if (response.status.isSuccess()) {
-          responseArg.apply {
-            contentType = response.headers[HttpHeaders.CONTENT_TYPE].orEmpty()
-            // Zip the content here
-            val content = response.readText()
-            zipped = content.length > agent.configVals.agent.minGzipSizeBytes
-            if (zipped)
-              contentAsZipped = content.zip()
-            else
-              contentAsText = content
-            validResponse = true
-          }
-          if (debugEnabled)
-            responseArg.setDebugInfo(url)
-          scrapeCounterMsg.set("success")
+      if (response.status.isSuccess()) {
+        responseArg.apply {
+          contentType = response.headers[HttpHeaders.CONTENT_TYPE].orEmpty()
+          // Zip the content here
+          val content = response.readText()
+          zipped = content.length > agent.configVals.agent.minGzipSizeBytes
+          if (zipped)
+            contentAsZipped = content.zip()
+          else
+            contentAsText = content
+          validResponse = true
         }
-        else {
-          if (debugEnabled)
-            responseArg.setDebugInfo(url, "Unsuccessful response code ${responseArg.statusCode}")
-          scrapeCounterMsg.set("unsuccessful")
-        }
+        if (debugEnabled)
+          responseArg.setDebugInfo(url)
+        scrapeCounterMsg.set("success")
       }
+      else {
+        if (debugEnabled)
+          responseArg.setDebugInfo(url, "Unsuccessful response code ${responseArg.statusCode}")
+        scrapeCounterMsg.set("unsuccessful")
+      }
+    }
 
   companion object : KLogging()
 }

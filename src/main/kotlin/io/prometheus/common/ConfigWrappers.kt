@@ -24,54 +24,54 @@ import com.github.pambrose.common.service.ZipkinConfig
 
 internal object ConfigWrappers {
   fun newAdminConfig(enabled: Boolean, port: Int, admin: ConfigVals.Proxy2.Admin2) =
-      AdminConfig(enabled,
-                  port,
-                  admin.pingPath,
-                  admin.versionPath,
-                  admin.healthCheckPath,
-                  admin.threadDumpPath)
+    AdminConfig(enabled,
+        port,
+        admin.pingPath,
+        admin.versionPath,
+        admin.healthCheckPath,
+        admin.threadDumpPath)
 
   fun newAdminConfig(enabled: Boolean, port: Int, admin: ConfigVals.Agent.Admin) =
-      AdminConfig(enabled,
-                port,
-                admin.pingPath,
-                admin.versionPath,
-                admin.healthCheckPath,
-                admin.threadDumpPath)
+    AdminConfig(enabled,
+        port,
+        admin.pingPath,
+        admin.versionPath,
+        admin.healthCheckPath,
+        admin.threadDumpPath)
 
   fun newMetricsConfig(enabled: Boolean, port: Int, metrics: ConfigVals.Proxy2.Metrics2) =
     MetricsConfig(enabled,
-                  port,
-                  metrics.path,
-                  metrics.standardExportsEnabled,
-                  metrics.memoryPoolsExportsEnabled,
-                  metrics.garbageCollectorExportsEnabled,
-                  metrics.threadExportsEnabled,
-                  metrics.classLoadingExportsEnabled,
-                  metrics.versionInfoExportsEnabled)
+        port,
+        metrics.path,
+        metrics.standardExportsEnabled,
+        metrics.memoryPoolsExportsEnabled,
+        metrics.garbageCollectorExportsEnabled,
+        metrics.threadExportsEnabled,
+        metrics.classLoadingExportsEnabled,
+        metrics.versionInfoExportsEnabled)
 
   fun newMetricsConfig(enabled: Boolean, port: Int, metrics: ConfigVals.Agent.Metrics) =
     MetricsConfig(enabled,
-                  port,
-                  metrics.path,
-                  metrics.standardExportsEnabled,
-                  metrics.memoryPoolsExportsEnabled,
-                  metrics.garbageCollectorExportsEnabled,
-                  metrics.threadExportsEnabled,
-                  metrics.classLoadingExportsEnabled,
-                  metrics.versionInfoExportsEnabled)
+        port,
+        metrics.path,
+        metrics.standardExportsEnabled,
+        metrics.memoryPoolsExportsEnabled,
+        metrics.garbageCollectorExportsEnabled,
+        metrics.threadExportsEnabled,
+        metrics.classLoadingExportsEnabled,
+        metrics.versionInfoExportsEnabled)
 
   fun newZipkinConfig(zipkin: ConfigVals.Proxy2.Internal2.Zipkin2) =
     ZipkinConfig(zipkin.enabled,
-                 zipkin.hostname,
-                 zipkin.port,
-                 zipkin.path,
-                 zipkin.serviceName)
+        zipkin.hostname,
+        zipkin.port,
+        zipkin.path,
+        zipkin.serviceName)
 
   fun newZipkinConfig(zipkin: ConfigVals.Agent.Internal.Zipkin) =
     ZipkinConfig(zipkin.enabled,
-                 zipkin.hostname,
-                 zipkin.port,
-                 zipkin.path,
-                 zipkin.serviceName)
+        zipkin.hostname,
+        zipkin.port,
+        zipkin.path,
+        zipkin.serviceName)
 }

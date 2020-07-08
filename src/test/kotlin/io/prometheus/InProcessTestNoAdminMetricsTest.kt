@@ -25,15 +25,16 @@ import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
 class InProcessTestNoAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
-                                                                      startPort = 10100,
-                                                                      caller = simpleClassName)) {
+    startPort = 10100,
+    caller = simpleClassName)) {
 
   companion object : CommonCompanion() {
-
     @JvmStatic
     @BeforeAll
-    fun setUp() = setItUp({ startProxy("nometrics") },
-                          { startAgent(serverName = "nometrics", chunkContentSizeKbs = 5) })
+    fun setUp() =
+      setItUp(
+          { startProxy("nometrics") },
+          { startAgent(serverName = "nometrics", chunkContentSizeKbs = 5) })
 
     @JvmStatic
     @AfterAll

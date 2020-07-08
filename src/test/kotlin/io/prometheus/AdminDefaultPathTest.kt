@@ -39,76 +39,76 @@ class AdminDefaultPathTest {
   @Test
   fun proxyPingPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.OK
-            response.readText() shouldStartWith "pong"
-          }
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.readText() shouldStartWith "pong"
         }
+      }
   }
 
   @Test
   fun agentPingPathTest() {
     agentConfigVals.admin
-        .also { admin ->
-          blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.OK
-            response.readText() shouldStartWith "pong"
-          }
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.readText() shouldStartWith "pong"
         }
+      }
   }
 
   @Test
   fun proxyVersionPathTest() {
     agentConfigVals.admin
-        .also { admin ->
-          blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.OK
-            response.readText() shouldContain "Version"
-          }
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.readText() shouldContain "Version"
         }
+      }
   }
 
   @Test
   fun agentVersionPathTest() {
     agentConfigVals.admin
-        .also { admin ->
-          blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.OK
-            response.readText() shouldContain "Version"
-          }
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.readText() shouldContain "Version"
         }
+      }
   }
 
   @Test
   fun proxyHealthCheckPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.OK
-            response.readText().length shouldBeGreaterThan 10
-          }
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.readText().length shouldBeGreaterThan 10
         }
+      }
   }
 
   @Test
   fun agentHealthCheckPathTest() {
     agentConfigVals.admin
-        .also { admin ->
-          blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
-            response.readText().length shouldBeGreaterThan 10
-          }
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
+          response.readText().length shouldBeGreaterThan 10
         }
+      }
   }
 
   @Test
   fun proxyThreadDumpPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
-            response.readText().length shouldBeGreaterThan 10
-          }
+      .also { admin ->
+        blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
+          response.readText().length shouldBeGreaterThan 10
         }
+      }
   }
 
   @Test

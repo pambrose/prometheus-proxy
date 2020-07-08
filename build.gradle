@@ -32,7 +32,13 @@ dependencies {
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:$coroutines_version"
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:$coroutines_version"
 
-  implementation "io.grpc:grpc-all:$grpc_version"
+  //implementation "io.grpc:grpc-all:$grpc_version"
+  implementation "io.grpc:grpc-netty-shaded:${grpc_version}"
+  implementation "io.grpc:grpc-protobuf:${grpc_version}"
+  implementation "io.grpc:grpc-stub:${grpc_version}"
+  implementation "io.grpc:grpc-services:${grpc_version}"
+
+  implementation "io.grpc:grpc-kotlin-stub:${gengrpc_version}"
 
   implementation "com.github.pambrose.common-utils:core-utils:$utils_version"
   implementation "com.github.pambrose.common-utils:corex-utils:$utils_version"
@@ -85,16 +91,50 @@ sourceSets {
 compileKotlin.dependsOn ':generateProto'
 
 protobuf {
-  protoc {
-    artifact = "com.google.protobuf:protoc:$protoc_version"
-  }
+  protoc { artifact = "com.google.protobuf:protoc:$protoc_version" }
   plugins {
     grpc { artifact = "io.grpc:protoc-gen-grpc-java:$grpc_version" }
+
+    // Specify protoc to generate using our grpc kotlin plugin
+    grpckt { artifact = "io.grpc:protoc-gen-grpc-kotlin:${gengrpc_version}" }
   }
   generateProtoTasks {
-    all()*.plugins {
-      grpc {}
+    all().each { task ->
+      task.plugins {
+        // Generate Java gRPC classes
+        grpc { }
+        // Generate Kotlin gRPC using the custom plugin from library
+        grpckt { }
+      }
     }
+  }
+}
+
+compileKotlin.dependsOn ':generateProto'
+
+compileKotlin {
+  kotlinOptions {
+    jvmTarget = "1.8"
+    freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
+                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault',
+                         '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
+                         '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
+                         '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
+                         '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI',
+                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault']
+  }
+}
+
+compileTestKotlin {
+  kotlinOptions {
+    jvmTarget = "1.8"
+    freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
+                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault',
+                         '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
+                         '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
+                         '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
+                         '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI',
+                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault']
   }
 }
 
@@ -140,32 +180,6 @@ check.dependsOn jacocoTestReport
 
 tasks.withType(JavaCompile) {
   options.encoding = 'UTF-8'
-}
-
-compileKotlin {
-  kotlinOptions {
-    jvmTarget = "1.8"
-    freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
-                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault',
-                         '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
-                         '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
-                         '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
-                         '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI',
-                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault']
-  }
-}
-
-compileTestKotlin {
-  kotlinOptions {
-    jvmTarget = "1.8"
-    freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
-                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault',
-                         '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
-                         '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
-                         '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
-                         '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI',
-                         '-Xuse-experimental=kotlinx.serialization.UnstableDefault']
-  }
 }
 
 // Required for multiple uberjar targets

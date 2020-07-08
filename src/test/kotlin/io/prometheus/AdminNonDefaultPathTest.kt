@@ -39,54 +39,54 @@ class AdminNonDefaultPathTest {
   @Test
   fun proxyPingPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          admin.port shouldBeEqualTo 8099
-          admin.pingPath shouldBeEqualTo "pingPath2"
+      .also { admin ->
+        admin.port shouldBeEqualTo 8099
+        admin.pingPath shouldBeEqualTo "pingPath2"
 
-          blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.OK
-            response.readText() shouldStartWith "pong"
-          }
+        blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.readText() shouldStartWith "pong"
         }
+      }
   }
 
   @Test
   fun proxyVersionPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          admin.port shouldBeEqualTo 8099
-          admin.versionPath shouldBeEqualTo "versionPath2"
+      .also { admin ->
+        admin.port shouldBeEqualTo 8099
+        admin.versionPath shouldBeEqualTo "versionPath2"
 
-          blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.OK
-            response.readText() shouldContain "Version"
-          }
+        blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.readText() shouldContain "Version"
         }
+      }
   }
 
   @Test
   fun proxyHealthCheckPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          admin.healthCheckPath shouldBeEqualTo "healthCheckPath2"
+      .also { admin ->
+        admin.healthCheckPath shouldBeEqualTo "healthCheckPath2"
 
-          blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.OK
-            response.readText().length shouldBeGreaterThan 10
-          }
+        blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.readText().length shouldBeGreaterThan 10
         }
+      }
   }
 
   @Test
   fun proxyThreadDumpPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          admin.threadDumpPath shouldBeEqualTo "threadDumpPath2"
+      .also { admin ->
+        admin.threadDumpPath shouldBeEqualTo "threadDumpPath2"
 
-          blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
-            response.readText().length shouldBeGreaterThan 10
-          }
+        blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
+          response.readText().length shouldBeGreaterThan 10
         }
+      }
   }
 
   companion object : CommonCompanion() {
@@ -94,13 +94,13 @@ class AdminNonDefaultPathTest {
     @JvmStatic
     @BeforeAll
     fun setUp() = setItUp({
-                            startProxy(adminEnabled = true, argv = listOf("-Dproxy.admin.port=8099",
-                                                                          "-Dproxy.admin.pingPath=pingPath2",
-                                                                          "-Dproxy.admin.versionPath=versionPath2",
-                                                                          "-Dproxy.admin.healthCheckPath=healthCheckPath2",
-                                                                          "-Dproxy.admin.threadDumpPath=threadDumpPath2"))
-                          },
-                          { startAgent(adminEnabled = true) })
+      startProxy(adminEnabled = true, argv = listOf("-Dproxy.admin.port=8099",
+          "-Dproxy.admin.pingPath=pingPath2",
+          "-Dproxy.admin.versionPath=versionPath2",
+          "-Dproxy.admin.healthCheckPath=healthCheckPath2",
+          "-Dproxy.admin.threadDumpPath=threadDumpPath2"))
+    },
+        { startAgent(adminEnabled = true) })
 
     @JvmStatic
     @AfterAll

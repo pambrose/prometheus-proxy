@@ -22,24 +22,19 @@ import com.beust.jcommander.Parameter
 import com.google.common.collect.Iterables
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
-import io.prometheus.common.EnvVars.AGENT_CONFIG
-import io.prometheus.common.EnvVars.AGENT_NAME
-import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
-import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
-import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
-import io.prometheus.common.EnvVars.PROXY_HOSTNAME
+import io.prometheus.common.EnvVars.*
 
- class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
-     BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
+class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
+    BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
 
-   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
-       this(Iterables.toArray<String>(args, String::class.java), exitOnMissingConfig)
+  constructor(args: List<String>, exitOnMissingConfig: Boolean) :
+      this(Iterables.toArray<String>(args, String::class.java), exitOnMissingConfig)
 
-   @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
-   var proxyHostname = ""
-     private set
+  @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
+  var proxyHostname = ""
+    private set
 
-   @Parameter(names = ["-n", "--name"], description = "Agent name")
+  @Parameter(names = ["-n", "--name"], description = "Agent name")
   var agentName = ""
     private set
 
@@ -65,9 +60,9 @@ import io.prometheus.common.EnvVars.PROXY_HOSTNAME
       if (proxyHostname.isEmpty()) {
         val configHostname = agent.proxy.hostname
         proxyHostname = PROXY_HOSTNAME.getEnv(if (":" in configHostname)
-                                                configHostname
-                                              else
-                                                "$configHostname:${agent.proxy.port}")
+          configHostname
+        else
+          "$configHostname:${agent.proxy.port}")
       }
 
       if (agentName.isEmpty())

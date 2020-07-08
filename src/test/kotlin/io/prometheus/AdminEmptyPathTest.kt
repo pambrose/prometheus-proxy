@@ -35,51 +35,51 @@ class AdminEmptyPathTest {
   @Test
   fun proxyPingPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          admin.port shouldBeEqualTo 8098
-          admin.pingPath shouldBeEqualTo ""
+      .also { admin ->
+        admin.port shouldBeEqualTo 8098
+        admin.pingPath shouldBeEqualTo ""
 
-          blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.NotFound
-          }
+        blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.NotFound
         }
+      }
   }
 
   @Test
   fun proxyVersionPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          admin.port shouldBeEqualTo 8098
-          admin.versionPath shouldBeEqualTo ""
+      .also { admin ->
+        admin.port shouldBeEqualTo 8098
+        admin.versionPath shouldBeEqualTo ""
 
-          blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.NotFound
-          }
+        blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.NotFound
         }
+      }
   }
 
   @Test
   fun proxyHealthCheckPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          admin.healthCheckPath shouldBeEqualTo ""
+      .also { admin ->
+        admin.healthCheckPath shouldBeEqualTo ""
 
-          blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.NotFound
-          }
+        blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.NotFound
         }
+      }
   }
 
   @Test
   fun proxyThreadDumpPathTest() {
     proxyConfigVals.admin
-        .also { admin ->
-          admin.threadDumpPath shouldBeEqualTo ""
+      .also { admin ->
+        admin.threadDumpPath shouldBeEqualTo ""
 
-          blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
-            response.status shouldBeEqualTo HttpStatusCode.NotFound
-          }
+        blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
+          response.status shouldBeEqualTo HttpStatusCode.NotFound
         }
+      }
   }
 
   companion object : CommonCompanion() {
@@ -87,13 +87,13 @@ class AdminEmptyPathTest {
     @JvmStatic
     @BeforeAll
     fun setUp() = setItUp({
-                            startProxy(adminEnabled = true, argv = listOf("-Dproxy.admin.port=8098",
-                                                                          "-Dproxy.admin.pingPath=\"\"",
-                                                                          "-Dproxy.admin.versionPath=\"\"",
-                                                                          "-Dproxy.admin.healthCheckPath=\"\"",
-                                                                          "-Dproxy.admin.threadDumpPath=\"\""))
-                          },
-                          { startAgent(adminEnabled = true) })
+      startProxy(adminEnabled = true, argv = listOf("-Dproxy.admin.port=8098",
+          "-Dproxy.admin.pingPath=\"\"",
+          "-Dproxy.admin.versionPath=\"\"",
+          "-Dproxy.admin.healthCheckPath=\"\"",
+          "-Dproxy.admin.threadDumpPath=\"\""))
+    },
+        { startAgent(adminEnabled = true) })
 
     @JvmStatic
     @AfterAll

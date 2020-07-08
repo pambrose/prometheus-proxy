@@ -35,8 +35,13 @@ open class CommonCompanion : KLogging() {
     CollectorRegistry.defaultRegistry.clear()
 
     runBlocking {
-      launch(Dispatchers.Default) { proxy = proxySetup.invoke() }
-      launch(Dispatchers.Default) { agent = agentSetup.invoke().apply { awaitInitialConnection(10.seconds) } }
+      launch(Dispatchers.Default + exceptionHandler(logger)) {
+        proxy = proxySetup.invoke()
+      }
+
+      launch(Dispatchers.Default + exceptionHandler(logger)) {
+        agent = agentSetup.invoke().apply { awaitInitialConnection(10.seconds) }
+      }
     }
 
     actions.invoke()
@@ -48,7 +53,7 @@ open class CommonCompanion : KLogging() {
     runBlocking {
       for (service in listOf(proxy, agent)) {
         logger.info { "Stopping ${service.simpleClassName}" }
-        launch(Dispatchers.Default) { service.stopSync() }
+        launch(Dispatchers.Default + exceptionHandler(logger)) { service.stopSync() }
       }
     }
 

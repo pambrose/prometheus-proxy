@@ -226,11 +226,11 @@ The gRPC docs describe [how to setup TLS](https://github.com/grpc/grpc-java/tree
 The [repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs) includes the
 certificates and keys necessary to test TLS support. 
 
-These settings are required to run TLS without mutual authentication:
+Running TLS without mutual authentication requires these settingss:
 * certChainFilePath and privateKeyFilePath on the proxy
 * trustCertCollectionFilePath on the agent
 
-These settings are required to run TLS with mutual authentication:
+Running TLS with mutual authentication requires these settingss:
 * certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the proxy
 * certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the agent
 

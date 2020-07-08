@@ -23,16 +23,8 @@ import com.beust.jcommander.JCommander
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
 import com.github.pambrose.common.util.simpleClassName
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import com.typesafe.config.ConfigParseOptions
-import com.typesafe.config.ConfigResolveOptions
-import com.typesafe.config.ConfigSyntax
-import io.prometheus.common.EnvVars.ADMIN_ENABLED
-import io.prometheus.common.EnvVars.ADMIN_PORT
-import io.prometheus.common.EnvVars.DEBUG_ENABLED
-import io.prometheus.common.EnvVars.METRICS_ENABLED
-import io.prometheus.common.EnvVars.METRICS_PORT
+import com.typesafe.config.*
+import io.prometheus.common.EnvVars.*
 import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
@@ -82,8 +74,8 @@ abstract class BaseOptions protected constructor(private val progName: String,
     private set
 
   @Parameter(names = ["-v", "--version"],
-             description = "Print version info and exit",
-             validateWith = [VersionValidator::class])
+      description = "Print version info and exit",
+      validateWith = [VersionValidator::class])
 
   private var version = false
 
@@ -105,18 +97,19 @@ abstract class BaseOptions protected constructor(private val progName: String,
     fun parseArgs(argv: Array<String>?) {
       try {
         val jcom =
-            JCommander(this)
-                .apply {
-                  programName = progName
-                  setCaseSensitiveOptions(false)
-                  parse(*argv ?: arrayOf())
-                }
+          JCommander(this)
+            .apply {
+              programName = progName
+              setCaseSensitiveOptions(false)
+              parse(*argv ?: arrayOf())
+            }
 
         if (usage) {
           jcom.usage()
           exitProcess(0)
         }
-      } catch (e: ParameterException) {
+      }
+      catch (e: ParameterException) {
         logger.error(e) { e.message }
         exitProcess(1)
       }
@@ -170,12 +163,12 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
   private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
     config = readConfig(if (configSource.isNotEmpty()) configSource else System.getenv(envConfig).orEmpty(),
-                        envConfig,
-                        ConfigParseOptions.defaults().setAllowMissing(false),
-                        ConfigFactory.load().resolve(),
-                        exitOnMissingConfig)
-        .resolve(ConfigResolveOptions.defaults())
-        .resolve()
+        envConfig,
+        ConfigParseOptions.defaults().setAllowMissing(false),
+        ConfigFactory.load().resolve(),
+        exitOnMissingConfig)
+      .resolve(ConfigResolveOptions.defaults())
+      .resolve()
 
     dynamicParams.forEach { (k, v) ->
       // Strip quotes
@@ -200,11 +193,11 @@ abstract class BaseOptions protected constructor(private val progName: String,
     fun String.isPropertiesSuffix() = toLowerCase().endsWith(".properties") || toLowerCase().endsWith(".props")
 
     fun getConfigSyntax(configName: String) =
-        when {
-          configName.isJsonSuffix() -> ConfigSyntax.JSON
-          configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
-          else -> ConfigSyntax.CONF
-        }
+      when {
+        configName.isJsonSuffix() -> ConfigSyntax.JSON
+        configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
+        else -> ConfigSyntax.CONF
+      }
 
     when {
       configName.isBlank() -> {
@@ -219,8 +212,9 @@ abstract class BaseOptions protected constructor(private val progName: String,
         try {
           val configSyntax = getConfigSyntax(configName)
           return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
-              .withFallback(fallback)
-        } catch (e: Exception) {
+            .withFallback(fallback)
+        }
+        catch (e: Exception) {
           if (e.cause is FileNotFoundException)
             logger.error { "Invalid config url: $configName" }
           else
@@ -231,7 +225,8 @@ abstract class BaseOptions protected constructor(private val progName: String,
       else -> {
         try {
           return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
-        } catch (e: Exception) {
+        }
+        catch (e: Exception) {
           if (e.cause is FileNotFoundException)
             logger.error { "Invalid config filename: $configName" }
           else

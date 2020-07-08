@@ -36,27 +36,27 @@ internal class AgentPathManager(private val agent: Agent) {
   fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
   private val pathConfigs =
-      agentConfigVals.pathConfigs
-          .map {
-            mapOf(NAME to "\"" + it.name + "\"",
-                  PATH to it.path,
-                  URL to it.url)
-          }
-          .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
-
-  fun registerPaths() =
-      pathConfigs.forEach {
-        val path = it["path"]
-        val url = it["url"]
-        if (path != null && url != null) {
-          registerPath(path, url)
-        }
-        else {
-          logger.error { "Null path/url values: $path/$url" }
-        }
+    agentConfigVals.pathConfigs
+      .map {
+        mapOf(
+            NAME to """"it.name""",
+            PATH to it.path,
+            URL to it.url
+        )
       }
+      .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
 
-  fun registerPath(pathVal: String, url: String) {
+  suspend fun registerPaths() =
+    pathConfigs.forEach {
+      val path = it["path"]
+      val url = it["url"]
+      if (path != null && url != null)
+        registerPath(path, url)
+      else
+        logger.error { "Null path/url values: $path/$url" }
+    }
+
+  suspend fun registerPath(pathVal: String, url: String) {
     require(pathVal.isNotEmpty()) { EMPTY_PATH }
     require(url.isNotEmpty()) { "Empty URL" }
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
@@ -66,7 +66,7 @@ internal class AgentPathManager(private val agent: Agent) {
     pathContextMap[path] = PathContext(pathId, path, url)
   }
 
-  fun unregisterPath(pathVal: String) {
+  suspend fun unregisterPath(pathVal: String) {
     require(pathVal.isNotEmpty()) { EMPTY_PATH }
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
     agent.grpcService.unregisterPathOnProxy(path)
