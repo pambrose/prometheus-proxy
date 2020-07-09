@@ -55,6 +55,8 @@ abstract class CommonTests(private val args: ProxyCallTestArgs) {
     const val HTTP_SERVER_COUNT = 5
     const val PATH_COUNT = 50
     const val SEQUENTIAL_QUERY_COUNT = 200
-    const val PARALLEL_QUERY_COUNT = 15
+    const val PARALLEL_QUERY_COUNT = 10
+    const val MIN_DELAY_MILLIS = 400
+    const val MAX_DELAY_MILLIS = 600
   }
 }

@@ -37,6 +37,8 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.prometheus.CommonTests.Companion.HTTP_SERVER_COUNT
+import io.prometheus.CommonTests.Companion.MAX_DELAY_MILLIS
+import io.prometheus.CommonTests.Companion.MIN_DELAY_MILLIS
 import io.prometheus.CommonTests.Companion.PARALLEL_QUERY_COUNT
 import io.prometheus.CommonTests.Companion.PATH_COUNT
 import io.prometheus.CommonTests.Companion.SEQUENTIAL_QUERY_COUNT
@@ -205,7 +207,7 @@ internal object ProxyTests : KLogging() {
             val jobs =
               List(args.parallelQueryCount) { cnt ->
                 launch(dispatcher + exceptionHandler(logger)) {
-                  delay((300..500).random().milliseconds)
+                  delay((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random().milliseconds)
                   callProxy(client, pathMap, "Parallel $cnt")
                   counter.incrementAndGet()
                 }
