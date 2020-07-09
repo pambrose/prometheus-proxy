@@ -64,7 +64,8 @@ internal class AgentContext(private val remoteAddr: String) {
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
-      scrapeRequestChannel.receiveOrNull()?.apply {
+    scrapeRequestChannel.receiveOrNull()
+      ?.apply {
         channelBacklogSize.decrementAndGet()
       }
 
@@ -85,15 +86,15 @@ internal class AgentContext(private val remoteAddr: String) {
   }
 
   override fun toString() =
-      toStringElements {
-        add("agentId", agentId)
-        add("valid", valid)
-        add("agentName", agentName)
-        add("hostName", hostName)
-        add("remoteAddr", remoteAddr)
-        add("lastRequestDuration", lastRequestDuration)
-        //add("inactivityDuration", inactivityDuration)
-      }
+    toStringElements {
+      add("agentId", agentId)
+      add("valid", valid)
+      add("agentName", agentName)
+      add("hostName", hostName)
+      add("remoteAddr", remoteAddr)
+      add("lastRequestDuration", lastRequestDuration)
+      //add("inactivityDuration", inactivityDuration)
+    }
 
   companion object {
     private val AGENT_ID_GENERATOR = AtomicLong(0)

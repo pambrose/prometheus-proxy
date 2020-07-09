@@ -41,13 +41,13 @@ object TestUtils : KLogging() {
     }
 
     val proxyOptions = ProxyOptions(mutableListOf<String>()
-                                        .apply {
-                                          addAll(TestConstants.CONFIG_ARG)
-                                          addAll(argv)
-                                          add("-Dproxy.admin.enabled=$adminEnabled")
-                                          add("-Dproxy.admin.debugEnabled=$debugEnabled")
-                                          add("-Dproxy.metrics.enabled=$metricsEnabled")
-                                        })
+                                      .apply {
+                                        addAll(TestConstants.CONFIG_ARG)
+                                        addAll(argv)
+                                        add("-Dproxy.admin.enabled=$adminEnabled")
+                                        add("-Dproxy.admin.debugEnabled=$debugEnabled")
+                                        add("-Dproxy.metrics.enabled=$metricsEnabled")
+                                      })
     return Proxy(options = proxyOptions,
                  proxyHttpPort = PROXY_PORT,
                  inProcessServerName = serverName,
@@ -67,27 +67,27 @@ object TestUtils : KLogging() {
     }
 
     val agentOptions = AgentOptions(mutableListOf<String>()
-                                        .apply {
-                                          addAll(TestConstants.CONFIG_ARG)
-                                          addAll(argv)
-                                          add("-Dagent.admin.enabled=$adminEnabled")
-                                          add("-Dagent.admin.debugEnabled=$debugEnabled")
-                                          add("-Dagent.metrics.enabled=$metricsEnabled")
-                                          if (chunkContentSizeKbs != -1)
-                                            add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
-                                        },
+                                      .apply {
+                                        addAll(TestConstants.CONFIG_ARG)
+                                        addAll(argv)
+                                        add("-Dagent.admin.enabled=$adminEnabled")
+                                        add("-Dagent.admin.debugEnabled=$debugEnabled")
+                                        add("-Dagent.metrics.enabled=$metricsEnabled")
+                                        if (chunkContentSizeKbs != -1)
+                                          add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
+                                      },
                                     false)
     return Agent(options = agentOptions, inProcessServerName = serverName, testMode = true) { startSync() }
   }
 }
 
-fun coroutineExceptionHandler(logger: KLogger) =
-    CoroutineExceptionHandler { _, e ->
-      if (e is ClosedSelectorException)
-        logger.info { "CoroutineExceptionHandler caught: $e" }
-      else
-        logger.warn(e) { "CoroutineExceptionHandler caught: $e" }
-    }
+fun exceptionHandler(logger: KLogger) =
+  CoroutineExceptionHandler { _, e ->
+    if (e is ClosedSelectorException)
+      logger.info { "CoroutineExceptionHandler caught: $e" }
+    else
+      logger.warn(e) { "CoroutineExceptionHandler caught: $e" }
+  }
 
 fun String.addPrefix(): String {
   val prefix = "http://localhost:"

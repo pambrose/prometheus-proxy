@@ -39,11 +39,11 @@ internal class ScrapeRequestManager {
   fun assignScrapeResults(scrapeResults: ScrapeResults) {
     val scrapeId = scrapeResults.scrapeId
     scrapeRequestMap[scrapeId]
-        ?.also { wrapper ->
-          wrapper.scrapeResults = scrapeResults
-          wrapper.markComplete()
-          wrapper.agentContext.markActivityTime(true)
-        } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
+      ?.also { wrapper ->
+        wrapper.scrapeResults = scrapeResults
+        wrapper.markComplete()
+        wrapper.agentContext.markActivityTime(true)
+      } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
   }
 
   fun removeFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {

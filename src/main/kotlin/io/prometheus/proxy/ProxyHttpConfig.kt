@@ -21,16 +21,8 @@ import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
 import io.ktor.application.call
 import io.ktor.application.install
-import io.ktor.features.Compression
-import io.ktor.features.DefaultHeaders
-import io.ktor.features.deflate
-import io.ktor.features.gzip
-import io.ktor.features.minimumSize
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.formUrlEncode
-import io.ktor.http.isSuccess
+import io.ktor.features.*
+import io.ktor.http.*
 import io.ktor.request.ApplicationRequest
 import io.ktor.request.header
 import io.ktor.request.path
@@ -77,7 +69,7 @@ internal fun Application.configServer(proxy: Proxy) {
 
       ProxyHttpService.logger.debug {
         "Servicing request for path: $path" +
-            (if (encodedQueryParams.isNotEmpty()) " with query params $encodedQueryParams" else "")
+        (if (encodedQueryParams.isNotEmpty()) " with query params $encodedQueryParams" else "")
       }
 
       when {
@@ -132,22 +124,22 @@ internal fun Application.configServer(proxy: Proxy) {
 
         else -> {
           submitScrapeRequest(proxy, path, encodedQueryParams, agentContext, call.request, call.response)
-              .also { response ->
+            .also { response ->
 
-                var status = "/$path - ${response.updateMsg} - ${response.statusCode}"
-                if (!response.statusCode.isSuccess())
-                  status += " reason: [${response.failureReason}]"
-                status += " time: ${response.fetchDuration} url: ${response.url}"
+              var status = "/$path - ${response.updateMsg} - ${response.statusCode}"
+              if (!response.statusCode.isSuccess())
+                status += " reason: [${response.failureReason}]"
+              status += " time: ${response.fetchDuration} url: ${response.url}"
 
-                proxy.logActivity(status)
+              proxy.logActivity(status)
 
-                responseResults.apply {
-                  statusCode = response.statusCode
-                  contentType = response.contentType
-                  contentText = response.contentText
-                  updateMsg = response.updateMsg
-                }
+              responseResults.apply {
+                statusCode = response.statusCode
+                contentType = response.contentType
+                contentText = response.contentText
+                updateMsg = response.updateMsg
               }
+            }
         }
       }
 
@@ -204,53 +196,54 @@ private suspend fun submitScrapeRequest(proxy: Proxy,
                                      updateMsg = "timed_out",
                                      fetchDuration = scrapeRequest.ageDuration())
     }
-  } finally {
+  }
+  finally {
     val scrapeId = scrapeRequest.scrapeId
     proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeId)
-        ?: ProxyHttpService.logger.error { "Scrape request $scrapeId missing in map" }
+    ?: ProxyHttpService.logger.error { "Scrape request $scrapeId missing in map" }
   }
 
   ProxyHttpService.logger.debug { "Results returned from $agentContext for $scrapeRequest" }
 
   scrapeRequest.scrapeResults
-      .also { scrapeResults ->
-        HttpStatusCode.fromValue(scrapeResults.statusCode)
-            .also { statusCode ->
-              scrapeResults.contentType.split("/")
-                  .also { contentTypeElems ->
+    .also { scrapeResults ->
+      HttpStatusCode.fromValue(scrapeResults.statusCode)
+        .also { statusCode ->
+          scrapeResults.contentType.split("/")
+            .also { contentTypeElems ->
 
-                    val contentType =
-                        if (contentTypeElems.size == 2)
-                          ContentType(contentTypeElems[0], contentTypeElems[1])
-                        else
-                          ContentType.Text.Plain
+              val contentType =
+                if (contentTypeElems.size == 2)
+                  ContentType(contentTypeElems[0], contentTypeElems[1])
+                else
+                  ContentType.Text.Plain
 
-                    // Do not return content on error status codes
-                    return if (!statusCode.isSuccess()) {
-                      scrapeRequest.scrapeResults.run {
-                        ScrapeRequestResponse(statusCode = statusCode,
-                                              contentType = contentType,
-                                              failureReason = failureReason,
-                                              url = url,
-                                              updateMsg = "path_not_found",
-                                              fetchDuration = scrapeRequest.ageDuration())
-                      }
-                    }
-                    else {
-                      scrapeRequest.scrapeResults.run {
-                        // Unzip content here
-                        ScrapeRequestResponse(statusCode = statusCode,
-                                              contentType = contentType,
-                                              contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
-                                              failureReason = failureReason,
-                                              url = url,
-                                              updateMsg = "success",
-                                              fetchDuration = scrapeRequest.ageDuration())
-                      }
-                    }
-                  }
+              // Do not return content on error status codes
+              return if (!statusCode.isSuccess()) {
+                scrapeRequest.scrapeResults.run {
+                  ScrapeRequestResponse(statusCode = statusCode,
+                                        contentType = contentType,
+                                        failureReason = failureReason,
+                                        url = url,
+                                        updateMsg = "path_not_found",
+                                        fetchDuration = scrapeRequest.ageDuration())
+                }
+              }
+              else {
+                scrapeRequest.scrapeResults.run {
+                  // Unzip content here
+                  ScrapeRequestResponse(statusCode = statusCode,
+                                        contentType = contentType,
+                                        contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
+                                        failureReason = failureReason,
+                                        url = url,
+                                        updateMsg = "success",
+                                        fetchDuration = scrapeRequest.ageDuration())
+                }
+              }
             }
-      }
+        }
+    }
 }
 
 private class ScrapeRequestResponse(val statusCode: HttpStatusCode,

@@ -27,29 +27,29 @@ import io.prometheus.Proxy
 internal class ProxyMetrics(proxy: Proxy) {
 
   val scrapeRequestCount =
-      counter {
-        name("proxy_scrape_requests")
-        help("Proxy scrape requests")
-        labelNames("type")
-      }
+    counter {
+      name("proxy_scrape_requests")
+      help("Proxy scrape requests")
+      labelNames("type")
+    }
 
   val connectCount =
-      counter {
-        name("proxy_connect_count")
-        help("Proxy connect count")
-      }
+    counter {
+      name("proxy_connect_count")
+      help("Proxy connect count")
+    }
 
   val agentEvictionCount =
-      counter {
-        name("proxy_eviction_count")
-        help("Proxy eviction count")
-      }
+    counter {
+      name("proxy_eviction_count")
+      help("Proxy eviction count")
+    }
 
   val heartbeatCount =
-      counter {
-        name("proxy_heartbeat_count")
-        help("Proxy heartbeat count")
-      }
+    counter {
+      name("proxy_heartbeat_count")
+      help("Proxy heartbeat count")
+    }
 
   val scrapeRequestLatency =
     summary {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@VersionAnnotation(version = "1.6.4", date = "4/30/20")
+@VersionAnnotation(version = "1.7.0", date = "7/8/20")
 package io.prometheus;
 
 import io.prometheus.common.VersionAnnotation;

@@ -33,11 +33,12 @@ import kotlin.time.seconds
 internal class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
   private val proxyConfigVals = proxy.configVals.proxy
   private val idleTimeout =
-      if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
+    if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
-  private val config: CIOApplicationEngine.Configuration.() -> Unit = { connectionIdleTimeoutSeconds = idleTimeout.inSeconds.toInt() }
+  private val config: CIOApplicationEngine.Configuration.() -> Unit =
+    { connectionIdleTimeoutSeconds = idleTimeout.inSeconds.toInt() }
   private val httpServer = embeddedServer(CIO, port = httpPort, configure = config) { configServer(proxy) }
 
   init {

@@ -1,11 +1,14 @@
-VERSION=1.6.4
+VERSION=1.7.0
 
 default: compile
 
 clean:
 	./gradlew clean
 
-compile:
+stubs:
+	./gradlew generateProto
+
+compile: stubs
 	./gradlew build -xtest
 
 build: compile

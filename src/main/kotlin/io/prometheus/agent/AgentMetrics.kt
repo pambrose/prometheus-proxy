@@ -27,28 +27,28 @@ import io.prometheus.Agent
 internal class AgentMetrics(agent: Agent) {
 
   val scrapeResultCount =
-      counter {
-        name("agent_scrape_result_count")
-        help("Agent scrape result count")
-        labelNames("type")
-      }
+    counter {
+      name("agent_scrape_result_count")
+      help("Agent scrape result count")
+      labelNames("type")
+    }
 
   val scrapeRequestCount =
-      counter {
-        name("agent_scrape_request_count")
-        help("Agent scrape request count")
-        labelNames("type")
-      }
+    counter {
+      name("agent_scrape_request_count")
+      help("Agent scrape request count")
+      labelNames("type")
+    }
 
   val connectCount =
-      counter {
-        name("agent_connect_count")
-        help("Agent connect count")
-        labelNames("type")
-      }
+    counter {
+      name("agent_connect_count")
+      help("Agent connect count")
+      labelNames("type")
+    }
 
   val scrapeRequestLatency =
-      summary {
+    summary {
       name("agent_scrape_request_latency_seconds")
       help("Agent scrape request latency in seconds")
       labelNames("agent_name")

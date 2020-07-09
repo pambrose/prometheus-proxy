@@ -19,8 +19,7 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.get
-import com.github.pambrose.common.dsl.KtorDsl.http
-import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
+import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
 import io.ktor.client.statement.readText
@@ -41,28 +40,24 @@ class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agen
 
   @Test
   fun adminDebugCallsTest() {
-    newHttpClient()
-        .use { httpClient ->
-          runBlocking {
-            http(httpClient) {
-              get("8093/debug".addPrefix()) { response ->
-                val body = response.readText()
-                body.length shouldBeGreaterThan 100
-                response.status shouldBeEqualTo HttpStatusCode.OK
-              }
-            }
-
-            http(httpClient) {
-              get("8092/debug".addPrefix()) { response ->
-                val body = response.readText()
-                body.length shouldBeGreaterThan 100
-                response.status shouldBeEqualTo HttpStatusCode.OK
-              }
-            }
-          }
+    runBlocking {
+      withHttpClient {
+        get("8093/debug".addPrefix()) { response ->
+          val body = response.readText()
+          body.length shouldBeGreaterThan 100
+          response.status shouldBeEqualTo HttpStatusCode.OK
         }
-  }
+      }
 
+      withHttpClient {
+        get("8092/debug".addPrefix()) { response ->
+          val body = response.readText()
+          body.length shouldBeGreaterThan 100
+          response.status shouldBeEqualTo HttpStatusCode.OK
+        }
+      }
+    }
+  }
 
   companion object : CommonCompanion() {
 

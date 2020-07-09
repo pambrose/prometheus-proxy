@@ -43,23 +43,23 @@ internal class AgentContextCleanupService(private val proxy: Proxy,
     val pauseTime = configVals.staleAgentCheckPauseSecs.seconds
     while (isRunning) {
       proxy.agentContextManager.agentContextMap
-          .forEach { (agentId, agentContext) ->
-            val inactivityDuration = agentContext.inactivityDuration
-            if (inactivityDuration > maxInactivityTime) {
-              logger.info { "Evicting agent after $inactivityDuration of inactivity $agentContext" }
-              proxy.removeAgentContext(agentId)
-              proxy.metrics { agentEvictionCount.inc() }
-            }
+        .forEach { (agentId, agentContext) ->
+          val inactivityDuration = agentContext.inactivityDuration
+          if (inactivityDuration > maxInactivityTime) {
+            logger.info { "Evicting agent after $inactivityDuration of inactivity $agentContext" }
+            proxy.removeAgentContext(agentId)
+            proxy.metrics { agentEvictionCount.inc() }
           }
+        }
       sleep(pauseTime)
     }
   }
 
   override fun toString() =
-      toStringElements {
-        add("max inactivity secs", configVals.maxAgentInactivitySecs)
-        add("pause secs", configVals.staleAgentCheckPauseSecs)
-      }
+    toStringElements {
+      add("max inactivity secs", configVals.maxAgentInactivitySecs)
+      add("pause secs", configVals.staleAgentCheckPauseSecs)
+    }
 
   companion object : KLogging()
 }

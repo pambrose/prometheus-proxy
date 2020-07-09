@@ -29,11 +29,12 @@ class InProcessTestNoAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = ag
                                                                       caller = simpleClassName)) {
 
   companion object : CommonCompanion() {
-
     @JvmStatic
     @BeforeAll
-    fun setUp() = setItUp({ startProxy("nometrics") },
-                          { startAgent(serverName = "nometrics", chunkContentSizeKbs = 5) })
+    fun setUp() =
+      setItUp(
+          { startProxy("nometrics") },
+          { startAgent(serverName = "nometrics", chunkContentSizeKbs = 5) })
 
     @JvmStatic
     @AfterAll

@@ -22,9 +22,7 @@ import com.beust.jcommander.Parameter
 import com.google.common.collect.Iterables
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
-import io.prometheus.common.EnvVars.AGENT_PORT
-import io.prometheus.common.EnvVars.PROXY_CONFIG
-import io.prometheus.common.EnvVars.PROXY_PORT
+import io.prometheus.common.EnvVars.*
 
 class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
 
@@ -33,6 +31,7 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
   @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
   var proxyHttpPort = -1
     private set
+
   @Parameter(names = ["-a", "--agent_port"], description = "gRPC listen port for Agents")
   var proxyAgentPort = -1
     private set

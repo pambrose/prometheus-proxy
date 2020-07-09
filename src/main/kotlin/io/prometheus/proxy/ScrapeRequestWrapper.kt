@@ -66,7 +66,8 @@ internal class ScrapeRequestWrapper(proxy: Proxy,
       try {
         completeChannel.receive()
         true
-      } catch (e: ClosedReceiveChannelException) {
+      }
+      catch (e: ClosedReceiveChannelException) {
         true
       }
     } != null
