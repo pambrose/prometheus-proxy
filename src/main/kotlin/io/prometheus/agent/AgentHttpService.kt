@@ -31,24 +31,23 @@ import io.ktor.http.isSuccess
 import io.prometheus.Agent
 import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.ScrapeRequest
-import kotlinx.atomicfu.AtomicRef
-import kotlinx.atomicfu.atomic
 import mu.KLogging
 import java.io.IOException
 import java.net.URLDecoder
+import java.util.concurrent.atomic.AtomicReference
 
 internal class AgentHttpService(val agent: Agent) {
 
   suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResults =
     ScrapeResults(agentId = request.agentId, scrapeId = request.scrapeId).also { scrapeResults ->
-      val scrapeMsg = atomic("")
+      val scrapeMsg = AtomicReference<String>("")
       val path = request.path
       val encodedQueryParams = request.encodedQueryParams
       val pathContext = agent.pathManager[path]
 
       if (pathContext == null) {
         logger.warn { "Invalid path in fetchScrapeUrl(): $path" }
-        scrapeMsg.value = "invalid_path"
+        scrapeMsg.set("invalid_path")
         if (request.debugEnabled)
           scrapeResults.setDebugInfo("None", "Invalid path: $path")
       }
@@ -85,7 +84,7 @@ internal class AgentHttpService(val agent: Agent) {
         }
       }
 
-      agent.updateScrapeCounter(scrapeMsg.value)
+      agent.updateScrapeCounter(scrapeMsg.get())
     }
 
   private fun setup(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
@@ -96,7 +95,7 @@ internal class AgentHttpService(val agent: Agent) {
 
   private fun getBlock(url: String,
                        responseArg: ScrapeResults,
-                       scrapeCounterMsg: AtomicRef<String>,
+                       scrapeCounterMsg: AtomicReference<String>,
                        debugEnabled: Boolean): suspend (HttpResponse) -> Unit =
     { response ->
       responseArg.statusCode = response.status.value
@@ -115,12 +114,12 @@ internal class AgentHttpService(val agent: Agent) {
         }
         if (debugEnabled)
           responseArg.setDebugInfo(url)
-        scrapeCounterMsg.value = "success"
+        scrapeCounterMsg.set("success")
       }
       else {
         if (debugEnabled)
           responseArg.setDebugInfo(url, "Unsuccessful response code ${responseArg.statusCode}")
-        scrapeCounterMsg.value = "unsuccessful"
+        scrapeCounterMsg.set("unsuccessful")
       }
     }
 
