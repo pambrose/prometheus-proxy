@@ -23,10 +23,10 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.newScrapeRequest
 import io.prometheus.common.ScrapeResults
+import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.TimeSource.Monotonic
 
@@ -79,6 +79,6 @@ internal class ScrapeRequestWrapper(proxy: Proxy,
     }
 
   companion object {
-    private val SCRAPE_ID_GENERATOR = AtomicLong(0)
+    private val SCRAPE_ID_GENERATOR = atomic(0L)
   }
 }

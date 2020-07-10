@@ -21,10 +21,9 @@ package io.prometheus.proxy
 import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.receiveOrNull
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
 
@@ -33,7 +32,7 @@ internal class AgentContext(private val remoteAddr: String) {
   val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
 
   private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(Channel.UNLIMITED)
-  private val channelBacklogSize = AtomicInteger(0)
+  private val channelBacklogSize = atomic(0)
 
   private val clock = Monotonic
   private var lastActivityTimeMark: TimeMark by nonNullableReference(clock.markNow())
@@ -50,7 +49,7 @@ internal class AgentContext(private val remoteAddr: String) {
     get() = lastActivityTimeMark.elapsedNow()
 
   val scrapeRequestBacklogSize: Int
-    get() = channelBacklogSize.get()
+    get() = channelBacklogSize.value
 
   init {
     hostName = "Unassigned"
@@ -97,6 +96,6 @@ internal class AgentContext(private val remoteAddr: String) {
     }
 
   companion object {
-    private val AGENT_ID_GENERATOR = AtomicLong(0)
+    private val AGENT_ID_GENERATOR = atomic(0L)
   }
 }
