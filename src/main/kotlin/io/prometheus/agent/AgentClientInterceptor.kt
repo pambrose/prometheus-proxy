@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import com.github.pambrose.common.util.isNull
 import io.grpc.*
 import io.prometheus.Agent
 import io.prometheus.Proxy
@@ -38,7 +39,7 @@ internal class AgentClientInterceptor(private val agent: Agent) : ClientIntercep
         super.start(
             object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
               override fun onHeaders(headers: Metadata?) {
-                if (headers == null) {
+                if (headers.isNull()) {
                   logger.error { "Missing headers" }
                 }
                 else {

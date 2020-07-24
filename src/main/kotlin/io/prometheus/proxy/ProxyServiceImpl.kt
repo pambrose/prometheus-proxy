@@ -18,6 +18,8 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.util.isNotNull
+import com.github.pambrose.common.util.isNull
 import com.google.protobuf.Empty
 import io.grpc.Status
 import io.prometheus.Proxy
@@ -80,7 +82,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     val agentId = request.agentId
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
 
-    return if (agentContext == null) {
+    return if (agentContext.isNull()) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
       unregisterPathResponse {
         valid = false
@@ -100,7 +102,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
     agentContext?.markActivityTime(false)
     ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
-    return newHeartBeatResponse(agentContext != null, "Invalid agentId: ${request.agentId}")
+    return newHeartBeatResponse(agentContext.isNotNull(), "Invalid agentId: ${request.agentId}")
   }
 
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> {
@@ -147,7 +149,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
               .apply {
                 logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
                 val context = chunkedContextMap[chunkScrapeId]
-                check(context != null) { "Missing chunked context with scrapeId: $chunkScrapeId" }
+                check(context.isNotNull()) { "Missing chunked context with scrapeId: $chunkScrapeId" }
                 context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
               }
           }
@@ -155,7 +157,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
             response.summary
               .apply {
                 val context = chunkedContextMap.remove(summaryScrapeId)
-                check(context != null) { "Missing chunked context with scrapeId: $summaryScrapeId" }
+                check(context.isNotNull()) { "Missing chunked context with scrapeId: $summaryScrapeId" }
                 logger.debug { "Reading summary chunkCount: ${context.totalChunkCount} byteCount: ${context.totalByteCount} for scrapeId: $summaryScrapeId" }
                 context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
                 proxy.scrapeRequestManager.assignScrapeResults(context.scrapeResults)

@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.unzip
 import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
@@ -102,7 +103,7 @@ internal fun Application.configServer(proxy: Proxy) {
         proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path ->
           responseResults.contentText = "42"
 
-        agentContext == null -> {
+        agentContext.isNull() -> {
           val msg = "Invalid path request /${path}"
           proxy.logActivity(msg)
           ProxyHttpService.logger.info { msg }

@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
 import io.prometheus.common.GrpcObjects.EMPTY_PATH
@@ -52,7 +53,7 @@ internal class ProxyPathManager(private val isTestMode: Boolean) {
     synchronized(pathMap) {
       val agentContext = pathMap[path]
       return when {
-        agentContext == null -> {
+        agentContext.isNull() -> {
           val msg = "Unable to remove path /$path - path not found"
           logger.error { msg }
           unregisterPathResponse {

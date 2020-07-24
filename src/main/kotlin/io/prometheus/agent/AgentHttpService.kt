@@ -20,6 +20,7 @@ package io.prometheus.agent
 
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
+import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders
@@ -45,7 +46,7 @@ internal class AgentHttpService(val agent: Agent) {
       val encodedQueryParams = request.encodedQueryParams
       val pathContext = agent.pathManager[path]
 
-      if (pathContext == null) {
+      if (pathContext.isNull()) {
         logger.warn { "Invalid path in fetchScrapeUrl(): $path" }
         scrapeMsg.set("invalid_path")
         if (request.debugEnabled)

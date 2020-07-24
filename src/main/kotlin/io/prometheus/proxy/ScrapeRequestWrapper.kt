@@ -20,6 +20,7 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.util.isNotNull
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.newScrapeRequest
 import io.prometheus.common.ScrapeResults
@@ -70,7 +71,7 @@ internal class ScrapeRequestWrapper(proxy: Proxy,
       catch (e: ClosedReceiveChannelException) {
         true
       }
-    } != null
+    }.isNotNull()
 
   override fun toString() =
     toStringElements {

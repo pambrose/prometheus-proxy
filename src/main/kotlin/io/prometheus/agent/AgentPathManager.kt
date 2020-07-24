@@ -18,6 +18,8 @@
 
 package io.prometheus.agent
 
+import com.github.pambrose.common.util.isNotNull
+import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Agent
 import io.prometheus.common.GrpcObjects.EMPTY_PATH
@@ -50,7 +52,7 @@ internal class AgentPathManager(private val agent: Agent) {
     pathConfigs.forEach {
       val path = it["path"]
       val url = it["url"]
-      if (path != null && url != null)
+      if (path.isNotNull() && url.isNotNull())
         registerPath(path, url)
       else
         logger.error { "Null path/url values: $path/$url" }
@@ -72,7 +74,7 @@ internal class AgentPathManager(private val agent: Agent) {
     agent.grpcService.unregisterPathOnProxy(path)
     val pathContext = pathContextMap.remove(path)
     when {
-      pathContext == null -> logger.info { "No path value /$path found in pathContextMap" }
+      pathContext.isNull() -> logger.info { "No path value /$path found in pathContextMap" }
       !agent.isTestMode -> logger.info { "Unregistered /$path for ${pathContext.url}" }
     }
   }
