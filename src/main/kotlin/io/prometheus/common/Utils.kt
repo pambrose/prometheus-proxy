@@ -23,7 +23,7 @@ import com.beust.jcommander.JCommander
 import io.prometheus.Proxy
 import kotlin.system.exitProcess
 
-internal fun getVersionDesc(asJson: Boolean = false): String =
+fun getVersionDesc(asJson: Boolean = false): String =
   Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java).run {
     if (asJson)
       """{"Version": "$version", "Release Date": "$date"}"""
