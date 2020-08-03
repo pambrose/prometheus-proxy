@@ -241,11 +241,6 @@ class Agent(val options: AgentOptions,
       args.invoke(metrics)
   }
 
-  // Used by ambedded Agents unable to call startAsync() directly
-  fun startAgentAsync() {
-    startAsync()
-  }
-
   override fun shutDown() {
     grpcService.shutDown()
     super.shutDown()
