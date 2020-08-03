@@ -41,7 +41,7 @@ internal class AgentHttpService(val agent: Agent) {
 
   suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResults =
     ScrapeResults(agentId = request.agentId, scrapeId = request.scrapeId).also { scrapeResults ->
-      val scrapeMsg = AtomicReference<String>("")
+      val scrapeMsg = AtomicReference("")
       val path = request.path
       val encodedQueryParams = request.encodedQueryParams
       val pathContext = agent.pathManager[path]

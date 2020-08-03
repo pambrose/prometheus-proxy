@@ -153,7 +153,7 @@ The only required argument is an agent config value, which should have an `agent
 
 | Options               | ENV VAR<br>Property                             |Default | Description                         |
 |-----------------------|-------------------------------------------------|--------|-------------------------------------|
-| --config, -c           | PROXY_CONFIG                                    |        | Agent config file or url              |
+| --config, -c          | PROXY_CONFIG                                    |        | Agent config file or url              |
 | --port, -p            | PROXY_PORT      <br> proxy.http.port            | 8080   | Proxy listen port                   |
 | --agent_port, -a      | AGENT_PORT      <br> proxy.agent.port           | 50051  | gRPC listen port for agents         |
 | --admin, -r           | ADMIN_ENABLED   <br> proxy.admin.enabled        | false  | Enable admin servlets               |
@@ -173,7 +173,7 @@ The only required argument is an agent config value, which should have an `agent
 
 | Options               | ENV VAR<br>Property                             |Default | Description                         |
 |:----------------------|:------------------------------------------------|:-------|:------------------------------------|
-| --config, -c           | AGENT_CONFIG                                    |        | Agent config file or url (required)   |
+| --config, -c          | AGENT_CONFIG                                    |        | Agent config file or url (required)   |
 | --proxy, -p           | PROXY_HOSTNAME  <br> agent.proxy.hostname       |        | Proxy hostname (can include :port)  |
 | --name, -n            | AGENT_NAME      <br> agent.name                 |        | Agent name                          |
 | --admin, -r           | ADMIN_ENABLED   <br> agent.admin.enabled        | false  | Enable admin servlets               |
@@ -181,15 +181,15 @@ The only required argument is an agent config value, which should have an `agent
 | --debug, -b           | DEBUG_ENABLED   <br> agent.admin.debugEnabled   | false  | Enable agent debug servlet<br>on admin port|
 | --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
-| --chunk               | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs | 32 | Threshold for chunking data to Proxy and buffer size (KBs) |
-| --gzip                | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes | 1024 | Minimum size for content to be gzipped (Bytes) |
-| --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath |  | Certificate chain file path         |
+| --chunk               | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs   | 32 | Threshold for chunking data to Proxy and buffer size (KBs) |
+| --gzip                | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes | 1024  | Minimum size for content to be gzipped (Bytes) |
+| --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath   |  | Certificate chain file path         |
 | --key, -k             | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath |  | Private key file path            |
 | --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |  | Trust certificate collection file path |
-| --override            | OVERRIDE_AUTHORITY <br> agent.tls.overrideAuthority |  | Override authority (for testing)    |
-| --version, -v         |                                              |        | Print version info and exit            |
-| --usage, -u           |                                              |        | Print usage message and exit           |
-| -D                    |                                              |        | Dynamic property assignment            |
+| --override            | OVERRIDE_AUTHORITY <br> agent.tls.overrideAuthority     |  | Override authority (for testing)    |
+| --version, -v         |                                                 |        | Print version info and exit            |
+| --usage, -u           |                                                 |        | Print usage message and exit           |
+| -D                    |                                                 |        | Dynamic property assignment            |
 
 Misc notes:
 * If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
