@@ -67,15 +67,16 @@ internal fun Application.configServer(proxy: Proxy) {
       val encodedQueryParams = call.request.queryParameters.formUrlEncode()
       val agentContext = proxy.pathManager[path]
       val responseResults = ResponseResults()
+      val logger = ProxyHttpService.logger
 
-      ProxyHttpService.logger.debug {
+      logger.debug {
         "Servicing request for path: $path" +
         (if (encodedQueryParams.isNotEmpty()) " with query params $encodedQueryParams" else "")
       }
 
       when {
         !proxy.isRunning -> {
-          ProxyHttpService.logger.error { "Proxy stopped" }
+          logger.error { "Proxy stopped" }
           responseResults.apply {
             updateMsg = "proxy_stopped"
             statusCode = HttpStatusCode.ServiceUnavailable
@@ -85,7 +86,7 @@ internal fun Application.configServer(proxy: Proxy) {
         path.isEmpty() || path.isBlank() -> {
           val msg = "Request missing path"
           proxy.logActivity(msg)
-          ProxyHttpService.logger.info { msg }
+          logger.info { msg }
           responseResults.apply {
             updateMsg = "missing_path"
             statusCode = HttpStatusCode.NotFound
@@ -106,7 +107,7 @@ internal fun Application.configServer(proxy: Proxy) {
         agentContext.isNull() -> {
           val msg = "Invalid path request /${path}"
           proxy.logActivity(msg)
-          ProxyHttpService.logger.info { msg }
+          logger.info { msg }
           responseResults.apply {
             updateMsg = "invalid_path"
             statusCode = HttpStatusCode.NotFound
@@ -116,7 +117,7 @@ internal fun Application.configServer(proxy: Proxy) {
         agentContext.isNotValid() -> {
           val msg = "Invalid AgentContext for /${path}"
           proxy.logActivity(msg)
-          ProxyHttpService.logger.error { msg }
+          logger.error { msg }
           responseResults.apply {
             updateMsg = "invalid_agent_context"
             statusCode = HttpStatusCode.NotFound
@@ -180,6 +181,7 @@ private suspend fun submitScrapeRequest(proxy: Proxy,
                                            agentContext,
                                            request.header(com.google.common.net.HttpHeaders.ACCEPT),
                                            proxy.options.debugEnabled)
+  val logger = ProxyHttpService.logger
 
   try {
     val proxyConfigVals = proxy.configVals.proxy
@@ -201,10 +203,10 @@ private suspend fun submitScrapeRequest(proxy: Proxy,
   finally {
     val scrapeId = scrapeRequest.scrapeId
     proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeId)
-    ?: ProxyHttpService.logger.error { "Scrape request $scrapeId missing in map" }
+    ?: logger.error { "Scrape request $scrapeId missing in map" }
   }
 
-  ProxyHttpService.logger.debug { "Results returned from $agentContext for $scrapeRequest" }
+  logger.debug { "Results returned from $agentContext for $scrapeRequest" }
 
   scrapeRequest.scrapeResults
     .also { scrapeResults ->
@@ -259,4 +261,3 @@ private class ResponseResults(var statusCode: HttpStatusCode = HttpStatusCode.OK
                               var contentType: ContentType = ContentType.Text.Plain,
                               var contentText: String = "",
                               var updateMsg: String = "")
-

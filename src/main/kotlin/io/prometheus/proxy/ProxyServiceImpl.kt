@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import mu.KLogging
+import java.util.concurrent.CancellationException
 
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
 
@@ -126,7 +127,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
       if (proxy.isRunning)
         Status.fromThrowable(throwable)
           .also { arg ->
-            if (arg.code != Status.Code.CANCELLED)
+            if (arg.code != Status.Code.CANCELLED && arg.cause !is CancellationException)
               logger.error(throwable) { "Error in writeResponsesToProxy(): $arg" }
           }
     }
@@ -171,7 +172,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
       if (proxy.isRunning)
         Status.fromThrowable(throwable)
           .also { arg ->
-            if (arg.code != Status.Code.CANCELLED)
+            if (arg.code != Status.Code.CANCELLED && arg.cause !is CancellationException)
               logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
           }
     }

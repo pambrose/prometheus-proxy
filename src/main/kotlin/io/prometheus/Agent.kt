@@ -30,6 +30,7 @@ import com.github.pambrose.common.util.hostInfo
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
 import io.grpc.Status
+import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
 import io.prometheus.agent.*
 import io.prometheus.client.Summary
@@ -118,7 +119,7 @@ class Agent(val options: AgentOptions,
         if (grpcService.agent.isRunning)
           Status.fromThrowable(e)
             .apply {
-              AgentGrpcService.logger.error { "Error in $name(): $code $description" }
+              logger.error { "Error in $name(): $code $description" }
             }
       }
 
@@ -178,6 +179,9 @@ class Agent(val options: AgentOptions,
       }
       catch (e: StatusRuntimeException) {
         logger.info { "Disconnected from proxy at $proxyHost" }
+      }
+      catch (e: StatusException) {
+        logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
       }
       catch (e: Throwable) {
         // Catch anything else to avoid exiting retry loop
@@ -263,6 +267,11 @@ class Agent(val options: AgentOptions,
         info { getVersionDesc(false) }
       }
       Agent(options = AgentOptions(argv, true)) { startSync() }
+    }
+
+    @JvmStatic
+    fun startAgent(configFilename: String, exitOnMissingConfig: Boolean) {
+      Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
     }
   }
 }

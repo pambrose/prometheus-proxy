@@ -30,6 +30,9 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
       this(Iterables.toArray<String>(args, String::class.java), exitOnMissingConfig)
 
+  constructor(configFilename: String, exitOnMissingConfig: Boolean) :
+      this(listOf("--config", configFilename), exitOnMissingConfig)
+
   @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
   var proxyHostname = ""
     private set

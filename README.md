@@ -43,7 +43,7 @@ Start an `agent` with:
 java -jar prometheus-agent.jar -Dagent.proxy.hostname=mymachine.local --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
 ```
 
-If prometheus-proxy were running on a machine named *mymachine.local* and the
+If the prometheus-proxy were running on a machine named *mymachine.local* and the
 `agent.pathConfigs` value in the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) 
 config file had the contents:
 
