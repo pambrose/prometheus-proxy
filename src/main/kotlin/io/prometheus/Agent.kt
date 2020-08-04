@@ -271,6 +271,10 @@ class Agent(val options: AgentOptions,
 
     @JvmStatic
     fun startAgent(configFilename: String, exitOnMissingConfig: Boolean) {
+      logger.apply {
+        info { getBanner("banners/agent.txt", this) }
+        info { getVersionDesc(false) }
+      }
       Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
     }
   }
