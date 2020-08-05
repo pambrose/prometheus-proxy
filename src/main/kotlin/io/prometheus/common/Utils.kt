@@ -20,20 +20,11 @@ package io.prometheus.common
 
 import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
-import com.github.pambrose.common.util.Version
+import com.github.pambrose.common.util.versionDesc
 import io.prometheus.Proxy
-import kotlin.reflect.full.findAnnotation
 import kotlin.system.exitProcess
 
-private val jsonVersion = { version: String, date: String -> """{"Version": "$version", "Release Date": "$date"}""" }
-
-private val plainVersion = { version: String, date: String -> "Version: $version Release Date: $date" }
-
-fun getVersionDesc(asJson: Boolean = false): String =
-  Proxy::class.findAnnotation<Version>()?.run {
-    if (asJson) jsonVersion(version, date) else plainVersion(version, date)
-  }
-  ?: if (asJson) jsonVersion("unknown", "unknown") else plainVersion("unknown", "unknown")
+fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
 internal class VersionValidator : IParameterValidator {
   override fun validate(name: String, value: String) {

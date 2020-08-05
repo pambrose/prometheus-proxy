@@ -262,18 +262,23 @@ class Agent(val options: AgentOptions,
   companion object : KLogging() {
     @JvmStatic
     fun main(argv: Array<String>) {
-      logger.apply {
-        info { getBanner("banners/agent.txt", this) }
-        info { getVersionDesc(false) }
-      }
-      Agent(options = AgentOptions(argv, true)) { startSync() }
+      startSyncAgent(argv, true)
     }
 
     @JvmStatic
-    fun startAgent(configFilename: String, exitOnMissingConfig: Boolean) {
+    fun startSyncAgent(argv: Array<String>, exitOnMissingConfig: Boolean) {
       logger.apply {
         info { getBanner("banners/agent.txt", this) }
-        info { getVersionDesc(false) }
+        info { getVersionDesc() }
+      }
+      Agent(options = AgentOptions(argv, exitOnMissingConfig)) { startSync() }
+    }
+
+    @JvmStatic
+    fun startAsyncAgent(configFilename: String, exitOnMissingConfig: Boolean) {
+      logger.apply {
+        info { getBanner("banners/agent.txt", this) }
+        info { getVersionDesc() }
       }
       Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
     }
