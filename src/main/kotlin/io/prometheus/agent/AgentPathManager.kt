@@ -24,12 +24,11 @@ import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Agent
 import io.prometheus.common.GrpcObjects.EMPTY_PATH
 import mu.KLogging
-import java.util.concurrent.ConcurrentMap
 
 internal class AgentPathManager(private val agent: Agent) {
 
   private val agentConfigVals = agent.configVals.agent
-  private val pathContextMap: ConcurrentMap<String, PathContext> = newConcurrentMap()
+  private val pathContextMap = newConcurrentMap<String, PathContext>()
 
   operator fun get(path: String): PathContext? = pathContextMap[path]
 
@@ -61,6 +60,7 @@ internal class AgentPathManager(private val agent: Agent) {
   suspend fun registerPath(pathVal: String, url: String) {
     require(pathVal.isNotEmpty()) { EMPTY_PATH }
     require(url.isNotEmpty()) { "Empty URL" }
+
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
     val pathId = agent.grpcService.registerPathOnProxy(path)
     if (!agent.isTestMode)
@@ -70,11 +70,12 @@ internal class AgentPathManager(private val agent: Agent) {
 
   suspend fun unregisterPath(pathVal: String) {
     require(pathVal.isNotEmpty()) { EMPTY_PATH }
+
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
     agent.grpcService.unregisterPathOnProxy(path)
     val pathContext = pathContextMap.remove(path)
     when {
-      pathContext.isNull() -> logger.info { "No path value /$path found in pathContextMap" }
+      pathContext.isNull() -> logger.info { "No path value /$path found in pathContextMap when unregistering" }
       !agent.isTestMode -> logger.info { "Unregistered /$path for ${pathContext.url}" }
     }
   }

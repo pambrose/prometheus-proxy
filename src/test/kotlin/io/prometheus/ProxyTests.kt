@@ -51,7 +51,6 @@ import mu.KLogging
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
-import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
 import kotlin.collections.set
 import kotlin.time.milliseconds
@@ -117,7 +116,7 @@ internal object ProxyTests : KLogging() {
   suspend fun proxyCallTest(args: ProxyCallTestArgs) {
     logger.info { "Calling proxyCallTest() from ${args.caller}" }
 
-    val pathMap: ConcurrentMap<Int, Int> = newConcurrentMap()
+    val pathMap = newConcurrentMap<Int, Int>()
 
     // Take into account pre-existing paths already registered
     val originalSize = args.agent.grpcService.pathMapSize()

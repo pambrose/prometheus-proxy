@@ -19,15 +19,14 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.Maps.newConcurrentMap
-import java.util.concurrent.ConcurrentMap
 
 internal class AgentContextManager {
   // Map agent_id to AgentContext
-  val agentContextMap: ConcurrentMap<String, AgentContext> = newConcurrentMap()
+  val agentContextMap = newConcurrentMap<String, AgentContext>()
   val agentContextSize: Int get() = agentContextMap.size
 
   // Map scrape_id to ChunkedContext
-  val chunkedContextMap: ConcurrentMap<Long, ChunkedContext> = newConcurrentMap()
+  val chunkedContextMap = newConcurrentMap<Long, ChunkedContext>()
   val chunkedContextSize: Int get() = chunkedContextMap.size
 
   val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.map { it.scrapeRequestBacklogSize }.sum()

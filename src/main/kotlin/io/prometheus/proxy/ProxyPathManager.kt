@@ -25,11 +25,10 @@ import io.prometheus.common.GrpcObjects.EMPTY_PATH
 import io.prometheus.common.GrpcObjects.unregisterPathResponse
 import io.prometheus.grpc.UnregisterPathResponse
 import mu.KLogging
-import java.util.concurrent.ConcurrentMap
 
 internal class ProxyPathManager(private val isTestMode: Boolean) {
 
-  private val pathMap: ConcurrentMap<String, AgentContext> = newConcurrentMap() // Map path to AgentContext
+  private val pathMap = newConcurrentMap<String, AgentContext>() // Map path to AgentContext
 
   operator fun get(path: String) = pathMap[path]
 

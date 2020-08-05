@@ -26,6 +26,7 @@ import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
+import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.isNull
 import com.google.common.base.Joiner
@@ -45,6 +46,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.milliseconds
 
+@Version(version = "1.7.1", date = "8/5/20")
 class Proxy(val options: ProxyOptions,
             proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",
