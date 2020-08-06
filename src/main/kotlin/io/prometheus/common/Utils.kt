@@ -20,7 +20,7 @@ package io.prometheus.common
 
 import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
-import com.github.pambrose.common.util.versionDesc
+import com.github.pambrose.common.util.Version.Companion.versionDesc
 import io.prometheus.Proxy
 import kotlin.system.exitProcess
 
