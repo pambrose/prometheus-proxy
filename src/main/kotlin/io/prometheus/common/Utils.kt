@@ -24,7 +24,7 @@ import com.github.pambrose.common.util.versionDesc
 import io.prometheus.Proxy
 import kotlin.system.exitProcess
 
-fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
+internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
 internal class VersionValidator : IParameterValidator {
   override fun validate(name: String, value: String) {
