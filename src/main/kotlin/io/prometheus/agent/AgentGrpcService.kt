@@ -147,11 +147,11 @@ internal class AgentGrpcService(internal val agent: Agent,
       logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
       stub.connectAgent(Empty.getDefaultInstance())
       logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
-      agent.metrics { connectCount.labels(agent.uniqueId, "success").inc() }
+      agent.metrics { connectCount.labels(agent.launchId, "success").inc() }
       true
     }
     catch (e: StatusRuntimeException) {
-      agent.metrics { connectCount.labels(agent.uniqueId, "failure").inc() }
+      agent.metrics { connectCount.labels(agent.launchId, "failure").inc() }
       logger.info { "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}" }
       false
     }
@@ -243,7 +243,7 @@ internal class AgentGrpcService(internal val agent: Agent,
         if (!scrapeResults.zipped) {
           logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.contentAsText.length}" }
           nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-          agent.metrics { scrapeResultCount.labels(agent.uniqueId, "non-gzipped").inc() }
+          agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
         }
         else {
           val zipped = scrapeResults.contentAsZipped
@@ -252,7 +252,7 @@ internal class AgentGrpcService(internal val agent: Agent,
           if (zipped.size < options.chunkContentSizeKbs) {
             logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
             nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-            agent.metrics { scrapeResultCount.labels(agent.uniqueId, "gzipped").inc() }
+            agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
           }
           else {
             scrapeResults.toScrapeResponseHeader()
@@ -284,7 +284,7 @@ internal class AgentGrpcService(internal val agent: Agent,
               .also {
                 logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
                 chunkedChannel.send(it)
-                agent.metrics { scrapeResultCount.labels(agent.uniqueId, "chunked").inc() }
+                agent.metrics { scrapeResultCount.labels(agent.launchId, "chunked").inc() }
               }
           }
         }

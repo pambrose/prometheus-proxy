@@ -81,7 +81,7 @@ class Agent(val options: AgentOptions,
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
   internal val metrics by lazy { AgentMetrics(this) }
-  internal val uniqueId = randomId(15)
+  internal val launchId = randomId(15)
 
   init {
     fun toPlainText() = """
@@ -200,7 +200,7 @@ class Agent(val options: AgentOptions,
   internal val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
 
   internal fun startTimer(agent: Agent): Summary.Timer? =
-    metrics.scrapeRequestLatency.labels(agent.uniqueId, agentName).startTimer()
+    metrics.scrapeRequestLatency.labels(agent.launchId, agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"
 
@@ -235,7 +235,7 @@ class Agent(val options: AgentOptions,
 
   internal fun updateScrapeCounter(agent: Agent, type: String) {
     if (type.isNotEmpty())
-      metrics { scrapeRequestCount.labels(agent.uniqueId, type).inc() }
+      metrics { scrapeRequestCount.labels(agent.launchId, type).inc() }
   }
 
   internal fun markMsgSent() {
@@ -280,13 +280,13 @@ class Agent(val options: AgentOptions,
     }
 
     @JvmStatic
-    fun startAsyncAgent(configFilename: String, exitOnMissingConfig: Boolean): AgentInfo {
+    fun startAsyncAgent(configFilename: String, exitOnMissingConfig: Boolean): EmbeddedAgentInfo {
       logger.apply {
         info { getBanner("banners/agent.txt", this) }
         info { getVersionDesc() }
       }
       val agent = Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
-      return AgentInfo(agent.uniqueId, agent.agentName)
+      return EmbeddedAgentInfo(agent.launchId, agent.agentName)
     }
   }
 }

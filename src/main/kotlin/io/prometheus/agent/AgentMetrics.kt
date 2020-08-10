@@ -30,46 +30,46 @@ internal class AgentMetrics(agent: Agent) {
     counter {
       name("agent_scrape_request_count")
       help("Agent scrape request count")
-      labelNames(AGENT_ID, TYPE)
+      labelNames(LAUNCH_ID, TYPE)
     }
 
   val scrapeResultCount =
     counter {
       name("agent_scrape_result_count")
       help("Agent scrape result count")
-      labelNames(AGENT_ID, TYPE)
+      labelNames(LAUNCH_ID, TYPE)
     }
 
   val connectCount =
     counter {
       name("agent_connect_count")
       help("Agent connect count")
-      labelNames(AGENT_ID, TYPE)
+      labelNames(LAUNCH_ID, TYPE)
     }
 
   val scrapeRequestLatency =
     summary {
       name("agent_scrape_request_latency_seconds")
       help("Agent scrape request latency in seconds")
-      labelNames(AGENT_ID, AGENT_NAME)
+      labelNames(LAUNCH_ID, AGENT_NAME)
     }
 
   init {
     gauge {
       name("agent_start_time_seconds")
-      labelNames(AGENT_ID)
+      labelNames(LAUNCH_ID)
       help("Agent start time in seconds")
-    }.labels(agent.uniqueId).setToCurrentTime()
+    }.labels(agent.launchId).setToCurrentTime()
 
     SamplerGaugeCollector("agent_scrape_backlog_size",
                           "Agent scrape backlog size",
-                          labelNames = listOf(AGENT_ID),
-                          labelValues = listOf(agent.uniqueId),
+                          labelNames = listOf(LAUNCH_ID),
+                          labelValues = listOf(agent.launchId),
                           data = { agent.scrapeRequestBacklogSize.value.toDouble() })
   }
 
   companion object {
-    private const val AGENT_ID = "agent_id"
+    private const val LAUNCH_ID = "launch_id"
     private const val AGENT_NAME = "agent_name"
     private const val TYPE = "type"
   }

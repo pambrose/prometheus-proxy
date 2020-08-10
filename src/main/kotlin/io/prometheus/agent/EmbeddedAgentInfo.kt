@@ -16,4 +16,4 @@
 
 package io.prometheus.agent
 
-data class AgentInfo(val agentId: String, val agentName: String)
+data class EmbeddedAgentInfo(val launchId: String, val agentName: String)
