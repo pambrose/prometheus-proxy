@@ -51,17 +51,17 @@ config file had the contents:
 agent {
   pathConfigs: [
     {
-      name: "app1 name"
+      name: "App1 metrics"
       path: app1_metrics
       url: "http://app1.local:9100/metrics"
     },
     {
-      name: "app2 name"
+      name: "App2 metrics"
       path: app2_metrics
       url: "http://app2.local:9100/metrics"
     },
     {
-      name: "app3 name"
+      name: "App3 metrics"
       path: app3_metrics
       url: "http://app3.local:9100/metrics"
     }
@@ -79,15 +79,15 @@ The `prometheus.yml` file would include:
 
 ```yaml
 scrape_configs:
-  - job_name: 'app1'
+  - job_name: 'app1 metrics'
     metrics_path: '/app1_metrics'
     static_configs:
       - targets: ['mymachine.local:8080']
-  - job_name: 'app2'
+  - job_name: 'app2 metrics'
     metrics_path: '/app2_metrics'
     static_configs:
       - targets: ['mymachine.local:8080']
-  - job_name: 'app3'
+  - job_name: 'app3 metrics'
     metrics_path: '/app3_metrics'
     static_configs:
       - targets: ['mymachine.local:8080']
@@ -181,6 +181,7 @@ The only required argument is an agent config value, which should have an `agent
 | --debug, -b           | DEBUG_ENABLED   <br> agent.admin.debugEnabled   | false  | Enable agent debug servlet<br>on admin port|
 | --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
 | --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
+| --consolidated, -o    | CONSOLIDATED <br> agent.consolidated            | false  | Enable multiple agents per registered path |
 | --chunk               | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs   | 32   | Threshold for chunking data to Proxy and buffer size (KBs) |
 | --gzip                | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes         | 1024 | Minimum size for content to be gzipped (Bytes) |
 | --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath   |      | Certificate chain file path         |
