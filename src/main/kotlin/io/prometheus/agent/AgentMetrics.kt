@@ -26,17 +26,17 @@ import io.prometheus.Agent
 
 internal class AgentMetrics(agent: Agent) {
 
-  val scrapeResultCount =
-    counter {
-      name("agent_scrape_result_count")
-      help("Agent scrape result count")
-      labelNames(AGENT_ID, TYPE)
-    }
-
   val scrapeRequestCount =
     counter {
       name("agent_scrape_request_count")
       help("Agent scrape request count")
+      labelNames(AGENT_ID, TYPE)
+    }
+
+  val scrapeResultCount =
+    counter {
+      name("agent_scrape_result_count")
+      help("Agent scrape result count")
       labelNames(AGENT_ID, TYPE)
     }
 
