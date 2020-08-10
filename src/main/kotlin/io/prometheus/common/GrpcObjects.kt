@@ -24,7 +24,7 @@ import java.util.zip.CRC32
 
 internal object GrpcObjects {
 
-  const val EMPTY_AGENTID = "Empty agentId"
+  const val EMPTY_AGENT_ID = "Empty agentId"
   const val EMPTY_PATH = "Empty path"
 
   fun newHeartBeatRequest(agentId: String): HeartBeatRequest =
@@ -42,7 +42,7 @@ internal object GrpcObjects {
                               agentName: String,
                               hostName: String,
                               consolidated: Boolean): RegisterAgentRequest {
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
     return registerAgentRequest {
       this.agentId = agentId
       this.agentName = agentName
@@ -52,7 +52,7 @@ internal object GrpcObjects {
   }
 
   fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse {
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
     return registerAgentResponse {
       this.valid = valid
       this.reason = reason
@@ -61,7 +61,7 @@ internal object GrpcObjects {
   }
 
   fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest {
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
     return pathMapSizeRequest {
       this.agentId = agentId
     }
@@ -73,7 +73,7 @@ internal object GrpcObjects {
     }
 
   fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest {
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
     require(path.isNotEmpty()) { EMPTY_PATH }
     return registerPathRequest {
       this.agentId = agentId
@@ -98,7 +98,7 @@ internal object GrpcObjects {
                        encodedQueryParams: String,
                        accept: String?,
                        debugEnabled: Boolean): ScrapeRequest {
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
     return scrapeRequest {
       this.agentId = agentId
       this.scrapeId = scrapeId
@@ -191,7 +191,7 @@ internal object GrpcObjects {
     }
 
   fun newUnregisterPathRequest(agentId: String, path: String): UnregisterPathRequest {
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
     require(path.isNotEmpty()) { EMPTY_PATH }
     return unregisterPathRequest {
       this.agentId = agentId
@@ -200,7 +200,7 @@ internal object GrpcObjects {
   }
 
   fun newAgentInfo(agentId: String): AgentInfo {
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
     return agentInfo { this.agentId = agentId }
   }
 

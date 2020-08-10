@@ -44,6 +44,6 @@ internal class ProxyInterceptor : ServerInterceptor {
   }
 
   companion object {
-    private val META_AGENT_ID = Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER)
+    private val META_AGENT_ID = Metadata.Key.of(Proxy.AGENT_ID_KEY, Metadata.ASCII_STRING_MARSHALLER)
   }
 }

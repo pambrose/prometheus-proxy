@@ -22,7 +22,7 @@ import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Proxy
-import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
+import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID
 import io.prometheus.common.GrpcObjects.EMPTY_PATH
 import io.prometheus.common.GrpcObjects.unregisterPathResponse
 import io.prometheus.grpc.UnregisterPathResponse
@@ -70,7 +70,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
 
   fun removePath(path: String, agentId: String): UnregisterPathResponse {
     require(path.isNotEmpty()) { EMPTY_PATH }
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
 
     synchronized(pathMap) {
       val agentInfo = pathMap[path]
@@ -108,7 +108,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
 
   // This is called on agent disconnects
   fun removePathByAgentId(agentId: String) {
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
 
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
     if (agentContext.isNull()) {

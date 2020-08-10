@@ -81,8 +81,7 @@ class Agent(val options: AgentOptions,
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
   internal val metrics by lazy { AgentMetrics(this) }
-
-  val uniqueId = randomId(15)
+  internal val uniqueId = randomId(15)
 
   init {
     fun toPlainText() = """
@@ -281,12 +280,13 @@ class Agent(val options: AgentOptions,
     }
 
     @JvmStatic
-    fun startAsyncAgent(configFilename: String, exitOnMissingConfig: Boolean): String {
+    fun startAsyncAgent(configFilename: String, exitOnMissingConfig: Boolean): AgentInfo {
       logger.apply {
         info { getBanner("banners/agent.txt", this) }
         info { getVersionDesc() }
       }
-      return Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }.uniqueId
+      val agent = Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
+      return AgentInfo(agent.uniqueId, agent.agentName)
     }
   }
 }

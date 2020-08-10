@@ -37,7 +37,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
+import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.*
 import kotlinx.coroutines.runBlocking
@@ -173,7 +173,7 @@ class Proxy(val options: ProxyOptions,
 
   // This is called on agent disconnects
   internal fun removeAgentContext(agentId: String): AgentContext? {
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
 
     return agentContextManager.removeAgentContext(agentId)
       .let { agentContext ->
@@ -209,8 +209,8 @@ class Proxy(val options: ProxyOptions,
     }
 
   companion object : KLogging() {
-    internal const val AGENT_ID = "agent-id"
-    internal val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
+    internal const val AGENT_ID_KEY = "agent-id"
+    internal val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID_KEY)
 
     @JvmStatic
     fun main(argv: Array<String>) {

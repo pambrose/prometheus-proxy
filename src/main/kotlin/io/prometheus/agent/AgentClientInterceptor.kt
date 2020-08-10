@@ -22,7 +22,7 @@ import com.github.pambrose.common.util.isNull
 import io.grpc.*
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
+import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID
 import mu.KLogging
 
 internal class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
@@ -45,9 +45,9 @@ internal class AgentClientInterceptor(private val agent: Agent) : ClientIntercep
                 else {
                   // Grab agent_id from headers if not already assigned
                   if (agent.agentId.isEmpty()) {
-                    headers.get(Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER))?.also {
+                    headers.get(Metadata.Key.of(Proxy.AGENT_ID_KEY, Metadata.ASCII_STRING_MARSHALLER))?.also {
                       agent.agentId = it
-                      check(agent.agentId.isNotEmpty()) { EMPTY_AGENTID }
+                      check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID }
                       logger.info { "Assigned agentId: $it to $agent" }
                     } ?: logger.error { "Headers missing AGENT_ID key" }
                   }
