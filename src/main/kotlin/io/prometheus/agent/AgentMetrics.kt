@@ -64,7 +64,7 @@ internal class AgentMetrics(agent: Agent) {
     SamplerGaugeCollector("agent_scrape_backlog_size",
                           "Agent scrape backlog size",
                           labelNames = listOf(LAUNCH_ID),
-                          labelValues = { listOf(agent.launchId) },
+                          labelValues = listOf(agent.launchId),
                           data = { agent.scrapeRequestBacklogSize.value.toDouble() })
   }
 
