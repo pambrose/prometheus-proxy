@@ -80,8 +80,8 @@ class Agent(val options: AgentOptions,
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
-  internal val metrics by lazy { AgentMetrics(this) }
   internal val launchId = randomId(15)
+  internal val metrics by lazy { AgentMetrics(this) }
 
   init {
     fun toPlainText() = """

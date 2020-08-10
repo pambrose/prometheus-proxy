@@ -40,11 +40,11 @@ internal class AgentContext(private val remoteAddr: String) {
   private var lastRequestTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var valid by atomicBoolean(true)
 
-  var hostName: String by nonNullableReference()
+  var hostName: String by nonNullableReference("Unassigned")
     private set
-  var agentName: String by nonNullableReference()
+  var agentName: String by nonNullableReference("Unassigned")
     private set
-  var consolidated: Boolean by nonNullableReference()
+  var consolidated: Boolean by nonNullableReference(false)
     private set
 
   internal val desc: String
@@ -60,8 +60,6 @@ internal class AgentContext(private val remoteAddr: String) {
     get() = channelBacklogSize.value
 
   init {
-    hostName = "Unassigned"
-    agentName = "Unassigned"
     markActivityTime(true)
   }
 
