@@ -48,7 +48,7 @@ internal class AgentClientInterceptor(private val agent: Agent) : ClientIntercep
                     headers.get(Metadata.Key.of(Proxy.AGENT_ID, Metadata.ASCII_STRING_MARSHALLER))?.also {
                       agent.agentId = it
                       check(agent.agentId.isNotEmpty()) { EMPTY_AGENTID }
-                      logger.debug { "Assigned agentId to $agent" }
+                      logger.info { "Assigned agentId: $it to $agent" }
                     } ?: logger.error { "Headers missing AGENT_ID key" }
                   }
                 }

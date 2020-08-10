@@ -6,145 +6,146 @@ option java_multiple_files = true;
 option java_package = "io.prometheus.grpc";
 
 message RegisterAgentRequest {
-    string agent_id = 1;
-    string agent_name = 2;
-    string host_name = 3;
+  string agent_id = 1;
+  string agent_name = 2;
+  string host_name = 3;
+  bool consolidated = 4;
 }
 
 message RegisterAgentResponse {
-    bool valid = 1;
-    string reason = 2;
-    string agent_id = 3;
-    string proxy_url = 4;
+  bool valid = 1;
+  string reason = 2;
+  string agent_id = 3;
+  string proxy_url = 4;
 }
 
 message RegisterPathRequest {
-    string agent_id = 1;
-    string path = 2;
+  string agent_id = 1;
+  string path = 2;
 }
 
 message RegisterPathResponse {
-    bool valid = 1;
-    string reason = 2;
-    int32 path_count = 3;
-    int64 path_id = 4;
+  bool valid = 1;
+  string reason = 2;
+  int32 path_count = 3;
+  int64 path_id = 4;
 }
 
 message UnregisterPathRequest {
-    string agent_id = 1;
-    string path = 2;
+  string agent_id = 1;
+  string path = 2;
 }
 
 message UnregisterPathResponse {
-    bool valid = 1;
-    string reason = 2;
+  bool valid = 1;
+  string reason = 2;
 }
 
 message PathMapSizeRequest {
-    string agent_id = 1;
+  string agent_id = 1;
 }
 
 message PathMapSizeResponse {
-    int32 path_count = 1;
+  int32 path_count = 1;
 }
 
 message AgentInfo {
-    string agent_id = 1;
+  string agent_id = 1;
 }
 
 message ScrapeRequest {
-    string agent_id = 1;
-    int64 scrape_id = 2;
-    string path = 3;
-    string accept = 4;
-    bool debug_enabled = 5;
-    string encodedQueryParams = 6;
+  string agent_id = 1;
+  int64 scrape_id = 2;
+  string path = 3;
+  string accept = 4;
+  bool debug_enabled = 5;
+  string encodedQueryParams = 6;
 }
 
 message ScrapeResponse {
-    bool valid_response = 1;
-    string agent_id = 2;
-    int64 scrape_id = 3;
-    int32 status_code = 4;
-    string failure_reason = 5;
-    string url = 6;
-    string content_type = 7;
-    bool zipped = 8;
-    oneof content_one_of {
-        string content_as_text = 9;
-        bytes content_as_zipped = 10;
-    }
+  bool valid_response = 1;
+  string agent_id = 2;
+  int64 scrape_id = 3;
+  int32 status_code = 4;
+  string failure_reason = 5;
+  string url = 6;
+  string content_type = 7;
+  bool zipped = 8;
+  oneof content_one_of {
+    string content_as_text = 9;
+    bytes content_as_zipped = 10;
+  }
 }
 
 message ChunkedScrapeResponse {
-    oneof chunk_one_of {
-        // Changes to the field names meta, data, and summary are hard-coded in the impl code
-        HeaderData header = 1;
-        ChunkData chunk = 2;
-        SummaryData summary = 3;
-    }
+  oneof chunk_one_of {
+    // Changes to the field names meta, data, and summary are hard-coded in the impl code
+    HeaderData header = 1;
+    ChunkData chunk = 2;
+    SummaryData summary = 3;
+  }
 }
 
 message HeaderData {
-    bool header_valid_response = 1;
-    string header_agent_id = 2;
-    int64 header_scrape_id = 3;
-    int32 header_status_code = 4;
-    string header_failure_reason = 5;
-    string header_url = 6;
-    string header_content_type = 7;
+  bool header_valid_response = 1;
+  string header_agent_id = 2;
+  int64 header_scrape_id = 3;
+  int32 header_status_code = 4;
+  string header_failure_reason = 5;
+  string header_url = 6;
+  string header_content_type = 7;
 }
 
 message ChunkData {
-    int64 chunk_scrape_id = 1;
-    int32 chunk_count = 2;
-    int32 chunk_byte_count = 3;
-    int64 chunk_checksum = 4;
-    bytes chunk_bytes = 5;
+  int64 chunk_scrape_id = 1;
+  int32 chunk_count = 2;
+  int32 chunk_byte_count = 3;
+  int64 chunk_checksum = 4;
+  bytes chunk_bytes = 5;
 }
 
 message SummaryData {
-    int64 summary_scrape_id = 1;
-    int32 summary_chunk_count = 2;
-    int32 summary_byte_count = 3;
-    int64 summary_checksum = 4;
+  int64 summary_scrape_id = 1;
+  int32 summary_chunk_count = 2;
+  int32 summary_byte_count = 3;
+  int64 summary_checksum = 4;
 }
 
 message HeartBeatRequest {
-    string agent_id = 1;
+  string agent_id = 1;
 }
 
 message HeartBeatResponse {
-    bool valid = 1;
-    string reason = 2;
+  bool valid = 1;
+  string reason = 2;
 }
 
 service ProxyService {
-    rpc connectAgent (google.protobuf.Empty) returns (google.protobuf.Empty) {
-    }
+  rpc connectAgent (google.protobuf.Empty) returns (google.protobuf.Empty) {
+  }
 
-    rpc registerAgent (RegisterAgentRequest) returns (RegisterAgentResponse) {
-    }
+  rpc registerAgent (RegisterAgentRequest) returns (RegisterAgentResponse) {
+  }
 
-    rpc registerPath (RegisterPathRequest) returns (RegisterPathResponse) {
-    }
+  rpc registerPath (RegisterPathRequest) returns (RegisterPathResponse) {
+  }
 
-    rpc unregisterPath (UnregisterPathRequest) returns (UnregisterPathResponse) {
-    }
+  rpc unregisterPath (UnregisterPathRequest) returns (UnregisterPathResponse) {
+  }
 
-    rpc pathMapSize (PathMapSizeRequest) returns (PathMapSizeResponse) {
-    }
+  rpc pathMapSize (PathMapSizeRequest) returns (PathMapSizeResponse) {
+  }
 
-    rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {
-    }
+  rpc readRequestsFromProxy (AgentInfo) returns (stream ScrapeRequest) {
+  }
 
-    rpc writeResponsesToProxy (stream ScrapeResponse) returns (google.protobuf.Empty) {
-    }
+  rpc writeResponsesToProxy (stream ScrapeResponse) returns (google.protobuf.Empty) {
+  }
 
-    rpc writeChunkedResponsesToProxy (stream ChunkedScrapeResponse) returns (google.protobuf.Empty) {
-    }
+  rpc writeChunkedResponsesToProxy (stream ChunkedScrapeResponse) returns (google.protobuf.Empty) {
+  }
 
-    rpc sendHeartBeat (HeartBeatRequest) returns (HeartBeatResponse) {
-    }
+  rpc sendHeartBeat (HeartBeatRequest) returns (HeartBeatResponse) {
+  }
 }
 

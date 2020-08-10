@@ -33,7 +33,6 @@ internal class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportF
 
     val agentContext = AgentContext(getRemoteAddr(attributes))
     proxy.agentContextManager.addAgentContext(agentContext)
-    logger.debug { "Registering agentId: ${agentContext.agentId}" }
 
     return attributes {
       set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)

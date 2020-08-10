@@ -27,6 +27,7 @@ import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
+import com.github.pambrose.common.util.randomId
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
 import io.grpc.Status
@@ -81,6 +82,8 @@ class Agent(val options: AgentOptions,
   internal var agentId: String by nonNullableReference("")
   internal val metrics by lazy { AgentMetrics(this) }
 
+  val uniqueId = randomId(15)
+
   init {
     fun toPlainText() = """
       Prometheus Agent Info [${getVersionDesc(false)}]
@@ -98,15 +101,17 @@ class Agent(val options: AgentOptions,
       
     """.trimIndent()
 
-    logger.info { "Assigning agent name: $agentName" }
-    logger.info { "Assigning proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
+    logger.info { "Assigned agent name: $agentName" }
+    logger.info { "Assigned proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
 
     initService {
-      if (options.debugEnabled)
+      if (options.debugEnabled) {
+        logger.info { "Adding /$DEBUG endpoint" }
         addServlet(DEBUG,
                    LambdaServlet {
                      listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n")
                    })
+      }
     }
 
     initBlock?.invoke(this)
@@ -153,7 +158,7 @@ class Agent(val options: AgentOptions,
 
           // This exceptionHandler is not necessary
           launch(Dispatchers.Default + exceptionHandler("writeResponsesToProxyUntilDisconnected")) {
-            grpcService.writeResponsesToProxyUntilDisconnected(connectionContext)
+            grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
           }
 
           launch(Dispatchers.Default + exceptionHandler("scrapeResultsChannel.send")) {
@@ -195,7 +200,8 @@ class Agent(val options: AgentOptions,
 
   internal val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
 
-  internal fun startTimer(): Summary.Timer? = metrics.scrapeRequestLatency.labels(agentName).startTimer()
+  internal fun startTimer(agent: Agent): Summary.Timer? =
+    metrics.scrapeRequestLatency.labels(agent.uniqueId, agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"
 
@@ -228,9 +234,9 @@ class Agent(val options: AgentOptions,
       logger.info { "Heartbeat disabled" }
     }
 
-  internal fun updateScrapeCounter(type: String) {
+  internal fun updateScrapeCounter(agent: Agent, type: String) {
     if (type.isNotEmpty())
-      metrics { scrapeRequestCount.labels(type).inc() }
+      metrics { scrapeRequestCount.labels(agent.uniqueId, type).inc() }
   }
 
   internal fun markMsgSent() {
@@ -275,12 +281,12 @@ class Agent(val options: AgentOptions,
     }
 
     @JvmStatic
-    fun startAsyncAgent(configFilename: String, exitOnMissingConfig: Boolean) {
+    fun startAsyncAgent(configFilename: String, exitOnMissingConfig: Boolean): String {
       logger.apply {
         info { getBanner("banners/agent.txt", this) }
         info { getVersionDesc() }
       }
-      Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
+      return Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }.uniqueId
     }
   }
 }

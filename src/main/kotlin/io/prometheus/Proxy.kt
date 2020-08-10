@@ -75,10 +75,10 @@ class Proxy(val options: ProxyOptions,
 
   private val agentCleanupService by lazy { AgentContextCleanupService(this, proxyConfigVals) { addServices(this) } }
 
-  internal val pathManager = ProxyPathManager(isTestMode)
-  internal val scrapeRequestManager = ScrapeRequestManager()
-  internal val agentContextManager = AgentContextManager()
   internal val metrics by lazy { ProxyMetrics(this) }
+  internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
+  internal val agentContextManager = AgentContextManager()
+  internal val scrapeRequestManager = ScrapeRequestManager()
 
   init {
     fun toPlainText() = """
@@ -100,6 +100,7 @@ class Proxy(val options: ProxyOptions,
     initService {
       if (options.debugEnabled) {
         val cnt = configVals.proxy.admin.recentRequestsQueueSize
+        logger.info { "Adding /$DEBUG endpoint" }
         addServlet(DEBUG,
                    LambdaServlet {
                      listOf(toPlainText(),
@@ -170,17 +171,20 @@ class Proxy(val options: ProxyOptions,
       }
   }
 
+  // This is called on agent disconnects
   internal fun removeAgentContext(agentId: String): AgentContext? {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
-    return agentContextManager.removeAgentContext(agentId).let { agentContext ->
-      if (agentContext.isNull())
-        logger.error { "Missing AgentContext for agentId: $agentId" }
-      else {
-        logger.debug { "Removed $agentContext" }
-        agentContext.invalidate()
+
+    return agentContextManager.removeAgentContext(agentId)
+      .let { agentContext ->
+        if (agentContext.isNull())
+          logger.error { "Missing AgentContext for agentId: $agentId" }
+        else {
+          logger.debug { "Removed $agentContext" }
+          agentContext.invalidate()
+        }
+        agentContext
       }
-      agentContext
-    }
   }
 
   internal fun metrics(args: ProxyMetrics.() -> Unit) {

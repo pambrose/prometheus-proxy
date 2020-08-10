@@ -21,6 +21,7 @@ package io.prometheus.proxy
 import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.receiveOrNull
@@ -40,7 +41,14 @@ internal class AgentContext(private val remoteAddr: String) {
   private var valid by atomicBoolean(true)
 
   var hostName: String by nonNullableReference()
+    private set
   var agentName: String by nonNullableReference()
+    private set
+  var consolidated: Boolean by nonNullableReference()
+    private set
+
+  internal val desc: String
+    get() = if (consolidated) "consolidated " else ""
 
   private val lastRequestDuration
     get() = lastRequestTimeMark.elapsedNow()
@@ -55,6 +63,12 @@ internal class AgentContext(private val remoteAddr: String) {
     hostName = "Unassigned"
     agentName = "Unassigned"
     markActivityTime(true)
+  }
+
+  fun assignProperties(request: RegisterAgentRequest) {
+    agentName = request.agentName
+    hostName = request.hostName
+    consolidated = request.consolidated
   }
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
@@ -84,8 +98,10 @@ internal class AgentContext(private val remoteAddr: String) {
       lastRequestTimeMark = clock.markNow()
   }
 
+
   override fun toString() =
     toStringElements {
+      add("consolidated", consolidated)
       add("agentId", agentId)
       add("valid", valid)
       add("agentName", agentName)
@@ -94,6 +110,15 @@ internal class AgentContext(private val remoteAddr: String) {
       add("lastRequestDuration", lastRequestDuration)
       //add("inactivityDuration", inactivityDuration)
     }
+
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (javaClass != other?.javaClass) return false
+    other as AgentContext
+    return agentId == other.agentId
+  }
+
+  override fun hashCode() = agentId.hashCode()
 
   companion object {
     private val AGENT_ID_GENERATOR = atomic(0L)

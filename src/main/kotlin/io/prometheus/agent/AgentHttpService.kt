@@ -53,7 +53,7 @@ internal class AgentHttpService(val agent: Agent) {
           scrapeResults.setDebugInfo("None", "Invalid path: $path")
       }
       else {
-        val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
+        val requestTimer = if (agent.isMetricsEnabled) agent.startTimer(agent) else null
         // Add the incoming query params to the url
         val url = pathContext.url +
                   (if (encodedQueryParams.isNotEmpty())
@@ -85,7 +85,7 @@ internal class AgentHttpService(val agent: Agent) {
         }
       }
 
-      agent.updateScrapeCounter(scrapeMsg.get())
+      agent.updateScrapeCounter(agent, scrapeMsg.get())
     }
 
   private fun setup(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {

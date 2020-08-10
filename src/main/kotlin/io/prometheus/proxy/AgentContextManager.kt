@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.Maps.newConcurrentMap
+import mu.KLogging
 
 internal class AgentContextManager {
   // Map agent_id to AgentContext
@@ -31,9 +32,14 @@ internal class AgentContextManager {
 
   val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.map { it.scrapeRequestBacklogSize }.sum()
 
-  fun addAgentContext(agentContext: AgentContext) = agentContextMap.put(agentContext.agentId, agentContext)
+  fun addAgentContext(agentContext: AgentContext): AgentContext? {
+    logger.debug { "Registering agentId: ${agentContext.agentId}" }
+    return agentContextMap.put(agentContext.agentId, agentContext)
+  }
 
   fun getAgentContext(agentId: String) = agentContextMap[agentId]
 
   fun removeAgentContext(agentId: String) = agentContextMap.remove(agentId)
+
+  companion object : KLogging()
 }

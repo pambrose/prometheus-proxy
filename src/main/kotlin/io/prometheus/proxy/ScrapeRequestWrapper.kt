@@ -31,10 +31,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration
 import kotlin.time.TimeSource.Monotonic
 
-internal class ScrapeRequestWrapper(proxy: Proxy,
+internal class ScrapeRequestWrapper(val agentContext: AgentContext,
+                                    proxy: Proxy,
                                     path: String,
                                     encodedQueryParams: String,
-                                    val agentContext: AgentContext,
                                     accept: String?,
                                     debugEnabled: Boolean) {
   private val clock = Monotonic
@@ -42,12 +42,13 @@ internal class ScrapeRequestWrapper(proxy: Proxy,
   private val completeChannel = Channel<Boolean>()
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
-  val scrapeRequest = newScrapeRequest(agentContext.agentId,
-                                       SCRAPE_ID_GENERATOR.getAndIncrement(),
-                                       path,
-                                       encodedQueryParams,
-                                       accept,
-                                       debugEnabled)
+  val scrapeRequest =
+    newScrapeRequest(agentContext.agentId,
+                     SCRAPE_ID_GENERATOR.getAndIncrement(),
+                     path,
+                     encodedQueryParams,
+                     accept,
+                     debugEnabled)
 
   var scrapeResults: ScrapeResults by nonNullableReference()
 

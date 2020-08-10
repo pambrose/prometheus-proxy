@@ -32,8 +32,8 @@ dependencies {
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:$coroutines_version"
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:$coroutines_version"
 
-  //implementation "io.grpc:grpc-all:$grpc_version"
-  implementation "io.grpc:grpc-netty-shaded:${grpc_version}"
+  //implementation "io.grpc:grpc-netty-shaded:${grpc_version}"
+  implementation "io.grpc:grpc-netty:${grpc_version}"
   implementation "io.grpc:grpc-protobuf:${grpc_version}"
   implementation "io.grpc:grpc-stub:${grpc_version}"
   implementation "io.grpc:grpc-services:${grpc_version}"

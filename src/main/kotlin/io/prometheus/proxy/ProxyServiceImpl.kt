@@ -50,8 +50,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     proxy.agentContextManager.getAgentContext(agentId)
       ?.apply {
         valid = true
-        agentName = request.agentName
-        hostName = request.hostName
+        assignProperties(request)
         markActivityTime(false)
         logger.info { "Connected to $this" }
       } ?: logger.info { "registerAgent() missing AgentContext agentId: $agentId" }
@@ -61,14 +60,12 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
     val path = request.path
-    if (path in proxy.pathManager)
-      logger.info { "Overwriting path /$path" }
-
     val agentId = request.agentId
     var valid = false
 
     proxy.agentContextManager.getAgentContext(agentId)?.apply {
-      valid = true
+
+    valid = true
       proxy.pathManager.addPath(path, this)
       markActivityTime(false)
     } ?: logger.error { "Missing AgentContext for agentId: $agentId" }

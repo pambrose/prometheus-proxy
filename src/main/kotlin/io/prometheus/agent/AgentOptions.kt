@@ -41,6 +41,10 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   var agentName = ""
     private set
 
+  @Parameter(names = ["-o", "--consolidated"], description = "Consolidated Agent")
+  var consolidated = false
+    private set
+
   @Parameter(names = ["--over", "--override"], description = "Override Authority")
   var overrideAuthority = ""
     private set
@@ -81,6 +85,9 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
 
       if (minGzipSizeBytes == -1)
         minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agent.minGzipSizeBytes)
+
+      if (!consolidated)
+        consolidated = CONSOLIDATED.getEnv(agent.consolidated)
 
       assignAdminEnabled(agent.admin.enabled)
       assignAdminPort(agent.admin.port)

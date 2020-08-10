@@ -38,12 +38,16 @@ internal object GrpcObjects {
       this.reason = reason
     }
 
-  fun newRegisterAgentRequest(agentId: String, agentName: String, hostName: String): RegisterAgentRequest {
+  fun newRegisterAgentRequest(agentId: String,
+                              agentName: String,
+                              hostName: String,
+                              consolidated: Boolean): RegisterAgentRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENTID }
     return registerAgentRequest {
       this.agentId = agentId
       this.agentName = agentName
       this.hostName = hostName
+      this.consolidated = consolidated
     }
   }
 
