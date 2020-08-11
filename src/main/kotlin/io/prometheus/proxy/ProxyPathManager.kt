@@ -122,14 +122,14 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
           if (v.agentContexts.get(0).agentId == agentId)
             pathMap.remove(k)?.also {
               if (!isTestMode)
-                logger.info { "Removed path /$k for agent context: $it" }
+                logger.info { "Removed path /$k for $it" }
             }
             ?: logger.warn { "Missing ${agentContext.desc}path /$k for agentId: $agentId" }
         }
         else {
           val removed = v.agentContexts.removeIf { it.agentId == agentId }
           if (removed)
-            logger.info { "Removed path /$k for agent context: $agentContext" }
+            logger.info { "Removed path /$k for $agentContext" }
           else
             logger.warn { "Missing path /$k for agentId: $agentId" }
         }
