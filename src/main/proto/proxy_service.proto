@@ -7,9 +7,10 @@ option java_package = "io.prometheus.grpc";
 
 message RegisterAgentRequest {
   string agent_id = 1;
-  string agent_name = 2;
-  string host_name = 3;
-  bool consolidated = 4;
+  string launch_id = 2;
+  string agent_name = 3;
+  string host_name = 4;
+  bool consolidated = 6;
 }
 
 message RegisterAgentResponse {

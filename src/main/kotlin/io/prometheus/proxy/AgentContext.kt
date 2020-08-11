@@ -40,6 +40,8 @@ internal class AgentContext(private val remoteAddr: String) {
   private var lastRequestTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var valid by atomicBoolean(true)
 
+  var launchId: String by nonNullableReference("Unassigned")
+    private set
   var hostName: String by nonNullableReference("Unassigned")
     private set
   var agentName: String by nonNullableReference("Unassigned")
@@ -64,6 +66,7 @@ internal class AgentContext(private val remoteAddr: String) {
   }
 
   fun assignProperties(request: RegisterAgentRequest) {
+    launchId = request.launchId
     agentName = request.agentName
     hostName = request.hostName
     consolidated = request.consolidated
@@ -99,8 +102,9 @@ internal class AgentContext(private val remoteAddr: String) {
 
   override fun toString() =
     toStringElements {
-      add("consolidated", consolidated)
       add("agentId", agentId)
+      add("launchId", launchId)
+      add("consolidated", consolidated)
       add("valid", valid)
       add("agentName", agentName)
       add("hostName", hostName)

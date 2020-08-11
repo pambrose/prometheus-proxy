@@ -55,7 +55,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
         logger.info { "Connected to $this" }
       } ?: logger.info { "registerAgent() missing AgentContext agentId: $agentId" }
 
-    return newRegisterAgentResponse(valid, "Invalid agentId: $agentId", agentId)
+    return newRegisterAgentResponse(agentId, valid, "Invalid agentId: $agentId")
   }
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
@@ -65,15 +65,15 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
 
     proxy.agentContextManager.getAgentContext(agentId)?.apply {
 
-    valid = true
+      valid = true
       proxy.pathManager.addPath(path, this)
       markActivityTime(false)
     } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
 
-    return newRegisterPathResponse(valid,
+    return newRegisterPathResponse(if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1,
+                                   valid,
                                    "Invalid agentId: $agentId",
-                                   proxy.pathManager.pathMapSize,
-                                   if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1)
+                                   proxy.pathManager.pathMapSize)
   }
 
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {

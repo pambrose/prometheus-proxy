@@ -157,7 +157,12 @@ internal class AgentGrpcService(internal val agent: Agent,
     }
 
   suspend fun registerAgent(initialConnectionLatch: CountDownLatch) {
-    val request = newRegisterAgentRequest(agent.agentId, agent.agentName, hostName, agent.options.consolidated)
+    val request =
+      newRegisterAgentRequest(agent.agentId,
+                              agent.launchId,
+                              agent.agentName,
+                              hostName,
+                              agent.options.consolidated)
     stub.registerAgent(request)
       .also { response ->
         agent.markMsgSent()

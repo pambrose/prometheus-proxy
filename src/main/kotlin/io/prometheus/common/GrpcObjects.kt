@@ -39,29 +39,34 @@ internal object GrpcObjects {
     }
 
   fun newRegisterAgentRequest(agentId: String,
+                              launchId: String,
                               agentName: String,
                               hostName: String,
                               consolidated: Boolean): RegisterAgentRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
+
     return registerAgentRequest {
       this.agentId = agentId
+      this.launchId = launchId
       this.agentName = agentName
       this.hostName = hostName
       this.consolidated = consolidated
     }
   }
 
-  fun newRegisterAgentResponse(valid: Boolean, reason: String, agentId: String): RegisterAgentResponse {
+  fun newRegisterAgentResponse(agentId: String, valid: Boolean, reason: String): RegisterAgentResponse {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
+
     return registerAgentResponse {
+      this.agentId = agentId
       this.valid = valid
       this.reason = reason
-      this.agentId = agentId
     }
   }
 
   fun newPathMapSizeRequest(agentId: String): PathMapSizeRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
+
     return pathMapSizeRequest {
       this.agentId = agentId
     }
@@ -75,21 +80,22 @@ internal object GrpcObjects {
   fun newRegisterPathRequest(agentId: String, path: String): RegisterPathRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
     require(path.isNotEmpty()) { EMPTY_PATH }
+
     return registerPathRequest {
       this.agentId = agentId
       this.path = path
     }
   }
 
-  fun newRegisterPathResponse(valid: Boolean,
+  fun newRegisterPathResponse(pathId: Long,
+                              valid: Boolean,
                               reason: String,
-                              pathCount: Int,
-                              pathId: Long): RegisterPathResponse =
+                              pathCount: Int): RegisterPathResponse =
     registerPathResponse {
+      this.pathId = pathId
       this.valid = valid
       this.reason = reason
       this.pathCount = pathCount
-      this.pathId = pathId
     }
 
   fun newScrapeRequest(agentId: String,
@@ -99,6 +105,7 @@ internal object GrpcObjects {
                        accept: String?,
                        debugEnabled: Boolean): ScrapeRequest {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
+
     return scrapeRequest {
       this.agentId = agentId
       this.scrapeId = scrapeId
