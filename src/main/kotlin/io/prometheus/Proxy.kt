@@ -28,7 +28,6 @@ import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
-import com.github.pambrose.common.util.isNull
 import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
 import io.grpc.Attributes
@@ -175,18 +174,8 @@ class Proxy(val options: ProxyOptions,
   internal fun removeAgentContext(agentId: String): AgentContext? {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
 
-    pathManager.removePathByAgentId(agentId)
-
-    return agentContextManager.removeAgentContext(agentId)
-      .let { agentContext ->
-        if (agentContext.isNull())
-          logger.error { "Missing AgentContext for agentId: $agentId" }
-        else {
-          logger.debug { "Removed $agentContext" }
-          agentContext.invalidate()
-        }
-        agentContext
-      }
+    pathManager.removeFromPathManager(agentId)
+    return agentContextManager.removeFromContextManager(agentId)
   }
 
   internal fun metrics(args: ProxyMetrics.() -> Unit) {

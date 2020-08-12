@@ -107,7 +107,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
   }
 
   // This is called on agent disconnects
-  fun removePathByAgentId(agentId: String) {
+  fun removeFromPathManager(agentId: String) {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
 
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)

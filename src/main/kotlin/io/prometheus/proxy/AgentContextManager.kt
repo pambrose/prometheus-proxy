@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
 import mu.KLogging
 
@@ -39,7 +40,17 @@ internal class AgentContextManager {
 
   fun getAgentContext(agentId: String) = agentContextMap[agentId]
 
-  fun removeAgentContext(agentId: String) = agentContextMap.remove(agentId)
+  fun removeFromContextManager(agentId: String): AgentContext? =
+    agentContextMap.remove(agentId)
+      .let { agentContext ->
+        if (agentContext.isNull())
+          logger.error { "Missing AgentContext for agentId: $agentId" }
+        else {
+          logger.debug { "Removed $agentContext" }
+          agentContext.invalidate()
+        }
+        agentContext
+      }
 
   companion object : KLogging()
 }
