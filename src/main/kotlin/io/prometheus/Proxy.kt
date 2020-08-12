@@ -105,7 +105,7 @@ class Proxy(val options: ProxyOptions,
                    LambdaServlet {
                      listOf(toPlainText(),
                             pathManager.toPlainText(),
-                            if (recentActions.size > 0) "\n$cnt most recent Requests:" else "",
+                            if (recentActions.size > 0) "\n$cnt most recent requests:" else "",
                             recentActions.reversed().joinToString("\n"))
                        .joinToString("\n")
                    })
