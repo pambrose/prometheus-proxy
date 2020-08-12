@@ -46,7 +46,6 @@ internal class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportF
     }
     else {
       attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { agentId ->
-        proxy.pathManager.removePathByAgentId(agentId)
         val context = proxy.removeAgentContext(agentId)
         logger.info { "Disconnected ${if (context.isNotNull()) "from $context" else "with invalid agentId: $agentId"}" }
       } ?: logger.error { "Missing agentId in transportTerminated()" }

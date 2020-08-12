@@ -116,6 +116,8 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
       return
     }
 
+    logger.info { "Removing paths for agentId: $agentId" }
+
     synchronized(pathMap) {
       pathMap.forEach { (k, v) ->
         if (v.agentContexts.size == 1) {

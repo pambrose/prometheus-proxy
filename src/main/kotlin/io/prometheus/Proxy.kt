@@ -175,6 +175,8 @@ class Proxy(val options: ProxyOptions,
   internal fun removeAgentContext(agentId: String): AgentContext? {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
 
+    pathManager.removePathByAgentId(agentId)
+
     return agentContextManager.removeAgentContext(agentId)
       .let { agentContext ->
         if (agentContext.isNull())
