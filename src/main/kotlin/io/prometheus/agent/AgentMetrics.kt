@@ -65,7 +65,7 @@ internal class AgentMetrics(agent: Agent) {
                           "Agent scrape backlog size",
                           labelNames = listOf(LAUNCH_ID),
                           labelValues = listOf(agent.launchId),
-                          data = { agent.scrapeRequestBacklogSize.value.toDouble() })
+                          data = { agent.scrapeRequestBacklogSize.get().toDouble() })
   }
 
   companion object {

@@ -41,11 +41,11 @@ import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.getVersionDesc
-import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.*
 import mu.KLogging
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.TimeMark
@@ -76,7 +76,7 @@ class Agent(val options: AgentOptions,
   private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
   internal val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
-  internal val scrapeRequestBacklogSize = atomic(0)
+  internal val scrapeRequestBacklogSize = AtomicInteger(0)
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
@@ -137,7 +137,7 @@ class Agent(val options: AgentOptions,
 
       // Reset values for each connection attempt
       pathManager.clear()
-      scrapeRequestBacklogSize.value = 0
+      scrapeRequestBacklogSize.set(0)
       lastMsgSentMark = clock.markNow()
 
       if (grpcService.connectAgent()) {
@@ -209,7 +209,7 @@ class Agent(val options: AgentOptions,
     healthCheckRegistry.register(
         "scrape_request_backlog_check",
         newBacklogHealthCheck(
-            scrapeRequestBacklogSize.value,
+            scrapeRequestBacklogSize.get(),
             agentConfigVals.scrapeRequestBacklogUnhealthySize
         )
     )

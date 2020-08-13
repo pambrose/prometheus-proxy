@@ -19,23 +19,15 @@ package io.prometheus.proxy
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.unzip
-import io.ktor.application.Application
-import io.ktor.application.ApplicationCall
-import io.ktor.application.call
-import io.ktor.application.install
+import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.http.ContentType.Text.Plain
 import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.http.HttpStatusCode.Companion.OK
-import io.ktor.request.ApplicationRequest
-import io.ktor.request.header
-import io.ktor.request.path
-import io.ktor.response.ApplicationResponse
-import io.ktor.response.header
-import io.ktor.response.respondText
-import io.ktor.routing.get
-import io.ktor.routing.routing
+import io.ktor.request.*
+import io.ktor.response.*
+import io.ktor.routing.*
 import io.prometheus.Proxy
 import kotlinx.coroutines.async
 import kotlin.time.Duration
@@ -109,7 +101,7 @@ internal fun Application.configServer(proxy: Proxy) {
             responseResults.apply { updateMsg = "invalid_path"; statusCode = NotFound }
           }
           else {
-            if (!agentContextInfo.consolidated && agentContextInfo.agentContexts.get(0).isNotValid()) {
+            if (!agentContextInfo.consolidated && agentContextInfo.agentContexts[0].isNotValid()) {
               val msg = "Invalid AgentContext for /${path}"
               proxy.logActivity(msg)
               logger.error { msg }
@@ -131,15 +123,15 @@ internal fun Application.configServer(proxy: Proxy) {
 
               val statusCodes = jobs.map { it.statusCode }.toSet().toList()
               val contentTypes = jobs.map { it.contentType }.toSet().toList()
-              val updateMsgs = jobs.map { it.updateMsg }.joinToString("\n")
+              val updateMsgs = jobs.joinToString("\n") { it.updateMsg }
               // Grab the contentType of the first OK in the lit
               val okContentType = jobs.firstOrNull { it.statusCode == OK }?.contentType
 
               responseResults
                 .apply {
-                  statusCode = if (statusCodes.contains(OK)) OK else statusCodes.get(0)
-                  contentType = if (okContentType.isNotNull()) okContentType else contentTypes.get(0)
-                  contentText = jobs.map { it.contentText }.joinToString("\n")
+                  statusCode = if (statusCodes.contains(OK)) OK else statusCodes[0]
+                  contentType = if (okContentType.isNotNull()) okContentType else contentTypes[0]
+                  contentText = jobs.joinToString("\n") { it.contentText }
                   updateMsg = updateMsgs
                 }
             }

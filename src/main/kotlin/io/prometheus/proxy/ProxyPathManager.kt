@@ -60,7 +60,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
         }
       }
       else {
-        if (agentInfo.isNotNull()) logger.info { "Overwriting path /$path for ${agentInfo.agentContexts.get(0)}" }
+        if (agentInfo.isNotNull()) logger.info { "Overwriting path /$path for ${agentInfo.agentContexts[0]}" }
         pathMap[path] = AgentContextInfo(false, mutableListOf(agentContext))
       }
 
@@ -83,7 +83,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
         else {
           val agentContext = agentInfo.agentContexts.firstOrNull { it.agentId == agentId }
           if (agentContext.isNull()) {
-            val agentIds = agentInfo.agentContexts.map { it.agentId }.joinToString(", ")
+            val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
             val msg = "Unable to remove path /$path - invalid agentId: $agentId -- [$agentIds]"
             logger.error { msg }
             false to msg
@@ -121,7 +121,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
     synchronized(pathMap) {
       pathMap.forEach { (k, v) ->
         if (v.agentContexts.size == 1) {
-          if (v.agentContexts.get(0).agentId == agentId)
+          if (v.agentContexts[0].agentId == agentId)
             pathMap.remove(k)?.also {
               if (!isTestMode)
                 logger.info { "Removed path /$k for $it" }
@@ -144,7 +144,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
       "No agents connected."
     }
     else {
-      val maxPath = pathMap.keys.map { it.length }.max() ?: 0
+      val maxPath = pathMap.keys.map { it.length }.maxOrNull() ?: 0
       "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
       pathMap
         .toSortedMap()
