@@ -20,20 +20,21 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.util.isNotNull
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcObjects.newScrapeRequest
 import io.prometheus.common.ScrapeResults
+import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.TimeSource.Monotonic
 
-internal class ScrapeRequestWrapper(proxy: Proxy,
+internal class ScrapeRequestWrapper(val agentContext: AgentContext,
+                                    proxy: Proxy,
                                     path: String,
                                     encodedQueryParams: String,
-                                    val agentContext: AgentContext,
                                     accept: String?,
                                     debugEnabled: Boolean) {
   private val clock = Monotonic
@@ -41,12 +42,13 @@ internal class ScrapeRequestWrapper(proxy: Proxy,
   private val completeChannel = Channel<Boolean>()
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
-  val scrapeRequest = newScrapeRequest(agentContext.agentId,
-                                       SCRAPE_ID_GENERATOR.getAndIncrement(),
-                                       path,
-                                       encodedQueryParams,
-                                       accept,
-                                       debugEnabled)
+  val scrapeRequest =
+    newScrapeRequest(agentContext.agentId,
+                     SCRAPE_ID_GENERATOR.getAndIncrement(),
+                     path,
+                     encodedQueryParams,
+                     accept,
+                     debugEnabled)
 
   var scrapeResults: ScrapeResults by nonNullableReference()
 
@@ -70,7 +72,7 @@ internal class ScrapeRequestWrapper(proxy: Proxy,
       catch (e: ClosedReceiveChannelException) {
         true
       }
-    } != null
+    }.isNotNull()
 
   override fun toString() =
     toStringElements {
@@ -79,6 +81,6 @@ internal class ScrapeRequestWrapper(proxy: Proxy,
     }
 
   companion object {
-    private val SCRAPE_ID_GENERATOR = AtomicLong(0)
+    private val SCRAPE_ID_GENERATOR = atomic(0L)
   }
 }

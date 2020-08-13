@@ -18,6 +18,8 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.util.isNotNull
+import com.github.pambrose.common.util.isNull
 import com.google.protobuf.Empty
 import io.grpc.Status
 import io.prometheus.Proxy
@@ -28,11 +30,12 @@ import io.prometheus.common.GrpcObjects.newRegisterPathResponse
 import io.prometheus.common.GrpcObjects.toScrapeResults
 import io.prometheus.common.GrpcObjects.unregisterPathResponse
 import io.prometheus.grpc.*
+import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import mu.KLogging
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.CancellationException
 
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
 
@@ -47,40 +50,37 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     proxy.agentContextManager.getAgentContext(agentId)
       ?.apply {
         valid = true
-        agentName = request.agentName
-        hostName = request.hostName
+        assignProperties(request)
         markActivityTime(false)
         logger.info { "Connected to $this" }
       } ?: logger.info { "registerAgent() missing AgentContext agentId: $agentId" }
 
-    return newRegisterAgentResponse(valid, "Invalid agentId: $agentId", agentId)
+    return newRegisterAgentResponse(agentId, valid, "Invalid agentId: $agentId")
   }
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
     val path = request.path
-    if (path in proxy.pathManager)
-      logger.info { "Overwriting path /$path" }
-
     val agentId = request.agentId
     var valid = false
 
     proxy.agentContextManager.getAgentContext(agentId)?.apply {
+
       valid = true
       proxy.pathManager.addPath(path, this)
       markActivityTime(false)
     } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
 
-    return newRegisterPathResponse(valid,
+    return newRegisterPathResponse(if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1,
+                                   valid,
                                    "Invalid agentId: $agentId",
-                                   proxy.pathManager.pathMapSize,
-                                   if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1)
+                                   proxy.pathManager.pathMapSize)
   }
 
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {
     val agentId = request.agentId
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
 
-    return if (agentContext == null) {
+    return if (agentContext.isNull()) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
       unregisterPathResponse {
         valid = false
@@ -100,7 +100,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
     agentContext?.markActivityTime(false)
     ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
-    return newHeartBeatResponse(agentContext != null, "Invalid agentId: ${request.agentId}")
+    return newHeartBeatResponse(agentContext.isNotNull(), "Invalid agentId: ${request.agentId}")
   }
 
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> {
@@ -124,7 +124,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
       if (proxy.isRunning)
         Status.fromThrowable(throwable)
           .also { arg ->
-            if (arg.code != Status.Code.CANCELLED)
+            if (arg.code != Status.Code.CANCELLED && arg.cause !is CancellationException)
               logger.error(throwable) { "Error in writeResponsesToProxy(): $arg" }
           }
     }
@@ -147,7 +147,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
               .apply {
                 logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
                 val context = chunkedContextMap[chunkScrapeId]
-                check(context != null) { "Missing chunked context with scrapeId: $chunkScrapeId" }
+                check(context.isNotNull()) { "Missing chunked context with scrapeId: $chunkScrapeId" }
                 context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
               }
           }
@@ -155,7 +155,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
             response.summary
               .apply {
                 val context = chunkedContextMap.remove(summaryScrapeId)
-                check(context != null) { "Missing chunked context with scrapeId: $summaryScrapeId" }
+                check(context.isNotNull()) { "Missing chunked context with scrapeId: $summaryScrapeId" }
                 logger.debug { "Reading summary chunkCount: ${context.totalChunkCount} byteCount: ${context.totalByteCount} for scrapeId: $summaryScrapeId" }
                 context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
                 proxy.scrapeRequestManager.assignScrapeResults(context.scrapeResults)
@@ -169,7 +169,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
       if (proxy.isRunning)
         Status.fromThrowable(throwable)
           .also { arg ->
-            if (arg.code != Status.Code.CANCELLED)
+            if (arg.code != Status.Code.CANCELLED && arg.cause !is CancellationException)
               logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
           }
     }
@@ -177,6 +177,6 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
   }
 
   companion object : KLogging() {
-    private val PATH_ID_GENERATOR = AtomicLong(0)
+    private val PATH_ID_GENERATOR = atomic(0L)
   }
 }

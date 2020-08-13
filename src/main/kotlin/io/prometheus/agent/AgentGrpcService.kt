@@ -67,6 +67,7 @@ internal class AgentGrpcService(internal val agent: Agent,
 
   val hostName: String
   val port: Int
+
   private val tlsContext: TlsContext
 
   init {
@@ -146,17 +147,22 @@ internal class AgentGrpcService(internal val agent: Agent,
       logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
       stub.connectAgent(Empty.getDefaultInstance())
       logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
-      agent.metrics { connectCount.labels("success").inc() }
+      agent.metrics { connectCount.labels(agent.launchId, "success").inc() }
       true
     }
     catch (e: StatusRuntimeException) {
-      agent.metrics { connectCount.labels("failure").inc() }
+      agent.metrics { connectCount.labels(agent.launchId, "failure").inc() }
       logger.info { "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}" }
       false
     }
 
   suspend fun registerAgent(initialConnectionLatch: CountDownLatch) {
-    val request = newRegisterAgentRequest(agent.agentId, agent.agentName, hostName)
+    val request =
+      newRegisterAgentRequest(agent.agentId,
+                              agent.launchId,
+                              agent.agentName,
+                              hostName,
+                              agent.options.consolidated)
     stub.registerAgent(request)
       .also { response ->
         agent.markMsgSent()
@@ -231,7 +237,8 @@ internal class AgentGrpcService(internal val agent: Agent,
       }
   }
 
-  private suspend fun processScrapeResults(scrapeResultsChannel: Channel<ScrapeResults>,
+  private suspend fun processScrapeResults(agent: Agent,
+                                           scrapeResultsChannel: Channel<ScrapeResults>,
                                            nonChunkedChannel: Channel<ScrapeResponse>,
                                            chunkedChannel: Channel<ChunkedScrapeResponse>) =
     try {
@@ -241,7 +248,7 @@ internal class AgentGrpcService(internal val agent: Agent,
         if (!scrapeResults.zipped) {
           logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.contentAsText.length}" }
           nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-          agent.metrics { scrapeResultCount.labels("non-gzipped").inc() }
+          agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
         }
         else {
           val zipped = scrapeResults.contentAsZipped
@@ -250,7 +257,7 @@ internal class AgentGrpcService(internal val agent: Agent,
           if (zipped.size < options.chunkContentSizeKbs) {
             logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
             nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-            agent.metrics { scrapeResultCount.labels("gzipped").inc() }
+            agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
           }
           else {
             scrapeResults.toScrapeResponseHeader()
@@ -282,7 +289,7 @@ internal class AgentGrpcService(internal val agent: Agent,
               .also {
                 logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
                 chunkedChannel.send(it)
-                agent.metrics { scrapeResultCount.labels("chunked").inc() }
+                agent.metrics { scrapeResultCount.labels(agent.launchId, "chunked").inc() }
               }
           }
         }
@@ -296,7 +303,7 @@ internal class AgentGrpcService(internal val agent: Agent,
       chunkedChannel.close()
     }
 
-  suspend fun writeResponsesToProxyUntilDisconnected(connectionContext: AgentConnectionContext) {
+  suspend fun writeResponsesToProxyUntilDisconnected(agent: Agent, connectionContext: AgentConnectionContext) {
     fun exceptionHandler() =
       CoroutineExceptionHandler { _, e ->
         if (agent.isRunning)
@@ -311,7 +318,7 @@ internal class AgentGrpcService(internal val agent: Agent,
       val chunkedChannel = Channel<ChunkedScrapeResponse>(Channel.UNLIMITED)
 
       launch(Dispatchers.Default + exceptionHandler()) {
-        processScrapeResults(connectionContext.scrapeResultsChannel, nonChunkedChannel, chunkedChannel)
+        processScrapeResults(agent, connectionContext.scrapeResultsChannel, nonChunkedChannel, chunkedChannel)
       }
 
       connectionContext

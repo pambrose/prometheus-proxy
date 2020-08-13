@@ -19,6 +19,8 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GrpcDsl.attributes
+import com.github.pambrose.common.util.isNotNull
+import com.github.pambrose.common.util.isNull
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
@@ -31,7 +33,6 @@ internal class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportF
 
     val agentContext = AgentContext(getRemoteAddr(attributes))
     proxy.agentContextManager.addAgentContext(agentContext)
-    logger.debug { "Registering agentId: ${agentContext.agentId}" }
 
     return attributes {
       set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)
@@ -40,14 +41,13 @@ internal class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportF
   }
 
   override fun transportTerminated(attributes: Attributes?) {
-    if (attributes == null) {
+    if (attributes.isNull()) {
       logger.error { "Null attributes" }
     }
     else {
       attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { agentId ->
-        proxy.pathManager.removePathByAgentId(agentId)
         val context = proxy.removeAgentContext(agentId)
-        logger.info { "Disconnected ${if (context != null) "from $context" else "with invalid agentId: $agentId"}" }
+        logger.info { "Disconnected ${if (context.isNotNull()) "from $context" else "with invalid agentId: $agentId"}" }
       } ?: logger.error { "Missing agentId in transportTerminated()" }
     }
     super.transportTerminated(attributes)

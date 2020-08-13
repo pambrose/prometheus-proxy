@@ -1,4 +1,4 @@
-VERSION=1.7.0
+VERSION=1.7.1
 
 default: compile
 
@@ -17,10 +17,10 @@ jars:
 	./gradlew agentJar proxyJar
 
 tests:
-	./gradlew check jacocoTestReport
+	./gradlew --rerun-tasks check jacocoTestReport
 
 config:
-	java -jar ./etc/jars/tscfg-0.9.95.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
+	java -jar ./etc/jars/tscfg-0.9.98.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
 distro: clean compile jars
 
@@ -51,7 +51,7 @@ site:
 	./mvnw site
 
 tree:
-	./mvnw dependency:tree
+	./gradlew -q dependencies
 
 versioncheck:
 	./gradlew dependencyUpdates

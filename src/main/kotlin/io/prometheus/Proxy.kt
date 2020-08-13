@@ -26,6 +26,7 @@ import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
+import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
@@ -35,7 +36,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.GrpcObjects.EMPTY_AGENTID
+import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.*
 import kotlinx.coroutines.runBlocking
@@ -44,6 +45,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.milliseconds
 
+@Version(version = "1.7.1", date = "8/12/20")
 class Proxy(val options: ProxyOptions,
             proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",
@@ -72,10 +74,10 @@ class Proxy(val options: ProxyOptions,
 
   private val agentCleanupService by lazy { AgentContextCleanupService(this, proxyConfigVals) { addServices(this) } }
 
-  internal val pathManager = ProxyPathManager(isTestMode)
-  internal val scrapeRequestManager = ScrapeRequestManager()
-  internal val agentContextManager = AgentContextManager()
   internal val metrics by lazy { ProxyMetrics(this) }
+  internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
+  internal val agentContextManager = AgentContextManager()
+  internal val scrapeRequestManager = ScrapeRequestManager()
 
   init {
     fun toPlainText() = """
@@ -96,12 +98,12 @@ class Proxy(val options: ProxyOptions,
 
     initService {
       if (options.debugEnabled) {
-        val cnt = configVals.proxy.admin.recentRequestsQueueSize
+        logger.info { "Adding /$DEBUG endpoint" }
         addServlet(DEBUG,
                    LambdaServlet {
                      listOf(toPlainText(),
                             pathManager.toPlainText(),
-                            if (recentActions.size > 0) "\n$cnt most recent Requests:" else "",
+                            if (recentActions.size > 0) "\n${recentActions.size} most recent requests:" else "",
                             recentActions.reversed().joinToString("\n"))
                        .joinToString("\n")
                    })
@@ -167,17 +169,12 @@ class Proxy(val options: ProxyOptions,
       }
   }
 
+  // This is called on agent disconnects
   internal fun removeAgentContext(agentId: String): AgentContext? {
-    require(agentId.isNotEmpty()) { EMPTY_AGENTID }
-    return agentContextManager.removeAgentContext(agentId).let { agentContext ->
-      if (agentContext == null)
-        logger.error { "Missing AgentContext for agentId: $agentId" }
-      else {
-        logger.debug { "Removed $agentContext" }
-        agentContext.invalidate()
-      }
-      agentContext
-    }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
+
+    pathManager.removeFromPathManager(agentId)
+    return agentContextManager.removeFromContextManager(agentId)
   }
 
   internal fun metrics(args: ProxyMetrics.() -> Unit) {
@@ -202,8 +199,8 @@ class Proxy(val options: ProxyOptions,
     }
 
   companion object : KLogging() {
-    internal const val AGENT_ID = "agent-id"
-    internal val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
+    internal const val AGENT_ID_KEY = "agent-id"
+    internal val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID_KEY)
 
     @JvmStatic
     fun main(argv: Array<String>) {

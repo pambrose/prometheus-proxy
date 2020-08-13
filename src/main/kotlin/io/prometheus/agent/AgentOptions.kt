@@ -30,12 +30,19 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
       this(Iterables.toArray<String>(args, String::class.java), exitOnMissingConfig)
 
+  constructor(configFilename: String, exitOnMissingConfig: Boolean) :
+      this(listOf("--config", configFilename), exitOnMissingConfig)
+
   @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
   var proxyHostname = ""
     private set
 
   @Parameter(names = ["-n", "--name"], description = "Agent name")
   var agentName = ""
+    private set
+
+  @Parameter(names = ["-o", "--consolidated"], description = "Consolidated Agent")
+  var consolidated = false
     private set
 
   @Parameter(names = ["--over", "--override"], description = "Override Authority")
@@ -78,6 +85,9 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
 
       if (minGzipSizeBytes == -1)
         minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agent.minGzipSizeBytes)
+
+      if (!consolidated)
+        consolidated = CONSOLIDATED.getEnv(agent.consolidated)
 
       assignAdminEnabled(agent.admin.enabled)
       assignAdminPort(agent.admin.port)

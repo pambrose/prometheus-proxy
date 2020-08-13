@@ -45,14 +45,13 @@ import io.prometheus.CommonTests.Companion.SEQUENTIAL_QUERY_COUNT
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
+import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.*
 import mu.KLogging
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
-import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.set
 import kotlin.time.milliseconds
 import kotlin.time.minutes
@@ -117,7 +116,7 @@ internal object ProxyTests : KLogging() {
   suspend fun proxyCallTest(args: ProxyCallTestArgs) {
     logger.info { "Calling proxyCallTest() from ${args.caller}" }
 
-    val pathMap: ConcurrentMap<Int, Int> = newConcurrentMap()
+    val pathMap = newConcurrentMap<Int, Int>()
 
     // Take into account pre-existing paths already registered
     val originalSize = args.agent.grpcService.pathMapSize()
@@ -180,7 +179,7 @@ internal object ProxyTests : KLogging() {
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
           httpClient { client ->
-            val counter = AtomicInteger(0)
+            val counter = atomic(0)
             repeat(args.sequentialQueryCount) { cnt ->
               val job =
                 launch(dispatcher + exceptionHandler(logger)) {
@@ -192,7 +191,7 @@ internal object ProxyTests : KLogging() {
               job.getCancellationException().cause.shouldBeNull()
             }
 
-            counter.get() shouldBeEqualTo args.sequentialQueryCount
+            counter.value shouldBeEqualTo args.sequentialQueryCount
           }
         }
       }
@@ -203,7 +202,7 @@ internal object ProxyTests : KLogging() {
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
           httpClient { client ->
-            val counter = AtomicInteger(0)
+            val counter = atomic(0)
             val jobs =
               List(args.parallelQueryCount) { cnt ->
                 launch(dispatcher + exceptionHandler(logger)) {
@@ -218,14 +217,14 @@ internal object ProxyTests : KLogging() {
               job.getCancellationException().cause.shouldBeNull()
             }
 
-            counter.get() shouldBeEqualTo args.parallelQueryCount
+            counter.value shouldBeEqualTo args.parallelQueryCount
           }
         }
       }
 
     logger.debug { "Unregistering paths" }
-    val counter = AtomicInteger(0)
-    val errorCnt = AtomicInteger(0)
+    val counter = atomic(0)
+    val errorCnt = atomic(0)
     pathMap.forEach { path ->
       try {
         args.agent.pathManager.unregisterPath("proxy-${path.key}")
@@ -236,8 +235,8 @@ internal object ProxyTests : KLogging() {
       }
     }
 
-    counter.get() shouldBeEqualTo pathMap.size
-    errorCnt.get() shouldBeEqualTo 0
+    counter.value shouldBeEqualTo pathMap.size
+    errorCnt.value shouldBeEqualTo 0
     args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize
 
     logger.info { "Shutting down ${httpServers.size} httpServers" }

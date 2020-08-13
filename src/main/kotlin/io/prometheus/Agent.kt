@@ -27,9 +27,11 @@ import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
+import com.github.pambrose.common.util.randomId
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
 import io.grpc.Status
+import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
 import io.prometheus.agent.*
 import io.prometheus.client.Summary
@@ -39,11 +41,11 @@ import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.getVersionDesc
+import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.*
 import mu.KLogging
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.TimeMark
@@ -74,10 +76,11 @@ class Agent(val options: AgentOptions,
   private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
   internal val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
-  internal val scrapeRequestBacklogSize = AtomicInteger(0)
+  internal val scrapeRequestBacklogSize = atomic(0)
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
+  internal val launchId = randomId(15)
   internal val metrics by lazy { AgentMetrics(this) }
 
   init {
@@ -97,15 +100,17 @@ class Agent(val options: AgentOptions,
       
     """.trimIndent()
 
-    logger.info { "Assigning agent name: $agentName" }
-    logger.info { "Assigning proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
+    logger.info { "Assigned agent name: $agentName" }
+    logger.info { "Assigned proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
 
     initService {
-      if (options.debugEnabled)
+      if (options.debugEnabled) {
+        logger.info { "Adding /$DEBUG endpoint" }
         addServlet(DEBUG,
                    LambdaServlet {
                      listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n")
                    })
+      }
     }
 
     initBlock?.invoke(this)
@@ -118,7 +123,7 @@ class Agent(val options: AgentOptions,
         if (grpcService.agent.isRunning)
           Status.fromThrowable(e)
             .apply {
-              AgentGrpcService.logger.error { "Error in $name(): $code $description" }
+              logger.error { "Error in $name(): $code $description" }
             }
       }
 
@@ -132,7 +137,7 @@ class Agent(val options: AgentOptions,
 
       // Reset values for each connection attempt
       pathManager.clear()
-      scrapeRequestBacklogSize.set(0)
+      scrapeRequestBacklogSize.value = 0
       lastMsgSentMark = clock.markNow()
 
       if (grpcService.connectAgent()) {
@@ -152,7 +157,7 @@ class Agent(val options: AgentOptions,
 
           // This exceptionHandler is not necessary
           launch(Dispatchers.Default + exceptionHandler("writeResponsesToProxyUntilDisconnected")) {
-            grpcService.writeResponsesToProxyUntilDisconnected(connectionContext)
+            grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
           }
 
           launch(Dispatchers.Default + exceptionHandler("scrapeResultsChannel.send")) {
@@ -179,6 +184,9 @@ class Agent(val options: AgentOptions,
       catch (e: StatusRuntimeException) {
         logger.info { "Disconnected from proxy at $proxyHost" }
       }
+      catch (e: StatusException) {
+        logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
+      }
       catch (e: Throwable) {
         // Catch anything else to avoid exiting retry loop
         logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
@@ -191,7 +199,8 @@ class Agent(val options: AgentOptions,
 
   internal val proxyHost get() = "${grpcService.hostName}:${grpcService.port}"
 
-  internal fun startTimer(): Summary.Timer? = metrics.scrapeRequestLatency.labels(agentName).startTimer()
+  internal fun startTimer(agent: Agent): Summary.Timer? =
+    metrics.scrapeRequestLatency.labels(agent.launchId, agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"
 
@@ -200,7 +209,7 @@ class Agent(val options: AgentOptions,
     healthCheckRegistry.register(
         "scrape_request_backlog_check",
         newBacklogHealthCheck(
-            scrapeRequestBacklogSize.get(),
+            scrapeRequestBacklogSize.value,
             agentConfigVals.scrapeRequestBacklogUnhealthySize
         )
     )
@@ -224,9 +233,9 @@ class Agent(val options: AgentOptions,
       logger.info { "Heartbeat disabled" }
     }
 
-  internal fun updateScrapeCounter(type: String) {
+  internal fun updateScrapeCounter(agent: Agent, type: String) {
     if (type.isNotEmpty())
-      metrics { scrapeRequestCount.labels(type).inc() }
+      metrics { scrapeRequestCount.labels(agent.launchId, type).inc() }
   }
 
   internal fun markMsgSent() {
@@ -258,11 +267,26 @@ class Agent(val options: AgentOptions,
   companion object : KLogging() {
     @JvmStatic
     fun main(argv: Array<String>) {
+      startSyncAgent(argv, true)
+    }
+
+    @JvmStatic
+    fun startSyncAgent(argv: Array<String>, exitOnMissingConfig: Boolean) {
       logger.apply {
         info { getBanner("banners/agent.txt", this) }
-        info { getVersionDesc(false) }
+        info { getVersionDesc() }
       }
-      Agent(options = AgentOptions(argv, true)) { startSync() }
+      Agent(options = AgentOptions(argv, exitOnMissingConfig)) { startSync() }
+    }
+
+    @JvmStatic
+    fun startAsyncAgent(configFilename: String, exitOnMissingConfig: Boolean): EmbeddedAgentInfo {
+      logger.apply {
+        info { getBanner("banners/agent.txt", this) }
+        info { getVersionDesc() }
+      }
+      val agent = Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
+      return EmbeddedAgentInfo(agent.launchId, agent.agentName)
     }
   }
 }

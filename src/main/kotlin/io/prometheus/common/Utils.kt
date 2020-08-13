@@ -20,16 +20,11 @@ package io.prometheus.common
 
 import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
+import com.github.pambrose.common.util.Version.Companion.versionDesc
 import io.prometheus.Proxy
 import kotlin.system.exitProcess
 
-internal fun getVersionDesc(asJson: Boolean = false): String =
-  Proxy::class.java.`package`.getAnnotation(VersionAnnotation::class.java).run {
-    if (asJson)
-      """{"Version": "$version", "Release Date": "$date"}"""
-    else
-      "Version: $version Release Date: $date"
-  }
+internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
 internal class VersionValidator : IParameterValidator {
   override fun validate(name: String, value: String) {

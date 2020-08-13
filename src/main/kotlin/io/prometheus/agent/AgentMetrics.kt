@@ -26,42 +26,51 @@ import io.prometheus.Agent
 
 internal class AgentMetrics(agent: Agent) {
 
-  val scrapeResultCount =
-    counter {
-      name("agent_scrape_result_count")
-      help("Agent scrape result count")
-      labelNames("type")
-    }
-
   val scrapeRequestCount =
     counter {
       name("agent_scrape_request_count")
       help("Agent scrape request count")
-      labelNames("type")
+      labelNames(LAUNCH_ID, TYPE)
+    }
+
+  val scrapeResultCount =
+    counter {
+      name("agent_scrape_result_count")
+      help("Agent scrape result count")
+      labelNames(LAUNCH_ID, TYPE)
     }
 
   val connectCount =
     counter {
       name("agent_connect_count")
       help("Agent connect count")
-      labelNames("type")
+      labelNames(LAUNCH_ID, TYPE)
     }
 
   val scrapeRequestLatency =
     summary {
       name("agent_scrape_request_latency_seconds")
       help("Agent scrape request latency in seconds")
-      labelNames("agent_name")
+      labelNames(LAUNCH_ID, AGENT_NAME)
     }
 
   init {
     gauge {
       name("agent_start_time_seconds")
+      labelNames(LAUNCH_ID)
       help("Agent start time in seconds")
-    }.setToCurrentTime()
+    }.labels(agent.launchId).setToCurrentTime()
 
     SamplerGaugeCollector("agent_scrape_backlog_size",
                           "Agent scrape backlog size",
-                          data = { agent.scrapeRequestBacklogSize.get().toDouble() })
+                          labelNames = listOf(LAUNCH_ID),
+                          labelValues = listOf(agent.launchId),
+                          data = { agent.scrapeRequestBacklogSize.value.toDouble() })
+  }
+
+  companion object {
+    private const val LAUNCH_ID = "launch_id"
+    private const val AGENT_NAME = "agent_name"
+    private const val TYPE = "type"
   }
 }
