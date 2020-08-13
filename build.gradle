@@ -1,24 +1,14 @@
-buildscript {
-  ext.atomicfu_version = '0.14.3-1.4.0-rc-218'
-
-  dependencies {
-    classpath "org.jetbrains.kotlinx:atomicfu-gradle-plugin:$atomicfu_version"
-  }
-}
-
 plugins {
   id 'idea'
   id 'java'
-  id 'org.jetbrains.kotlin.jvm' version '1.4.0-rc'
-  id 'org.jetbrains.kotlin.plugin.serialization' version '1.4.0-rc'
+  id 'org.jetbrains.kotlin.jvm' version '1.3.72'
+  id 'org.jetbrains.kotlin.plugin.serialization' version '1.3.72'
   id 'com.google.protobuf' version '0.8.12'
   id "com.github.ben-manes.versions" version '0.29.0'
   id 'com.github.johnrengelman.shadow' version '6.0.0'
   id 'jacoco'
   id 'com.github.kt3k.coveralls' version '2.10.2'
 }
-
-apply plugin: 'kotlinx-atomicfu'
 
 group = 'io.prometheus'
 version = '1.8.0'
