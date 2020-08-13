@@ -45,7 +45,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.milliseconds
 
-@Version(version = "1.7.1", date = "8/5/20")
+@Version(version = "1.7.1", date = "8/12/20")
 class Proxy(val options: ProxyOptions,
             proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",
@@ -98,13 +98,12 @@ class Proxy(val options: ProxyOptions,
 
     initService {
       if (options.debugEnabled) {
-        val cnt = configVals.proxy.admin.recentRequestsQueueSize
         logger.info { "Adding /$DEBUG endpoint" }
         addServlet(DEBUG,
                    LambdaServlet {
                      listOf(toPlainText(),
                             pathManager.toPlainText(),
-                            if (recentActions.size > 0) "\n$cnt most recent requests:" else "",
+                            if (recentActions.size > 0) "\n${recentActions.size} most recent requests:" else "",
                             recentActions.reversed().joinToString("\n"))
                        .joinToString("\n")
                    })
