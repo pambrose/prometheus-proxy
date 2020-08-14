@@ -144,7 +144,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
       "No agents connected."
     }
     else {
-      val maxPath = pathMap.keys.map { it.length }.max() ?: 0
+      val maxPath = pathMap.keys.map { it.length }.maxOrNull() ?: 0
       "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
       pathMap
         .toSortedMap()
