@@ -23,14 +23,15 @@ import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
-import io.ktor.server.cio.CIO
-import io.ktor.server.cio.CIOApplicationEngine
-import io.ktor.server.engine.embeddedServer
+import io.ktor.server.cio.*
+import io.ktor.server.engine.*
 import io.prometheus.Proxy
+import io.prometheus.proxy.Installs.configServer
 import mu.KLogging
 import kotlin.time.seconds
 
-internal class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : GenericIdleService() {
+internal class ProxyHttpService(private val proxy: Proxy, val httpPort: Int, isTestMode: Boolean) :
+    GenericIdleService() {
   private val proxyConfigVals = proxy.configVals.proxy
   private val idleTimeout =
     if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
@@ -39,7 +40,7 @@ internal class ProxyHttpService(private val proxy: Proxy, val httpPort: Int) : G
 
   private val config: CIOApplicationEngine.Configuration.() -> Unit =
     { connectionIdleTimeoutSeconds = idleTimeout.inSeconds.toInt() }
-  private val httpServer = embeddedServer(CIO, port = httpPort, configure = config) { configServer(proxy) }
+  private val httpServer = embeddedServer(CIO, port = httpPort, configure = config) { configServer(proxy, isTestMode) }
 
   init {
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())

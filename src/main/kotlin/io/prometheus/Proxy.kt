@@ -63,7 +63,7 @@ class Proxy(val options: ProxyOptions,
                                isTestMode = testMode) {
 
   private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
-  private val httpService = ProxyHttpService(this, proxyHttpPort)
+  private val httpService = ProxyHttpService(this, proxyHttpPort, isTestMode)
   private val recentActions: EvictingQueue<String> =
     EvictingQueue.create(configVals.proxy.admin.recentRequestsQueueSize)
   private val grpcService =
