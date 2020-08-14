@@ -26,7 +26,7 @@ import com.google.common.util.concurrent.MoreExecutors
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
 import io.prometheus.Proxy
-import io.prometheus.proxy.Installs.configServer
+import io.prometheus.proxy.ProxyHttpConfig.configServer
 import mu.KLogging
 import kotlin.time.seconds
 

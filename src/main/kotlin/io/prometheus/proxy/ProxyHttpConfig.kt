@@ -38,9 +38,9 @@ import kotlin.time.Duration
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
-internal object Installs : KLogging() {
+internal object ProxyHttpConfig : KLogging() {
 
-  internal fun Application.configServer(proxy: Proxy, isTestMode: Boolean) {
+  fun Application.configServer(proxy: Proxy, isTestMode: Boolean) {
 
     install(DefaultHeaders) {
       header("X-Engine", "Ktor")
@@ -51,7 +51,7 @@ internal object Installs : KLogging() {
         level = Level.INFO
         filter { call -> call.request.path().startsWith("/") }
         format { call ->
-          when (val status = call.response.status() ?: "Unhandled") {
+          when (val status = call.response.status()) {
             HttpStatusCode.Found -> {
               "$status: ${call.request.toLogString()} -> ${call.response.headers[HttpHeaders.Location]} - ${call.request.origin.remoteHost}"
             }
@@ -113,7 +113,6 @@ internal object Installs : KLogging() {
           }
 
           path == "favicon.ico" -> {
-            //logger.info { "Invalid path request /${path}" }
             responseResults.apply { updateMsg = "invalid_path"; statusCode = NotFound }
           }
 

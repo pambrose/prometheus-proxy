@@ -25,9 +25,9 @@
     </appender>
 
     <logger name="io.grpc.internal" level="WARN"/>
-    <logger name="io.ktor.server.engine" level="WARN"/>
     <logger name="org.eclipse.jetty.server" level="WARN"/>
-    <logger name="ktor.application" level="WARN"/>
+    <logger name="io.ktor.server.engine" level="WARN"/>
+    <logger name="ktor.application" level="INFO"/>
 
     <logger name="io.prometheus.agent.AgentHttpService" level="INFO"/>
     <logger name="io.prometheus.agent.Agent" level="INFO"/>
