@@ -46,7 +46,7 @@ internal object ProxyHttpConfig : KLogging() {
       header("X-Engine", "Ktor")
     }
 
-    if (!isTestMode) {
+    if (!isTestMode && proxy.options.configVals.proxy.http.requestLoggingEnabled) {
       install(CallLogging) {
         level = Level.INFO
         filter { call -> call.request.path().startsWith("/") }
