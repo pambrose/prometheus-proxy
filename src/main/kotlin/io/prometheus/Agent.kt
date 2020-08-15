@@ -280,11 +280,14 @@ class Agent(val options: AgentOptions,
     }
 
     @JvmStatic
-    fun startAsyncAgent(configFilename: String, exitOnMissingConfig: Boolean): EmbeddedAgentInfo {
-      logger.apply {
-        info { getBanner("banners/agent.txt", this) }
-        info { getVersionDesc() }
-      }
+    fun startAsyncAgent(configFilename: String,
+                        exitOnMissingConfig: Boolean,
+                        logBanner: Boolean = true): EmbeddedAgentInfo {
+      if (logBanner)
+        logger.apply {
+          info { getBanner("banners/agent.txt", this) }
+          info { getVersionDesc() }
+        }
       val agent = Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
       return EmbeddedAgentInfo(agent.launchId, agent.agentName)
     }
