@@ -17,8 +17,9 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 repositories {
-  maven { url = "https://kotlin.bintray.com/kotlinx" }
-  maven { url = 'https://maven-central.storage-download.googleapis.com/repos/central/data/' }
+  maven { url 'https://kotlin.bintray.com/ktor' }
+  maven { url 'https://kotlin.bintray.com/kotlinx' }
+  maven { url 'https://maven-central.storage-download.googleapis.com/repos/central/data/' }
   jcenter()
   maven { url = 'https://jitpack.io' }
 }
