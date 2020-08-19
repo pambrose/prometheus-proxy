@@ -28,7 +28,6 @@ dependencies {
   implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
   implementation "org.jetbrains.kotlin:kotlin-reflect"
 
-  implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$serialization_version"
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
 
   //implementation "io.grpc:grpc-netty-shaded:${grpc_version}"
