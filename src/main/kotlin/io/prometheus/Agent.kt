@@ -24,11 +24,8 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
+import com.github.pambrose.common.util.*
 import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
-import com.github.pambrose.common.util.getBanner
-import com.github.pambrose.common.util.hostInfo
-import com.github.pambrose.common.util.randomId
-import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
 import io.grpc.Status
 import io.grpc.StatusException
@@ -53,6 +50,7 @@ import kotlin.time.TimeSource.Monotonic
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
+@Version(version = "1.8.0", date = "8/12/20")
 class Agent(val options: AgentOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,
