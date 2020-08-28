@@ -22,8 +22,10 @@ import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
-import io.ktor.client.statement.readText
-import io.ktor.http.HttpStatusCode
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.TestConstants.DEFAULT_TIMEOUT
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import kotlinx.coroutines.runBlocking
@@ -63,21 +65,24 @@ class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agen
 
     @JvmStatic
     @BeforeAll
-    fun setUp() = setItUp({
-                            startProxy(adminEnabled = true,
-                                       debugEnabled = true,
-                                       metricsEnabled = true)
-                          },
-                          {
-                            startAgent(adminEnabled = true,
-                                       debugEnabled = true,
-                                       metricsEnabled = true,
-                                       chunkContentSizeKbs = 5)
-                          },
-                          {
-                            // Wait long enough to trigger heartbeat for code coverage
-                            sleep(15.seconds)
-                          })
+    fun setUp() =
+      setItUp(
+          {
+            startProxy(adminEnabled = true,
+                       debugEnabled = true,
+                       metricsEnabled = true)
+          },
+          {
+            startAgent(adminEnabled = true,
+                       debugEnabled = true,
+                       metricsEnabled = true,
+                       scrapeTimeoutSecs = DEFAULT_TIMEOUT,
+                       chunkContentSizeKbs = DEFAULT_CHUNK_SIZE)
+          },
+          {
+            // Wait long enough to trigger heartbeat for code coverage
+            sleep(15.seconds)
+          })
 
     @JvmStatic
     @AfterAll

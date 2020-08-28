@@ -19,7 +19,7 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.ktor.http.HttpStatusCode
+import io.ktor.http.*
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.ConfigVals
@@ -86,14 +86,17 @@ class AdminEmptyPathTest {
 
     @JvmStatic
     @BeforeAll
-    fun setUp() = setItUp({
-                            startProxy(adminEnabled = true, argv = listOf("-Dproxy.admin.port=8098",
-                                                                          "-Dproxy.admin.pingPath=\"\"",
-                                                                          "-Dproxy.admin.versionPath=\"\"",
-                                                                          "-Dproxy.admin.healthCheckPath=\"\"",
-                                                                          "-Dproxy.admin.threadDumpPath=\"\""))
-                          },
-                          { startAgent(adminEnabled = true) })
+    fun setUp() =
+      setItUp(
+          {
+            startProxy(adminEnabled = true, argv = listOf("-Dproxy.admin.port=8098",
+                                                          "-Dproxy.admin.pingPath=\"\"",
+                                                          "-Dproxy.admin.versionPath=\"\"",
+                                                          "-Dproxy.admin.healthCheckPath=\"\"",
+                                                          "-Dproxy.admin.threadDumpPath=\"\""))
+          },
+          { startAgent(adminEnabled = true) }
+      )
 
     @JvmStatic
     @AfterAll

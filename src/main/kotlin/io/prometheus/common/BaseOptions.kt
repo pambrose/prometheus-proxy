@@ -124,60 +124,70 @@ abstract class BaseOptions protected constructor(private val progName: String,
   protected fun assignAdminEnabled(defaultVal: Boolean) {
     if (!adminEnabled)
       adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
+    logger.info { "adminEnabled: $adminEnabled" }
   }
 
   protected fun assignAdminPort(defaultVal: Int) {
     if (adminPort == -1)
       adminPort = ADMIN_PORT.getEnv(defaultVal)
+    logger.info { "adminPort: $adminPort" }
   }
 
   protected fun assignMetricsEnabled(defaultVal: Boolean) {
     if (!metricsEnabled)
       metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
+    logger.info { "metricsEnabled: $metricsEnabled" }
   }
 
   protected fun assignDebugEnabled(defaultVal: Boolean) {
     if (!debugEnabled)
       debugEnabled = DEBUG_ENABLED.getEnv(defaultVal)
+    logger.info { "debugEnabled: $debugEnabled" }
   }
 
   protected fun assignMetricsPort(defaultVal: Int) {
     if (metricsPort == -1)
       metricsPort = METRICS_PORT.getEnv(defaultVal)
+    logger.info { "metricsPort: $metricsPort" }
   }
 
   protected fun assignCertChainFilePath(defaultVal: String) {
     if (certChainFilePath.isEmpty())
       certChainFilePath = CERT_CHAIN_FILE_PATH.getEnv(defaultVal)
+    logger.info { "certChainFilePath: $certChainFilePath" }
   }
 
   protected fun assignPrivateKeyFilePath(defaultVal: String) {
     if (privateKeyFilePath.isEmpty())
       privateKeyFilePath = PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
+    logger.info { "privateKeyFilePath: $privateKeyFilePath" }
   }
 
   protected fun assignTrustCertCollectionFilePath(defaultVal: String) {
     if (trustCertCollectionFilePath.isEmpty())
       trustCertCollectionFilePath = TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
+    logger.info { "trustCertCollectionFilePath: $trustCertCollectionFilePath" }
   }
 
   private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
-    config = readConfig(if (configSource.isNotEmpty()) configSource else System.getenv(envConfig).orEmpty(),
-                        envConfig,
-                        ConfigParseOptions.defaults().setAllowMissing(false),
-                        ConfigFactory.load().resolve(),
-                        exitOnMissingConfig)
-      .resolve(ConfigResolveOptions.defaults())
-      .resolve()
+    config =
+      readConfig(if (configSource.isNotEmpty()) configSource else System.getenv(envConfig).orEmpty(),
+                 envConfig,
+                 ConfigParseOptions.defaults().setAllowMissing(false),
+                 ConfigFactory.load().resolve(),
+                 exitOnMissingConfig)
+        .resolve(ConfigResolveOptions.defaults())
+        .resolve()
 
-    dynamicParams.forEach { (k, v) ->
-      // Strip quotes
-      val qval = if (v.startsWith("\"") && v.endsWith("\"")) v.substring(1, v.length - 1) else v
-      val prop = "$k=$qval"
-      System.setProperty(k, prop)
-      val newConfig = ConfigFactory.parseString(prop, PROPS)
-      config = newConfig.withFallback(config).resolve()
-    }
+    dynamicParams
+      .forEach { (k, v) ->
+        // Strip quotes
+        val qval = if (v.startsWith("\"") && v.endsWith("\"")) v.substring(1, v.length - 1) else v
+        val prop = "$k=$qval"
+        System.setProperty(k, prop)
+        val newConfig = ConfigFactory.parseString(prop, PROPS)
+        config = newConfig.withFallback(config).resolve()
+      }
   }
 
   private fun readConfig(configName: String,

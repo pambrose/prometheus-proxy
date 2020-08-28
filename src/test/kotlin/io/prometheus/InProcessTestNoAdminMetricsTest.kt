@@ -19,6 +19,8 @@
 package io.prometheus
 
 import com.github.pambrose.common.util.simpleClassName
+import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.TestConstants.DEFAULT_TIMEOUT
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
@@ -34,7 +36,12 @@ class InProcessTestNoAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = ag
     fun setUp() =
       setItUp(
           { startProxy("nometrics") },
-          { startAgent(serverName = "nometrics", chunkContentSizeKbs = 5) })
+          {
+            startAgent(serverName = "nometrics",
+                       scrapeTimeoutSecs = DEFAULT_TIMEOUT,
+                       chunkContentSizeKbs = DEFAULT_CHUNK_SIZE)
+          }
+      )
 
     @JvmStatic
     @AfterAll

@@ -50,7 +50,7 @@ import kotlin.time.TimeSource.Monotonic
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
-@Version(version = "1.8.0", date = "8/12/20")
+@Version(version = "1.8.0", date = "8/28/20")
 class Agent(val options: AgentOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,
@@ -98,8 +98,9 @@ class Agent(val options: AgentOptions,
       
     """.trimIndent()
 
-    logger.info { "Assigned agent name: $agentName" }
-    logger.info { "Assigned proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
+    logger.info { "Agent name: $agentName" }
+    logger.info { "Proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
+    logger.info { "Scrape timeout time: ${configVals.agent.scrapeTimeoutSecs.seconds}" }
 
     initService {
       if (options.debugEnabled) {

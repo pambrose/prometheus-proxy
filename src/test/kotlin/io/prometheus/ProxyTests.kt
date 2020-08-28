@@ -76,7 +76,7 @@ internal object ProxyTests : KLogging() {
       embeddedServer(CIO, port = agentPort) {
         routing {
           get("/$agentPath") {
-            delay(10.seconds)
+            delay(60.seconds)
             call.respondText("This is never reached", Text.Plain)
           }
         }
@@ -86,14 +86,15 @@ internal object ProxyTests : KLogging() {
       launch(Dispatchers.Default + exceptionHandler(logger)) {
         logger.info { "Starting httpServer" }
         httpServer.start()
-        delay(5.seconds)
+        //delay(5.seconds)
       }
     }
 
+    delay(2.seconds) // Give http server a chance to start
     pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".addPrefix())
 
     blockingGet("$PROXY_PORT/$proxyPath".addPrefix()) { response ->
-      response.status shouldBeEqualTo HttpStatusCode.ServiceUnavailable
+      response.status shouldBeEqualTo HttpStatusCode.RequestTimeout
     }
 
     pathManager.unregisterPath("/$proxyPath")

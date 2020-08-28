@@ -58,6 +58,7 @@ object TestUtils : KLogging() {
                  adminEnabled: Boolean = false,
                  debugEnabled: Boolean = false,
                  metricsEnabled: Boolean = false,
+                 scrapeTimeoutSecs: Int = -1,
                  chunkContentSizeKbs: Int = -1,
                  argv: List<String> = emptyList()): Agent {
 
@@ -73,6 +74,8 @@ object TestUtils : KLogging() {
                                         add("-Dagent.admin.enabled=$adminEnabled")
                                         add("-Dagent.admin.debugEnabled=$debugEnabled")
                                         add("-Dagent.metrics.enabled=$metricsEnabled")
+                                        if (scrapeTimeoutSecs != -1)
+                                          add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
                                         if (chunkContentSizeKbs != -1)
                                           add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
                                       },
