@@ -19,6 +19,8 @@
 package io.prometheus
 
 import com.github.pambrose.common.util.simpleClassName
+import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.TestConstants.DEFAULT_TIMEOUT
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
@@ -32,19 +34,23 @@ class TlsNoMutualAuthTest : CommonTests(ProxyCallTestArgs(agent = agent,
 
     @JvmStatic
     @BeforeAll
-    fun setUp() = setItUp({
-                            startProxy(serverName = "nomutualauth",
-                                       argv = listOf("--agent_port", "50440",
-                                                     "--cert", "testing/certs/server1.pem",
-                                                     "--key", "testing/certs/server1.key"))
-                          },
-                          {
-                            startAgent(serverName = "nomutualauth",
-                                       chunkContentSizeKbs = 5,
-                                       argv = listOf("--proxy", "localhost:50440",
-                                                     "--trust", "testing/certs/ca.pem",
-                                                     "--override", "foo.test.google.fr"))
-                          })
+    fun setUp() =
+      setItUp(
+          {
+            startProxy(serverName = "nomutualauth",
+                       argv = listOf("--agent_port", "50440",
+                                     "--cert", "testing/certs/server1.pem",
+                                     "--key", "testing/certs/server1.key"))
+          },
+          {
+            startAgent(serverName = "nomutualauth",
+                       scrapeTimeoutSecs = DEFAULT_TIMEOUT,
+                       chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
+                       argv = listOf("--proxy", "localhost:50440",
+                                     "--trust", "testing/certs/ca.pem",
+                                     "--override", "foo.test.google.fr"))
+          }
+      )
 
     @JvmStatic
     @AfterAll

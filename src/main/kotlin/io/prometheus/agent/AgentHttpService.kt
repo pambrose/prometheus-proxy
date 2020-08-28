@@ -24,11 +24,10 @@ import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders
-import io.ktor.client.request.HttpRequestBuilder
-import io.ktor.client.request.header
-import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.readText
-import io.ktor.http.isSuccess
+import io.ktor.client.features.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import io.prometheus.Agent
 import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.ScrapeRequest
@@ -36,11 +35,13 @@ import mu.KLogging
 import java.io.IOException
 import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.time.seconds
 
 internal class AgentHttpService(val agent: Agent) {
 
   suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResults =
-    ScrapeResults(agentId = request.agentId, scrapeId = request.scrapeId).also { scrapeResults ->
+    ScrapeResults(agentId = request.agentId,
+                  scrapeId = request.scrapeId).also { scrapeResults ->
       val scrapeMsg = AtomicReference("")
       val path = request.path
       val encodedQueryParams = request.encodedQueryParams
@@ -64,19 +65,41 @@ internal class AgentHttpService(val agent: Agent) {
         if (encodedQueryParams.isNotEmpty())
           logger.debug { "URL: $url" }
 
+        val scrapeTimeout = agent.options.configVals.agent.scrapeTimeoutSecs.seconds
+
         // Content is fetched here
         try {
           withHttpClient {
-            get(url, setup(request), getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
+            get(url,
+                {
+                  val accept: String? = request.accept
+                  if (accept?.isNotEmpty() == true) header(HttpHeaders.ACCEPT, accept)
+                  timeout { requestTimeoutMillis = scrapeTimeout.toLongMilliseconds() }
+                },
+                getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
           }
+        }
+        catch (e: HttpRequestTimeoutException) {
+          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+          scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
+          scrapeResults.failureReason = e.message ?: e.simpleClassName
+
+          if (request.debugEnabled)
+            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
         }
         catch (e: IOException) {
           logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
+          scrapeResults.statusCode = HttpStatusCode.NotFound.value
+          scrapeResults.failureReason = e.message ?: e.simpleClassName
+
           if (request.debugEnabled)
             scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
         }
         catch (e: Throwable) {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+          scrapeResults.failureReason = e.message ?: e.simpleClassName
+          scrapeResults.statusCode = HttpStatusCode.ServiceUnavailable.value
+
           if (request.debugEnabled)
             scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
         }
@@ -87,12 +110,6 @@ internal class AgentHttpService(val agent: Agent) {
 
       agent.updateScrapeCounter(agent, scrapeMsg.get())
     }
-
-  private fun setup(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
-    val accept: String? = request.accept
-    if (accept?.isNotEmpty() == true)
-      header(HttpHeaders.ACCEPT, accept)
-  }
 
   private fun getBlock(url: String,
                        responseArg: ScrapeResults,

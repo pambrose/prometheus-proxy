@@ -25,17 +25,15 @@ import com.github.pambrose.common.dsl.KtorDsl.httpClient
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
-import io.ktor.application.call
-import io.ktor.client.HttpClient
-import io.ktor.client.statement.readText
-import io.ktor.http.ContentType.Text
-import io.ktor.http.HttpStatusCode
-import io.ktor.response.respondText
-import io.ktor.routing.get
-import io.ktor.routing.routing
-import io.ktor.server.cio.CIO
-import io.ktor.server.cio.CIOApplicationEngine
-import io.ktor.server.engine.embeddedServer
+import io.ktor.application.*
+import io.ktor.client.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.http.ContentType.*
+import io.ktor.response.*
+import io.ktor.routing.*
+import io.ktor.server.cio.*
+import io.ktor.server.engine.*
 import io.prometheus.CommonTests.Companion.HTTP_SERVER_COUNT
 import io.prometheus.CommonTests.Companion.MAX_DELAY_MILLIS
 import io.prometheus.CommonTests.Companion.MIN_DELAY_MILLIS
@@ -45,13 +43,13 @@ import io.prometheus.CommonTests.Companion.SEQUENTIAL_QUERY_COUNT
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.*
 import mu.KLogging
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.set
 import kotlin.time.milliseconds
 import kotlin.time.minutes
@@ -78,7 +76,7 @@ internal object ProxyTests : KLogging() {
       embeddedServer(CIO, port = agentPort) {
         routing {
           get("/$agentPath") {
-            delay(10.seconds)
+            delay(60.seconds)
             call.respondText("This is never reached", Text.Plain)
           }
         }
@@ -88,14 +86,15 @@ internal object ProxyTests : KLogging() {
       launch(Dispatchers.Default + exceptionHandler(logger)) {
         logger.info { "Starting httpServer" }
         httpServer.start()
-        delay(5.seconds)
+        //delay(5.seconds)
       }
     }
 
+    delay(2.seconds) // Give http server a chance to start
     pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".addPrefix())
 
     blockingGet("$PROXY_PORT/$proxyPath".addPrefix()) { response ->
-      response.status shouldBeEqualTo HttpStatusCode.ServiceUnavailable
+      response.status shouldBeEqualTo HttpStatusCode.RequestTimeout
     }
 
     pathManager.unregisterPath("/$proxyPath")
@@ -179,7 +178,7 @@ internal object ProxyTests : KLogging() {
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
           httpClient { client ->
-            val counter = atomic(0)
+            val counter = AtomicInteger(0)
             repeat(args.sequentialQueryCount) { cnt ->
               val job =
                 launch(dispatcher + exceptionHandler(logger)) {
@@ -191,7 +190,7 @@ internal object ProxyTests : KLogging() {
               job.getCancellationException().cause.shouldBeNull()
             }
 
-            counter.value shouldBeEqualTo args.sequentialQueryCount
+            counter.get() shouldBeEqualTo args.sequentialQueryCount
           }
         }
       }
@@ -202,7 +201,7 @@ internal object ProxyTests : KLogging() {
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
           httpClient { client ->
-            val counter = atomic(0)
+            val counter = AtomicInteger(0)
             val jobs =
               List(args.parallelQueryCount) { cnt ->
                 launch(dispatcher + exceptionHandler(logger)) {
@@ -217,14 +216,14 @@ internal object ProxyTests : KLogging() {
               job.getCancellationException().cause.shouldBeNull()
             }
 
-            counter.value shouldBeEqualTo args.parallelQueryCount
+            counter.get() shouldBeEqualTo args.parallelQueryCount
           }
         }
       }
 
     logger.debug { "Unregistering paths" }
-    val counter = atomic(0)
-    val errorCnt = atomic(0)
+    val counter = AtomicInteger(0)
+    val errorCnt = AtomicInteger(0)
     pathMap.forEach { path ->
       try {
         args.agent.pathManager.unregisterPath("proxy-${path.key}")
@@ -235,8 +234,8 @@ internal object ProxyTests : KLogging() {
       }
     }
 
-    counter.value shouldBeEqualTo pathMap.size
-    errorCnt.value shouldBeEqualTo 0
+    counter.get() shouldBeEqualTo pathMap.size
+    errorCnt.get() shouldBeEqualTo 0
     args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize
 
     logger.info { "Shutting down ${httpServers.size} httpServers" }

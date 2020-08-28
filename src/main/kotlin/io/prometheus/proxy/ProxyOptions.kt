@@ -41,12 +41,14 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
   }
 
   override fun assignConfigVals() {
+
     if (proxyHttpPort == -1)
       proxyHttpPort = PROXY_PORT.getEnv(configVals.proxy.http.port)
+    logger.info { "proxyHttpPort: $proxyHttpPort" }
 
     if (proxyAgentPort == -1)
       proxyAgentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port)
-
+    logger.info { "proxyAgentPort: $proxyAgentPort" }
 
     configVals.proxy.also { proxy ->
       assignAdminEnabled(proxy.admin.enabled)

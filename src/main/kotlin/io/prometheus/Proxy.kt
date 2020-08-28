@@ -45,7 +45,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.milliseconds
 
-@Version(version = "1.7.1", date = "8/12/20")
+@Version(version = "1.8.0", date = "8/28/20")
 class Proxy(val options: ProxyOptions,
             proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",
@@ -63,7 +63,7 @@ class Proxy(val options: ProxyOptions,
                                isTestMode = testMode) {
 
   private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
-  private val httpService = ProxyHttpService(this, proxyHttpPort)
+  private val httpService = ProxyHttpService(this, proxyHttpPort, isTestMode)
   private val recentActions: EvictingQueue<String> =
     EvictingQueue.create(configVals.proxy.admin.recentRequestsQueueSize)
   private val grpcService =

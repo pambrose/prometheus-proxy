@@ -24,11 +24,8 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
+import com.github.pambrose.common.util.*
 import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
-import com.github.pambrose.common.util.getBanner
-import com.github.pambrose.common.util.hostInfo
-import com.github.pambrose.common.util.randomId
-import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
 import io.grpc.Status
 import io.grpc.StatusException
@@ -41,11 +38,11 @@ import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.getVersionDesc
-import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.*
 import mu.KLogging
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.TimeMark
@@ -53,6 +50,7 @@ import kotlin.time.TimeSource.Monotonic
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
+@Version(version = "1.8.0", date = "8/28/20")
 class Agent(val options: AgentOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,
@@ -76,7 +74,7 @@ class Agent(val options: AgentOptions,
   private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
   internal val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
-  internal val scrapeRequestBacklogSize = atomic(0)
+  internal val scrapeRequestBacklogSize = AtomicInteger(0)
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
@@ -100,8 +98,9 @@ class Agent(val options: AgentOptions,
       
     """.trimIndent()
 
-    logger.info { "Assigned agent name: $agentName" }
-    logger.info { "Assigned proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
+    logger.info { "Agent name: $agentName" }
+    logger.info { "Proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
+    logger.info { "Scrape timeout time: ${configVals.agent.scrapeTimeoutSecs.seconds}" }
 
     initService {
       if (options.debugEnabled) {
@@ -137,7 +136,7 @@ class Agent(val options: AgentOptions,
 
       // Reset values for each connection attempt
       pathManager.clear()
-      scrapeRequestBacklogSize.value = 0
+      scrapeRequestBacklogSize.set(0)
       lastMsgSentMark = clock.markNow()
 
       if (grpcService.connectAgent()) {
@@ -209,7 +208,7 @@ class Agent(val options: AgentOptions,
     healthCheckRegistry.register(
         "scrape_request_backlog_check",
         newBacklogHealthCheck(
-            scrapeRequestBacklogSize.value,
+            scrapeRequestBacklogSize.get(),
             agentConfigVals.scrapeRequestBacklogUnhealthySize
         )
     )
@@ -280,11 +279,14 @@ class Agent(val options: AgentOptions,
     }
 
     @JvmStatic
-    fun startAsyncAgent(configFilename: String, exitOnMissingConfig: Boolean): EmbeddedAgentInfo {
-      logger.apply {
-        info { getBanner("banners/agent.txt", this) }
-        info { getVersionDesc() }
-      }
+    fun startAsyncAgent(configFilename: String,
+                        exitOnMissingConfig: Boolean,
+                        logBanner: Boolean = true): EmbeddedAgentInfo {
+      if (logBanner)
+        logger.apply {
+          info { getBanner("banners/agent.txt", this) }
+          info { getVersionDesc() }
+        }
       val agent = Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
       return EmbeddedAgentInfo(agent.launchId, agent.agentName)
     }

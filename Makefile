@@ -1,4 +1,4 @@
-VERSION=1.7.1
+VERSION=1.8.0
 
 default: compile
 
@@ -53,11 +53,14 @@ site:
 tree:
 	./gradlew -q dependencies
 
+depends:
+	./gradlew dependencies
+
 versioncheck:
 	./gradlew dependencyUpdates
 
 refresh:
 	./gradlew --refresh-dependencies
 
-depends:
-	./gradlew dependencies
+upgrade-wrapper:
+	./gradlew wrapper --gradle-version=6.6.1 --distribution-type=bin

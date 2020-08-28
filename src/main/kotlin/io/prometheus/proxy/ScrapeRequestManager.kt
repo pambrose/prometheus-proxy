@@ -21,10 +21,11 @@ package io.prometheus.proxy
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.common.ScrapeResults
 import mu.KLogging
+import java.util.concurrent.ConcurrentMap
 
 internal class ScrapeRequestManager {
   // Map scrape_id to agent_id
-  val scrapeRequestMap = newConcurrentMap<Long, ScrapeRequestWrapper>()
+  val scrapeRequestMap: ConcurrentMap<Long, ScrapeRequestWrapper> = newConcurrentMap()
 
   val scrapeMapSize: Int
     get() = scrapeRequestMap.size

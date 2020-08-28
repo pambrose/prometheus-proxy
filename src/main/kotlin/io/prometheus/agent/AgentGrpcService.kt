@@ -206,20 +206,21 @@ internal class AgentGrpcService(internal val agent: Agent,
   suspend fun sendHeartBeat() {
     if (agent.agentId.isEmpty())
       return
-
-    try {
-      val request = GrpcObjects.newHeartBeatRequest(agent.agentId)
-      stub.sendHeartBeat(request)
-        .apply {
-          agent.markMsgSent()
-          if (!valid) {
-            logger.error { "AgentId ${agent.agentId} not found on proxy" }
-            throw StatusRuntimeException(Status.NOT_FOUND)
+    else {
+      try {
+        val request = GrpcObjects.newHeartBeatRequest(agent.agentId)
+        stub.sendHeartBeat(request)
+          .apply {
+            agent.markMsgSent()
+            if (!valid) {
+              logger.error { "AgentId ${agent.agentId} not found on proxy" }
+              throw StatusRuntimeException(Status.NOT_FOUND)
+            }
           }
-        }
-    }
-    catch (e: StatusRuntimeException) {
-      logger.error { "Hearbeat failed ${e.status}" }
+      }
+      catch (e: StatusRuntimeException) {
+        logger.error { "Hearbeat failed ${e.status}" }
+      }
     }
   }
 
@@ -227,13 +228,13 @@ internal class AgentGrpcService(internal val agent: Agent,
     connectionContext
       .use {
         val agentInfo = newAgentInfo(agent.agentId)
-        val replies = stub.readRequestsFromProxy(agentInfo)
-        replies.collect { request: ScrapeRequest ->
-          // The actual fetch happens at the other end of the channel, not here.
-          logger.debug { "readRequestsFromProxy():\n$request" }
-          connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(request) }
-          agent.scrapeRequestBacklogSize.incrementAndGet()
-        }
+        stub.readRequestsFromProxy(agentInfo)
+          .collect { request: ScrapeRequest ->
+            // The actual fetch happens at the other end of the channel, not here.
+            logger.debug { "readRequestsFromProxy():\n$request" }
+            connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(request) }
+            agent.scrapeRequestBacklogSize.incrementAndGet()
+          }
       }
   }
 

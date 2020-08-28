@@ -23,6 +23,8 @@ import com.google.common.collect.Iterables
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.*
+import mu.KLogging
+import kotlin.time.seconds
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
     BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
@@ -49,11 +51,15 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   var overrideAuthority = ""
     private set
 
+  @Parameter(names = ["--timeout"], description = "Scrape timeout time (seconds)")
+  var scrapeTimeoutSecs = -1
+    private set
+
   @Parameter(names = ["--chunk"], description = "Threshold for chunking content to Proxy and buffer size (KBs)")
   var chunkContentSizeKbs = -1
     private set
 
-  @Parameter(names = ["--gzip"], description = "Minimum size for content to be gzipped (Bytes)")
+  @Parameter(names = ["--gzip"], description = "Minimum size for content to be gzipped (bytes)")
   var minGzipSizeBytes = -1
     private set
 
@@ -64,6 +70,7 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   override fun assignConfigVals() {
 
     configVals.agent.also { agent ->
+
       if (proxyHostname.isEmpty()) {
         val configHostname = agent.proxy.hostname
         proxyHostname = PROXY_HOSTNAME.getEnv(if (":" in configHostname)
@@ -71,23 +78,34 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
                                               else
                                                 "$configHostname:${agent.proxy.port}")
       }
+      logger.info { "proxyHostname: $proxyHostname" }
+
 
       if (agentName.isEmpty())
         agentName = AGENT_NAME.getEnv(agent.name)
+      logger.info { "agentName: $agentName" }
 
-      if (overrideAuthority.isEmpty())
-        overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)
+      if (!consolidated)
+        consolidated = CONSOLIDATED.getEnv(agent.consolidated)
+      logger.info { "consolidated: $consolidated" }
+
+      if (scrapeTimeoutSecs == -1)
+        scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agent.scrapeTimeoutSecs)
+      logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
 
       if (chunkContentSizeKbs == -1)
         chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agent.chunkContentSizeKbs)
       // Multiply the value time KB
       chunkContentSizeKbs *= 1024
+      logger.info { "chunkContentSizeKbs: $chunkContentSizeKbs" }
 
       if (minGzipSizeBytes == -1)
         minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agent.minGzipSizeBytes)
+      logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
 
-      if (!consolidated)
-        consolidated = CONSOLIDATED.getEnv(agent.consolidated)
+      if (overrideAuthority.isEmpty())
+        overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)
+      logger.info { "overrideAuthority: $overrideAuthority" }
 
       assignAdminEnabled(agent.admin.enabled)
       assignAdminPort(agent.admin.port)
@@ -100,4 +118,6 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
       assignTrustCertCollectionFilePath(agent.tls.trustCertCollectionFilePath)
     }
   }
+
+  companion object : KLogging()
 }

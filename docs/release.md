@@ -6,7 +6,7 @@
 
 3) Modify code
 
-4) Update the release date in *package-info.java*
+4) Update the release date in Agent.kt and Proxy.kt
 
 5) Verify tests run cleanly before merge with: `make tests`
 

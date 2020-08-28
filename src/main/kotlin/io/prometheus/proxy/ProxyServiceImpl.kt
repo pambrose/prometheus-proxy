@@ -30,12 +30,12 @@ import io.prometheus.common.GrpcObjects.newRegisterPathResponse
 import io.prometheus.common.GrpcObjects.toScrapeResults
 import io.prometheus.common.GrpcObjects.unregisterPathResponse
 import io.prometheus.grpc.*
-import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import mu.KLogging
 import java.util.concurrent.CancellationException
+import java.util.concurrent.atomic.AtomicLong
 
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
 
@@ -177,6 +177,6 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
   }
 
   companion object : KLogging() {
-    private val PATH_ID_GENERATOR = atomic(0L)
+    private val PATH_ID_GENERATOR = AtomicLong(0L)
   }
 }

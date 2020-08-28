@@ -23,6 +23,8 @@ import java.io.File
 object TestConstants {
   const val REPS = 1000
   const val PROXY_PORT = 9505
+  const val DEFAULT_TIMEOUT = 3
+  const val DEFAULT_CHUNK_SIZE = 5
 
   private const val travisFile = "etc/test-configs/travis.conf"
   private const val junitFile = "etc/test-configs/junit-test.conf"
