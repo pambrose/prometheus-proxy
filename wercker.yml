@@ -1,4 +1,5 @@
-box: java
+box:
+  id: openjdk
 
 dev:
   steps:
