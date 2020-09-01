@@ -65,7 +65,6 @@ internal class AgentHttpService(val agent: Agent) {
         if (encodedQueryParams.isNotEmpty())
           logger.debug { "URL: $url" }
 
-        val scrapeTimeout = agent.options.configVals.agent.scrapeTimeoutSecs.seconds
 
         // Content is fetched here
         try {
@@ -74,6 +73,7 @@ internal class AgentHttpService(val agent: Agent) {
                 {
                   val accept: String? = request.accept
                   if (accept?.isNotEmpty() == true) header(HttpHeaders.ACCEPT, accept)
+                  val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
                   timeout { requestTimeoutMillis = scrapeTimeout.toLongMilliseconds() }
                 },
                 getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
