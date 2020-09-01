@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import com.github.pambrose.common.dsl.KtorDsl.get
+import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
@@ -28,12 +29,15 @@ import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.network.sockets.*
 import io.prometheus.Agent
 import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.ScrapeRequest
+import kotlinx.coroutines.TimeoutCancellationException
 import mu.KLogging
 import java.io.IOException
 import java.net.URLDecoder
+import java.net.http.HttpConnectTimeoutException
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.seconds
 
@@ -65,19 +69,48 @@ internal class AgentHttpService(val agent: Agent) {
         if (encodedQueryParams.isNotEmpty())
           logger.debug { "URL: $url" }
 
-
         // Content is fetched here
         try {
-          withHttpClient {
-            get(url,
-                {
-                  val accept: String? = request.accept
-                  if (accept?.isNotEmpty() == true) header(HttpHeaders.ACCEPT, accept)
-                  val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
-                  timeout { requestTimeoutMillis = scrapeTimeout.toLongMilliseconds() }
-                },
-                getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
+          newHttpClient {
+            requestTimeout = 90.seconds.toLongMilliseconds()
+          }.use { client ->
+            withHttpClient(client) {
+              get(url,
+                  {
+                    val accept: String? = request.accept
+                    if (accept?.isNotEmpty() == true)
+                      header(HttpHeaders.ACCEPT, accept)
+                    val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
+                    logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
+                    timeout { requestTimeoutMillis = scrapeTimeout.toLongMilliseconds() }
+                  },
+                  getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
+            }
           }
+        }
+        catch (e: TimeoutCancellationException) {
+          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+          scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
+          scrapeResults.failureReason = e.message ?: e.simpleClassName
+
+          if (request.debugEnabled)
+            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
+        }
+        catch (e: HttpConnectTimeoutException) {
+          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+          scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
+          scrapeResults.failureReason = e.message ?: e.simpleClassName
+
+          if (request.debugEnabled)
+            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
+        }
+        catch (e: SocketTimeoutException) {
+          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+          scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
+          scrapeResults.failureReason = e.message ?: e.simpleClassName
+
+          if (request.debugEnabled)
+            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
         }
         catch (e: HttpRequestTimeoutException) {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }

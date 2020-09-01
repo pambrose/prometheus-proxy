@@ -50,16 +50,17 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
       proxyAgentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port)
     logger.info { "proxyAgentPort: $proxyAgentPort" }
 
-    configVals.proxy.also { proxy ->
-      assignAdminEnabled(proxy.admin.enabled)
-      assignAdminPort(proxy.admin.port)
-      assignMetricsEnabled(proxy.metrics.enabled)
-      assignMetricsPort(proxy.metrics.port)
-      assignDebugEnabled(proxy.admin.debugEnabled)
+    configVals.proxy
+      .also { proxyConfigVals ->
+        assignAdminEnabled(proxyConfigVals.admin.enabled)
+        assignAdminPort(proxyConfigVals.admin.port)
+        assignMetricsEnabled(proxyConfigVals.metrics.enabled)
+        assignMetricsPort(proxyConfigVals.metrics.port)
+        assignDebugEnabled(proxyConfigVals.admin.debugEnabled)
 
-      assignCertChainFilePath(proxy.tls.certChainFilePath)
-      assignPrivateKeyFilePath(proxy.tls.privateKeyFilePath)
-      assignTrustCertCollectionFilePath(proxy.tls.trustCertCollectionFilePath)
-    }
+        assignCertChainFilePath(proxyConfigVals.tls.certChainFilePath)
+        assignPrivateKeyFilePath(proxyConfigVals.tls.privateKeyFilePath)
+        assignTrustCertCollectionFilePath(proxyConfigVals.tls.trustCertCollectionFilePath)
+      }
   }
 }

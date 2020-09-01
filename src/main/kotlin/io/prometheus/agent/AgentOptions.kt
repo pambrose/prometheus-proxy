@@ -69,54 +69,55 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
 
   override fun assignConfigVals() {
 
-    configVals.agent.also { agent ->
+    configVals.agent
+      .also { agentConfigVals ->
 
-      if (proxyHostname.isEmpty()) {
-        val configHostname = agent.proxy.hostname
-        proxyHostname = PROXY_HOSTNAME.getEnv(if (":" in configHostname)
-                                                configHostname
-                                              else
-                                                "$configHostname:${agent.proxy.port}")
+        if (proxyHostname.isEmpty()) {
+          val configHostname = agentConfigVals.proxy.hostname
+          proxyHostname = PROXY_HOSTNAME.getEnv(if (":" in configHostname)
+                                                  configHostname
+                                                else
+                                                  "$configHostname:${agentConfigVals.proxy.port}")
+        }
+        logger.info { "proxyHostname: $proxyHostname" }
+
+
+        if (agentName.isEmpty())
+          agentName = AGENT_NAME.getEnv(agentConfigVals.name)
+        logger.info { "agentName: $agentName" }
+
+        if (!consolidated)
+          consolidated = CONSOLIDATED.getEnv(agentConfigVals.consolidated)
+        logger.info { "consolidated: $consolidated" }
+
+        if (scrapeTimeoutSecs == -1)
+          scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
+        logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+
+        if (chunkContentSizeKbs == -1)
+          chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
+        // Multiply the value time KB
+        chunkContentSizeKbs *= 1024
+        logger.info { "chunkContentSizeKbs: $chunkContentSizeKbs" }
+
+        if (minGzipSizeBytes == -1)
+          minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agentConfigVals.minGzipSizeBytes)
+        logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
+
+        if (overrideAuthority.isEmpty())
+          overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agentConfigVals.tls.overrideAuthority)
+        logger.info { "overrideAuthority: $overrideAuthority" }
+
+        assignAdminEnabled(agentConfigVals.admin.enabled)
+        assignAdminPort(agentConfigVals.admin.port)
+        assignMetricsEnabled(agentConfigVals.metrics.enabled)
+        assignMetricsPort(agentConfigVals.metrics.port)
+        assignDebugEnabled(agentConfigVals.admin.debugEnabled)
+
+        assignCertChainFilePath(agentConfigVals.tls.certChainFilePath)
+        assignPrivateKeyFilePath(agentConfigVals.tls.privateKeyFilePath)
+        assignTrustCertCollectionFilePath(agentConfigVals.tls.trustCertCollectionFilePath)
       }
-      logger.info { "proxyHostname: $proxyHostname" }
-
-
-      if (agentName.isEmpty())
-        agentName = AGENT_NAME.getEnv(agent.name)
-      logger.info { "agentName: $agentName" }
-
-      if (!consolidated)
-        consolidated = CONSOLIDATED.getEnv(agent.consolidated)
-      logger.info { "consolidated: $consolidated" }
-
-      if (scrapeTimeoutSecs == -1)
-        scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agent.scrapeTimeoutSecs)
-      logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
-
-      if (chunkContentSizeKbs == -1)
-        chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agent.chunkContentSizeKbs)
-      // Multiply the value time KB
-      chunkContentSizeKbs *= 1024
-      logger.info { "chunkContentSizeKbs: $chunkContentSizeKbs" }
-
-      if (minGzipSizeBytes == -1)
-        minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agent.minGzipSizeBytes)
-      logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
-
-      if (overrideAuthority.isEmpty())
-        overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agent.tls.overrideAuthority)
-      logger.info { "overrideAuthority: $overrideAuthority" }
-
-      assignAdminEnabled(agent.admin.enabled)
-      assignAdminPort(agent.admin.port)
-      assignMetricsEnabled(agent.metrics.enabled)
-      assignMetricsPort(agent.metrics.port)
-      assignDebugEnabled(agent.admin.debugEnabled)
-
-      assignCertChainFilePath(agent.tls.certChainFilePath)
-      assignPrivateKeyFilePath(agent.tls.privateKeyFilePath)
-      assignTrustCertCollectionFilePath(agent.tls.trustCertCollectionFilePath)
-    }
   }
 
   companion object : KLogging()
