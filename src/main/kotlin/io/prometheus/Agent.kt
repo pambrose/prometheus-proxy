@@ -50,7 +50,7 @@ import kotlin.time.TimeSource.Monotonic
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
-@Version(version = "1.8.3", date = "9/1/20")
+@Version(version = "1.8.4", date = "9/10/20")
 class Agent(val options: AgentOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,
