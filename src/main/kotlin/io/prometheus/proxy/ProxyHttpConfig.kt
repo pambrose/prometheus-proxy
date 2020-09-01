@@ -32,6 +32,7 @@ import io.ktor.response.*
 import io.ktor.routing.*
 import io.prometheus.Proxy
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import mu.KLogging
 import org.slf4j.event.Level
 import kotlin.time.Duration
@@ -84,6 +85,10 @@ internal object ProxyHttpConfig : KLogging() {
     }
 
     routing {
+      get("/__test__") {
+        delay(30.seconds)
+        call.respondWith("Test value", Plain, OK)
+      }
       get("/*") {
         call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
 
