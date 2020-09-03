@@ -19,12 +19,12 @@
 package io.prometheus.agent
 
 import com.github.pambrose.common.dsl.KtorDsl.get
-import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
-import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -71,22 +71,22 @@ internal class AgentHttpService(val agent: Agent) {
 
         // Content is fetched here
         try {
-          newHttpClient {
-            requestTimeout = 90.seconds.toLongMilliseconds()
-          }.use { client ->
-            withHttpClient(client) {
-              get(url,
-                  {
-                    val accept: String? = request.accept
-                    if (accept?.isNotEmpty() == true)
-                      header(HttpHeaders.ACCEPT, accept)
-                    val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
-                    logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
-                    timeout { requestTimeoutMillis = scrapeTimeout.toLongMilliseconds() }
-                  },
-                  getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
+          CIO.create { requestTimeout = 90.seconds.toLongMilliseconds() }
+            .use { engine ->
+              HttpClient(engine) { install(HttpTimeout) }
+                .use { client ->
+                  client.get(url,
+                             {
+                               val accept: String? = request.accept
+                               if (accept?.isNotEmpty() == true)
+                                 header(HttpHeaders.ACCEPT, accept)
+                               val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
+                               logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
+                               timeout { requestTimeoutMillis = scrapeTimeout.toLongMilliseconds() }
+                             },
+                             getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
+                }
             }
-          }
         }
         catch (e: TimeoutCancellationException) {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }
