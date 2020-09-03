@@ -1,4 +1,4 @@
-VERSION=1.8.3
+VERSION=1.8.4
 
 default: compile
 
@@ -24,13 +24,13 @@ config:
 
 distro: clean compile jars
 
-docker-build:
+build-docker:
 	docker build -f ./etc/docker/proxy.df -t pambrose/prometheus-proxy:${VERSION} .
 	docker build -f ./etc/docker/proxy.df -t pambrose/prometheus-proxy:latest .
 	docker build -f ./etc/docker/agent.df -t pambrose/prometheus-agent:${VERSION} .
 	docker build -f ./etc/docker/agent.df -t pambrose/prometheus-agent:latest .
 
-docker-push:
+push-docker:
 	docker push pambrose/prometheus-proxy:${VERSION}
 	docker push pambrose/prometheus-proxy:latest
 	docker push pambrose/prometheus-agent:${VERSION}
