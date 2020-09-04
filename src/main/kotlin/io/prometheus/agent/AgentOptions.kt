@@ -117,6 +117,9 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
         assignCertChainFilePath(agentConfigVals.tls.certChainFilePath)
         assignPrivateKeyFilePath(agentConfigVals.tls.privateKeyFilePath)
         assignTrustCertCollectionFilePath(agentConfigVals.tls.trustCertCollectionFilePath)
+
+        logger.info { "agent.internal.cioTimeoutSecs: ${agentConfigVals.internal.cioTimeoutSecs.seconds}" }
+        logger.info { "agent.scrapeTimeoutSecs: ${agentConfigVals.scrapeTimeoutSecs.seconds}" }
       }
   }
 

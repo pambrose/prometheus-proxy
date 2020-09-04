@@ -71,7 +71,8 @@ internal class AgentHttpService(val agent: Agent) {
 
         // Content is fetched here
         try {
-          CIO.create { requestTimeout = 90.seconds.toLongMilliseconds() }
+          val timeout = agent.configVals.agent.internal.cioTimeoutSecs.seconds
+          CIO.create { requestTimeout = timeout.toLongMilliseconds() }
             .use { engine ->
               HttpClient(engine) { install(HttpTimeout) }
                 .use { client ->

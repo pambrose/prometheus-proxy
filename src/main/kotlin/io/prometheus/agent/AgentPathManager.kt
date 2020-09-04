@@ -45,12 +45,12 @@ internal class AgentPathManager(private val agent: Agent) {
             URL to it.url
         )
       }
-      .onEach { logger.info { "Proxy path /${it["path"]} will be assigned to ${it["url"]}" } }
+      .onEach { logger.info { "Proxy path /${it[PATH]} will be assigned to ${it[URL]}" } }
 
   suspend fun registerPaths() =
     pathConfigs.forEach {
-      val path = it["path"]
-      val url = it["url"]
+      val path = it[PATH]
+      val url = it[URL]
       if (path.isNotNull() && url.isNotNull())
         registerPath(path, url)
       else
