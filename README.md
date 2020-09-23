@@ -27,6 +27,9 @@ An agent can run as a stand-alone server, embedded in another java server, or as
 Agents connect to a `prometheus-proxy` (the proxy) and register the paths for which they will provide data. 
 One proxy can work one or many agents.
 
+## Requirements
+Requires Java 11 or newer.
+
 ## CLI Usage
 
 Download the proxy and agent uber-jars from [here](https://github.com/pambrose/prometheus-proxy/releases).
