@@ -2,15 +2,15 @@ plugins {
     id 'idea'
     id 'java'
     id 'org.jetbrains.kotlin.jvm' version '1.4.10'
-    id 'com.google.protobuf' version '0.8.13'
-    id "com.github.ben-manes.versions" version '0.33.0'
+    id 'com.google.protobuf' version '0.8.14'
+    id "com.github.ben-manes.versions" version '0.36.0'
     id 'com.github.johnrengelman.shadow' version '6.1.0'
     id 'jacoco'
     id 'com.github.kt3k.coveralls' version '2.10.2'
 }
 
 group = 'io.prometheus'
-version = '1.8.6'
+version = '1.8.7'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -153,6 +153,10 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
     from javadoc.destinationDir
 }
 
+//java {
+//    withSourcesJar()
+//}
+
 artifacts {
     archives sourcesJar
 //archives javadocJar
@@ -204,6 +208,8 @@ task proxyJar(type: Jar, dependsOn: shadowJar) {
 
 test {
     useJUnitPlatform()
+
+    finalizedBy jacocoTestReport
 
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"

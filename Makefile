@@ -1,4 +1,4 @@
-VERSION=1.8.6
+VERSION=1.8.7
 
 default: compile
 
@@ -63,4 +63,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=6.6.1 --distribution-type=bin
+	./gradlew wrapper --gradle-version=6.7.1 --distribution-type=bin
