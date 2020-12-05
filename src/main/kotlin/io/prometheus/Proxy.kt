@@ -45,7 +45,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.milliseconds
 
-@Version(version = "1.8.7", date = "11/22/20")
+@Version(version = "1.8.7", date = "12/4/20")
 class Proxy(val options: ProxyOptions,
             proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",
