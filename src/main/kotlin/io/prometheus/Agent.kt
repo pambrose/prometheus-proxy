@@ -38,6 +38,7 @@ import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.getVersionDesc
+import io.prometheus.prometheus_proxy.BuildConfig
 import kotlinx.coroutines.*
 import mu.KLogging
 import java.util.concurrent.CountDownLatch
@@ -50,7 +51,7 @@ import kotlin.time.TimeSource.Monotonic
 import kotlin.time.milliseconds
 import kotlin.time.seconds
 
-@Version(version = "1.8.8", date = "12/4/20")
+@Version(version = BuildConfig.APP_VERSION, date = BuildConfig.APP_RELEASE_DATE)
 class Agent(val options: AgentOptions,
             inProcessServerName: String = "",
             testMode: Boolean = false,
