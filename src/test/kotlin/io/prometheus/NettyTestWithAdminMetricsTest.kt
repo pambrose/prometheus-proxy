@@ -44,7 +44,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agen
   fun adminDebugCallsTest() {
     runBlocking {
       withHttpClient {
-        get("8093/debug".addPrefix()) { response ->
+        get("8093/debug".withPrefix()) { response ->
           val body = response.readText()
           body.length shouldBeGreaterThan 100
           response.status shouldBeEqualTo HttpStatusCode.OK
@@ -52,7 +52,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agen
       }
 
       withHttpClient {
-        get("8092/debug".addPrefix()) { response ->
+        get("8092/debug".withPrefix()) { response ->
           val body = response.readText()
           body.length shouldBeGreaterThan 100
           response.status shouldBeEqualTo HttpStatusCode.OK

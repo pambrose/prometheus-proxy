@@ -91,9 +91,9 @@ internal object ProxyTests : KLogging() {
     }
 
     delay(2.seconds) // Give http server a chance to start
-    pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".addPrefix())
+    pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
 
-    blockingGet("$PROXY_PORT/$proxyPath".addPrefix()) { response ->
+    blockingGet("$PROXY_PORT/$proxyPath".withPrefix()) { response ->
       response.status shouldBeEqualTo HttpStatusCode.RequestTimeout
     }
 
@@ -166,7 +166,7 @@ internal object ProxyTests : KLogging() {
     logger.debug { "Registering paths" }
     repeat(args.pathCount) { i ->
       val index = httpServers.size.random()
-      args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".addPrefix())
+      args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".withPrefix())
       pathMap[i] = index
     }
 
@@ -260,7 +260,7 @@ internal object ProxyTests : KLogging() {
     httpIndex.shouldNotBeNull()
 
     withHttpClient(httpClient) {
-      get("$PROXY_PORT/proxy-$index".addPrefix()) { response ->
+      get("$PROXY_PORT/proxy-$index".withPrefix()) { response ->
         val body = response.readText()
         body shouldBeEqualTo contentMap[httpIndex]
         response.status shouldBeEqualTo HttpStatusCode.OK

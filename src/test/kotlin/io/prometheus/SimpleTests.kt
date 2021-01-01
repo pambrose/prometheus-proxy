@@ -19,7 +19,7 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.ktor.http.HttpStatusCode
+import io.ktor.http.*
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import kotlinx.coroutines.Dispatchers
@@ -37,14 +37,14 @@ internal object SimpleTests : KLogging() {
 
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
-    blockingGet("$PROXY_PORT/".addPrefix()) { response ->
+    blockingGet("$PROXY_PORT/".withPrefix()) { response ->
       response.status shouldBeEqualTo HttpStatusCode.NotFound
     }
   }
 
   fun invalidPathTest(caller: String) {
     logger.debug { "Calling invalidPathTest() from $caller" }
-    blockingGet("$PROXY_PORT/invalid_path".addPrefix()) { response ->
+    blockingGet("$PROXY_PORT/invalid_path".withPrefix()) { response ->
       response.status shouldBeEqualTo HttpStatusCode.NotFound
     }
   }
@@ -59,7 +59,7 @@ internal object SimpleTests : KLogging() {
     repeat(TestConstants.REPS) { i ->
       val path = "test-$i"
       pathManager.let { manager ->
-        manager.registerPath(path, "$PROXY_PORT/$path".addPrefix())
+        manager.registerPath(path, "$PROXY_PORT/$path".withPrefix())
         cnt++
         manager.pathMapSize() shouldBeEqualTo originalSize + cnt
         manager.unregisterPath(path)
@@ -72,8 +72,8 @@ internal object SimpleTests : KLogging() {
   suspend fun invalidAgentUrlTest(pathManager: AgentPathManager, caller: String, badPath: String = "badPath") {
     logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
-    pathManager.registerPath(badPath, "33/metrics".addPrefix())
-    blockingGet("$PROXY_PORT/$badPath".addPrefix()) { response ->
+    pathManager.registerPath(badPath, "33/metrics".withPrefix())
+    blockingGet("$PROXY_PORT/$badPath".withPrefix()) { response ->
       response.status shouldBeEqualTo HttpStatusCode.NotFound
     }
     pathManager.unregisterPath(badPath)
@@ -92,7 +92,7 @@ internal object SimpleTests : KLogging() {
         List(TestConstants.REPS) { i ->
           launch(Dispatchers.Default + exceptionHandler(logger)) {
             val path = "test-$i}"
-            val url = "$PROXY_PORT/$path".addPrefix()
+            val url = "$PROXY_PORT/$path".withPrefix()
             mutex.withLock { paths += path }
             pathManager.registerPath(path, url)
           }
