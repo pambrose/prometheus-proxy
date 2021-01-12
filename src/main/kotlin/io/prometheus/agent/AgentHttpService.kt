@@ -74,7 +74,10 @@ internal class AgentHttpService(val agent: Agent) {
           val timeout = agent.configVals.agent.internal.cioTimeoutSecs.seconds
           CIO.create { requestTimeout = timeout.toLongMilliseconds() }
             .use { engine ->
-              HttpClient(engine) { install(HttpTimeout) }
+              HttpClient(engine) {
+                expectSuccess = false
+                install(HttpTimeout)
+              }
                 .use { client ->
                   client.get(url,
                              {
