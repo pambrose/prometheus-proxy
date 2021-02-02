@@ -159,6 +159,7 @@ class Proxy(val options: ProxyOptions,
                      agentContextManager.agentContextMap.entries
                        .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
                        .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
+                       .toMutableList()
                    if (vals.isEmpty()) {
                      HealthCheck.Result.healthy()
                    }
