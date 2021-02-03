@@ -78,7 +78,7 @@ dependencies {
 buildConfig {
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"12/12/20\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"2/3/21\"")
 }
 
 /*
