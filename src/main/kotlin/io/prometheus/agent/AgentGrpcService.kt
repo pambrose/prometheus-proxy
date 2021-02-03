@@ -129,6 +129,7 @@ internal class AgentGrpcService(internal val agent: Agent,
     channel =
       channel(hostName = hostName,
               port = port,
+              enableRetry = true,
               tlsContext = tlsContext,
               overrideAuthority = agent.options.overrideAuthority,
               inProcessServerName = inProcessServerName) {

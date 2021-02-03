@@ -27,7 +27,7 @@ import kotlin.time.seconds
 
 class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
 
-  constructor(args: List<String>) : this(Iterables.toArray<String>(args, String::class.java))
+  constructor(args: List<String>) : this(Iterables.toArray<String>(args.toMutableList(), String::class.java))
 
   @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
   var proxyHttpPort = -1

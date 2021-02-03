@@ -92,7 +92,5 @@ fun exceptionHandler(logger: KLogger) =
       logger.warn(e) { "CoroutineExceptionHandler caught: $e" }
   }
 
-fun String.addPrefix(): String {
-  val prefix = "http://localhost:"
-  return if (this.startsWith(prefix)) this else (prefix + this)
-}
+fun String.withPrefix(prefix: String = "http://localhost:") =
+  if (this.startsWith(prefix)) this else (prefix + this)

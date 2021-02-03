@@ -39,7 +39,7 @@ class AdminEmptyPathTest {
         admin.port shouldBeEqualTo 8098
         admin.pingPath shouldBeEqualTo ""
 
-        blockingGet("${admin.port}/${admin.pingPath}".addPrefix()) { response ->
+        blockingGet("${admin.port}/${admin.pingPath}".withPrefix()) { response ->
           response.status shouldBeEqualTo HttpStatusCode.NotFound
         }
       }
@@ -52,7 +52,7 @@ class AdminEmptyPathTest {
         admin.port shouldBeEqualTo 8098
         admin.versionPath shouldBeEqualTo ""
 
-        blockingGet("${admin.port}/${admin.versionPath}".addPrefix()) { response ->
+        blockingGet("${admin.port}/${admin.versionPath}".withPrefix()) { response ->
           response.status shouldBeEqualTo HttpStatusCode.NotFound
         }
       }
@@ -64,7 +64,7 @@ class AdminEmptyPathTest {
       .also { admin ->
         admin.healthCheckPath shouldBeEqualTo ""
 
-        blockingGet("${admin.port}/${admin.healthCheckPath}".addPrefix()) { response ->
+        blockingGet("${admin.port}/${admin.healthCheckPath}".withPrefix()) { response ->
           response.status shouldBeEqualTo HttpStatusCode.NotFound
         }
       }
@@ -76,7 +76,7 @@ class AdminEmptyPathTest {
       .also { admin ->
         admin.threadDumpPath shouldBeEqualTo ""
 
-        blockingGet("${admin.port}/${admin.threadDumpPath}".addPrefix()) { response ->
+        blockingGet("${admin.port}/${admin.threadDumpPath}".withPrefix()) { response ->
           response.status shouldBeEqualTo HttpStatusCode.NotFound
         }
       }

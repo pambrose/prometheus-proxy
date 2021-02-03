@@ -30,7 +30,7 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
     BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
 
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
-      this(Iterables.toArray<String>(args, String::class.java), exitOnMissingConfig)
+      this(Iterables.toArray<String>(args.toMutableList(), String::class.java), exitOnMissingConfig)
 
   constructor(configFilename: String, exitOnMissingConfig: Boolean) :
       this(listOf("--config", configFilename), exitOnMissingConfig)

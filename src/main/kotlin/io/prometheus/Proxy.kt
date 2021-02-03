@@ -38,6 +38,7 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID
 import io.prometheus.common.getVersionDesc
+import io.prometheus.prometheus_proxy.BuildConfig
 import io.prometheus.proxy.*
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
@@ -45,7 +46,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.milliseconds
 
-@Version(version = "1.8.7", date = "12/4/20")
+@Version(version = BuildConfig.APP_VERSION, date = BuildConfig.APP_RELEASE_DATE)
 class Proxy(val options: ProxyOptions,
             proxyHttpPort: Int = options.proxyHttpPort,
             inProcessServerName: String = "",
@@ -158,6 +159,7 @@ class Proxy(val options: ProxyOptions,
                      agentContextManager.agentContextMap.entries
                        .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
                        .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
+                       .toMutableList()
                    if (vals.isEmpty()) {
                      HealthCheck.Result.healthy()
                    }
