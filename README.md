@@ -146,7 +146,7 @@ If you are running a JVM-based program, you can run with the agent embedded dire
 proxy:
 
 ```java
-EmbeddedAgentInfo agentInfo=startAsyncAgent("configFile.conf",true)
+EmbeddedAgentInfo agentInfo=startAsyncAgent("configFile.conf",true);
 ```
 
 ## Configuration
