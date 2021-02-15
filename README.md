@@ -137,18 +137,29 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     pambrose/prometheus-agent:1.9.0
 ```
 
-**Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure 
-to use `/app` as the base directory in the target for `--mount` options.
+**Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
+target for `--mount` options.
+
+## Embedded Agent Usage
+
+If you are running a JVM-based program, you can run with the agent embedded directly in your app and not use an external
+proxy:
+
+```java
+EmbeddedAgentInfo agentInfo=startAsyncAgent("configFile.conf",true)
+```
 
 ## Configuration
 
 The proxy and agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
 Highlights include:
-* support for files in three formats: Java properties, JSON, and a human-friendly JSON superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
+
+* support for files in three formats: Java properties, JSON, and a human-friendly JSON
+  superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
 * config files can be files or urls
 * config values can come from CLI options, environment vars, Java system properties, and/or config files.
 * config files can reference environment variables
-  
+
 All the proxy and agent properties are described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf).
 The only required argument is an agent config value, which should have an `agent.pathConfigs` value.
 
