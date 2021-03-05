@@ -90,7 +90,7 @@ internal object ProxyHttpConfig : KLogging() {
         call.respondWith("Test value", Plain, OK)
       }
       get("/*") {
-        call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
+        call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-store")
 
         val proxyConfigVals = proxy.configVals.proxy
         val path = call.request.path().drop(1)
@@ -188,7 +188,7 @@ internal object ProxyHttpConfig : KLogging() {
   private suspend fun ApplicationCall.respondWith(text: String,
                                                   contentType: ContentType = Plain,
                                                   status: HttpStatusCode = OK) {
-    response.header(HttpHeaders.CacheControl, "must-revalidate,no-cache,no-store")
+    response.header(HttpHeaders.CacheControl, "must-revalidate,no-store")
     response.status(status)
     respondText(text, contentType, status)
   }
