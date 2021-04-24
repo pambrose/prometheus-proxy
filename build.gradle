@@ -1,13 +1,13 @@
 plugins {
     id 'idea'
     id 'java'
-    id 'org.jetbrains.kotlin.jvm' version '1.4.30'
+    id 'org.jetbrains.kotlin.jvm' version '1.4.32'
     id 'com.google.protobuf' version '0.8.14'
     id "com.github.ben-manes.versions" version '0.38.0'
     id 'com.github.johnrengelman.shadow' version '6.1.0'
     id 'com.github.gmazzo.buildconfig' version '3.0.0'
     id 'jacoco'
-    id 'com.github.kt3k.coveralls' version '2.10.2'
+    id 'com.github.kt3k.coveralls' version '2.12.0'
 }
 
 group = 'io.prometheus'
