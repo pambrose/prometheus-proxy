@@ -22,7 +22,7 @@ import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Agent
-import io.prometheus.common.GrpcObjects.EMPTY_PATH
+import io.prometheus.common.GrpcObjects.EMPTY_PATH_MSG
 import mu.KLogging
 
 internal class AgentPathManager(private val agent: Agent) {
@@ -40,9 +40,9 @@ internal class AgentPathManager(private val agent: Agent) {
     agentConfigVals.pathConfigs
       .map {
         mapOf(
-            NAME to """"it.name""",
-            PATH to it.path,
-            URL to it.url
+          NAME to """"${it.name}"""",
+          PATH to it.path,
+          URL to it.url
         )
       }
       .onEach { logger.info { "Proxy path /${it[PATH]} will be assigned to ${it[URL]}" } }
@@ -58,18 +58,18 @@ internal class AgentPathManager(private val agent: Agent) {
     }
 
   suspend fun registerPath(pathVal: String, url: String) {
-    require(pathVal.isNotEmpty()) { EMPTY_PATH }
+    require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
     require(url.isNotEmpty()) { "Empty URL" }
 
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
-    val pathId = agent.grpcService.registerPathOnProxy(path)
+    val pathId = agent.grpcService.registerPathOnProxy(path).pathId
     if (!agent.isTestMode)
       logger.info { "Registered $url as /$path" }
     pathContextMap[path] = PathContext(pathId, path, url)
   }
 
   suspend fun unregisterPath(pathVal: String) {
-    require(pathVal.isNotEmpty()) { EMPTY_PATH }
+    require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
 
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
     agent.grpcService.unregisterPathOnProxy(path)

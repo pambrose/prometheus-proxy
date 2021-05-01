@@ -24,7 +24,7 @@ import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.*
 import mu.KLogging
-import kotlin.time.seconds
+import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
     BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
@@ -92,7 +92,7 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
 
         if (scrapeTimeoutSecs == -1)
           scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
-        logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+        logger.info { "scrapeTimeoutSecs: ${seconds(scrapeTimeoutSecs)}" }
 
         if (chunkContentSizeKbs == -1)
           chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
@@ -118,8 +118,8 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
         assignPrivateKeyFilePath(agentConfigVals.tls.privateKeyFilePath)
         assignTrustCertCollectionFilePath(agentConfigVals.tls.trustCertCollectionFilePath)
 
-        logger.info { "agent.internal.cioTimeoutSecs: ${agentConfigVals.internal.cioTimeoutSecs.seconds}" }
-        logger.info { "agent.scrapeTimeoutSecs: ${agentConfigVals.scrapeTimeoutSecs.seconds}" }
+        logger.info { "agent.internal.cioTimeoutSecs: ${seconds(agentConfigVals.internal.cioTimeoutSecs)}" }
+        logger.info { "agent.scrapeTimeoutSecs: ${seconds(agentConfigVals.scrapeTimeoutSecs)}" }
       }
   }
 

@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import kotlin.properties.Delegates.notNull
-import kotlin.time.seconds
+import kotlin.time.Duration.Companion.seconds
 
 open class CommonCompanion : KLogging() {
   protected var proxy: Proxy by notNull()
@@ -40,7 +40,7 @@ open class CommonCompanion : KLogging() {
       }
 
       launch(Dispatchers.Default + exceptionHandler(logger)) {
-        agent = agentSetup.invoke().apply { awaitInitialConnection(10.seconds) }
+        agent = agentSetup.invoke().apply { awaitInitialConnection(seconds(10)) }
       }
     }
 

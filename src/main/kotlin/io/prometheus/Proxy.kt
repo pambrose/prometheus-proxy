@@ -36,7 +36,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID
+import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.getVersionDesc
 import io.prometheus.prometheus_proxy.BuildConfig
 import io.prometheus.proxy.*
@@ -44,25 +44,24 @@ import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import kotlin.time.milliseconds
+import kotlin.time.Duration.Companion.milliseconds
 
 @Version(version = BuildConfig.APP_VERSION, date = BuildConfig.APP_RELEASE_DATE)
-class Proxy(val options: ProxyOptions,
-            proxyHttpPort: Int = options.proxyHttpPort,
-            inProcessServerName: String = "",
-            testMode: Boolean = false,
-            initBlock: (Proxy.() -> Unit)? = null) :
-    GenericService<ConfigVals>(options.configVals,
-                               newAdminConfig(options.adminEnabled,
-                                              options.adminPort,
-                                              options.configVals.proxy.admin),
-                               newMetricsConfig(options.metricsEnabled,
-                                                options.metricsPort,
-                                                options.configVals.proxy.metrics),
-                               newZipkinConfig(options.configVals.proxy.internal.zipkin),
-                               { getVersionDesc(true) },
-                               isTestMode = testMode) {
-
+class Proxy(
+  val options: ProxyOptions,
+  proxyHttpPort: Int = options.proxyHttpPort,
+  inProcessServerName: String = "",
+  testMode: Boolean = false,
+  initBlock: (Proxy.() -> Unit)? = null
+) :
+  GenericService<ConfigVals>(
+    options.configVals,
+    newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.proxy.admin),
+    newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.proxy.metrics),
+    newZipkinConfig(options.configVals.proxy.internal.zipkin),
+    { getVersionDesc(true) },
+    isTestMode = testMode
+  ) {
   private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort, isTestMode)
   private val recentActions: EvictingQueue<String> =
@@ -77,7 +76,7 @@ class Proxy(val options: ProxyOptions,
 
   internal val metrics by lazy { ProxyMetrics(this) }
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
-  internal val agentContextManager = AgentContextManager()
+  internal val agentContextManager = AgentContextManager(isTestMode)
   internal val scrapeRequestManager = ScrapeRequestManager()
 
   init {
@@ -102,10 +101,12 @@ class Proxy(val options: ProxyOptions,
         logger.info { "Adding /$DEBUG endpoint" }
         addServlet(DEBUG,
                    LambdaServlet {
-                     listOf(toPlainText(),
-                            pathManager.toPlainText(),
-                            if (recentActions.size > 0) "\n${recentActions.size} most recent requests:" else "",
-                            recentActions.reversed().joinToString("\n"))
+                     listOf(
+                       toPlainText(),
+                       pathManager.toPlainText(),
+                       if (recentActions.size > 0) "\n${recentActions.size} most recent requests:" else "",
+                       recentActions.reversed().joinToString("\n")
+                     )
                        .joinToString("\n")
                    })
       }
@@ -137,7 +138,7 @@ class Proxy(val options: ProxyOptions,
   override fun run() {
     runBlocking {
       while (isRunning)
-        delay(500.milliseconds)
+        delay(milliseconds(500))
     }
   }
 
@@ -146,37 +147,44 @@ class Proxy(val options: ProxyOptions,
     healthCheckRegistry
       .apply {
         register("grpc_service", grpcService.healthCheck)
-        register("chunking_map_check",
-                 newMapHealthCheck(agentContextManager.chunkedContextMap,
-                                   proxyConfigVals.chunkContextMapUnhealthySize))
-        register("scrape_response_map_check",
-                 newMapHealthCheck(scrapeRequestManager.scrapeRequestMap,
-                                   proxyConfigVals.scrapeRequestMapUnhealthySize))
-        register("agent_scrape_request_backlog",
-                 healthCheck {
-                   val unhealthySize = proxyConfigVals.scrapeRequestBacklogUnhealthySize
-                   val vals =
-                     agentContextManager.agentContextMap.entries
-                       .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
-                       .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
-                       .toMutableList()
-                   if (vals.isEmpty()) {
-                     HealthCheck.Result.healthy()
-                   }
-                   else {
-                     val s = Joiner.on(", ").join(vals)
-                     HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
-                   }
-                 })
+        register(
+          "chunking_map_check",
+          newMapHealthCheck(
+            agentContextManager.chunkedContextMap,
+            proxyConfigVals.chunkContextMapUnhealthySize
+          )
+        )
+        register(
+          "scrape_response_map_check",
+          newMapHealthCheck(
+            scrapeRequestManager.scrapeRequestMap,
+            proxyConfigVals.scrapeRequestMapUnhealthySize
+          )
+        )
+        register(
+          "agent_scrape_request_backlog",
+          healthCheck {
+            agentContextManager.agentContextMap.entries
+              .filter { it.value.scrapeRequestBacklogSize >= proxyConfigVals.scrapeRequestBacklogUnhealthySize }
+              .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
+              .let { vals ->
+                if (vals.isEmpty()) {
+                  HealthCheck.Result.healthy()
+                } else {
+                  val s = Joiner.on(", ").join(vals)
+                  HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
+                }
+              }
+          })
       }
   }
 
   // This is called on agent disconnects
-  internal fun removeAgentContext(agentId: String): AgentContext? {
-    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
+  internal fun removeAgentContext(agentId: String, reason: String): AgentContext? {
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
-    pathManager.removeFromPathManager(agentId)
-    return agentContextManager.removeFromContextManager(agentId)
+    pathManager.removeFromPathManager(agentId, reason)
+    return agentContextManager.removeFromContextManager(agentId, reason)
   }
 
   internal fun metrics(args: ProxyMetrics.() -> Unit) {

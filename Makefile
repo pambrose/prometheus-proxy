@@ -1,4 +1,4 @@
-VERSION=1.8.8
+VERSION=1.9.0
 
 default: compile
 
@@ -17,7 +17,7 @@ jars:
 	./gradlew agentJar proxyJar
 
 tests:
-	./gradlew --rerun-tasks check jacocoTestReport
+	./gradlew --rerun-tasks check
 
 config:
 	java -jar ./etc/jars/tscfg-0.9.98.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
@@ -63,4 +63,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=6.8.1 --distribution-type=bin
+	./gradlew wrapper --gradle-version=6.8.3 --distribution-type=bin

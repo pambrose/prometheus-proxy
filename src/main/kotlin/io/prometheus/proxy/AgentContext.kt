@@ -23,7 +23,6 @@ import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.receiveOrNull
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.TimeMark
@@ -41,8 +40,7 @@ internal class AgentContext(private val remoteAddr: String) {
   private var lastRequestTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var valid by atomicBoolean(true)
 
-  var launchId: String by nonNullableReference("Unassigned")
-    private set
+  private var launchId: String by nonNullableReference("Unassigned")
   var hostName: String by nonNullableReference("Unassigned")
     private set
   var agentName: String by nonNullableReference("Unassigned")
@@ -79,7 +77,7 @@ internal class AgentContext(private val remoteAddr: String) {
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
-    scrapeRequestChannel.receiveOrNull()
+    scrapeRequestChannel.receiveCatching().getOrNull()
       ?.apply {
         channelBacklogSize.decrementAndGet()
       }

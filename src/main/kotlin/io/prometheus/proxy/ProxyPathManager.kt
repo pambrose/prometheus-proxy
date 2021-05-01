@@ -22,8 +22,8 @@ import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Proxy
-import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID
-import io.prometheus.common.GrpcObjects.EMPTY_PATH
+import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
+import io.prometheus.common.GrpcObjects.EMPTY_PATH_MSG
 import io.prometheus.common.GrpcObjects.unregisterPathResponse
 import io.prometheus.grpc.UnregisterPathResponse
 import mu.KLogging
@@ -44,22 +44,20 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
     get() = pathMap.size
 
   fun addPath(path: String, agentContext: AgentContext) {
-    require(path.isNotEmpty()) { EMPTY_PATH }
+    require(path.isNotEmpty()) { EMPTY_PATH_MSG }
 
     synchronized(pathMap) {
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
         if (agentInfo.isNull()) {
           pathMap[path] = AgentContextInfo(true, mutableListOf(agentContext))
-        }
-        else {
+        } else {
           if (agentContext.consolidated != agentInfo.consolidated)
             logger.warn { "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.consolidated}" }
           else
             agentInfo.agentContexts += agentContext
         }
-      }
-      else {
+      } else {
         if (agentInfo.isNotNull()) logger.info { "Overwriting path /$path for ${agentInfo.agentContexts[0]}" }
         pathMap[path] = AgentContextInfo(false, mutableListOf(agentContext))
       }
@@ -69,8 +67,8 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
   }
 
   fun removePath(path: String, agentId: String): UnregisterPathResponse {
-    require(path.isNotEmpty()) { EMPTY_PATH }
-    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
+    require(path.isNotEmpty()) { EMPTY_PATH_MSG }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
     synchronized(pathMap) {
       val agentInfo = pathMap[path]
@@ -79,22 +77,19 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
           val msg = "Unable to remove path /$path - path not found"
           logger.error { msg }
           false to msg
-        }
-        else {
+        } else {
           val agentContext = agentInfo.agentContexts.firstOrNull { it.agentId == agentId }
           if (agentContext.isNull()) {
             val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
             val msg = "Unable to remove path /$path - invalid agentId: $agentId -- [$agentIds]"
             logger.error { msg }
             false to msg
-          }
-          else {
+          } else {
             if (agentInfo.consolidated && agentInfo.agentContexts.size > 1) {
               agentInfo.agentContexts.remove(agentContext)
               if (!isTestMode)
                 logger.info { "Removed element of path /$path for $agentInfo" }
-            }
-            else {
+            } else {
               pathMap.remove(path)
               if (!isTestMode)
                 logger.info { "Removed path /$path for $agentInfo" }
@@ -107,33 +102,31 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
   }
 
   // This is called on agent disconnects
-  fun removeFromPathManager(agentId: String) {
-    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
+  fun removeFromPathManager(agentId: String, reason: String) {
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
     if (agentContext.isNull()) {
-      logger.warn { "Missing agent context for agentId: $agentId" }
-      return
-    }
+      logger.warn { "Missing agent context for agentId: $agentId ($reason)" }
+    } else {
+      logger.info { "Removing paths for agentId: $agentId ($reason)" }
 
-    logger.info { "Removing paths for agentId: $agentId" }
-
-    synchronized(pathMap) {
-      pathMap.forEach { (k, v) ->
-        if (v.agentContexts.size == 1) {
-          if (v.agentContexts[0].agentId == agentId)
-            pathMap.remove(k)?.also {
-              if (!isTestMode)
-                logger.info { "Removed path /$k for $it" }
-            }
-            ?: logger.warn { "Missing ${agentContext.desc}path /$k for agentId: $agentId" }
-        }
-        else {
-          val removed = v.agentContexts.removeIf { it.agentId == agentId }
-          if (removed)
-            logger.info { "Removed path /$k for $agentContext" }
-          else
-            logger.warn { "Missing path /$k for agentId: $agentId" }
+      synchronized(pathMap) {
+        pathMap.forEach { (k, v) ->
+          if (v.agentContexts.size == 1) {
+            if (v.agentContexts[0].agentId == agentId)
+              pathMap.remove(k)
+                ?.also {
+                  if (!isTestMode)
+                    logger.info { "Removed path /$k for $it" }
+                } ?: logger.warn { "Missing ${agentContext.desc}path /$k for agentId: $agentId" }
+          } else {
+            val removed = v.agentContexts.removeIf { it.agentId == agentId }
+            if (removed)
+              logger.info { "Removed path /$k for $agentContext" }
+            else
+              logger.warn { "Missing path /$k for agentId: $agentId" }
+          }
         }
       }
     }
@@ -142,14 +135,13 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
   fun toPlainText() =
     if (pathMap.isEmpty()) {
       "No agents connected."
-    }
-    else {
+    } else {
       val maxPath = pathMap.keys.map { it.length }.maxOrNull() ?: 0
       "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
-      pathMap
-        .toSortedMap()
-        .map { c -> "/${c.key.padEnd(maxPath)} ${c.value.agentContexts.size} ${c.value}" }
-        .joinToString("\n\n")
+          pathMap
+            .toSortedMap()
+            .map { c -> "/${c.key.padEnd(maxPath)} ${c.value.agentContexts.size} ${c.value}" }
+            .joinToString("\n\n")
     }
 
   companion object : KLogging()

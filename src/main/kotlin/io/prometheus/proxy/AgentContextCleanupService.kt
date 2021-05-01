@@ -26,12 +26,13 @@ import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
 import mu.KLogging
-import kotlin.time.seconds
+import kotlin.time.Duration.Companion.seconds
 
-internal class AgentContextCleanupService(private val proxy: Proxy,
-                                          private val configVals: ConfigVals.Proxy2.Internal2,
-                                          initBlock: (AgentContextCleanupService.() -> Unit) = {}) :
-    GenericExecutionThreadService() {
+internal class AgentContextCleanupService(
+  private val proxy: Proxy,
+  private val configVals: ConfigVals.Proxy2.Internal2,
+  initBlock: (AgentContextCleanupService.() -> Unit) = {}
+) : GenericExecutionThreadService() {
 
   init {
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
@@ -39,15 +40,15 @@ internal class AgentContextCleanupService(private val proxy: Proxy,
   }
 
   override fun run() {
-    val maxInactivityTime = configVals.maxAgentInactivitySecs.seconds
-    val pauseTime = configVals.staleAgentCheckPauseSecs.seconds
+    val maxAgentInactivityTime = seconds(configVals.maxAgentInactivitySecs)
+    val pauseTime = seconds(configVals.staleAgentCheckPauseSecs)
     while (isRunning) {
       proxy.agentContextManager.agentContextMap
         .forEach { (agentId, agentContext) ->
           val inactivityDuration = agentContext.inactivityDuration
-          if (inactivityDuration > maxInactivityTime) {
+          if (inactivityDuration > maxAgentInactivityTime) {
             logger.info { "Evicting agent after $inactivityDuration of inactivity $agentContext" }
-            proxy.removeAgentContext(agentId)
+            proxy.removeAgentContext(agentId, "Eviction")
             proxy.metrics { agentEvictionCount.inc() }
           }
         }

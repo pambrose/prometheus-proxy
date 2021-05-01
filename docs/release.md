@@ -6,7 +6,7 @@
 
 3) Modify code
 
-4) Update the release date in Agent.kt and Proxy.kt
+4) Update the release date in `build.gradle`
 
 5) Verify tests run cleanly before merge with: `make tests`
 

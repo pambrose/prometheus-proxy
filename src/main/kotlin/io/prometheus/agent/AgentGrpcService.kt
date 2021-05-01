@@ -55,9 +55,11 @@ import java.util.concurrent.CountDownLatch
 import java.util.zip.CRC32
 import kotlin.properties.Delegates.notNull
 
-internal class AgentGrpcService(internal val agent: Agent,
-                                private val options: AgentOptions,
-                                private val inProcessServerName: String) {
+internal class AgentGrpcService(
+  internal val agent: Agent,
+  private val options: AgentOptions,
+  private val inProcessServerName: String
+) {
   private var grpcStarted by atomicBoolean(false)
   private var stub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub by notNull()
   private val tracing by lazy { agent.zipkinReporterService.newTracing("grpc_client") }
@@ -85,8 +87,7 @@ internal class AgentGrpcService(internal val agent: Agent,
       val vals = schemeStripped.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
       hostName = vals[0]
       port = Integer.valueOf(vals[1])
-    }
-    else {
+    } else {
       hostName = schemeStripped
       port = 50051
     }
@@ -94,13 +95,13 @@ internal class AgentGrpcService(internal val agent: Agent,
     tlsContext =
       agent.options.run {
         if (certChainFilePath.isNotEmpty()
-            || privateKeyFilePath.isNotEmpty()
-            || trustCertCollectionFilePath.isNotEmpty()
+          || privateKeyFilePath.isNotEmpty()
+          || trustCertCollectionFilePath.isNotEmpty()
         )
           buildClientTlsContext(
-              certChainFilePath = certChainFilePath,
-              privateKeyFilePath = privateKeyFilePath,
-              trustCertCollectionFilePath = trustCertCollectionFilePath
+            certChainFilePath = certChainFilePath,
+            privateKeyFilePath = privateKeyFilePath,
+            trustCertCollectionFilePath = trustCertCollectionFilePath
           )
         else
           PLAINTEXT_CONTEXT
@@ -127,18 +128,19 @@ internal class AgentGrpcService(internal val agent: Agent,
       grpcStarted = true
 
     channel =
-      channel(hostName = hostName,
-              port = port,
-              enableRetry = true,
-              tlsContext = tlsContext,
-              overrideAuthority = agent.options.overrideAuthority,
-              inProcessServerName = inProcessServerName) {
+      channel(
+        hostName = hostName,
+        port = port,
+        enableRetry = true,
+        tlsContext = tlsContext,
+        overrideAuthority = agent.options.overrideAuthority,
+        inProcessServerName = inProcessServerName
+      ) {
         if (agent.isZipkinEnabled)
           intercept(grpcTracing.newClientInterceptor())
       }
 
     val interceptors = listOf(AgentClientInterceptor(agent))
-
     stub = ProxyServiceGrpcKt.ProxyServiceCoroutineStub(ClientInterceptors.intercept(channel, interceptors))
   }
 
@@ -150,8 +152,7 @@ internal class AgentGrpcService(internal val agent: Agent,
       logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
       agent.metrics { connectCount.labels(agent.launchId, "success").inc() }
       true
-    }
-    catch (e: StatusRuntimeException) {
+    } catch (e: StatusRuntimeException) {
       agent.metrics { connectCount.labels(agent.launchId, "failure").inc() }
       logger.info { "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}" }
       false
@@ -159,11 +160,7 @@ internal class AgentGrpcService(internal val agent: Agent,
 
   suspend fun registerAgent(initialConnectionLatch: CountDownLatch) {
     val request =
-      newRegisterAgentRequest(agent.agentId,
-                              agent.launchId,
-                              agent.agentName,
-                              hostName,
-                              agent.options.consolidated)
+      newRegisterAgentRequest(agent.agentId, agent.launchId, agent.agentName, hostName, agent.options.consolidated)
     stub.registerAgent(request)
       .also { response ->
         agent.markMsgSent()
@@ -175,54 +172,46 @@ internal class AgentGrpcService(internal val agent: Agent,
 
   fun pathMapSize() =
     runBlocking {
-      val request = GrpcObjects.newPathMapSizeRequest(agent.agentId)
-      stub.pathMapSize(request)
+      stub.pathMapSize(GrpcObjects.newPathMapSizeRequest(agent.agentId))
         .run {
           agent.markMsgSent()
           pathCount
         }
     }
 
-  suspend fun registerPathOnProxy(path: String): Long {
-    val request = GrpcObjects.newRegisterPathRequest(agent.agentId, path)
-    return stub.registerPath(request)
-      .run {
-        agent.markMsgSent()
-        if (!valid)
-          throw RequestFailureException("registerPath() - $reason")
-        pathId
-      }
-  }
-
-  suspend fun unregisterPathOnProxy(path: String) {
-    val request = GrpcObjects.newUnregisterPathRequest(agent.agentId, path)
-    stub.unregisterPath(request)
+  suspend fun registerPathOnProxy(path: String) =
+    stub.registerPath(GrpcObjects.newRegisterPathRequest(agent.agentId, path))
       .apply {
         agent.markMsgSent()
         if (!valid)
-          throw RequestFailureException("unregisterPath() - $reason")
+          throw RequestFailureException("registerPathOnProxy() - $reason")
       }
-  }
+
+  suspend fun unregisterPathOnProxy(path: String) =
+    stub.unregisterPath(GrpcObjects.newUnregisterPathRequest(agent.agentId, path))
+      .apply {
+        agent.markMsgSent()
+        if (!valid)
+          throw RequestFailureException("unregisterPathOnProxy() - $reason")
+      }
 
   suspend fun sendHeartBeat() {
-    if (agent.agentId.isEmpty())
-      return
-    else {
-      try {
-        val request = GrpcObjects.newHeartBeatRequest(agent.agentId)
-        stub.sendHeartBeat(request)
-          .apply {
-            agent.markMsgSent()
-            if (!valid) {
-              logger.error { "AgentId ${agent.agentId} not found on proxy" }
-              throw StatusRuntimeException(Status.NOT_FOUND)
-            }
+    agent.agentId
+      .also { agentId ->
+        if (agentId.isNotEmpty())
+          try {
+            stub.sendHeartBeat(GrpcObjects.newHeartBeatRequest(agentId))
+              .apply {
+                agent.markMsgSent()
+                if (!valid) {
+                  logger.error { "AgentId $agentId not found on proxy" }
+                  throw StatusRuntimeException(Status.NOT_FOUND)
+                }
+              }
+          } catch (e: StatusRuntimeException) {
+            logger.error { "sendHeartBeat() failed ${e.status}" }
           }
       }
-      catch (e: StatusRuntimeException) {
-        logger.error { "Hearbeat failed ${e.status}" }
-      }
-    }
   }
 
   suspend fun readRequestsFromProxy(agentHttpService: AgentHttpService, connectionContext: AgentConnectionContext) {
@@ -239,10 +228,12 @@ internal class AgentGrpcService(internal val agent: Agent,
       }
   }
 
-  private suspend fun processScrapeResults(agent: Agent,
-                                           scrapeResultsChannel: Channel<ScrapeResults>,
-                                           nonChunkedChannel: Channel<ScrapeResponse>,
-                                           chunkedChannel: Channel<ChunkedScrapeResponse>) =
+  private suspend fun processScrapeResults(
+    agent: Agent,
+    scrapeResultsChannel: Channel<ScrapeResults>,
+    nonChunkedChannel: Channel<ScrapeResponse>,
+    chunkedChannel: Channel<ChunkedScrapeResponse>
+  ) =
     try {
       for (scrapeResults: ScrapeResults in scrapeResultsChannel) {
         val scrapeId = scrapeResults.scrapeId
@@ -251,17 +242,17 @@ internal class AgentGrpcService(internal val agent: Agent,
           logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.contentAsText.length}" }
           nonChunkedChannel.send(scrapeResults.toScrapeResponse())
           agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
-        }
-        else {
+        } else {
           val zipped = scrapeResults.contentAsZipped
-          logger.debug { "Comparing ${zipped.size} and ${options.chunkContentSizeKbs}" }
+          val chunkContentSize = options.chunkContentSizeKbs
 
-          if (zipped.size < options.chunkContentSizeKbs) {
+          logger.debug { "Comparing ${zipped.size} and $chunkContentSize" }
+
+          if (zipped.size < chunkContentSize) {
             logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
             nonChunkedChannel.send(scrapeResults.toScrapeResponse())
             agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
-          }
-          else {
+          } else {
             scrapeResults.toScrapeResponseHeader()
               .also {
                 logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapeId " }
@@ -272,7 +263,7 @@ internal class AgentGrpcService(internal val agent: Agent,
             var totalChunkCount = 0
             val checksum = CRC32()
             val bais = ByteArrayInputStream(zipped)
-            val buffer = ByteArray(options.chunkContentSizeKbs)
+            val buffer = ByteArray(chunkContentSize)
             var readByteCount: Int
 
             while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
@@ -299,8 +290,7 @@ internal class AgentGrpcService(internal val agent: Agent,
         agent.markMsgSent()
         agent.scrapeRequestBacklogSize.decrementAndGet()
       }
-    }
-    finally {
+    } finally {
       nonChunkedChannel.close()
       chunkedChannel.close()
     }

@@ -39,7 +39,7 @@ import java.io.IOException
 import java.net.URLDecoder
 import java.net.http.HttpConnectTimeoutException
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.time.seconds
+import kotlin.time.Duration.Companion.seconds
 
 internal class AgentHttpService(val agent: Agent) {
 
@@ -71,22 +71,23 @@ internal class AgentHttpService(val agent: Agent) {
 
         // Content is fetched here
         try {
-          val timeout = agent.configVals.agent.internal.cioTimeoutSecs.seconds
-          CIO.create { requestTimeout = timeout.toLongMilliseconds() }
+          val timeout = seconds(agent.configVals.agent.internal.cioTimeoutSecs)
+          CIO.create { requestTimeout = timeout.inWholeMilliseconds }
             .use { engine ->
               HttpClient(engine) {
                 expectSuccess = false
                 install(HttpTimeout)
               }
                 .use { client ->
-                  client.get(url,
-                             {
-                               val accept: String? = request.accept
-                               if (accept?.isNotEmpty() == true)
+                  client.get(
+                    url,
+                    {
+                      val accept: String? = request.accept
+                      if (accept?.isNotEmpty() == true)
                                  header(HttpHeaders.ACCEPT, accept)
-                               val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
+                      val scrapeTimeout = seconds(agent.options.scrapeTimeoutSecs)
                                logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
-                               timeout { requestTimeoutMillis = scrapeTimeout.toLongMilliseconds() }
+                      timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
                              },
                              getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
                 }
