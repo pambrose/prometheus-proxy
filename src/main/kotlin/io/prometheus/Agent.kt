@@ -118,7 +118,6 @@ class Agent(
   }
 
   override fun run() {
-
     fun exceptionHandler(name: String) =
       CoroutineExceptionHandler { _, e ->
         if (grpcService.agent.isRunning)

@@ -20,42 +20,46 @@ package io.prometheus.agent
 
 import com.github.pambrose.common.util.isNull
 import io.grpc.*
+import io.grpc.Metadata.ASCII_STRING_MARSHALLER
 import io.prometheus.Agent
-import io.prometheus.Proxy
-import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID
+import io.prometheus.Proxy.Companion.AGENT_ID_KEY
+import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
 import mu.KLogging
 
 internal class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
-  override fun <ReqT, RespT> interceptCall(method: MethodDescriptor<ReqT, RespT>,
-                                           callOptions: CallOptions,
-                                           next: Channel): ClientCall<ReqT, RespT> =
+  override fun <ReqT, RespT> interceptCall(
+    method: MethodDescriptor<ReqT, RespT>,
+    callOptions: CallOptions,
+    next: Channel
+  ): ClientCall<ReqT, RespT> =
   // final String methodName = method.getFullMethodName();
     // logger.info {"Intercepting {}", methodName);
     object :
-        ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-            agent.grpcService.channel.newCall(method, callOptions)) {
+      ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
+        agent.grpcService.channel.newCall(method, callOptions)
+      ) {
       override fun start(responseListener: Listener<RespT>, metadata: Metadata) {
         super.start(
-            object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
-              override fun onHeaders(headers: Metadata?) {
-                if (headers.isNull()) {
-                  logger.error { "Missing headers" }
-                }
-                else {
-                  // Grab agent_id from headers if not already assigned
-                  if (agent.agentId.isEmpty()) {
-                    headers.get(Metadata.Key.of(Proxy.AGENT_ID_KEY, Metadata.ASCII_STRING_MARSHALLER))?.also {
+          object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
+            override fun onHeaders(headers: Metadata?) {
+              if (headers.isNull()) {
+                logger.error { "Missing headers" }
+              } else {
+                // Grab agent_id from headers if not already assigned
+                if (agent.agentId.isEmpty()) {
+                  headers.get(Metadata.Key.of(AGENT_ID_KEY, ASCII_STRING_MARSHALLER))
+                    ?.also {
                       agent.agentId = it
-                      check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID }
+                      check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
                       logger.info { "Assigned agentId: $it to $agent" }
                     } ?: logger.error { "Headers missing AGENT_ID key" }
-                  }
                 }
-                super.onHeaders(headers)
               }
-            },
-            metadata
+              super.onHeaders(headers)
+            }
+          },
+          metadata
         )
       }
     }

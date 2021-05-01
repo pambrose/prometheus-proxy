@@ -36,7 +36,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID
+import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.getVersionDesc
 import io.prometheus.prometheus_proxy.BuildConfig
 import io.prometheus.proxy.*
@@ -164,25 +164,24 @@ class Proxy(
         register(
           "agent_scrape_request_backlog",
           healthCheck {
-            val unhealthySize = proxyConfigVals.scrapeRequestBacklogUnhealthySize
-            val vals =
-              agentContextManager.agentContextMap.entries
-                .filter { it.value.scrapeRequestBacklogSize >= unhealthySize }
-                .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
-                .toMutableList()
-            if (vals.isEmpty()) {
-              HealthCheck.Result.healthy()
-            } else {
-              val s = Joiner.on(", ").join(vals)
-              HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
-            }
-                 })
+            agentContextManager.agentContextMap.entries
+              .filter { it.value.scrapeRequestBacklogSize >= proxyConfigVals.scrapeRequestBacklogUnhealthySize }
+              .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
+              .let { vals ->
+                if (vals.isEmpty()) {
+                  HealthCheck.Result.healthy()
+                } else {
+                  val s = Joiner.on(", ").join(vals)
+                  HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
+                }
+              }
+          })
       }
   }
 
   // This is called on agent disconnects
   internal fun removeAgentContext(agentId: String): AgentContext? {
-    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID }
+    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
     pathManager.removeFromPathManager(agentId)
     return agentContextManager.removeFromContextManager(agentId)
