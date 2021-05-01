@@ -8,12 +8,12 @@ jdk:
 before_script:
   - chmod +x gradlew
 
-script:
-  - ./gradlew check jacocoTestReport
+#script:
+#  - ./gradlew check jacocoTestReport
 
-after_success:
-  - bash <(curl -s https://codecov.io/bash)
-  - ./gradlew jacocoTestReport coveralls
+#after_success:
+#  - bash <(curl -s https://codecov.io/bash)
+#  - ./gradlew jacocoTestReport coveralls
 
 notifications:
   email:
