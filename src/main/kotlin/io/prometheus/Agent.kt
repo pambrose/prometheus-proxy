@@ -215,8 +215,10 @@ class Agent(
 
       while (isRunning && connectionContext.connected) {
         val timeSinceLastWrite = lastMsgSentMark.elapsedNow()
-        if (timeSinceLastWrite > maxInactivityTime)
+        if (timeSinceLastWrite > maxInactivityTime) {
+          logger.debug { "Sending heartbeat" }
           grpcService.sendHeartBeat()
+        }
         delay(heartbeatPauseTime)
       }
       logger.info { "Heartbeat completed" }

@@ -76,7 +76,7 @@ class Proxy(
 
   internal val metrics by lazy { ProxyMetrics(this) }
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
-  internal val agentContextManager = AgentContextManager()
+  internal val agentContextManager = AgentContextManager(isTestMode)
   internal val scrapeRequestManager = ScrapeRequestManager()
 
   init {
@@ -180,11 +180,11 @@ class Proxy(
   }
 
   // This is called on agent disconnects
-  internal fun removeAgentContext(agentId: String): AgentContext? {
+  internal fun removeAgentContext(agentId: String, reason: String): AgentContext? {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
-    pathManager.removeFromPathManager(agentId)
-    return agentContextManager.removeFromContextManager(agentId)
+    pathManager.removeFromPathManager(agentId, reason)
+    return agentContextManager.removeFromContextManager(agentId, reason)
   }
 
   internal fun metrics(args: ProxyMetrics.() -> Unit) {

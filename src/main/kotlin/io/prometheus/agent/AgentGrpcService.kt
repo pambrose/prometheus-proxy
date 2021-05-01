@@ -184,7 +184,7 @@ internal class AgentGrpcService(
       .apply {
         agent.markMsgSent()
         if (!valid)
-          throw RequestFailureException("registerPath() - $reason")
+          throw RequestFailureException("registerPathOnProxy() - $reason")
       }
 
   suspend fun unregisterPathOnProxy(path: String) =
@@ -192,7 +192,7 @@ internal class AgentGrpcService(
       .apply {
         agent.markMsgSent()
         if (!valid)
-          throw RequestFailureException("unregisterPath() - $reason")
+          throw RequestFailureException("unregisterPathOnProxy() - $reason")
       }
 
   suspend fun sendHeartBeat() {
@@ -209,7 +209,7 @@ internal class AgentGrpcService(
                 }
               }
           } catch (e: StatusRuntimeException) {
-            logger.error { "Hearbeat failed ${e.status}" }
+            logger.error { "sendHeartBeat() failed ${e.status}" }
           }
       }
   }

@@ -40,9 +40,9 @@ internal class AgentPathManager(private val agent: Agent) {
     agentConfigVals.pathConfigs
       .map {
         mapOf(
-            NAME to """"it.name""",
-            PATH to it.path,
-            URL to it.url
+          NAME to """"${it.name}"""",
+          PATH to it.path,
+          URL to it.url
         )
       }
       .onEach { logger.info { "Proxy path /${it[PATH]} will be assigned to ${it[URL]}" } }

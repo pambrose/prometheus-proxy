@@ -143,14 +143,15 @@ internal object ProxyTests : KLogging() {
         repeat(len) { builder.append(s + "${it}\n") }
         contentMap[i] = builder.toString()
 
-        HttpServerWrapper(port = port,
-                          server = embeddedServer(CIO, port = port) {
-                            routing {
-                              get("/agent-$i") {
-                                call.respondText(contentMap[i]!!, Text.Plain)
-                              }
-                            }
-                          })
+        HttpServerWrapper(
+          port = port,
+          server = embeddedServer(CIO, port = port) {
+            routing {
+              get("/agent-$i") {
+                call.respondText(contentMap[i]!!, Text.Plain)
+              }
+            }
+          })
       }
 
     logger.debug { "Starting ${args.httpServerCount} httpServers" }

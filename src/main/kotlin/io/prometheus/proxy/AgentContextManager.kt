@@ -23,7 +23,7 @@ import com.google.common.collect.Maps.newConcurrentMap
 import mu.KLogging
 import java.util.concurrent.ConcurrentMap
 
-internal class AgentContextManager {
+internal class AgentContextManager(private val isTestMode: Boolean) {
   // Map agent_id to AgentContext
   val agentContextMap: ConcurrentMap<String, AgentContext> = newConcurrentMap()
   val agentContextSize: Int get() = agentContextMap.size
@@ -41,13 +41,14 @@ internal class AgentContextManager {
 
   fun getAgentContext(agentId: String) = agentContextMap[agentId]
 
-  fun removeFromContextManager(agentId: String): AgentContext? =
+  fun removeFromContextManager(agentId: String, reason: String): AgentContext? =
     agentContextMap.remove(agentId)
       .let { agentContext ->
         if (agentContext.isNull())
-          logger.error { "Missing AgentContext for agentId: $agentId" }
+          logger.warn { "Missing AgentContext for agentId: $agentId ($reason)" }
         else {
-          logger.debug { "Removed $agentContext" }
+          if (!isTestMode)
+            logger.info { "Removed AgentContext $agentContext for agentId: $agentId ($reason)" }
           agentContext.invalidate()
         }
         agentContext

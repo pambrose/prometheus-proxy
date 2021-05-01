@@ -102,32 +102,31 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
   }
 
   // This is called on agent disconnects
-  fun removeFromPathManager(agentId: String) {
+  fun removeFromPathManager(agentId: String, reason: String) {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
     if (agentContext.isNull()) {
-      logger.warn { "Missing agent context for agentId: $agentId" }
-      return
-    }
+      logger.warn { "Missing agent context for agentId: $agentId ($reason)" }
+    } else {
+      logger.info { "Removing paths for agentId: $agentId ($reason)" }
 
-    logger.info { "Removing paths for agentId: $agentId" }
-
-    synchronized(pathMap) {
-      pathMap.forEach { (k, v) ->
-        if (v.agentContexts.size == 1) {
-          if (v.agentContexts[0].agentId == agentId)
-            pathMap.remove(k)?.also {
-              if (!isTestMode)
-                logger.info { "Removed path /$k for $it" }
-            }
-              ?: logger.warn { "Missing ${agentContext.desc}path /$k for agentId: $agentId" }
-        } else {
-          val removed = v.agentContexts.removeIf { it.agentId == agentId }
-          if (removed)
-            logger.info { "Removed path /$k for $agentContext" }
-          else
-            logger.warn { "Missing path /$k for agentId: $agentId" }
+      synchronized(pathMap) {
+        pathMap.forEach { (k, v) ->
+          if (v.agentContexts.size == 1) {
+            if (v.agentContexts[0].agentId == agentId)
+              pathMap.remove(k)
+                ?.also {
+                  if (!isTestMode)
+                    logger.info { "Removed path /$k for $it" }
+                } ?: logger.warn { "Missing ${agentContext.desc}path /$k for agentId: $agentId" }
+          } else {
+            val removed = v.agentContexts.removeIf { it.agentId == agentId }
+            if (removed)
+              logger.info { "Removed path /$k for $agentContext" }
+            else
+              logger.warn { "Missing path /$k for agentId: $agentId" }
+          }
         }
       }
     }

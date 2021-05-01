@@ -151,9 +151,9 @@ target for `--mount` options.
 ## Embedded Agent Usage
 
 If you are running a JVM-based program, you can run with the agent embedded directly in your app and not use an external
-proxy:
+agent:
 
-```
+```Java
 EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
 ```
 
