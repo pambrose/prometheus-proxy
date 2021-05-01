@@ -32,7 +32,7 @@ internal class AgentContextManager {
   val chunkedContextMap: ConcurrentMap<Long, ChunkedContext> = newConcurrentMap()
   val chunkedContextSize: Int get() = chunkedContextMap.size
 
-  val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.map { it.scrapeRequestBacklogSize }.sum()
+  val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.sumOf { it.scrapeRequestBacklogSize }
 
   fun addAgentContext(agentContext: AgentContext): AgentContext? {
     logger.debug { "Registering agentId: ${agentContext.agentId}" }

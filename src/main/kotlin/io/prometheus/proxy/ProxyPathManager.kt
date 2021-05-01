@@ -51,15 +51,13 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
       if (agentContext.consolidated) {
         if (agentInfo.isNull()) {
           pathMap[path] = AgentContextInfo(true, mutableListOf(agentContext))
-        }
-        else {
+        } else {
           if (agentContext.consolidated != agentInfo.consolidated)
             logger.warn { "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.consolidated}" }
           else
             agentInfo.agentContexts += agentContext
         }
-      }
-      else {
+      } else {
         if (agentInfo.isNotNull()) logger.info { "Overwriting path /$path for ${agentInfo.agentContexts[0]}" }
         pathMap[path] = AgentContextInfo(false, mutableListOf(agentContext))
       }
@@ -79,22 +77,19 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
           val msg = "Unable to remove path /$path - path not found"
           logger.error { msg }
           false to msg
-        }
-        else {
+        } else {
           val agentContext = agentInfo.agentContexts.firstOrNull { it.agentId == agentId }
           if (agentContext.isNull()) {
             val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
             val msg = "Unable to remove path /$path - invalid agentId: $agentId -- [$agentIds]"
             logger.error { msg }
             false to msg
-          }
-          else {
+          } else {
             if (agentInfo.consolidated && agentInfo.agentContexts.size > 1) {
               agentInfo.agentContexts.remove(agentContext)
               if (!isTestMode)
                 logger.info { "Removed element of path /$path for $agentInfo" }
-            }
-            else {
+            } else {
               pathMap.remove(path)
               if (!isTestMode)
                 logger.info { "Removed path /$path for $agentInfo" }
@@ -126,9 +121,8 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
               if (!isTestMode)
                 logger.info { "Removed path /$k for $it" }
             }
-            ?: logger.warn { "Missing ${agentContext.desc}path /$k for agentId: $agentId" }
-        }
-        else {
+              ?: logger.warn { "Missing ${agentContext.desc}path /$k for agentId: $agentId" }
+        } else {
           val removed = v.agentContexts.removeIf { it.agentId == agentId }
           if (removed)
             logger.info { "Removed path /$k for $agentContext" }
@@ -142,14 +136,13 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
   fun toPlainText() =
     if (pathMap.isEmpty()) {
       "No agents connected."
-    }
-    else {
+    } else {
       val maxPath = pathMap.keys.map { it.length }.maxOrNull() ?: 0
       "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
-      pathMap
-        .toSortedMap()
-        .map { c -> "/${c.key.padEnd(maxPath)} ${c.value.agentContexts.size} ${c.value}" }
-        .joinToString("\n\n")
+          pathMap
+            .toSortedMap()
+            .map { c -> "/${c.key.padEnd(maxPath)} ${c.value.agentContexts.size} ${c.value}" }
+            .joinToString("\n\n")
     }
 
   companion object : KLogging()

@@ -43,8 +43,7 @@ internal class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportF
   override fun transportTerminated(attributes: Attributes?) {
     if (attributes.isNull()) {
       logger.error { "Null attributes" }
-    }
-    else {
+    } else {
       attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { agentId ->
         val context = proxy.removeAgentContext(agentId)
         logger.info { "Disconnected ${if (context.isNotNull()) "from $context" else "with invalid agentId: $agentId"}" }

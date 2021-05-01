@@ -29,6 +29,7 @@ import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
+import java.util.*
 import kotlin.properties.Delegates.notNull
 import kotlin.system.exitProcess
 
@@ -171,11 +172,13 @@ abstract class BaseOptions protected constructor(private val progName: String,
 
   private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
     config =
-      readConfig(if (configSource.isNotEmpty()) configSource else System.getenv(envConfig).orEmpty(),
-                 envConfig,
-                 ConfigParseOptions.defaults().setAllowMissing(false),
-                 ConfigFactory.load().resolve(),
-                 exitOnMissingConfig)
+      readConfig(
+        configSource.ifEmpty { System.getenv(envConfig).orEmpty() },
+        envConfig,
+        ConfigParseOptions.defaults().setAllowMissing(false),
+        ConfigFactory.load().resolve(),
+        exitOnMissingConfig
+      )
         .resolve(ConfigResolveOptions.defaults())
         .resolve()
 
@@ -196,11 +199,14 @@ abstract class BaseOptions protected constructor(private val progName: String,
                          fallback: Config,
                          exitOnMissingConfig: Boolean): Config {
 
-    fun String.isUrlPrefix() = toLowerCase().startsWith(HTTP_PREFIX) || toLowerCase().startsWith(HTTPS_PREFIX)
+    fun String.isUrlPrefix() =
+      lowercase(Locale.getDefault()).startsWith(HTTP_PREFIX) || lowercase(Locale.getDefault()).startsWith(HTTPS_PREFIX)
 
-    fun String.isJsonSuffix() = toLowerCase().endsWith(".json") || toLowerCase().endsWith(".jsn")
+    fun String.isJsonSuffix() =
+      lowercase(Locale.getDefault()).endsWith(".json") || lowercase(Locale.getDefault()).endsWith(".jsn")
 
-    fun String.isPropertiesSuffix() = toLowerCase().endsWith(".properties") || toLowerCase().endsWith(".props")
+    fun String.isPropertiesSuffix() =
+      lowercase(Locale.getDefault()).endsWith(".properties") || lowercase(Locale.getDefault()).endsWith(".props")
 
     fun getConfigSyntax(configName: String) =
       when {

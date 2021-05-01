@@ -36,8 +36,8 @@ import kotlinx.coroutines.delay
 import mu.KLogging
 import org.slf4j.event.Level
 import kotlin.time.Duration
-import kotlin.time.milliseconds
-import kotlin.time.seconds
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 internal object ProxyHttpConfig : KLogging() {
 
@@ -86,7 +86,7 @@ internal object ProxyHttpConfig : KLogging() {
 
     routing {
       get("/__test__") {
-        delay(30.seconds)
+        delay(seconds(30))
         call.respondWith("Test value", Plain, OK)
       }
       get("/*") {
@@ -210,8 +210,8 @@ internal object ProxyHttpConfig : KLogging() {
 
     try {
       val proxyConfigVals = proxy.configVals.proxy
-      val timeoutTime = proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
-      val checkTime = proxyConfigVals.internal.scrapeRequestCheckMillis.milliseconds
+      val timeoutTime = seconds(proxyConfigVals.internal.scrapeRequestTimeoutSecs)
+      val checkTime = milliseconds(proxyConfigVals.internal.scrapeRequestCheckMillis)
 
       proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
       agentContext.writeScrapeRequest(scrapeRequest)
@@ -220,8 +220,9 @@ internal object ProxyHttpConfig : KLogging() {
       while (!scrapeRequest.suspendUntilComplete(checkTime)) {
         // Check if agent is disconnected or agent is hung
         if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
-          return ScrapeRequestResponse(statusCode = HttpStatusCode.ServiceUnavailable,
-                                       updateMsg = "timed_out",
+          return ScrapeRequestResponse(
+            statusCode = HttpStatusCode.ServiceUnavailable,
+            updateMsg = "timed_out",
                                        fetchDuration = scrapeRequest.ageDuration())
       }
     }

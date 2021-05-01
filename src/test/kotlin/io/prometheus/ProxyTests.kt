@@ -51,33 +51,38 @@ import org.amshove.kluent.shouldNotBeNull
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.set
-import kotlin.time.milliseconds
-import kotlin.time.minutes
-import kotlin.time.seconds
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
-class ProxyCallTestArgs(val agent: Agent,
-                        val httpServerCount: Int = HTTP_SERVER_COUNT,
-                        val pathCount: Int = PATH_COUNT,
-                        val sequentialQueryCount: Int = SEQUENTIAL_QUERY_COUNT,
-                        val parallelQueryCount: Int = PARALLEL_QUERY_COUNT,
-                        val startPort: Int = 9600,
-                        val caller: String)
+class ProxyCallTestArgs(
+  val agent: Agent,
+  val httpServerCount: Int = HTTP_SERVER_COUNT,
+  val pathCount: Int = PATH_COUNT,
+  val sequentialQueryCount: Int = SEQUENTIAL_QUERY_COUNT,
+  val parallelQueryCount: Int = PARALLEL_QUERY_COUNT,
+  val startPort: Int = 9600,
+  val caller: String
+)
 
 internal object ProxyTests : KLogging() {
 
-  suspend fun timeoutTest(pathManager: AgentPathManager,
-                          caller: String,
-                          agentPort: Int = 9900,
-                          agentPath: String = "agent-timeout",
-                          proxyPath: String = "proxy-timeout") {
+  suspend fun timeoutTest(
+    pathManager: AgentPathManager,
+    caller: String,
+    agentPort: Int = 9900,
+    agentPath: String = "agent-timeout",
+    proxyPath: String = "proxy-timeout"
+  ) {
     logger.debug { "Calling timeoutTest() from $caller" }
 
     val httpServer =
       embeddedServer(CIO, port = agentPort) {
         routing {
           get("/$agentPath") {
-            delay(60.seconds)
+            delay(seconds(60))
             call.respondText("This is never reached", Text.Plain)
+            error("This should not be reached")
           }
         }
       }
@@ -86,11 +91,11 @@ internal object ProxyTests : KLogging() {
       launch(Dispatchers.Default + exceptionHandler(logger)) {
         logger.info { "Starting httpServer" }
         httpServer.start()
-        //delay(5.seconds)
+        delay(seconds(5))
       }
     }
 
-    delay(2.seconds) // Give http server a chance to start
+    delay(seconds(2)) // Give http server a chance to start
     pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
 
     blockingGet("$PROXY_PORT/$proxyPath".withPrefix()) { response ->
@@ -102,8 +107,8 @@ internal object ProxyTests : KLogging() {
     coroutineScope {
       launch(Dispatchers.Default + exceptionHandler(logger)) {
         logger.info { "Stopping httpServer" }
-        httpServer.stop(5.seconds.toLongMilliseconds(), 5.seconds.toLongMilliseconds())
-        delay(6.seconds)
+        httpServer.stop(seconds(5).inWholeMilliseconds, seconds(5).inWholeMilliseconds)
+        delay(seconds(5))
       }
     }
   }
@@ -155,7 +160,7 @@ internal object ProxyTests : KLogging() {
         launch(Dispatchers.Default + exceptionHandler(logger)) {
           logger.info { "Starting httpServer listening on ${wrapper.port}" }
           wrapper.server.start()
-          delay(5.seconds)
+          delay(seconds(5))
         }
       }
     }
@@ -176,7 +181,7 @@ internal object ProxyTests : KLogging() {
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
     Executors.newSingleThreadExecutor().asCoroutineDispatcher()
       .use { dispatcher ->
-        withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
+        withTimeoutOrNull(minutes(1).inWholeMilliseconds) {
           httpClient { client ->
             val counter = AtomicInteger(0)
             repeat(args.sequentialQueryCount) { cnt ->
@@ -199,13 +204,13 @@ internal object ProxyTests : KLogging() {
     logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
     Executors.newFixedThreadPool(5).asCoroutineDispatcher()
       .use { dispatcher ->
-        withTimeoutOrNull(1.minutes.toLongMilliseconds()) {
+        withTimeoutOrNull(minutes(1).inWholeMilliseconds) {
           httpClient { client ->
             val counter = AtomicInteger(0)
             val jobs =
               List(args.parallelQueryCount) { cnt ->
                 launch(dispatcher + exceptionHandler(logger)) {
-                  delay((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random().milliseconds)
+                  delay(milliseconds((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random()))
                   callProxy(client, pathMap, "Parallel $cnt")
                   counter.incrementAndGet()
                 }
@@ -228,8 +233,7 @@ internal object ProxyTests : KLogging() {
       try {
         args.agent.pathManager.unregisterPath("proxy-${path.key}")
         counter.incrementAndGet()
-      }
-      catch (e: RequestFailureException) {
+      } catch (e: RequestFailureException) {
         errorCnt.incrementAndGet()
       }
     }
@@ -243,8 +247,8 @@ internal object ProxyTests : KLogging() {
       httpServers.forEach { httpServer ->
         launch(Dispatchers.Default + exceptionHandler(logger)) {
           logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
-          httpServer.server.stop(5.seconds.toLongMilliseconds(), 5.seconds.toLongMilliseconds())
-          delay(5.seconds)
+          httpServer.server.stop(seconds(5).inWholeMilliseconds, seconds(5).inWholeMilliseconds)
+          delay(seconds(5))
         }
       }
     }

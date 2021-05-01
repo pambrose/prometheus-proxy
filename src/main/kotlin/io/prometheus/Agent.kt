@@ -46,25 +46,26 @@ import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
-import kotlin.time.milliseconds
-import kotlin.time.seconds
 
 @Version(version = BuildConfig.APP_VERSION, date = BuildConfig.APP_RELEASE_DATE)
-class Agent(val options: AgentOptions,
-            inProcessServerName: String = "",
-            testMode: Boolean = false,
-            initBlock: (Agent.() -> Unit)? = null) :
-    GenericService<ConfigVals>(options.configVals,
-                               newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
-                               newMetricsConfig(options.metricsEnabled,
-                                                options.metricsPort,
-                                                options.configVals.agent.metrics),
-                               newZipkinConfig(options.configVals.agent.internal.zipkin),
-                               { getVersionDesc(true) },
-                               isTestMode = testMode) {
-
+class Agent(
+  val options: AgentOptions,
+  inProcessServerName: String = "",
+  testMode: Boolean = false,
+  initBlock: (Agent.() -> Unit)? = null
+) :
+  GenericService<ConfigVals>(
+    options.configVals,
+    newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
+    newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.agent.metrics),
+    newZipkinConfig(options.configVals.agent.internal.zipkin),
+    { getVersionDesc(true) },
+    isTestMode = testMode
+  ) {
   private val agentConfigVals = configVals.agent.internal
   private val clock = Monotonic
   private val agentHttpService = AgentHttpService(this)
@@ -74,7 +75,7 @@ class Agent(val options: AgentOptions,
   private val reconnectLimiter = RateLimiter.create(1.0 / agentConfigVals.reconnectPauseSecs).apply { acquire() }
   private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
-  internal val agentName = if (options.agentName.isBlank()) "Unnamed-${hostInfo.hostName}" else options.agentName
+  internal val agentName = options.agentName.ifBlank { "Unnamed-${hostInfo.hostName}" }
   internal val scrapeRequestBacklogSize = AtomicInteger(0)
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
@@ -100,8 +101,8 @@ class Agent(val options: AgentOptions,
     """.trimIndent()
 
     logger.info { "Agent name: $agentName" }
-    logger.info { "Proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
-    logger.info { "Scrape timeout time: ${options.scrapeTimeoutSecs.seconds}" }
+    logger.info { "Proxy reconnect pause time: ${seconds(agentConfigVals.reconnectPauseSecs)}" }
+    logger.info { "Scrape timeout time: ${seconds(options.scrapeTimeoutSecs)}" }
 
     initService {
       if (options.debugEnabled) {
@@ -121,10 +122,7 @@ class Agent(val options: AgentOptions,
     fun exceptionHandler(name: String) =
       CoroutineExceptionHandler { _, e ->
         if (grpcService.agent.isRunning)
-          Status.fromThrowable(e)
-            .apply {
-              logger.error { "Error in $name(): $code $description" }
-            }
+          Status.fromThrowable(e).apply { logger.error { "Error in $name(): $code $description" } }
       }
 
     suspend fun connectToProxy() {
@@ -177,22 +175,17 @@ class Agent(val options: AgentOptions,
         runBlocking {
           connectToProxy()
         }
-      }
-      catch (e: RequestFailureException) {
+      } catch (e: RequestFailureException) {
         logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
-      }
-      catch (e: StatusRuntimeException) {
+      } catch (e: StatusRuntimeException) {
         logger.info { "Disconnected from proxy at $proxyHost" }
-      }
-      catch (e: StatusException) {
+      } catch (e: StatusException) {
         logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
-      }
-      catch (e: Throwable) {
+      } catch (e: Throwable) {
         // Catch anything else to avoid exiting retry loop
         logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
-      }
-      finally {
-        logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
+      } finally {
+        logger.info { "Waited ${seconds(reconnectLimiter.acquire().roundToInt())} to reconnect" }
       }
     }
   }
@@ -207,18 +200,18 @@ class Agent(val options: AgentOptions,
   override fun registerHealthChecks() {
     super.registerHealthChecks()
     healthCheckRegistry.register(
-        "scrape_request_backlog_check",
-        newBacklogHealthCheck(
-            scrapeRequestBacklogSize.get(),
-            agentConfigVals.scrapeRequestBacklogUnhealthySize
-        )
+      "scrape_request_backlog_check",
+      newBacklogHealthCheck(
+        scrapeRequestBacklogSize.get(),
+        agentConfigVals.scrapeRequestBacklogUnhealthySize
+      )
     )
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) =
     if (agentConfigVals.heartbeatEnabled) {
-      val heartbeatPauseTime = agentConfigVals.heartbeatCheckPauseMillis.milliseconds
-      val maxInactivityTime = agentConfigVals.heartbeatMaxInactivitySecs.seconds
+      val heartbeatPauseTime = milliseconds(agentConfigVals.heartbeatCheckPauseMillis)
+      val maxInactivityTime = seconds(agentConfigVals.heartbeatMaxInactivitySecs)
       logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
 
       while (isRunning && connectionContext.connected) {
@@ -228,8 +221,7 @@ class Agent(val options: AgentOptions,
         delay(heartbeatPauseTime)
       }
       logger.info { "Heartbeat completed" }
-    }
-    else {
+    } else {
       logger.info { "Heartbeat disabled" }
     }
 
@@ -243,7 +235,7 @@ class Agent(val options: AgentOptions,
   }
 
   internal fun awaitInitialConnection(timeout: Duration) =
-    initialConnectionLatch.await(timeout.toLongMilliseconds(), MILLISECONDS)
+    initialConnectionLatch.await(timeout.inWholeMilliseconds, MILLISECONDS)
 
   internal fun metrics(args: AgentMetrics.() -> Unit) {
     if (isMetricsEnabled)
@@ -280,9 +272,11 @@ class Agent(val options: AgentOptions,
     }
 
     @JvmStatic
-    fun startAsyncAgent(configFilename: String,
-                        exitOnMissingConfig: Boolean,
-                        logBanner: Boolean = true): EmbeddedAgentInfo {
+    fun startAsyncAgent(
+      configFilename: String,
+      exitOnMissingConfig: Boolean,
+      logBanner: Boolean = true
+    ): EmbeddedAgentInfo {
       if (logBanner)
         logger.apply {
           info { getBanner("banners/agent.txt", this) }

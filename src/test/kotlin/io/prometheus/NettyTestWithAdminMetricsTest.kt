@@ -34,7 +34,7 @@ import org.amshove.kluent.shouldBeGreaterThan
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
-import kotlin.time.seconds
+import kotlin.time.Duration.Companion.seconds
 
 class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
                                                                     startPort = 10300,
@@ -81,7 +81,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agen
           },
           {
             // Wait long enough to trigger heartbeat for code coverage
-            sleep(15.seconds)
+            sleep(seconds(15))
           })
 
     @JvmStatic

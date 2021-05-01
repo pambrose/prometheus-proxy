@@ -31,24 +31,28 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.TimeSource.Monotonic
 
-internal class ScrapeRequestWrapper(val agentContext: AgentContext,
-                                    proxy: Proxy,
-                                    path: String,
-                                    encodedQueryParams: String,
-                                    accept: String?,
-                                    debugEnabled: Boolean) {
+internal class ScrapeRequestWrapper(
+  val agentContext: AgentContext,
+  proxy: Proxy,
+  path: String,
+  encodedQueryParams: String,
+  accept: String?,
+  debugEnabled: Boolean
+) {
   private val clock = Monotonic
   private val createTimeMark = clock.markNow()
   private val completeChannel = Channel<Boolean>()
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
   val scrapeRequest =
-    newScrapeRequest(agentContext.agentId,
-                     SCRAPE_ID_GENERATOR.getAndIncrement(),
-                     path,
-                     encodedQueryParams,
-                     accept,
-                     debugEnabled)
+    newScrapeRequest(
+      agentContext.agentId,
+      SCRAPE_ID_GENERATOR.getAndIncrement(),
+      path,
+      encodedQueryParams,
+      accept,
+      debugEnabled
+    )
 
   var scrapeResults: ScrapeResults by nonNullableReference()
 
@@ -63,13 +67,12 @@ internal class ScrapeRequestWrapper(val agentContext: AgentContext,
   }
 
   suspend fun suspendUntilComplete(waitMillis: Duration) =
-    withTimeoutOrNull(waitMillis.toLongMilliseconds()) {
+    withTimeoutOrNull(waitMillis.inWholeMilliseconds) {
       // completeChannel will eventually close and never get a value, or timeout
       try {
         completeChannel.receive()
         true
-      }
-      catch (e: ClosedReceiveChannelException) {
+      } catch (e: ClosedReceiveChannelException) {
         true
       }
     }.isNotNull()

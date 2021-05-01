@@ -35,7 +35,7 @@ import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
 import mu.KLogging
-import kotlin.time.seconds
+import kotlin.time.Duration.Companion.seconds
 
 internal class ProxyGrpcService(private val proxy: Proxy,
                                 private val port: Int = -1,
@@ -76,7 +76,7 @@ internal class ProxyGrpcService(private val proxy: Proxy,
         addTransportFilter(ProxyTransportFilter(proxy))
       }
 
-    grpcServer.shutdownWithJvm(2.seconds)
+    grpcServer.shutdownWithJvm(seconds(2))
 
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
   }
@@ -88,7 +88,7 @@ internal class ProxyGrpcService(private val proxy: Proxy,
   override fun shutDown() {
     if (proxy.isZipkinEnabled)
       tracing.close()
-    grpcServer.shutdownGracefully(2.seconds)
+    grpcServer.shutdownGracefully(seconds(2))
   }
 
   override fun toString() =

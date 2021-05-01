@@ -34,15 +34,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import mu.KLogging
+import java.util.*
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicLong
 
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
 
-  override suspend fun connectAgent(request: Empty): Empty {
-    proxy.metrics { connectCount.inc() }
-    return Empty.getDefaultInstance()
-  }
+  override suspend fun connectAgent(request: Empty): Empty =
+    proxy.metrics { connectCount.inc() }.let { Empty.getDefaultInstance() }
 
   override suspend fun registerAgent(request: RegisterAgentRequest): RegisterAgentResponse {
     val agentId = request.agentId
@@ -55,7 +54,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
         logger.info { "Connected to $this" }
       } ?: logger.info { "registerAgent() missing AgentContext agentId: $agentId" }
 
-    return newRegisterAgentResponse(agentId, valid, "Invalid agentId: $agentId")
+    return newRegisterAgentResponse(agentId, valid, "Invalid agentId: $agentId (registerAgent)")
   }
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
@@ -63,17 +62,19 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     val agentId = request.agentId
     var valid = false
 
-    proxy.agentContextManager.getAgentContext(agentId)?.apply {
+    proxy.agentContextManager.getAgentContext(agentId)
+      ?.apply {
+        valid = true
+        proxy.pathManager.addPath(path, this)
+        markActivityTime(false)
+      } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
 
-      valid = true
-      proxy.pathManager.addPath(path, this)
-      markActivityTime(false)
-    } ?: logger.error { "Missing AgentContext for agentId: $agentId" }
-
-    return newRegisterPathResponse(if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1,
-                                   valid,
-                                   "Invalid agentId: $agentId",
-                                   proxy.pathManager.pathMapSize)
+    return newRegisterPathResponse(
+      if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1,
+      valid,
+      "Invalid agentId: $agentId (registerPath)",
+      proxy.pathManager.pathMapSize
+    )
   }
 
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {
@@ -82,12 +83,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
 
     return if (agentContext.isNull()) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
-      unregisterPathResponse {
-        valid = false
-        reason = "Invalid agentId: $agentId"
-      }
-    }
-    else {
+      unregisterPathResponse { valid = false; reason = "Invalid agentId: $agentId (unregisterPath)" }
+    } else {
       proxy.pathManager.removePath(request.path, agentId).apply { agentContext.markActivityTime(false) }
     }
   }
@@ -99,8 +96,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     proxy.metrics { heartbeatCount.inc() }
     val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
     agentContext?.markActivityTime(false)
-    ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
-    return newHeartBeatResponse(agentContext.isNotNull(), "Invalid agentId: ${request.agentId}")
+      ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
+    return newHeartBeatResponse(agentContext.isNotNull(), "Invalid agentId: ${request.agentId} (sendHeartBeat)")
   }
 
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> {
@@ -119,8 +116,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
         val scrapeResults = response.toScrapeResults()
         proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
       }
-    }
-    catch (throwable: Throwable) {
+    } catch (throwable: Throwable) {
       if (proxy.isRunning)
         Status.fromThrowable(throwable)
           .also { arg ->
@@ -136,7 +132,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
       requests.collect { response ->
         val ooc = response.chunkOneOfCase
         val chunkedContextMap = proxy.agentContextManager.chunkedContextMap
-        when (ooc.name.toLowerCase()) {
+        when (ooc.name.lowercase(Locale.getDefault())) {
           "header" -> {
             val scrapeId = response.header.headerScrapeId
             logger.debug { "Reading header for scrapeId: $scrapeId}" }
@@ -164,8 +160,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
           else -> throw IllegalStateException("Invalid field name in writeChunkedResponsesToProxy()")
         }
       }
-    }
-    catch (throwable: Throwable) {
+    } catch (throwable: Throwable) {
       if (proxy.isRunning)
         Status.fromThrowable(throwable)
           .also { arg ->

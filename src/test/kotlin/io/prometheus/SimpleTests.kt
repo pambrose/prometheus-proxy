@@ -31,7 +31,7 @@ import mu.KLogging
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
-import kotlin.time.seconds
+import kotlin.time.Duration.Companion.seconds
 
 internal object SimpleTests : KLogging() {
 
@@ -86,7 +86,7 @@ internal object SimpleTests : KLogging() {
     // Take into account pre-existing paths already registered
     val originalSize = pathManager.pathMapSize()
 
-    withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
+    withTimeoutOrNull(seconds(30).inWholeMilliseconds) {
       val mutex = Mutex()
       val jobs =
         List(TestConstants.REPS) { i ->
@@ -108,7 +108,7 @@ internal object SimpleTests : KLogging() {
     paths.size shouldBeEqualTo TestConstants.REPS
     pathManager.pathMapSize() shouldBeEqualTo (originalSize + TestConstants.REPS)
 
-    withTimeoutOrNull(30.seconds.toLongMilliseconds()) {
+    withTimeoutOrNull(seconds(30).inWholeMilliseconds) {
       val jobs =
         List(paths.size) {
           launch(Dispatchers.Default + exceptionHandler(logger)) {

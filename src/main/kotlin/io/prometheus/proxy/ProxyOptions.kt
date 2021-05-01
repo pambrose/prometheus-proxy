@@ -23,7 +23,7 @@ import com.google.common.collect.Iterables
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.*
-import kotlin.time.seconds
+import kotlin.time.Duration.Companion.seconds
 
 class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
 
@@ -63,7 +63,7 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
         assignPrivateKeyFilePath(proxyConfigVals.tls.privateKeyFilePath)
         assignTrustCertCollectionFilePath(proxyConfigVals.tls.trustCertCollectionFilePath)
 
-        logger.info { "proxy.internal.scrapeRequestTimeoutSecs: ${proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds}" }
+        logger.info { "proxy.internal.scrapeRequestTimeoutSecs: ${seconds(proxyConfigVals.internal.scrapeRequestTimeoutSecs)}" }
       }
   }
 }

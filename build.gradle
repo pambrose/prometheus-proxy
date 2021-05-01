@@ -1,13 +1,14 @@
 plugins {
     id 'idea'
     id 'java'
-    id 'org.jetbrains.kotlin.jvm' version '1.4.32'
-    id 'com.google.protobuf' version '0.8.14'
+    id 'org.jetbrains.kotlin.jvm' version '1.5.0'
+    id 'com.google.protobuf' version '0.8.16'
     id "com.github.ben-manes.versions" version '0.38.0'
     id 'com.github.johnrengelman.shadow' version '6.1.0'
     id 'com.github.gmazzo.buildconfig' version '3.0.0'
-    id 'jacoco'
-    id 'com.github.kt3k.coveralls' version '2.12.0'
+    // Turn these of until jacoco fixes their kotlin 1.5.0 SMAP issue
+//    id 'jacoco'
+//    id 'com.github.kt3k.coveralls' version '2.12.0'
 }
 
 group = 'io.prometheus'
@@ -17,16 +18,16 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 repositories {
-    maven { url 'https://kotlin.bintray.com/ktor' }
-    maven { url 'https://kotlin.bintray.com/kotlinx' }
-    maven { url 'https://maven-central.storage-download.googleapis.com/repos/central/data/' }
-    jcenter()
+    maven { url = 'https://kotlin.bintray.com/ktor' }
+    maven { url = 'https://kotlin.bintray.com/kotlinx' }
+    maven { url = 'https://maven-central.storage-download.googleapis.com/repos/central/data/' }
+    mavenCentral()
     maven { url = 'https://jitpack.io' }
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    implementation "org.jetbrains.kotlin:kotlin-reflect"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
 
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
 
@@ -78,19 +79,8 @@ dependencies {
 buildConfig {
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"2/3/21\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"5/1/21\"")
 }
-
-/*
-sourceSets {
-  main.java.srcDirs += ['src/main/java']
-  main.kotlin.srcDirs += ['src/main/kotlin']
-  test.java.srcDirs += ['src/test/java']
-  test.kotlin.srcDirs += ['src/test/kotlin']
-  main.resources.srcDirs += ['src/main/resources']
-  test.resources.srcDirs += ['src/main/testresources']
-}
-*/
 
 compileKotlin.dependsOn ':generateProto'
 
@@ -171,24 +161,24 @@ artifacts {
 //archives javadocJar
 }
 
-jacocoTestReport {
-    reports {
-        xml.enabled true
-        html.enabled true
-    }
+//jacocoTestReport {
+//    reports {
+//        xml.enabled true
+//        html.enabled true
+//    }
+//
+//    afterEvaluate {
+//        getClassDirectories().setFrom(files(classDirectories.files.collect {
+//            fileTree(dir: it,
+//                    excludes: [
+//                            '**/ConfigVals*',
+//                            'io/prometheus/grpc/**'
+//                    ])
+//        }))
+//    }
+//}
 
-    afterEvaluate {
-        getClassDirectories().setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it,
-                    excludes: [
-                            '**/ConfigVals*',
-                            'io/prometheus/grpc/**'
-                    ])
-        }))
-    }
-}
-
-check.dependsOn jacocoTestReport
+//check.dependsOn jacocoTestReport
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
@@ -218,7 +208,7 @@ task proxyJar(type: Jar, dependsOn: shadowJar) {
 test {
     useJUnitPlatform()
 
-    finalizedBy jacocoTestReport
+//    finalizedBy jacocoTestReport
 
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
