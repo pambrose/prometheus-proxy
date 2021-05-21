@@ -6,7 +6,7 @@ plugins {
     id "com.github.ben-manes.versions" version '0.38.0'
     id 'com.github.johnrengelman.shadow' version '6.1.0'
     id 'com.github.gmazzo.buildconfig' version '3.0.0'
-    // Turn these of until jacoco fixes their kotlin 1.5.0 SMAP issue
+    // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
 //    id 'jacoco'
 //    id 'com.github.kt3k.coveralls' version '2.12.0'
 }
