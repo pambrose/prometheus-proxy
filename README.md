@@ -83,6 +83,8 @@ then the *prometheus.yml* scrape_config would target the three apps with:
 * http://mymachine.local:8080/app2_metrics
 * http://mymachine.local:8080/app3_metrics
 
+If the endpoints use basic auth, then include the credentials in the URL with: `http://user:pass@hostname/metrics`
+
 The `prometheus.yml` file would include:
 
 ```yaml
