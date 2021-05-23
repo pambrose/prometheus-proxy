@@ -19,13 +19,17 @@
 package io.prometheus.agent
 
 import com.github.pambrose.common.dsl.KtorDsl.get
+import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders
+import com.google.common.net.HttpHeaders.ACCEPT
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.features.*
+import io.ktor.client.features.auth.*
+import io.ktor.client.features.auth.providers.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -39,13 +43,16 @@ import java.io.IOException
 import java.net.URLDecoder
 import java.net.http.HttpConnectTimeoutException
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.text.Charsets.UTF_8
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentHttpService(val agent: Agent) {
 
   suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResults =
-    ScrapeResults(agentId = request.agentId,
-                  scrapeId = request.scrapeId).also { scrapeResults ->
+    ScrapeResults(
+      agentId = request.agentId,
+      scrapeId = request.scrapeId
+    ).also { scrapeResults ->
       val scrapeMsg = AtomicReference("")
       val path = request.path
       val encodedQueryParams = request.encodedQueryParams
@@ -56,14 +63,13 @@ internal class AgentHttpService(val agent: Agent) {
         scrapeMsg.set("invalid_path")
         if (request.debugEnabled)
           scrapeResults.setDebugInfo("None", "Invalid path: $path")
-      }
-      else {
+      } else {
         val requestTimer = if (agent.isMetricsEnabled) agent.startTimer(agent) else null
         // Add the incoming query params to the url
         val url = pathContext.url +
-                  (if (encodedQueryParams.isNotEmpty())
-                    "?${URLDecoder.decode(encodedQueryParams, Charsets.UTF_8.name())}"
-                  else "")
+            (if (encodedQueryParams.isNotEmpty())
+              "?${URLDecoder.decode(encodedQueryParams, UTF_8.name())}"
+            else "")
 
         logger.debug { "Fetching $pathContext" }
         if (encodedQueryParams.isNotEmpty())
@@ -77,71 +83,75 @@ internal class AgentHttpService(val agent: Agent) {
               HttpClient(engine) {
                 expectSuccess = false
                 install(HttpTimeout)
+
+                val urlObj = Url(url)
+                val user = urlObj.user
+                val passwd = urlObj.password
+                if (user.isNotNull() && passwd.isNotNull()) {
+                  install(Auth) {
+                    basic {
+                      username = user
+                      password = passwd
+                    }
+                  }
+                }
               }
                 .use { client ->
                   client.get(
                     url,
                     {
-                      val accept: String? = request.accept
-                      if (accept?.isNotEmpty() == true)
-                                 header(HttpHeaders.ACCEPT, accept)
+                      request.accept?.also { if (it.isNotEmpty()) header(ACCEPT, it) }
                       val scrapeTimeout = seconds(agent.options.scrapeTimeoutSecs)
-                               logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
+                      logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
                       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
-                             },
-                             getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled))
+                    },
+                    getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled)
+                  )
                 }
             }
-        }
-        catch (e: TimeoutCancellationException) {
+        } catch (e: TimeoutCancellationException) {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }
           scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
           scrapeResults.failureReason = e.message ?: e.simpleClassName
 
           if (request.debugEnabled)
             scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        }
-        catch (e: HttpConnectTimeoutException) {
+        } catch (e: HttpConnectTimeoutException) {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }
           scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
           scrapeResults.failureReason = e.message ?: e.simpleClassName
 
           if (request.debugEnabled)
             scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        }
-        catch (e: SocketTimeoutException) {
+        } catch (e: SocketTimeoutException) {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }
           scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
           scrapeResults.failureReason = e.message ?: e.simpleClassName
 
           if (request.debugEnabled)
             scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        }
-        catch (e: HttpRequestTimeoutException) {
+        } catch (e: HttpRequestTimeoutException) {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }
           scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
           scrapeResults.failureReason = e.message ?: e.simpleClassName
 
           if (request.debugEnabled)
             scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        }
-        catch (e: IOException) {
+        } catch (e: IOException) {
           logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
           scrapeResults.statusCode = HttpStatusCode.NotFound.value
           scrapeResults.failureReason = e.message ?: e.simpleClassName
 
           if (request.debugEnabled)
             scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        }
-        catch (e: Throwable) {
+        } catch (e: Throwable) {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }
           scrapeResults.failureReason = e.message ?: e.simpleClassName
           scrapeResults.statusCode = HttpStatusCode.ServiceUnavailable.value
 
           if (request.debugEnabled)
             scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        }
-        finally {
+        } finally {
           requestTimer?.observeDuration()
         }
       }
@@ -149,10 +159,12 @@ internal class AgentHttpService(val agent: Agent) {
       agent.updateScrapeCounter(agent, scrapeMsg.get())
     }
 
-  private fun getBlock(url: String,
-                       responseArg: ScrapeResults,
-                       scrapeCounterMsg: AtomicReference<String>,
-                       debugEnabled: Boolean): suspend (HttpResponse) -> Unit =
+  private fun getBlock(
+    url: String,
+    responseArg: ScrapeResults,
+    scrapeCounterMsg: AtomicReference<String>,
+    debugEnabled: Boolean
+  ): suspend (HttpResponse) -> Unit =
     { response ->
       responseArg.statusCode = response.status.value
 
@@ -171,8 +183,7 @@ internal class AgentHttpService(val agent: Agent) {
         if (debugEnabled)
           responseArg.setDebugInfo(url)
         scrapeCounterMsg.set("success")
-      }
-      else {
+      } else {
         if (debugEnabled)
           responseArg.setDebugInfo(url, "Unsuccessful response code ${responseArg.statusCode}")
         scrapeCounterMsg.set("unsuccessful")
