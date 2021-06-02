@@ -37,9 +37,11 @@ import io.prometheus.Proxy
 import mu.KLogging
 import kotlin.time.Duration.Companion.seconds
 
-internal class ProxyGrpcService(private val proxy: Proxy,
-                                private val port: Int = -1,
-                                private val inProcessName: String = "") : GenericIdleService() {
+internal class ProxyGrpcService(
+  private val proxy: Proxy,
+  private val port: Int = -1,
+  private val inProcessName: String = ""
+) : GenericIdleService() {
 
   val healthCheck =
     healthCheck {
@@ -58,16 +60,20 @@ internal class ProxyGrpcService(private val proxy: Proxy,
     val options = proxy.options
     val tlsContext =
       if (options.certChainFilePath.isNotEmpty() || options.privateKeyFilePath.isNotEmpty())
-        buildServerTlsContext(certChainFilePath = options.certChainFilePath,
-                              privateKeyFilePath = options.privateKeyFilePath,
-                              trustCertCollectionFilePath = options.trustCertCollectionFilePath)
+        buildServerTlsContext(
+          certChainFilePath = options.certChainFilePath,
+          privateKeyFilePath = options.privateKeyFilePath,
+          trustCertCollectionFilePath = options.trustCertCollectionFilePath
+        )
       else
         PLAINTEXT_CONTEXT
 
     grpcServer =
-      server(port = port,
-             tlsContext = tlsContext,
-             inProcessServerName = inProcessName) {
+      server(
+        port = port,
+        tlsContext = tlsContext,
+        inProcessServerName = inProcessName
+      ) {
         val proxyService = ProxyServiceImpl(proxy)
         val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
         if (proxy.isZipkinEnabled)
@@ -96,8 +102,7 @@ internal class ProxyGrpcService(private val proxy: Proxy,
       if (inProcessName.isNotEmpty()) {
         add("serverType", "InProcess")
         add("serverName", inProcessName)
-      }
-      else {
+      } else {
         add("serverType", "Netty")
         add("port", port)
       }

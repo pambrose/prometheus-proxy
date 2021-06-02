@@ -69,7 +69,8 @@ internal class AgentHttpService(val agent: Agent) {
         val url = pathContext.url +
             (if (encodedQueryParams.isNotEmpty())
               "?${URLDecoder.decode(encodedQueryParams, UTF_8.name())}"
-            else "")
+            else
+              "")
 
         logger.debug { "Fetching $pathContext" }
         if (encodedQueryParams.isNotEmpty())

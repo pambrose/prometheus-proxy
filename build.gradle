@@ -1,9 +1,10 @@
 plugins {
     id 'idea'
     id 'java'
-    id 'org.jetbrains.kotlin.jvm' version '1.5.0'
+    id 'org.jmailen.kotlinter' version "3.4.4"
+    id 'org.jetbrains.kotlin.jvm' version '1.5.20-M1'
     id 'com.google.protobuf' version '0.8.16'
-    id "com.github.ben-manes.versions" version '0.38.0'
+    id "com.github.ben-manes.versions" version '0.39.0'
     id 'com.github.johnrengelman.shadow' version '6.1.0'
     id 'com.github.gmazzo.buildconfig' version '3.0.0'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
@@ -12,7 +13,7 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.9.1'
+version = '1.9.2'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -80,7 +81,7 @@ dependencies {
 buildConfig {
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"5/23/21\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"6/2/21\"")
 }
 
 compileKotlin.dependsOn ':generateProto'
@@ -120,8 +121,7 @@ compileKotlin {
         freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
                              '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
                              '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
-                             '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
-                             '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI']
+                             '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi']
     }
 }
 
@@ -132,8 +132,7 @@ compileTestKotlin {
         freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
                              '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
                              '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
-                             '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
-                             '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI']
+                             '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi']
     }
 }
 
@@ -216,4 +215,12 @@ test {
         exceptionFormat "full"
         showStandardStreams = true
     }
+}
+
+kotlinter {
+    ignoreFailures = false
+    indentSize = 2
+    reporters = ['checkstyle', 'plain']
+    experimentalRules = false
+    disabledRules = ["no-wildcard-imports", "indent",  "final-newline", "comment-spacing", "max-line-length", "no-multi-spaces"]
 }

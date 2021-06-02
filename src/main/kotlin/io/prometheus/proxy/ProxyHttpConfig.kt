@@ -127,19 +127,17 @@ internal object ProxyHttpConfig : KLogging() {
           else -> {
             val agentContextInfo = proxy.pathManager.getAgentContextInfo(path)
             if (agentContextInfo.isNull()) {
-              val msg = "Invalid path request /${path}"
+              val msg = "Invalid path request /$path"
               proxy.logActivity(msg)
               logger.info { msg }
               responseResults.apply { updateMsg = "invalid_path"; statusCode = NotFound }
-            }
-            else {
+            } else {
               if (!agentContextInfo.consolidated && agentContextInfo.agentContexts[0].isNotValid()) {
-                val msg = "Invalid AgentContext for /${path}"
+                val msg = "Invalid AgentContext for /$path"
                 proxy.logActivity(msg)
                 logger.error { msg }
                 responseResults.apply { updateMsg = "invalid_agent_context"; statusCode = NotFound }
-              }
-              else {
+              } else {
                 val jobs =
                   agentContextInfo.agentContexts
                     .map { async { submitScrapeRequest(it, proxy, path, queryParams, call.request, call.response) } }
@@ -185,27 +183,33 @@ internal object ProxyHttpConfig : KLogging() {
       proxy.metrics { scrapeRequestCount.labels(type).inc() }
   }
 
-  private suspend fun ApplicationCall.respondWith(text: String,
-                                                  contentType: ContentType = Plain,
-                                                  status: HttpStatusCode = OK) {
+  private suspend fun ApplicationCall.respondWith(
+    text: String,
+    contentType: ContentType = Plain,
+    status: HttpStatusCode = OK
+  ) {
     response.header(HttpHeaders.CacheControl, "must-revalidate,no-store")
     response.status(status)
     respondText(text, contentType, status)
   }
 
-  private suspend fun submitScrapeRequest(agentContext: AgentContext,
-                                          proxy: Proxy,
-                                          path: String,
-                                          encodedQueryParams: String,
-                                          request: ApplicationRequest,
-                                          response: ApplicationResponse): ScrapeRequestResponse {
+  private suspend fun submitScrapeRequest(
+    agentContext: AgentContext,
+    proxy: Proxy,
+    path: String,
+    encodedQueryParams: String,
+    request: ApplicationRequest,
+    response: ApplicationResponse
+  ): ScrapeRequestResponse {
 
-    val scrapeRequest = ScrapeRequestWrapper(agentContext,
-                                             proxy,
-                                             path,
-                                             encodedQueryParams,
-                                             request.header(HttpHeaders.Accept),
-                                             proxy.options.debugEnabled)
+    val scrapeRequest = ScrapeRequestWrapper(
+      agentContext,
+      proxy,
+      path,
+      encodedQueryParams,
+      request.header(HttpHeaders.Accept),
+      proxy.options.debugEnabled
+    )
     val logger = ProxyHttpService.logger
 
     try {
@@ -223,13 +227,13 @@ internal object ProxyHttpConfig : KLogging() {
           return ScrapeRequestResponse(
             statusCode = HttpStatusCode.ServiceUnavailable,
             updateMsg = "timed_out",
-                                       fetchDuration = scrapeRequest.ageDuration())
+            fetchDuration = scrapeRequest.ageDuration()
+          )
       }
-    }
-    finally {
+    } finally {
       val scrapeId = scrapeRequest.scrapeId
       proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeId)
-      ?: logger.error { "Scrape request $scrapeId missing in map" }
+        ?: logger.error { "Scrape request $scrapeId missing in map" }
     }
 
     logger.debug { "Results returned from $agentContext for $scrapeRequest" }
@@ -250,24 +254,27 @@ internal object ProxyHttpConfig : KLogging() {
                 // Do not return content on error status codes
                 return if (!statusCode.isSuccess()) {
                   scrapeRequest.scrapeResults.run {
-                    ScrapeRequestResponse(statusCode = statusCode,
-                                          contentType = contentType,
-                                          failureReason = failureReason,
-                                          url = url,
-                                          updateMsg = "path_not_found",
-                                          fetchDuration = scrapeRequest.ageDuration())
+                    ScrapeRequestResponse(
+                      statusCode = statusCode,
+                      contentType = contentType,
+                      failureReason = failureReason,
+                      url = url,
+                      updateMsg = "path_not_found",
+                      fetchDuration = scrapeRequest.ageDuration()
+                    )
                   }
-                }
-                else {
+                } else {
                   scrapeRequest.scrapeResults.run {
                     // Unzip content here
-                    ScrapeRequestResponse(statusCode = statusCode,
-                                          contentType = contentType,
-                                          contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
-                                          failureReason = failureReason,
-                                          url = url,
-                                          updateMsg = "success",
-                                          fetchDuration = scrapeRequest.ageDuration())
+                    ScrapeRequestResponse(
+                      statusCode = statusCode,
+                      contentType = contentType,
+                      contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
+                      failureReason = failureReason,
+                      url = url,
+                      updateMsg = "success",
+                      fetchDuration = scrapeRequest.ageDuration()
+                    )
                   }
                 }
               }
@@ -276,15 +283,19 @@ internal object ProxyHttpConfig : KLogging() {
   }
 }
 
-private class ScrapeRequestResponse(val statusCode: HttpStatusCode,
-                                    val updateMsg: String,
-                                    var contentType: ContentType = Plain,
-                                    var contentText: String = "",
-                                    val failureReason: String = "",
-                                    val url: String = "",
-                                    val fetchDuration: Duration)
+private class ScrapeRequestResponse(
+  val statusCode: HttpStatusCode,
+  val updateMsg: String,
+  var contentType: ContentType = Plain,
+  var contentText: String = "",
+  val failureReason: String = "",
+  val url: String = "",
+  val fetchDuration: Duration
+)
 
-private class ResponseResults(var statusCode: HttpStatusCode = OK,
-                              var contentType: ContentType = Plain,
-                              var contentText: String = "",
-                              var updateMsg: String = "")
+private class ResponseResults(
+  var statusCode: HttpStatusCode = OK,
+  var contentType: ContentType = Plain,
+  var contentText: String = "",
+  var updateMsg: String = ""
+)

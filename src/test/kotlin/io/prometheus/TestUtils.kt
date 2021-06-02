@@ -29,11 +29,13 @@ import mu.KLogging
 import java.nio.channels.ClosedSelectorException
 
 object TestUtils : KLogging() {
-  fun startProxy(serverName: String = "",
-                 adminEnabled: Boolean = false,
-                 debugEnabled: Boolean = false,
-                 metricsEnabled: Boolean = false,
-                 argv: List<String> = emptyList()): Proxy {
+  fun startProxy(
+    serverName: String = "",
+    adminEnabled: Boolean = false,
+    debugEnabled: Boolean = false,
+    metricsEnabled: Boolean = false,
+    argv: List<String> = emptyList()
+  ): Proxy {
 
     logger.apply {
       info { getBanner("banners/proxy.txt", logger) }
@@ -48,38 +50,44 @@ object TestUtils : KLogging() {
                                         add("-Dproxy.admin.debugEnabled=$debugEnabled")
                                         add("-Dproxy.metrics.enabled=$metricsEnabled")
                                       })
-    return Proxy(options = proxyOptions,
-                 proxyHttpPort = PROXY_PORT,
-                 inProcessServerName = serverName,
-                 testMode = true) { startSync() }
+    return Proxy(
+      options = proxyOptions,
+      proxyHttpPort = PROXY_PORT,
+      inProcessServerName = serverName,
+      testMode = true
+    ) { startSync() }
   }
 
-  fun startAgent(serverName: String = "",
-                 adminEnabled: Boolean = false,
-                 debugEnabled: Boolean = false,
-                 metricsEnabled: Boolean = false,
-                 scrapeTimeoutSecs: Int = -1,
-                 chunkContentSizeKbs: Int = -1,
-                 argv: List<String> = emptyList()): Agent {
+  fun startAgent(
+    serverName: String = "",
+    adminEnabled: Boolean = false,
+    debugEnabled: Boolean = false,
+    metricsEnabled: Boolean = false,
+    scrapeTimeoutSecs: Int = -1,
+    chunkContentSizeKbs: Int = -1,
+    argv: List<String> = emptyList()
+  ): Agent {
 
     logger.apply {
       info { getBanner("banners/agent.txt", logger) }
       info { getVersionDesc(false) }
     }
 
-    val agentOptions = AgentOptions(mutableListOf<String>()
-                                      .apply {
-                                        addAll(TestConstants.CONFIG_ARG)
-                                        addAll(argv)
-                                        add("-Dagent.admin.enabled=$adminEnabled")
-                                        add("-Dagent.admin.debugEnabled=$debugEnabled")
-                                        add("-Dagent.metrics.enabled=$metricsEnabled")
-                                        if (scrapeTimeoutSecs != -1)
-                                          add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
-                                        if (chunkContentSizeKbs != -1)
-                                          add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
-                                      },
-                                    false)
+    val agentOptions = AgentOptions(
+      mutableListOf<String>()
+        .apply {
+          addAll(TestConstants.CONFIG_ARG)
+          addAll(argv)
+          add("-Dagent.admin.enabled=$adminEnabled")
+          add("-Dagent.admin.debugEnabled=$debugEnabled")
+          add("-Dagent.metrics.enabled=$metricsEnabled")
+          if (scrapeTimeoutSecs != -1)
+            add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
+          if (chunkContentSizeKbs != -1)
+            add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
+        },
+      false
+    )
     return Agent(options = agentOptions, inProcessServerName = serverName, testMode = true) { startSync() }
   }
 }

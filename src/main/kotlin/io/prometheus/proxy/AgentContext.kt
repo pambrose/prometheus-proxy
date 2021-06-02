@@ -98,7 +98,6 @@ internal class AgentContext(private val remoteAddr: String) {
       lastRequestTimeMark = clock.markNow()
   }
 
-
   override fun toString() =
     toStringElements {
       add("agentId", agentId)

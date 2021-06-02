@@ -94,9 +94,9 @@ internal class AgentGrpcService(
 
     tlsContext =
       agent.options.run {
-        if (certChainFilePath.isNotEmpty()
-          || privateKeyFilePath.isNotEmpty()
-          || trustCertCollectionFilePath.isNotEmpty()
+        if (certChainFilePath.isNotEmpty() ||
+          privateKeyFilePath.isNotEmpty() ||
+          trustCertCollectionFilePath.isNotEmpty()
         )
           buildClientTlsContext(
             certChainFilePath = certChainFilePath,

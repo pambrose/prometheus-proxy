@@ -1,4 +1,4 @@
-VERSION=1.9.1
+VERSION=1.9.2
 
 default: compile
 
@@ -55,6 +55,10 @@ tree:
 
 depends:
 	./gradlew dependencies
+
+lint:
+	./gradlew lintKotlinMain
+	./gradlew lintKotlinTest
 
 versioncheck:
 	./gradlew dependencyUpdates

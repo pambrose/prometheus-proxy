@@ -16,4 +16,6 @@
 
 package io.prometheus.common
 
+object TypeAliases
+
 internal typealias ScrapeRequestAction = suspend () -> ScrapeResults
