@@ -24,19 +24,16 @@ config:
 
 distro: clean compile jars
 
-build-docker:
-	docker build -f ./etc/docker/proxy.df -t pambrose/prometheus-proxy:${VERSION} .
-	docker build -f ./etc/docker/proxy.df -t pambrose/prometheus-proxy:latest .
-	docker build -f ./etc/docker/agent.df -t pambrose/prometheus-agent:${VERSION} .
-	docker build -f ./etc/docker/agent.df -t pambrose/prometheus-agent:latest .
+PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x,linux/ppc64le
+IMAGE_PREFIX := pambrose/prometheus
 
-push-docker:
-	docker push pambrose/prometheus-proxy:${VERSION}
-	docker push pambrose/prometheus-proxy:latest
-	docker push pambrose/prometheus-agent:${VERSION}
-	docker push pambrose/prometheus-agent:latest
+docker-push:
+	# prepare multiarch
+	docker buildx use buildx 2>/dev/null || docker buildx create --use --name=buildx
+	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:latest -t ${IMAGE_PREFIX}-proxy:${VERSION} .
+	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:latest -t ${IMAGE_PREFIX}-agent:${VERSION} .
 
-all: distro docker-build docker-push
+all: distro docker-push
 
 build-coverage:
 	./mvnw clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report
