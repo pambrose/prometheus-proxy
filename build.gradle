@@ -1,13 +1,14 @@
 plugins {
     id 'idea'
     id 'java'
-    id 'java-library'
-    id 'maven-publish'
+    //id 'java-library'
+    //id 'maven-publish'
+    id 'maven'
     id 'org.jmailen.kotlinter' version "3.4.5"
     id 'org.jetbrains.kotlin.jvm' version '1.5.20'
     id 'com.google.protobuf' version '0.8.16'
     id "com.github.ben-manes.versions" version '0.39.0'
-    id 'com.github.johnrengelman.shadow' version '7.0.0'
+    id 'com.github.johnrengelman.shadow' version '6.1.0'
     id 'com.github.gmazzo.buildconfig' version '3.0.1'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
 //    id 'jacoco'
@@ -15,7 +16,7 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.9.2'
+version = '1.10.0'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -120,7 +121,7 @@ configurations.all {
 
 //startScripts.enabled = false
 
-task sourcesJar(type: Jar) {
+task sourcesJar(type: Jar, dependsOn: classes) {
     from sourceSets.main.allJava
     archiveClassifier.set("sources")
 }
@@ -130,16 +131,25 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
     from javadoc.destinationDir
 }
 
-publishing {
-    publications {
-        mavenAar(MavenPublication) {
-            from components.java
-            afterEvaluate {
-                artifact javadocJar
-                artifact sourcesJar
-            }
-        }
-    }
+//publishing {
+//    publications {
+//        mavenAar(MavenPublication) {
+//            from components.java
+//            afterEvaluate {
+//                artifact javadocJar
+//                artifact sourcesJar
+//            }
+//        }
+//    }
+//}
+
+//java {
+//    withSourcesJar()
+//}
+
+artifacts {
+    archives sourcesJar
+    //archives javadocJar
 }
 
 //jacocoTestReport {
