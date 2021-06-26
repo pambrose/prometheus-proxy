@@ -1,5 +1,5 @@
 box:
-  id: openjdk
+  id: alpine
 
 dev:
   steps:
