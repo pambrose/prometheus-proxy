@@ -91,8 +91,9 @@ internal class AgentHttpService(val agent: Agent) {
                 if (user.isNotNull() && passwd.isNotNull()) {
                   install(Auth) {
                     basic {
-                      username = user
-                      password = passwd
+                      credentials {
+                        BasicAuthCredentials(user, passwd)
+                      }
                     }
                   }
                 }
