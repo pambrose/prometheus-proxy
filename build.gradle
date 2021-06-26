@@ -1,18 +1,21 @@
 plugins {
     id 'idea'
     id 'java'
-    id 'org.jetbrains.kotlin.jvm' version '1.5.0'
+    id 'java-library'
+    id 'maven-publish'
+    id 'org.jmailen.kotlinter' version "3.4.5"
+    id 'org.jetbrains.kotlin.jvm' version '1.5.20'
     id 'com.google.protobuf' version '0.8.16'
-    id "com.github.ben-manes.versions" version '0.38.0'
-    id 'com.github.johnrengelman.shadow' version '6.1.0'
-    id 'com.github.gmazzo.buildconfig' version '3.0.0'
+    id "com.github.ben-manes.versions" version '0.39.0'
+    id 'com.github.johnrengelman.shadow' version '7.0.0'
+    id 'com.github.gmazzo.buildconfig' version '3.0.1'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
 //    id 'jacoco'
 //    id 'com.github.kt3k.coveralls' version '2.12.0'
 }
 
 group = 'io.prometheus'
-version = '1.9.1'
+version = '1.9.2'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -31,13 +34,13 @@ dependencies {
 
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
 
-    //implementation "io.grpc:grpc-netty-shaded:${grpc_version}"
-    implementation "io.grpc:grpc-netty:${grpc_version}"
-    implementation "io.grpc:grpc-protobuf:${grpc_version}"
-    implementation "io.grpc:grpc-stub:${grpc_version}"
-    implementation "io.grpc:grpc-services:${grpc_version}"
+    //implementation "io.grpc:grpc-netty-shaded:$grpc_version"
+    implementation "io.grpc:grpc-netty:$grpc_version"
+    implementation "io.grpc:grpc-protobuf:$grpc_version"
+    implementation "io.grpc:grpc-stub:$grpc_version"
+    implementation "io.grpc:grpc-services:$grpc_version"
 
-    implementation "io.grpc:grpc-kotlin-stub:${gengrpc_version}"
+    implementation "io.grpc:grpc-kotlin-stub:$gengrpc_version"
 
     implementation "com.github.pambrose.common-utils:core-utils:$utils_version"
     implementation "com.github.pambrose.common-utils:corex-utils:$utils_version"
@@ -80,7 +83,7 @@ dependencies {
 buildConfig {
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"5/23/21\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"6/25/21\"")
 }
 
 compileKotlin.dependsOn ':generateProto'
@@ -111,55 +114,32 @@ protobuf {
     }
 }
 
-compileKotlin.dependsOn ':generateProto'
-
-compileKotlin {
-    kotlinOptions {
-        useIR = true
-        jvmTarget = "1.8"
-        freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
-                             '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
-                             '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
-                             '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
-                             '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI']
-    }
-}
-
-compileTestKotlin {
-    kotlinOptions {
-        useIR = true
-        jvmTarget = "1.8"
-        freeCompilerArgs += ['-Xuse-experimental=kotlin.time.ExperimentalTime',
-                             '-Xuse-experimental=kotlin.ExperimentalUnsignedTypes',
-                             '-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi',
-                             '-Xuse-experimental=kotlinx.coroutines.InternalCoroutinesApi',
-                             '-Xuse-experimental=io.ktor.util.KtorExperimentalAPI']
-    }
-}
-
 configurations.all {
     resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
 }
 
 //startScripts.enabled = false
 
-task sourcesJar(type: Jar, dependsOn: classes) {
-    classifier = 'sources'
-    from sourceSets.main.allSource
+task sourcesJar(type: Jar) {
+    from sourceSets.main.allJava
+    archiveClassifier.set("sources")
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {
-    classifier = 'javadoc'
+    archiveClassifier.set("javadoc")
     from javadoc.destinationDir
 }
 
-//java {
-//    withSourcesJar()
-//}
-
-artifacts {
-    archives sourcesJar
-//archives javadocJar
+publishing {
+    publications {
+        mavenAar(MavenPublication) {
+            from components.java
+            afterEvaluate {
+                artifact javadocJar
+                artifact sourcesJar
+            }
+        }
+    }
 }
 
 //jacocoTestReport {
@@ -206,6 +186,32 @@ task proxyJar(type: Jar, dependsOn: shadowJar) {
     from zipTree(shadowJar.archiveFile)
 }
 
+compileKotlin.dependsOn ':generateProto'
+
+compileKotlin {
+    kotlinOptions {
+        useIR = true
+        jvmTarget = "1.8"
+        freeCompilerArgs += ["-Xopt-in=kotlin.time.ExperimentalTime",
+                             "-Xopt-in=kotlin.contracts.ExperimentalContracts",
+                             "-Xopt-in=kotlin.ExperimentalUnsignedTypes",
+                             "-Xopt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+                             "-Xopt-in=kotlinx.coroutines.InternalCoroutinesApi"]
+    }
+}
+
+compileTestKotlin {
+    kotlinOptions {
+        useIR = true
+        jvmTarget = "1.8"
+        freeCompilerArgs += ["-Xopt-in=kotlin.time.ExperimentalTime",
+                             "-Xopt-in=kotlin.contracts.ExperimentalContracts",
+                             "-Xopt-in=kotlin.ExperimentalUnsignedTypes",
+                             "-Xopt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+                             "-Xopt-in=kotlinx.coroutines.InternalCoroutinesApi"]
+    }
+}
+
 test {
     useJUnitPlatform()
 
@@ -216,4 +222,12 @@ test {
         exceptionFormat "full"
         showStandardStreams = true
     }
+}
+
+kotlinter {
+    ignoreFailures = false
+    indentSize = 2
+    reporters = ['checkstyle', 'plain']
+    experimentalRules = false
+    disabledRules = ["no-wildcard-imports", "indent",  "final-newline", "comment-spacing", "max-line-length", "no-multi-spaces"]
 }

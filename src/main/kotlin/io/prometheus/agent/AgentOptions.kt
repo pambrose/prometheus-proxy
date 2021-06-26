@@ -81,7 +81,6 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
         }
         logger.info { "proxyHostname: $proxyHostname" }
 
-
         if (agentName.isEmpty())
           agentName = AGENT_NAME.getEnv(agentConfigVals.name)
         logger.info { "agentName: $agentName" }
