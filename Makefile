@@ -1,4 +1,4 @@
-VERSION=1.9.1
+VERSION=1.9.2
 
 default: compile
 
@@ -56,6 +56,10 @@ tree:
 depends:
 	./gradlew dependencies
 
+lint:
+	./gradlew lintKotlinMain
+	./gradlew lintKotlinTest
+
 versioncheck:
 	./gradlew dependencyUpdates
 
@@ -63,4 +67,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=6.8.3 --distribution-type=bin
+	./gradlew wrapper --gradle-version=7.1 --distribution-type=bin

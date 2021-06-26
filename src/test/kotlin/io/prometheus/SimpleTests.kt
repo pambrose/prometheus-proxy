@@ -102,7 +102,6 @@ internal object SimpleTests : KLogging() {
         job.join()
         job.getCancellationException().cause.shouldBeNull()
       }
-
     }.shouldNotBeNull()
 
     paths.size shouldBeEqualTo TestConstants.REPS
@@ -120,7 +119,6 @@ internal object SimpleTests : KLogging() {
         job.join()
         job.getCancellationException().cause.shouldBeNull()
       }
-
     }.shouldNotBeNull()
 
     pathManager.pathMapSize() shouldBeEqualTo originalSize

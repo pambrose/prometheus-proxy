@@ -113,7 +113,6 @@ internal object GrpcObjects {
     }
   }
 
-
   fun ScrapeResponse.toScrapeResults(): ScrapeResults =
     ScrapeResults(
       agentId = agentId,

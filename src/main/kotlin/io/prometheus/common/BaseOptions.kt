@@ -34,10 +34,12 @@ import kotlin.properties.Delegates.notNull
 import kotlin.system.exitProcess
 
 //@Parameters(separators = "=")
-abstract class BaseOptions protected constructor(private val progName: String,
-                                                 private val argv: Array<String>,
-                                                 private val envConfig: String,
-                                                 private val exitOnMissingConfig: Boolean = false) {
+abstract class BaseOptions protected constructor(
+  private val progName: String,
+  private val argv: Array<String>,
+  private val envConfig: String,
+  private val exitOnMissingConfig: Boolean = false
+) {
 
   @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
   private var configSource = ""
@@ -74,9 +76,11 @@ abstract class BaseOptions protected constructor(private val progName: String,
   var trustCertCollectionFilePath = ""
     private set
 
-  @Parameter(names = ["-v", "--version"],
-             description = "Print version info and exit",
-             validateWith = [VersionValidator::class])
+  @Parameter(
+    names = ["-v", "--version"],
+    description = "Print version info and exit",
+    validateWith = [VersionValidator::class]
+  )
 
   private var version = false
 
@@ -109,8 +113,7 @@ abstract class BaseOptions protected constructor(private val progName: String,
           jcom.usage()
           exitProcess(0)
         }
-      }
-      catch (e: ParameterException) {
+      } catch (e: ParameterException) {
         logger.error(e) { e.message }
         exitProcess(1)
       }
@@ -193,11 +196,13 @@ abstract class BaseOptions protected constructor(private val progName: String,
       }
   }
 
-  private fun readConfig(configName: String,
-                         envConfig: String,
-                         configParseOptions: ConfigParseOptions,
-                         fallback: Config,
-                         exitOnMissingConfig: Boolean): Config {
+  private fun readConfig(
+    configName: String,
+    envConfig: String,
+    configParseOptions: ConfigParseOptions,
+    fallback: Config,
+    exitOnMissingConfig: Boolean
+  ): Config {
 
     fun String.isUrlPrefix() =
       lowercase(Locale.getDefault()).startsWith(HTTP_PREFIX) || lowercase(Locale.getDefault()).startsWith(HTTPS_PREFIX)
@@ -229,20 +234,17 @@ abstract class BaseOptions protected constructor(private val progName: String,
           val configSyntax = getConfigSyntax(configName)
           return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
             .withFallback(fallback)
-        }
-        catch (e: Exception) {
+        } catch (e: Exception) {
           if (e.cause is FileNotFoundException)
             logger.error { "Invalid config url: $configName" }
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
-
       }
       else -> {
         try {
           return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
-        }
-        catch (e: Exception) {
+        } catch (e: Exception) {
           if (e.cause is FileNotFoundException)
             logger.error { "Invalid config filename: $configName" }
           else
