@@ -16,7 +16,7 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.10.0'
+version = '1.10.1'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -84,7 +84,7 @@ dependencies {
 buildConfig {
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"6/25/21\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"6/26/21\"")
 }
 
 compileKotlin.dependsOn ':generateProto'
@@ -121,15 +121,15 @@ configurations.all {
 
 //startScripts.enabled = false
 
-task sourcesJar(type: Jar, dependsOn: classes) {
-    from sourceSets.main.allJava
-    archiveClassifier.set("sources")
-}
-
-task javadocJar(type: Jar, dependsOn: javadoc) {
-    archiveClassifier.set("javadoc")
-    from javadoc.destinationDir
-}
+//task sourcesJar(type: Jar, dependsOn: classes) {
+//    from sourceSets.main.allJava
+//    archiveClassifier.set("sources")
+//}
+//
+//task javadocJar(type: Jar, dependsOn: javadoc) {
+//    archiveClassifier.set("javadoc")
+//    from javadoc.destinationDir
+//}
 
 //publishing {
 //    publications {
@@ -143,13 +143,23 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
 //    }
 //}
 
-//java {
-//    withSourcesJar()
-//}
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
 
 artifacts {
     archives sourcesJar
     //archives javadocJar
+}
+
+java {
+    withSourcesJar()
 }
 
 //jacocoTestReport {
