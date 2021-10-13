@@ -5,7 +5,7 @@ plugins {
     //id 'maven-publish'
     id 'maven'
     id 'org.jmailen.kotlinter' version "3.6.0"
-    id 'org.jetbrains.kotlin.jvm' version '1.6.0-M1'
+    id 'org.jetbrains.kotlin.jvm' version '1.6.0-RC'
     id 'com.google.protobuf' version '0.8.17'
     id "com.github.ben-manes.versions" version '0.39.0'
     id 'com.github.johnrengelman.shadow' version '6.1.0'
@@ -210,7 +210,7 @@ compileKotlin.dependsOn ':generateProto'
 
 compileKotlin {
     kotlinOptions {
-        useIR = true
+//        useIR = true
         jvmTarget = "1.8"
         freeCompilerArgs += ["-Xopt-in=kotlin.time.ExperimentalTime",
                              "-Xopt-in=kotlin.contracts.ExperimentalContracts",
@@ -222,7 +222,7 @@ compileKotlin {
 
 compileTestKotlin {
     kotlinOptions {
-        useIR = true
+//        useIR = true
         jvmTarget = "1.8"
         freeCompilerArgs += ["-Xopt-in=kotlin.time.ExperimentalTime",
                              "-Xopt-in=kotlin.contracts.ExperimentalContracts",

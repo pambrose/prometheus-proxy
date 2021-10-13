@@ -1,6 +1,6 @@
 VERSION=1.10.2
 
-default: compile
+default: versioncheck
 
 clean:
 	./gradlew clean
