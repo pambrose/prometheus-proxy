@@ -86,7 +86,7 @@ internal object SimpleTests : KLogging() {
     // Take into account pre-existing paths already registered
     val originalSize = pathManager.pathMapSize()
 
-    withTimeoutOrNull(seconds(30).inWholeMilliseconds) {
+    withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
       val mutex = Mutex()
       val jobs =
         List(TestConstants.REPS) { i ->
@@ -107,7 +107,7 @@ internal object SimpleTests : KLogging() {
     paths.size shouldBeEqualTo TestConstants.REPS
     pathManager.pathMapSize() shouldBeEqualTo (originalSize + TestConstants.REPS)
 
-    withTimeoutOrNull(seconds(30).inWholeMilliseconds) {
+    withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
       val jobs =
         List(paths.size) {
           launch(Dispatchers.Default + exceptionHandler(logger)) {

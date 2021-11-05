@@ -86,7 +86,7 @@ internal object ProxyHttpConfig : KLogging() {
 
     routing {
       get("/__test__") {
-        delay(seconds(30))
+        delay(30.seconds)
         call.respondWith("Test value", Plain, OK)
       }
       get("/*") {
@@ -214,8 +214,8 @@ internal object ProxyHttpConfig : KLogging() {
 
     try {
       val proxyConfigVals = proxy.configVals.proxy
-      val timeoutTime = seconds(proxyConfigVals.internal.scrapeRequestTimeoutSecs)
-      val checkTime = milliseconds(proxyConfigVals.internal.scrapeRequestCheckMillis)
+      val timeoutTime = proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
+      val checkTime = proxyConfigVals.internal.scrapeRequestCheckMillis.milliseconds
 
       proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
       agentContext.writeScrapeRequest(scrapeRequest)

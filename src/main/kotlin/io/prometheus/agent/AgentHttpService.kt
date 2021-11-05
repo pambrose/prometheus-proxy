@@ -78,7 +78,7 @@ internal class AgentHttpService(val agent: Agent) {
 
         // Content is fetched here
         try {
-          val timeout = seconds(agent.configVals.agent.internal.cioTimeoutSecs)
+          val timeout = agent.configVals.agent.internal.cioTimeoutSecs.seconds
           CIO.create { requestTimeout = timeout.inWholeMilliseconds }
             .use { engine ->
               HttpClient(engine) {
@@ -103,7 +103,7 @@ internal class AgentHttpService(val agent: Agent) {
                     url,
                     {
                       request.accept?.also { if (it.isNotEmpty()) header(ACCEPT, it) }
-                      val scrapeTimeout = seconds(agent.options.scrapeTimeoutSecs)
+                      val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
                       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
                       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
                     },

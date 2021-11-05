@@ -82,7 +82,7 @@ internal class ProxyGrpcService(
         addTransportFilter(ProxyTransportFilter(proxy))
       }
 
-    grpcServer.shutdownWithJvm(seconds(2))
+    grpcServer.shutdownWithJvm(2.seconds)
 
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
   }
@@ -94,7 +94,7 @@ internal class ProxyGrpcService(
   override fun shutDown() {
     if (proxy.isZipkinEnabled)
       tracing.close()
-    grpcServer.shutdownGracefully(seconds(2))
+    grpcServer.shutdownGracefully(2.seconds)
   }
 
   override fun toString() =

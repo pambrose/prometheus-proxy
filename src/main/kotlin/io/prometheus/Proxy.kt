@@ -138,7 +138,7 @@ class Proxy(
   override fun run() {
     runBlocking {
       while (isRunning)
-        delay(milliseconds(500))
+        delay(500.milliseconds)
     }
   }
 

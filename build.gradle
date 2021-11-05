@@ -5,7 +5,7 @@ plugins {
     //id 'maven-publish'
     id 'maven'
     id 'org.jmailen.kotlinter' version "3.6.0"
-    id 'org.jetbrains.kotlin.jvm' version '1.6.0-RC'
+    id 'org.jetbrains.kotlin.jvm' version '1.6.0-RC2'
     id 'com.google.protobuf' version '0.8.17'
     id "com.github.ben-manes.versions" version '0.39.0'
     id 'com.github.johnrengelman.shadow' version '6.1.0'
@@ -22,6 +22,7 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 repositories {
+    //maven { url "https://maven.pkg.jetbrains.space/public/p/ktor/eap" }
     maven { url = 'https://kotlin.bintray.com/ktor' }
     maven { url = 'https://kotlin.bintray.com/kotlinx' }
     maven { url = 'https://maven-central.storage-download.googleapis.com/repos/central/data/' }
@@ -64,6 +65,11 @@ dependencies {
 
     implementation "io.ktor:ktor-server-core:$ktor_version"
     implementation "io.ktor:ktor-server-cio:$ktor_version"
+//    implementation "io.ktor:ktor-server-auth:$ktor_version"
+//    implementation "io.ktor:ktor-server-compression:$ktor_version"
+//    implementation "io.ktor:ktor-server-default-headers:$ktor_version"
+//    implementation "io.ktor:ktor-server-status-pages:$ktor_version"
+//    implementation "io.ktor:ktor-server-call-logging:$ktor_version"
     implementation "io.ktor:ktor-client-core:$ktor_version"
     implementation "io.ktor:ktor-client-cio:$ktor_version"
     implementation "io.ktor:ktor-client-auth:$ktor_version"

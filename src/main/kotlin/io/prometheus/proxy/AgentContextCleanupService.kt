@@ -40,8 +40,8 @@ internal class AgentContextCleanupService(
   }
 
   override fun run() {
-    val maxAgentInactivityTime = seconds(configVals.maxAgentInactivitySecs)
-    val pauseTime = seconds(configVals.staleAgentCheckPauseSecs)
+    val maxAgentInactivityTime = configVals.maxAgentInactivitySecs.seconds
+    val pauseTime = configVals.staleAgentCheckPauseSecs.seconds
     while (isRunning) {
       proxy.agentContextManager.agentContextMap
         .forEach { (agentId, agentContext) ->
