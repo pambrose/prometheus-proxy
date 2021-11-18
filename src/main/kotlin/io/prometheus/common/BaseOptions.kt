@@ -24,7 +24,6 @@ import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
 import com.github.pambrose.common.util.simpleClassName
 import com.typesafe.config.*
-import io.prometheus.common.EnvVars.*
 import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
@@ -127,49 +126,49 @@ abstract class BaseOptions protected constructor(
 
   protected fun assignAdminEnabled(defaultVal: Boolean) {
     if (!adminEnabled)
-      adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
+      adminEnabled = EnvVars.ADMIN_ENABLED.getEnv(defaultVal)
     logger.info { "adminEnabled: $adminEnabled" }
   }
 
   protected fun assignAdminPort(defaultVal: Int) {
     if (adminPort == -1)
-      adminPort = ADMIN_PORT.getEnv(defaultVal)
+      adminPort = EnvVars.ADMIN_PORT.getEnv(defaultVal)
     logger.info { "adminPort: $adminPort" }
   }
 
   protected fun assignMetricsEnabled(defaultVal: Boolean) {
     if (!metricsEnabled)
-      metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
+      metricsEnabled = EnvVars.METRICS_ENABLED.getEnv(defaultVal)
     logger.info { "metricsEnabled: $metricsEnabled" }
   }
 
   protected fun assignDebugEnabled(defaultVal: Boolean) {
     if (!debugEnabled)
-      debugEnabled = DEBUG_ENABLED.getEnv(defaultVal)
+      debugEnabled = EnvVars.DEBUG_ENABLED.getEnv(defaultVal)
     logger.info { "debugEnabled: $debugEnabled" }
   }
 
   protected fun assignMetricsPort(defaultVal: Int) {
     if (metricsPort == -1)
-      metricsPort = METRICS_PORT.getEnv(defaultVal)
+      metricsPort = EnvVars.METRICS_PORT.getEnv(defaultVal)
     logger.info { "metricsPort: $metricsPort" }
   }
 
   protected fun assignCertChainFilePath(defaultVal: String) {
     if (certChainFilePath.isEmpty())
-      certChainFilePath = CERT_CHAIN_FILE_PATH.getEnv(defaultVal)
+      certChainFilePath = EnvVars.CERT_CHAIN_FILE_PATH.getEnv(defaultVal)
     logger.info { "certChainFilePath: $certChainFilePath" }
   }
 
   protected fun assignPrivateKeyFilePath(defaultVal: String) {
     if (privateKeyFilePath.isEmpty())
-      privateKeyFilePath = PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
+      privateKeyFilePath = EnvVars.PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
     logger.info { "privateKeyFilePath: $privateKeyFilePath" }
   }
 
   protected fun assignTrustCertCollectionFilePath(defaultVal: String) {
     if (trustCertCollectionFilePath.isEmpty())
-      trustCertCollectionFilePath = TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
+      trustCertCollectionFilePath = EnvVars.TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
     logger.info { "trustCertCollectionFilePath: $trustCertCollectionFilePath" }
   }
 
