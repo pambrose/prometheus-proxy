@@ -91,7 +91,7 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
 
         if (scrapeTimeoutSecs == -1)
           scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
-        logger.info { "scrapeTimeoutSecs: ${seconds(scrapeTimeoutSecs)}" }
+        logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
 
         if (chunkContentSizeKbs == -1)
           chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
@@ -117,8 +117,8 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
         assignPrivateKeyFilePath(agentConfigVals.tls.privateKeyFilePath)
         assignTrustCertCollectionFilePath(agentConfigVals.tls.trustCertCollectionFilePath)
 
-        logger.info { "agent.internal.cioTimeoutSecs: ${seconds(agentConfigVals.internal.cioTimeoutSecs)}" }
-        logger.info { "agent.scrapeTimeoutSecs: ${seconds(agentConfigVals.scrapeTimeoutSecs)}" }
+        logger.info { "agent.internal.cioTimeoutSecs: ${agentConfigVals.internal.cioTimeoutSecs.seconds}" }
+        logger.info { "agent.scrapeTimeoutSecs: ${agentConfigVals.scrapeTimeoutSecs.seconds}" }
       }
   }
 

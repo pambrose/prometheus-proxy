@@ -63,7 +63,7 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
         assignPrivateKeyFilePath(proxyConfigVals.tls.privateKeyFilePath)
         assignTrustCertCollectionFilePath(proxyConfigVals.tls.trustCertCollectionFilePath)
 
-        logger.info { "proxy.internal.scrapeRequestTimeoutSecs: ${seconds(proxyConfigVals.internal.scrapeRequestTimeoutSecs)}" }
+        logger.info { "proxy.internal.scrapeRequestTimeoutSecs: ${proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds}" }
       }
   }
 }

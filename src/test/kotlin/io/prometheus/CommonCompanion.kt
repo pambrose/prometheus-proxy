@@ -40,7 +40,7 @@ open class CommonCompanion : KLogging() {
       }
 
       launch(Dispatchers.Default + exceptionHandler(logger)) {
-        agent = agentSetup.invoke().apply { awaitInitialConnection(seconds(10)) }
+        agent = agentSetup.invoke().apply { awaitInitialConnection(10.seconds) }
       }
     }
 

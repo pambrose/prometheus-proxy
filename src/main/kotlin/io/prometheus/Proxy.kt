@@ -39,7 +39,15 @@ import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.getVersionDesc
 import io.prometheus.prometheus_proxy.BuildConfig
-import io.prometheus.proxy.*
+import io.prometheus.proxy.AgentContext
+import io.prometheus.proxy.AgentContextCleanupService
+import io.prometheus.proxy.AgentContextManager
+import io.prometheus.proxy.ProxyGrpcService
+import io.prometheus.proxy.ProxyHttpService
+import io.prometheus.proxy.ProxyMetrics
+import io.prometheus.proxy.ProxyOptions
+import io.prometheus.proxy.ProxyPathManager
+import io.prometheus.proxy.ScrapeRequestManager
 import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.time.LocalDateTime
@@ -138,7 +146,7 @@ class Proxy(
   override fun run() {
     runBlocking {
       while (isRunning)
-        delay(milliseconds(500))
+        delay(500.milliseconds)
     }
   }
 

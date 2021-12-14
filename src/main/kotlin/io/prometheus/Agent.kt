@@ -30,7 +30,14 @@ import com.google.common.util.concurrent.RateLimiter
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
-import io.prometheus.agent.*
+import io.prometheus.agent.AgentConnectionContext
+import io.prometheus.agent.AgentGrpcService
+import io.prometheus.agent.AgentHttpService
+import io.prometheus.agent.AgentMetrics
+import io.prometheus.agent.AgentOptions
+import io.prometheus.agent.AgentPathManager
+import io.prometheus.agent.EmbeddedAgentInfo
+import io.prometheus.agent.RequestFailureException
 import io.prometheus.client.Summary
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
@@ -101,8 +108,8 @@ class Agent(
     """.trimIndent()
 
     logger.info { "Agent name: $agentName" }
-    logger.info { "Proxy reconnect pause time: ${seconds(agentConfigVals.reconnectPauseSecs)}" }
-    logger.info { "Scrape timeout time: ${seconds(options.scrapeTimeoutSecs)}" }
+    logger.info { "Proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
+    logger.info { "Scrape timeout time: ${options.scrapeTimeoutSecs.seconds}" }
 
     initService {
       if (options.debugEnabled) {
@@ -184,7 +191,7 @@ class Agent(
         // Catch anything else to avoid exiting retry loop
         logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
       } finally {
-        logger.info { "Waited ${seconds(reconnectLimiter.acquire().roundToInt())} to reconnect" }
+        logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
       }
     }
   }
@@ -209,8 +216,8 @@ class Agent(
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) =
     if (agentConfigVals.heartbeatEnabled) {
-      val heartbeatPauseTime = milliseconds(agentConfigVals.heartbeatCheckPauseMillis)
-      val maxInactivityTime = seconds(agentConfigVals.heartbeatMaxInactivitySecs)
+      val heartbeatPauseTime = agentConfigVals.heartbeatCheckPauseMillis.milliseconds
+      val maxInactivityTime = agentConfigVals.heartbeatMaxInactivitySecs.seconds
       logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
 
       while (isRunning && connectionContext.connected) {

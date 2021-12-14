@@ -81,7 +81,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agen
           },
           {
             // Wait long enough to trigger heartbeat for code coverage
-            sleep(seconds(15))
+            sleep(15.seconds)
           })
 
     @JvmStatic

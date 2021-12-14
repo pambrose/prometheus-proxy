@@ -35,7 +35,7 @@ internal class ProxyHttpService(private val proxy: Proxy, val httpPort: Int, isT
     GenericIdleService() {
   private val proxyConfigVals = proxy.configVals.proxy
   private val idleTimeout =
-    if (proxyConfigVals.http.idleTimeoutSecs == -1) seconds(45) else seconds(proxyConfigVals.http.idleTimeoutSecs)
+    if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
@@ -54,8 +54,8 @@ internal class ProxyHttpService(private val proxy: Proxy, val httpPort: Int, isT
   override fun shutDown() {
     if (proxy.isZipkinEnabled)
       tracing.close()
-    httpServer.stop(seconds(5).inWholeMilliseconds, seconds(5).inWholeMilliseconds)
-    sleep(seconds(2))
+    httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
+    sleep(2.seconds)
   }
 
   override fun toString() = toStringElements { add("port", httpPort) }
