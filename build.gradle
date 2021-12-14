@@ -14,7 +14,7 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.10.2'
+version = '1.11.0'
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -81,7 +81,7 @@ dependencies {
 buildConfig {
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"6/26/21\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"12/14/21\"")
 }
 
 // gradle 7
