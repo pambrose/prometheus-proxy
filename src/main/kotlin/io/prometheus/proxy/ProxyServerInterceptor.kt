@@ -18,34 +18,34 @@
 
 package io.prometheus.proxy
 
-import io.grpc.*
-import io.prometheus.Proxy
+import io.grpc.ForwardingServerCall
+import io.grpc.Metadata
+import io.grpc.Metadata.ASCII_STRING_MARSHALLER
+import io.grpc.ServerCall
+import io.grpc.ServerCallHandler
+import io.grpc.ServerInterceptor
+import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID
+import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 
-internal class ProxyInterceptor : ServerInterceptor {
+internal class ProxyServerInterceptor : ServerInterceptor {
 
   override fun <ReqT, RespT> interceptCall(
     call: ServerCall<ReqT, RespT>,
     requestHeaders: Metadata,
     handler: ServerCallHandler<ReqT, RespT>
-  ): ServerCall.Listener<ReqT> {
-    val attributes = call.attributes
-    //val methodDescriptor = call.methodDescriptor
-    // final String methodName = methodDescriptor.getFullMethodName();
-    // logger.info {"Intercepting {}", methodName);
-
-    return handler.startCall(
+  ): ServerCall.Listener<ReqT> =
+    handler.startCall(
       object : ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(call) {
         override fun sendHeaders(headers: Metadata) {
-          // agent_id was assigned in ServerTransportFilter
-          attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { headers.put(META_AGENT_ID, it) }
+          // ATTRIB_AGENT_ID was assigned in ServerTransportFilter
+          call.attributes.get(AGENT_ID_KEY)?.also { headers.put(META_AGENT_ID_KEY, it) }
           super.sendHeaders(headers)
         }
       },
       requestHeaders
     )
-  }
 
   companion object {
-    private val META_AGENT_ID = Metadata.Key.of(Proxy.AGENT_ID_KEY, Metadata.ASCII_STRING_MARSHALLER)
+    internal val META_AGENT_ID_KEY = Metadata.Key.of(AGENT_ID, ASCII_STRING_MARSHALLER)
   }
 }

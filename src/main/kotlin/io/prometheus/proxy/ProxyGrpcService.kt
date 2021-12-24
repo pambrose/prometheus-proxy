@@ -75,11 +75,11 @@ internal class ProxyGrpcService(
         inProcessServerName = inProcessName
       ) {
         val proxyService = ProxyServiceImpl(proxy)
-        val interceptors = mutableListOf<ServerInterceptor>(ProxyInterceptor())
+        val interceptors = mutableListOf<ServerInterceptor>(ProxyServerInterceptor())
         if (proxy.isZipkinEnabled)
           interceptors += grpcTracing.newServerInterceptor()
         addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
-        addTransportFilter(ProxyTransportFilter(proxy))
+        addTransportFilter(ProxyServerTransportFilter(proxy))
       }
 
     grpcServer.shutdownWithJvm(2.seconds)

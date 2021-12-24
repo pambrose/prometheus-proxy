@@ -20,39 +20,36 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GrpcDsl.attributes
 import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
 import mu.KLogging
 
-internal class ProxyTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
+internal class ProxyServerTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
   override fun transportReady(attributes: Attributes): Attributes {
-    fun getRemoteAddr(attributes: Attributes) = attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"
-
-    val agentContext = AgentContext(getRemoteAddr(attributes))
+    val remoteAddress = attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"
+    val agentContext = AgentContext(remoteAddress)
     proxy.agentContextManager.addAgentContext(agentContext)
 
     return attributes {
-      set(Proxy.ATTRIB_AGENT_ID, agentContext.agentId)
+      set(AGENT_ID_KEY, agentContext.agentId)
       setAll(attributes)
     }
   }
 
-  override fun transportTerminated(attributes: Attributes?) {
-    if (attributes.isNull()) {
-      logger.error { "Null attributes" }
-    } else {
-      attributes.get(Proxy.ATTRIB_AGENT_ID)?.also { agentId ->
-        val context = proxy.removeAgentContext(agentId, "Termination")
-        logger.info { "Disconnected ${if (context.isNotNull()) "from $context" else "with invalid agentId: $agentId"}" }
-      } ?: logger.error { "Missing agentId in transportTerminated()" }
-    }
+  override fun transportTerminated(attributes: Attributes) {
+    attributes.get(AGENT_ID_KEY)?.also { agentId ->
+      val context = proxy.removeAgentContext(agentId, "Termination")
+      logger.info { "Disconnected ${if (context.isNotNull()) "from $context" else "with invalid agentId: $agentId"}" }
+    } ?: logger.error { "Missing agentId in transportTerminated()" }
     super.transportTerminated(attributes)
   }
 
   companion object : KLogging() {
-    private val REMOTE_ADDR_KEY: Attributes.Key<String> = Attributes.Key.create("remote-addr")
+    internal const val AGENT_ID = "agent-id"
+    private const val REMOTE_ADDR = "remote-addr"
+    internal val AGENT_ID_KEY: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
+    private val REMOTE_ADDR_KEY: Attributes.Key<String> = Attributes.Key.create(REMOTE_ADDR)
   }
 }

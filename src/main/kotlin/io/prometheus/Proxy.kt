@@ -30,7 +30,6 @@ import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
-import io.grpc.Attributes
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
@@ -217,9 +216,6 @@ class Proxy(
     }
 
   companion object : KLogging() {
-    internal const val AGENT_ID_KEY = "agent-id"
-    internal val ATTRIB_AGENT_ID: Attributes.Key<String> = Attributes.Key.create(AGENT_ID_KEY)
-
     @JvmStatic
     fun main(argv: Array<String>) {
       logger.apply {
