@@ -42,7 +42,7 @@ class AdminDefaultPathTest {
       .also { admin ->
         blockingGet("${admin.port}/${admin.pingPath}".withPrefix()) { response ->
           response.status shouldBeEqualTo HttpStatusCode.OK
-          response.readText() shouldStartWith "pong"
+          response.bodyAsText() shouldStartWith "pong"
         }
       }
   }
@@ -53,7 +53,7 @@ class AdminDefaultPathTest {
       .also { admin ->
         blockingGet("${admin.port}/${admin.pingPath}".withPrefix()) { response ->
           response.status shouldBeEqualTo HttpStatusCode.OK
-          response.readText() shouldStartWith "pong"
+          response.bodyAsText() shouldStartWith "pong"
         }
       }
   }
@@ -64,7 +64,7 @@ class AdminDefaultPathTest {
       .also { admin ->
         blockingGet("${admin.port}/${admin.versionPath}".withPrefix()) { response ->
           response.status shouldBeEqualTo HttpStatusCode.OK
-          response.readText() shouldContain "Version"
+          response.bodyAsText() shouldContain "Version"
         }
       }
   }
@@ -75,7 +75,7 @@ class AdminDefaultPathTest {
       .also { admin ->
         blockingGet("${admin.port}/${admin.versionPath}".withPrefix()) { response ->
           response.status shouldBeEqualTo HttpStatusCode.OK
-          response.readText() shouldContain "Version"
+          response.bodyAsText() shouldContain "Version"
         }
       }
   }
@@ -86,7 +86,7 @@ class AdminDefaultPathTest {
       .also { admin ->
         blockingGet("${admin.port}/${admin.healthCheckPath}".withPrefix()) { response ->
           response.status shouldBeEqualTo HttpStatusCode.OK
-          response.readText().length shouldBeGreaterThan 10
+          response.bodyAsText().length shouldBeGreaterThan 10
         }
       }
   }
@@ -96,7 +96,7 @@ class AdminDefaultPathTest {
     agentConfigVals.admin
       .also { admin ->
         blockingGet("${admin.port}/${admin.healthCheckPath}".withPrefix()) { response ->
-          response.readText().length shouldBeGreaterThan 10
+          response.bodyAsText().length shouldBeGreaterThan 10
         }
       }
   }
@@ -106,7 +106,7 @@ class AdminDefaultPathTest {
     proxyConfigVals.admin
       .also { admin ->
         blockingGet("${admin.port}/${admin.threadDumpPath}".withPrefix()) { response ->
-          response.readText().length shouldBeGreaterThan 10
+          response.bodyAsText().length shouldBeGreaterThan 10
         }
       }
   }
@@ -114,7 +114,7 @@ class AdminDefaultPathTest {
   @Test
   fun agentThreadDumpPathTest() {
     blockingGet("${agentConfigVals.admin.port}/${agentConfigVals.admin.threadDumpPath}".withPrefix()) { response ->
-      response.readText().length shouldBeGreaterThan 10
+      response.bodyAsText().length shouldBeGreaterThan 10
     }
   }
 

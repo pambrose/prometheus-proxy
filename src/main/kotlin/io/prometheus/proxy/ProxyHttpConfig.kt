@@ -20,16 +20,17 @@ import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.unzip
-import io.ktor.application.*
-import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.http.ContentType.Text.Plain
 import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.http.HttpStatusCode.Companion.OK
 import io.ktor.http.content.*
-import io.ktor.request.*
-import io.ktor.response.*
-import io.ktor.routing.*
+import io.ktor.server.application.*
+import io.ktor.server.logging.*
+import io.ktor.server.plugins.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import io.prometheus.Proxy
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -74,13 +75,13 @@ internal object ProxyHttpConfig : KLogging() {
 
     install(StatusPages) {
       // Catch all
-      exception<Throwable> { cause ->
+      exception<Throwable> { call, cause ->
         logger.info(cause) { " Throwable caught: ${cause.simpleClassName}" }
         call.respond(NotFound)
       }
 
-      status(NotFound) {
-        call.respond(TextContent("${it.value} ${it.description}", Plain.withCharset(Charsets.UTF_8), it))
+      status(NotFound) { call, cause ->
+        call.respond(TextContent("${cause.value} ${cause.description}", Plain.withCharset(Charsets.UTF_8), cause))
       }
     }
 
@@ -103,11 +104,10 @@ internal object ProxyHttpConfig : KLogging() {
         when {
           !proxy.isRunning -> {
             logger.error { "Proxy stopped" }
-            responseResults
-              .apply {
-                updateMsg = "proxy_stopped"
-                statusCode = HttpStatusCode.ServiceUnavailable
-              }
+            responseResults.apply {
+              updateMsg = "proxy_stopped"
+              statusCode = HttpStatusCode.ServiceUnavailable
+            }
           }
 
           path.isEmpty() || path.isBlank() -> {
@@ -121,8 +121,8 @@ internal object ProxyHttpConfig : KLogging() {
             responseResults.apply { updateMsg = "invalid_path"; statusCode = NotFound }
           }
 
-          proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path ->
-            responseResults.contentText = "42"
+          proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path -> responseResults.contentText =
+            "42"
 
           else -> {
             val agentContextInfo = proxy.pathManager.getAgentContextInfo(path)
@@ -138,18 +138,24 @@ internal object ProxyHttpConfig : KLogging() {
                 logger.error { msg }
                 responseResults.apply { updateMsg = "invalid_agent_context"; statusCode = NotFound }
               } else {
-                val jobs =
-                  agentContextInfo.agentContexts
-                    .map { async { submitScrapeRequest(it, proxy, path, queryParams, call.request, call.response) } }
-                    .map { it.await() }
-                    .onEach { response ->
-                      var status = "/$path - ${response.updateMsg} - ${response.statusCode}"
-                      if (!response.statusCode.isSuccess())
-                        status += " reason: [${response.failureReason}]"
-                      status += " time: ${response.fetchDuration} url: ${response.url}"
+                val jobs = agentContextInfo.agentContexts.map {
+                  async {
+                    submitScrapeRequest(
+                      it,
+                      proxy,
+                      path,
+                      queryParams,
+                      call.request,
+                      call.response
+                    )
+                  }
+                }.map { it.await() }.onEach { response ->
+                  var status = "/$path - ${response.updateMsg} - ${response.statusCode}"
+                  if (!response.statusCode.isSuccess()) status += " reason: [${response.failureReason}]"
+                  status += " time: ${response.fetchDuration} url: ${response.url}"
 
-                      proxy.logActivity(status)
-                    }
+                  proxy.logActivity(status)
+                }
 
                 val statusCodes = jobs.map { it.statusCode }.toSet().toList()
                 val contentTypes = jobs.map { it.contentType }.toSet().toList()
@@ -157,30 +163,27 @@ internal object ProxyHttpConfig : KLogging() {
                 // Grab the contentType of the first OK in the lit
                 val okContentType = jobs.firstOrNull { it.statusCode == OK }?.contentType
 
-                responseResults
-                  .apply {
-                    statusCode = if (statusCodes.contains(OK)) OK else statusCodes[0]
-                    contentType = if (okContentType.isNotNull()) okContentType else contentTypes[0]
-                    contentText = jobs.joinToString("\n") { it.contentText }
-                    updateMsg = updateMsgs
-                  }
+                responseResults.apply {
+                  statusCode = if (statusCodes.contains(OK)) OK else statusCodes[0]
+                  contentType = if (okContentType.isNotNull()) okContentType else contentTypes[0]
+                  contentText = jobs.joinToString("\n") { it.contentText }
+                  updateMsg = updateMsgs
+                }
               }
             }
           }
         }
 
-        responseResults
-          .apply {
-            updateScrapeRequests(proxy, updateMsg)
-            call.respondWith(contentText, contentType, statusCode)
-          }
+        responseResults.apply {
+          updateScrapeRequests(proxy, updateMsg)
+          call.respondWith(contentText, contentType, statusCode)
+        }
       }
     }
   }
 
   private fun updateScrapeRequests(proxy: Proxy, type: String) {
-    if (type.isNotEmpty())
-      proxy.metrics { scrapeRequestCount.labels(type).inc() }
+    if (type.isNotEmpty()) proxy.metrics { scrapeRequestCount.labels(type).inc() }
   }
 
   private suspend fun ApplicationCall.respondWith(
@@ -203,12 +206,7 @@ internal object ProxyHttpConfig : KLogging() {
   ): ScrapeRequestResponse {
 
     val scrapeRequest = ScrapeRequestWrapper(
-      agentContext,
-      proxy,
-      path,
-      encodedQueryParams,
-      request.header(HttpHeaders.Accept),
-      proxy.options.debugEnabled
+      agentContext, proxy, path, encodedQueryParams, request.header(HttpHeaders.Accept), proxy.options.debugEnabled
     )
     val logger = ProxyHttpService.logger
 
@@ -223,12 +221,11 @@ internal object ProxyHttpConfig : KLogging() {
       // Returns false if timed out
       while (!scrapeRequest.suspendUntilComplete(checkTime)) {
         // Check if agent is disconnected or agent is hung
-        if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
-          return ScrapeRequestResponse(
-            statusCode = HttpStatusCode.ServiceUnavailable,
-            updateMsg = "timed_out",
-            fetchDuration = scrapeRequest.ageDuration()
-          )
+        if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning) return ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "timed_out",
+          fetchDuration = scrapeRequest.ageDuration()
+        )
       }
     } finally {
       val scrapeId = scrapeRequest.scrapeId
@@ -238,48 +235,42 @@ internal object ProxyHttpConfig : KLogging() {
 
     logger.debug { "Results returned from $agentContext for $scrapeRequest" }
 
-    scrapeRequest.scrapeResults
-      .also { scrapeResults ->
-        HttpStatusCode.fromValue(scrapeResults.statusCode)
-          .also { statusCode ->
-            scrapeResults.contentType.split("/")
-              .also { contentTypeElems ->
+    scrapeRequest.scrapeResults.also { scrapeResults ->
+      HttpStatusCode.fromValue(scrapeResults.statusCode).also { statusCode ->
+        scrapeResults.contentType.split("/").also { contentTypeElems ->
 
-                val contentType =
-                  if (contentTypeElems.size == 2)
-                    ContentType(contentTypeElems[0], contentTypeElems[1])
-                  else
-                    Plain
+          val contentType = if (contentTypeElems.size == 2) ContentType(contentTypeElems[0], contentTypeElems[1])
+          else Plain
 
-                // Do not return content on error status codes
-                return if (!statusCode.isSuccess()) {
-                  scrapeRequest.scrapeResults.run {
-                    ScrapeRequestResponse(
-                      statusCode = statusCode,
-                      contentType = contentType,
-                      failureReason = failureReason,
-                      url = url,
-                      updateMsg = "path_not_found",
-                      fetchDuration = scrapeRequest.ageDuration()
-                    )
-                  }
-                } else {
-                  scrapeRequest.scrapeResults.run {
-                    // Unzip content here
-                    ScrapeRequestResponse(
-                      statusCode = statusCode,
-                      contentType = contentType,
-                      contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
-                      failureReason = failureReason,
-                      url = url,
-                      updateMsg = "success",
-                      fetchDuration = scrapeRequest.ageDuration()
-                    )
-                  }
-                }
-              }
+          // Do not return content on error status codes
+          return if (!statusCode.isSuccess()) {
+            scrapeRequest.scrapeResults.run {
+              ScrapeRequestResponse(
+                statusCode = statusCode,
+                contentType = contentType,
+                failureReason = failureReason,
+                url = url,
+                updateMsg = "path_not_found",
+                fetchDuration = scrapeRequest.ageDuration()
+              )
+            }
+          } else {
+            scrapeRequest.scrapeResults.run {
+              // Unzip content here
+              ScrapeRequestResponse(
+                statusCode = statusCode,
+                contentType = contentType,
+                contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
+                failureReason = failureReason,
+                url = url,
+                updateMsg = "success",
+                fetchDuration = scrapeRequest.ageDuration()
+              )
+            }
           }
+        }
       }
+    }
   }
 }
 
