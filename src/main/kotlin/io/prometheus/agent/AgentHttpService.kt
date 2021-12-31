@@ -83,7 +83,13 @@ internal class AgentHttpService(val agent: Agent) {
             .use { engine ->
               HttpClient(engine) {
                 expectSuccess = false
+
                 install(HttpTimeout)
+
+//                install(HttpRequestRetry) {
+//                  retryOnServerErrors(maxRetries = 5)
+//                  exponentialDelay()
+//                }
 
                 val urlObj = Url(url)
                 val user = urlObj.user
