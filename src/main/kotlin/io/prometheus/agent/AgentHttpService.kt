@@ -56,6 +56,11 @@ internal class AgentHttpService(val agent: Agent) {
       val scrapeMsg = AtomicReference("")
       val path = request.path
       val encodedQueryParams = request.encodedQueryParams
+      val authHeader = when {
+        request.authHeader.isNullOrBlank() -> null
+        else -> request.authHeader
+      }
+
       val pathContext = agent.pathManager[path]
 
       if (pathContext.isNull()) {
@@ -106,6 +111,7 @@ internal class AgentHttpService(val agent: Agent) {
                       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
                       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
                       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
+                      authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
                     },
                     getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled)
                   )

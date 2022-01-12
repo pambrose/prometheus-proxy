@@ -207,6 +207,7 @@ internal object ProxyHttpConfig : KLogging() {
       proxy,
       path,
       encodedQueryParams,
+      request.header(HttpHeaders.Authorization) ?: "",
       request.header(HttpHeaders.Accept),
       proxy.options.debugEnabled
     )
