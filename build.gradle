@@ -80,7 +80,7 @@ dependencies {
 buildConfig {
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"12/31/21\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"1/13/22\"")
 }
 
 // gradle 7
