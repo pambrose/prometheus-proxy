@@ -61,6 +61,7 @@ message ScrapeRequest {
   string accept = 4;
   bool debug_enabled = 5;
   string encodedQueryParams = 6;
+  string authHeader = 7;
 }
 
 message ScrapeResponse {
