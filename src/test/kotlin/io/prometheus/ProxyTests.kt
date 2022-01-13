@@ -44,15 +44,15 @@ import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.newFixedThreadPoolContext
+import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withTimeoutOrNull
 import mu.KLogging
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.set
 import kotlin.time.Duration.Companion.milliseconds
@@ -184,7 +184,7 @@ internal object ProxyTests : KLogging() {
 
     // Call the proxy sequentially
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
-    Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    newSingleThreadContext("test-single")
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.inWholeMilliseconds) {
           httpClient { client ->
@@ -207,7 +207,7 @@ internal object ProxyTests : KLogging() {
 
     // Call the proxy in parallel
     logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
-    Executors.newFixedThreadPool(5).asCoroutineDispatcher()
+    newFixedThreadPoolContext(5, "test-multi")
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.inWholeMilliseconds) {
           httpClient { client ->
