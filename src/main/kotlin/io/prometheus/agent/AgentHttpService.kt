@@ -27,9 +27,9 @@ import com.google.common.net.HttpHeaders
 import com.google.common.net.HttpHeaders.ACCEPT
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
-import io.ktor.client.features.*
-import io.ktor.client.features.auth.*
-import io.ktor.client.features.auth.providers.*
+import io.ktor.client.plugins.*
+import io.ktor.client.plugins.auth.*
+import io.ktor.client.plugins.auth.providers.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -88,7 +88,13 @@ internal class AgentHttpService(val agent: Agent) {
             .use { engine ->
               HttpClient(engine) {
                 expectSuccess = false
+
                 install(HttpTimeout)
+
+//                install(HttpRequestRetry) {
+//                  retryOnServerErrors(maxRetries = 5)
+//                  exponentialDelay()
+//                }
 
                 val urlObj = Url(url)
                 val user = urlObj.user
@@ -180,7 +186,7 @@ internal class AgentHttpService(val agent: Agent) {
         responseArg.apply {
           contentType = response.headers[HttpHeaders.CONTENT_TYPE].orEmpty()
           // Zip the content here
-          val content = response.readText()
+          val content = response.bodyAsText()
           zipped = content.length > agent.configVals.agent.minGzipSizeBytes
           if (zipped)
             contentAsZipped = content.zip()

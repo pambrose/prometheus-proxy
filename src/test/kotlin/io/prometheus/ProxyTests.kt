@@ -25,15 +25,15 @@ import com.github.pambrose.common.dsl.KtorDsl.httpClient
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
-import io.ktor.application.*
 import io.ktor.client.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.http.ContentType.*
-import io.ktor.response.*
-import io.ktor.routing.*
+import io.ktor.server.application.*
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import io.prometheus.CommonTests.Companion.HTTP_SERVER_COUNT
 import io.prometheus.CommonTests.Companion.MAX_DELAY_MILLIS
 import io.prometheus.CommonTests.Companion.MIN_DELAY_MILLIS
@@ -43,12 +43,16 @@ import io.prometheus.CommonTests.Companion.SEQUENTIAL_QUERY_COUNT
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.newFixedThreadPoolContext
+import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.withTimeoutOrNull
 import mu.KLogging
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.set
 import kotlin.time.Duration.Companion.milliseconds
@@ -180,7 +184,7 @@ internal object ProxyTests : KLogging() {
 
     // Call the proxy sequentially
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
-    Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    newSingleThreadContext("test-single")
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.inWholeMilliseconds) {
           httpClient { client ->
@@ -203,7 +207,7 @@ internal object ProxyTests : KLogging() {
 
     // Call the proxy in parallel
     logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
-    Executors.newFixedThreadPool(5).asCoroutineDispatcher()
+    newFixedThreadPoolContext(5, "test-multi")
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.inWholeMilliseconds) {
           httpClient { client ->
@@ -266,7 +270,7 @@ internal object ProxyTests : KLogging() {
 
     withHttpClient(httpClient) {
       get("$PROXY_PORT/proxy-$index".withPrefix()) { response ->
-        val body = response.readText()
+        val body = response.bodyAsText()
         body shouldBeEqualTo contentMap[httpIndex]
         response.status shouldBeEqualTo HttpStatusCode.OK
       }
