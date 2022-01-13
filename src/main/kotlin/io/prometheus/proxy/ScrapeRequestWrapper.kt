@@ -36,6 +36,7 @@ internal class ScrapeRequestWrapper(
   proxy: Proxy,
   path: String,
   encodedQueryParams: String,
+  authHeader: String,
   accept: String?,
   debugEnabled: Boolean
 ) {
@@ -50,6 +51,7 @@ internal class ScrapeRequestWrapper(
       SCRAPE_ID_GENERATOR.getAndIncrement(),
       path,
       encodedQueryParams,
+      authHeader,
       accept,
       debugEnabled
     )

@@ -206,7 +206,13 @@ internal object ProxyHttpConfig : KLogging() {
   ): ScrapeRequestResponse {
 
     val scrapeRequest = ScrapeRequestWrapper(
-      agentContext, proxy, path, encodedQueryParams, request.header(HttpHeaders.Accept), proxy.options.debugEnabled
+      agentContext,
+      proxy,
+      path,
+      encodedQueryParams,
+      request.header(HttpHeaders.Authorization) ?: "",
+      request.header(HttpHeaders.Accept),
+      proxy.options.debugEnabled
     )
     val logger = ProxyHttpService.logger
 

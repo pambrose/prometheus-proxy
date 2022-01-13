@@ -83,7 +83,7 @@ then the *prometheus.yml* scrape_config would target the three apps with:
 * http://mymachine.local:8080/app2_metrics
 * http://mymachine.local:8080/app3_metrics
 
-If the endpoints use basic auth, then include the credentials in the URL with: `http://user:pass@hostname/metrics`
+If the endpoints were restricted with basic auth/bearer authentication, you could either include the basic-auth credentials in the URL with: `http://user:pass@hostname/metrics` or they could be configured with `basic_auth`/`bearer_token` in the scrape-config.
 
 The `prometheus.yml` file would include:
 
@@ -91,10 +91,14 @@ The `prometheus.yml` file would include:
 scrape_configs:
   - job_name: 'app1 metrics'
     metrics_path: '/app1_metrics'
+    bearer_token: 'eyJ....hH9rloA'
     static_configs:
       - targets: [ 'mymachine.local:8080' ]
   - job_name: 'app2 metrics'
     metrics_path: '/app2_metrics'
+    basic_auth:
+        username: 'user'
+        password: 's3cr3t'
     static_configs:
       - targets: [ 'mymachine.local:8080' ]
   - job_name: 'app3 metrics'

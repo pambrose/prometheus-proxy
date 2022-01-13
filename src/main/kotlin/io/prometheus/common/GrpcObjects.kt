@@ -98,6 +98,7 @@ internal object GrpcObjects {
     scrapeId: Long,
     path: String,
     encodedQueryParams: String,
+    authHeader: String,
     accept: String?,
     debugEnabled: Boolean
   ): ScrapeRequest {
@@ -107,6 +108,7 @@ internal object GrpcObjects {
       this.scrapeId = scrapeId
       this.path = path
       this.encodedQueryParams = encodedQueryParams
+      this.authHeader = authHeader
       this.debugEnabled = debugEnabled
       if (!accept.isNullOrBlank())
         this.accept = accept
