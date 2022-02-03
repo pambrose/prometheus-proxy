@@ -37,6 +37,16 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
   var proxyAgentPort = -1
     private set
 
+  @Parameter(names = ["--discoverUrl"], description = "URL of this service")
+  var discoverUrl = ""
+    private set
+
+  protected fun assignDiscoverUrl(defaultVal: String) {
+    if (discoverUrl.isEmpty())
+      discoverUrl = DISCOVER_URL.getEnv(defaultVal)
+    logger.info { "discoverUrl: $privateKeyFilePath" }
+  }
+
   init {
     parseOptions()
   }
@@ -58,6 +68,7 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
         assignMetricsEnabled(proxyConfigVals.metrics.enabled)
         assignMetricsPort(proxyConfigVals.metrics.port)
         assignDebugEnabled(proxyConfigVals.admin.debugEnabled)
+        assignDiscoverUrl(proxyConfigVals.admin.discoverUrl)
 
         assignCertChainFilePath(proxyConfigVals.tls.certChainFilePath)
         assignPrivateKeyFilePath(proxyConfigVals.tls.privateKeyFilePath)

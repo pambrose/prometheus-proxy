@@ -26,6 +26,7 @@ enum class EnvVars {
   PROXY_CONFIG,
   PROXY_PORT,
   AGENT_PORT,
+  DISCOVER_URL,
 
   // Agent
   AGENT_CONFIG,

@@ -258,6 +258,7 @@ abstract class BaseOptions protected constructor(
   companion object : KLogging() {
     private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
     const val DEBUG = "debug"
+    const val DISCOVER = "discover"
     const val HTTP_PREFIX = "http://"
     const val HTTPS_PREFIX = "https://"
   }

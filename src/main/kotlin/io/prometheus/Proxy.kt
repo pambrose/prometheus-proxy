@@ -31,6 +31,7 @@ import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
 import io.prometheus.common.BaseOptions.Companion.DEBUG
+import io.prometheus.common.BaseOptions.Companion.DISCOVER
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
@@ -117,6 +118,10 @@ class Proxy(
                        .joinToString("\n")
                    })
       }
+      addServlet(DISCOVER,
+                 LambdaServlet("application/json") {
+                   "[{\"targets\":[" + pathManager.getPaths().map { "\"${options.discoverUrl + it}\"" }.joinToString(",") + "]}]"
+                 })
     }
 
     initBlock?.invoke(this)

@@ -43,6 +43,12 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
   val pathMapSize: Int
     get() = pathMap.size
 
+  fun getPaths(): List<String> {
+    synchronized(pathMap) {
+      return pathMap.keys.toList()
+    }
+  }
+
   fun addPath(path: String, agentContext: AgentContext) {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
 

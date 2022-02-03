@@ -218,6 +218,7 @@ public class ConfigVals {
       public final int recentRequestsQueueSize;
       public final java.lang.String threadDumpPath;
       public final java.lang.String versionPath;
+      public final java.lang.String discoverUrl;
 
       public Admin2(com.typesafe.config.Config c, java.lang.String parentPath, $TsCfgValidator $tsCfgValidator) {
         this.debugEnabled = c.hasPathOrNull("debugEnabled") && c.getBoolean("debugEnabled");
@@ -228,6 +229,7 @@ public class ConfigVals {
         this.recentRequestsQueueSize = c.hasPathOrNull("recentRequestsQueueSize") ? c.getInt("recentRequestsQueueSize") : 50;
         this.threadDumpPath = c.hasPathOrNull("threadDumpPath") ? c.getString("threadDumpPath") : "threaddump";
         this.versionPath = c.hasPathOrNull("versionPath") ? c.getString("versionPath") : "version";
+        this.discoverUrl = c.hasPathOrNull("discoverUrl") ? c.getString("discoverUrl") : ("http://localhost:8080/");
       }
     }
 
