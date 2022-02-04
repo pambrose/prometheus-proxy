@@ -180,46 +180,46 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 
 ### Proxy CLI Options
 
-| Options               | ENV VAR<br>Property                             |Default | Description                         |
-|-----------------------|-------------------------------------------------|--------|-------------------------------------|
-| --config, -c          | PROXY_CONFIG                                    |        | Agent config file or url              |
-| --port, -p            | PROXY_PORT      <br> proxy.http.port            | 8080   | Proxy listen port                   |
-| --agent_port, -a      | AGENT_PORT      <br> proxy.agent.port           | 50051  | gRPC listen port for agents         |
-| --admin, -r           | ADMIN_ENABLED   <br> proxy.admin.enabled        | false  | Enable admin servlets               |
-| --admin_port, -i      | ADMIN_PORT      <br> proxy.admin.port           | 8092   | Admin servlets port                 |
-| --debug, -b           | DEBUG_ENABLED   <br> proxy.admin.debugEnabled   | false  | Enable proxy debug servlet<br>on admin port|
-| --metrics, -e         | METRICS_ENABLED <br> proxy.metrics.enabled      | false  | Enable proxy metrics                |
-| --metrics_port, -m    | METRICS_PORT    <br> proxy.metrics.port         | 8082   | Proxy metrics listen port           |
-| --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath   |  | Certificate chain file path       |
-| --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath |  | Private key file path            |
-| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |  | Trust certificate collection file path |
-| --version, -v         |                                                 |        | Print version info and exit         |
-| --usage, -u           |                                                 |        | Print usage message and exit        |
-| -D                    |                                                 |        | Dynamic property assignment         |
+| Options               | ENV VAR<br>Property                                                        | Default | Description                                 |
+|-----------------------|----------------------------------------------------------------------------|---------|---------------------------------------------|
+| --config, -c          | PROXY_CONFIG                                                               |         | Agent config file or url                    |
+| --port, -p            | PROXY_PORT      <br> proxy.http.port                                       | 8080    | Proxy listen port                           |
+| --agent_port, -a      | AGENT_PORT      <br> proxy.agent.port                                      | 50051   | gRPC listen port for agents                 |
+| --admin, -r           | ADMIN_ENABLED   <br> proxy.admin.enabled                                   | false   | Enable admin servlets                       |
+| --admin_port, -i      | ADMIN_PORT      <br> proxy.admin.port                                      | 8092    | Admin servlets port                         |
+| --debug, -b           | DEBUG_ENABLED   <br> proxy.admin.debugEnabled                              | false   | Enable proxy debug servlet<br>on admin port |
+| --metrics, -e         | METRICS_ENABLED <br> proxy.metrics.enabled                                 | false   | Enable proxy metrics                        |
+| --metrics_port, -m    | METRICS_PORT    <br> proxy.metrics.port                                    | 8082    | Proxy metrics listen port                   |
+| --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath                      |         | Certificate chain file path                 |
+| --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath                    |         | Private key file path                       |
+| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |         | Trust certificate collection file path      |
+| --version, -v         |                                                                            |         | Print version info and exit                 |
+| --usage, -u           |                                                                            |         | Print usage message and exit                |
+| -D                    |                                                                            |         | Dynamic property assignment                 |
 
 ### Agent CLI Options
 
-| Options               | ENV VAR<br>Property                             |Default | Description                         |
-|:----------------------|:------------------------------------------------|:-------|:------------------------------------|
-| --config, -c          | AGENT_CONFIG                                    |        | Agent config file or url (required)   |
-| --proxy, -p           | PROXY_HOSTNAME  <br> agent.proxy.hostname       |        | Proxy hostname (can include :port)  |
-| --name, -n            | AGENT_NAME      <br> agent.name                 |        | Agent name                          |
-| --admin, -r           | ADMIN_ENABLED   <br> agent.admin.enabled        | false  | Enable admin servlets               |
-| --admin_port, -i      | ADMIN_PORT      <br> agent.admin.port           | 8093   | Admin servlets port                 |
-| --debug, -b           | DEBUG_ENABLED   <br> agent.admin.debugEnabled   | false  | Enable agent debug servlet<br>on admin port|
-| --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled      | false  | Enable agent metrics                |
-| --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port         | 8083   | Agent metrics listen port           |
-| --consolidated, -o    | CONSOLIDATED <br> agent.consolidated            | false  | Enable multiple agents per registered path |
-| --timeout             | SCRAPE_TIMEOUT_SECS <br> agent.scrapeTimeoutSecs  | 15  | Scrape timeout time (seconds) |
-| --chunk               | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs   | 32   | Threshold for chunking data to Proxy and buffer size (KBs) |
-| --gzip                | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes         | 1024 | Minimum size for content to be gzipped (bytes) |
-| --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath   |      | Certificate chain file path         |
-| --key, -k             | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath |      | Private key file path            |
-| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |  | Trust certificate collection file path |
-| --override            | OVERRIDE_AUTHORITY <br> agent.tls.overrideAuthority     |      | Override authority (for testing)    |
-| --version, -v         |                                                 |        | Print version info and exit            |
-| --usage, -u           |                                                 |        | Print usage message and exit           |
-| -D                    |                                                 |        | Dynamic property assignment            |
+| Options               | ENV VAR<br>Property                                                        | Default | Description                                                |
+|:----------------------|:---------------------------------------------------------------------------|:--------|:-----------------------------------------------------------|
+| --config, -c          | AGENT_CONFIG                                                               |         | Agent config file or url (required)                        |
+| --proxy, -p           | PROXY_HOSTNAME  <br> agent.proxy.hostname                                  |         | Proxy hostname (can include :port)                         |
+| --name, -n            | AGENT_NAME      <br> agent.name                                            |         | Agent name                                                 |
+| --admin, -r           | ADMIN_ENABLED   <br> agent.admin.enabled                                   | false   | Enable admin servlets                                      |
+| --admin_port, -i      | ADMIN_PORT      <br> agent.admin.port                                      | 8093    | Admin servlets port                                        |
+| --debug, -b           | DEBUG_ENABLED   <br> agent.admin.debugEnabled                              | false   | Enable agent debug servlet<br>on admin port                |
+| --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled                                 | false   | Enable agent metrics                                       |
+| --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port                                    | 8083    | Agent metrics listen port                                  |
+| --consolidated, -o    | CONSOLIDATED <br> agent.consolidated                                       | false   | Enable multiple agents per registered path                 |
+| --timeout             | SCRAPE_TIMEOUT_SECS <br> agent.scrapeTimeoutSecs                           | 15      | Scrape timeout time (seconds)                              |
+| --chunk               | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs                      | 32      | Threshold for chunking data to Proxy and buffer size (KBs) |
+| --gzip                | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes                            | 1024    | Minimum size for content to be gzipped (bytes)             |
+| --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath                      |         | Certificate chain file path                                |
+| --key, -k             | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath                    |         | Private key file path                                      |
+| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |         | Trust certificate collection file path                     |
+| --override            | OVERRIDE_AUTHORITY <br> agent.tls.overrideAuthority                        |         | Override authority (for testing)                           |
+| --version, -v         |                                                                            |         | Print version info and exit                                |
+| --usage, -u           |                                                                            |         | Print usage message and exit                               |
+| -D                    |                                                                            |         | Dynamic property assignment                                |
 
 Misc notes:
 
