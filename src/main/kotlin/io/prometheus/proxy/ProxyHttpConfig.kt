@@ -140,7 +140,6 @@ internal object ProxyHttpConfig : KLogging() {
             }
           }
 
-
           path.isEmpty() || path.isBlank() -> {
             val msg = "Request missing path"
             proxy.logActivity(msg)
