@@ -20,7 +20,7 @@ tests:
 	./gradlew --rerun-tasks check
 
 config:
-	java -jar ./etc/jars/tscfg-0.9.98.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
+	java -jar ./etc/jars/tscfg-0.9.997.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
 distro: clean compile jars
 
@@ -64,4 +64,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=7.3.3 --distribution-type=bin
+	./gradlew wrapper --gradle-version=7.4 --distribution-type=bin

@@ -16,11 +16,14 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.util.ensureSuffix
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
+import com.github.pambrose.common.util.toDoubleQuoted
 import com.github.pambrose.common.util.unzip
 import io.ktor.http.*
+import io.ktor.http.ContentType.Application.Json
 import io.ktor.http.ContentType.Text.Plain
 import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.http.HttpStatusCode.Companion.OK
@@ -34,6 +37,10 @@ import io.ktor.server.routing.*
 import io.prometheus.Proxy
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import mu.KLogging
 import org.slf4j.event.Level
 import kotlin.time.Duration
@@ -90,6 +97,29 @@ internal object ProxyHttpConfig : KLogging() {
         delay(30.seconds)
         call.respondWith("Test value", Plain, OK)
       }
+
+      if (proxy.options.sdEnabled) {
+        logger.info { "Adding /${proxy.options.sdPath} service discovery endpoint" }
+        val format = Json { prettyPrint = true }
+
+        get(proxy.options.sdPath) {
+          val content =
+            buildString {
+              append("""[{"targets": [ """)
+              append(proxy.pathManager.allPaths.joinToString(", ") {
+                "${proxy.options.sdTargetPrefix.ensureSuffix("/")}$it".toDoubleQuoted()
+              })
+              append(" ]}]")
+            }
+          val jsonElement = format.decodeFromString<JsonElement>(content)
+          val prettyPrint = format.encodeToString(jsonElement)
+
+          call.respondWith(prettyPrint, Json)
+        }
+      } else {
+        logger.info { "Not adding /${proxy.options.sdPath} service discovery endpoint" }
+      }
+
       get("/*") {
         call.response.header(HttpHeaders.CacheControl, "must-revalidate,no-store")
 

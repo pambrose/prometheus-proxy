@@ -37,6 +37,18 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
   var proxyAgentPort = -1
     private set
 
+  @Parameter(names = ["--sd_enabled"], description = "Service discovery endpoint enabled")
+  var sdEnabled = false
+    private set
+
+  @Parameter(names = ["--sd_path"], description = "Service discovery endpoint path")
+  var sdPath = ""
+    private set
+
+  @Parameter(names = ["--sd_target_prefix"], description = "Service discovery target prefix")
+  var sdTargetPrefix = ""
+    private set
+
   init {
     parseOptions()
   }
@@ -53,6 +65,25 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
 
     configVals.proxy
       .also { proxyConfigVals ->
+
+        if (!sdEnabled)
+          sdEnabled = SD_ENABLED.getEnv(false)
+        logger.info { "sdEnabled: $sdEnabled" }
+
+        if (sdPath.isEmpty())
+          sdPath = SD_PATH.getEnv(proxyConfigVals.service.discovery.path)
+        if (sdEnabled)
+          require(sdPath.isNotEmpty()) { "sdPath is empty" }
+        else
+          logger.info { "sdPath: $sdPath" }
+
+        if (sdTargetPrefix.isEmpty())
+          sdTargetPrefix = SD_TARGET_PREFIX.getEnv(proxyConfigVals.service.discovery.targetPrefix)
+        if (sdEnabled)
+          require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
+        else
+          logger.info { "sdTargetPrefix: $sdTargetPrefix" }
+
         assignAdminEnabled(proxyConfigVals.admin.enabled)
         assignAdminPort(proxyConfigVals.admin.port)
         assignMetricsEnabled(proxyConfigVals.metrics.enabled)

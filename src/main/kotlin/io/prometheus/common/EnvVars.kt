@@ -26,6 +26,9 @@ enum class EnvVars {
   PROXY_CONFIG,
   PROXY_PORT,
   AGENT_PORT,
+  SD_ENABLED,
+  SD_PATH,
+  SD_TARGET_PREFIX,
 
   // Agent
   AGENT_CONFIG,
