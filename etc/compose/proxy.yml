@@ -1,6 +1,6 @@
 prometheus-proxy:
   autoredeploy: true
-  image: 'pambrose/prometheus-proxy:1.12.0'
+  image: 'pambrose/prometheus-proxy:1.13.0'
   ports:
     - '8080:8080'
     - '8082:8082'
