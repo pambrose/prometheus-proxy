@@ -71,8 +71,7 @@ class Proxy(
   ) {
   private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort, isTestMode)
-  private val recentActions: EvictingQueue<String> =
-    EvictingQueue.create(configVals.proxy.admin.recentRequestsQueueSize)
+  private val recentReqs: EvictingQueue<String> = EvictingQueue.create(configVals.proxy.admin.recentRequestsQueueSize)
   private val grpcService =
     if (inProcessServerName.isEmpty())
       ProxyGrpcService(this, port = options.proxyAgentPort)
@@ -111,11 +110,13 @@ class Proxy(
                      listOf(
                        toPlainText(),
                        pathManager.toPlainText(),
-                       if (recentActions.size > 0) "\n${recentActions.size} most recent requests:" else "",
-                       recentActions.reversed().joinToString("\n")
+                       if (recentReqs.size > 0) "\n${recentReqs.size} most recent requests:" else "",
+                       recentReqs.reversed().joinToString("\n")
                      )
                        .joinToString("\n")
                    })
+      } else {
+        logger.info { "Debug servlet disabled" }
       }
     }
 
@@ -203,8 +204,8 @@ class Proxy(
   private val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
   internal fun logActivity(desc: String) {
-    synchronized(recentActions) {
-      recentActions.add("${LocalDateTime.now().format(formatter)}: $desc")
+    synchronized(recentReqs) {
+      recentReqs.add("${LocalDateTime.now().format(formatter)}: $desc")
     }
   }
 

@@ -24,23 +24,23 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
 import io.ktor.server.cio.*
+import io.ktor.server.cio.CIOApplicationEngine.*
 import io.ktor.server.engine.*
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyHttpConfig.configServer
 import mu.KLogging
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.DurationUnit
+import kotlin.time.DurationUnit.SECONDS
 
 internal class ProxyHttpService(private val proxy: Proxy, val httpPort: Int, isTestMode: Boolean) :
-    GenericIdleService() {
+  GenericIdleService() {
   private val proxyConfigVals = proxy.configVals.proxy
   private val idleTimeout =
     if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
-  private val config: CIOApplicationEngine.Configuration.() -> Unit =
-    { connectionIdleTimeoutSeconds = idleTimeout.toInt(DurationUnit.SECONDS) }
+  private val config: Configuration.() -> Unit = { connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS) }
   private val httpServer = embeddedServer(CIO, port = httpPort, configure = config) { configServer(proxy, isTestMode) }
 
   init {

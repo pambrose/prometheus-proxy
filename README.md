@@ -180,22 +180,25 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 
 ### Proxy CLI Options
 
-| Options               | ENV VAR<br>Property                                                        | Default | Description                                 |
-|-----------------------|----------------------------------------------------------------------------|---------|---------------------------------------------|
-| --config, -c          | PROXY_CONFIG                                                               |         | Agent config file or url                    |
-| --port, -p            | PROXY_PORT      <br> proxy.http.port                                       | 8080    | Proxy listen port                           |
-| --agent_port, -a      | AGENT_PORT      <br> proxy.agent.port                                      | 50051   | gRPC listen port for agents                 |
-| --admin, -r           | ADMIN_ENABLED   <br> proxy.admin.enabled                                   | false   | Enable admin servlets                       |
-| --admin_port, -i      | ADMIN_PORT      <br> proxy.admin.port                                      | 8092    | Admin servlets port                         |
-| --debug, -b           | DEBUG_ENABLED   <br> proxy.admin.debugEnabled                              | false   | Enable proxy debug servlet<br>on admin port |
-| --metrics, -e         | METRICS_ENABLED <br> proxy.metrics.enabled                                 | false   | Enable proxy metrics                        |
-| --metrics_port, -m    | METRICS_PORT    <br> proxy.metrics.port                                    | 8082    | Proxy metrics listen port                   |
-| --cert, -t            | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath                      |         | Certificate chain file path                 |
-| --key, -k             | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath                    |         | Private key file path                       |
-| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |         | Trust certificate collection file path      |
-| --version, -v         |                                                                            |         | Print version info and exit                 |
-| --usage, -u           |                                                                            |         | Print usage message and exit                |
-| -D                    |                                                                            |         | Dynamic property assignment                 |
+| Options            | ENV VAR<br>Property                                                        | Default                  | Description                                 |
+|--------------------|----------------------------------------------------------------------------|--------------------------|---------------------------------------------|
+| --config, -c       | PROXY_CONFIG                                                               |                          | Agent config file or url                    |
+| --port, -p         | PROXY_PORT       <br> proxy.http.port                                      | 8080                     | Proxy listen port                           |
+| --agent_port, -a   | AGENT_PORT       <br> proxy.agent.port                                     | 50051                    | gRPC listen port for agents                 |
+| --admin, -r        | ADMIN_ENABLED    <br> proxy.admin.enabled                                  | false                    | Enable admin servlets                       |
+| --admin_port, -i   | ADMIN_PORT       <br> proxy.admin.port                                     | 8092                     | Admin servlets port                         |
+| --debug, -b        | DEBUG_ENABLED    <br> proxy.admin.debugEnabled                             | false                    | Enable proxy debug servlet<br>on admin port |
+| --metrics, -e      | METRICS_ENABLED  <br> proxy.metrics.enabled                                | false                    | Enable proxy metrics                        |
+| --metrics_port, -m | METRICS_PORT     <br> proxy.metrics.port                                   | 8082                     | Proxy metrics listen port                   |
+| --sd_enabled       | SD_ENABLED       <br> proxy.service.discovery.enabled                      | false                    | Service discovery endpoint enabled          |
+| --sd_path          | SD_PATH          <br> proxy.service.discovery.path                         | "discovery"              | Service discovery endpoint path             |
+| --sd_target_prefix | SD_TARGET_PREFIX <br> proxy.service.discovery.targetPrefix                 | "http://localhost:8080/" | Service discovery target prefix             |
+| --cert, -t         | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath                      |                          | Certificate chain file path                 |
+| --key, -k          | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath                    |                          | Private key file path                       |
+| --trust, -s        | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |                          | Trust certificate collection file path      |
+| --version, -v      |                                                                            |                          | Print version info and exit                 |
+| --usage, -u        |                                                                            |                          | Print usage message and exit                |
+| -D                 |                                                                            |                          | Dynamic property assignment                 |
 
 ### Agent CLI Options
 
@@ -228,7 +231,9 @@ Misc notes:
 * Java Properties config files must have a *.properties*  or *.prop* suffix
 * HOCON config files must have a *.conf* suffix
 * Option values are evaluated in the order: CLI, environment vars, and finally config file vals
-* Property values can be set as a java -D arg to or as a proxy or agent jar -D arg.
+* Property values can be set as a java -D arg to or as a proxy or agent jar -D arg
+* For more information about the proxy service discovery options, see the
+  Prometheus [documentation](https://prometheus.io/docs/prometheus/latest/http_sd/)
 
 ### Admin Servlets
 

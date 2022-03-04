@@ -4,8 +4,8 @@ plugins {
     id 'maven-publish'
     id 'org.jetbrains.kotlin.jvm' version '1.6.10'
     id 'com.google.protobuf' version '0.8.18'
-    id 'org.jmailen.kotlinter' version "3.8.0"
-    id "com.github.ben-manes.versions" version '0.41.0'
+    id 'org.jmailen.kotlinter' version "3.9.0"
+    id "com.github.ben-manes.versions" version '0.42.0'
     id 'com.github.johnrengelman.shadow' version '7.1.2'
     id 'com.github.gmazzo.buildconfig' version '3.0.3'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
@@ -29,6 +29,8 @@ repositories {
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
     implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:$serialization_version"
 
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
 
@@ -80,10 +82,9 @@ dependencies {
 buildConfig {
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"1/13/22\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"3/3/22\"")
 }
 
-// gradle 7
 publishing {
     publications {
         mavenJava(MavenPublication) {
@@ -202,19 +203,21 @@ compileKotlin.dependsOn ':generateProto'
 compileKotlin {
     kotlinOptions {
         jvmTarget = "1.8"
-        freeCompilerArgs += ["-Xopt-in=kotlin.time.ExperimentalTime",
-                             "-Xopt-in=kotlin.contracts.ExperimentalContracts",
-                             "-Xopt-in=kotlin.ExperimentalUnsignedTypes",
-                             "-Xopt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
-                             "-Xopt-in=kotlinx.coroutines.InternalCoroutinesApi"]
+        freeCompilerArgs += ['-Xbackend-threads=8',
+                             "-opt-in=kotlin.time.ExperimentalTime",
+                             "-opt-in=kotlin.contracts.ExperimentalContracts",
+                             "-opt-in=kotlin.ExperimentalUnsignedTypes",
+                             "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+                             "-opt-in=kotlinx.coroutines.InternalCoroutinesApi"]
     }
 }
 
 compileTestKotlin {
     kotlinOptions {
         jvmTarget = "1.8"
-        freeCompilerArgs += ["-Xopt-in=kotlinx.coroutines.InternalCoroutinesApi",
-                             "-Xopt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
+        freeCompilerArgs += ['-Xbackend-threads=8',
+                             "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
+                             "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
     }
 }
 
