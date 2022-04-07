@@ -19,7 +19,6 @@
 package io.prometheus.agent
 
 import com.beust.jcommander.Parameter
-import com.google.common.collect.Iterables
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.*
@@ -27,10 +26,10 @@ import mu.KLogging
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
-    BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
+  BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
 
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
-      this(Iterables.toArray<String>(args.toMutableList(), String::class.java), exitOnMissingConfig)
+      this(args.toTypedArray(), exitOnMissingConfig)
 
   constructor(configFilename: String, exitOnMissingConfig: Boolean) :
       this(listOf("--config", configFilename), exitOnMissingConfig)
@@ -74,10 +73,12 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
 
         if (proxyHostname.isEmpty()) {
           val configHostname = agentConfigVals.proxy.hostname
-          proxyHostname = PROXY_HOSTNAME.getEnv(if (":" in configHostname)
-                                                  configHostname
-                                                else
-                                                  "$configHostname:${agentConfigVals.proxy.port}")
+          proxyHostname = PROXY_HOSTNAME.getEnv(
+            if (":" in configHostname)
+              configHostname
+            else
+              "$configHostname:${agentConfigVals.proxy.port}"
+          )
         }
         logger.info { "proxyHostname: $proxyHostname" }
 

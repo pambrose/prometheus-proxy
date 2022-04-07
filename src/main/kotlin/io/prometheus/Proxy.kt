@@ -93,7 +93,7 @@ class Proxy(
       Proxy port: ${httpService.httpPort}
       
       Admin Service:
-      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
+      ${if (isAdminEnabled) servletService.toString() else "Disabled"}
       
       Metrics Service:
       ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
@@ -102,17 +102,18 @@ class Proxy(
 
     addServices(grpcService, httpService)
 
-    initService {
+    initServletService {
       if (options.debugEnabled) {
         logger.info { "Adding /$DEBUG endpoint" }
-        addServlet(DEBUG,
-                   LambdaServlet {
-                     listOf(
-                       toPlainText(),
-                       pathManager.toPlainText(),
-                       if (recentReqs.size > 0) "\n${recentReqs.size} most recent requests:" else "",
-                       recentReqs.reversed().joinToString("\n")
-                     )
+        addServlet(
+          DEBUG,
+          LambdaServlet {
+            listOf(
+              toPlainText(),
+              pathManager.toPlainText(),
+              if (recentReqs.size > 0) "\n${recentReqs.size} most recent requests:" else "",
+              recentReqs.reversed().joinToString("\n")
+            )
                        .joinToString("\n")
                    })
       } else {
@@ -212,7 +213,7 @@ class Proxy(
   override fun toString() =
     toStringElements {
       add("proxyPort", httpService.httpPort)
-      add("adminService", if (isAdminEnabled) adminService else "Disabled")
+      add("adminService", if (isAdminEnabled) servletService else "Disabled")
       add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
     }
 
