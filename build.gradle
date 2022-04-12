@@ -4,7 +4,7 @@ plugins {
     id 'maven-publish'
     id 'org.jetbrains.kotlin.jvm' version '1.6.20'
     id 'com.google.protobuf' version '0.8.18'
-    id 'org.jmailen.kotlinter' version "3.9.0"
+    id 'org.jmailen.kotlinter' version "3.10.0"
     id "com.github.ben-manes.versions" version '0.42.0'
     id 'com.github.johnrengelman.shadow' version '7.1.2'
     id 'com.github.gmazzo.buildconfig' version '3.0.3'
@@ -60,11 +60,14 @@ dependencies {
 
     implementation "io.prometheus:simpleclient:$prometheus_version"
 
-    implementation "io.ktor:ktor-server:$ktor_version"
-    implementation "io.ktor:ktor-server-cio:$ktor_version"
     implementation "io.ktor:ktor-client:$ktor_version"
     implementation "io.ktor:ktor-client-cio:$ktor_version"
     implementation "io.ktor:ktor-client-auth:$ktor_version"
+
+    implementation "io.ktor:ktor-server:$ktor_version"
+    implementation "io.ktor:ktor-server-cio:$ktor_version"
+    implementation "io.ktor:ktor-server-call-logging:$ktor_version"
+    implementation "io.ktor:ktor-server-compression:$ktor_version"
 
     implementation "io.dropwizard.metrics:metrics-healthchecks:$dropwizard_version"
 
@@ -140,6 +143,9 @@ task sourcesJar(type: Jar, dependsOn: classes) {
     from sourceSets.main.allSource
 }
 
+// This is to fix a bizarre gradle error related to duplicate Agent.toString() methods
+project.getTasks().getByName("jar").setProperty("duplicatesStrategy", DuplicatesStrategy.INCLUDE);
+
 task javadocJar(type: Jar, dependsOn: javadoc) {
     classifier = 'javadoc'
     from javadoc.destinationDir
@@ -153,6 +159,7 @@ artifacts {
 java {
     withSourcesJar()
 }
+
 
 //jacocoTestReport {
 //    reports {
@@ -235,8 +242,8 @@ test {
 
 kotlinter {
     ignoreFailures = false
-    indentSize = 2
+    //indentSize = 2
     reporters = ['checkstyle', 'plain']
     experimentalRules = false
-    disabledRules = ["no-wildcard-imports", "indent", "final-newline", "comment-spacing", "max-line-length", "no-multi-spaces", "no-trailing-spaces"]
+    disabledRules = ["no-wildcard-imports", "indent", "final-newline", "comment-spacing", "max-line-length", "no-multi-spaces", "no-trailing-spaces", "wrapping"]
 }
