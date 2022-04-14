@@ -307,12 +307,11 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 target for `--mount` options.
 
 ## Scraping a prometheus instance
-It's possible to scrape an existing prometheus server using the /federate endpoint. 
-This enables using the existing service discovery features already built into prometheus. 
+It's possible to scrape an existing prometheus server using the `/federate` endpoint. 
+This enables using the existing service discovery features already built into Prometheus. 
 
 An example config can be found in
-[federate.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/federate.conf)
-
+[federate.conf](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf).
 
 ## Grafana
 
