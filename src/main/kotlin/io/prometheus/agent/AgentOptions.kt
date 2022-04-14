@@ -54,6 +54,10 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   var scrapeTimeoutSecs = -1
     private set
 
+  @Parameter(names = ["--max_retries"], description = "Scrape max retries")
+  var scrapeMaxRetries = -1
+    private set
+
   @Parameter(names = ["--chunk"], description = "Threshold for chunking content to Proxy and buffer size (KBs)")
   var chunkContentSizeKbs = -1
     private set
@@ -93,6 +97,10 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
         if (scrapeTimeoutSecs == -1)
           scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
         logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+
+        if (scrapeMaxRetries == -1)
+          scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
+        logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
 
         if (chunkContentSizeKbs == -1)
           chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)

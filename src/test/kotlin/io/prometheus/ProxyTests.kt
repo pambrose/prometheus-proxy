@@ -137,22 +137,20 @@ internal object ProxyTests : KLogging() {
 
         // Create fake content
         val s = "This is the content for an endpoint for server# $i on $port\n"
-        val builder = StringBuilder()
         val len =
           when (i % 3) {
             0 -> 100_000
-            1 -> 1000
+            1 -> 1_000
             else -> 1
           }
-        repeat(len) { builder.append(s + "${it}\n") }
-        contentMap[i] = builder.toString()
+        val content = buildString { repeat(len) { append("$s$it\n") } }.also { contentMap[i] = it }
 
         HttpServerWrapper(
           port = port,
           server = embeddedServer(CIO, port = port) {
             routing {
               get("/agent-$i") {
-                call.respondText(contentMap[i]!!, Text.Plain)
+                call.respondText(content, Text.Plain)
               }
             }
           })
