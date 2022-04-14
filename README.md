@@ -306,7 +306,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
 target for `--mount` options.
 
-## Scraping a prometheus instance
+## Scraping a Prometheus instance
 It's possible to scrape an existing prometheus server using the `/federate` endpoint. 
 This enables using the existing service discovery features already built into Prometheus. 
 
