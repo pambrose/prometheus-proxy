@@ -2,12 +2,13 @@ plugins {
     id 'idea'
     id 'java'
     id 'maven-publish'
-    id 'org.jetbrains.kotlin.jvm' version '1.6.21'
+    id 'org.jetbrains.kotlin.jvm' version '1.7.0'
     id 'com.google.protobuf' version '0.8.18'
     id 'org.jmailen.kotlinter' version "3.10.0"
     id "com.github.ben-manes.versions" version '0.42.0'
     id 'com.github.johnrengelman.shadow' version '7.1.2'
     id 'com.github.gmazzo.buildconfig' version '3.0.3'
+    //id 'org.jetbrains.kotlinx.kover' version '0.5.0'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
     // id 'jacoco'
     // id 'com.github.kt3k.coveralls' version '2.12.0'
@@ -20,19 +21,19 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 repositories {
-    maven { url 'https://maven.pkg.jetbrains.space/public/p/ktor/eap'; name 'ktor-eap' }
+    //maven { url "https://maven.pkg.jetbrains.space/public/p/ktor/eap" }
     google()
     mavenCentral()
     maven { url = 'https://jitpack.io' }
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    //implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
     implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
 
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:$serialization_version"
 
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
+    //implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
 
     implementation "io.grpc:grpc-netty:$grpc_version"
     implementation "io.grpc:grpc-protobuf:$grpc_version"
@@ -117,17 +118,18 @@ protobuf {
 
         // Specify protoc to generate using our grpc kotlin plugin
         grpckt {
-            artifact = "io.grpc:protoc-gen-grpc-kotlin:$gengrpc_version:jdk7@jar"
+            artifact = "io.grpc:protoc-gen-grpc-kotlin:$gengrpc_version:jdk8@jar"
         }
     }
     generateProtoTasks {
         all().each { task ->
             task.plugins {
-                // Generate Java gRPC classes
-                grpc {}
-                // Generate Kotlin gRPC using the custom plugin from library
-                grpckt {}
+                grpc {}     // Generate Java gRPC classes
+                grpckt {}   // Generate Kotlin gRPC using the custom plugin from library
             }
+//            task.builtins {
+//                kotlin {}
+//            }
         }
     }
 }
