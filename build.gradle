@@ -33,8 +33,6 @@ dependencies {
 
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:$serialization_version"
 
-    //implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
-
     implementation "io.grpc:grpc-netty:$grpc_version"
     implementation "io.grpc:grpc-protobuf:$grpc_version"
     implementation "io.grpc:grpc-stub:$grpc_version"
