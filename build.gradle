@@ -2,12 +2,12 @@ plugins {
     id 'idea'
     id 'java'
     id 'maven-publish'
-    id 'org.jetbrains.kotlin.jvm' version '1.7.0'
-    id 'com.google.protobuf' version '0.8.18'
-    id 'org.jmailen.kotlinter' version "3.10.0"
+    id 'org.jetbrains.kotlin.jvm' version '1.7.10'
+    id 'com.google.protobuf' version '0.8.19'
+    id 'org.jmailen.kotlinter' version "3.11.1"
     id "com.github.ben-manes.versions" version '0.42.0'
     id 'com.github.johnrengelman.shadow' version '7.1.2'
-    id 'com.github.gmazzo.buildconfig' version '3.0.3'
+    id 'com.github.gmazzo.buildconfig' version '3.1.0'
     //id 'org.jetbrains.kotlinx.kover' version '0.5.0'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
     // id 'jacoco'
