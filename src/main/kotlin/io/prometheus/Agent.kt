@@ -49,7 +49,6 @@ import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.getVersionDesc
-import io.prometheus.prometheus_proxy.BuildConfig
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -122,10 +121,12 @@ class Agent(
     initServletService {
       if (options.debugEnabled) {
         logger.info { "Adding /$DEBUG endpoint" }
-        addServlet(DEBUG,
-                   LambdaServlet {
-                     listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n")
-                   })
+        addServlet(
+          DEBUG,
+          LambdaServlet {
+            listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n")
+          }
+        )
       }
     }
 

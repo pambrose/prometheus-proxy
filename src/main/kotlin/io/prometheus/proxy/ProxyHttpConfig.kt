@@ -54,7 +54,6 @@ import kotlin.time.Duration.Companion.seconds
 internal object ProxyHttpConfig : KLogging() {
 
   fun Application.configServer(proxy: Proxy, isTestMode: Boolean) {
-
     install(DefaultHeaders) {
       header("X-Engine", "Ktor")
     }
@@ -238,7 +237,6 @@ internal object ProxyHttpConfig : KLogging() {
     request: ApplicationRequest,
     response: ApplicationResponse
   ): ScrapeRequestResponse {
-
     val scrapeRequest = ScrapeRequestWrapper(
       agentContext,
       proxy,

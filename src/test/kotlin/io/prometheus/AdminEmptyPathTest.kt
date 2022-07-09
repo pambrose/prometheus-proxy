@@ -88,14 +88,19 @@ class AdminEmptyPathTest {
     @BeforeAll
     fun setUp() =
       setItUp(
-          {
-            startProxy(adminEnabled = true, argv = listOf("-Dproxy.admin.port=8098",
-                                                          "-Dproxy.admin.pingPath=\"\"",
-                                                          "-Dproxy.admin.versionPath=\"\"",
-                                                          "-Dproxy.admin.healthCheckPath=\"\"",
-                                                          "-Dproxy.admin.threadDumpPath=\"\""))
-          },
-          { startAgent(adminEnabled = true) }
+        {
+          startProxy(
+            adminEnabled = true,
+            argv = listOf(
+              "-Dproxy.admin.port=8098",
+              "-Dproxy.admin.pingPath=\"\"",
+              "-Dproxy.admin.versionPath=\"\"",
+              "-Dproxy.admin.healthCheckPath=\"\"",
+              "-Dproxy.admin.threadDumpPath=\"\""
+            )
+          )
+        },
+        { startAgent(adminEnabled = true) }
       )
 
     @JvmStatic

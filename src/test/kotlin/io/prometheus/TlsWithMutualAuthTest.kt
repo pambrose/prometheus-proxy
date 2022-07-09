@@ -26,9 +26,13 @@ import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class TlsWithMutualAuthTest : CommonTests(ProxyCallTestArgs(agent = agent,
-                                                            startPort = 10800,
-                                                            caller = simpleClassName)) {
+class TlsWithMutualAuthTest : CommonTests(
+  ProxyCallTestArgs(
+    agent = agent,
+    startPort = 10800,
+    caller = simpleClassName
+  )
+) {
 
   companion object : CommonCompanion() {
 
@@ -36,23 +40,40 @@ class TlsWithMutualAuthTest : CommonTests(ProxyCallTestArgs(agent = agent,
     @BeforeAll
     fun setUp() =
       setItUp(
-          {
-            startProxy(serverName = "withmutualauth",
-                       argv = listOf("--agent_port", "50440",
-                                     "--cert", "testing/certs/server1.pem",
-                                     "--key", "testing/certs/server1.key",
-                                     "--trust", "testing/certs/ca.pem"))
-          },
-          {
-            startAgent(serverName = "withmutualauth",
-                       scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-                       chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
-                       argv = listOf("--proxy", "localhost:50440",
-                                     "--cert", "testing/certs/client.pem",
-                                     "--key", "testing/certs/client.key",
-                                     "--trust", "testing/certs/ca.pem",
-                                     "--override", "foo.test.google.fr"))
-          }
+        {
+          startProxy(
+            serverName = "withmutualauth",
+            argv = listOf(
+              "--agent_port",
+              "50440",
+              "--cert",
+              "testing/certs/server1.pem",
+              "--key",
+              "testing/certs/server1.key",
+              "--trust",
+              "testing/certs/ca.pem"
+            )
+          )
+        },
+        {
+          startAgent(
+            serverName = "withmutualauth",
+            scrapeTimeoutSecs = DEFAULT_TIMEOUT,
+            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
+            argv = listOf(
+              "--proxy",
+              "localhost:50440",
+              "--cert",
+              "testing/certs/client.pem",
+              "--key",
+              "testing/certs/client.key",
+              "--trust",
+              "testing/certs/ca.pem",
+              "--override",
+              "foo.test.google.fr"
+            )
+          )
+        }
       )
 
     @JvmStatic

@@ -26,9 +26,13 @@ import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class NettyTestNoAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
-                                                                  startPort = 10900,
-                                                                  caller = simpleClassName)) {
+class NettyTestNoAdminMetricsTest : CommonTests(
+  ProxyCallTestArgs(
+    agent = agent,
+    startPort = 10900,
+    caller = simpleClassName
+  )
+) {
 
   companion object : CommonCompanion() {
 
@@ -36,11 +40,13 @@ class NettyTestNoAdminMetricsTest : CommonTests(ProxyCallTestArgs(agent = agent,
     @BeforeAll
     fun setUp() =
       setItUp(
-          { startProxy() },
-          {
-            startAgent(scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-                       chunkContentSizeKbs = DEFAULT_CHUNK_SIZE)
-          }
+        { startProxy() },
+        {
+          startAgent(
+            scrapeTimeoutSecs = DEFAULT_TIMEOUT,
+            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE
+          )
+        }
       )
 
     @JvmStatic

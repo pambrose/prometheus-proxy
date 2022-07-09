@@ -37,7 +37,6 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.getVersionDesc
-import io.prometheus.prometheus_proxy.BuildConfig
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
@@ -114,8 +113,9 @@ class Proxy(
               if (recentReqs.size > 0) "\n${recentReqs.size} most recent requests:" else "",
               recentReqs.reversed().joinToString("\n")
             )
-                       .joinToString("\n")
-                   })
+              .joinToString("\n")
+          }
+        )
       } else {
         logger.info { "Debug servlet disabled" }
       }
@@ -184,7 +184,8 @@ class Proxy(
                   HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
                 }
               }
-          })
+          }
+        )
       }
   }
 

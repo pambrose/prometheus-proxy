@@ -71,7 +71,6 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   }
 
   override fun assignConfigVals() {
-
     configVals.agent
       .also { agentConfigVals ->
 

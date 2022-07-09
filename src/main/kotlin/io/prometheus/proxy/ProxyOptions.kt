@@ -53,7 +53,6 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
   }
 
   override fun assignConfigVals() {
-
     if (proxyHttpPort == -1)
       proxyHttpPort = PROXY_PORT.getEnv(configVals.proxy.http.port)
     logger.info { "proxyHttpPort: $proxyHttpPort" }

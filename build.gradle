@@ -82,6 +82,8 @@ dependencies {
 }
 
 buildConfig {
+    packageName("io.prometheus")
+
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
     buildConfigField('String', 'APP_RELEASE_DATE', "\"4/12/22\"")
@@ -245,5 +247,13 @@ kotlinter {
     //indentSize = 2
     reporters = ['checkstyle', 'plain']
     experimentalRules = false
-    disabledRules = ["no-wildcard-imports", "indent", "final-newline", "comment-spacing", "max-line-length", "no-multi-spaces", "no-trailing-spaces", "wrapping"]
+    disabledRules = ["no-wildcard-imports",
+                     "indent",
+                     "final-newline",
+                     "comment-spacing",
+                     "max-line-length",
+                     "no-multi-spaces",
+                     "no-trailing-spaces",
+                     "wrapping",
+                     "multiline-if-else",]
 }

@@ -153,7 +153,8 @@ internal object ProxyTests : KLogging() {
                 call.respondText(content, Text.Plain)
               }
             }
-          })
+          }
+        )
       }
 
     logger.debug { "Starting ${args.httpServerCount} httpServers" }
