@@ -19,7 +19,23 @@
 package io.prometheus.common
 
 import com.google.protobuf.ByteString
-import io.prometheus.grpc.*
+import io.prometheus.grpc.AgentInfo
+import io.prometheus.grpc.ChunkData
+import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.HeaderData
+import io.prometheus.grpc.HeartBeatRequest
+import io.prometheus.grpc.HeartBeatResponse
+import io.prometheus.grpc.PathMapSizeRequest
+import io.prometheus.grpc.PathMapSizeResponse
+import io.prometheus.grpc.RegisterAgentRequest
+import io.prometheus.grpc.RegisterAgentResponse
+import io.prometheus.grpc.RegisterPathRequest
+import io.prometheus.grpc.RegisterPathResponse
+import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.grpc.ScrapeResponse
+import io.prometheus.grpc.SummaryData
+import io.prometheus.grpc.UnregisterPathRequest
+import io.prometheus.grpc.UnregisterPathResponse
 import java.util.zip.CRC32
 
 internal object GrpcObjects {
@@ -214,120 +230,120 @@ internal object GrpcObjects {
 
   private fun heartBeatRequest(block: HeartBeatRequest.Builder.() -> Unit): HeartBeatRequest =
     HeartBeatRequest.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun heartBeatResponse(block: HeartBeatResponse.Builder.() -> Unit): HeartBeatResponse =
     HeartBeatResponse.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun registerAgentRequest(block: RegisterAgentRequest.Builder.() -> Unit): RegisterAgentRequest =
     RegisterAgentRequest.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun registerAgentResponse(block: RegisterAgentResponse.Builder.() -> Unit): RegisterAgentResponse =
     RegisterAgentResponse.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun pathMapSizeRequest(block: PathMapSizeRequest.Builder.() -> Unit): PathMapSizeRequest =
     PathMapSizeRequest.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun pathMapSizeResponse(block: PathMapSizeResponse.Builder.() -> Unit): PathMapSizeResponse =
     PathMapSizeResponse.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun registerPathRequest(block: RegisterPathRequest.Builder.() -> Unit): RegisterPathRequest =
     RegisterPathRequest.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun registerPathResponse(block: RegisterPathResponse.Builder.() -> Unit): RegisterPathResponse =
     RegisterPathResponse.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun scrapeRequest(block: ScrapeRequest.Builder.() -> Unit): ScrapeRequest =
     ScrapeRequest.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun scrapeResponse(block: ScrapeResponse.Builder.() -> Unit): ScrapeResponse =
     ScrapeResponse.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun headerData(block: HeaderData.Builder.() -> Unit): HeaderData =
     HeaderData.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun chunkData(block: ChunkData.Builder.() -> Unit): ChunkData =
     ChunkData.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun summaryData(block: SummaryData.Builder.() -> Unit): SummaryData =
     SummaryData.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun chunkedScrapeResponse(block: ChunkedScrapeResponse.Builder.() -> Unit): ChunkedScrapeResponse =
     ChunkedScrapeResponse.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun unregisterPathRequest(block: UnregisterPathRequest.Builder.() -> Unit): UnregisterPathRequest =
     UnregisterPathRequest.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   internal fun unregisterPathResponse(block: UnregisterPathResponse.Builder.() -> Unit): UnregisterPathResponse =
     UnregisterPathResponse.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 
   private fun agentInfo(block: AgentInfo.Builder.() -> Unit): AgentInfo =
     AgentInfo.newBuilder()
-      .let {
-        block.invoke(it)
-        it.build()
+      .run {
+        block()
+        build()
       }
 }
