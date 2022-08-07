@@ -67,4 +67,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=7.5 --distribution-type=bin
+	./gradlew wrapper --gradle-version=7.5.1 --distribution-type=bin
