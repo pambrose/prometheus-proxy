@@ -24,8 +24,12 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
-import com.github.pambrose.common.util.*
 import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
+import com.github.pambrose.common.util.Version
+import com.github.pambrose.common.util.getBanner
+import com.github.pambrose.common.util.hostInfo
+import com.github.pambrose.common.util.randomId
+import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
 import io.grpc.Status
 import io.grpc.StatusException
@@ -45,8 +49,11 @@ import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.getVersionDesc
-import io.prometheus.prometheus_proxy.BuildConfig
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import mu.KLogging
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
@@ -100,7 +107,7 @@ class Agent(
       ProxyHost: $proxyHost
       
       Admin Service:
-      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
+      ${if (isAdminEnabled) servletService.toString() else "Disabled"}
       
       Metrics Service:
       ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
@@ -111,13 +118,15 @@ class Agent(
     logger.info { "Proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
     logger.info { "Scrape timeout time: ${options.scrapeTimeoutSecs.seconds}" }
 
-    initService {
+    initServletService {
       if (options.debugEnabled) {
         logger.info { "Adding /$DEBUG endpoint" }
-        addServlet(DEBUG,
-                   LambdaServlet {
-                     listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n")
-                   })
+        addServlet(
+          DEBUG,
+          LambdaServlet {
+            listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n")
+          }
+        )
       }
     }
 
@@ -260,7 +269,7 @@ class Agent(
       add("agentId", agentId)
       add("agentName", agentName)
       add("proxyHost", proxyHost)
-      add("adminService", if (isAdminEnabled) adminService else "Disabled")
+      add("adminService", if (isAdminEnabled) servletService else "Disabled")
       add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
     }
 

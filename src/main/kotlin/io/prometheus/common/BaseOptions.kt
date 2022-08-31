@@ -206,7 +206,6 @@ abstract class BaseOptions protected constructor(
     fallback: Config,
     exitOnMissingConfig: Boolean
   ): Config {
-
     fun String.isUrlPrefix() =
       lowercase(Locale.getDefault()).startsWith(HTTP_PREFIX) || lowercase(Locale.getDefault()).startsWith(HTTPS_PREFIX)
 

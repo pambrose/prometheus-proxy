@@ -19,7 +19,6 @@
 package io.prometheus.proxy
 
 import com.beust.jcommander.Parameter
-import com.google.common.collect.Iterables
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.*
@@ -27,7 +26,7 @@ import kotlin.time.Duration.Companion.seconds
 
 class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
 
-  constructor(args: List<String>) : this(Iterables.toArray<String>(args.toMutableList(), String::class.java))
+  constructor(args: List<String>) : this(args.toTypedArray())
 
   @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
   var proxyHttpPort = -1
@@ -54,7 +53,6 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
   }
 
   override fun assignConfigVals() {
-
     if (proxyHttpPort == -1)
       proxyHttpPort = PROXY_PORT.getEnv(configVals.proxy.http.port)
     logger.info { "proxyHttpPort: $proxyHttpPort" }

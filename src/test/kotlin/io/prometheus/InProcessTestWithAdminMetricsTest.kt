@@ -27,21 +27,24 @@ import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
 class InProcessTestWithAdminMetricsTest :
-    CommonTests(ProxyCallTestArgs(agent = agent, startPort = 10700, caller = simpleClassName)) {
+  CommonTests(ProxyCallTestArgs(agent = agent, startPort = 10700, caller = simpleClassName)) {
 
   companion object : CommonCompanion() {
     @JvmStatic
     @BeforeAll
     fun setUp() =
       setItUp(
-          { startProxy("withmetrics", adminEnabled = true, metricsEnabled = true) },
-          {
-            startAgent(serverName = "withmetrics",
-                       adminEnabled = true,
-                       metricsEnabled = true,
-                       scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-                       chunkContentSizeKbs = DEFAULT_CHUNK_SIZE)
-          })
+        { startProxy("withmetrics", adminEnabled = true, metricsEnabled = true) },
+        {
+          startAgent(
+            serverName = "withmetrics",
+            adminEnabled = true,
+            metricsEnabled = true,
+            scrapeTimeoutSecs = DEFAULT_TIMEOUT,
+            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE
+          )
+        }
+      )
 
     @JvmStatic
     @AfterAll

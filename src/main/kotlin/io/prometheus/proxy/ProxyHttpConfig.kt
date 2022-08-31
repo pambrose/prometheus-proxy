@@ -31,6 +31,10 @@ import io.ktor.http.content.*
 import io.ktor.server.application.*
 import io.ktor.server.logging.*
 import io.ktor.server.plugins.*
+import io.ktor.server.plugins.callloging.*
+import io.ktor.server.plugins.compression.*
+import io.ktor.server.plugins.defaultheaders.*
+import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -50,7 +54,6 @@ import kotlin.time.Duration.Companion.seconds
 internal object ProxyHttpConfig : KLogging() {
 
   fun Application.configServer(proxy: Proxy, isTestMode: Boolean) {
-
     install(DefaultHeaders) {
       header("X-Engine", "Ktor")
     }
@@ -234,7 +237,6 @@ internal object ProxyHttpConfig : KLogging() {
     request: ApplicationRequest,
     response: ApplicationResponse
   ): ScrapeRequestResponse {
-
     val scrapeRequest = ScrapeRequestWrapper(
       agentContext,
       proxy,

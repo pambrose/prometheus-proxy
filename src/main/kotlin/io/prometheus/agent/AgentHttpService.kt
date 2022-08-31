@@ -33,6 +33,7 @@ import io.ktor.client.plugins.auth.providers.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.network.sockets.*
 import io.prometheus.Agent
 import io.prometheus.common.ScrapeResults
@@ -91,10 +92,20 @@ internal class AgentHttpService(val agent: Agent) {
 
                 install(HttpTimeout)
 
-//                install(HttpRequestRetry) {
-//                  retryOnServerErrors(maxRetries = 5)
-//                  exponentialDelay()
-//                }
+                install(HttpRequestRetry) {
+                  agent.options.scrapeMaxRetries.also { maxRetries ->
+                    if (maxRetries <= 0)
+                      noRetry()
+                    else {
+                      retryOnException(maxRetries)
+                      retryIf(maxRetries) { _, response ->
+                        !response.status.isSuccess() && response.status != NotFound
+                      }
+                      modifyRequest { it.headers.append("x-retry-count", retryCount.toString()) }
+                      exponentialDelay()
+                    }
+                  }
+                }
 
                 val urlObj = Url(url)
                 val user = urlObj.user
@@ -108,20 +119,19 @@ internal class AgentHttpService(val agent: Agent) {
                     }
                   }
                 }
+              }.use { client ->
+                client.get(
+                  url,
+                  {
+                    request.accept?.also { if (it.isNotEmpty()) header(ACCEPT, it) }
+                    val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
+                    logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
+                    timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
+                    authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
+                  },
+                  getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled)
+                )
               }
-                .use { client ->
-                  client.get(
-                    url,
-                    {
-                      request.accept?.also { if (it.isNotEmpty()) header(ACCEPT, it) }
-                      val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
-                      logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
-                      timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
-                      authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
-                    },
-                    getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled)
-                  )
-                }
             }
         } catch (e: TimeoutCancellationException) {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }

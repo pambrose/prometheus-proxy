@@ -26,9 +26,13 @@ import io.prometheus.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class TlsNoMutualAuthTest : CommonTests(ProxyCallTestArgs(agent = agent,
-                                                          startPort = 10200,
-                                                          caller = simpleClassName)) {
+class TlsNoMutualAuthTest : CommonTests(
+  ProxyCallTestArgs(
+    agent = agent,
+    startPort = 10200,
+    caller = simpleClassName
+  )
+) {
 
   companion object : CommonCompanion() {
 
@@ -36,20 +40,34 @@ class TlsNoMutualAuthTest : CommonTests(ProxyCallTestArgs(agent = agent,
     @BeforeAll
     fun setUp() =
       setItUp(
-          {
-            startProxy(serverName = "nomutualauth",
-                       argv = listOf("--agent_port", "50440",
-                                     "--cert", "testing/certs/server1.pem",
-                                     "--key", "testing/certs/server1.key"))
-          },
-          {
-            startAgent(serverName = "nomutualauth",
-                       scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-                       chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
-                       argv = listOf("--proxy", "localhost:50440",
-                                     "--trust", "testing/certs/ca.pem",
-                                     "--override", "foo.test.google.fr"))
-          }
+        {
+          startProxy(
+            serverName = "nomutualauth",
+            argv = listOf(
+              "--agent_port",
+              "50440",
+              "--cert",
+              "testing/certs/server1.pem",
+              "--key",
+              "testing/certs/server1.key"
+            )
+          )
+        },
+        {
+          startAgent(
+            serverName = "nomutualauth",
+            scrapeTimeoutSecs = DEFAULT_TIMEOUT,
+            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
+            argv = listOf(
+              "--proxy",
+              "localhost:50440",
+              "--trust",
+              "testing/certs/ca.pem",
+              "--override",
+              "foo.test.google.fr"
+            )
+          )
+        }
       )
 
     @JvmStatic

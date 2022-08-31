@@ -1,7 +1,7 @@
 # Prometheus Proxy
 
 [![JitPack](https://jitpack.io/v/pambrose/prometheus-proxy.svg)](https://jitpack.io/#pambrose/prometheus-proxy)
-[![Build Status](https://travis-ci.org/pambrose/prometheus-proxy.svg?branch=master)](https://travis-ci.org/pambrose/prometheus-proxy)
+[![Build Status](https://app.travis-ci.com/pambrose/prometheus-proxy.svg?branch=master)](https://app.travis-ci.com/pambrose/prometheus-proxy)
 [![codebeat badge](https://codebeat.co/badges/8dbe1dc6-628e-44a4-99f9-d468831ff0cc)](https://codebeat.co/projects/github-com-pambrose-prometheus-proxy-master)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/422df508473443df9fbd8ea00fdee973)](https://www.codacy.com/app/pambrose/prometheus-proxy?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=pambrose/prometheus-proxy&amp;utm_campaign=Badge_Grade)
 [![codecov](https://codecov.io/gh/pambrose/prometheus-proxy/branch/master/graph/badge.svg)](https://codecov.io/gh/pambrose/prometheus-proxy)
@@ -112,8 +112,8 @@ scrape_configs:
 The docker images are available via:
 
 ```bash
-docker pull pambrose/prometheus-proxy:1.13.0
-docker pull pambrose/prometheus-agent:1.13.0
+docker pull pambrose/prometheus-proxy:1.14.0
+docker pull pambrose/prometheus-agent:1.14.0
 ```
 
 Start a proxy container with:
@@ -122,7 +122,7 @@ Start a proxy container with:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.13.0
+        pambrose/prometheus-proxy:1.14.0
 ```
 
 Start an agent container with:
@@ -130,7 +130,7 @@ Start an agent container with:
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.13.0
+        pambrose/prometheus-agent:1.14.0
 ```
 
 Using the config
@@ -148,7 +148,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:1.13.0
+    pambrose/prometheus-agent:1.14.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -202,27 +202,28 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 
 ### Agent CLI Options
 
-| Options               | ENV VAR<br>Property                                                        | Default | Description                                                |
-|:----------------------|:---------------------------------------------------------------------------|:--------|:-----------------------------------------------------------|
-| --config, -c          | AGENT_CONFIG                                                               |         | Agent config file or url (required)                        |
-| --proxy, -p           | PROXY_HOSTNAME  <br> agent.proxy.hostname                                  |         | Proxy hostname (can include :port)                         |
-| --name, -n            | AGENT_NAME      <br> agent.name                                            |         | Agent name                                                 |
-| --admin, -r           | ADMIN_ENABLED   <br> agent.admin.enabled                                   | false   | Enable admin servlets                                      |
-| --admin_port, -i      | ADMIN_PORT      <br> agent.admin.port                                      | 8093    | Admin servlets port                                        |
-| --debug, -b           | DEBUG_ENABLED   <br> agent.admin.debugEnabled                              | false   | Enable agent debug servlet<br>on admin port                |
-| --metrics, -e         | METRICS_ENABLED <br> agent.metrics.enabled                                 | false   | Enable agent metrics                                       |
-| --metrics_port, -m    | METRICS_PORT    <br> agent.metrics.port                                    | 8083    | Agent metrics listen port                                  |
-| --consolidated, -o    | CONSOLIDATED <br> agent.consolidated                                       | false   | Enable multiple agents per registered path                 |
-| --timeout             | SCRAPE_TIMEOUT_SECS <br> agent.scrapeTimeoutSecs                           | 15      | Scrape timeout time (seconds)                              |
-| --chunk               | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs                      | 32      | Threshold for chunking data to Proxy and buffer size (KBs) |
-| --gzip                | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes                            | 1024    | Minimum size for content to be gzipped (bytes)             |
-| --cert, -t            | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath                      |         | Certificate chain file path                                |
-| --key, -k             | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath                    |         | Private key file path                                      |
-| --trust, -s           | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |         | Trust certificate collection file path                     |
-| --override            | OVERRIDE_AUTHORITY <br> agent.tls.overrideAuthority                        |         | Override authority (for testing)                           |
-| --version, -v         |                                                                            |         | Print version info and exit                                |
-| --usage, -u           |                                                                            |         | Print usage message and exit                               |
-| -D                    |                                                                            |         | Dynamic property assignment                                |
+| Options            | ENV VAR<br>Property                                                        | Default | Description                                                |
+|:-------------------|:---------------------------------------------------------------------------|:--------|:-----------------------------------------------------------|
+| --config, -c       | AGENT_CONFIG                                                               |         | Agent config file or url (required)                        |
+| --proxy, -p        | PROXY_HOSTNAME  <br> agent.proxy.hostname                                  |         | Proxy hostname (can include :port)                         |
+| --name, -n         | AGENT_NAME      <br> agent.name                                            |         | Agent name                                                 |
+| --admin, -r        | ADMIN_ENABLED   <br> agent.admin.enabled                                   | false   | Enable admin servlets                                      |
+| --admin_port, -i   | ADMIN_PORT      <br> agent.admin.port                                      | 8093    | Admin servlets port                                        |
+| --debug, -b        | DEBUG_ENABLED   <br> agent.admin.debugEnabled                              | false   | Enable agent debug servlet<br>on admin port                |
+| --metrics, -e      | METRICS_ENABLED <br> agent.metrics.enabled                                 | false   | Enable agent metrics                                       |
+| --metrics_port, -m | METRICS_PORT    <br> agent.metrics.port                                    | 8083    | Agent metrics listen port                                  |
+| --consolidated, -o | CONSOLIDATED <br> agent.consolidated                                       | false   | Enable multiple agents per registered path                 |
+| --timeout          | SCRAPE_TIMEOUT_SECS <br> agent.scrapeTimeoutSecs                           | 15      | Scrape timeout time (seconds)                              |
+| --max_retries      | SCRAPE_MAX_RETRIES <br> agent.scrapeMaxRetries                             | 0       | Scrape maximum retries (0 disables scrape retries)         |
+| --chunk            | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs                      | 32      | Threshold for chunking data to Proxy and buffer size (KBs) |
+| --gzip             | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes                            | 1024    | Minimum size for content to be gzipped (bytes)             |
+| --cert, -t         | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath                      |         | Certificate chain file path                                |
+| --key, -k          | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath                    |         | Private key file path                                      |
+| --trust, -s        | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |         | Trust certificate collection file path                     |
+| --override         | OVERRIDE_AUTHORITY <br> agent.tls.overrideAuthority                        |         | Override authority (for testing)                           |
+| --version, -v      |                                                                            |         | Print version info and exit                                |
+| --usage, -u        |                                                                            |         | Print usage message and exit                               |
+| -D                 |                                                                            |         | Dynamic property assignment                                |
 
 Misc notes:
 
@@ -292,7 +293,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.13.0
+    pambrose/prometheus-proxy:1.14.0
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -300,7 +301,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:1.13.0
+    pambrose/prometheus-agent:1.14.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the

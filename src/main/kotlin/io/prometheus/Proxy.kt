@@ -37,7 +37,6 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.getVersionDesc
-import io.prometheus.prometheus_proxy.BuildConfig
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
@@ -93,7 +92,7 @@ class Proxy(
       Proxy port: ${httpService.httpPort}
       
       Admin Service:
-      ${if (isAdminEnabled) adminService.toString() else "Disabled"}
+      ${if (isAdminEnabled) servletService.toString() else "Disabled"}
       
       Metrics Service:
       ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
@@ -102,19 +101,21 @@ class Proxy(
 
     addServices(grpcService, httpService)
 
-    initService {
+    initServletService {
       if (options.debugEnabled) {
         logger.info { "Adding /$DEBUG endpoint" }
-        addServlet(DEBUG,
-                   LambdaServlet {
-                     listOf(
-                       toPlainText(),
-                       pathManager.toPlainText(),
-                       if (recentReqs.size > 0) "\n${recentReqs.size} most recent requests:" else "",
-                       recentReqs.reversed().joinToString("\n")
-                     )
-                       .joinToString("\n")
-                   })
+        addServlet(
+          DEBUG,
+          LambdaServlet {
+            listOf(
+              toPlainText(),
+              pathManager.toPlainText(),
+              if (recentReqs.size > 0) "\n${recentReqs.size} most recent requests:" else "",
+              recentReqs.reversed().joinToString("\n")
+            )
+              .joinToString("\n")
+          }
+        )
       } else {
         logger.info { "Debug servlet disabled" }
       }
@@ -183,7 +184,8 @@ class Proxy(
                   HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
                 }
               }
-          })
+          }
+        )
       }
   }
 
@@ -212,7 +214,7 @@ class Proxy(
   override fun toString() =
     toStringElements {
       add("proxyPort", httpService.httpPort)
-      add("adminService", if (isAdminEnabled) adminService else "Disabled")
+      add("adminService", if (isAdminEnabled) servletService else "Disabled")
       add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
     }
 

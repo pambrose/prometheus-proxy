@@ -36,20 +36,21 @@ object TestUtils : KLogging() {
     metricsEnabled: Boolean = false,
     argv: List<String> = emptyList()
   ): Proxy {
-
     logger.apply {
       info { getBanner("banners/proxy.txt", logger) }
       info { getVersionDesc(false) }
     }
 
-    val proxyOptions = ProxyOptions(mutableListOf<String>()
-                                      .apply {
-                                        addAll(TestConstants.CONFIG_ARG)
-                                        addAll(argv)
-                                        add("-Dproxy.admin.enabled=$adminEnabled")
-                                        add("-Dproxy.admin.debugEnabled=$debugEnabled")
-                                        add("-Dproxy.metrics.enabled=$metricsEnabled")
-                                      })
+    val proxyOptions = ProxyOptions(
+      mutableListOf<String>()
+        .apply {
+          addAll(TestConstants.CONFIG_ARG)
+          addAll(argv)
+          add("-Dproxy.admin.enabled=$adminEnabled")
+          add("-Dproxy.admin.debugEnabled=$debugEnabled")
+          add("-Dproxy.metrics.enabled=$metricsEnabled")
+        }
+    )
     return Proxy(
       options = proxyOptions,
       proxyHttpPort = PROXY_PORT,
@@ -67,7 +68,6 @@ object TestUtils : KLogging() {
     chunkContentSizeKbs: Int = -1,
     argv: List<String> = emptyList()
   ): Agent {
-
     logger.apply {
       info { getBanner("banners/agent.txt", logger) }
       info { getVersionDesc(false) }

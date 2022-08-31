@@ -1,4 +1,4 @@
-VERSION=1.13.0
+VERSION=1.14.0
 
 default: versioncheck
 
@@ -18,6 +18,9 @@ jars:
 
 tests:
 	./gradlew --rerun-tasks check
+
+reports:
+	./gradlew koverMergedHtmlReport
 
 config:
 	java -jar ./etc/jars/tscfg-0.9.997.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
@@ -64,4 +67,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=7.4 --distribution-type=bin
+	./gradlew wrapper --gradle-version=7.5.1 --distribution-type=bin

@@ -19,7 +19,6 @@
 package io.prometheus.agent
 
 import com.beust.jcommander.Parameter
-import com.google.common.collect.Iterables
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.*
@@ -27,10 +26,10 @@ import mu.KLogging
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
-    BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
+  BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
 
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
-      this(Iterables.toArray<String>(args.toMutableList(), String::class.java), exitOnMissingConfig)
+      this(args.toTypedArray(), exitOnMissingConfig)
 
   constructor(configFilename: String, exitOnMissingConfig: Boolean) :
       this(listOf("--config", configFilename), exitOnMissingConfig)
@@ -55,6 +54,10 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   var scrapeTimeoutSecs = -1
     private set
 
+  @Parameter(names = ["--max_retries"], description = "Scrape max retries")
+  var scrapeMaxRetries = -1
+    private set
+
   @Parameter(names = ["--chunk"], description = "Threshold for chunking content to Proxy and buffer size (KBs)")
   var chunkContentSizeKbs = -1
     private set
@@ -68,16 +71,17 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   }
 
   override fun assignConfigVals() {
-
     configVals.agent
       .also { agentConfigVals ->
 
         if (proxyHostname.isEmpty()) {
           val configHostname = agentConfigVals.proxy.hostname
-          proxyHostname = PROXY_HOSTNAME.getEnv(if (":" in configHostname)
-                                                  configHostname
-                                                else
-                                                  "$configHostname:${agentConfigVals.proxy.port}")
+          proxyHostname = PROXY_HOSTNAME.getEnv(
+            if (":" in configHostname)
+              configHostname
+            else
+              "$configHostname:${agentConfigVals.proxy.port}"
+          )
         }
         logger.info { "proxyHostname: $proxyHostname" }
 
@@ -92,6 +96,10 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
         if (scrapeTimeoutSecs == -1)
           scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
         logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+
+        if (scrapeMaxRetries == -1)
+          scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
+        logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
 
         if (chunkContentSizeKbs == -1)
           chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
