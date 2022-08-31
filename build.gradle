@@ -88,7 +88,7 @@ buildConfig {
 
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"4/12/22\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"9/30/22\"")
 }
 
 publishing {
