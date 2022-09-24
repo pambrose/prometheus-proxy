@@ -4,21 +4,21 @@ plugins {
     id 'maven-publish'
     id 'org.jetbrains.kotlin.jvm' version '1.7.10'
     id 'com.google.protobuf' version '0.8.19'
-    id 'org.jmailen.kotlinter' version "3.11.1"
+    id 'org.jmailen.kotlinter' version "3.12.0"
     id "com.github.ben-manes.versions" version '0.42.0'
     id 'com.github.johnrengelman.shadow' version '7.1.2'
     id 'com.github.gmazzo.buildconfig' version '3.1.0'
-    //id 'org.jetbrains.kotlinx.kover' version '0.5.0'
+    id 'org.jetbrains.kotlinx.kover' version '0.6.0'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
     // id 'jacoco'
     // id 'com.github.kt3k.coveralls' version '2.12.0'
 }
 
 group = 'io.prometheus'
-version = '1.14.0'
+version = '1.14.1'
 
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
+sourceCompatibility = 11
+targetCompatibility = 11
 
 repositories {
     //maven { url "https://maven.pkg.jetbrains.space/public/p/ktor/eap" }
@@ -88,7 +88,7 @@ buildConfig {
 
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"9/30/22\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"9/23/22\"")
 }
 
 publishing {
@@ -258,4 +258,63 @@ kotlinter {
                      "no-trailing-spaces",
                      "wrapping",
                      "multiline-if-else",]
+}
+
+koverMerged {
+    enable()  // create Kover merged reports
+
+    filters { // common filters for all default Kover merged tasks
+        classes { // common class filter for all default Kover merged tasks
+            includes.add("io.prometheus.*") // class inclusion rules
+            //excludes.addAll("io.prometheus.subpackage.*") // class exclusion rules
+        }
+
+        projects { // common projects filter for all default Kover merged tasks
+            //excludes.addAll("project1", ":child:project") // Specifies the projects excluded in the merged tasks
+        }
+    }
+
+
+    xmlReport {
+        onCheck.set(true)
+        // true to run koverMergedXmlReport task during the execution of the check task (if it exists) of the current project
+        reportFile.set(layout.buildDirectory.file("my-merged-report/result.xml")) // change report file name
+        overrideClassFilter { // override common class filter
+            includes.add("io.prometheus.*") // override class inclusion rules
+            //excludes.addAll("io.prometheus.subpackage.*") // override class exclusion rules
+        }
+    }
+
+    htmlReport {
+        onCheck.set(true)
+        // true to run koverMergedHtmlReport task during the execution of the check task (if it exists) of the current project
+        reportDir.set(layout.buildDirectory.dir("my-merged-report/html-result")) // change report directory
+        overrideClassFilter { // override common class filter
+            includes.add("io.prometheus.*") // override class inclusion rules
+            //excludes.addAll("io.prometheus.subpackage.*") // override class exclusion rules
+        }
+    }
+
+    verify {
+        onCheck.set(true)
+        // true to run koverMergedVerify task during the execution of the check task (if it exists) of the current project
+        rule { // add verification rule
+            //isEnabled = true // false to disable rule checking
+            name = null // custom name for the rule
+            target = 'ALL' // specify by which entity the code for separate coverage evaluation will be grouped
+
+            overrideClassFilter { // override common class filter
+                includes.add("io.prometheus.verify.*") // override class inclusion rules
+                // excludes.addAll("io.prometheus.verify.subpackage.*") // override class exclusion rules
+            }
+
+            bound { // add rule bound
+                minValue = 10
+                maxValue = 20
+                counter = 'LINE' // change coverage metric to evaluate (LINE, INSTRUCTION, BRANCH)
+                valueType = 'COVERED_PERCENTAGE'
+                // change counter value (COVERED_COUNT, MISSED_COUNT, COVERED_PERCENTAGE, MISSED_PERCENTAGE)
+            }
+        }
+    }
 }
