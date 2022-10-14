@@ -20,7 +20,6 @@ import com.github.pambrose.common.util.ensureSuffix
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
-import com.github.pambrose.common.util.toDoubleQuoted
 import com.github.pambrose.common.util.unzip
 import io.ktor.http.*
 import io.ktor.http.ContentType.Application.Json
@@ -41,10 +40,12 @@ import io.ktor.server.routing.*
 import io.prometheus.Proxy
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.putJsonArray
 import mu.KLogging
 import org.slf4j.event.Level
 import kotlin.time.Duration
@@ -106,17 +107,19 @@ internal object ProxyHttpConfig : KLogging() {
         val format = Json { prettyPrint = true }
 
         get(proxy.options.sdPath) {
-          val content =
-            buildString {
-              append("""[{"targets": [ """)
-              append(proxy.pathManager.allPaths.joinToString(", ") {
-                "${proxy.options.sdTargetPrefix.ensureSuffix("/")}$it".toDoubleQuoted()
-              })
-              append(" ]}]")
+          val json =
+            buildJsonArray {
+              addJsonObject {
+                putJsonArray("targets") {
+                  proxy.pathManager.allPaths
+                    .forEach { path ->
+                      val target = "${proxy.options.sdTargetPrefix.ensureSuffix("/")}$path"
+                      add(JsonPrimitive(target))
+                    }
+                }
+              }
             }
-          val jsonElement = format.decodeFromString<JsonElement>(content)
-          val prettyPrint = format.encodeToString(jsonElement)
-
+          val prettyPrint = format.encodeToString(json)
           call.respondWith(prettyPrint, Json)
         }
       } else {

@@ -66,6 +66,10 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
   var minGzipSizeBytes = -1
     private set
 
+  @Parameter(names = ["--trust_all_x509"], description = "Disable SSL verification for https agent endpoints")
+  var trustAllX509Certificates = false
+    private set
+
   init {
     parseOptions()
   }
@@ -114,6 +118,11 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
         if (overrideAuthority.isEmpty())
           overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agentConfigVals.tls.overrideAuthority)
         logger.info { "overrideAuthority: $overrideAuthority" }
+
+        if (!trustAllX509Certificates)
+          trustAllX509Certificates =
+            TRUST_ALL_X509_CERTIFICATES.getEnv(agentConfigVals.http.enableTrustAllX509Certificates)
+        logger.info { "trustAllX509Certificates: $trustAllX509Certificates" }
 
         assignAdminEnabled(agentConfigVals.admin.enabled)
         assignAdminPort(agentConfigVals.admin.port)
