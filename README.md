@@ -217,6 +217,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --max_retries      | SCRAPE_MAX_RETRIES <br> agent.scrapeMaxRetries                             | 0       | Scrape maximum retries (0 disables scrape retries)         |
 | --chunk            | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs                      | 32      | Threshold for chunking data to Proxy and buffer size (KBs) |
 | --gzip             | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes                            | 1024    | Minimum size for content to be gzipped (bytes)             |
+| --trust_all_x509   | TRUST_ALL_X509_CERTIFICATES <br> agent.http.enableTrustAllX509Certificates | false   | Disable SSL verification for agent https endpoints         |
 | --cert, -t         | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath                      |         | Certificate chain file path                                |
 | --key, -k          | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath                    |         | Private key file path                                      |
 | --trust, -s        | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |         | Trust certificate collection file path                     |
@@ -248,14 +249,14 @@ These admin servlets are available when the admin servlet is enabled:
 The admin servlets can be enabled with the `ADMIN_ENABLED` environment var, the `--admin` CLI option, or with the
 `proxy.admin.enabled` and `agent.admin.enabled` properties.
 
-The debug servlet can be enabled with the `DEBUG_ENABLED` env var, `--debug` CLI option , or with the
+The debug servlet can be enabled with the `DEBUG_ENABLED` environment var, the `--debug` CLI option , or with the
 `proxy.admin.debugEnabled` and `agent.admin.debugEnabled` properties. The debug servlet requires that the admin servlets
 are enabled. The debug servlet is at: `/debug` on the admin port.
 
 Descriptions of the servlets are [here](http://metrics.dropwizard.io/3.2.2/manual/servlets.html). The path names can be
 changed in the configuration file. To disable an admin servlet, assign its property path to "".
 
-## Adding TLS to Agent-Proxy connections
+## Adding TLS to Agent-Proxy Connections
 
 Agents connect to a proxy using [gRPC](https://grpc.io). gRPC supports TLS with or without mutual authentication. The
 necessary certificate and key file paths can be specified via CLI args, environment variables and configuration file
@@ -267,13 +268,13 @@ necessary to test TLS support.
 
 Running TLS without mutual authentication requires these settingss:
 
-* certChainFilePath and privateKeyFilePath on the proxy
-* trustCertCollectionFilePath on the agent
+* `certChainFilePath` and `privateKeyFilePath` on the proxy
+* `trustCertCollectionFilePath` on the agent
 
 Running TLS with mutual authentication requires these settingss:
 
-* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the proxy
-* certChainFilePath, privateKeyFilePath and trustCertCollectionFilePath on the agent
+* `certChainFilePath`, `privateKeyFilePath` and `trustCertCollectionFilePath` on the proxy
+* `certChainFilePath`, `privateKeyFilePath` and `trustCertCollectionFilePath` on the agent
 
 ### Running with TLS
 
@@ -307,9 +308,15 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
 target for `--mount` options.
 
-## Scraping a Prometheus instance
-It's possible to scrape an existing prometheus server using the `/federate` endpoint. 
-This enables using the existing service discovery features already built into Prometheus. 
+## Scraping HTTPS Endpoints
+
+Disable SSL verification for agent https endpoints with the `TRUST_ALL_X509_CERTIFICATES` environment var,
+the `--trust_all_x509` CLI option, or the `agent.http.enableTrustAllX509Certificates` property,
+
+## Scraping a Prometheus Instance
+
+It's possible to scrape an existing prometheus server using the `/federate` endpoint.
+This enables using the existing service discovery features already built into Prometheus.
 
 An example config can be found in
 [federate.conf](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf).

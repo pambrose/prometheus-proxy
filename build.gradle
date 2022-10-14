@@ -2,13 +2,13 @@ plugins {
     id 'idea'
     id 'java'
     id 'maven-publish'
-    id 'org.jetbrains.kotlin.jvm' version '1.7.10'
-    id 'com.google.protobuf' version '0.8.19'
+    id 'org.jetbrains.kotlin.jvm' version '1.7.20'
+    id 'com.google.protobuf' version '0.8.18'   // Keep in sync with grpc
     id 'org.jmailen.kotlinter' version "3.12.0"
     id "com.github.ben-manes.versions" version '0.42.0'
     id 'com.github.johnrengelman.shadow' version '7.1.2'
     id 'com.github.gmazzo.buildconfig' version '3.1.0'
-    id 'org.jetbrains.kotlinx.kover' version '0.6.0'
+    id 'org.jetbrains.kotlinx.kover' version '0.6.1'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
     // id 'jacoco'
     // id 'com.github.kt3k.coveralls' version '2.12.0'
@@ -64,6 +64,8 @@ dependencies {
     implementation "io.ktor:ktor-client:$ktor_version"
     implementation "io.ktor:ktor-client-cio:$ktor_version"
     implementation "io.ktor:ktor-client-auth:$ktor_version"
+    implementation "io.ktor:ktor-network:$ktor_version"
+    implementation "io.ktor:ktor-network-tls:$ktor_version"
 
     implementation "io.ktor:ktor-server:$ktor_version"
     implementation "io.ktor:ktor-server-cio:$ktor_version"
@@ -213,7 +215,7 @@ compileKotlin.dependsOn ':generateProto'
 
 compileKotlin {
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "11"
         freeCompilerArgs += ['-Xbackend-threads=8',
                              "-opt-in=kotlin.time.ExperimentalTime",
                              "-opt-in=kotlin.contracts.ExperimentalContracts",
@@ -225,7 +227,7 @@ compileKotlin {
 
 compileTestKotlin {
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "11"
         freeCompilerArgs += ['-Xbackend-threads=8',
                              "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
                              "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]

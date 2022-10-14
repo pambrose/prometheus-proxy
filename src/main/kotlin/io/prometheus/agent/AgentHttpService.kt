@@ -57,10 +57,11 @@ internal class AgentHttpService(val agent: Agent) {
       val scrapeMsg = AtomicReference("")
       val path = request.path
       val encodedQueryParams = request.encodedQueryParams
-      val authHeader = when {
-        request.authHeader.isNullOrBlank() -> null
-        else -> request.authHeader
-      }
+      val authHeader =
+        when {
+          request.authHeader.isNullOrBlank() -> null
+          else -> request.authHeader
+        }
 
       val pathContext = agent.pathManager[path]
 
@@ -84,55 +85,63 @@ internal class AgentHttpService(val agent: Agent) {
 
         // Content is fetched here
         try {
-          val timeout = agent.configVals.agent.internal.cioTimeoutSecs.seconds
-          CIO.create { requestTimeout = timeout.inWholeMilliseconds }
-            .use { engine ->
-              HttpClient(engine) {
-                expectSuccess = false
+          HttpClient(CIO) {
+            expectSuccess = false
+            engine {
+              val timeout = agent.configVals.agent.internal.cioTimeoutSecs.seconds
+              requestTimeout = timeout.inWholeMilliseconds
 
-                install(HttpTimeout)
-
-                install(HttpRequestRetry) {
-                  agent.options.scrapeMaxRetries.also { maxRetries ->
-                    if (maxRetries <= 0)
-                      noRetry()
-                    else {
-                      retryOnException(maxRetries)
-                      retryIf(maxRetries) { _, response ->
-                        !response.status.isSuccess() && response.status != NotFound
-                      }
-                      modifyRequest { it.headers.append("x-retry-count", retryCount.toString()) }
-                      exponentialDelay()
-                    }
-                  }
+              val enableTrustAllX509Certificates = agent.configVals.agent.http.enableTrustAllX509Certificates
+              if (enableTrustAllX509Certificates) {
+                https {
+                  // trustManager = SslSettings.getTrustManager()
+                  trustManager = TrustAllX509TrustManager
                 }
-
-                val urlObj = Url(url)
-                val user = urlObj.user
-                val passwd = urlObj.password
-                if (user.isNotNull() && passwd.isNotNull()) {
-                  install(Auth) {
-                    basic {
-                      credentials {
-                        BasicAuthCredentials(user, passwd)
-                      }
-                    }
-                  }
-                }
-              }.use { client ->
-                client.get(
-                  url,
-                  {
-                    request.accept?.also { if (it.isNotEmpty()) header(ACCEPT, it) }
-                    val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
-                    logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
-                    timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
-                    authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
-                  },
-                  getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled)
-                )
               }
             }
+
+            install(HttpTimeout)
+
+            install(HttpRequestRetry) {
+              agent.options.scrapeMaxRetries.also { maxRetries ->
+                if (maxRetries <= 0)
+                  noRetry()
+                else {
+                  retryOnException(maxRetries)
+                  retryIf(maxRetries) { _, response ->
+                    !response.status.isSuccess() && response.status != NotFound
+                  }
+                  modifyRequest { it.headers.append("x-retry-count", retryCount.toString()) }
+                  exponentialDelay()
+                }
+              }
+            }
+
+            val urlObj = Url(url)
+            val user = urlObj.user
+            val passwd = urlObj.password
+            if (user.isNotNull() && passwd.isNotNull()) {
+              install(Auth) {
+                basic {
+                  credentials {
+                    BasicAuthCredentials(user, passwd)
+                  }
+                }
+              }
+            }
+          }.use { client ->
+            client.get(
+              url,
+              {
+                request.accept?.also { if (it.isNotEmpty()) header(ACCEPT, it) }
+                val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
+                logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
+                timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
+                authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
+              },
+              getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled)
+            )
+          }
         } catch (e: TimeoutCancellationException) {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }
           scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
