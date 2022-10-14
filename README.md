@@ -311,7 +311,7 @@ target for `--mount` options.
 ## Scraping HTTPS Endpoints
 
 Disable SSL verification for agent https endpoints with the `TRUST_ALL_X509_CERTIFICATES` environment var,
-the `--trust_all_x509` CLI option, or the `agent.http.enableTrustAllX509Certificates` property,
+the `--trust_all_x509` CLI option, or the `agent.http.enableTrustAllX509Certificates` property.
 
 ## Scraping a Prometheus Instance
 
@@ -326,7 +326,7 @@ An example config can be found in
 [Grafana](https://grafana.com) dashboards for the proxy and agent
 are [here](https://github.com/pambrose/prometheus-proxy/tree/master/grafana).
 
-## Related Links
+## Related LinksK
 
 * [Prometheus.io](http://prometheus.io)
 * [gRPC](http://grpc.io)
