@@ -16,7 +16,6 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.ensureSuffix
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
@@ -46,6 +45,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import mu.KLogging
 import org.slf4j.event.Level
 import kotlin.time.Duration
@@ -107,18 +107,18 @@ internal object ProxyHttpConfig : KLogging() {
         val format = Json { prettyPrint = true }
 
         get(proxy.options.sdPath) {
-          val json =
-            buildJsonArray {
+          val json = buildJsonArray {
+            proxy.pathManager.allPaths.forEach {
               addJsonObject {
                 putJsonArray("targets") {
-                  proxy.pathManager.allPaths
-                    .forEach { path ->
-                      val target = "${proxy.options.sdTargetPrefix.ensureSuffix("/")}$path"
-                      add(JsonPrimitive(target))
-                    }
+                  add(JsonPrimitive(proxy.options.sdTargetPrefix))
+                }
+                putJsonObject("labels") {
+                  put("__metrics_path__", JsonPrimitive(it))
                 }
               }
             }
+          }
           val prettyPrint = format.encodeToString(json)
           call.respondWith(prettyPrint, Json)
         }
