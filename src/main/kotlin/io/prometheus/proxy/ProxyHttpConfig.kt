@@ -108,13 +108,17 @@ internal object ProxyHttpConfig : KLogging() {
 
         get(proxy.options.sdPath) {
           val json = buildJsonArray {
-            proxy.pathManager.allPaths.forEach {
+            proxy.pathManager.allPaths.forEach { path ->
               addJsonObject {
                 putJsonArray("targets") {
                   add(JsonPrimitive(proxy.options.sdTargetPrefix))
                 }
                 putJsonObject("labels") {
-                  put("__metrics_path__", JsonPrimitive(it))
+                  put("__metrics_path__", JsonPrimitive(path))
+
+                  val agentContexts = proxy.pathManager.getAgentContextInfo(path)?.agentContexts
+                  put("agentName",  JsonPrimitive(agentContexts?.map { it.agentName }?.joinToString()))
+                  put("hostName",  JsonPrimitive(agentContexts?.map { it.hostName }?.joinToString()))
                 }
               }
             }
