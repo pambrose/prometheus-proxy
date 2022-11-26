@@ -326,7 +326,11 @@ An example config can be found in
 [Grafana](https://grafana.com) dashboards for the proxy and agent
 are [here](https://github.com/pambrose/prometheus-proxy/tree/master/grafana).
 
-## Related LinksK
+## Nginx Support
+
+Nginx does not work as a reverse proxy for prometheus-proxy.
+
+## Related Links
 
 * [Prometheus.io](http://prometheus.io)
 * [gRPC](http://grpc.io)
