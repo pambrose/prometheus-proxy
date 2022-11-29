@@ -33,7 +33,6 @@ import io.ktor.client.plugins.auth.providers.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.network.sockets.*
 import io.prometheus.Agent
 import io.prometheus.common.ScrapeResults
@@ -109,7 +108,7 @@ internal class AgentHttpService(val agent: Agent) {
                 else {
                   retryOnException(maxRetries)
                   retryIf(maxRetries) { _, response ->
-                    !response.status.isSuccess() && response.status != NotFound
+                    !response.status.isSuccess() && response.status != HttpStatusCode.NotFound
                   }
                   modifyRequest { it.headers.append("x-retry-count", retryCount.toString()) }
                   exponentialDelay()

@@ -126,6 +126,9 @@ service ProxyService {
   rpc connectAgent (google.protobuf.Empty) returns (google.protobuf.Empty) {
   }
 
+  rpc connectAgentWithTransportFilterDisabled (google.protobuf.Empty) returns (AgentInfo) {
+  }
+
   rpc registerAgent (RegisterAgentRequest) returns (RegisterAgentResponse) {
   }
 

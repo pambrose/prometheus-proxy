@@ -38,7 +38,6 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.prometheus.Proxy
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
@@ -68,6 +67,7 @@ internal object ProxyHttpConfig : KLogging() {
             HttpStatusCode.Found -> {
               "$status: ${call.request.toLogString()} -> ${call.response.headers[HttpHeaders.Location]} - ${call.request.origin.remoteHost}"
             }
+
             else -> "$status: ${call.request.toLogString()} - ${call.request.origin.remoteHost}"
           }
         }
@@ -97,10 +97,10 @@ internal object ProxyHttpConfig : KLogging() {
     }
 
     routing {
-      get("/__test__") {
-        delay(30.seconds)
-        call.respondWith("Test value", Plain, OK)
-      }
+//      get("/__test__") {
+//        delay(30.seconds)
+//        call.respondWith("Test value", Plain, OK)
+//      }
 
       if (proxy.options.sdEnabled) {
         logger.info { "Adding /${proxy.options.sdPath} service discovery endpoint" }
@@ -117,8 +117,8 @@ internal object ProxyHttpConfig : KLogging() {
                   put("__metrics_path__", JsonPrimitive(path))
 
                   val agentContexts = proxy.pathManager.getAgentContextInfo(path)?.agentContexts
-                  put("agentName",  JsonPrimitive(agentContexts?.map { it.agentName }?.joinToString()))
-                  put("hostName",  JsonPrimitive(agentContexts?.map { it.hostName }?.joinToString()))
+                  put("agentName", JsonPrimitive(agentContexts?.joinToString { it.agentName }))
+                  put("hostName", JsonPrimitive(agentContexts?.joinToString { it.hostName }))
                 }
               }
             }

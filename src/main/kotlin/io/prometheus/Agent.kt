@@ -153,7 +153,7 @@ class Agent(
       scrapeRequestBacklogSize.set(0)
       lastMsgSentMark = clock.markNow()
 
-      if (grpcService.connectAgent()) {
+      if (grpcService.connectAgent(configVals.agent.transportFilterDisabled)) {
         grpcService.registerAgent(initialConnectionLatch)
         pathManager.registerPaths()
 

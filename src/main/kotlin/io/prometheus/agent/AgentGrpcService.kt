@@ -25,7 +25,7 @@ import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
-import com.google.protobuf.Empty
+import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
 import io.grpc.Status
@@ -34,6 +34,7 @@ import io.prometheus.Agent
 import io.prometheus.common.BaseOptions.Companion.HTTPS_PREFIX
 import io.prometheus.common.BaseOptions.Companion.HTTP_PREFIX
 import io.prometheus.common.GrpcObjects
+import io.prometheus.common.GrpcObjects.EMPTY_INSTANCE
 import io.prometheus.common.GrpcObjects.newAgentInfo
 import io.prometheus.common.GrpcObjects.newRegisterAgentRequest
 import io.prometheus.common.GrpcObjects.newScrapeResponseChunk
@@ -143,15 +144,23 @@ internal class AgentGrpcService(
           intercept(grpcTracing.newClientInterceptor())
       }
 
-    val interceptors = listOf(AgentClientInterceptor(agent))
+    val interceptors =
+      buildList<ClientInterceptor> {
+        if (!options.transportFilterDisabled)
+          add(AgentClientInterceptor(agent))
+      }
     stub = ProxyServiceGrpcKt.ProxyServiceCoroutineStub(ClientInterceptors.intercept(channel, interceptors))
   }
 
   // If successful, this will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
-  suspend fun connectAgent() =
+  suspend fun connectAgent(transportFilterDisabled: Boolean) =
     try {
       logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
-      stub.connectAgent(Empty.getDefaultInstance())
+      if (transportFilterDisabled)
+        stub.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE).also { agent.agentId = it.agentId }
+      else
+        stub.connectAgent(EMPTY_INSTANCE)
+
       logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
       agent.metrics { connectCount.labels(agent.launchId, "success").inc() }
       true

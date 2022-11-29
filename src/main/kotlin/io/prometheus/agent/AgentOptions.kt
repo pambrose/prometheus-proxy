@@ -128,14 +128,17 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
         assignAdminPort(agentConfigVals.admin.port)
         assignMetricsEnabled(agentConfigVals.metrics.enabled)
         assignMetricsPort(agentConfigVals.metrics.port)
+        assignTransportFilterDisabled(agentConfigVals.transportFilterDisabled)
         assignDebugEnabled(agentConfigVals.admin.debugEnabled)
 
         assignCertChainFilePath(agentConfigVals.tls.certChainFilePath)
         assignPrivateKeyFilePath(agentConfigVals.tls.privateKeyFilePath)
         assignTrustCertCollectionFilePath(agentConfigVals.tls.trustCertCollectionFilePath)
 
-        logger.info { "agent.internal.cioTimeoutSecs: ${agentConfigVals.internal.cioTimeoutSecs.seconds}" }
         logger.info { "agent.scrapeTimeoutSecs: ${agentConfigVals.scrapeTimeoutSecs.seconds}" }
+        logger.info { "agent.internal.cioTimeoutSecs: ${agentConfigVals.internal.cioTimeoutSecs.seconds}" }
+        logger.info { "agent.internal.heartbeatCheckPauseMillis: ${agentConfigVals.internal.heartbeatCheckPauseMillis}" }
+        logger.info { "agent.internal.heartbeatMaxInactivitySecs: ${agentConfigVals.internal.heartbeatMaxInactivitySecs}" }
       }
   }
 

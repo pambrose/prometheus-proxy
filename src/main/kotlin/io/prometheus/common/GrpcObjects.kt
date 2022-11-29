@@ -19,6 +19,7 @@
 package io.prometheus.common
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.Empty
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkData
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -346,4 +347,6 @@ internal object GrpcObjects {
         block()
         build()
       }
+
+  internal val EMPTY_INSTANCE = Empty.getDefaultInstance()
 }

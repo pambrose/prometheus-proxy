@@ -22,7 +22,6 @@ import com.beust.jcommander.Parameter
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.*
-import kotlin.time.Duration.Companion.seconds
 
 class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
 
@@ -86,13 +85,16 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
         assignAdminPort(proxyConfigVals.admin.port)
         assignMetricsEnabled(proxyConfigVals.metrics.enabled)
         assignMetricsPort(proxyConfigVals.metrics.port)
+        assignTransportFilterDisabled(proxyConfigVals.transportFilterDisabled)
         assignDebugEnabled(proxyConfigVals.admin.debugEnabled)
 
         assignCertChainFilePath(proxyConfigVals.tls.certChainFilePath)
         assignPrivateKeyFilePath(proxyConfigVals.tls.privateKeyFilePath)
         assignTrustCertCollectionFilePath(proxyConfigVals.tls.trustCertCollectionFilePath)
 
-        logger.info { "proxy.internal.scrapeRequestTimeoutSecs: ${proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds}" }
+        logger.info { "proxy.internal.scrapeRequestTimeoutSecs: ${proxyConfigVals.internal.scrapeRequestTimeoutSecs}" }
+        logger.info { "proxy.internal.staleAgentCheckPauseSecs: ${proxyConfigVals.internal.staleAgentCheckPauseSecs}" }
+        logger.info { "proxy.internal.maxAgentInactivitySecs: ${proxyConfigVals.internal.maxAgentInactivitySecs}" }
       }
   }
 }
