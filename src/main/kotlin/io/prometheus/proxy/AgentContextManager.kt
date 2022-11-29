@@ -35,7 +35,7 @@ internal class AgentContextManager(private val isTestMode: Boolean) {
   val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.sumOf { it.scrapeRequestBacklogSize }
 
   fun addAgentContext(agentContext: AgentContext): AgentContext? {
-    logger.debug { "Registering agentId: ${agentContext.agentId}" }
+    logger.info { "Registering agentId: ${agentContext.agentId}" }
     return agentContextMap.put(agentContext.agentId, agentContext)
   }
 
@@ -48,7 +48,7 @@ internal class AgentContextManager(private val isTestMode: Boolean) {
           logger.warn { "Missing AgentContext for agentId: $agentId ($reason)" }
         else {
           if (!isTestMode)
-            logger.info { "Removed AgentContext $agentContext for agentId: $agentId ($reason)" }
+            logger.info { "Removed $agentContext for agentId: $agentId ($reason)" }
           agentContext.invalidate()
         }
         agentContext

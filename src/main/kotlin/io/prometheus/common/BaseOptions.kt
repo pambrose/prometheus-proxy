@@ -28,6 +28,7 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
+import io.prometheus.common.EnvVars.*
 import mu.KLogging
 import java.io.File
 import java.io.FileNotFoundException
@@ -65,6 +66,10 @@ abstract class BaseOptions protected constructor(
 
   @Parameter(names = ["-b", "--debug"], description = "Debug option enabled")
   var debugEnabled = false
+    private set
+
+  @Parameter(names = ["--tf-disabled"], description = "Transport filter disabled")
+  var transportFilterDisabled = false
     private set
 
   @Parameter(names = ["-t", "--cert"], description = "Certificate chain file path")
@@ -130,49 +135,55 @@ abstract class BaseOptions protected constructor(
 
   protected fun assignAdminEnabled(defaultVal: Boolean) {
     if (!adminEnabled)
-      adminEnabled = EnvVars.ADMIN_ENABLED.getEnv(defaultVal)
+      adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
     logger.info { "adminEnabled: $adminEnabled" }
   }
 
   protected fun assignAdminPort(defaultVal: Int) {
     if (adminPort == -1)
-      adminPort = EnvVars.ADMIN_PORT.getEnv(defaultVal)
+      adminPort = ADMIN_PORT.getEnv(defaultVal)
     logger.info { "adminPort: $adminPort" }
   }
 
   protected fun assignMetricsEnabled(defaultVal: Boolean) {
     if (!metricsEnabled)
-      metricsEnabled = EnvVars.METRICS_ENABLED.getEnv(defaultVal)
+      metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
     logger.info { "metricsEnabled: $metricsEnabled" }
   }
 
   protected fun assignDebugEnabled(defaultVal: Boolean) {
     if (!debugEnabled)
-      debugEnabled = EnvVars.DEBUG_ENABLED.getEnv(defaultVal)
+      debugEnabled = DEBUG_ENABLED.getEnv(defaultVal)
     logger.info { "debugEnabled: $debugEnabled" }
   }
 
   protected fun assignMetricsPort(defaultVal: Int) {
     if (metricsPort == -1)
-      metricsPort = EnvVars.METRICS_PORT.getEnv(defaultVal)
+      metricsPort = METRICS_PORT.getEnv(defaultVal)
     logger.info { "metricsPort: $metricsPort" }
+  }
+
+  protected fun assignTransportFilterDisabled(defaultVal: Boolean) {
+    if (!transportFilterDisabled)
+      transportFilterDisabled = TRANSPORT_FILTER_DISABLED.getEnv(defaultVal)
+    logger.info { "transportFilterDisabled: $transportFilterDisabled" }
   }
 
   protected fun assignCertChainFilePath(defaultVal: String) {
     if (certChainFilePath.isEmpty())
-      certChainFilePath = EnvVars.CERT_CHAIN_FILE_PATH.getEnv(defaultVal)
+      certChainFilePath = CERT_CHAIN_FILE_PATH.getEnv(defaultVal)
     logger.info { "certChainFilePath: $certChainFilePath" }
   }
 
   protected fun assignPrivateKeyFilePath(defaultVal: String) {
     if (privateKeyFilePath.isEmpty())
-      privateKeyFilePath = EnvVars.PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
+      privateKeyFilePath = PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
     logger.info { "privateKeyFilePath: $privateKeyFilePath" }
   }
 
   protected fun assignTrustCertCollectionFilePath(defaultVal: String) {
     if (trustCertCollectionFilePath.isEmpty())
-      trustCertCollectionFilePath = EnvVars.TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
+      trustCertCollectionFilePath = TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
     logger.info { "trustCertCollectionFilePath: $trustCertCollectionFilePath" }
   }
 

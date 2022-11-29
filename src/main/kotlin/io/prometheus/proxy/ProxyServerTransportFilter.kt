@@ -23,12 +23,13 @@ import com.github.pambrose.common.util.isNotNull
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
+import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 import mu.KLogging
 
 internal class ProxyServerTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 
   override fun transportReady(attributes: Attributes): Attributes {
-    val remoteAddress = attributes.get(REMOTE_ADDR_KEY)?.toString() ?: "Unknown"
+    val remoteAddress = attributes.get(REMOTE_ADDR_KEY)?.toString() ?: UNKNOWN_ADDRESS
     val agentContext = AgentContext(remoteAddress)
     proxy.agentContextManager.addAgentContext(agentContext)
 

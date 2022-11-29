@@ -112,8 +112,8 @@ scrape_configs:
 The docker images are available via:
 
 ```bash
-docker pull pambrose/prometheus-proxy:1.14.2
-docker pull pambrose/prometheus-agent:1.14.2
+docker pull pambrose/prometheus-proxy:1.15.0-b1
+docker pull pambrose/prometheus-agent:1.15.0-b1
 ```
 
 Start a proxy container with:
@@ -122,7 +122,7 @@ Start a proxy container with:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.14.2
+        pambrose/prometheus-proxy:1.15.0-b1
 ```
 
 Start an agent container with:
@@ -130,7 +130,7 @@ Start an agent container with:
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.14.2
+        pambrose/prometheus-agent:1.15.0-b1
 ```
 
 Using the config
@@ -148,7 +148,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:1.14.2
+    pambrose/prometheus-agent:1.15.0-b1
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -193,6 +193,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --sd_enabled       | SD_ENABLED       <br> proxy.service.discovery.enabled                      | false                    | Service discovery endpoint enabled          |
 | --sd_path          | SD_PATH          <br> proxy.service.discovery.path                         | "discovery"              | Service discovery endpoint path             |
 | --sd_target_prefix | SD_TARGET_PREFIX <br> proxy.service.discovery.targetPrefix                 | "http://localhost:8080/" | Service discovery target prefix             |
+| --tf-disabled      | TRANSPORT_FILTER_DISABLED <br> proxy.transportFilterDisabled               | false                    | Transport filter disabled                   |
 | --cert, -t         | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath                      |                          | Certificate chain file path                 |
 | --key, -k          | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath                    |                          | Private key file path                       |
 | --trust, -s        | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |                          | Trust certificate collection file path      |
@@ -217,6 +218,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --max_retries      | SCRAPE_MAX_RETRIES <br> agent.scrapeMaxRetries                             | 0       | Scrape maximum retries (0 disables scrape retries)         |
 | --chunk            | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs                      | 32      | Threshold for chunking data to Proxy and buffer size (KBs) |
 | --gzip             | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes                            | 1024    | Minimum size for content to be gzipped (bytes)             |
+| --tf-disabled      | TRANSPORT_FILTER_DISABLED <br> proxy.transportFilterDisabled               | false   | Transport filter disabled                                  |
 | --trust_all_x509   | TRUST_ALL_X509_CERTIFICATES <br> agent.http.enableTrustAllX509Certificates | false   | Disable SSL verification for agent https endpoints         |
 | --cert, -t         | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath                      |         | Certificate chain file path                                |
 | --key, -k          | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath                    |         | Private key file path                                      |
@@ -294,7 +296,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.14.2
+    pambrose/prometheus-proxy:1.15.0-b1
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -302,7 +304,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:1.14.2
+    pambrose/prometheus-agent:1.15.0-b1
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -321,14 +323,25 @@ This enables using the existing service discovery features already built into Pr
 An example config can be found in
 [federate.conf](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf).
 
+## Nginx Support
+
+To use the prometheus_proxy with nginx as a reverse proxy, disable the transport filter with the
+`TRANSPORT_FILTER_DISABLED` environment var, the `--tf-disabled` CLI option, or the `agent.transportFilterDisabled`/
+`proxy.transportFilterDisabled` properties. Agents and the Proxy must run with the same `transporFilterDisabled` value.
+
+When using `transporFilterDisabled`, you will not see agent contexts immediately removed
+from the proxy when agents are terminated. Instead, agent contexts will be removed from the proxy
+after they age out from inactivity. The maximum age is controlled by the `proxy.internal.maxAgentInactivitySecs` value.
+The default value is 1 minute.
+
+An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/docker/nginx.conf)
+and an example agent/proxy conf file
+is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/nginx-proxy.conf)
+
 ## Grafana
 
 [Grafana](https://grafana.com) dashboards for the proxy and agent
 are [here](https://github.com/pambrose/prometheus-proxy/tree/master/grafana).
-
-## Nginx Support
-
-Nginx does not work as a reverse proxy for prometheus-proxy.
 
 ## Related Links
 

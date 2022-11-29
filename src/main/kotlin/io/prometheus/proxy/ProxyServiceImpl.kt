@@ -23,6 +23,9 @@ import com.github.pambrose.common.util.isNull
 import com.google.protobuf.Empty
 import io.grpc.Status
 import io.prometheus.Proxy
+import io.prometheus.agent.RequestFailureException
+import io.prometheus.common.GrpcObjects.EMPTY_INSTANCE
+import io.prometheus.common.GrpcObjects.newAgentInfo
 import io.prometheus.common.GrpcObjects.newHeartBeatResponse
 import io.prometheus.common.GrpcObjects.newPathMapSizeResponse
 import io.prometheus.common.GrpcObjects.newRegisterAgentResponse
@@ -52,8 +55,31 @@ import java.util.concurrent.atomic.AtomicLong
 
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
 
-  override suspend fun connectAgent(request: Empty): Empty =
-    proxy.metrics { connectCount.inc() }.let { Empty.getDefaultInstance() }
+  override suspend fun connectAgent(request: Empty): Empty {
+    if (proxy.options.transportFilterDisabled) {
+      "Agent (false) and Proxy (true) do not have matching transportFilterDisabled config values".also { msg ->
+        logger.error { msg }
+        throw RequestFailureException(msg)
+      }
+    }
+
+    proxy.metrics { connectCount.inc() }
+    return EMPTY_INSTANCE
+  }
+
+  override suspend fun connectAgentWithTransportFilterDisabled(request: Empty): AgentInfo {
+    if (!proxy.options.transportFilterDisabled) {
+      "Agent (true) and Proxy (false) do not have matching transportFilterDisabled config values".also { msg ->
+        logger.error { msg }
+        throw RequestFailureException(msg)
+      }
+    }
+
+    proxy.metrics { connectCount.inc() }
+    val agentContext = AgentContext(UNKNOWN_ADDRESS)
+    proxy.agentContextManager.addAgentContext(agentContext)
+    return newAgentInfo(agentContext.agentId)
+  }
 
   override suspend fun registerAgent(request: RegisterAgentRequest): RegisterAgentResponse {
     val agentId = request.agentId
@@ -136,7 +162,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
               logger.error(throwable) { "Error in writeResponsesToProxy(): $arg" }
           }
     }
-    return Empty.getDefaultInstance()
+    return EMPTY_INSTANCE
   }
 
   override suspend fun writeChunkedResponsesToProxy(requests: Flow<ChunkedScrapeResponse>): Empty {
@@ -150,6 +176,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
             logger.debug { "Reading header for scrapeId: $scrapeId}" }
             chunkedContextMap[scrapeId] = ChunkedContext(response)
           }
+
           "chunk" -> {
             response.chunk
               .apply {
@@ -159,6 +186,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
                 context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
               }
           }
+
           "summary" -> {
             response.summary
               .apply {
@@ -169,6 +197,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
                 proxy.scrapeRequestManager.assignScrapeResults(context.scrapeResults)
               }
           }
+
           else -> throw IllegalStateException("Invalid field name in writeChunkedResponsesToProxy()")
         }
       }
@@ -180,10 +209,11 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
               logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
           }
     }
-    return Empty.getDefaultInstance()
+    return EMPTY_INSTANCE
   }
 
   companion object : KLogging() {
     private val PATH_ID_GENERATOR = AtomicLong(0L)
+    internal const val UNKNOWN_ADDRESS = "Unknown"
   }
 }
