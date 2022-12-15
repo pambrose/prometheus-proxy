@@ -1,4 +1,4 @@
-VERSION=1.15.0-b1
+VERSION=1.15.0
 
 default: versioncheck
 
