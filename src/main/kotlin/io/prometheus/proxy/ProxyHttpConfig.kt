@@ -45,7 +45,7 @@ import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import mu.KLogging
+import mu.two.KLogging
 import org.slf4j.event.Level
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds

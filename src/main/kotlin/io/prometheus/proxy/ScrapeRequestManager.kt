@@ -20,7 +20,7 @@ package io.prometheus.proxy
 
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.common.ScrapeResults
-import mu.KLogging
+import mu.two.KLogging
 import java.util.concurrent.ConcurrentMap
 
 internal class ScrapeRequestManager {

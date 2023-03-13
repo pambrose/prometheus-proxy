@@ -29,7 +29,7 @@ import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
 import io.prometheus.common.EnvVars.*
-import mu.KLogging
+import mu.two.KLogging
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL

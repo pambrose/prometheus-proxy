@@ -47,7 +47,7 @@ import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRequestManager
 import kotlinx.coroutines.runBlocking
-import mu.KLogging
+import mu.two.KLogging
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.milliseconds

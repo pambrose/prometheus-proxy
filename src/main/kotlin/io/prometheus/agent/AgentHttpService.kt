@@ -38,7 +38,7 @@ import io.prometheus.Agent
 import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.ScrapeRequest
 import kotlinx.coroutines.TimeoutCancellationException
-import mu.KLogging
+import mu.two.KLogging
 import java.io.IOException
 import java.net.URLDecoder
 import java.net.http.HttpConnectTimeoutException

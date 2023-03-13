@@ -22,7 +22,7 @@ import com.beust.jcommander.Parameter
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.*
-import mu.KLogging
+import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :

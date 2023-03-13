@@ -20,7 +20,7 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
-import mu.KLogging
+import mu.two.KLogging
 import java.util.concurrent.ConcurrentMap
 
 internal class AgentContextManager(private val isTestMode: Boolean) {

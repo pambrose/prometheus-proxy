@@ -25,7 +25,7 @@ import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
-import mu.KLogging
+import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentContextCleanupService(

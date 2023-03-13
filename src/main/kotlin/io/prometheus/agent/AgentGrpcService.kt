@@ -53,7 +53,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mu.KLogging
+import mu.two.KLogging
 import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.zip.CRC32

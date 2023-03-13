@@ -28,7 +28,7 @@ import io.ktor.server.cio.CIOApplicationEngine.*
 import io.ktor.server.engine.*
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyHttpConfig.configServer
-import mu.KLogging
+import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit.SECONDS
 

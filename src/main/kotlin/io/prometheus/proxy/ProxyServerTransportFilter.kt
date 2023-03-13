@@ -24,7 +24,7 @@ import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
-import mu.KLogging
+import mu.two.KLogging
 
 internal class ProxyServerTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 

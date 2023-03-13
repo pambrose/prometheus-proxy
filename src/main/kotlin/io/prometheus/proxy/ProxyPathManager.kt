@@ -26,7 +26,7 @@ import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.GrpcObjects.EMPTY_PATH_MSG
 import io.prometheus.common.GrpcObjects.unregisterPathResponse
 import io.prometheus.grpc.UnregisterPathResponse
-import mu.KLogging
+import mu.two.KLogging
 
 internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode: Boolean) {
 

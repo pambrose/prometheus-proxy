@@ -48,7 +48,7 @@ import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import mu.KLogging
+import mu.two.KLogging
 import java.util.*
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicLong

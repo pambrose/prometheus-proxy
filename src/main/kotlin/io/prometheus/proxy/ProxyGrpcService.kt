@@ -34,7 +34,7 @@ import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
-import mu.KLogging
+import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 
 internal class ProxyGrpcService(

@@ -29,7 +29,7 @@ import io.grpc.MethodDescriptor
 import io.prometheus.Agent
 import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
 import io.prometheus.proxy.ProxyServerInterceptor.Companion.META_AGENT_ID_KEY
-import mu.KLogging
+import mu.two.KLogging
 
 internal class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
 
