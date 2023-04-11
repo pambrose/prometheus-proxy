@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
-import mu.KLogging
+import mu.two.KLogging
 
 internal class ProxyServerTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
 

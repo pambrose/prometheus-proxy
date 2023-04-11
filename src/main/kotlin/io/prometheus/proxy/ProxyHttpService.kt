@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import io.ktor.server.cio.CIOApplicationEngine.*
 import io.ktor.server.engine.*
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyHttpConfig.configServer
-import mu.KLogging
+import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit.SECONDS
 

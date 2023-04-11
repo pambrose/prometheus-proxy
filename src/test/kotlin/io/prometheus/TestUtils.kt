@@ -24,8 +24,8 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
-import mu.KLogger
-import mu.KLogging
+import mu.two.KLogger
+import mu.two.KLogging
 import java.nio.channels.ClosedSelectorException
 
 object TestUtils : KLogging() {

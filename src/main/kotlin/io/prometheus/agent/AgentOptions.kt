@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import com.beust.jcommander.Parameter
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.*
-import mu.KLogging
+import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :

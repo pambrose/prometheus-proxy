@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ package io.prometheus.proxy
 
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.common.ScrapeResults
-import mu.KLogging
+import mu.two.KLogging
 import java.util.concurrent.ConcurrentMap
 
 internal class ScrapeRequestManager {

@@ -1,4 +1,4 @@
-VERSION=1.15.0
+VERSION=1.16.0
 
 default: versioncheck
 
@@ -27,7 +27,8 @@ config:
 
 distro: clean compile jars
 
-PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x,linux/ppc64le
+#PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x,linux/ppc64le
+PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x
 IMAGE_PREFIX := pambrose/prometheus
 
 docker-push:
@@ -67,4 +68,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=7.6 --distribution-type=bin
+	./gradlew wrapper --gradle-version=8.0.2 --distribution-type=bin

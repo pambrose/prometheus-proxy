@@ -23,7 +23,7 @@ import io.prometheus.client.CollectorRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mu.KLogging
+import mu.two.KLogging
 import kotlin.properties.Delegates.notNull
 import kotlin.time.Duration.Companion.seconds
 

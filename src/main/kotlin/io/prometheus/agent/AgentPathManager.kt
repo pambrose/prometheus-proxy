@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Agent
 import io.prometheus.common.GrpcObjects.EMPTY_PATH_MSG
-import mu.KLogging
+import mu.two.KLogging
 
 internal class AgentPathManager(private val agent: Agent) {
 
