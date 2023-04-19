@@ -35,7 +35,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
+import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.getVersionDesc
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService

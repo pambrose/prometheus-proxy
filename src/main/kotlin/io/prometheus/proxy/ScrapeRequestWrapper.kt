@@ -22,8 +22,10 @@ import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.isNotNull
 import io.prometheus.Proxy
-import io.prometheus.common.GrpcObjects.newScrapeRequest
+import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults
+import io.prometheus.grpc.krotodc.ScrapeRequest
+import io.prometheus.grpc.krotodc.scraperequest.toProto
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.withTimeoutOrNull
@@ -46,15 +48,15 @@ internal class ScrapeRequestWrapper(
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
   val scrapeRequest =
-    newScrapeRequest(
-      agentContext.agentId,
-      SCRAPE_ID_GENERATOR.getAndIncrement(),
-      path,
-      encodedQueryParams,
-      authHeader,
-      accept,
-      debugEnabled
-    )
+    ScrapeRequest(
+      agentId = agentContext.agentId,
+      scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement(),
+      path = path,
+      accept = accept.orEmpty(),
+      debugEnabled = debugEnabled,
+      encodedQueryParams = encodedQueryParams,
+      authHeader = authHeader,
+    ).apply { require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }.toProto()
 
   var scrapeResults: ScrapeResults by nonNullableReference()
 

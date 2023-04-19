@@ -22,7 +22,7 @@ import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Agent
-import io.prometheus.common.GrpcObjects.EMPTY_PATH_MSG
+import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import mu.two.KLogging
 
 internal class AgentPathManager(private val agent: Agent) {

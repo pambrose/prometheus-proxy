@@ -3,7 +3,7 @@ plugins {
     id 'java'
     id 'maven-publish'
     id 'org.jetbrains.kotlin.jvm' version '1.8.20'
-    id 'com.google.protobuf' version '0.8.18'   // Keep in sync with grpc
+    id 'com.google.protobuf' version '0.9.1'   // Keep in sync with grpc
     id 'org.jmailen.kotlinter' version "3.13.0"
     id "com.github.ben-manes.versions" version '0.46.0'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
@@ -15,7 +15,7 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.16.0'
+version = '1.17.0'
 
 sourceCompatibility = 11
 targetCompatibility = 11
@@ -25,7 +25,7 @@ buildConfig {
 
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"04/11/2023\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"04/18/2023\"")
 }
 
 repositories {
@@ -45,6 +45,8 @@ dependencies {
     implementation "io.grpc:grpc-services:$grpc_version"
 
     implementation "io.grpc:grpc-kotlin-stub:$gengrpc_version"
+
+    implementation "io.github.mscheong01:krotoDC-core:$krotodc_version"
 
     // Required
     implementation "io.netty:netty-tcnative-boringssl-static:$tcnative_version"
@@ -123,12 +125,17 @@ protobuf {
         grpckt {
             artifact = "io.grpc:protoc-gen-grpc-kotlin:$gengrpc_version:jdk8@jar"
         }
+
+        krotoDC {
+            artifact = "io.github.mscheong01:protoc-gen-krotoDC:1.0.0:jdk8@jar"
+        }
     }
     generateProtoTasks {
         all().each { task ->
             task.plugins {
                 grpc {}     // Generate Java gRPC classes
                 grpckt {}   // Generate Kotlin gRPC using the custom plugin from library
+                krotoDC {}  // Generate Kotlin data classes
             }
 //            task.builtins {
 //                kotlin {}
@@ -243,6 +250,11 @@ test {
         exceptionFormat "full"
         showStandardStreams = true
     }
+}
+
+// This will keep generated code out of the kotlinter checks
+tasks.named("lintKotlinMain") {
+    source = source - fileTree("$buildDir/generated")
 }
 
 kotlinter {

@@ -36,7 +36,7 @@ import io.ktor.http.*
 import io.ktor.network.sockets.*
 import io.prometheus.Agent
 import io.prometheus.common.ScrapeResults
-import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.grpc.krotodc.ScrapeRequest
 import kotlinx.coroutines.TimeoutCancellationException
 import mu.two.KLogging
 import java.io.IOException
@@ -58,7 +58,7 @@ internal class AgentHttpService(val agent: Agent) {
       val encodedQueryParams = request.encodedQueryParams
       val authHeader =
         when {
-          request.authHeader.isNullOrBlank() -> null
+          request.authHeader.isBlank() -> null
           else -> request.authHeader
         }
 
@@ -132,7 +132,7 @@ internal class AgentHttpService(val agent: Agent) {
             client.get(
               url,
               {
-                request.accept?.also { if (it.isNotEmpty()) header(ACCEPT, it) }
+                request.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
                 val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
                 logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
                 timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }

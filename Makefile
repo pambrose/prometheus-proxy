@@ -1,4 +1,4 @@
-VERSION=1.16.0
+VERSION=1.17.0
 
 default: versioncheck
 
@@ -68,4 +68,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=8.0.2 --distribution-type=bin
+	./gradlew wrapper --gradle-version=8.1 --distribution-type=bin

@@ -22,10 +22,9 @@ import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
 import io.prometheus.Proxy
-import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
-import io.prometheus.common.GrpcObjects.EMPTY_PATH_MSG
-import io.prometheus.common.GrpcObjects.unregisterPathResponse
-import io.prometheus.grpc.UnregisterPathResponse
+import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
+import io.prometheus.common.Messages.EMPTY_PATH_MSG
+import io.prometheus.grpc.krotodc.UnregisterPathResponse
 import mu.two.KLogging
 
 internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode: Boolean) {
@@ -102,7 +101,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
             true to ""
           }
         }
-      return unregisterPathResponse { valid = results.first; reason = results.second }
+      return UnregisterPathResponse(valid = results.first, reason = results.second)
     }
   }
 
