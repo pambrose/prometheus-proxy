@@ -196,7 +196,8 @@ internal class AgentGrpcService(
         hostName = hostName,
         consolidated = agent.options.consolidated
       ).apply { require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
-    stub.registerAgent(request.toProto())
+        .toProto()
+    stub.registerAgent(request)
       .also { response ->
         agent.markMsgSent()
         if (!response.valid)
@@ -207,8 +208,11 @@ internal class AgentGrpcService(
 
   fun pathMapSize() =
     runBlocking {
-      val request = PathMapSizeRequest(agent.agentId).apply { require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
-      stub.pathMapSize(request.toProto())
+      val request =
+        PathMapSizeRequest(agent.agentId)
+          .apply { require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
+          .toProto()
+      stub.pathMapSize(request)
         .run {
           agent.markMsgSent()
           pathCount
@@ -220,8 +224,8 @@ internal class AgentGrpcService(
       RegisterPathRequest(agent.agentId, path).apply {
         require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         require(this.path.isNotEmpty()) { EMPTY_PATH_MSG }
-      }
-    return stub.registerPath(request.toProto()).toDataClass()
+      }.toProto()
+    return stub.registerPath(request).toDataClass()
       .apply {
         agent.markMsgSent()
         if (!valid)
@@ -236,7 +240,8 @@ internal class AgentGrpcService(
           require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
           require(this.path.isNotEmpty()) { EMPTY_PATH_MSG }
         }
-    return stub.unregisterPath(request.toProto()).toDataClass()
+        .toProto()
+    return stub.unregisterPath(request).toDataClass()
       .apply {
         agent.markMsgSent()
         if (!valid)
@@ -249,8 +254,8 @@ internal class AgentGrpcService(
       .also { agentId ->
         if (agentId.isNotEmpty())
           try {
-            val request = HeartBeatRequest(agentId)
-            stub.sendHeartBeat(request.toProto()).toDataClass()
+            val request = HeartBeatRequest(agentId).toProto()
+            stub.sendHeartBeat(request).toDataClass()
               .apply {
                 agent.markMsgSent()
                 if (!valid) {
@@ -268,10 +273,10 @@ internal class AgentGrpcService(
     connectionContext
       .use {
         val agentInfo =
-          AgentInfo(agent.agentId).apply {
-            require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
-          }
-        stub.readRequestsFromProxy(agentInfo.toProto())
+          AgentInfo(agent.agentId)
+            .apply { require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
+            .toProto()
+        stub.readRequestsFromProxy(agentInfo)
           .collect { grpcRequest: ScrapeRequest ->
             // The actual fetch happens at the other end of the channel, not here.
             val request = grpcRequest.toDataClass()

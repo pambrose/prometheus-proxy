@@ -102,8 +102,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
       valid = valid,
       reason = request.agentId,
       agentId = "Invalid agentId: ${request.agentId} (registerAgent)"
-    )
-      .apply { require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
+    ).apply { require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
       .toProto()
   }
 

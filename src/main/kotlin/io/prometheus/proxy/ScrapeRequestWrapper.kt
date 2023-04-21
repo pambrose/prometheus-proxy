@@ -56,7 +56,8 @@ internal class ScrapeRequestWrapper(
       debugEnabled = debugEnabled,
       encodedQueryParams = encodedQueryParams,
       authHeader = authHeader,
-    ).apply { require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }.toProto()
+    ).apply { require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
+      .toProto()
 
   var scrapeResults: ScrapeResults by nonNullableReference()
 
