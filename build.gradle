@@ -2,12 +2,12 @@ plugins {
     id 'idea'
     id 'java'
     id 'maven-publish'
-    id 'org.jetbrains.kotlin.jvm' version '1.8.20'
+    id 'org.jetbrains.kotlin.jvm' version '1.8.21'
     id 'com.google.protobuf' version '0.9.1'   // Keep in sync with grpc
     id 'org.jmailen.kotlinter' version "3.13.0"
     id "com.github.ben-manes.versions" version '0.46.0'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
-    id 'com.github.gmazzo.buildconfig' version '3.1.0'
+    id 'com.github.gmazzo.buildconfig' version '4.0.4'
     id 'org.jetbrains.kotlinx.kover' version '0.6.1'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
     // id 'jacoco'
@@ -25,7 +25,7 @@ buildConfig {
 
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"04/18/2023\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"05/07/2023\"")
 }
 
 repositories {
@@ -127,7 +127,7 @@ protobuf {
         }
 
         krotoDC {
-            artifact = "io.github.mscheong01:protoc-gen-krotoDC:1.0.0:jdk8@jar"
+            artifact = "io.github.mscheong01:protoc-gen-krotoDC:$krotodc_version:jdk8@jar"
         }
     }
     generateProtoTasks {
