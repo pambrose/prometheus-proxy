@@ -27,7 +27,7 @@ import io.grpc.ForwardingClientCallListener
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor
 import io.prometheus.Agent
-import io.prometheus.common.GrpcObjects.EMPTY_AGENT_ID_MSG
+import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.proxy.ProxyServerInterceptor.Companion.META_AGENT_ID_KEY
 import mu.two.KLogging
 

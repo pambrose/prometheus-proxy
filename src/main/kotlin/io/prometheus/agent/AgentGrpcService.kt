@@ -33,19 +33,36 @@ import io.grpc.StatusRuntimeException
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions.Companion.HTTPS_PREFIX
 import io.prometheus.common.BaseOptions.Companion.HTTP_PREFIX
-import io.prometheus.common.GrpcObjects
-import io.prometheus.common.GrpcObjects.EMPTY_INSTANCE
-import io.prometheus.common.GrpcObjects.newAgentInfo
-import io.prometheus.common.GrpcObjects.newRegisterAgentRequest
+import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.GrpcObjects.newScrapeResponseChunk
 import io.prometheus.common.GrpcObjects.newScrapeResponseSummary
-import io.prometheus.common.GrpcObjects.toScrapeResponse
-import io.prometheus.common.GrpcObjects.toScrapeResponseHeader
+import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
+import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
+import io.prometheus.grpc.krotodc.AgentInfo
+import io.prometheus.grpc.krotodc.HeartBeatRequest
+import io.prometheus.grpc.krotodc.PathMapSizeRequest
+import io.prometheus.grpc.krotodc.RegisterAgentRequest
+import io.prometheus.grpc.krotodc.RegisterPathRequest
+import io.prometheus.grpc.krotodc.RegisterPathResponse
+import io.prometheus.grpc.krotodc.UnregisterPathRequest
+import io.prometheus.grpc.krotodc.UnregisterPathResponse
+import io.prometheus.grpc.krotodc.agentinfo.toProto
+import io.prometheus.grpc.krotodc.chunkedscraperesponse.toProto
+import io.prometheus.grpc.krotodc.heartbeatrequest.toProto
+import io.prometheus.grpc.krotodc.heartbeatresponse.toDataClass
+import io.prometheus.grpc.krotodc.pathmapsizerequest.toProto
+import io.prometheus.grpc.krotodc.registeragentrequest.toProto
+import io.prometheus.grpc.krotodc.registerpathrequest.toProto
+import io.prometheus.grpc.krotodc.registerpathresponse.toDataClass
+import io.prometheus.grpc.krotodc.scraperequest.toDataClass
+import io.prometheus.grpc.krotodc.scraperesponse.toProto
+import io.prometheus.grpc.krotodc.unregisterpathrequest.toProto
+import io.prometheus.grpc.krotodc.unregisterpathresponse.toDataClass
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -172,7 +189,14 @@ internal class AgentGrpcService(
 
   suspend fun registerAgent(initialConnectionLatch: CountDownLatch) {
     val request =
-      newRegisterAgentRequest(agent.agentId, agent.launchId, agent.agentName, hostName, agent.options.consolidated)
+      RegisterAgentRequest(
+        agentId = agent.agentId,
+        launchId = agent.launchId,
+        agentName = agent.agentName,
+        hostName = hostName,
+        consolidated = agent.options.consolidated
+      ).apply { require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
+        .toProto()
     stub.registerAgent(request)
       .also { response ->
         agent.markMsgSent()
@@ -184,35 +208,54 @@ internal class AgentGrpcService(
 
   fun pathMapSize() =
     runBlocking {
-      stub.pathMapSize(GrpcObjects.newPathMapSizeRequest(agent.agentId))
+      val request =
+        PathMapSizeRequest(agent.agentId)
+          .apply { require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
+          .toProto()
+      stub.pathMapSize(request)
         .run {
           agent.markMsgSent()
           pathCount
         }
     }
 
-  suspend fun registerPathOnProxy(path: String) =
-    stub.registerPath(GrpcObjects.newRegisterPathRequest(agent.agentId, path))
+  suspend fun registerPathOnProxy(path: String): RegisterPathResponse {
+    val request =
+      RegisterPathRequest(agent.agentId, path).apply {
+        require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+        require(this.path.isNotEmpty()) { EMPTY_PATH_MSG }
+      }.toProto()
+    return stub.registerPath(request).toDataClass()
       .apply {
         agent.markMsgSent()
         if (!valid)
           throw RequestFailureException("registerPathOnProxy() - $reason")
       }
+  }
 
-  suspend fun unregisterPathOnProxy(path: String) =
-    stub.unregisterPath(GrpcObjects.newUnregisterPathRequest(agent.agentId, path))
+  suspend fun unregisterPathOnProxy(path: String): UnregisterPathResponse {
+    val request =
+      UnregisterPathRequest(agent.agentId, path)
+        .apply {
+          require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+          require(this.path.isNotEmpty()) { EMPTY_PATH_MSG }
+        }
+        .toProto()
+    return stub.unregisterPath(request).toDataClass()
       .apply {
         agent.markMsgSent()
         if (!valid)
           throw RequestFailureException("unregisterPathOnProxy() - $reason")
       }
+  }
 
   suspend fun sendHeartBeat() {
     agent.agentId
       .also { agentId ->
         if (agentId.isNotEmpty())
           try {
-            stub.sendHeartBeat(GrpcObjects.newHeartBeatRequest(agentId))
+            val request = HeartBeatRequest(agentId).toProto()
+            stub.sendHeartBeat(request).toDataClass()
               .apply {
                 agent.markMsgSent()
                 if (!valid) {
@@ -229,10 +272,14 @@ internal class AgentGrpcService(
   suspend fun readRequestsFromProxy(agentHttpService: AgentHttpService, connectionContext: AgentConnectionContext) {
     connectionContext
       .use {
-        val agentInfo = newAgentInfo(agent.agentId)
+        val agentInfo =
+          AgentInfo(agent.agentId)
+            .apply { require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
+            .toProto()
         stub.readRequestsFromProxy(agentInfo)
-          .collect { request: ScrapeRequest ->
+          .collect { grpcRequest: ScrapeRequest ->
             // The actual fetch happens at the other end of the channel, not here.
+            val request = grpcRequest.toDataClass()
             logger.debug { "readRequestsFromProxy():\n$request" }
             connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(request) }
             agent.scrapeRequestBacklogSize.incrementAndGet()
@@ -252,7 +299,7 @@ internal class AgentGrpcService(
 
         if (!scrapeResults.zipped) {
           logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.contentAsText.length}" }
-          nonChunkedChannel.send(scrapeResults.toScrapeResponse())
+          nonChunkedChannel.send(scrapeResults.toScrapeResponse().toProto())
           agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
         } else {
           val zipped = scrapeResults.contentAsZipped
@@ -262,13 +309,13 @@ internal class AgentGrpcService(
 
           if (zipped.size < chunkContentSize) {
             logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
-            nonChunkedChannel.send(scrapeResults.toScrapeResponse())
+            nonChunkedChannel.send(scrapeResults.toScrapeResponse().toProto())
             agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
           } else {
             scrapeResults.toScrapeResponseHeader()
               .also {
                 logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapeId " }
-                chunkedChannel.send(it)
+                chunkedChannel.send(it.toProto())
               }
 
             var totalByteCount = 0
@@ -286,14 +333,14 @@ internal class AgentGrpcService(
               newScrapeResponseChunk(scrapeId, totalChunkCount, readByteCount, checksum, buffer)
                 .also {
                   logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapeId" }
-                  chunkedChannel.send(it)
+                  chunkedChannel.send(it.toProto())
                 }
             }
 
             newScrapeResponseSummary(scrapeId, totalChunkCount, totalByteCount, checksum)
               .also {
                 logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
-                chunkedChannel.send(it)
+                chunkedChannel.send(it.toProto())
                 agent.metrics { scrapeResultCount.labels(agent.launchId, "chunked").inc() }
               }
           }
