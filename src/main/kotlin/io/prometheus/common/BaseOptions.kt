@@ -243,21 +243,22 @@ abstract class BaseOptions protected constructor(
       }
 
       configName.isUrlPrefix() -> {
-        try {
+        runCatching {
           val configSyntax = getConfigSyntax(configName)
           return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
             .withFallback(fallback)
-        } catch (e: Exception) {
+        }.onFailure { e ->
           if (e.cause is FileNotFoundException)
             logger.error { "Invalid config url: $configName" }
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
       }
+
       else -> {
-        try {
+        runCatching {
           return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
-        } catch (e: Exception) {
+        }.onFailure { e ->
           if (e.cause is FileNotFoundException)
             logger.error { "Invalid config filename: $configName" }
           else

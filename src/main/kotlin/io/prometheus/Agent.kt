@@ -187,18 +187,19 @@ class Agent(
 
     while (isRunning) {
       try {
-        runBlocking {
-          connectToProxy()
+        runCatching {
+          runBlocking {
+            connectToProxy()
+          }
+        }.onFailure { e ->
+          when (e) {
+            is RequestFailureException -> logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
+            is StatusRuntimeException -> logger.info { "Disconnected from proxy at $proxyHost" }
+            is StatusException -> logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
+            // Catch anything else to avoid exiting retry loop
+            else -> logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
+          }
         }
-      } catch (e: RequestFailureException) {
-        logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
-      } catch (e: StatusRuntimeException) {
-        logger.info { "Disconnected from proxy at $proxyHost" }
-      } catch (e: StatusException) {
-        logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
-      } catch (e: Throwable) {
-        // Catch anything else to avoid exiting retry loop
-        logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
       } finally {
         logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
       }
