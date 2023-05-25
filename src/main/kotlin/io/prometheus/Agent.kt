@@ -289,6 +289,7 @@ class Agent(
       Agent(options = AgentOptions(argv, exitOnMissingConfig)) { startSync() }
     }
 
+    @Suppress("unused")
     @JvmStatic
     fun startAsyncAgent(
       configFilename: String,
