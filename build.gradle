@@ -15,7 +15,7 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.18.0'
+version = '1.19.0'
 
 sourceCompatibility = JavaVersion.VERSION_17
 targetCompatibility = JavaVersion.VERSION_17
