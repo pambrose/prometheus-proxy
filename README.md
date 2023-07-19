@@ -264,16 +264,16 @@ Agents connect to a proxy using [gRPC](https://grpc.io). gRPC supports TLS with 
 necessary certificate and key file paths can be specified via CLI args, environment variables and configuration file
 settings.
 
-The gRPC docs describe [how to setup TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
+The gRPC docs describe [how to set up TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
 The [repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs) includes the certificates and keys
 necessary to test TLS support.
 
-Running TLS without mutual authentication requires these settingss:
+Running TLS without mutual authentication requires these settings:
 
 * `certChainFilePath` and `privateKeyFilePath` on the proxy
 * `trustCertCollectionFilePath` on the agent
 
-Running TLS with mutual authentication requires these settingss:
+Running TLS with mutual authentication requires these settings:
 
 * `certChainFilePath`, `privateKeyFilePath` and `trustCertCollectionFilePath` on the proxy
 * `certChainFilePath`, `privateKeyFilePath` and `trustCertCollectionFilePath` on the agent

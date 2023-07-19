@@ -68,4 +68,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=8.1.1 --distribution-type=bin
+	./gradlew wrapper --gradle-version=8.2.1 --distribution-type=bin
