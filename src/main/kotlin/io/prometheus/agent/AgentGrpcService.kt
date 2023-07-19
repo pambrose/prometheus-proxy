@@ -171,7 +171,7 @@ internal class AgentGrpcService(
 
   // If successful, this will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
   suspend fun connectAgent(transportFilterDisabled: Boolean) =
-    try {
+    runCatching {
       logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
       if (transportFilterDisabled)
         stub.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE).also { agent.agentId = it.agentId }
@@ -181,7 +181,7 @@ internal class AgentGrpcService(
       logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
       agent.metrics { connectCount.labels(agent.launchId, "success").inc() }
       true
-    } catch (e: StatusRuntimeException) {
+    }.getOrElse { e ->
       agent.metrics { connectCount.labels(agent.launchId, "failure").inc() }
       logger.info { "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}" }
       false
@@ -253,7 +253,7 @@ internal class AgentGrpcService(
     agent.agentId
       .also { agentId ->
         if (agentId.isNotEmpty())
-          try {
+          runCatching {
             val request = HeartBeatRequest(agentId).toProto()
             stub.sendHeartBeat(request).toDataClass()
               .apply {
@@ -263,8 +263,11 @@ internal class AgentGrpcService(
                   throw StatusRuntimeException(Status.NOT_FOUND)
                 }
               }
-          } catch (e: StatusRuntimeException) {
-            logger.error { "sendHeartBeat() failed ${e.status}" }
+          }.onFailure { e ->
+            if (e is StatusRuntimeException)
+              logger.error { "sendHeartBeat() failed ${e.status}" }
+            else
+              logger.error { "sendHeartBeat() failed ${e.message}" }
           }
       }
   }

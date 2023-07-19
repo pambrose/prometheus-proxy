@@ -112,8 +112,8 @@ scrape_configs:
 The docker images are available via:
 
 ```bash
-docker pull pambrose/prometheus-proxy:1.17.0
-docker pull pambrose/prometheus-agent:1.17.0
+docker pull pambrose/prometheus-proxy:1.18.0
+docker pull pambrose/prometheus-agent:1.18.0
 ```
 
 Start a proxy container with:
@@ -122,7 +122,7 @@ Start a proxy container with:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.17.0
+        pambrose/prometheus-proxy:1.18.0
 ```
 
 Start an agent container with:
@@ -130,7 +130,7 @@ Start an agent container with:
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.17.0
+        pambrose/prometheus-agent:1.18.0
 ```
 
 Using the config
@@ -148,7 +148,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:1.17.0
+    pambrose/prometheus-agent:1.18.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -264,16 +264,16 @@ Agents connect to a proxy using [gRPC](https://grpc.io). gRPC supports TLS with 
 necessary certificate and key file paths can be specified via CLI args, environment variables and configuration file
 settings.
 
-The gRPC docs describe [how to setup TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
+The gRPC docs describe [how to set up TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
 The [repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs) includes the certificates and keys
 necessary to test TLS support.
 
-Running TLS without mutual authentication requires these settingss:
+Running TLS without mutual authentication requires these settings:
 
 * `certChainFilePath` and `privateKeyFilePath` on the proxy
 * `trustCertCollectionFilePath` on the agent
 
-Running TLS with mutual authentication requires these settingss:
+Running TLS with mutual authentication requires these settings:
 
 * `certChainFilePath`, `privateKeyFilePath` and `trustCertCollectionFilePath` on the proxy
 * `certChainFilePath`, `privateKeyFilePath` and `trustCertCollectionFilePath` on the agent
@@ -296,7 +296,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.17.0
+    pambrose/prometheus-proxy:1.18.0
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -304,7 +304,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:1.17.0
+    pambrose/prometheus-agent:1.18.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the

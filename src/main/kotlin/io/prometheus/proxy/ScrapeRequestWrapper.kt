@@ -27,7 +27,6 @@ import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.krotodc.ScrapeRequest
 import io.prometheus.grpc.krotodc.scraperequest.toProto
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
@@ -74,10 +73,10 @@ internal class ScrapeRequestWrapper(
   suspend fun suspendUntilComplete(waitMillis: Duration) =
     withTimeoutOrNull(waitMillis.inWholeMilliseconds) {
       // completeChannel will eventually close and never get a value, or timeout
-      try {
+      runCatching {
         completeChannel.receive()
         true
-      } catch (e: ClosedReceiveChannelException) {
+      }.getOrElse {
         true
       }
     }.isNotNull()

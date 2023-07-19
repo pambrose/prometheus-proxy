@@ -16,6 +16,7 @@
 
 package io.prometheus.common
 
+@Suppress("unused")
 object TypeAliases
 
 internal typealias ScrapeRequestAction = suspend () -> ScrapeResults

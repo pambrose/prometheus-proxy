@@ -24,5 +24,5 @@ internal object Messages {
 }
 
 internal object DefaultObjects {
-  val EMPTY_INSTANCE = Empty.getDefaultInstance()
+  val EMPTY_INSTANCE: Empty = Empty.getDefaultInstance()
 }

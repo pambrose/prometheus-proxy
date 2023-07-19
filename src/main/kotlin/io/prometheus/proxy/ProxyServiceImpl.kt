@@ -163,12 +163,12 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     }
 
   override suspend fun writeResponsesToProxy(requests: Flow<ScrapeResponse>): Empty {
-    try {
+    runCatching {
       requests.collect { response ->
         val scrapeResults = response.toDataClass().toScrapeResults()
         proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
       }
-    } catch (throwable: Throwable) {
+    }.onFailure { throwable ->
       if (proxy.isRunning)
         Status.fromThrowable(throwable)
           .also { arg ->
@@ -180,7 +180,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
   }
 
   override suspend fun writeChunkedResponsesToProxy(requests: Flow<ChunkedScrapeResponse>): Empty {
-    try {
+    runCatching {
       requests.collect { response ->
         val ooc = response.chunkOneOfCase
         val chunkedContextMap = proxy.agentContextManager.chunkedContextMap
@@ -215,7 +215,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
           else -> throw IllegalStateException("Invalid field name in writeChunkedResponsesToProxy()")
         }
       }
-    } catch (throwable: Throwable) {
+    }.onFailure { throwable ->
       if (proxy.isRunning)
         Status.fromThrowable(throwable)
           .also { arg ->

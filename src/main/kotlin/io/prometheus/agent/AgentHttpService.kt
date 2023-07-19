@@ -84,110 +84,93 @@ internal class AgentHttpService(val agent: Agent) {
 
         // Content is fetched here
         try {
-          HttpClient(CIO) {
-            expectSuccess = false
-            engine {
-              val timeout = agent.configVals.agent.internal.cioTimeoutSecs.seconds
-              requestTimeout = timeout.inWholeMilliseconds
+          runCatching {
+            HttpClient(CIO) {
+              expectSuccess = false
+              engine {
+                val timeout = agent.configVals.agent.internal.cioTimeoutSecs.seconds
+                requestTimeout = timeout.inWholeMilliseconds
 
-              val enableTrustAllX509Certificates = agent.configVals.agent.http.enableTrustAllX509Certificates
-              if (enableTrustAllX509Certificates) {
-                https {
-                  // trustManager = SslSettings.getTrustManager()
-                  trustManager = TrustAllX509TrustManager
-                }
-              }
-            }
-
-            install(HttpTimeout)
-
-            install(HttpRequestRetry) {
-              agent.options.scrapeMaxRetries.also { maxRetries ->
-                if (maxRetries <= 0)
-                  noRetry()
-                else {
-                  retryOnException(maxRetries)
-                  retryIf(maxRetries) { _, response ->
-                    !response.status.isSuccess() && response.status != HttpStatusCode.NotFound
-                  }
-                  modifyRequest { it.headers.append("x-retry-count", retryCount.toString()) }
-                  exponentialDelay()
-                }
-              }
-            }
-
-            val urlObj = Url(url)
-            val user = urlObj.user
-            val passwd = urlObj.password
-            if (user.isNotNull() && passwd.isNotNull()) {
-              install(Auth) {
-                basic {
-                  credentials {
-                    BasicAuthCredentials(user, passwd)
+                val enableTrustAllX509Certificates = agent.configVals.agent.http.enableTrustAllX509Certificates
+                if (enableTrustAllX509Certificates) {
+                  https {
+                    // trustManager = SslSettings.getTrustManager()
+                    trustManager = TrustAllX509TrustManager
                   }
                 }
               }
+
+              install(HttpTimeout)
+
+              install(HttpRequestRetry) {
+                agent.options.scrapeMaxRetries.also { maxRetries ->
+                  if (maxRetries <= 0)
+                    noRetry()
+                  else {
+                    retryOnException(maxRetries)
+                    retryIf(maxRetries) { _, response ->
+                      !response.status.isSuccess() && response.status != HttpStatusCode.NotFound
+                    }
+                    modifyRequest { it.headers.append("x-retry-count", retryCount.toString()) }
+                    exponentialDelay()
+                  }
+                }
+              }
+
+              val urlObj = Url(url)
+              val user = urlObj.user
+              val passwd = urlObj.password
+              if (user.isNotNull() && passwd.isNotNull()) {
+                install(Auth) {
+                  basic {
+                    credentials {
+                      BasicAuthCredentials(user, passwd)
+                    }
+                  }
+                }
+              }
+            }.use { client ->
+              client.get(
+                url,
+                {
+                  request.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
+                  val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
+                  logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
+                  timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
+                  authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
+                },
+                getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled)
+              )
             }
-          }.use { client ->
-            client.get(
-              url,
-              {
-                request.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
-                val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
-                logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
-                timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
-                authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
-              },
-              getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled)
-            )
+          }.onFailure { e ->
+            scrapeResults.statusCode =
+              when (e) {
+                is TimeoutCancellationException,
+                is HttpConnectTimeoutException,
+                is SocketTimeoutException,
+                is HttpRequestTimeoutException -> {
+                  logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+                  HttpStatusCode.RequestTimeout.value
+                }
+
+                is IOException -> {
+                  logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
+                  HttpStatusCode.NotFound.value
+                }
+
+                else -> {
+                  logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+                  HttpStatusCode.ServiceUnavailable.value
+                }
+              }
+            scrapeResults.failureReason = e.message ?: e.simpleClassName
+            if (request.debugEnabled)
+              scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
           }
-        } catch (e: TimeoutCancellationException) {
-          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
-          scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
-          scrapeResults.failureReason = e.message ?: e.simpleClassName
-
-          if (request.debugEnabled)
-            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        } catch (e: HttpConnectTimeoutException) {
-          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
-          scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
-          scrapeResults.failureReason = e.message ?: e.simpleClassName
-
-          if (request.debugEnabled)
-            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        } catch (e: SocketTimeoutException) {
-          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
-          scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
-          scrapeResults.failureReason = e.message ?: e.simpleClassName
-
-          if (request.debugEnabled)
-            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        } catch (e: HttpRequestTimeoutException) {
-          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
-          scrapeResults.statusCode = HttpStatusCode.RequestTimeout.value
-          scrapeResults.failureReason = e.message ?: e.simpleClassName
-
-          if (request.debugEnabled)
-            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        } catch (e: IOException) {
-          logger.info { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
-          scrapeResults.statusCode = HttpStatusCode.NotFound.value
-          scrapeResults.failureReason = e.message ?: e.simpleClassName
-
-          if (request.debugEnabled)
-            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
-        } catch (e: Throwable) {
-          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
-          scrapeResults.failureReason = e.message ?: e.simpleClassName
-          scrapeResults.statusCode = HttpStatusCode.ServiceUnavailable.value
-
-          if (request.debugEnabled)
-            scrapeResults.setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
         } finally {
           requestTimer?.observeDuration()
         }
       }
-
       agent.updateScrapeCounter(agent, scrapeMsg.get())
     }
 
