@@ -8,7 +8,7 @@ plugins {
     id "com.github.ben-manes.versions" version '0.47.0'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'com.github.gmazzo.buildconfig' version '4.1.2'
-    id 'org.jetbrains.kotlinx.kover' version '0.7.2'
+    id 'org.jetbrains.kotlinx.kover' version '0.7.3'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
     // id 'jacoco'
     // id 'com.github.kt3k.coveralls' version '2.12.0'
