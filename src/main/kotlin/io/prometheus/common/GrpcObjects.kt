@@ -30,7 +30,6 @@ import io.prometheus.grpc.krotodc.SummaryData
 import java.util.zip.CRC32
 
 internal object GrpcObjects {
-
   fun ScrapeResponse.toScrapeResults() =
     ScrapeResults(
       agentId = agentId,
@@ -40,7 +39,7 @@ internal object GrpcObjects {
       contentType = contentType,
       zipped = zipped,
       failureReason = failureReason,
-      url = url
+      url = url,
     ).also { results ->
       if (zipped)
         results.contentAsZipped = (contentOneOf as ContentAsZipped).contentAsZipped.toByteArray()
@@ -53,34 +52,32 @@ internal object GrpcObjects {
     totalChunkCount: Int,
     readByteCount: Int,
     checksum: CRC32,
-    buffer: ByteArray
-  ) =
-    ChunkedScrapeResponse(
-      Chunk(
-        ChunkData(
-          chunkScrapeId = scrapeId,
-          chunkCount = totalChunkCount,
-          chunkByteCount = readByteCount,
-          chunkChecksum = checksum.value,
-          chunkBytes = ByteString.copyFrom(buffer),
-        )
-      )
-    )
+    buffer: ByteArray,
+  ) = ChunkedScrapeResponse(
+    chunkOneOf = Chunk(
+      chunk = ChunkData(
+        chunkScrapeId = scrapeId,
+        chunkCount = totalChunkCount,
+        chunkByteCount = readByteCount,
+        chunkChecksum = checksum.value,
+        chunkBytes = ByteString.copyFrom(buffer),
+      ),
+    ),
+  )
 
   fun newScrapeResponseSummary(
     scrapeId: Long,
     totalChunkCount: Int,
     totalByteCount: Int,
-    checksum: CRC32
-  ) =
-    ChunkedScrapeResponse(
-      Summary(
-        SummaryData(
-          summaryScrapeId = scrapeId,
-          summaryChunkCount = totalChunkCount,
-          summaryByteCount = totalByteCount,
-          summaryChecksum = checksum.value,
-        )
-      )
-    )
+    checksum: CRC32,
+  ) = ChunkedScrapeResponse(
+    chunkOneOf = Summary(
+      SummaryData(
+        summaryScrapeId = scrapeId,
+        summaryChunkCount = totalChunkCount,
+        summaryByteCount = totalByteCount,
+        summaryChecksum = checksum.value,
+      ),
+    ),
+  )
 }

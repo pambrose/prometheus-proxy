@@ -30,17 +30,15 @@ class TlsWithMutualAuthTest : CommonTests(
   ProxyCallTestArgs(
     agent = agent,
     startPort = 10800,
-    caller = simpleClassName
-  )
+    caller = simpleClassName,
+  ),
 ) {
-
   companion object : CommonCompanion() {
-
     @JvmStatic
     @BeforeAll
     fun setUp() =
       setItUp(
-        {
+        proxySetup = {
           startProxy(
             serverName = "withmutualauth",
             argv = listOf(
@@ -51,11 +49,11 @@ class TlsWithMutualAuthTest : CommonTests(
               "--key",
               "testing/certs/server1.key",
               "--trust",
-              "testing/certs/ca.pem"
-            )
+              "testing/certs/ca.pem",
+            ),
           )
         },
-        {
+        agentSetup = {
           startAgent(
             serverName = "withmutualauth",
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
@@ -70,10 +68,10 @@ class TlsWithMutualAuthTest : CommonTests(
               "--trust",
               "testing/certs/ca.pem",
               "--override",
-              "foo.test.google.fr"
-            )
+              "foo.test.google.fr",
+            ),
           )
-        }
+        },
       )
 
     @JvmStatic

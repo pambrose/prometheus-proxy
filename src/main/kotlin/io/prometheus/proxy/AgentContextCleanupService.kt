@@ -31,9 +31,8 @@ import kotlin.time.Duration.Companion.seconds
 internal class AgentContextCleanupService(
   private val proxy: Proxy,
   private val configVals: ConfigVals.Proxy2.Internal2,
-  initBlock: (AgentContextCleanupService.() -> Unit) = {}
+  initBlock: (AgentContextCleanupService.() -> Unit) = {},
 ) : GenericExecutionThreadService() {
-
   init {
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
     initBlock(this)
@@ -47,7 +46,11 @@ internal class AgentContextCleanupService(
         .forEach { (agentId, agentContext) ->
           val inactivityDuration = agentContext.inactivityDuration
           if (inactivityDuration > maxAgentInactivityTime) {
-            logger.info { "Evicting agentId ${agentContext.agentId} after $inactivityDuration (max $maxAgentInactivityTime) of inactivity: $agentContext" }
+            logger.info {
+              val id = agentContext.agentId
+              val maxTime = maxAgentInactivityTime
+              "Evicting agentId $id after $inactivityDuration (max $maxTime) of inactivity: $agentContext"
+            }
             proxy.removeAgentContext(agentId, "Eviction")
             proxy.metrics { agentEvictionCount.inc() }
           }

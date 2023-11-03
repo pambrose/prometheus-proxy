@@ -2,6 +2,9 @@ VERSION=1.19.0
 
 default: versioncheck
 
+stop:
+	./gradlew --stop
+
 clean:
 	./gradlew clean
 
@@ -68,4 +71,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=8.2.1 --distribution-type=bin
+	./gradlew wrapper --gradle-version=8.4 --distribution-type=bin

@@ -21,7 +21,6 @@ package io.prometheus.common
 import java.lang.System.getenv
 
 enum class EnvVars {
-
   // Proxy
   PROXY_CONFIG,
   PROXY_PORT,
@@ -52,7 +51,8 @@ enum class EnvVars {
   CERT_CHAIN_FILE_PATH,
   PRIVATE_KEY_FILE_PATH,
   TRUST_CERT_COLLECTION_FILE_PATH,
-  OVERRIDE_AUTHORITY;
+  OVERRIDE_AUTHORITY,
+  ;
 
   fun getEnv(defaultVal: String) = getenv(name) ?: defaultVal
 

@@ -27,7 +27,10 @@ import kotlin.system.exitProcess
 internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
 internal class VersionValidator : IParameterValidator {
-  override fun validate(name: String, value: String) {
+  override fun validate(
+    name: String,
+    value: String,
+  ) {
     val console = JCommander().console
     console.println(getVersionDesc(false))
     exitProcess(0)

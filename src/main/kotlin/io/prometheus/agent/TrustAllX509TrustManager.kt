@@ -26,7 +26,15 @@ object TrustAllX509TrustManager : X509TrustManager {
 
   override fun getAcceptedIssuers(): Array<X509Certificate?> = EMPTY_CERTIFICATES
 
-  override fun checkClientTrusted(certs: Array<X509Certificate?>?, authType: String?) {}
+  override fun checkClientTrusted(
+    certs: Array<X509Certificate?>?,
+    authType: String?,
+  ) {
+  }
 
-  override fun checkServerTrusted(certs: Array<X509Certificate?>?, authType: String?) {}
+  override fun checkServerTrusted(
+    certs: Array<X509Certificate?>?,
+    authType: String?,
+  ) {
+  }
 }

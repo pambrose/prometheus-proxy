@@ -2,13 +2,13 @@ plugins {
     id 'idea'
     id 'java'
     id 'maven-publish'
-    id 'org.jetbrains.kotlin.jvm' version '1.9.0'
-    id 'com.google.protobuf' version '0.9.1'   // Keep in sync with grpc
-    id 'org.jmailen.kotlinter' version "3.13.0"
-    id "com.github.ben-manes.versions" version '0.47.0'
+  id 'org.jetbrains.kotlin.jvm' version '1.9.20'
+  id 'com.google.protobuf' version '0.9.4'   // Keep in sync with grpc
+  id 'org.jmailen.kotlinter' version "4.0.0"
+  id "com.github.ben-manes.versions" version '0.49.0'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'com.github.gmazzo.buildconfig' version '4.1.2'
-    id 'org.jetbrains.kotlinx.kover' version '0.7.3'
+  id 'org.jetbrains.kotlinx.kover' version '0.7.4'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
     // id 'jacoco'
     // id 'com.github.kt3k.coveralls' version '2.12.0'
@@ -25,7 +25,7 @@ buildConfig {
 
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"07/19/2023\"")
+  buildConfigField('String', 'APP_RELEASE_DATE', "\"11/02/2023\"")
 }
 
 repositories {
@@ -260,18 +260,7 @@ tasks.named("lintKotlinMain") {
 
 kotlinter {
     ignoreFailures = false
-    //indentSize = 2
     reporters = ['checkstyle', 'plain']
-    experimentalRules = false
-    disabledRules = ["no-wildcard-imports",
-                     "indent",
-                     "final-newline",
-                     "comment-spacing",
-                     "max-line-length",
-                     "no-multi-spaces",
-                     "no-trailing-spaces",
-                     "wrapping",
-                     "multiline-if-else",]
 }
 
 koverMerged {

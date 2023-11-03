@@ -79,7 +79,7 @@ import kotlin.properties.Delegates.notNull
 internal class AgentGrpcService(
   internal val agent: Agent,
   private val options: AgentOptions,
-  private val inProcessServerName: String
+  private val inProcessServerName: String,
 ) {
   private var grpcStarted by atomicBoolean(false)
   private var stub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub by notNull()
@@ -122,7 +122,7 @@ internal class AgentGrpcService(
           buildClientTlsContext(
             certChainFilePath = certChainFilePath,
             privateKeyFilePath = privateKeyFilePath,
-            trustCertCollectionFilePath = trustCertCollectionFilePath
+            trustCertCollectionFilePath = trustCertCollectionFilePath,
           )
         else
           PLAINTEXT_CONTEXT
@@ -155,7 +155,7 @@ internal class AgentGrpcService(
         enableRetry = true,
         tlsContext = tlsContext,
         overrideAuthority = agent.options.overrideAuthority,
-        inProcessServerName = inProcessServerName
+        inProcessServerName = inProcessServerName,
       ) {
         if (agent.isZipkinEnabled)
           intercept(grpcTracing.newClientInterceptor())
@@ -183,7 +183,9 @@ internal class AgentGrpcService(
       true
     }.getOrElse { e ->
       agent.metrics { connectCount.labels(agent.launchId, "failure").inc() }
-      logger.info { "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}" }
+      logger.info {
+        "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
+      }
       false
     }
 
@@ -194,7 +196,7 @@ internal class AgentGrpcService(
         launchId = agent.launchId,
         agentName = agent.agentName,
         hostName = hostName,
-        consolidated = agent.options.consolidated
+        consolidated = agent.options.consolidated,
       ).apply { require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
         .toProto()
     stub.registerAgent(request)
@@ -272,7 +274,10 @@ internal class AgentGrpcService(
       }
   }
 
-  suspend fun readRequestsFromProxy(agentHttpService: AgentHttpService, connectionContext: AgentConnectionContext) {
+  suspend fun readRequestsFromProxy(
+    agentHttpService: AgentHttpService,
+    connectionContext: AgentConnectionContext,
+  ) {
     connectionContext
       .use {
         val agentInfo =
@@ -294,70 +299,72 @@ internal class AgentGrpcService(
     agent: Agent,
     scrapeResultsChannel: Channel<ScrapeResults>,
     nonChunkedChannel: Channel<ScrapeResponse>,
-    chunkedChannel: Channel<ChunkedScrapeResponse>
-  ) =
-    try {
-      for (scrapeResults: ScrapeResults in scrapeResultsChannel) {
-        val scrapeId = scrapeResults.scrapeId
+    chunkedChannel: Channel<ChunkedScrapeResponse>,
+  ) = try {
+    for (scrapeResults: ScrapeResults in scrapeResultsChannel) {
+      val scrapeId = scrapeResults.scrapeId
 
-        if (!scrapeResults.zipped) {
-          logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.contentAsText.length}" }
+      if (!scrapeResults.zipped) {
+        logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.contentAsText.length}" }
+        nonChunkedChannel.send(scrapeResults.toScrapeResponse().toProto())
+        agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
+      } else {
+        val zipped = scrapeResults.contentAsZipped
+        val chunkContentSize = options.chunkContentSizeKbs
+
+        logger.debug { "Comparing ${zipped.size} and $chunkContentSize" }
+
+        if (zipped.size < chunkContentSize) {
+          logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
           nonChunkedChannel.send(scrapeResults.toScrapeResponse().toProto())
-          agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
+          agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
         } else {
-          val zipped = scrapeResults.contentAsZipped
-          val chunkContentSize = options.chunkContentSizeKbs
-
-          logger.debug { "Comparing ${zipped.size} and $chunkContentSize" }
-
-          if (zipped.size < chunkContentSize) {
-            logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
-            nonChunkedChannel.send(scrapeResults.toScrapeResponse().toProto())
-            agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
-          } else {
-            scrapeResults.toScrapeResponseHeader()
-              .also {
-                logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapeId " }
-                chunkedChannel.send(it.toProto())
-              }
-
-            var totalByteCount = 0
-            var totalChunkCount = 0
-            val checksum = CRC32()
-            val bais = ByteArrayInputStream(zipped)
-            val buffer = ByteArray(chunkContentSize)
-            var readByteCount: Int
-
-            while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
-              totalChunkCount++
-              totalByteCount += readByteCount
-              checksum.update(buffer, 0, buffer.size)
-
-              newScrapeResponseChunk(scrapeId, totalChunkCount, readByteCount, checksum, buffer)
-                .also {
-                  logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapeId" }
-                  chunkedChannel.send(it.toProto())
-                }
+          scrapeResults.toScrapeResponseHeader()
+            .also {
+              logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapeId " }
+              chunkedChannel.send(it.toProto())
             }
 
-            newScrapeResponseSummary(scrapeId, totalChunkCount, totalByteCount, checksum)
+          var totalByteCount = 0
+          var totalChunkCount = 0
+          val checksum = CRC32()
+          val bais = ByteArrayInputStream(zipped)
+          val buffer = ByteArray(chunkContentSize)
+          var readByteCount: Int
+
+          while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
+            totalChunkCount++
+            totalByteCount += readByteCount
+            checksum.update(buffer, 0, buffer.size)
+
+            newScrapeResponseChunk(scrapeId, totalChunkCount, readByteCount, checksum, buffer)
               .also {
-                logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
+                logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapeId" }
                 chunkedChannel.send(it.toProto())
-                agent.metrics { scrapeResultCount.labels(agent.launchId, "chunked").inc() }
               }
           }
+
+          newScrapeResponseSummary(scrapeId, totalChunkCount, totalByteCount, checksum)
+            .also {
+              logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
+              chunkedChannel.send(it.toProto())
+              agent.metrics { scrapeResultCount.labels(agent.launchId, "chunked").inc() }
+            }
         }
-
-        agent.markMsgSent()
-        agent.scrapeRequestBacklogSize.decrementAndGet()
       }
-    } finally {
-      nonChunkedChannel.close()
-      chunkedChannel.close()
-    }
 
-  suspend fun writeResponsesToProxyUntilDisconnected(agent: Agent, connectionContext: AgentConnectionContext) {
+      agent.markMsgSent()
+      agent.scrapeRequestBacklogSize.decrementAndGet()
+    }
+  } finally {
+    nonChunkedChannel.close()
+    chunkedChannel.close()
+  }
+
+  suspend fun writeResponsesToProxyUntilDisconnected(
+    agent: Agent,
+    connectionContext: AgentConnectionContext,
+  ) {
     fun exceptionHandler() =
       CoroutineExceptionHandler { _, e ->
         if (agent.isRunning)

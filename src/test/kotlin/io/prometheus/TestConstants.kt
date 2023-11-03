@@ -26,11 +26,11 @@ object TestConstants {
   const val DEFAULT_TIMEOUT = 3
   const val DEFAULT_CHUNK_SIZE = 5
 
-  private const val travisFile = "etc/test-configs/travis.conf"
-  private const val junitFile = "etc/test-configs/junit-test.conf"
-  private const val ghPrefix = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/"
+  private const val TRAVIS_FILE = "etc/test-configs/travis.conf"
+  private const val JUNIT_FILE = "etc/test-configs/junit-test.conf"
+  private const val GH_PREFIX = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/"
 
-  val CONFIG_ARG = listOf("--config", "${if (File(travisFile).exists()) "" else ghPrefix}$travisFile")
+  val CONFIG_ARG = listOf("--config", "${if (File(TRAVIS_FILE).exists()) "" else GH_PREFIX}$TRAVIS_FILE")
 
-  val OPTIONS_CONFIG = "${if (File(junitFile).exists()) ghPrefix else ""}$junitFile"
+  val OPTIONS_CONFIG = "${if (File(JUNIT_FILE).exists()) GH_PREFIX else ""}$JUNIT_FILE"
 }

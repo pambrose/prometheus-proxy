@@ -25,7 +25,6 @@ import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
 
 internal class AgentMetrics(agent: Agent) {
-
   val scrapeRequestCount =
     counter {
       name("agent_scrape_request_count")
@@ -66,7 +65,7 @@ internal class AgentMetrics(agent: Agent) {
       "Agent scrape backlog size",
       labelNames = listOf(LAUNCH_ID),
       labelValues = listOf(agent.launchId),
-      data = { agent.scrapeRequestBacklogSize.get().toDouble() }
+      data = { agent.scrapeRequestBacklogSize.get().toDouble() },
     )
   }
 

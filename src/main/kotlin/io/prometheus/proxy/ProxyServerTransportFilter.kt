@@ -27,7 +27,6 @@ import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 import mu.two.KLogging
 
 internal class ProxyServerTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
-
   override fun transportReady(attributes: Attributes): Attributes {
     val remoteAddress = attributes.get(REMOTE_ADDR_KEY)?.toString() ?: UNKNOWN_ADDRESS
     val agentContext = AgentContext(remoteAddress)

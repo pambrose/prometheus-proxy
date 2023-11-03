@@ -25,14 +25,15 @@ import io.prometheus.common.EnvVars.*
 import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 
-class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
-  BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
-
+class AgentOptions(
+  argv: Array<String>,
+  exitOnMissingConfig: Boolean,
+) : BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
-      this(args.toTypedArray(), exitOnMissingConfig)
+    this(args.toTypedArray(), exitOnMissingConfig)
 
   constructor(configFilename: String, exitOnMissingConfig: Boolean) :
-      this(listOf("--config", configFilename), exitOnMissingConfig)
+    this(listOf("--config", configFilename), exitOnMissingConfig)
 
   @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
   var proxyHostname = ""
@@ -80,12 +81,11 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
 
         if (proxyHostname.isEmpty()) {
           val configHostname = agentConfigVals.proxy.hostname
-          proxyHostname = PROXY_HOSTNAME.getEnv(
-            if (":" in configHostname)
-              configHostname
-            else
-              "$configHostname:${agentConfigVals.proxy.port}"
-          )
+          val str = if (":" in configHostname)
+            configHostname
+          else
+            "$configHostname:${agentConfigVals.proxy.port}"
+          proxyHostname = PROXY_HOSTNAME.getEnv(str)
         }
         logger.info { "proxyHostname: $proxyHostname" }
 
@@ -137,8 +137,12 @@ class AgentOptions(argv: Array<String>, exitOnMissingConfig: Boolean) :
 
         logger.info { "agent.scrapeTimeoutSecs: ${agentConfigVals.scrapeTimeoutSecs.seconds}" }
         logger.info { "agent.internal.cioTimeoutSecs: ${agentConfigVals.internal.cioTimeoutSecs.seconds}" }
-        logger.info { "agent.internal.heartbeatCheckPauseMillis: ${agentConfigVals.internal.heartbeatCheckPauseMillis}" }
-        logger.info { "agent.internal.heartbeatMaxInactivitySecs: ${agentConfigVals.internal.heartbeatMaxInactivitySecs}" }
+        logger.info {
+          "agent.internal.heartbeatCheckPauseMillis: ${agentConfigVals.internal.heartbeatCheckPauseMillis}"
+        }
+        logger.info {
+          "agent.internal.heartbeatMaxInactivitySecs: ${agentConfigVals.internal.heartbeatMaxInactivitySecs}"
+        }
       }
   }
 

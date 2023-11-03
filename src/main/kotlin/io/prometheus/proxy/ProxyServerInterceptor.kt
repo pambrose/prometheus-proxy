@@ -28,11 +28,10 @@ import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 
 internal class ProxyServerInterceptor : ServerInterceptor {
-
   override fun <ReqT, RespT> interceptCall(
     call: ServerCall<ReqT, RespT>,
     requestHeaders: Metadata,
-    handler: ServerCallHandler<ReqT, RespT>
+    handler: ServerCallHandler<ReqT, RespT>,
   ): ServerCall.Listener<ReqT> =
     handler.startCall(
       object : ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(call) {
@@ -42,7 +41,7 @@ internal class ProxyServerInterceptor : ServerInterceptor {
           super.sendHeaders(headers)
         }
       },
-      requestHeaders
+      requestHeaders,
     )
 
   companion object {

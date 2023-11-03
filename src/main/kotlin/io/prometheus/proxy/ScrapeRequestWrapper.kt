@@ -39,7 +39,7 @@ internal class ScrapeRequestWrapper(
   encodedQueryParams: String,
   authHeader: String,
   accept: String?,
-  debugEnabled: Boolean
+  debugEnabled: Boolean,
 ) {
   private val clock = Monotonic
   private val createTimeMark = clock.markNow()

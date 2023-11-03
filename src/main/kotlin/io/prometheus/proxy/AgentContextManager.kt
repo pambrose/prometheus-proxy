@@ -41,12 +41,15 @@ internal class AgentContextManager(private val isTestMode: Boolean) {
 
   fun getAgentContext(agentId: String) = agentContextMap[agentId]
 
-  fun removeFromContextManager(agentId: String, reason: String): AgentContext? =
+  fun removeFromContextManager(
+    agentId: String,
+    reason: String,
+  ): AgentContext? =
     agentContextMap.remove(agentId)
       .let { agentContext ->
-        if (agentContext.isNull())
+        if (agentContext.isNull()) {
           logger.warn { "Missing AgentContext for agentId: $agentId ($reason)" }
-        else {
+        } else {
           if (!isTestMode)
             logger.info { "Removed $agentContext for agentId: $agentId ($reason)" }
           agentContext.invalidate()
