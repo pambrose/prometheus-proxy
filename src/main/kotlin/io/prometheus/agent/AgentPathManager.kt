@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *  
+ *
  *       http://www.apache.org/licenses/LICENSE-2.0
- *  
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,7 +26,6 @@ import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import mu.two.KLogging
 
 internal class AgentPathManager(private val agent: Agent) {
-
   private val agentConfigVals = agent.configVals.agent
   private val pathContextMap = newConcurrentMap<String, PathContext>()
 
@@ -42,7 +41,7 @@ internal class AgentPathManager(private val agent: Agent) {
         mapOf(
           NAME to """"${it.name}"""",
           PATH to it.path,
-          URL to it.url
+          URL to it.url,
         )
       }
       .onEach { logger.info { "Proxy path /${it[PATH]} will be assigned to ${it[URL]}" } }
@@ -57,7 +56,10 @@ internal class AgentPathManager(private val agent: Agent) {
         logger.error { "Null path/url values: $path/$url" }
     }
 
-  suspend fun registerPath(pathVal: String, url: String) {
+  suspend fun registerPath(
+    pathVal: String,
+    url: String,
+  ) {
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
     require(url.isNotEmpty()) { "Empty URL" }
 
@@ -84,7 +86,7 @@ internal class AgentPathManager(private val agent: Agent) {
     val maxName = pathConfigs.maxOfOrNull { it[NAME]?.length ?: 0 } ?: 0
     val maxPath = pathConfigs.maxOfOrNull { it[PATH]?.length ?: 0 } ?: 0
     return "Agent Path Configs:\n" + "Name".padEnd(maxName + 1) + "Path".padEnd(maxPath + 2) + "URL\n" +
-        pathConfigs.joinToString("\n") { c -> "${c[NAME]?.padEnd(maxName)} /${c[PATH]?.padEnd(maxPath)} ${c[URL]}" }
+      pathConfigs.joinToString("\n") { c -> "${c[NAME]?.padEnd(maxName)} /${c[PATH]?.padEnd(maxPath)} ${c[URL]}" }
   }
 
   companion object : KLogging() {

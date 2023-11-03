@@ -70,15 +70,15 @@ class Agent(
   val options: AgentOptions,
   inProcessServerName: String = "",
   testMode: Boolean = false,
-  initBlock: (Agent.() -> Unit)? = null
+  initBlock: (Agent.() -> Unit)? = null,
 ) :
   GenericService<ConfigVals>(
-    options.configVals,
-    newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
-    newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.agent.metrics),
-    newZipkinConfig(options.configVals.agent.internal.zipkin),
-    { getVersionDesc(true) },
-    isTestMode = testMode
+    configVals = options.configVals,
+    adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
+    metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.agent.metrics),
+    zipkinConfig = newZipkinConfig(options.configVals.agent.internal.zipkin),
+    versionBlock = { getVersionDesc(true) },
+    isTestMode = testMode,
   ) {
   private val agentConfigVals = configVals.agent.internal
   private val clock = Monotonic
@@ -98,21 +98,22 @@ class Agent(
   internal val metrics by lazy { AgentMetrics(this) }
 
   init {
-    fun toPlainText() = """
-      Prometheus Agent Info [${getVersionDesc(false)}]
-      
-      Uptime:    ${upTime.format(true)}
-      AgentId:   $agentId 
-      AgentName: $agentName
-      ProxyHost: $proxyHost
-      
-      Admin Service:
-      ${if (isAdminEnabled) servletService.toString() else "Disabled"}
-      
-      Metrics Service:
-      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
-      
-    """.trimIndent()
+    fun toPlainText() =
+      """
+        Prometheus Agent Info [${getVersionDesc(false)}]
+
+        Uptime:    ${upTime.format(true)}
+        AgentId:   $agentId
+        AgentName: $agentName
+        ProxyHost: $proxyHost
+
+        Admin Service:
+        ${if (isAdminEnabled) servletService.toString() else "Disabled"}
+
+        Metrics Service:
+        ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
+
+      """.trimIndent()
 
     logger.info { "Agent name: $agentName" }
     logger.info { "Proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
@@ -122,10 +123,8 @@ class Agent(
       if (options.debugEnabled) {
         logger.info { "Adding /$DEBUG endpoint" }
         addServlet(
-          DEBUG,
-          LambdaServlet {
-            listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n")
-          }
+          path = DEBUG,
+          servlet = LambdaServlet { listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n") },
         )
       }
     }
@@ -193,11 +192,19 @@ class Agent(
           }
         }.onFailure { e ->
           when (e) {
-            is RequestFailureException -> logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
-            is StatusRuntimeException -> logger.info { "Disconnected from proxy at $proxyHost" }
-            is StatusException -> logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
+            is RequestFailureException ->
+              logger.info {
+                "Disconnected from proxy at $proxyHost after invalid response ${e.message}"
+              }
+
+            is StatusRuntimeException ->
+              logger.info { "Disconnected from proxy at $proxyHost" }
+
+            is StatusException ->
+              logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
             // Catch anything else to avoid exiting retry loop
-            else -> logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
+            else ->
+              logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
           }
         }
       } finally {
@@ -218,9 +225,9 @@ class Agent(
     healthCheckRegistry.register(
       "scrape_request_backlog_check",
       newBacklogHealthCheck(
-        scrapeRequestBacklogSize.get(),
-        agentConfigVals.scrapeRequestBacklogUnhealthySize
-      )
+        backlogSize = scrapeRequestBacklogSize.get(),
+        size = agentConfigVals.scrapeRequestBacklogUnhealthySize,
+      ),
     )
   }
 
@@ -243,7 +250,10 @@ class Agent(
       logger.info { "Heartbeat disabled" }
     }
 
-  internal fun updateScrapeCounter(agent: Agent, type: String) {
+  internal fun updateScrapeCounter(
+    agent: Agent,
+    type: String,
+  ) {
     if (type.isNotEmpty())
       metrics { scrapeRequestCount.labels(agent.launchId, type).inc() }
   }
@@ -281,7 +291,10 @@ class Agent(
     }
 
     @JvmStatic
-    fun startSyncAgent(argv: Array<String>, exitOnMissingConfig: Boolean) {
+    fun startSyncAgent(
+      argv: Array<String>,
+      exitOnMissingConfig: Boolean,
+    ) {
       logger.apply {
         info { getBanner("banners/agent.txt", this) }
         info { getVersionDesc() }
@@ -294,7 +307,7 @@ class Agent(
     fun startAsyncAgent(
       configFilename: String,
       exitOnMissingConfig: Boolean,
-      logBanner: Boolean = true
+      logBanner: Boolean = true,
     ): EmbeddedAgentInfo {
       if (logBanner)
         logger.apply {

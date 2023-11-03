@@ -28,7 +28,6 @@ import io.prometheus.grpc.krotodc.UnregisterPathResponse
 import mu.two.KLogging
 
 internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode: Boolean) {
-
   class AgentContextInfo(var consolidated: Boolean, val agentContexts: MutableList<AgentContext>) {
     override fun toString(): String {
       return "AgentContextInfo(consolidated=$consolidated, agentContexts=$agentContexts)"
@@ -47,7 +46,10 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
       return pathMap.keys.toList()
     }
 
-  fun addPath(path: String, agentContext: AgentContext) {
+  fun addPath(
+    path: String,
+    agentContext: AgentContext,
+  ) {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
 
     synchronized(pathMap) {
@@ -57,7 +59,9 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
           pathMap[path] = AgentContextInfo(true, mutableListOf(agentContext))
         } else {
           if (agentContext.consolidated != agentInfo.consolidated)
-            logger.warn { "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.consolidated}" }
+            logger.warn {
+              "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.consolidated}"
+            }
           else
             agentInfo.agentContexts += agentContext
         }
@@ -70,7 +74,10 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
     }
   }
 
-  fun removePath(path: String, agentId: String): UnregisterPathResponse {
+  fun removePath(
+    path: String,
+    agentId: String,
+  ): UnregisterPathResponse {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
@@ -106,7 +113,10 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
   }
 
   // This is called on agent disconnects
-  fun removeFromPathManager(agentId: String, reason: String) {
+  fun removeFromPathManager(
+    agentId: String,
+    reason: String,
+  ) {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
@@ -142,10 +152,10 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
     } else {
       val maxPath = pathMap.keys.maxOfOrNull { it.length } ?: 0
       "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
-          pathMap
-            .toSortedMap()
-            .map { c -> "/${c.key.padEnd(maxPath)} ${c.value.agentContexts.size} ${c.value}" }
-            .joinToString("\n\n")
+        pathMap
+          .toSortedMap()
+          .map { c -> "/${c.key.padEnd(maxPath)} ${c.value.agentContexts.size} ${c.value}" }
+          .joinToString("\n\n")
     }
 
   companion object : KLogging()

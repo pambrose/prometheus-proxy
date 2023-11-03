@@ -58,15 +58,15 @@ class Proxy(
   proxyHttpPort: Int = options.proxyHttpPort,
   inProcessServerName: String = "",
   testMode: Boolean = false,
-  initBlock: (Proxy.() -> Unit)? = null
+  initBlock: (Proxy.() -> Unit)? = null,
 ) :
   GenericService<ConfigVals>(
-    options.configVals,
-    newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.proxy.admin),
-    newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.proxy.metrics),
-    newZipkinConfig(options.configVals.proxy.internal.zipkin),
-    { getVersionDesc(true) },
-    isTestMode = testMode
+    configVals = options.configVals,
+    adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.proxy.admin),
+    metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.proxy.metrics),
+    zipkinConfig = newZipkinConfig(options.configVals.proxy.internal.zipkin),
+    versionBlock = { getVersionDesc(true) },
+    isTestMode = testMode,
   ) {
   private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort, isTestMode)
@@ -85,19 +85,20 @@ class Proxy(
   internal val scrapeRequestManager = ScrapeRequestManager()
 
   init {
-    fun toPlainText() = """
-      Prometheus Proxy Info [${getVersionDesc(false)}]
-      
-      Uptime:     ${upTime.format(true)}
-      Proxy port: ${httpService.httpPort}
-      
-      Admin Service:
-      ${if (isAdminEnabled) servletService.toString() else "Disabled"}
-      
-      Metrics Service:
-      ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
-      
-    """.trimIndent()
+    fun toPlainText() =
+      """
+        Prometheus Proxy Info [${getVersionDesc(false)}]
+
+        Uptime:     ${upTime.format(true)}
+        Proxy port: ${httpService.httpPort}
+
+        Admin Service:
+        ${if (isAdminEnabled) servletService.toString() else "Disabled"}
+
+        Metrics Service:
+        ${if (isMetricsEnabled) metricsService.toString() else "Disabled"}
+
+      """.trimIndent()
 
     addServices(grpcService, httpService)
 
@@ -111,10 +112,10 @@ class Proxy(
               toPlainText(),
               pathManager.toPlainText(),
               if (recentReqs.size > 0) "\n${recentReqs.size} most recent requests:" else "",
-              recentReqs.reversed().joinToString("\n")
+              recentReqs.reversed().joinToString("\n"),
             )
               .joinToString("\n")
-          }
+          },
         )
       } else {
         logger.info { "Debug servlet disabled" }
@@ -160,15 +161,15 @@ class Proxy(
           "chunking_map_check",
           newMapHealthCheck(
             agentContextManager.chunkedContextMap,
-            proxyConfigVals.chunkContextMapUnhealthySize
-          )
+            proxyConfigVals.chunkContextMapUnhealthySize,
+          ),
         )
         register(
           "scrape_response_map_check",
           newMapHealthCheck(
             scrapeRequestManager.scrapeRequestMap,
-            proxyConfigVals.scrapeRequestMapUnhealthySize
-          )
+            proxyConfigVals.scrapeRequestMapUnhealthySize,
+          ),
         )
         register(
           "agent_scrape_request_backlog",
@@ -184,13 +185,16 @@ class Proxy(
                   HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
                 }
               }
-          }
+          },
         )
       }
   }
 
   // This is called on agent disconnects
-  internal fun removeAgentContext(agentId: String, reason: String): AgentContext? {
+  internal fun removeAgentContext(
+    agentId: String,
+    reason: String,
+  ): AgentContext? {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
     pathManager.removeFromPathManager(agentId, reason)
@@ -202,7 +206,7 @@ class Proxy(
       args.invoke(metrics)
   }
 
-  //val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+  // val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
   private val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
   internal fun logActivity(desc: String) {

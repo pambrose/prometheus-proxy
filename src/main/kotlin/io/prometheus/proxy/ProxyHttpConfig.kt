@@ -52,8 +52,10 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 internal object ProxyHttpConfig : KLogging() {
-
-  fun Application.configServer(proxy: Proxy, isTestMode: Boolean) {
+  fun Application.configServer(
+    proxy: Proxy,
+    isTestMode: Boolean,
+  ) {
     install(DefaultHeaders) {
       header("X-Engine", "Ktor")
     }
@@ -65,7 +67,8 @@ internal object ProxyHttpConfig : KLogging() {
         format { call ->
           when (val status = call.response.status()) {
             HttpStatusCode.Found -> {
-              "$status: ${call.request.toLogString()} -> ${call.response.headers[HttpHeaders.Location]} - ${call.request.origin.remoteHost}"
+              val str = call.request.toLogString()
+              "$status: $str -> ${call.response.headers[HttpHeaders.Location]} - ${call.request.origin.remoteHost}"
             }
 
             else -> "$status: ${call.request.toLogString()} - ${call.request.origin.remoteHost}"
@@ -139,7 +142,9 @@ internal object ProxyHttpConfig : KLogging() {
         val responseResults = ResponseResults()
         val logger = ProxyHttpService.logger
 
-        logger.debug { "Servicing request for path: $path${if (queryParams.isNotEmpty()) " with query params $queryParams" else ""}" }
+        logger.debug {
+          "Servicing request for path: $path${if (queryParams.isNotEmpty()) " with query params $queryParams" else ""}"
+        }
 
         when {
           !proxy.isRunning -> {
@@ -154,15 +159,21 @@ internal object ProxyHttpConfig : KLogging() {
             val msg = "Request missing path"
             proxy.logActivity(msg)
             logger.info { msg }
-            responseResults.apply { updateMsg = "missing_path"; statusCode = NotFound }
+            responseResults.apply {
+              updateMsg = "missing_path"
+              statusCode = NotFound
+            }
           }
 
           path == "favicon.ico" -> {
-            responseResults.apply { updateMsg = "invalid_path"; statusCode = NotFound }
+            responseResults.apply {
+              updateMsg = "invalid_path"
+              statusCode = NotFound
+            }
           }
 
-          proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path -> responseResults.contentText =
-            "42"
+          proxyConfigVals.internal.blitz.enabled && path == proxyConfigVals.internal.blitz.path ->
+            responseResults.contentText = "42"
 
           else -> {
             val agentContextInfo = proxy.pathManager.getAgentContextInfo(path)
@@ -170,32 +181,35 @@ internal object ProxyHttpConfig : KLogging() {
               val msg = "Invalid path request /$path"
               proxy.logActivity(msg)
               logger.info { msg }
-              responseResults.apply { updateMsg = "invalid_path"; statusCode = NotFound }
+              responseResults.apply {
+                updateMsg = "invalid_path"
+                statusCode = NotFound
+              }
             } else {
               if (!agentContextInfo.consolidated && agentContextInfo.agentContexts[0].isNotValid()) {
                 val msg = "Invalid AgentContext for /$path"
                 proxy.logActivity(msg)
                 logger.error { msg }
-                responseResults.apply { updateMsg = "invalid_agent_context"; statusCode = NotFound }
-              } else {
-                val jobs = agentContextInfo.agentContexts.map {
-                  async {
-                    submitScrapeRequest(
-                      it,
-                      proxy,
-                      path,
-                      queryParams,
-                      call.request,
-                      call.response
-                    )
-                  }
-                }.map { it.await() }.onEach { response ->
-                  var status = "/$path - ${response.updateMsg} - ${response.statusCode}"
-                  if (!response.statusCode.isSuccess()) status += " reason: [${response.failureReason}]"
-                  status += " time: ${response.fetchDuration} url: ${response.url}"
-
-                  proxy.logActivity(status)
+                responseResults.apply {
+                  updateMsg = "invalid_agent_context"
+                  statusCode = NotFound
                 }
+              } else {
+                val jobs =
+                  agentContextInfo.agentContexts
+                    .map {
+                      async {
+                        submitScrapeRequest(it, proxy, path, queryParams, call.request, call.response)
+                      }
+                    }
+                    .map { it.await() }
+                    .onEach { response ->
+                      var status = "/$path - ${response.updateMsg} - ${response.statusCode}"
+                      if (!response.statusCode.isSuccess()) status += " reason: [${response.failureReason}]"
+                      status += " time: ${response.fetchDuration} url: ${response.url}"
+
+                      proxy.logActivity(status)
+                    }
 
                 val statusCodes = jobs.map { it.statusCode }.toSet().toList()
                 val contentTypes = jobs.map { it.contentType }.toSet().toList()
@@ -222,14 +236,17 @@ internal object ProxyHttpConfig : KLogging() {
     }
   }
 
-  private fun updateScrapeRequests(proxy: Proxy, type: String) {
+  private fun updateScrapeRequests(
+    proxy: Proxy,
+    type: String,
+  ) {
     if (type.isNotEmpty()) proxy.metrics { scrapeRequestCount.labels(type).inc() }
   }
 
   private suspend fun ApplicationCall.respondWith(
     text: String,
     contentType: ContentType = Plain,
-    status: HttpStatusCode = OK
+    status: HttpStatusCode = OK,
   ) {
     response.header(HttpHeaders.CacheControl, "must-revalidate,no-store")
     response.status(status)
@@ -242,16 +259,16 @@ internal object ProxyHttpConfig : KLogging() {
     path: String,
     encodedQueryParams: String,
     request: ApplicationRequest,
-    response: ApplicationResponse
+    response: ApplicationResponse,
   ): ScrapeRequestResponse {
     val scrapeRequest = ScrapeRequestWrapper(
-      agentContext,
-      proxy,
-      path,
-      encodedQueryParams,
-      request.header(HttpHeaders.Authorization) ?: "",
-      request.header(HttpHeaders.Accept),
-      proxy.options.debugEnabled
+      agentContext = agentContext,
+      proxy = proxy,
+      path = path,
+      encodedQueryParams = encodedQueryParams,
+      authHeader = request.header(HttpHeaders.Authorization) ?: "",
+      accept = request.header(HttpHeaders.Accept),
+      debugEnabled = proxy.options.debugEnabled,
     )
     val logger = ProxyHttpService.logger
 
@@ -266,11 +283,12 @@ internal object ProxyHttpConfig : KLogging() {
       // Returns false if timed out
       while (!scrapeRequest.suspendUntilComplete(checkTime)) {
         // Check if agent is disconnected or agent is hung
-        if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning) return ScrapeRequestResponse(
-          statusCode = HttpStatusCode.ServiceUnavailable,
-          updateMsg = "timed_out",
-          fetchDuration = scrapeRequest.ageDuration()
-        )
+        if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
+          return ScrapeRequestResponse(
+            statusCode = HttpStatusCode.ServiceUnavailable,
+            updateMsg = "timed_out",
+            fetchDuration = scrapeRequest.ageDuration(),
+          )
       }
     } finally {
       val scrapeId = scrapeRequest.scrapeId
@@ -284,8 +302,11 @@ internal object ProxyHttpConfig : KLogging() {
       HttpStatusCode.fromValue(scrapeResults.statusCode).also { statusCode ->
         scrapeResults.contentType.split("/").also { contentTypeElems ->
 
-          val contentType = if (contentTypeElems.size == 2) ContentType(contentTypeElems[0], contentTypeElems[1])
-          else Plain
+          val contentType =
+            if (contentTypeElems.size == 2)
+              ContentType(contentTypeElems[0], contentTypeElems[1])
+            else
+              Plain
 
           // Do not return content on error status codes
           return if (!statusCode.isSuccess()) {
@@ -296,7 +317,7 @@ internal object ProxyHttpConfig : KLogging() {
                 failureReason = failureReason,
                 url = url,
                 updateMsg = "path_not_found",
-                fetchDuration = scrapeRequest.ageDuration()
+                fetchDuration = scrapeRequest.ageDuration(),
               )
             }
           } else {
@@ -309,7 +330,7 @@ internal object ProxyHttpConfig : KLogging() {
                 failureReason = failureReason,
                 url = url,
                 updateMsg = "success",
-                fetchDuration = scrapeRequest.ageDuration()
+                fetchDuration = scrapeRequest.ageDuration(),
               )
             }
           }
@@ -326,12 +347,12 @@ private class ScrapeRequestResponse(
   var contentText: String = "",
   val failureReason: String = "",
   val url: String = "",
-  val fetchDuration: Duration
+  val fetchDuration: Duration,
 )
 
 private class ResponseResults(
   var statusCode: HttpStatusCode = OK,
   var contentType: ContentType = Plain,
   var contentText: String = "",
-  var updateMsg: String = ""
+  var updateMsg: String = "",
 )

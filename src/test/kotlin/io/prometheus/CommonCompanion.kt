@@ -31,7 +31,11 @@ open class CommonCompanion : KLogging() {
   protected var proxy: Proxy by notNull()
   protected var agent: Agent by notNull()
 
-  protected fun setItUp(proxySetup: () -> Proxy, agentSetup: () -> Agent, actions: () -> Unit = {}) {
+  protected fun setItUp(
+    proxySetup: () -> Proxy,
+    agentSetup: () -> Agent,
+    actions: () -> Unit = {},
+  ) {
     CollectorRegistry.defaultRegistry.clear()
 
     runBlocking {

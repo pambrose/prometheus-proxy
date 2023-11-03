@@ -37,14 +37,13 @@ import java.util.*
 import kotlin.properties.Delegates.notNull
 import kotlin.system.exitProcess
 
-//@Parameters(separators = "=")
+// @Parameters(separators = "=")
 abstract class BaseOptions protected constructor(
   private val progName: String,
   private val argv: Array<String>,
   private val envConfig: String,
-  private val exitOnMissingConfig: Boolean = false
+  private val exitOnMissingConfig: Boolean = false,
 ) {
-
   @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
   private var configSource = ""
 
@@ -87,9 +86,8 @@ abstract class BaseOptions protected constructor(
   @Parameter(
     names = ["-v", "--version"],
     description = "Print version info and exit",
-    validateWith = [VersionValidator::class]
+    validateWith = [VersionValidator::class],
   )
-
   private var version = false
 
   @Parameter(names = ["-u", "--usage"], help = true)
@@ -187,14 +185,17 @@ abstract class BaseOptions protected constructor(
     logger.info { "trustCertCollectionFilePath: $trustCertCollectionFilePath" }
   }
 
-  private fun readConfig(envConfig: String, exitOnMissingConfig: Boolean) {
+  private fun readConfig(
+    envConfig: String,
+    exitOnMissingConfig: Boolean,
+  ) {
     config =
       readConfig(
         configSource.ifEmpty { System.getenv(envConfig).orEmpty() },
         envConfig,
         ConfigParseOptions.defaults().setAllowMissing(false),
         ConfigFactory.load().resolve(),
-        exitOnMissingConfig
+        exitOnMissingConfig,
       )
         .resolve(ConfigResolveOptions.defaults())
         .resolve()
@@ -215,7 +216,7 @@ abstract class BaseOptions protected constructor(
     envConfig: String,
     configParseOptions: ConfigParseOptions,
     fallback: Config,
-    exitOnMissingConfig: Boolean
+    exitOnMissingConfig: Boolean,
   ): Config {
     fun String.isUrlPrefix() =
       lowercase(Locale.getDefault()).startsWith(HTTP_PREFIX) || lowercase(Locale.getDefault()).startsWith(HTTPS_PREFIX)

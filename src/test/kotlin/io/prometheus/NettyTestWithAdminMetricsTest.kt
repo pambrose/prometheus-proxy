@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *  
+ *
  *       http://www.apache.org/licenses/LICENSE-2.0
- *  
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -40,10 +40,9 @@ class NettyTestWithAdminMetricsTest : CommonTests(
   ProxyCallTestArgs(
     agent = agent,
     startPort = 10300,
-    caller = simpleClassName
-  )
+    caller = simpleClassName,
+  ),
 ) {
-
   @Test
   fun adminDebugCallsTest() {
     runBlocking {
@@ -66,31 +65,30 @@ class NettyTestWithAdminMetricsTest : CommonTests(
   }
 
   companion object : CommonCompanion() {
-
     @JvmStatic
     @BeforeAll
     fun setUp() =
       setItUp(
-        {
+        proxySetup = {
           startProxy(
             adminEnabled = true,
             debugEnabled = true,
-            metricsEnabled = true
+            metricsEnabled = true,
           )
         },
-        {
+        agentSetup = {
           startAgent(
             adminEnabled = true,
             debugEnabled = true,
             metricsEnabled = true,
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE
+            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
           )
         },
-        {
+        actions = {
           // Wait long enough to trigger heartbeat for code coverage
           sleep(15.seconds)
-        }
+        },
       )
 
     @JvmStatic

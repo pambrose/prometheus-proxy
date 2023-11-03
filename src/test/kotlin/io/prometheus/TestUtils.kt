@@ -34,7 +34,7 @@ object TestUtils : KLogging() {
     adminEnabled: Boolean = false,
     debugEnabled: Boolean = false,
     metricsEnabled: Boolean = false,
-    argv: List<String> = emptyList()
+    argv: List<String> = emptyList(),
   ): Proxy {
     logger.apply {
       info { getBanner("banners/proxy.txt", logger) }
@@ -49,13 +49,13 @@ object TestUtils : KLogging() {
           add("-Dproxy.admin.enabled=$adminEnabled")
           add("-Dproxy.admin.debugEnabled=$debugEnabled")
           add("-Dproxy.metrics.enabled=$metricsEnabled")
-        }
+        },
     )
     return Proxy(
       options = proxyOptions,
       proxyHttpPort = PROXY_PORT,
       inProcessServerName = serverName,
-      testMode = true
+      testMode = true,
     ) { startSync() }
   }
 
@@ -66,7 +66,7 @@ object TestUtils : KLogging() {
     metricsEnabled: Boolean = false,
     scrapeTimeoutSecs: Int = -1,
     chunkContentSizeKbs: Int = -1,
-    argv: List<String> = emptyList()
+    argv: List<String> = emptyList(),
   ): Agent {
     logger.apply {
       info { getBanner("banners/agent.txt", logger) }
@@ -74,7 +74,7 @@ object TestUtils : KLogging() {
     }
 
     val agentOptions = AgentOptions(
-      mutableListOf<String>()
+      args = mutableListOf<String>()
         .apply {
           addAll(TestConstants.CONFIG_ARG)
           addAll(argv)
@@ -86,7 +86,7 @@ object TestUtils : KLogging() {
           if (chunkContentSizeKbs != -1)
             add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
         },
-      false
+      exitOnMissingConfig = false,
     )
     return Agent(options = agentOptions, inProcessServerName = serverName, testMode = true) { startSync() }
   }
@@ -100,5 +100,4 @@ fun exceptionHandler(logger: KLogger) =
       logger.warn(e) { "CoroutineExceptionHandler caught: $e" }
   }
 
-fun String.withPrefix(prefix: String = "http://localhost:") =
-  if (this.startsWith(prefix)) this else (prefix + this)
+fun String.withPrefix(prefix: String = "http://localhost:") = if (this.startsWith(prefix)) this else (prefix + this)

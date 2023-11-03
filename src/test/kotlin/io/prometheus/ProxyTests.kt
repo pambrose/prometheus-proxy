@@ -66,17 +66,16 @@ class ProxyCallTestArgs(
   val sequentialQueryCount: Int = SEQUENTIAL_QUERY_COUNT,
   val parallelQueryCount: Int = PARALLEL_QUERY_COUNT,
   val startPort: Int = 9600,
-  val caller: String
+  val caller: String,
 )
 
 internal object ProxyTests : KLogging() {
-
   suspend fun timeoutTest(
     pathManager: AgentPathManager,
     caller: String,
     agentPort: Int = 9900,
     agentPath: String = "agent-timeout",
-    proxyPath: String = "proxy-timeout"
+    proxyPath: String = "proxy-timeout",
   ) {
     logger.debug { "Calling timeoutTest() from $caller" }
 
@@ -153,7 +152,7 @@ internal object ProxyTests : KLogging() {
                 call.respondText(content, Text.Plain)
               }
             }
-          }
+          },
         )
       }
 
@@ -259,7 +258,11 @@ internal object ProxyTests : KLogging() {
     logger.info { "Finished shutting down ${httpServers.size} httpServers" }
   }
 
-  private suspend fun callProxy(httpClient: HttpClient, pathMap: Map<Int, Int>, msg: String) {
+  private suspend fun callProxy(
+    httpClient: HttpClient,
+    pathMap: Map<Int, Int>,
+    msg: String,
+  ) {
     logger.debug { "Launched $msg" }
 
     // Randomly choose one of the pathMap values

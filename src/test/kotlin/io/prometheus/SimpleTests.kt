@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *  
+ *
  *       http://www.apache.org/licenses/LICENSE-2.0
- *  
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,7 +34,6 @@ import org.amshove.kluent.shouldNotBeNull
 import kotlin.time.Duration.Companion.seconds
 
 internal object SimpleTests : KLogging() {
-
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
     blockingGet("$PROXY_PORT/".withPrefix()) { response ->
@@ -49,7 +48,10 @@ internal object SimpleTests : KLogging() {
     }
   }
 
-  suspend fun addRemovePathsTest(pathManager: AgentPathManager, caller: String) {
+  suspend fun addRemovePathsTest(
+    pathManager: AgentPathManager,
+    caller: String,
+  ) {
     logger.debug { "Calling addRemovePathsTest() from $caller" }
 
     // Take into account pre-existing paths already registered
@@ -69,7 +71,11 @@ internal object SimpleTests : KLogging() {
     }
   }
 
-  suspend fun invalidAgentUrlTest(pathManager: AgentPathManager, caller: String, badPath: String = "badPath") {
+  suspend fun invalidAgentUrlTest(
+    pathManager: AgentPathManager,
+    caller: String,
+    badPath: String = "badPath",
+  ) {
     logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
@@ -79,7 +85,10 @@ internal object SimpleTests : KLogging() {
     pathManager.unregisterPath(badPath)
   }
 
-  suspend fun threadedAddRemovePathsTest(pathManager: AgentPathManager, caller: String) {
+  suspend fun threadedAddRemovePathsTest(
+    pathManager: AgentPathManager,
+    caller: String,
+  ) {
     logger.debug { "Calling threadedAddRemovePathsTest() from $caller" }
     val paths: MutableList<String> = mutableListOf()
 

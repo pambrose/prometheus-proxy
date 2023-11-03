@@ -57,7 +57,6 @@ import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicLong
 
 internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
-
   override suspend fun connectAgent(request: Empty): Empty {
     if (proxy.options.transportFilterDisabled) {
       "Agent (false) and Proxy (true) do not have matching transportFilterDisabled config values".also { msg ->
@@ -101,7 +100,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     return io.prometheus.grpc.krotodc.RegisterAgentResponse(
       valid = valid,
       reason = request.agentId,
-      agentId = "Invalid agentId: ${request.agentId} (registerAgent)"
+      agentId = "Invalid agentId: ${request.agentId} (registerAgent)",
     ).apply { require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
       .toProto()
   }
@@ -120,7 +119,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
       pathId = if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1,
       valid = valid,
       reason = "Invalid agentId: ${request.agentId} (registerPath)",
-      pathCount = proxy.pathManager.pathMapSize
+      pathCount = proxy.pathManager.pathMapSize,
     ).toProto()
   }
 
@@ -131,7 +130,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
       logger.error { "Missing AgentContext for agentId: $agentId" }
       io.prometheus.grpc.krotodc.UnregisterPathResponse(
         valid = false,
-        reason = "Invalid agentId: $agentId (unregisterPath)"
+        reason = "Invalid agentId: $agentId (unregisterPath)",
       )
     } else {
       proxy.pathManager.removePath(request.path, agentId).apply { agentContext.markActivityTime(false) }
@@ -149,7 +148,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
           ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
         HeartBeatResponse(
           valid = agentContext.isNotNull(),
-          reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
+          reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)",
         ).toProto()
       }
 
@@ -206,7 +205,11 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
               .apply {
                 val context = chunkedContextMap.remove(summaryScrapeId)
                 check(context.isNotNull()) { "Missing chunked context with scrapeId: $summaryScrapeId" }
-                logger.debug { "Reading summary chunkCount: ${context.totalChunkCount} byteCount: ${context.totalByteCount} for scrapeId: $summaryScrapeId" }
+                logger.debug {
+                  val ccnt = context.totalChunkCount
+                  val bcnt = context.totalByteCount
+                  "Reading summary chunkCount: $ccnt byteCount: $bcnt for scrapeId: $summaryScrapeId"
+                }
                 context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
                 proxy.scrapeRequestManager.assignScrapeResults(context.scrapeResults)
               }

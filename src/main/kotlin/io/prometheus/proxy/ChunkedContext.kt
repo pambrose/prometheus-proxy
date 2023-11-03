@@ -42,11 +42,16 @@ internal class ChunkedContext(response: ChunkedScrapeResponse) {
         zipped = true,
         failureReason = headerFailureReason,
         url = headerUrl,
-        contentType = headerContentType
+        contentType = headerContentType,
       )
     }
 
-  fun applyChunk(data: ByteArray, chunkByteCount: Int, chunkCount: Int, chunkChecksum: Long) {
+  fun applyChunk(
+    data: ByteArray,
+    chunkByteCount: Int,
+    chunkCount: Int,
+    chunkChecksum: Long,
+  ) {
     totalChunkCount++
     totalByteCount += chunkByteCount
     checksum.update(data, 0, data.size)
@@ -56,7 +61,11 @@ internal class ChunkedContext(response: ChunkedScrapeResponse) {
     check(checksum.value == chunkChecksum)
   }
 
-  fun applySummary(summaryChunkCount: Int, summaryByteCount: Int, summaryChecksum: Long) {
+  fun applySummary(
+    summaryChunkCount: Int,
+    summaryByteCount: Int,
+    summaryChecksum: Long,
+  ) {
     check(totalChunkCount == summaryChunkCount)
     check(totalByteCount == summaryByteCount)
     check(checksum.value == summaryChecksum)

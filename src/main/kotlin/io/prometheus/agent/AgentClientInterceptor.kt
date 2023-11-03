@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *  
+ *
  *       http://www.apache.org/licenses/LICENSE-2.0
- *  
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,16 +32,18 @@ import io.prometheus.proxy.ProxyServerInterceptor.Companion.META_AGENT_ID_KEY
 import mu.two.KLogging
 
 internal class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
-
   override fun <ReqT, RespT> interceptCall(
     method: MethodDescriptor<ReqT, RespT>,
     callOptions: CallOptions,
-    next: Channel
+    next: Channel,
   ): ClientCall<ReqT, RespT> =
     object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-      agent.grpcService.channel.newCall(method, callOptions)
+      agent.grpcService.channel.newCall(method, callOptions),
     ) {
-      override fun start(responseListener: Listener<RespT>, metadata: Metadata) {
+      override fun start(
+        responseListener: Listener<RespT>,
+        metadata: Metadata,
+      ) {
         super.start(
           object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
             override fun onHeaders(headers: Metadata) {
@@ -58,7 +60,7 @@ internal class AgentClientInterceptor(private val agent: Agent) : ClientIntercep
               super.onHeaders(headers)
             }
           },
-          metadata
+          metadata,
         )
       }
     }

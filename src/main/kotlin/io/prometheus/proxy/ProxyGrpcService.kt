@@ -40,9 +40,8 @@ import kotlin.time.Duration.Companion.seconds
 internal class ProxyGrpcService(
   private val proxy: Proxy,
   private val port: Int = -1,
-  private val inProcessName: String = ""
+  private val inProcessName: String = "",
 ) : GenericIdleService() {
-
   val healthCheck =
     healthCheck {
       if (grpcServer.isShutdown || grpcServer.isTerminated)
@@ -63,7 +62,7 @@ internal class ProxyGrpcService(
         buildServerTlsContext(
           certChainFilePath = options.certChainFilePath,
           privateKeyFilePath = options.privateKeyFilePath,
-          trustCertCollectionFilePath = options.trustCertCollectionFilePath
+          trustCertCollectionFilePath = options.trustCertCollectionFilePath,
         )
       else
         PLAINTEXT_CONTEXT
@@ -72,7 +71,7 @@ internal class ProxyGrpcService(
       server(
         port = port,
         tlsContext = tlsContext,
-        inProcessServerName = inProcessName
+        inProcessServerName = inProcessName,
       ) {
         val proxyService = ProxyServiceImpl(proxy)
         val interceptors =

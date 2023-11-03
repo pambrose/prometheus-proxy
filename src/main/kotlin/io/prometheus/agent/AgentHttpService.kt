@@ -47,11 +47,10 @@ import kotlin.text.Charsets.UTF_8
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentHttpService(val agent: Agent) {
-
   suspend fun fetchScrapeUrl(request: ScrapeRequest): ScrapeResults =
     ScrapeResults(
       agentId = request.agentId,
-      scrapeId = request.scrapeId
+      scrapeId = request.scrapeId,
     ).also { scrapeResults ->
       val scrapeMsg = AtomicReference("")
       val path = request.path
@@ -73,10 +72,12 @@ internal class AgentHttpService(val agent: Agent) {
         val requestTimer = if (agent.isMetricsEnabled) agent.startTimer(agent) else null
         // Add the incoming query params to the url
         val url = pathContext.url +
-            (if (encodedQueryParams.isNotEmpty())
+          (
+            if (encodedQueryParams.isNotEmpty())
               "?${URLDecoder.decode(encodedQueryParams, UTF_8.name())}"
             else
-              "")
+              ""
+            )
 
         logger.debug { "Fetching $pathContext" }
         if (encodedQueryParams.isNotEmpty())
@@ -104,9 +105,9 @@ internal class AgentHttpService(val agent: Agent) {
 
               install(HttpRequestRetry) {
                 agent.options.scrapeMaxRetries.also { maxRetries ->
-                  if (maxRetries <= 0)
+                  if (maxRetries <= 0) {
                     noRetry()
-                  else {
+                  } else {
                     retryOnException(maxRetries)
                     retryIf(maxRetries) { _, response ->
                       !response.status.isSuccess() && response.status != HttpStatusCode.NotFound
@@ -139,7 +140,7 @@ internal class AgentHttpService(val agent: Agent) {
                   timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
                   authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
                 },
-                getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled)
+                getBlock(url, scrapeResults, scrapeMsg, request.debugEnabled),
               )
             }
           }.onFailure { e ->
@@ -148,7 +149,8 @@ internal class AgentHttpService(val agent: Agent) {
                 is TimeoutCancellationException,
                 is HttpConnectTimeoutException,
                 is SocketTimeoutException,
-                is HttpRequestTimeoutException -> {
+                is HttpRequestTimeoutException,
+                -> {
                   logger.warn(e) { "fetchScrapeUrl() $e - $url" }
                   HttpStatusCode.RequestTimeout.value
                 }
@@ -178,7 +180,7 @@ internal class AgentHttpService(val agent: Agent) {
     url: String,
     responseArg: ScrapeResults,
     scrapeCounterMsg: AtomicReference<String>,
-    debugEnabled: Boolean
+    debugEnabled: Boolean,
   ): suspend (HttpResponse) -> Unit =
     { response ->
       responseArg.statusCode = response.status.value

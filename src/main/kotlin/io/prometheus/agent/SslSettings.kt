@@ -26,7 +26,10 @@ import javax.net.ssl.X509TrustManager
 
 @Suppress("unused")
 object SslSettings {
-  fun getKeyStore(fileName: String, password: String): KeyStore =
+  fun getKeyStore(
+    fileName: String,
+    password: String,
+  ): KeyStore =
     KeyStore.getInstance(KeyStore.getDefaultType())
       .apply {
         val keyStoreFile = FileInputStream(fileName)
@@ -34,18 +37,27 @@ object SslSettings {
         load(keyStoreFile, keyStorePassword)
       }
 
-  fun getTrustManagerFactory(fileName: String, password: String): TrustManagerFactory? =
+  fun getTrustManagerFactory(
+    fileName: String,
+    password: String,
+  ): TrustManagerFactory? =
     TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
       .apply {
         init(getKeyStore(fileName, password))
       }
 
-  fun getSslContext(fileName: String, password: String): SSLContext? =
+  fun getSslContext(
+    fileName: String,
+    password: String,
+  ): SSLContext? =
     SSLContext.getInstance("TLS")
       .apply {
         init(null, getTrustManagerFactory(fileName, password)?.trustManagers, null)
       }
 
-  fun getTrustManager(fileName: String, password: String): X509TrustManager =
+  fun getTrustManager(
+    fileName: String,
+    password: String,
+  ): X509TrustManager =
     getTrustManagerFactory(fileName, password)?.trustManagers?.first { it is X509TrustManager } as X509TrustManager
 }

@@ -27,7 +27,6 @@ import org.amshove.kluent.shouldBeTrue
 import org.junit.jupiter.api.Test
 
 class OptionsTest {
-
   @Test
   fun verifyDefaultValues() {
     val configVals = readProxyOptions(listOf())
