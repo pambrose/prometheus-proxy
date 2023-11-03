@@ -8,8 +8,11 @@ insert_final_newline = true
 max_line_length = 120
 trim_trailing_whitespace = true
 
+[build.gradle]
+indent_size = 4
+
 # Override for Makefile
-[{Makefile, makefile, GNUmakefile}]
+[{Makefile, makefile}]
 indent_style = tab
 indent_size = 4
 

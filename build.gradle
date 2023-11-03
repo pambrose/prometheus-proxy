@@ -1,17 +1,17 @@
 plugins {
-  id 'idea'
-  id 'java'
-  id 'maven-publish'
-  id 'org.jetbrains.kotlin.jvm' version '1.9.20'
-  id 'com.google.protobuf' version '0.9.4'   // Keep in sync with grpc
-  id 'org.jmailen.kotlinter' version "4.0.0"
-  id "com.github.ben-manes.versions" version '0.49.0'
-  id 'com.github.johnrengelman.shadow' version '8.1.1'
-  id 'com.github.gmazzo.buildconfig' version '4.1.2'
-  id 'org.jetbrains.kotlinx.kover' version '0.7.4'
-  // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
-  // id 'jacoco'
-  // id 'com.github.kt3k.coveralls' version '2.12.0'
+    id 'idea'
+    id 'java'
+    id 'maven-publish'
+    id 'org.jetbrains.kotlin.jvm' version '1.9.20'
+    id 'com.google.protobuf' version '0.9.4'   // Keep in sync with grpc
+    id 'org.jmailen.kotlinter' version "4.0.0"
+    id "com.github.ben-manes.versions" version '0.49.0'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'com.github.gmazzo.buildconfig' version '4.1.2'
+    id 'org.jetbrains.kotlinx.kover' version '0.7.4'
+    // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
+    // id 'jacoco'
+    // id 'com.github.kt3k.coveralls' version '2.12.0'
 }
 
 group = 'io.prometheus'
@@ -21,131 +21,131 @@ sourceCompatibility = JavaVersion.VERSION_17
 targetCompatibility = JavaVersion.VERSION_17
 
 buildConfig {
-  packageName("io.prometheus")
+    packageName("io.prometheus")
 
-  buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
-  buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-  buildConfigField('String', 'APP_RELEASE_DATE', "\"11/02/2023\"")
+    buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
+    buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"11/02/2023\"")
 }
 
 repositories {
-  google()
-  mavenCentral()
-  maven { url = 'https://jitpack.io' }
+    google()
+    mavenCentral()
+    maven { url = 'https://jitpack.io' }
 }
 
 dependencies {
-  implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
 
-  implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:$serialization_version"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:$serialization_version"
 
-  implementation "io.grpc:grpc-netty:$grpc_version"
-  implementation "io.grpc:grpc-protobuf:$grpc_version"
-  implementation "io.grpc:grpc-stub:$grpc_version"
-  implementation "io.grpc:grpc-services:$grpc_version"
+    implementation "io.grpc:grpc-netty:$grpc_version"
+    implementation "io.grpc:grpc-protobuf:$grpc_version"
+    implementation "io.grpc:grpc-stub:$grpc_version"
+    implementation "io.grpc:grpc-services:$grpc_version"
 
-  implementation "io.grpc:grpc-kotlin-stub:$gengrpc_version"
+    implementation "io.grpc:grpc-kotlin-stub:$gengrpc_version"
 
-  implementation "io.github.mscheong01:krotoDC-core:$krotodc_version"
+    implementation "io.github.mscheong01:krotoDC-core:$krotodc_version"
 
-  // Required
-  implementation "io.netty:netty-tcnative-boringssl-static:$tcnative_version"
+    // Required
+    implementation "io.netty:netty-tcnative-boringssl-static:$tcnative_version"
 
-  implementation "com.github.pambrose.common-utils:core-utils:$utils_version"
-  implementation "com.github.pambrose.common-utils:corex-utils:$utils_version"
-  implementation "com.github.pambrose.common-utils:dropwizard-utils:$utils_version"
-  implementation "com.github.pambrose.common-utils:guava-utils:$utils_version"
-  implementation "com.github.pambrose.common-utils:grpc-utils:$utils_version"
-  implementation "com.github.pambrose.common-utils:jetty-utils:$utils_version"
-  implementation "com.github.pambrose.common-utils:ktor-client-utils:$utils_version"
-  implementation "com.github.pambrose.common-utils:prometheus-utils:$utils_version"
-  implementation "com.github.pambrose.common-utils:service-utils:$utils_version"
-  implementation "com.github.pambrose.common-utils:zipkin-utils:$utils_version"
+    implementation "com.github.pambrose.common-utils:core-utils:$utils_version"
+    implementation "com.github.pambrose.common-utils:corex-utils:$utils_version"
+    implementation "com.github.pambrose.common-utils:dropwizard-utils:$utils_version"
+    implementation "com.github.pambrose.common-utils:guava-utils:$utils_version"
+    implementation "com.github.pambrose.common-utils:grpc-utils:$utils_version"
+    implementation "com.github.pambrose.common-utils:jetty-utils:$utils_version"
+    implementation "com.github.pambrose.common-utils:ktor-client-utils:$utils_version"
+    implementation "com.github.pambrose.common-utils:prometheus-utils:$utils_version"
+    implementation "com.github.pambrose.common-utils:service-utils:$utils_version"
+    implementation "com.github.pambrose.common-utils:zipkin-utils:$utils_version"
 
-  implementation "org.eclipse.jetty:jetty-servlet:$jetty_version"
+    implementation "org.eclipse.jetty:jetty-servlet:$jetty_version"
 
-  implementation "javax.annotation:javax.annotation-api:$annotation_version"
-  implementation "com.beust:jcommander:$jcommander_version"
-  implementation "com.typesafe:config:$typesafe_version"
+    implementation "javax.annotation:javax.annotation-api:$annotation_version"
+    implementation "com.beust:jcommander:$jcommander_version"
+    implementation "com.typesafe:config:$typesafe_version"
 
-  implementation "io.prometheus:simpleclient:$prometheus_version"
+    implementation "io.prometheus:simpleclient:$prometheus_version"
 
-  implementation "io.ktor:ktor-client:$ktor_version"
-  implementation "io.ktor:ktor-client-cio:$ktor_version"
-  implementation "io.ktor:ktor-client-auth:$ktor_version"
-  implementation "io.ktor:ktor-network:$ktor_version"
-  implementation "io.ktor:ktor-network-tls:$ktor_version"
+    implementation "io.ktor:ktor-client:$ktor_version"
+    implementation "io.ktor:ktor-client-cio:$ktor_version"
+    implementation "io.ktor:ktor-client-auth:$ktor_version"
+    implementation "io.ktor:ktor-network:$ktor_version"
+    implementation "io.ktor:ktor-network-tls:$ktor_version"
 
-  implementation "io.ktor:ktor-server:$ktor_version"
-  implementation "io.ktor:ktor-server-cio:$ktor_version"
-  implementation "io.ktor:ktor-server-call-logging:$ktor_version"
-  implementation "io.ktor:ktor-server-compression:$ktor_version"
+    implementation "io.ktor:ktor-server:$ktor_version"
+    implementation "io.ktor:ktor-server-cio:$ktor_version"
+    implementation "io.ktor:ktor-server-call-logging:$ktor_version"
+    implementation "io.ktor:ktor-server-compression:$ktor_version"
 
-  implementation "io.dropwizard.metrics:metrics-healthchecks:$dropwizard_version"
+    implementation "io.dropwizard.metrics:metrics-healthchecks:$dropwizard_version"
 
-  implementation "io.zipkin.brave:brave-instrumentation-grpc:$zipkin_version"
+    implementation "io.zipkin.brave:brave-instrumentation-grpc:$zipkin_version"
 
-  implementation "io.github.microutils:kotlin-logging:$logging_version"
-  implementation "ch.qos.logback:logback-classic:$logback_version"
-  implementation "org.slf4j:jul-to-slf4j:$slf4j_version"
+    implementation "io.github.microutils:kotlin-logging:$logging_version"
+    implementation "ch.qos.logback:logback-classic:$logback_version"
+    implementation "org.slf4j:jul-to-slf4j:$slf4j_version"
 
-  testImplementation "org.amshove.kluent:kluent:$kluent_version"
-  testImplementation "org.junit.jupiter:junit-jupiter-api:$junit_version"
-  testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junit_version"
+    testImplementation "org.amshove.kluent:kluent:$kluent_version"
+    testImplementation "org.junit.jupiter:junit-jupiter-api:$junit_version"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junit_version"
 }
 
 publishing {
-  publications {
-    mavenJava(MavenPublication) {
-      from components.java
-      versionMapping {
-        usage('java-api') {
-          fromResolutionOf('runtimeClasspath')
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            versionMapping {
+                usage('java-api') {
+                    fromResolutionOf('runtimeClasspath')
+                }
+                usage('java-runtime') {
+                    fromResolutionResult()
+                }
+            }
         }
-        usage('java-runtime') {
-          fromResolutionResult()
-        }
-      }
     }
-  }
 }
 
 compileKotlin.dependsOn ':generateProto'
 
 protobuf {
-  protoc {
-    artifact = "com.google.protobuf:protoc:$protoc_version"
-  }
-  plugins {
-    grpc {
-      artifact = "io.grpc:protoc-gen-grpc-java:$grpc_version"
+    protoc {
+        artifact = "com.google.protobuf:protoc:$protoc_version"
     }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:$grpc_version"
+        }
 
-    // Specify protoc to generate using our grpc kotlin plugin
-    grpckt {
-      artifact = "io.grpc:protoc-gen-grpc-kotlin:$gengrpc_version:jdk8@jar"
-    }
+        // Specify protoc to generate using our grpc kotlin plugin
+        grpckt {
+            artifact = "io.grpc:protoc-gen-grpc-kotlin:$gengrpc_version:jdk8@jar"
+        }
 
-    krotoDC {
-      artifact = "io.github.mscheong01:protoc-gen-krotoDC:$krotodc_version:jdk8@jar"
+        krotoDC {
+            artifact = "io.github.mscheong01:protoc-gen-krotoDC:$krotodc_version:jdk8@jar"
+        }
     }
-  }
-  generateProtoTasks {
-    all().each { task ->
-      task.plugins {
-        grpc {}     // Generate Java gRPC classes
-        grpckt {}   // Generate Kotlin gRPC using the custom plugin from library
-        krotoDC {}  // Generate Kotlin data classes
-      }
+    generateProtoTasks {
+        all().each { task ->
+            task.plugins {
+                grpc {}     // Generate Java gRPC classes
+                grpckt {}   // Generate Kotlin gRPC using the custom plugin from library
+                krotoDC {}  // Generate Kotlin data classes
+            }
 //            task.builtins {
 //                kotlin {}
 //            }
+        }
     }
-  }
 }
 
 configurations.all {
-  resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+    resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
 }
 
 //startScripts.enabled = false
@@ -154,24 +154,24 @@ configurations.all {
 project.getTasks().getByName("jar").setProperty("duplicatesStrategy", DuplicatesStrategy.INCLUDE);
 
 tasks.register('sourcesJar', Jar) {
-  dependsOn classes
-  from sourceSets.main.allSource
-  archiveClassifier = 'sources'
+    dependsOn classes
+    from sourceSets.main.allSource
+    archiveClassifier = 'sources'
 }
 
 tasks.register('javadocJar', Jar) {
-  dependsOn javadoc
-  archiveClassifier = 'javadoc'
-  from javadoc.destinationDir
+    dependsOn javadoc
+    archiveClassifier = 'javadoc'
+    from javadoc.destinationDir
 }
 
 artifacts {
-  archives sourcesJar
-  //archives javadocJar
+    archives sourcesJar
+    //archives javadocJar
 }
 
 java {
-  withSourcesJar()
+    withSourcesJar()
 }
 
 
@@ -195,129 +195,129 @@ java {
 //check.dependsOn jacocoTestReport
 
 tasks.withType(JavaCompile) {
-  options.encoding = 'UTF-8'
+    options.encoding = 'UTF-8'
 }
 
 // Required for multiple uberjar targets
 shadowJar {
-  mergeServiceFiles()
+    mergeServiceFiles()
 }
 
 task agentJar(type: Jar, dependsOn: shadowJar) {
-  archiveFileName = 'prometheus-agent.jar'
-  manifest {
-    attributes('Main-Class': 'io.prometheus.Agent')
-  }
-  from zipTree(shadowJar.archiveFile)
+    archiveFileName = 'prometheus-agent.jar'
+    manifest {
+        attributes('Main-Class': 'io.prometheus.Agent')
+    }
+    from zipTree(shadowJar.archiveFile)
 }
 
 task proxyJar(type: Jar, dependsOn: shadowJar) {
-  archiveFileName = 'prometheus-proxy.jar'
-  manifest {
-    attributes('Main-Class': 'io.prometheus.Proxy')
-  }
-  from zipTree(shadowJar.archiveFile)
+    archiveFileName = 'prometheus-proxy.jar'
+    manifest {
+        attributes('Main-Class': 'io.prometheus.Proxy')
+    }
+    from zipTree(shadowJar.archiveFile)
 }
 
 compileKotlin.dependsOn ':generateProto'
 
 kotlin {
-  jvmToolchain(17)
+    jvmToolchain(17)
 }
 
 compileKotlin {
-  kotlinOptions.freeCompilerArgs += ['-Xbackend-threads=8',
-                                     "-opt-in=kotlin.time.ExperimentalTime",
-                                     "-opt-in=kotlin.contracts.ExperimentalContracts",
-                                     "-opt-in=kotlin.ExperimentalUnsignedTypes",
-                                     "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
-                                     "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
-                                     "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
+    kotlinOptions.freeCompilerArgs += ['-Xbackend-threads=8',
+                                       "-opt-in=kotlin.time.ExperimentalTime",
+                                       "-opt-in=kotlin.contracts.ExperimentalContracts",
+                                       "-opt-in=kotlin.ExperimentalUnsignedTypes",
+                                       "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+                                       "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
+                                       "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
 }
 
 compileTestKotlin {
-  kotlinOptions.freeCompilerArgs += ['-Xbackend-threads=8',
-                                     "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
-                                     "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
+    kotlinOptions.freeCompilerArgs += ['-Xbackend-threads=8',
+                                       "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
+                                       "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
 }
 
 test {
-  useJUnitPlatform()
+    useJUnitPlatform()
 
-  // finalizedBy jacocoTestReport
+    // finalizedBy jacocoTestReport
 
-  testLogging {
-    events "passed", "skipped", "failed", "standardOut", "standardError"
-    exceptionFormat "full"
-    showStandardStreams = true
-  }
+    testLogging {
+        events "passed", "skipped", "failed", "standardOut", "standardError"
+        exceptionFormat "full"
+        showStandardStreams = true
+    }
 }
 
 // This will keep generated code out of the kotlinter checks
 tasks.named("lintKotlinMain") {
-  source = source - fileTree("$buildDir/generated")
+    source = source - fileTree("$buildDir/generated")
 }
 
 kotlinter {
-  ignoreFailures = false
-  reporters = ['checkstyle', 'plain']
+    ignoreFailures = false
+    reporters = ['checkstyle', 'plain']
 }
 
 koverMerged {
-  enable()  // create Kover merged reports
+    enable()  // create Kover merged reports
 
-  filters { // common filters for all default Kover merged tasks
-    classes { // common class filter for all default Kover merged tasks
-      includes.add("io.prometheus.*") // class inclusion rules
-      //excludes.addAll("io.prometheus.subpackage.*") // class exclusion rules
+    filters { // common filters for all default Kover merged tasks
+        classes { // common class filter for all default Kover merged tasks
+            includes.add("io.prometheus.*") // class inclusion rules
+            //excludes.addAll("io.prometheus.subpackage.*") // class exclusion rules
+        }
+
+        projects { // common projects filter for all default Kover merged tasks
+            //excludes.addAll("project1", ":child:project") // Specifies the projects excluded in the merged tasks
+        }
     }
 
-    projects { // common projects filter for all default Kover merged tasks
-      //excludes.addAll("project1", ":child:project") // Specifies the projects excluded in the merged tasks
+
+    xmlReport {
+        onCheck.set(true)
+        // true to run koverMergedXmlReport task during the execution of the check task (if it exists) of the current project
+        reportFile.set(layout.buildDirectory.file("my-merged-report/result.xml")) // change report file name
+        overrideClassFilter { // override common class filter
+            includes.add("io.prometheus.*") // override class inclusion rules
+            //excludes.addAll("io.prometheus.subpackage.*") // override class exclusion rules
+        }
     }
-  }
 
-
-  xmlReport {
-    onCheck.set(true)
-    // true to run koverMergedXmlReport task during the execution of the check task (if it exists) of the current project
-    reportFile.set(layout.buildDirectory.file("my-merged-report/result.xml")) // change report file name
-    overrideClassFilter { // override common class filter
-      includes.add("io.prometheus.*") // override class inclusion rules
-      //excludes.addAll("io.prometheus.subpackage.*") // override class exclusion rules
+    htmlReport {
+        onCheck.set(true)
+        // true to run koverMergedHtmlReport task during the execution of the check task (if it exists) of the current project
+        reportDir.set(layout.buildDirectory.dir("my-merged-report/html-result")) // change report directory
+        overrideClassFilter { // override common class filter
+            includes.add("io.prometheus.*") // override class inclusion rules
+            //excludes.addAll("io.prometheus.subpackage.*") // override class exclusion rules
+        }
     }
-  }
 
-  htmlReport {
-    onCheck.set(true)
-    // true to run koverMergedHtmlReport task during the execution of the check task (if it exists) of the current project
-    reportDir.set(layout.buildDirectory.dir("my-merged-report/html-result")) // change report directory
-    overrideClassFilter { // override common class filter
-      includes.add("io.prometheus.*") // override class inclusion rules
-      //excludes.addAll("io.prometheus.subpackage.*") // override class exclusion rules
+    verify {
+        onCheck.set(true)
+        // true to run koverMergedVerify task during the execution of the check task (if it exists) of the current project
+        rule { // add verification rule
+            //isEnabled = true // false to disable rule checking
+            name = null // custom name for the rule
+            target = 'ALL' // specify by which entity the code for separate coverage evaluation will be grouped
+
+            overrideClassFilter { // override common class filter
+                includes.add("io.prometheus.verify.*") // override class inclusion rules
+                // excludes.addAll("io.prometheus.verify.subpackage.*") // override class exclusion rules
+            }
+
+            bound { // add rule bound
+                minValue = 10
+                maxValue = 20
+                counter = 'LINE' // change coverage metric to evaluate (LINE, INSTRUCTION, BRANCH)
+                valueType = 'COVERED_PERCENTAGE'
+                // change counter value (COVERED_COUNT, MISSED_COUNT, COVERED_PERCENTAGE, MISSED_PERCENTAGE)
+            }
+        }
     }
-  }
-
-  verify {
-    onCheck.set(true)
-    // true to run koverMergedVerify task during the execution of the check task (if it exists) of the current project
-    rule { // add verification rule
-      //isEnabled = true // false to disable rule checking
-      name = null // custom name for the rule
-      target = 'ALL' // specify by which entity the code for separate coverage evaluation will be grouped
-
-      overrideClassFilter { // override common class filter
-        includes.add("io.prometheus.verify.*") // override class inclusion rules
-        // excludes.addAll("io.prometheus.verify.subpackage.*") // override class exclusion rules
-      }
-
-      bound { // add rule bound
-        minValue = 10
-        maxValue = 20
-        counter = 'LINE' // change coverage metric to evaluate (LINE, INSTRUCTION, BRANCH)
-        valueType = 'COVERED_PERCENTAGE'
-        // change counter value (COVERED_COUNT, MISSED_COUNT, COVERED_PERCENTAGE, MISSED_PERCENTAGE)
-      }
-    }
-  }
 }
