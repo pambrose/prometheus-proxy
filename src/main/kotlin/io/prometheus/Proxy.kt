@@ -59,15 +59,14 @@ class Proxy(
   inProcessServerName: String = "",
   testMode: Boolean = false,
   initBlock: (Proxy.() -> Unit)? = null,
-) :
-  GenericService<ConfigVals>(
-    configVals = options.configVals,
-    adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.proxy.admin),
-    metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.proxy.metrics),
-    zipkinConfig = newZipkinConfig(options.configVals.proxy.internal.zipkin),
-    versionBlock = { getVersionDesc(true) },
-    isTestMode = testMode,
-  ) {
+) : GenericService<ConfigVals>(
+  configVals = options.configVals,
+  adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.proxy.admin),
+  metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.proxy.metrics),
+  zipkinConfig = newZipkinConfig(options.configVals.proxy.internal.zipkin),
+  versionBlock = { getVersionDesc(true) },
+  isTestMode = testMode,
+) {
   private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort, isTestMode)
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(configVals.proxy.admin.recentRequestsQueueSize)

@@ -71,15 +71,14 @@ class Agent(
   inProcessServerName: String = "",
   testMode: Boolean = false,
   initBlock: (Agent.() -> Unit)? = null,
-) :
-  GenericService<ConfigVals>(
-    configVals = options.configVals,
-    adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
-    metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.agent.metrics),
-    zipkinConfig = newZipkinConfig(options.configVals.agent.internal.zipkin),
-    versionBlock = { getVersionDesc(true) },
-    isTestMode = testMode,
-  ) {
+) : GenericService<ConfigVals>(
+  configVals = options.configVals,
+  adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
+  metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.agent.metrics),
+  zipkinConfig = newZipkinConfig(options.configVals.agent.internal.zipkin),
+  versionBlock = { getVersionDesc(true) },
+  isTestMode = testMode,
+) {
   private val agentConfigVals = configVals.agent.internal
   private val clock = Monotonic
   private val agentHttpService = AgentHttpService(this)
