@@ -37,55 +37,51 @@ class AdminNonDefaultPathTest {
 
   @Test
   fun proxyPingPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        admin.port shouldBeEqualTo 8099
-        admin.pingPath shouldBeEqualTo "pingPath2"
+    with(proxyConfigVals.admin) {
+      port shouldBeEqualTo 8099
+      pingPath shouldBeEqualTo "pingPath2"
 
-        blockingGet("${admin.port}/${admin.pingPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.OK
-          response.bodyAsText() shouldStartWith "pong"
-        }
+      blockingGet("$port/$pingPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.bodyAsText() shouldStartWith "pong"
       }
+    }
   }
 
   @Test
   fun proxyVersionPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        admin.port shouldBeEqualTo 8099
-        admin.versionPath shouldBeEqualTo "versionPath2"
+    with(proxyConfigVals.admin) {
+      port shouldBeEqualTo 8099
+      versionPath shouldBeEqualTo "versionPath2"
 
-        blockingGet("${admin.port}/${admin.versionPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.OK
-          response.bodyAsText() shouldContain "Version"
-        }
+      blockingGet("$port/$versionPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.bodyAsText() shouldContain "Version"
       }
+    }
   }
 
   @Test
   fun proxyHealthCheckPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        admin.healthCheckPath shouldBeEqualTo "healthCheckPath2"
+    with(proxyConfigVals.admin) {
+      healthCheckPath shouldBeEqualTo "healthCheckPath2"
 
-        blockingGet("${admin.port}/${admin.healthCheckPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.OK
-          response.bodyAsText().length shouldBeGreaterThan 10
-        }
+      blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.bodyAsText().length shouldBeGreaterThan 10
       }
+    }
   }
 
   @Test
   fun proxyThreadDumpPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        admin.threadDumpPath shouldBeEqualTo "threadDumpPath2"
+    with(proxyConfigVals.admin) {
+      threadDumpPath shouldBeEqualTo "threadDumpPath2"
 
-        blockingGet("${admin.port}/${admin.threadDumpPath}".withPrefix()) { response ->
-          response.bodyAsText().length shouldBeGreaterThan 10
-        }
+      blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+        response.bodyAsText().length shouldBeGreaterThan 10
       }
+    }
   }
 
   companion object : CommonCompanion() {

@@ -27,21 +27,28 @@ import io.ktor.server.cio.*
 import io.ktor.server.cio.CIOApplicationEngine.*
 import io.ktor.server.engine.*
 import io.prometheus.Proxy
-import io.prometheus.proxy.ProxyHttpConfig.configServer
+import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
+import io.prometheus.proxy.ProxyHttpRoutes.configureHttpRoutes
 import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit.SECONDS
 
-internal class ProxyHttpService(private val proxy: Proxy, val httpPort: Int, isTestMode: Boolean) :
-  GenericIdleService() {
-  private val proxyConfigVals = proxy.configVals.proxy
+internal class ProxyHttpService(
+  private val proxy: Proxy,
+  val httpPort: Int,
+  isTestMode: Boolean,
+) : GenericIdleService() {
   private val idleTimeout =
-    if (proxyConfigVals.http.idleTimeoutSecs == -1) 45.seconds else proxyConfigVals.http.idleTimeoutSecs.seconds
+    with(proxy.proxyConfigVals.http) { (if (idleTimeoutSecs == -1) 45 else idleTimeoutSecs).seconds }
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
   private val config: Configuration.() -> Unit = { connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS) }
-  private val httpServer = embeddedServer(CIO, port = httpPort, configure = config) { configServer(proxy, isTestMode) }
+  private val httpServer =
+    embeddedServer(CIO, port = httpPort, configure = config) {
+      configureKtorServer(proxy, isTestMode)
+      configureHttpRoutes(proxy)
+    }
 
   init {
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())

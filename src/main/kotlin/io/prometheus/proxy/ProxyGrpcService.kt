@@ -25,6 +25,7 @@ import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GrpcDsl.server
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildServerTlsContext
 import com.github.pambrose.common.utils.shutdownGracefully
@@ -42,18 +43,10 @@ internal class ProxyGrpcService(
   private val port: Int = -1,
   private val inProcessName: String = "",
 ) : GenericIdleService() {
-  val healthCheck =
-    healthCheck {
-      if (grpcServer.isShutdown || grpcServer.isTerminated)
-        HealthCheck.Result.unhealthy("gRPC server is not running")
-      else
-        HealthCheck.Result.healthy()
-    }
-
-  private val grpcServer: Server
-
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("grpc_server") }
   private val grpcTracing by lazy { GrpcTracing.create(tracing) }
+  private val grpcServer: Server
+  val healthCheck: HealthCheck
 
   init {
     val options = proxy.options
@@ -67,31 +60,41 @@ internal class ProxyGrpcService(
       else
         PLAINTEXT_CONTEXT
 
-    grpcServer =
-      server(
-        port = port,
-        tlsContext = tlsContext,
-        inProcessServerName = inProcessName,
-      ) {
-        val proxyService = ProxyServiceImpl(proxy)
-        val interceptors =
-          buildList<ServerInterceptor> {
-            if (!options.transportFilterDisabled)
-              add(ProxyServerInterceptor())
-            if (proxy.isZipkinEnabled)
-              add(grpcTracing.newServerInterceptor())
-          }
-
-        addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
-
-        if (!options.transportFilterDisabled)
-          addTransportFilter(ProxyServerTransportFilter(proxy))
-      }
-
+    grpcServer = createGrpcServer(tlsContext, options)
     grpcServer.shutdownWithJvm(2.seconds)
-
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
+
+    healthCheck = healthCheck {
+      if (grpcServer.isShutdown || grpcServer.isTerminated)
+        HealthCheck.Result.unhealthy("gRPC server is not running")
+      else
+        HealthCheck.Result.healthy()
+    }
   }
+
+  private fun createGrpcServer(
+    tlsContext: TlsContext,
+    options: ProxyOptions,
+  ): Server =
+    server(
+      port = port,
+      tlsContext = tlsContext,
+      inProcessServerName = inProcessName,
+    ) {
+      val proxyService = ProxyServiceImpl(proxy)
+      val interceptors: List<ServerInterceptor> =
+        buildList {
+          if (!options.transportFilterDisabled)
+            add(ProxyServerInterceptor())
+          if (proxy.isZipkinEnabled)
+            add(grpcTracing.newServerInterceptor())
+        }
+
+      addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
+
+      if (!options.transportFilterDisabled)
+        addTransportFilter(ProxyServerTransportFilter(proxy))
+    }
 
   override fun startUp() {
     grpcServer.start()

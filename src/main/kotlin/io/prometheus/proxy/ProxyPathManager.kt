@@ -28,9 +28,11 @@ import io.prometheus.grpc.krotodc.UnregisterPathResponse
 import mu.two.KLogging
 
 internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode: Boolean) {
-  class AgentContextInfo(var consolidated: Boolean, val agentContexts: MutableList<AgentContext>) {
+  class AgentContextInfo(val isConsolidated: Boolean, val agentContexts: MutableList<AgentContext>) {
+    fun isNotValid() = !isConsolidated && agentContexts[0].isNotValid()
+
     override fun toString(): String {
-      return "AgentContextInfo(consolidated=$consolidated, agentContexts=$agentContexts)"
+      return "AgentContextInfo(consolidated=$isConsolidated, agentContexts=$agentContexts)"
     }
   }
 
@@ -58,9 +60,9 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
         if (agentInfo.isNull()) {
           pathMap[path] = AgentContextInfo(true, mutableListOf(agentContext))
         } else {
-          if (agentContext.consolidated != agentInfo.consolidated)
+          if (agentContext.consolidated != agentInfo.isConsolidated)
             logger.warn {
-              "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.consolidated}"
+              "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.isConsolidated}"
             }
           else
             agentInfo.agentContexts += agentContext
@@ -96,7 +98,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
             logger.error { msg }
             false to msg
           } else {
-            if (agentInfo.consolidated && agentInfo.agentContexts.size > 1) {
+            if (agentInfo.isConsolidated && agentInfo.agentContexts.size > 1) {
               agentInfo.agentContexts.remove(agentContext)
               if (!isTestMode)
                 logger.info { "Removed element of path /$path for $agentInfo" }
