@@ -51,49 +51,51 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
   }
 
   override fun assignConfigVals() {
-    if (proxyHttpPort == -1)
-      proxyHttpPort = PROXY_PORT.getEnv(configVals.proxy.http.port)
-    logger.info { "proxyHttpPort: $proxyHttpPort" }
+    with(configVals.proxy) {
+      if (proxyHttpPort == -1)
+        proxyHttpPort = PROXY_PORT.getEnv(http.port)
+      logger.info { "proxyHttpPort: $proxyHttpPort" }
 
-    if (proxyAgentPort == -1)
-      proxyAgentPort = AGENT_PORT.getEnv(configVals.proxy.agent.port)
-    logger.info { "proxyAgentPort: $proxyAgentPort" }
+      if (proxyAgentPort == -1)
+        proxyAgentPort = AGENT_PORT.getEnv(agent.port)
+      logger.info { "proxyAgentPort: $proxyAgentPort" }
 
-    configVals.proxy
-      .also { proxyConfigVals ->
+      if (!sdEnabled)
+        sdEnabled = SD_ENABLED.getEnv(false)
+      logger.info { "sdEnabled: $sdEnabled" }
 
-        if (!sdEnabled)
-          sdEnabled = SD_ENABLED.getEnv(false)
-        logger.info { "sdEnabled: $sdEnabled" }
+      if (sdPath.isEmpty())
+        sdPath = SD_PATH.getEnv(service.discovery.path)
+      if (sdEnabled)
+        require(sdPath.isNotEmpty()) { "sdPath is empty" }
+      else
+        logger.info { "sdPath: $sdPath" }
 
-        if (sdPath.isEmpty())
-          sdPath = SD_PATH.getEnv(proxyConfigVals.service.discovery.path)
-        if (sdEnabled)
-          require(sdPath.isNotEmpty()) { "sdPath is empty" }
-        else
-          logger.info { "sdPath: $sdPath" }
+      if (sdTargetPrefix.isEmpty())
+        sdTargetPrefix = SD_TARGET_PREFIX.getEnv(service.discovery.targetPrefix)
+      if (sdEnabled)
+        require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
+      else
+        logger.info { "sdTargetPrefix: $sdTargetPrefix" }
 
-        if (sdTargetPrefix.isEmpty())
-          sdTargetPrefix = SD_TARGET_PREFIX.getEnv(proxyConfigVals.service.discovery.targetPrefix)
-        if (sdEnabled)
-          require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
-        else
-          logger.info { "sdTargetPrefix: $sdTargetPrefix" }
+      assignAdminEnabled(admin.enabled)
+      assignAdminPort(admin.port)
+      assignMetricsEnabled(metrics.enabled)
+      assignMetricsPort(metrics.port)
+      assignTransportFilterDisabled(transportFilterDisabled)
+      assignDebugEnabled(admin.debugEnabled)
 
-        assignAdminEnabled(proxyConfigVals.admin.enabled)
-        assignAdminPort(proxyConfigVals.admin.port)
-        assignMetricsEnabled(proxyConfigVals.metrics.enabled)
-        assignMetricsPort(proxyConfigVals.metrics.port)
-        assignTransportFilterDisabled(proxyConfigVals.transportFilterDisabled)
-        assignDebugEnabled(proxyConfigVals.admin.debugEnabled)
-
-        assignCertChainFilePath(proxyConfigVals.tls.certChainFilePath)
-        assignPrivateKeyFilePath(proxyConfigVals.tls.privateKeyFilePath)
-        assignTrustCertCollectionFilePath(proxyConfigVals.tls.trustCertCollectionFilePath)
-
-        logger.info { "proxy.internal.scrapeRequestTimeoutSecs: ${proxyConfigVals.internal.scrapeRequestTimeoutSecs}" }
-        logger.info { "proxy.internal.staleAgentCheckPauseSecs: ${proxyConfigVals.internal.staleAgentCheckPauseSecs}" }
-        logger.info { "proxy.internal.maxAgentInactivitySecs: ${proxyConfigVals.internal.maxAgentInactivitySecs}" }
+      with(tls) {
+        assignCertChainFilePath(certChainFilePath)
+        assignPrivateKeyFilePath(privateKeyFilePath)
+        assignTrustCertCollectionFilePath(trustCertCollectionFilePath)
       }
+
+      with(internal) {
+        logger.info { "proxy.internal.scrapeRequestTimeoutSecs: $scrapeRequestTimeoutSecs" }
+        logger.info { "proxy.internal.staleAgentCheckPauseSecs: $staleAgentCheckPauseSecs" }
+        logger.info { "proxy.internal.maxAgentInactivitySecs: $maxAgentInactivitySecs" }
+      }
+    }
   }
 }

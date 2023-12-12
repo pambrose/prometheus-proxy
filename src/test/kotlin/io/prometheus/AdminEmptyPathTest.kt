@@ -33,52 +33,48 @@ class AdminEmptyPathTest {
 
   @Test
   fun proxyPingPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        admin.port shouldBeEqualTo 8098
-        admin.pingPath shouldBeEqualTo ""
+    with(proxyConfigVals.admin) {
+      port shouldBeEqualTo 8098
+      pingPath shouldBeEqualTo ""
 
-        blockingGet("${admin.port}/${admin.pingPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.NotFound
-        }
+      blockingGet("$port/$pingPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.NotFound
       }
+    }
   }
 
   @Test
   fun proxyVersionPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        admin.port shouldBeEqualTo 8098
-        admin.versionPath shouldBeEqualTo ""
+    with(proxyConfigVals.admin) {
+      port shouldBeEqualTo 8098
+      versionPath shouldBeEqualTo ""
 
-        blockingGet("${admin.port}/${admin.versionPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.NotFound
-        }
+      blockingGet("$port/$versionPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.NotFound
       }
+    }
   }
 
   @Test
   fun proxyHealthCheckPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        admin.healthCheckPath shouldBeEqualTo ""
+    with(proxyConfigVals.admin) {
+      healthCheckPath shouldBeEqualTo ""
 
-        blockingGet("${admin.port}/${admin.healthCheckPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.NotFound
-        }
+      blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.NotFound
       }
+    }
   }
 
   @Test
   fun proxyThreadDumpPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        admin.threadDumpPath shouldBeEqualTo ""
+    with(proxyConfigVals.admin) {
+      threadDumpPath shouldBeEqualTo ""
 
-        blockingGet("${admin.port}/${admin.threadDumpPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.NotFound
-        }
+      blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.NotFound
       }
+    }
   }
 
   companion object : CommonCompanion() {

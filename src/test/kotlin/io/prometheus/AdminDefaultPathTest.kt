@@ -32,88 +32,83 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 
 class AdminDefaultPathTest {
-  private val agentConfigVals = agent.configVals.agent
-  private val proxyConfigVals = proxy.configVals.proxy
+  private val agentConfigVals = agent.agentConfigVals
+  private val proxyConfigVals = proxy.proxyConfigVals
 
   @Test
   fun proxyPingPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        blockingGet("${admin.port}/${admin.pingPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.OK
-          response.bodyAsText() shouldStartWith "pong"
-        }
+    with(proxyConfigVals.admin) {
+      blockingGet("$port/$pingPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.bodyAsText() shouldStartWith "pong"
       }
+    }
   }
 
   @Test
   fun agentPingPathTest() {
-    agentConfigVals.admin
-      .also { admin ->
-        blockingGet("${admin.port}/${admin.pingPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.OK
-          response.bodyAsText() shouldStartWith "pong"
-        }
+    with(agentConfigVals.admin) {
+      blockingGet("$port/$pingPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.bodyAsText() shouldStartWith "pong"
       }
+    }
   }
 
   @Test
   fun proxyVersionPathTest() {
-    agentConfigVals.admin
-      .also { admin ->
-        blockingGet("${admin.port}/${admin.versionPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.OK
-          response.bodyAsText() shouldContain "Version"
-        }
+    with(agentConfigVals.admin) {
+      blockingGet("$port/$versionPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.bodyAsText() shouldContain "Version"
       }
+    }
   }
 
   @Test
   fun agentVersionPathTest() {
-    agentConfigVals.admin
-      .also { admin ->
-        blockingGet("${admin.port}/${admin.versionPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.OK
-          response.bodyAsText() shouldContain "Version"
-        }
+    with(agentConfigVals.admin) {
+      blockingGet("$port/$versionPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.bodyAsText() shouldContain "Version"
       }
+    }
   }
 
   @Test
   fun proxyHealthCheckPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        blockingGet("${admin.port}/${admin.healthCheckPath}".withPrefix()) { response ->
-          response.status shouldBeEqualTo HttpStatusCode.OK
-          response.bodyAsText().length shouldBeGreaterThan 10
-        }
+    with(proxyConfigVals.admin) {
+      blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.bodyAsText().length shouldBeGreaterThan 10
       }
+    }
   }
 
   @Test
   fun agentHealthCheckPathTest() {
-    agentConfigVals.admin
-      .also { admin ->
-        blockingGet("${admin.port}/${admin.healthCheckPath}".withPrefix()) { response ->
-          response.bodyAsText().length shouldBeGreaterThan 10
-        }
+    with(agentConfigVals.admin) {
+      blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+        response.bodyAsText().length shouldBeGreaterThan 10
       }
+    }
   }
 
   @Test
   fun proxyThreadDumpPathTest() {
-    proxyConfigVals.admin
-      .also { admin ->
-        blockingGet("${admin.port}/${admin.threadDumpPath}".withPrefix()) { response ->
-          response.bodyAsText().length shouldBeGreaterThan 10
-        }
+    with(proxyConfigVals.admin) {
+      blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+        response.bodyAsText().length shouldBeGreaterThan 10
       }
+    }
   }
 
   @Test
   fun agentThreadDumpPathTest() {
-    blockingGet("${agentConfigVals.admin.port}/${agentConfigVals.admin.threadDumpPath}".withPrefix()) { response ->
-      response.bodyAsText().length shouldBeGreaterThan 10
+    with(agentConfigVals.admin) {
+      blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+        response.bodyAsText().length shouldBeGreaterThan 10
+      }
     }
   }
 

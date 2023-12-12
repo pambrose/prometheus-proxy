@@ -47,6 +47,12 @@ import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRequestManager
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import mu.two.KLogging
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -67,21 +73,24 @@ class Proxy(
   versionBlock = { getVersionDesc(true) },
   isTestMode = testMode,
 ) {
-  private val proxyConfigVals: ConfigVals.Proxy2.Internal2 = configVals.proxy.internal
   private val httpService = ProxyHttpService(this, proxyHttpPort, isTestMode)
-  private val recentReqs: EvictingQueue<String> = EvictingQueue.create(configVals.proxy.admin.recentRequestsQueueSize)
+  private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
   private val grpcService =
     if (inProcessServerName.isEmpty())
-      ProxyGrpcService(this, port = options.proxyAgentPort)
+      ProxyGrpcService(proxy = this, port = options.proxyAgentPort)
     else
-      ProxyGrpcService(this, inProcessName = inProcessServerName)
+      ProxyGrpcService(proxy = this, inProcessName = inProcessServerName)
 
-  private val agentCleanupService by lazy { AgentContextCleanupService(this, proxyConfigVals) { addServices(this) } }
+  private val agentCleanupService by lazy {
+    AgentContextCleanupService(this, proxyConfigVals.internal) { addServices(this) }
+  }
 
   internal val metrics by lazy { ProxyMetrics(this) }
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
   internal val agentContextManager = AgentContextManager(isTestMode)
   internal val scrapeRequestManager = ScrapeRequestManager()
+
+  val proxyConfigVals: ConfigVals.Proxy2 get() = configVals.proxy
 
   init {
     fun toPlainText() =
@@ -112,8 +121,7 @@ class Proxy(
               pathManager.toPlainText(),
               if (recentReqs.size > 0) "\n${recentReqs.size} most recent requests:" else "",
               recentReqs.reversed().joinToString("\n"),
-            )
-              .joinToString("\n")
+            ).joinToString("\n")
           },
         )
       } else {
@@ -130,7 +138,7 @@ class Proxy(
     grpcService.startSync()
     httpService.startSync()
 
-    if (proxyConfigVals.staleAgentCheckEnabled)
+    if (proxyConfigVals.internal.staleAgentCheckEnabled)
       agentCleanupService.startSync()
     else
       logger.info { "Agent eviction thread not started" }
@@ -139,7 +147,7 @@ class Proxy(
   override fun shutDown() {
     grpcService.stopSync()
     httpService.stopSync()
-    if (proxyConfigVals.staleAgentCheckEnabled)
+    if (proxyConfigVals.internal.staleAgentCheckEnabled)
       agentCleanupService.stopSync()
     super.shutDown()
   }
@@ -160,21 +168,23 @@ class Proxy(
           "chunking_map_check",
           newMapHealthCheck(
             agentContextManager.chunkedContextMap,
-            proxyConfigVals.chunkContextMapUnhealthySize,
+            proxyConfigVals.internal.chunkContextMapUnhealthySize,
           ),
         )
         register(
           "scrape_response_map_check",
           newMapHealthCheck(
             scrapeRequestManager.scrapeRequestMap,
-            proxyConfigVals.scrapeRequestMapUnhealthySize,
+            proxyConfigVals.internal.scrapeRequestMapUnhealthySize,
           ),
         )
         register(
           "agent_scrape_request_backlog",
           healthCheck {
             agentContextManager.agentContextMap.entries
-              .filter { it.value.scrapeRequestBacklogSize >= proxyConfigVals.scrapeRequestBacklogUnhealthySize }
+              .filter {
+                it.value.scrapeRequestBacklogSize >= proxyConfigVals.internal.scrapeRequestBacklogUnhealthySize
+              }
               .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
               .let { vals ->
                 if (vals.isEmpty()) {
@@ -213,6 +223,26 @@ class Proxy(
       recentReqs.add("${LocalDateTime.now().format(formatter)}: $desc")
     }
   }
+
+  fun isBlitzRequest(path: String) = with(proxyConfigVals.internal) { blitz.enabled && path == blitz.path }
+
+  fun buildSdJson(): JsonArray =
+    buildJsonArray {
+      pathManager.allPaths.forEach { path ->
+        addJsonObject {
+          putJsonArray("targets") {
+            add(JsonPrimitive(options.sdTargetPrefix))
+          }
+          putJsonObject("labels") {
+            put("__metrics_path__", JsonPrimitive(path))
+
+            val agentContexts = pathManager.getAgentContextInfo(path)?.agentContexts
+            put("agentName", JsonPrimitive(agentContexts?.joinToString { it.agentName }))
+            put("hostName", JsonPrimitive(agentContexts?.joinToString { it.hostName }))
+          }
+        }
+      }
+    }
 
   override fun toString() =
     toStringElements {

@@ -79,13 +79,12 @@ class Agent(
   versionBlock = { getVersionDesc(true) },
   isTestMode = testMode,
 ) {
-  private val agentConfigVals = configVals.agent.internal
   private val clock = Monotonic
   private val agentHttpService = AgentHttpService(this)
   private val initialConnectionLatch = CountDownLatch(1)
 
   // Prime the limiter
-  private val reconnectLimiter = RateLimiter.create(1.0 / agentConfigVals.reconnectPauseSecs).apply { acquire() }
+  private val reconnectLimiter: RateLimiter
   private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
   internal val agentName = options.agentName.ifBlank { "Unnamed-${hostInfo.hostName}" }
@@ -96,7 +95,11 @@ class Agent(
   internal val launchId = randomId(15)
   internal val metrics by lazy { AgentMetrics(this) }
 
+  val agentConfigVals: ConfigVals.Agent get() = configVals.agent
+
   init {
+    reconnectLimiter = RateLimiter.create(1.0 / agentConfigVals.internal.reconnectPauseSecs).apply { acquire() }
+
     fun toPlainText() =
       """
         Prometheus Agent Info [${getVersionDesc(false)}]
@@ -115,7 +118,7 @@ class Agent(
       """.trimIndent()
 
     logger.info { "Agent name: $agentName" }
-    logger.info { "Proxy reconnect pause time: ${agentConfigVals.reconnectPauseSecs.seconds}" }
+    logger.info { "Proxy reconnect pause time: ${agentConfigVals.internal.reconnectPauseSecs.seconds}" }
     logger.info { "Scrape timeout time: ${options.scrapeTimeoutSecs.seconds}" }
 
     initServletService {
@@ -192,9 +195,7 @@ class Agent(
         }.onFailure { e ->
           when (e) {
             is RequestFailureException ->
-              logger.info {
-                "Disconnected from proxy at $proxyHost after invalid response ${e.message}"
-              }
+              logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
 
             is StatusRuntimeException ->
               logger.info { "Disconnected from proxy at $proxyHost" }
@@ -225,29 +226,32 @@ class Agent(
       "scrape_request_backlog_check",
       newBacklogHealthCheck(
         backlogSize = scrapeRequestBacklogSize.get(),
-        size = agentConfigVals.scrapeRequestBacklogUnhealthySize,
+        size = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize,
       ),
     )
   }
 
-  private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) =
-    if (agentConfigVals.heartbeatEnabled) {
-      val heartbeatPauseTime = agentConfigVals.heartbeatCheckPauseMillis.milliseconds
-      val maxInactivityTime = agentConfigVals.heartbeatMaxInactivitySecs.seconds
-      logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
+  private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) {
+    with(agentConfigVals.internal) {
+      if (heartbeatEnabled) {
+        val heartbeatPauseTime = heartbeatCheckPauseMillis.milliseconds
+        val maxInactivityTime = heartbeatMaxInactivitySecs.seconds
+        logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
 
-      while (isRunning && connectionContext.connected) {
-        val timeSinceLastWrite = lastMsgSentMark.elapsedNow()
-        if (timeSinceLastWrite > maxInactivityTime) {
-          logger.debug { "Sending heartbeat" }
-          grpcService.sendHeartBeat()
+        while (isRunning && connectionContext.connected) {
+          val timeSinceLastWrite = lastMsgSentMark.elapsedNow()
+          if (timeSinceLastWrite > maxInactivityTime) {
+            logger.debug { "Sending heartbeat" }
+            grpcService.sendHeartBeat()
+          }
+          delay(heartbeatPauseTime)
         }
-        delay(heartbeatPauseTime)
+        logger.info { "Heartbeat completed" }
+      } else {
+        logger.info { "Heartbeat disabled" }
       }
-      logger.info { "Heartbeat completed" }
-    } else {
-      logger.info { "Heartbeat disabled" }
     }
+  }
 
   internal fun updateScrapeCounter(
     agent: Agent,
