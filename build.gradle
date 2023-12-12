@@ -25,7 +25,7 @@ buildConfig {
 
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"11/02/2023\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"12/11/2023\"")
 }
 
 repositories {
