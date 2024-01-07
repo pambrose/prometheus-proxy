@@ -15,10 +15,10 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.21.0'
+version = '1.22.0'
 
-sourceCompatibility = JavaVersion.VERSION_17
-targetCompatibility = JavaVersion.VERSION_17
+//sourceCompatibility = JavaVersion.VERSION_17
+//targetCompatibility = JavaVersion.VERSION_17
 
 buildConfig {
     packageName("io.prometheus")
