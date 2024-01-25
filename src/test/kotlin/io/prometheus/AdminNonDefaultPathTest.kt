@@ -19,11 +19,12 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.ktor.client.statement.*
-import io.ktor.http.*
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.Utils.lambda
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeGreaterThan
 import org.amshove.kluent.shouldContain
@@ -89,7 +90,7 @@ class AdminNonDefaultPathTest {
     @BeforeAll
     fun setUp() =
       setItUp(
-        proxySetup = {
+        proxySetup = lambda {
           startProxy(
             adminEnabled = true,
             argv = listOf(
@@ -101,7 +102,7 @@ class AdminNonDefaultPathTest {
             ),
           )
         },
-        agentSetup = { startAgent(adminEnabled = true) },
+        agentSetup = lambda { startAgent(adminEnabled = true) },
       )
 
     @JvmStatic

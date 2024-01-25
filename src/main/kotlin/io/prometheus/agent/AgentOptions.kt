@@ -21,7 +21,16 @@ package io.prometheus.agent
 import com.beust.jcommander.Parameter
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
-import io.prometheus.common.EnvVars.*
+import io.prometheus.common.EnvVars.AGENT_CONFIG
+import io.prometheus.common.EnvVars.AGENT_NAME
+import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
+import io.prometheus.common.EnvVars.CONSOLIDATED
+import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
+import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
+import io.prometheus.common.EnvVars.PROXY_HOSTNAME
+import io.prometheus.common.EnvVars.SCRAPE_MAX_RETRIES
+import io.prometheus.common.EnvVars.SCRAPE_TIMEOUT_SECS
+import io.prometheus.common.EnvVars.TRUST_ALL_X509_CERTIFICATES
 import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 

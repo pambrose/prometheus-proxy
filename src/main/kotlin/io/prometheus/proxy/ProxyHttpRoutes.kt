@@ -18,12 +18,23 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.unzip
-import io.ktor.http.*
-import io.ktor.server.application.*
-import io.ktor.server.request.*
-import io.ktor.server.response.*
-import io.ktor.server.routing.*
-import io.ktor.util.pipeline.*
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.formUrlEncode
+import io.ktor.http.isSuccess
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.call
+import io.ktor.server.request.ApplicationRequest
+import io.ktor.server.request.header
+import io.ktor.server.request.path
+import io.ktor.server.response.ApplicationResponse
+import io.ktor.server.response.header
+import io.ktor.server.routing.Routing
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
+import io.ktor.util.pipeline.PipelineContext
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
@@ -252,7 +263,7 @@ object ProxyHttpRoutes : KLogging() {
       proxy = proxy,
       path = path,
       encodedQueryParams = encodedQueryParams,
-      authHeader = request.header(HttpHeaders.Authorization) ?: "",
+      authHeader = request.header(HttpHeaders.Authorization).orEmpty(),
       accept = request.header(HttpHeaders.Accept),
       debugEnabled = proxy.options.debugEnabled,
     )

@@ -22,17 +22,25 @@ import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
 import com.github.pambrose.common.util.Version.Companion.versionDesc
 import io.prometheus.Proxy
+import java.util.*
 import kotlin.system.exitProcess
 
-internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
+object Utils {
+  internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
-internal class VersionValidator : IParameterValidator {
-  override fun validate(
-    name: String,
-    value: String,
-  ) {
-    val console = JCommander().console
-    console.println(getVersionDesc(false))
-    exitProcess(0)
+  internal class VersionValidator : IParameterValidator {
+    override fun validate(
+      name: String,
+      value: String,
+    ) {
+      val console = JCommander().console
+      console.println(getVersionDesc(false))
+      exitProcess(0)
+    }
   }
+
+  // This eliminates an extra set of paren in when blocks and if/else stmts
+  fun <T> lambda(block: T) = block
+
+  fun String.toLowercase() = this.lowercase(Locale.getDefault())
 }

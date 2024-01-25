@@ -20,7 +20,7 @@ package io.prometheus.common
 
 import com.github.pambrose.common.util.EMPTY_BYTE_ARRAY
 import com.google.protobuf.ByteString
-import io.ktor.http.*
+import io.ktor.http.HttpStatusCode
 import io.prometheus.grpc.krotodc.ChunkedScrapeResponse
 import io.prometheus.grpc.krotodc.ChunkedScrapeResponse.ChunkOneOf.Header
 import io.prometheus.grpc.krotodc.HeaderData

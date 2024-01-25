@@ -169,7 +169,7 @@ internal class AgentGrpcService(
     stub = ProxyServiceGrpcKt.ProxyServiceCoroutineStub(ClientInterceptors.intercept(channel, interceptors))
   }
 
-  // If successful, this will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
+  // If successful, will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
   suspend fun connectAgent(transportFilterDisabled: Boolean) =
     runCatching {
       logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }

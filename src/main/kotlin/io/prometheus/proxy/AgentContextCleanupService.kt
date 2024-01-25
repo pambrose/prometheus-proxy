@@ -25,13 +25,14 @@ import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.Utils.lambda
 import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentContextCleanupService(
   private val proxy: Proxy,
   private val configVals: ConfigVals.Proxy2.Internal2,
-  initBlock: (AgentContextCleanupService.() -> Unit) = {},
+  initBlock: (AgentContextCleanupService.() -> Unit) = lambda {},
 ) : GenericExecutionThreadService() {
   init {
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())

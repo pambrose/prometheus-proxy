@@ -23,10 +23,11 @@ import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
-import io.ktor.server.cio.*
-import io.ktor.server.cio.CIOApplicationEngine.*
-import io.ktor.server.engine.*
+import io.ktor.server.cio.CIO
+import io.ktor.server.cio.CIOApplicationEngine.Configuration
+import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
+import io.prometheus.common.Utils.lambda
 import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
 import io.prometheus.proxy.ProxyHttpRoutes.configureHttpRoutes
 import mu.two.KLogging
@@ -43,7 +44,7 @@ internal class ProxyHttpService(
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
-  private val config: Configuration.() -> Unit = { connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS) }
+  private val config: Configuration.() -> Unit = lambda { connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS) }
   private val httpServer =
     embeddedServer(CIO, port = httpPort, configure = config) {
       configureKtorServer(proxy, isTestMode)

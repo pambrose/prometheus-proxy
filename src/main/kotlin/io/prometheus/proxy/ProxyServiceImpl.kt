@@ -27,6 +27,7 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.GrpcObjects.toScrapeResults
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
+import io.prometheus.common.Utils.toLowercase
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeartBeatRequest
@@ -52,7 +53,6 @@ import io.prometheus.grpc.krotodc.unregisterpathresponse.toProto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import mu.two.KLogging
-import java.util.*
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicLong
 
@@ -183,7 +183,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
       requests.collect { response ->
         val ooc = response.chunkOneOfCase
         val chunkedContextMap = proxy.agentContextManager.chunkedContextMap
-        when (ooc.name.lowercase(Locale.getDefault())) {
+        when (ooc.name.toLowercase()) {
           "header" -> {
             val scrapeId = response.header.headerScrapeId
             logger.debug { "Reading header for scrapeId: $scrapeId}" }
@@ -215,7 +215,7 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
               }
           }
 
-          else -> throw IllegalStateException("Invalid field name in writeChunkedResponsesToProxy()")
+          else -> error("Invalid field name in writeChunkedResponsesToProxy()")
         }
       }
     }.onFailure { throwable ->

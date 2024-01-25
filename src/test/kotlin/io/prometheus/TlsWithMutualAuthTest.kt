@@ -23,6 +23,7 @@ import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
 import io.prometheus.TestConstants.DEFAULT_TIMEOUT
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
+import io.prometheus.common.Utils.lambda
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
@@ -38,7 +39,7 @@ class TlsWithMutualAuthTest : CommonTests(
     @BeforeAll
     fun setUp() =
       setItUp(
-        proxySetup = {
+        proxySetup = lambda {
           startProxy(
             serverName = "withmutualauth",
             argv = listOf(
@@ -53,7 +54,7 @@ class TlsWithMutualAuthTest : CommonTests(
             ),
           )
         },
-        agentSetup = {
+        agentSetup = lambda {
           startAgent(
             serverName = "withmutualauth",
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,

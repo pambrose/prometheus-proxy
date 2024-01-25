@@ -20,6 +20,7 @@ package io.prometheus
 
 import com.github.pambrose.common.util.simpleClassName
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.Utils.lambda
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -34,7 +35,7 @@ open class CommonCompanion : KLogging() {
   protected fun setItUp(
     proxySetup: () -> Proxy,
     agentSetup: () -> Agent,
-    actions: () -> Unit = {},
+    actions: () -> Unit = lambda {},
   ) {
     CollectorRegistry.defaultRegistry.clear()
 

@@ -19,7 +19,7 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.ktor.http.*
+import io.ktor.http.HttpStatusCode
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import kotlinx.coroutines.Dispatchers

@@ -21,7 +21,7 @@ package io.prometheus
 import com.github.pambrose.common.util.getBanner
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentOptions
-import io.prometheus.common.getVersionDesc
+import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
 import mu.two.KLogger

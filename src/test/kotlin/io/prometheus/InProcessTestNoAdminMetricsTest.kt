@@ -23,6 +23,7 @@ import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
 import io.prometheus.TestConstants.DEFAULT_TIMEOUT
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
+import io.prometheus.common.Utils.lambda
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
@@ -33,8 +34,8 @@ class InProcessTestNoAdminMetricsTest :
     @BeforeAll
     fun setUp() =
       setItUp(
-        proxySetup = { startProxy("nometrics") },
-        agentSetup = {
+        proxySetup = lambda { startProxy("nometrics") },
+        agentSetup = lambda {
           startAgent(
             serverName = "nometrics",
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,

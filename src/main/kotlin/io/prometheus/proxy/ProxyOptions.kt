@@ -21,7 +21,12 @@ package io.prometheus.proxy
 import com.beust.jcommander.Parameter
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
-import io.prometheus.common.EnvVars.*
+import io.prometheus.common.EnvVars.AGENT_PORT
+import io.prometheus.common.EnvVars.PROXY_CONFIG
+import io.prometheus.common.EnvVars.PROXY_PORT
+import io.prometheus.common.EnvVars.SD_ENABLED
+import io.prometheus.common.EnvVars.SD_PATH
+import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
 
 class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
   constructor(args: List<String>) : this(args.toTypedArray())

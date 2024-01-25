@@ -23,6 +23,7 @@ import com.github.pambrose.common.dsl.PrometheusDsl.gauge
 import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Proxy
+import io.prometheus.common.Utils.lambda
 
 internal class ProxyMetrics(proxy: Proxy) {
   val scrapeRequestCount =
@@ -65,31 +66,31 @@ internal class ProxyMetrics(proxy: Proxy) {
     SamplerGaugeCollector(
       name = "proxy_agent_map_size",
       help = "Proxy connected agents",
-      data = { proxy.agentContextManager.agentContextSize.toDouble() },
+      data = lambda { proxy.agentContextManager.agentContextSize.toDouble() },
     )
 
     SamplerGaugeCollector(
       name = "proxy_chunk_context_map_size",
       help = "Proxy chunk context map size",
-      data = { proxy.agentContextManager.chunkedContextSize.toDouble() },
+      data = lambda { proxy.agentContextManager.chunkedContextSize.toDouble() },
     )
 
     SamplerGaugeCollector(
       name = "proxy_path_map_size",
       help = "Proxy path map size",
-      data = { proxy.pathManager.pathMapSize.toDouble() },
+      data = lambda { proxy.pathManager.pathMapSize.toDouble() },
     )
 
     SamplerGaugeCollector(
       name = "proxy_scrape_map_size",
       help = "Proxy scrape map size",
-      data = { proxy.scrapeRequestManager.scrapeMapSize.toDouble() },
+      data = lambda { proxy.scrapeRequestManager.scrapeMapSize.toDouble() },
     )
 
     SamplerGaugeCollector(
       name = "proxy_cumulative_agent_backlog_size",
       help = "Proxy cumulative agent backlog size",
-      data = { proxy.agentContextManager.totalAgentScrapeRequestBacklogSize.toDouble() },
+      data = lambda { proxy.agentContextManager.totalAgentScrapeRequestBacklogSize.toDouble() },
     )
   }
 }

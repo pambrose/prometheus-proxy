@@ -17,6 +17,7 @@ indent_style = tab
 indent_size = 4
 
 [*.{kt,kts}]
+indent_size = 2
 ktlint_standard_no-wildcard-imports = disabled
 ktlint_standard_multiline-if-else = disabled
 ktlint_standard_string-template-indent = disabled

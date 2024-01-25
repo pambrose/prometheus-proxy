@@ -23,6 +23,7 @@ import com.github.pambrose.common.dsl.PrometheusDsl.gauge
 import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
+import io.prometheus.common.Utils.lambda
 
 internal class AgentMetrics(agent: Agent) {
   val scrapeRequestCount =
@@ -65,7 +66,7 @@ internal class AgentMetrics(agent: Agent) {
       "Agent scrape backlog size",
       labelNames = listOf(LAUNCH_ID),
       labelValues = listOf(agent.launchId),
-      data = { agent.scrapeRequestBacklogSize.get().toDouble() },
+      data = lambda { agent.scrapeRequestBacklogSize.get().toDouble() },
     )
   }
 

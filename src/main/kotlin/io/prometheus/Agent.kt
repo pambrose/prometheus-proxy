@@ -48,7 +48,8 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.getVersionDesc
+import io.prometheus.common.Utils.getVersionDesc
+import io.prometheus.common.Utils.lambda
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -76,7 +77,7 @@ class Agent(
   adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
   metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.agent.metrics),
   zipkinConfig = newZipkinConfig(options.configVals.agent.internal.zipkin),
-  versionBlock = { getVersionDesc(true) },
+  versionBlock = lambda { getVersionDesc(true) },
   isTestMode = testMode,
 ) {
   private val clock = Monotonic

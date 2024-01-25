@@ -19,7 +19,7 @@
 package io.prometheus.agent
 
 import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
-import io.ktor.utils.io.core.*
+import io.ktor.utils.io.core.Closeable
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
