@@ -254,12 +254,9 @@ class Agent(
     }
   }
 
-  internal fun updateScrapeCounter(
-    agent: Agent,
-    type: String,
-  ) {
+  internal fun updateScrapeCounter(type: String) {
     if (type.isNotEmpty())
-      metrics { scrapeRequestCount.labels(agent.launchId, type).inc() }
+      metrics { scrapeRequestCount.labels(launchId, type).inc() }
   }
 
   internal fun markMsgSent() {

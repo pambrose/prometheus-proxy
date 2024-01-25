@@ -284,7 +284,8 @@ internal class AgentGrpcService(
           AgentInfo(agent.agentId)
             .apply { require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
             .toProto()
-        stub.readRequestsFromProxy(agentInfo)
+        stub
+          .readRequestsFromProxy(agentInfo)
           .collect { grpcRequest: ScrapeRequest ->
             // The actual fetch happens at the other end of the channel, not here.
             val request = grpcRequest.toDataClass()

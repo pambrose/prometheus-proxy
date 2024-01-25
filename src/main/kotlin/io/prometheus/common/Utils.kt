@@ -22,8 +22,10 @@ import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
 import com.github.pambrose.common.util.Version.Companion.versionDesc
 import io.prometheus.Proxy
+import java.net.URLDecoder
 import java.util.*
 import kotlin.system.exitProcess
+import kotlin.text.Charsets.UTF_8
 
 object Utils {
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
@@ -42,5 +44,12 @@ object Utils {
   // This eliminates an extra set of paren in when blocks and if/else stmts
   fun <T> lambda(block: T) = block
 
+  fun Boolean.ifTrue(block: () -> Unit) {
+    if (this) block()
+  }
+
   fun String.toLowercase() = this.lowercase(Locale.getDefault())
+
+  fun decodeParams(encodedQueryParams: String): String =
+    if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8.name())}" else ""
 }
