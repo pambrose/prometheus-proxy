@@ -9,7 +9,7 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'com.github.gmazzo.buildconfig' version '5.3.5'
     id 'org.jetbrains.kotlinx.kover' version '0.7.5'
-    id 'io.gitlab.arturbosch.detekt' version '1.23.4'
+    id 'io.gitlab.arturbosch.detekt' version '1.23.5'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
     // id 'jacoco'
     // id 'com.github.kt3k.coveralls' version '2.12.0'
