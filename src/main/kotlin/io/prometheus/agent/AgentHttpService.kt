@@ -107,7 +107,7 @@ internal class AgentHttpService(val agent: Agent) {
       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
-      val authHeader = if (request.authHeader.isBlank()) null else request.authHeader
+      val authHeader = request.authHeader.ifBlank { null }
       authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
     }
 
