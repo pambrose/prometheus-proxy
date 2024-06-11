@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@ package io.prometheus.proxy
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.grpc.krotodc.UnregisterPathResponse
-import mu.two.KLogging
 
 internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode: Boolean) {
   class AgentContextInfo(val isConsolidated: Boolean, val agentContexts: MutableList<AgentContext>) {
@@ -160,5 +160,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
           .joinToString("\n\n")
     }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

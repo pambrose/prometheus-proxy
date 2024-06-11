@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,16 @@
 
 package io.prometheus.proxy
 
-import io.ktor.http.*
-import io.ktor.server.application.*
-import io.ktor.server.response.*
+import io.github.oshai.kotlinlogging.KLogger
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.response.header
+import io.ktor.server.response.respondText
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.MISSING_PATH_MSG
-import mu.two.KLogger
 
 object ProxyUtils {
   fun invalidAgentContextResponse(
@@ -94,13 +97,13 @@ object ProxyUtils {
     message: String,
     proxy: Proxy?,
     logger: KLogger,
-    logLevel: (KLogger, String) -> Unit,
+    logLevel: (KLogger, () -> String) -> Unit,
     responseResults: ResponseResults,
     updateMsg: String,
     statusCode: HttpStatusCode,
   ) {
     proxy?.logActivity(message)
-    logLevel(logger, message)
+    logLevel(logger) { message }
     responseResults.apply {
       this.updateMsg = updateMsg
       this.statusCode = statusCode

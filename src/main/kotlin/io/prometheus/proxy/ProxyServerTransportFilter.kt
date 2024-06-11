@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,11 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GrpcDsl.attributes
 import com.github.pambrose.common.util.isNotNull
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
-import mu.two.KLogging
 
 internal class ProxyServerTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
   override fun transportReady(attributes: Attributes): Attributes {
@@ -46,7 +46,8 @@ internal class ProxyServerTransportFilter(private val proxy: Proxy) : ServerTran
     super.transportTerminated(attributes)
   }
 
-  companion object : KLogging() {
+  companion object {
+    private val logger = KotlinLogging.logger {}
     internal const val AGENT_ID = "agent-id"
     private const val REMOTE_ADDR = "remote-addr"
     internal val AGENT_ID_KEY: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)

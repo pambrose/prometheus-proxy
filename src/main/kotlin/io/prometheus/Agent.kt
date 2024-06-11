@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import com.github.pambrose.common.util.hostInfo
 import com.github.pambrose.common.util.randomId
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
@@ -48,13 +49,13 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.getVersionDesc
+import io.prometheus.common.Utils.getVersionDesc
+import io.prometheus.common.Utils.lambda
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mu.two.KLogging
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.atomic.AtomicInteger
@@ -76,7 +77,7 @@ class Agent(
   adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
   metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.agent.metrics),
   zipkinConfig = newZipkinConfig(options.configVals.agent.internal.zipkin),
-  versionBlock = { getVersionDesc(true) },
+  versionBlock = lambda { getVersionDesc(true) },
   isTestMode = testMode,
 ) {
   private val clock = Monotonic
@@ -253,12 +254,9 @@ class Agent(
     }
   }
 
-  internal fun updateScrapeCounter(
-    agent: Agent,
-    type: String,
-  ) {
+  internal fun updateScrapeCounter(type: String) {
     if (type.isNotEmpty())
-      metrics { scrapeRequestCount.labels(agent.launchId, type).inc() }
+      metrics { scrapeRequestCount.labels(launchId, type).inc() }
   }
 
   internal fun markMsgSent() {
@@ -287,7 +285,9 @@ class Agent(
       add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
     }
 
-  companion object : KLogging() {
+  companion object {
+    private val logger = KotlinLogging.logger {}
+
     @JvmStatic
     fun main(argv: Array<String>) {
       startSyncAgent(argv, true)

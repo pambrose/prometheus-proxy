@@ -19,22 +19,24 @@
 package io.prometheus
 
 import com.github.pambrose.common.util.simpleClassName
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.Utils.lambda
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mu.two.KLogging
 import kotlin.properties.Delegates.notNull
 import kotlin.time.Duration.Companion.seconds
 
-open class CommonCompanion : KLogging() {
+open class CommonCompanion {
+  private val logger = KotlinLogging.logger {}
   protected var proxy: Proxy by notNull()
   protected var agent: Agent by notNull()
 
   protected fun setItUp(
     proxySetup: () -> Proxy,
     agentSetup: () -> Agent,
-    actions: () -> Unit = {},
+    actions: () -> Unit = lambda {},
   ) {
     CollectorRegistry.defaultRegistry.clear()
 

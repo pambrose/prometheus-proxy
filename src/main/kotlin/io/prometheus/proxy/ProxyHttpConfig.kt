@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,24 +17,36 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.util.simpleClassName
-import io.ktor.http.*
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.http.ContentType.Text.Plain
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.HttpStatusCode.Companion.NotFound
-import io.ktor.http.content.*
-import io.ktor.server.application.*
-import io.ktor.server.logging.*
-import io.ktor.server.plugins.*
-import io.ktor.server.plugins.callloging.*
-import io.ktor.server.plugins.compression.*
-import io.ktor.server.plugins.defaultheaders.*
-import io.ktor.server.plugins.statuspages.*
-import io.ktor.server.request.*
-import io.ktor.server.response.*
+import io.ktor.http.content.TextContent
+import io.ktor.http.withCharset
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.install
+import io.ktor.server.logging.toLogString
+import io.ktor.server.plugins.callloging.CallLogging
+import io.ktor.server.plugins.callloging.CallLoggingConfig
+import io.ktor.server.plugins.compression.Compression
+import io.ktor.server.plugins.compression.CompressionConfig
+import io.ktor.server.plugins.compression.deflate
+import io.ktor.server.plugins.compression.gzip
+import io.ktor.server.plugins.compression.minimumSize
+import io.ktor.server.plugins.defaultheaders.DefaultHeaders
+import io.ktor.server.plugins.origin
+import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.plugins.statuspages.StatusPagesConfig
+import io.ktor.server.request.path
+import io.ktor.server.response.respond
 import io.prometheus.Proxy
-import mu.two.KLogging
 import org.slf4j.event.Level
 
-internal object ProxyHttpConfig : KLogging() {
+internal object ProxyHttpConfig {
+  private val logger = KotlinLogging.logger {}
+
   fun Application.configureKtorServer(
     proxy: Proxy,
     isTestMode: Boolean,

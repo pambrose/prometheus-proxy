@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import com.github.pambrose.common.dsl.PrometheusDsl.gauge
 import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
+import io.prometheus.common.Utils.lambda
 
 internal class AgentMetrics(agent: Agent) {
   val scrapeRequestCount =
@@ -65,7 +66,7 @@ internal class AgentMetrics(agent: Agent) {
       "Agent scrape backlog size",
       labelNames = listOf(LAUNCH_ID),
       labelValues = listOf(agent.launchId),
-      data = { agent.scrapeRequestBacklogSize.get().toDouble() },
+      data = lambda { agent.scrapeRequestBacklogSize.get().toDouble() },
     )
   }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,15 +23,16 @@ import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
-import mu.two.KLogging
+import io.prometheus.common.Utils.lambda
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentContextCleanupService(
   private val proxy: Proxy,
   private val configVals: ConfigVals.Proxy2.Internal2,
-  initBlock: (AgentContextCleanupService.() -> Unit) = {},
+  initBlock: (AgentContextCleanupService.() -> Unit) = lambda {},
 ) : GenericExecutionThreadService() {
   init {
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
@@ -44,12 +45,11 @@ internal class AgentContextCleanupService(
     while (isRunning) {
       proxy.agentContextManager.agentContextMap
         .forEach { (agentId, agentContext) ->
-          val inactivityDuration = agentContext.inactivityDuration
-          if (inactivityDuration > maxAgentInactivityTime) {
+          val inactiveTime = agentContext.inactivityDuration
+          if (inactiveTime > maxAgentInactivityTime) {
             logger.info {
               val id = agentContext.agentId
-              val maxTime = maxAgentInactivityTime
-              "Evicting agentId $id after $inactivityDuration (max $maxTime) of inactivity: $agentContext"
+              "Evicting agentId $id after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
             }
             proxy.removeAgentContext(agentId, "Eviction")
             proxy.metrics { agentEvictionCount.inc() }
@@ -65,5 +65,7 @@ internal class AgentContextCleanupService(
       add("pause secs", configVals.staleAgentCheckPauseSecs)
     }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

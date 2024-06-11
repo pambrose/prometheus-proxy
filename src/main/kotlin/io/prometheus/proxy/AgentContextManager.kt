@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
-import mu.two.KLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.concurrent.ConcurrentMap
 
 internal class AgentContextManager(private val isTestMode: Boolean) {
@@ -57,5 +57,7 @@ internal class AgentContextManager(private val isTestMode: Boolean) {
         agentContext
       }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

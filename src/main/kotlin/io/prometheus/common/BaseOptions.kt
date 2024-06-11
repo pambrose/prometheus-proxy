@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,12 +28,21 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
-import io.prometheus.common.EnvVars.*
-import mu.two.KLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.prometheus.common.EnvVars.ADMIN_ENABLED
+import io.prometheus.common.EnvVars.ADMIN_PORT
+import io.prometheus.common.EnvVars.CERT_CHAIN_FILE_PATH
+import io.prometheus.common.EnvVars.DEBUG_ENABLED
+import io.prometheus.common.EnvVars.METRICS_ENABLED
+import io.prometheus.common.EnvVars.METRICS_PORT
+import io.prometheus.common.EnvVars.PRIVATE_KEY_FILE_PATH
+import io.prometheus.common.EnvVars.TRANSPORT_FILTER_DISABLED
+import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
+import io.prometheus.common.Utils.VersionValidator
+import io.prometheus.common.Utils.toLowercase
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
-import java.util.*
 import kotlin.properties.Delegates.notNull
 import kotlin.system.exitProcess
 
@@ -112,7 +121,7 @@ abstract class BaseOptions protected constructor(
             .apply {
               programName = progName
               setCaseSensitiveOptions(false)
-              parse(*argv ?: arrayOf())
+              parse(*(argv.orEmpty()))
             }
 
         if (usage) {
@@ -211,6 +220,19 @@ abstract class BaseOptions protected constructor(
       }
   }
 
+  private fun String.isUrlPrefix() = toLowercase().startsWith(HTTP_PREFIX) || toLowercase().startsWith(HTTPS_PREFIX)
+
+  private fun String.isJsonSuffix() = toLowercase().endsWith(".json") || toLowercase().endsWith(".jsn")
+
+  private fun String.isPropertiesSuffix() = toLowercase().endsWith(".properties") || toLowercase().endsWith(".props")
+
+  private fun getConfigSyntax(configName: String) =
+    when {
+      configName.isJsonSuffix() -> ConfigSyntax.JSON
+      configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
+      else -> ConfigSyntax.CONF
+    }
+
   private fun readConfig(
     configName: String,
     envConfig: String,
@@ -218,22 +240,6 @@ abstract class BaseOptions protected constructor(
     fallback: Config,
     exitOnMissingConfig: Boolean,
   ): Config {
-    fun String.isUrlPrefix() =
-      lowercase(Locale.getDefault()).startsWith(HTTP_PREFIX) || lowercase(Locale.getDefault()).startsWith(HTTPS_PREFIX)
-
-    fun String.isJsonSuffix() =
-      lowercase(Locale.getDefault()).endsWith(".json") || lowercase(Locale.getDefault()).endsWith(".jsn")
-
-    fun String.isPropertiesSuffix() =
-      lowercase(Locale.getDefault()).endsWith(".properties") || lowercase(Locale.getDefault()).endsWith(".props")
-
-    fun getConfigSyntax(configName: String) =
-      when {
-        configName.isJsonSuffix() -> ConfigSyntax.JSON
-        configName.isPropertiesSuffix() -> ConfigSyntax.PROPERTIES
-        else -> ConfigSyntax.CONF
-      }
-
     when {
       configName.isBlank() -> {
         if (exitOnMissingConfig) {
@@ -243,7 +249,7 @@ abstract class BaseOptions protected constructor(
         return fallback
       }
 
-      configName.isUrlPrefix() -> {
+      configName.isUrlPrefix() ->
         runCatching {
           val configSyntax = getConfigSyntax(configName)
           return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
@@ -254,9 +260,8 @@ abstract class BaseOptions protected constructor(
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
-      }
 
-      else -> {
+      else ->
         runCatching {
           return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
         }.onFailure { e ->
@@ -265,13 +270,13 @@ abstract class BaseOptions protected constructor(
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
-      }
     }
 
     exitProcess(1)
   }
 
-  companion object : KLogging() {
+  companion object {
+    private val logger = KotlinLogging.logger {}
     private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
     const val DEBUG = "debug"
     const val HTTP_PREFIX = "http://"

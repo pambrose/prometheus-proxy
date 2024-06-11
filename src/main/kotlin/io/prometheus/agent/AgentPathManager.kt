@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,9 @@ package io.prometheus.agent
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
-import mu.two.KLogging
 
 internal class AgentPathManager(private val agent: Agent) {
   private val agentConfigVals = agent.configVals.agent
@@ -89,7 +89,8 @@ internal class AgentPathManager(private val agent: Agent) {
       pathConfigs.joinToString("\n") { c -> "${c[NAME]?.padEnd(maxName)} /${c[PATH]?.padEnd(maxPath)} ${c[URL]}" }
   }
 
-  companion object : KLogging() {
+  companion object {
+    private val logger = KotlinLogging.logger {}
     private const val NAME = "name"
     private const val PATH = "path"
     private const val URL = "url"

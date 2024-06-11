@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,13 +30,15 @@ import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
-import io.prometheus.common.getVersionDesc
+import io.prometheus.common.Utils.getVersionDesc
+import io.prometheus.common.Utils.lambda
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
@@ -53,7 +55,6 @@ import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import mu.two.KLogging
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.milliseconds
@@ -70,7 +71,7 @@ class Proxy(
   adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.proxy.admin),
   metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.proxy.metrics),
   zipkinConfig = newZipkinConfig(options.configVals.proxy.internal.zipkin),
-  versionBlock = { getVersionDesc(true) },
+  versionBlock = lambda { getVersionDesc(true) },
   isTestMode = testMode,
 ) {
   private val httpService = ProxyHttpService(this, proxyHttpPort, isTestMode)
@@ -251,7 +252,9 @@ class Proxy(
       add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
     }
 
-  companion object : KLogging() {
+  companion object {
+    private val logger = KotlinLogging.logger {}
+
     @JvmStatic
     fun main(argv: Array<String>) {
       logger.apply {

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
@@ -70,7 +71,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mu.two.KLogging
 import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.zip.CRC32
@@ -169,7 +169,7 @@ internal class AgentGrpcService(
     stub = ProxyServiceGrpcKt.ProxyServiceCoroutineStub(ClientInterceptors.intercept(channel, interceptors))
   }
 
-  // If successful, this will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
+  // If successful, will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
   suspend fun connectAgent(transportFilterDisabled: Boolean) =
     runCatching {
       logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
@@ -284,7 +284,8 @@ internal class AgentGrpcService(
           AgentInfo(agent.agentId)
             .apply { require(this.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
             .toProto()
-        stub.readRequestsFromProxy(agentInfo)
+        stub
+          .readRequestsFromProxy(agentInfo)
           .collect { grpcRequest: ScrapeRequest ->
             // The actual fetch happens at the other end of the channel, not here.
             val request = grpcRequest.toDataClass()
@@ -399,5 +400,7 @@ internal class AgentGrpcService(
     }
   }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

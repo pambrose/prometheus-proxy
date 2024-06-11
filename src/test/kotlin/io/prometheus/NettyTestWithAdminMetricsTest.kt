@@ -22,12 +22,13 @@ import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
-import io.ktor.client.statement.*
-import io.ktor.http.*
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
 import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
 import io.prometheus.TestConstants.DEFAULT_TIMEOUT
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
+import io.prometheus.common.Utils.lambda
 import kotlinx.coroutines.runBlocking
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeGreaterThan
@@ -69,14 +70,14 @@ class NettyTestWithAdminMetricsTest : CommonTests(
     @BeforeAll
     fun setUp() =
       setItUp(
-        proxySetup = {
+        proxySetup = lambda {
           startProxy(
             adminEnabled = true,
             debugEnabled = true,
             metricsEnabled = true,
           )
         },
-        agentSetup = {
+        agentSetup = lambda {
           startAgent(
             adminEnabled = true,
             debugEnabled = true,
@@ -85,7 +86,7 @@ class NettyTestWithAdminMetricsTest : CommonTests(
             chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
           )
         },
-        actions = {
+        actions = lambda {
           // Wait long enough to trigger heartbeat for code coverage
           sleep(15.seconds)
         },

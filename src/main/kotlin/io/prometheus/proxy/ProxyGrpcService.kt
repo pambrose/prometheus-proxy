@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,11 +31,11 @@ import com.github.pambrose.common.utils.TlsUtils.buildServerTlsContext
 import com.github.pambrose.common.utils.shutdownGracefully
 import com.github.pambrose.common.utils.shutdownWithJvm
 import com.google.common.util.concurrent.MoreExecutors
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.prometheus.Proxy
-import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 
 internal class ProxyGrpcService(
@@ -117,5 +117,7 @@ internal class ProxyGrpcService(
       }
     }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,19 @@
 package io.prometheus.agent
 
 import com.beust.jcommander.Parameter
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
-import io.prometheus.common.EnvVars.*
-import mu.two.KLogging
+import io.prometheus.common.EnvVars.AGENT_CONFIG
+import io.prometheus.common.EnvVars.AGENT_NAME
+import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
+import io.prometheus.common.EnvVars.CONSOLIDATED
+import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
+import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
+import io.prometheus.common.EnvVars.PROXY_HOSTNAME
+import io.prometheus.common.EnvVars.SCRAPE_MAX_RETRIES
+import io.prometheus.common.EnvVars.SCRAPE_TIMEOUT_SECS
+import io.prometheus.common.EnvVars.TRUST_ALL_X509_CERTIFICATES
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(
@@ -146,5 +155,7 @@ class AgentOptions(
       }
   }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

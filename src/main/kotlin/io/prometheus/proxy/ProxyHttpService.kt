@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,14 @@ import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
-import io.ktor.server.cio.*
-import io.ktor.server.cio.CIOApplicationEngine.*
-import io.ktor.server.engine.*
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.ktor.server.cio.CIO
+import io.ktor.server.cio.CIOApplicationEngine.Configuration
+import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
+import io.prometheus.common.Utils.lambda
 import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
 import io.prometheus.proxy.ProxyHttpRoutes.configureHttpRoutes
-import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit.SECONDS
 
@@ -43,7 +44,7 @@ internal class ProxyHttpService(
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
-  private val config: Configuration.() -> Unit = { connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS) }
+  private val config: Configuration.() -> Unit = lambda { connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS) }
   private val httpServer =
     embeddedServer(CIO, port = httpPort, configure = config) {
       configureKtorServer(proxy, isTestMode)
@@ -67,5 +68,7 @@ internal class ProxyHttpService(
 
   override fun toString() = toStringElements { add("port", httpPort) }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

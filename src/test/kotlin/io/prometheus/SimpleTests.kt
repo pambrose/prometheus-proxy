@@ -19,7 +19,8 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.ktor.http.*
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.ktor.http.HttpStatusCode
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import kotlinx.coroutines.Dispatchers
@@ -27,13 +28,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import mu.two.KLogging
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
 import kotlin.time.Duration.Companion.seconds
 
-internal object SimpleTests : KLogging() {
+internal object SimpleTests {
+  private val logger = KotlinLogging.logger {}
+
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
     blockingGet("$PROXY_PORT/".withPrefix()) { response ->

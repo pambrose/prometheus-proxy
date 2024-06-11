@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.grpc.CallOptions
 import io.grpc.Channel
 import io.grpc.ClientCall
@@ -29,7 +30,6 @@ import io.grpc.MethodDescriptor
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.proxy.ProxyServerInterceptor.Companion.META_AGENT_ID_KEY
-import mu.two.KLogging
 
 internal class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
   override fun <ReqT, RespT> interceptCall(
@@ -65,5 +65,7 @@ internal class AgentClientInterceptor(private val agent: Agent) : ClientIntercep
       }
     }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

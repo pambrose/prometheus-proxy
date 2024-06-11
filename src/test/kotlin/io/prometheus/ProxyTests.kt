@@ -25,15 +25,18 @@ import com.github.pambrose.common.dsl.KtorDsl.httpClient
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
-import io.ktor.client.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.http.ContentType.*
-import io.ktor.server.application.*
-import io.ktor.server.cio.*
-import io.ktor.server.engine.*
-import io.ktor.server.response.*
-import io.ktor.server.routing.*
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.ktor.client.HttpClient
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType.Text
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.call
+import io.ktor.server.cio.CIO
+import io.ktor.server.cio.CIOApplicationEngine
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
 import io.prometheus.CommonTests.Companion.HTTP_SERVER_COUNT
 import io.prometheus.CommonTests.Companion.MAX_DELAY_MILLIS
 import io.prometheus.CommonTests.Companion.MIN_DELAY_MILLIS
@@ -49,7 +52,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withTimeoutOrNull
-import mu.two.KLogging
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
@@ -69,7 +71,9 @@ class ProxyCallTestArgs(
   val caller: String,
 )
 
-internal object ProxyTests : KLogging() {
+internal object ProxyTests {
+  private val logger = KotlinLogging.logger {}
+
   suspend fun timeoutTest(
     pathManager: AgentPathManager,
     caller: String,
