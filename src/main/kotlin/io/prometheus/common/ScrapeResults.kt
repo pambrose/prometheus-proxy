@@ -21,6 +21,7 @@ package io.prometheus.common
 import com.github.pambrose.common.util.EMPTY_BYTE_ARRAY
 import com.github.pambrose.common.util.simpleClassName
 import com.google.protobuf.ByteString
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.http.HttpStatusCode.Companion.RequestTimeout
@@ -32,7 +33,6 @@ import io.prometheus.grpc.krotodc.HeaderData
 import io.prometheus.grpc.krotodc.ScrapeResponse.ContentOneOf.ContentAsText
 import io.prometheus.grpc.krotodc.ScrapeResponse.ContentOneOf.ContentAsZipped
 import kotlinx.coroutines.TimeoutCancellationException
-import mu.two.KLogging
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
 import java.util.concurrent.atomic.AtomicReference
@@ -91,7 +91,9 @@ internal class ScrapeResults(
       ),
     )
 
-  companion object : KLogging() {
+  companion object {
+    private val logger = KotlinLogging.logger {}
+
     fun errorCode(
       e: Throwable,
       url: String,

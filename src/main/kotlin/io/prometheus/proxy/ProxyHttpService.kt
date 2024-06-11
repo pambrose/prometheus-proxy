@@ -23,6 +23,7 @@ import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine.Configuration
 import io.ktor.server.engine.embeddedServer
@@ -30,7 +31,6 @@ import io.prometheus.Proxy
 import io.prometheus.common.Utils.lambda
 import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
 import io.prometheus.proxy.ProxyHttpRoutes.configureHttpRoutes
-import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit.SECONDS
 
@@ -68,5 +68,7 @@ internal class ProxyHttpService(
 
   override fun toString() = toStringElements { add("port", httpPort) }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

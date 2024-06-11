@@ -2,14 +2,14 @@ plugins {
     id 'idea'
     id 'java'
     id 'maven-publish'
-    id 'org.jetbrains.kotlin.jvm' version '1.9.22'
+    id 'org.jetbrains.kotlin.jvm' version '2.0.0'
     id 'com.google.protobuf' version '0.9.4'   // Keep in sync with grpc
-    id 'org.jmailen.kotlinter' version "4.2.0"
+    id 'org.jmailen.kotlinter' version "4.3.0"
     id "com.github.ben-manes.versions" version '0.51.0'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'com.github.gmazzo.buildconfig' version '5.3.5'
-    id 'org.jetbrains.kotlinx.kover' version '0.7.6'
-    id 'io.gitlab.arturbosch.detekt' version '1.23.5'
+    id 'org.jetbrains.kotlinx.kover' version '0.8.1'
+    id 'io.gitlab.arturbosch.detekt' version '1.23.6'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
     // id 'jacoco'
     // id 'com.github.kt3k.coveralls' version '2.12.0'
@@ -26,7 +26,7 @@ buildConfig {
 
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
-    buildConfigField('String', 'APP_RELEASE_DATE', "\"12/11/2023\"")
+    buildConfigField('String', 'APP_RELEASE_DATE', "\"06/11/2024\"")
 }
 
 repositories {
@@ -44,6 +44,9 @@ dependencies {
     implementation "io.grpc:grpc-protobuf:$grpc_version"
     implementation "io.grpc:grpc-stub:$grpc_version"
     implementation "io.grpc:grpc-services:$grpc_version"
+
+    implementation("com.google.protobuf:protobuf-java:$protobuf_version")
+    implementation("com.google.protobuf:protobuf-java-util:$protobuf_version")
 
     implementation "io.grpc:grpc-kotlin-stub:$gengrpc_version"
 
@@ -66,7 +69,7 @@ dependencies {
     implementation "org.eclipse.jetty:jetty-servlet:$jetty_version"
 
     implementation "javax.annotation:javax.annotation-api:$annotation_version"
-    implementation "com.beust:jcommander:$jcommander_version"
+    implementation "org.jcommander:jcommander:$jcommander_version"
     implementation "com.typesafe:config:$typesafe_version"
 
     implementation "io.prometheus:simpleclient:$prometheus_version"
@@ -86,7 +89,7 @@ dependencies {
 
     implementation "io.zipkin.brave:brave-instrumentation-grpc:$zipkin_version"
 
-    implementation "io.github.microutils:kotlin-logging:$logging_version"
+    implementation "io.github.oshai:kotlin-logging-jvm:$logging_version"
     implementation "ch.qos.logback:logback-classic:$logback_version"
     implementation "org.slf4j:jul-to-slf4j:$slf4j_version"
 
@@ -280,61 +283,63 @@ kotlinter {
     reporters = ['checkstyle', 'plain']
 }
 
-koverMerged {
-    enable()  // create Kover merged reports
+kover {
+    reports {
+//        enable()  // create Kover merged reports
+//
+//        filters { // common filters for all default Kover merged tasks
+//            classes { // common class filter for all default Kover merged tasks
+//                includes.add("io.prometheus.*") // class inclusion rules
+//                //excludes.addAll("io.prometheus.subpackage.*") // class exclusion rules
+//            }
+//
+//            projects { // common projects filter for all default Kover merged tasks
+//                //excludes.addAll("project1", ":child:project") // Specifies the projects excluded in the merged tasks
+//            }
+//        }
+//
+//
+//        xmlReport {
+//            onCheck.set(true)
+//            // true to run koverMergedXmlReport task during the execution of the check task (if it exists) of the current project
+//            reportFile.set(layout.buildDirectory.file("my-merged-report/result.xml")) // change report file name
+//            overrideClassFilter { // override common class filter
+//                includes.add("io.prometheus.*") // override class inclusion rules
+//                //excludes.addAll("io.prometheus.subpackage.*") // override class exclusion rules
+//            }
+//        }
+//
+//        htmlReport {
+//            onCheck.set(true)
+//            // true to run koverMergedHtmlReport task during the execution of the check task (if it exists) of the current project
+//            reportDir.set(layout.buildDirectory.dir("my-merged-report/html-result")) // change report directory
+//            overrideClassFilter { // override common class filter
+//                includes.add("io.prometheus.*") // override class inclusion rules
+//                //excludes.addAll("io.prometheus.subpackage.*") // override class exclusion rules
+//            }
+//        }
 
-    filters { // common filters for all default Kover merged tasks
-        classes { // common class filter for all default Kover merged tasks
-            includes.add("io.prometheus.*") // class inclusion rules
-            //excludes.addAll("io.prometheus.subpackage.*") // class exclusion rules
-        }
-
-        projects { // common projects filter for all default Kover merged tasks
-            //excludes.addAll("project1", ":child:project") // Specifies the projects excluded in the merged tasks
-        }
-    }
-
-
-    xmlReport {
-        onCheck.set(true)
-        // true to run koverMergedXmlReport task during the execution of the check task (if it exists) of the current project
-        reportFile.set(layout.buildDirectory.file("my-merged-report/result.xml")) // change report file name
-        overrideClassFilter { // override common class filter
-            includes.add("io.prometheus.*") // override class inclusion rules
-            //excludes.addAll("io.prometheus.subpackage.*") // override class exclusion rules
-        }
-    }
-
-    htmlReport {
-        onCheck.set(true)
-        // true to run koverMergedHtmlReport task during the execution of the check task (if it exists) of the current project
-        reportDir.set(layout.buildDirectory.dir("my-merged-report/html-result")) // change report directory
-        overrideClassFilter { // override common class filter
-            includes.add("io.prometheus.*") // override class inclusion rules
-            //excludes.addAll("io.prometheus.subpackage.*") // override class exclusion rules
-        }
-    }
-
-    verify {
-        onCheck.set(true)
-        // true to run koverMergedVerify task during the execution of the check task (if it exists) of the current project
-        rule { // add verification rule
-            //isEnabled = true // false to disable rule checking
-            name = null // custom name for the rule
-            target = 'ALL' // specify by which entity the code for separate coverage evaluation will be grouped
-
-            overrideClassFilter { // override common class filter
-                includes.add("io.prometheus.verify.*") // override class inclusion rules
-                // excludes.addAll("io.prometheus.verify.subpackage.*") // override class exclusion rules
-            }
-
-            bound { // add rule bound
-                minValue = 10
-                maxValue = 20
-                counter = 'LINE' // change coverage metric to evaluate (LINE, INSTRUCTION, BRANCH)
-                valueType = 'COVERED_PERCENTAGE'
-                // change counter value (COVERED_COUNT, MISSED_COUNT, COVERED_PERCENTAGE, MISSED_PERCENTAGE)
-            }
-        }
+//        verify {
+//            // onCheck.set(true)
+//            // true to run koverMergedVerify task during the execution of the check task (if it exists) of the current project
+//            rule { // add verification rule
+//                //isEnabled = true // false to disable rule checking
+//                name = null // custom name for the rule
+//                target = 'ALL' // specify by which entity the code for separate coverage evaluation will be grouped
+//
+//                overrideClassFilter { // override common class filter
+//                    includes.add("io.prometheus.verify.*") // override class inclusion rules
+//                    // excludes.addAll("io.prometheus.verify.subpackage.*") // override class exclusion rules
+//                }
+//
+//                bound { // add rule bound
+//                    minValue = 10
+//                    maxValue = 20
+//                    counter = 'LINE' // change coverage metric to evaluate (LINE, INSTRUCTION, BRANCH)
+//                    valueType = 'COVERED_PERCENTAGE'
+//                    // change counter value (COVERED_COUNT, MISSED_COUNT, COVERED_PERCENTAGE, MISSED_PERCENTAGE)
+//                }
+//            }
+//        }
     }
 }

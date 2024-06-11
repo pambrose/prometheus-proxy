@@ -25,6 +25,7 @@ import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
@@ -70,7 +71,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mu.two.KLogging
 import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.zip.CRC32
@@ -400,5 +400,7 @@ internal class AgentGrpcService(
     }
   }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

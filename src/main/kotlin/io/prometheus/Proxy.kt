@@ -30,6 +30,7 @@ import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
@@ -54,7 +55,6 @@ import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import mu.two.KLogging
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.milliseconds
@@ -252,7 +252,9 @@ class Proxy(
       add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
     }
 
-  companion object : KLogging() {
+  companion object {
+    private val logger = KotlinLogging.logger {}
+
     @JvmStatic
     fun main(argv: Array<String>) {
       logger.apply {

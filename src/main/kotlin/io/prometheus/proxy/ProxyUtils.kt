@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy
 
+import io.github.oshai.kotlinlogging.KLogger
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -25,7 +26,6 @@ import io.ktor.server.response.respondText
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.MISSING_PATH_MSG
-import mu.two.KLogger
 
 object ProxyUtils {
   fun invalidAgentContextResponse(
@@ -97,13 +97,13 @@ object ProxyUtils {
     message: String,
     proxy: Proxy?,
     logger: KLogger,
-    logLevel: (KLogger, String) -> Unit,
+    logLevel: (KLogger, () -> String) -> Unit,
     responseResults: ResponseResults,
     updateMsg: String,
     statusCode: HttpStatusCode,
   ) {
     proxy?.logActivity(message)
-    logLevel(logger, message)
+    logLevel(logger) { message }
     responseResults.apply {
       this.updateMsg = updateMsg
       this.statusCode = statusCode

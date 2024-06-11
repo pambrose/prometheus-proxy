@@ -21,6 +21,7 @@ package io.prometheus.proxy
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.google.protobuf.Empty
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.grpc.Status
 import io.prometheus.Proxy
 import io.prometheus.agent.RequestFailureException
@@ -52,7 +53,6 @@ import io.prometheus.grpc.krotodc.scraperesponse.toDataClass
 import io.prometheus.grpc.krotodc.unregisterpathresponse.toProto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import mu.two.KLogging
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicLong
 
@@ -229,7 +229,8 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     return EMPTY_INSTANCE
   }
 
-  companion object : KLogging() {
+  companion object {
+    private val logger = KotlinLogging.logger {}
     private val PATH_ID_GENERATOR = AtomicLong(0L)
     internal const val UNKNOWN_ADDRESS = "Unknown"
   }

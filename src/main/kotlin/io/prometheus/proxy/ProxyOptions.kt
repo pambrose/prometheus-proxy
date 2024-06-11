@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.beust.jcommander.Parameter
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.AGENT_PORT
@@ -102,5 +103,9 @@ class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleNa
         logger.info { "proxy.internal.maxAgentInactivitySecs: $maxAgentInactivitySecs" }
       }
     }
+  }
+
+  companion object {
+    private val logger = KotlinLogging.logger {}
   }
 }

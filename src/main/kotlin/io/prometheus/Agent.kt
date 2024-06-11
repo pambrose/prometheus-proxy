@@ -31,6 +31,7 @@ import com.github.pambrose.common.util.hostInfo
 import com.github.pambrose.common.util.randomId
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
@@ -55,7 +56,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mu.two.KLogging
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.atomic.AtomicInteger
@@ -285,7 +285,9 @@ class Agent(
       add("metricsService", if (isMetricsEnabled) metricsService else "Disabled")
     }
 
-  companion object : KLogging() {
+  companion object {
+    private val logger = KotlinLogging.logger {}
+
     @JvmStatic
     fun main(argv: Array<String>) {
       startSyncAgent(argv, true)

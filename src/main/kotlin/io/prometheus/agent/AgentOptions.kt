@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import com.beust.jcommander.Parameter
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.AGENT_CONFIG
@@ -31,7 +32,6 @@ import io.prometheus.common.EnvVars.PROXY_HOSTNAME
 import io.prometheus.common.EnvVars.SCRAPE_MAX_RETRIES
 import io.prometheus.common.EnvVars.SCRAPE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.TRUST_ALL_X509_CERTIFICATES
-import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(
@@ -155,5 +155,7 @@ class AgentOptions(
       }
   }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

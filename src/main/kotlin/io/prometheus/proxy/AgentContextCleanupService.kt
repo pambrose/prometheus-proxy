@@ -23,10 +23,10 @@ import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.Utils.lambda
-import mu.two.KLogging
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentContextCleanupService(
@@ -65,5 +65,7 @@ internal class AgentContextCleanupService(
       add("pause secs", configVals.staleAgentCheckPauseSecs)
     }
 
-  companion object : KLogging()
+  companion object {
+    private val logger = KotlinLogging.logger {}
+  }
 }

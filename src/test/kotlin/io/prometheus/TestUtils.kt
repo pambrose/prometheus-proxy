@@ -19,16 +19,18 @@
 package io.prometheus
 
 import com.github.pambrose.common.util.getBanner
+import io.github.oshai.kotlinlogging.KLogger
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
-import mu.two.KLogger
-import mu.two.KLogging
 import java.nio.channels.ClosedSelectorException
 
-object TestUtils : KLogging() {
+object TestUtils {
+  private val logger = KotlinLogging.logger {}
+
   fun startProxy(
     serverName: String = "",
     adminEnabled: Boolean = false,

@@ -28,6 +28,7 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
 import io.prometheus.common.EnvVars.CERT_CHAIN_FILE_PATH
@@ -39,7 +40,6 @@ import io.prometheus.common.EnvVars.TRANSPORT_FILTER_DISABLED
 import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
 import io.prometheus.common.Utils.VersionValidator
 import io.prometheus.common.Utils.toLowercase
-import mu.two.KLogging
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
@@ -275,7 +275,8 @@ abstract class BaseOptions protected constructor(
     exitProcess(1)
   }
 
-  companion object : KLogging() {
+  companion object {
+    private val logger = KotlinLogging.logger {}
     private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
     const val DEBUG = "debug"
     const val HTTP_PREFIX = "http://"
