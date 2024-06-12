@@ -16,7 +16,7 @@ plugins {
 }
 
 group = 'io.prometheus'
-version = '1.22.0'
+version = '1.23.0'
 
 //sourceCompatibility = JavaVersion.VERSION_17
 //targetCompatibility = JavaVersion.VERSION_17
