@@ -25,7 +25,9 @@ import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Proxy
 import io.prometheus.common.Utils.lambda
 
-internal class ProxyMetrics(proxy: Proxy) {
+internal class ProxyMetrics(
+  proxy: Proxy,
+) {
   val scrapeRequestCount =
     counter {
       name("proxy_scrape_requests")

@@ -37,13 +37,14 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
-class NettyTestWithAdminMetricsTest : CommonTests(
-  ProxyCallTestArgs(
-    agent = agent,
-    startPort = 10300,
-    caller = simpleClassName,
-  ),
-) {
+class NettyTestWithAdminMetricsTest :
+  CommonTests(
+    ProxyCallTestArgs(
+      agent = agent,
+      startPort = 10300,
+      caller = simpleClassName,
+    ),
+  ) {
   @Test
   fun adminDebugCallsTest() {
     runBlocking {

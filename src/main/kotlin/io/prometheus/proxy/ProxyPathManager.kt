@@ -27,13 +27,17 @@ import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.grpc.krotodc.UnregisterPathResponse
 
-internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode: Boolean) {
-  class AgentContextInfo(val isConsolidated: Boolean, val agentContexts: MutableList<AgentContext>) {
+internal class ProxyPathManager(
+  private val proxy: Proxy,
+  private val isTestMode: Boolean,
+) {
+  class AgentContextInfo(
+    val isConsolidated: Boolean,
+    val agentContexts: MutableList<AgentContext>,
+  ) {
     fun isNotValid() = !isConsolidated && agentContexts[0].isNotValid()
 
-    override fun toString(): String {
-      return "AgentContextInfo(consolidated=$isConsolidated, agentContexts=$agentContexts)"
-    }
+    override fun toString(): String = "AgentContextInfo(consolidated=$isConsolidated, agentContexts=$agentContexts)"
   }
 
   private val pathMap = newConcurrentMap<String, AgentContextInfo>()

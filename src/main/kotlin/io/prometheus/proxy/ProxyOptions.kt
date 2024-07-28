@@ -29,7 +29,9 @@ import io.prometheus.common.EnvVars.SD_ENABLED
 import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
 
-class ProxyOptions(argv: Array<String>) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
+class ProxyOptions(
+  argv: Array<String>,
+) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
   constructor(args: List<String>) : this(args.toTypedArray())
 
   @Parameter(names = ["-p", "--port"], description = "Proxy listen port")

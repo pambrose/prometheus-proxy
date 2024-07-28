@@ -25,7 +25,9 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 
-internal class AgentPathManager(private val agent: Agent) {
+internal class AgentPathManager(
+  private val agent: Agent,
+) {
   private val agentConfigVals = agent.configVals.agent
   private val pathContextMap = newConcurrentMap<String, PathContext>()
 
@@ -96,5 +98,9 @@ internal class AgentPathManager(private val agent: Agent) {
     private const val URL = "url"
   }
 
-  data class PathContext(val pathId: Long, val path: String, val url: String)
+  data class PathContext(
+    val pathId: Long,
+    val path: String,
+    val url: String,
+  )
 }

@@ -26,10 +26,49 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
 import java.nio.channels.ClosedSelectorException
+
+@Serializable(with = CustomEnumSerializer::class)
+enum class MyEnum(
+  val type: String,
+) {
+  A("a"),
+  B("b"),
+}
+
+object CustomEnumSerializer : KSerializer<MyEnum> {
+  override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("MyEnum", PrimitiveKind.STRING)
+
+  override fun serialize(
+    encoder: Encoder,
+    value: MyEnum,
+  ) {
+    encoder.encodeString(value.type)
+  }
+
+  override fun deserialize(decoder: Decoder): MyEnum {
+    val value = decoder.decodeString()
+    return MyEnum.entries.find { it.type == value }
+      ?: throw IllegalArgumentException("Unknown enum value: $value")
+  }
+}
 
 object TestUtils {
   private val logger = KotlinLogging.logger {}
+
+  @JvmStatic
+  fun main(args: Array<String>) {
+    println(Json.encodeToString(MyEnum.A))
+  }
 
   fun startProxy(
     serverName: String = "",

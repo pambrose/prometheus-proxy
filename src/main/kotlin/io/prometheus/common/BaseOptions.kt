@@ -252,7 +252,8 @@ abstract class BaseOptions protected constructor(
       configName.isUrlPrefix() ->
         runCatching {
           val configSyntax = getConfigSyntax(configName)
-          return ConfigFactory.parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
+          return ConfigFactory
+            .parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
             .withFallback(fallback)
         }.onFailure { e ->
           if (e.cause is FileNotFoundException)

@@ -155,8 +155,9 @@ class Proxy(
 
   override fun run() {
     runBlocking {
-      while (isRunning)
+      while (isRunning) {
         delay(500.milliseconds)
+      }
     }
   }
 
@@ -186,7 +187,9 @@ class Proxy(
               .filter {
                 it.value.scrapeRequestBacklogSize >= proxyConfigVals.internal.scrapeRequestBacklogUnhealthySize
               }
-              .map { "${it.value} ${it.value.scrapeRequestBacklogSize}" }
+              .map {
+                "${it.value} ${it.value.scrapeRequestBacklogSize}"
+              }
               .let { vals ->
                 if (vals.isEmpty()) {
                   HealthCheck.Result.healthy()

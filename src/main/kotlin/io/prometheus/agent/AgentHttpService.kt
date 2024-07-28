@@ -50,7 +50,9 @@ import io.prometheus.common.Utils.lambda
 import io.prometheus.grpc.krotodc.ScrapeRequest
 import kotlin.time.Duration.Companion.seconds
 
-internal class AgentHttpService(val agent: Agent) {
+internal class AgentHttpService(
+  val agent: Agent,
+) {
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
     return if (pathContext.isNull())

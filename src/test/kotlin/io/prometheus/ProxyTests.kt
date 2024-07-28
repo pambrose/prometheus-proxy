@@ -120,7 +120,10 @@ internal object ProxyTests {
     }
   }
 
-  private class HttpServerWrapper(val port: Int, val server: CIOApplicationEngine)
+  private class HttpServerWrapper(
+    val port: Int,
+    val server: CIOApplicationEngine,
+  )
 
   private val contentMap = mutableMapOf<Int, String>()
 

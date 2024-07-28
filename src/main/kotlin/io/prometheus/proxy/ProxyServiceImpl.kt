@@ -56,7 +56,9 @@ import kotlinx.coroutines.flow.flow
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicLong
 
-internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
+internal class ProxyServiceImpl(
+  private val proxy: Proxy,
+) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
   override suspend fun connectAgent(request: Empty): Empty {
     if (proxy.options.transportFilterDisabled) {
       "Agent (false) and Proxy (true) do not have matching transportFilterDisabled config values".also { msg ->
@@ -156,8 +158,9 @@ internal class ProxyServiceImpl(private val proxy: Proxy) : ProxyServiceGrpcKt.P
     flow {
       proxy.agentContextManager.getAgentContext(request.agentId)
         ?.also { agentContext ->
-          while (proxy.isRunning && agentContext.isValid())
+          while (proxy.isRunning && agentContext.isValid()) {
             agentContext.readScrapeRequest()?.apply { emit(scrapeRequest) }
+          }
         }
     }
 

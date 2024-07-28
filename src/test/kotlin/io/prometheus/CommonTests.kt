@@ -28,7 +28,9 @@ import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 
-abstract class CommonTests(private val args: ProxyCallTestArgs) {
+abstract class CommonTests(
+  private val args: ProxyCallTestArgs,
+) {
   @Test
   fun proxyCallTest() = runBlocking { ProxyTests.proxyCallTest(args) }
 

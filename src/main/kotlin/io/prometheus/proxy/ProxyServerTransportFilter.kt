@@ -26,7 +26,9 @@ import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 
-internal class ProxyServerTransportFilter(private val proxy: Proxy) : ServerTransportFilter() {
+internal class ProxyServerTransportFilter(
+  private val proxy: Proxy,
+) : ServerTransportFilter() {
   override fun transportReady(attributes: Attributes): Attributes {
     val remoteAddress = attributes.get(REMOTE_ADDR_KEY)?.toString() ?: UNKNOWN_ADDRESS
     val agentContext = AgentContext(remoteAddress)

@@ -27,13 +27,14 @@ import io.prometheus.common.Utils.lambda
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class TlsNoMutualAuthTest : CommonTests(
-  ProxyCallTestArgs(
-    agent = agent,
-    startPort = 10200,
-    caller = simpleClassName,
-  ),
-) {
+class TlsNoMutualAuthTest :
+  CommonTests(
+    ProxyCallTestArgs(
+      agent = agent,
+      startPort = 10200,
+      caller = simpleClassName,
+    ),
+  ) {
   companion object : CommonCompanion() {
     @JvmStatic
     @BeforeAll

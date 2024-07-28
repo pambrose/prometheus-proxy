@@ -27,13 +27,14 @@ import io.prometheus.common.Utils.lambda
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class NettyTestNoAdminMetricsTest : CommonTests(
-  ProxyCallTestArgs(
-    agent = agent,
-    startPort = 10900,
-    caller = simpleClassName,
-  ),
-) {
+class NettyTestNoAdminMetricsTest :
+  CommonTests(
+    ProxyCallTestArgs(
+      agent = agent,
+      startPort = 10900,
+      caller = simpleClassName,
+    ),
+  ) {
   companion object : CommonCompanion() {
     @JvmStatic
     @BeforeAll
