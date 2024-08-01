@@ -22,6 +22,7 @@ import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
 import com.github.pambrose.common.util.Version.Companion.versionDesc
 import io.prometheus.Proxy
+import kotlinx.datetime.LocalDateTime
 import java.net.URLDecoder
 import java.util.*
 import kotlin.system.exitProcess
@@ -52,4 +53,23 @@ object Utils {
 
   fun decodeParams(encodedQueryParams: String): String =
     if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8.name())}" else ""
+
+  fun LocalDateTime.toFullDateString(): String =
+    "${abbrevDayOfWeek()} ${monthNumber.lpad(2)}/${dayOfMonth.lpad(2)}/${(year - 2000).lpad(2)} " +
+      "${hour.lpad(2)}:${minute.lpad(2)}:${second.lpad(2)} PST"
+
+  internal fun Int.lpad(
+    width: Int,
+    padChar: Char = '0',
+  ): String = toString().padStart(width, padChar)
+
+  internal fun Int.rpad(
+    width: Int,
+    padChar: Char = '0',
+  ): String = toString().padEnd(width, padChar)
+
+  internal fun String.capitalizeFirstChar(): String =
+    replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+
+  fun LocalDateTime.abbrevDayOfWeek(): String = dayOfWeek.name.lowercase().capitalizeFirstChar().substring(0, 3)
 }

@@ -26,7 +26,6 @@ import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
-import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
@@ -39,6 +38,7 @@ import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
+import io.prometheus.common.Version
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
@@ -59,7 +59,11 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.milliseconds
 
-@Version(version = BuildConfig.APP_VERSION, date = BuildConfig.APP_RELEASE_DATE)
+@Version(
+  version = BuildConfig.APP_VERSION,
+  releaseDate = BuildConfig.APP_RELEASE_DATE,
+  buildTime = BuildConfig.BUILD_TIME,
+)
 class Proxy(
   val options: ProxyOptions,
   proxyHttpPort: Int = options.proxyHttpPort,

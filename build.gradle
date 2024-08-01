@@ -28,6 +28,7 @@ buildConfig {
     buildConfigField('String', 'APP_NAME', "\"${project.name}\"")
     buildConfigField('String', 'APP_VERSION', "\"${project.version}\"")
     buildConfigField('String', 'APP_RELEASE_DATE', "\"06/11/2024\"")
+    buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
 }
 
 repositories {
@@ -72,6 +73,8 @@ dependencies {
     implementation "javax.annotation:javax.annotation-api:$annotation_version"
     implementation "org.jcommander:jcommander:$jcommander_version"
     implementation "com.typesafe:config:$typesafe_version"
+
+    implementation("org.jetbrains.kotlinx:kotlinx-datetime:$datetime_version")
 
     implementation "io.prometheus:simpleclient:$prometheus_version"
 
