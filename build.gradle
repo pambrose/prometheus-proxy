@@ -2,8 +2,8 @@ plugins {
     id 'idea'
     id 'java'
     id 'maven-publish'
-    id 'org.jetbrains.kotlin.jvm' version '2.0.0'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '2.0.0'
+    id 'org.jetbrains.kotlin.jvm' version '2.0.10'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '2.0.10'
     id 'com.google.protobuf' version '0.9.4'   // Keep in sync with grpc
     id 'org.jmailen.kotlinter' version "4.4.1"
     id "com.github.ben-manes.versions" version '0.51.0'
