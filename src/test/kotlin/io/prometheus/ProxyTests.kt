@@ -30,9 +30,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.call
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
+import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -47,6 +47,7 @@ import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
@@ -122,11 +123,12 @@ internal object ProxyTests {
 
   private class HttpServerWrapper(
     val port: Int,
-    val server: CIOApplicationEngine,
+    val server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>,
   )
 
   private val contentMap = mutableMapOf<Int, String>()
 
+  @OptIn(ExperimentalCoroutinesApi::class)
   suspend fun proxyCallTest(args: ProxyCallTestArgs) {
     logger.info { "Calling proxyCallTest() from ${args.caller}" }
 
@@ -153,7 +155,7 @@ internal object ProxyTests {
 
         HttpServerWrapper(
           port = port,
-          server = embeddedServer(CIO, port = port) {
+          server = embeddedServer(factory = CIO, port = port) {
             routing {
               get("/agent-$i") {
                 call.respondText(content, Text.Plain)

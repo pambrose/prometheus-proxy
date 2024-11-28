@@ -26,6 +26,7 @@ import com.google.common.util.concurrent.MoreExecutors
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine.Configuration
+import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.prometheus.Proxy
 import io.prometheus.common.Utils.lambda
@@ -44,9 +45,16 @@ internal class ProxyHttpService(
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
-  private val config: Configuration.() -> Unit = lambda { connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS) }
+  private fun getConfig(httpPort: Int): Configuration.() -> Unit = lambda {
+    connector {
+      host = "0.0.0.0"
+      port = httpPort
+    }
+    connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS)
+  }
+
   private val httpServer =
-    embeddedServer(CIO, port = httpPort, configure = config) {
+    embeddedServer(factory = CIO, configure = getConfig(httpPort)) {
       configureKtorServer(proxy, isTestMode)
       configureHttpRoutes(proxy)
     }

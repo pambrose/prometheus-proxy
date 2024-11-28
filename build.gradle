@@ -2,15 +2,15 @@ plugins {
     id 'idea'
     id 'java'
     id 'maven-publish'
-    id 'org.jetbrains.kotlin.jvm' version '2.0.10'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '2.0.10'
+    id 'org.jetbrains.kotlin.jvm' version '2.1.0'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '2.1.0'
     id 'com.google.protobuf' version '0.9.4'   // Keep in sync with grpc
-    id 'org.jmailen.kotlinter' version "4.4.1"
+    // id 'org.jmailen.kotlinter' version "4.4.1"
     id "com.github.ben-manes.versions" version '0.51.0'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
-    id 'com.github.gmazzo.buildconfig' version '5.4.0'
+    id 'com.github.gmazzo.buildconfig' version '5.5.1'
     id 'org.jetbrains.kotlinx.kover' version '0.8.3'
-    id 'io.gitlab.arturbosch.detekt' version '1.23.6'
+    id 'io.gitlab.arturbosch.detekt' version '1.23.7'
     // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
     // id 'jacoco'
     // id 'com.github.kt3k.coveralls' version '2.12.0'
@@ -32,6 +32,7 @@ buildConfig {
 }
 
 repositories {
+    mavenLocal()
     google()
     mavenCentral()
     maven { url = 'https://jitpack.io' }
@@ -246,23 +247,27 @@ task proxyJar(type: Jar, dependsOn: shadowJar) {
 compileKotlin.dependsOn ':generateProto'
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(11)
 }
 
 compileKotlin {
-    kotlinOptions.freeCompilerArgs += ['-Xbackend-threads=8',
-                                       "-opt-in=kotlin.time.ExperimentalTime",
-                                       "-opt-in=kotlin.contracts.ExperimentalContracts",
-                                       "-opt-in=kotlin.ExperimentalUnsignedTypes",
-                                       "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
-                                       "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
-                                       "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
+    kotlinOptions {
+        freeCompilerArgs += ['-Xbackend-threads=8',
+                             "-opt-in=kotlin.time.ExperimentalTime",
+                             "-opt-in=kotlin.contracts.ExperimentalContracts",
+                             "-opt-in=kotlin.ExperimentalUnsignedTypes",
+                             "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+                             "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
+                             "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
+    }
 }
 
 compileTestKotlin {
-    kotlinOptions.freeCompilerArgs += ['-Xbackend-threads=8',
-                                       "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
-                                       "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
+    kotlinOptions {
+        freeCompilerArgs += ['-Xbackend-threads=8',
+                             "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
+                             "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
+    }
 }
 
 test {
@@ -278,14 +283,14 @@ test {
 }
 
 // This will keep generated code out of the kotlinter checks
-tasks.named("lintKotlinMain") {
-    source = source - fileTree("$buildDir/generated")
-}
+//tasks.named("lintKotlinMain") {
+//    source = source - fileTree("$buildDir/generated")
+//}
 
-kotlinter {
-    ignoreFailures = false
-    reporters = ['checkstyle', 'plain']
-}
+//kotlinter {
+//    ignoreFailures = false
+//    reporters = ['checkstyle', 'plain']
+//}
 
 kover {
     reports {
