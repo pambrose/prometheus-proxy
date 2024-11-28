@@ -258,7 +258,9 @@ compileKotlin {
                              "-opt-in=kotlin.ExperimentalUnsignedTypes",
                              "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
                              "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
-                             "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
+                             "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi",
+                             "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+        ]
     }
 }
 
@@ -266,7 +268,9 @@ compileTestKotlin {
     kotlinOptions {
         freeCompilerArgs += ['-Xbackend-threads=8',
                              "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
-                             "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi"]
+                             "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi",
+                             "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+        ]
     }
 }
 
