@@ -79,8 +79,8 @@ internal class ScrapeResults(
   fun toScrapeResponseHeader() =
     ChunkedScrapeResponse
       .newBuilder()
-      .also {
-        it.header = HeaderData
+      .apply {
+        header = HeaderData
           .newBuilder()
           .also {
             it.headerValidResponse = validResponse

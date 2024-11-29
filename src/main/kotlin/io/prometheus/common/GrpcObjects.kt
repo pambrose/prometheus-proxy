@@ -52,8 +52,8 @@ internal object GrpcObjects {
   ) =
     ChunkedScrapeResponse
       .newBuilder()
-      .also {
-        it.chunk = ChunkData
+      .apply {
+        chunk = ChunkData
           .newBuilder()
           .also {
             it.chunkScrapeId = scrapeId
