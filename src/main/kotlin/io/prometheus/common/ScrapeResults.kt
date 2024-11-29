@@ -27,11 +27,9 @@ import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.http.HttpStatusCode.Companion.RequestTimeout
 import io.ktor.http.HttpStatusCode.Companion.ServiceUnavailable
 import io.ktor.network.sockets.SocketTimeoutException
-import io.prometheus.grpc.krotodc.ChunkedScrapeResponse
-import io.prometheus.grpc.krotodc.ChunkedScrapeResponse.ChunkOneOf.Header
-import io.prometheus.grpc.krotodc.HeaderData
-import io.prometheus.grpc.krotodc.ScrapeResponse.ContentOneOf.ContentAsText
-import io.prometheus.grpc.krotodc.ScrapeResponse.ContentOneOf.ContentAsZipped
+import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.HeaderData
+import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.TimeoutCancellationException
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
@@ -60,36 +58,41 @@ internal class ScrapeResults(
   }
 
   fun toScrapeResponse() =
-    io.prometheus.grpc.krotodc.ScrapeResponse(
-      agentId = agentId,
-      scrapeId = scrapeId,
-      validResponse = validResponse,
-      statusCode = statusCode,
-      contentType = contentType,
-      zipped = zipped,
-      contentOneOf =
-      if (zipped)
-        ContentAsZipped(ByteString.copyFrom(contentAsZipped))
-      else
-        ContentAsText(contentAsText),
-      failureReason = failureReason,
-      url = url,
-    )
+    ScrapeResponse
+      .newBuilder()
+      .also {
+        it.agentId = agentId
+        it.scrapeId = scrapeId
+        it.validResponse = validResponse
+        it.statusCode = statusCode
+        it.contentType = contentType
+        it.zipped = zipped
+        if (zipped)
+          it.contentAsZipped = ByteString.copyFrom(contentAsZipped)
+        else
+          it.contentAsText = contentAsText
+        it.failureReason = failureReason
+        it.url = url
+      }
+      .build()
 
   fun toScrapeResponseHeader() =
-    ChunkedScrapeResponse(
-      chunkOneOf = Header(
-        header = HeaderData(
-          headerValidResponse = validResponse,
-          headerAgentId = agentId,
-          headerScrapeId = scrapeId,
-          headerStatusCode = statusCode,
-          headerFailureReason = failureReason,
-          headerUrl = url,
-          headerContentType = contentType,
-        ),
-      ),
-    )
+    ChunkedScrapeResponse
+      .newBuilder()
+      .also {
+        it.header = HeaderData
+          .newBuilder()
+          .also {
+            it.headerValidResponse = validResponse
+            it.headerAgentId = agentId
+            it.headerScrapeId = scrapeId
+            it.headerStatusCode = statusCode
+            it.headerFailureReason = failureReason
+            it.headerUrl = url
+            it.headerContentType = contentType
+          }
+          .build()
+      }.build()
 
   companion object {
     private val logger = KotlinLogging.logger {}
@@ -103,7 +106,7 @@ internal class ScrapeResults(
         is HttpConnectTimeoutException,
         is SocketTimeoutException,
         is HttpRequestTimeoutException,
-        -> {
+          -> {
           logger.warn(e) { "fetchScrapeUrl() $e - $url" }
           RequestTimeout.value
         }

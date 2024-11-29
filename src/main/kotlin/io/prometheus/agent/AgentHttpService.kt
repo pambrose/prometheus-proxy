@@ -47,7 +47,7 @@ import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
-import io.prometheus.grpc.krotodc.ScrapeRequest
+import io.prometheus.grpc.ScrapeRequest
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentHttpService(

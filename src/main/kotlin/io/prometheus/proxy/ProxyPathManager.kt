@@ -25,7 +25,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
-import io.prometheus.grpc.krotodc.UnregisterPathResponse
+import io.prometheus.grpc.UnregisterPathResponse
 
 internal class ProxyPathManager(
   private val proxy: Proxy,
@@ -114,7 +114,13 @@ internal class ProxyPathManager(
             true to ""
           }
         }
-      return UnregisterPathResponse(valid = results.first, reason = results.second)
+      return UnregisterPathResponse
+        .newBuilder()
+        .also {
+          it.valid = results.first
+          it.reason = results.second
+        }
+        .build()
     }
   }
 
