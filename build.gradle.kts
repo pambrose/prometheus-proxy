@@ -75,13 +75,13 @@ dependencies {
 
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$serializationVersion")
 
-  implementation("io.grpc:grpc-netty:$grpcVersion")
+  implementation("io.grpc:grpc-netty-shaded:$grpcVersion")
   implementation("io.grpc:grpc-protobuf:$grpcVersion")
   implementation("io.grpc:grpc-stub:$grpcVersion")
   implementation("io.grpc:grpc-services:$grpcVersion")
 
-  implementation("com.google.protobuf:protobuf-java:$protobufVersion")
-  implementation("com.google.protobuf:protobuf-java-util:$protobufVersion")
+//  implementation("com.google.protobuf:protobuf-java:$protobufVersion")
+//  implementation("com.google.protobuf:protobuf-java-util:$protobufVersion")
 
   implementation("io.grpc:grpc-kotlin-stub:$gengrpcVersion")
 

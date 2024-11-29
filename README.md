@@ -195,6 +195,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --sd_path          | SD_PATH          <br> proxy.service.discovery.path                         | "discovery"              | Service discovery endpoint path             |
 | --sd_target_prefix | SD_TARGET_PREFIX <br> proxy.service.discovery.targetPrefix                 | "http://localhost:8080/" | Service discovery target prefix             |
 | --tf-disabled      | TRANSPORT_FILTER_DISABLED <br> proxy.transportFilterDisabled               | false                    | Transport filter disabled                   |
+| --ref-disabled     | REFLECTION_DISABLED <br> proxy.reflectionDisabled                          | false                    | gRPC Reflection disabled                    |
 | --cert, -t         | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath                      |                          | Certificate chain file path                 |
 | --key, -k          | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath                    |                          | Private key file path                       |
 | --trust, -s        | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |                          | Trust certificate collection file path      |
@@ -219,7 +220,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --max_retries      | SCRAPE_MAX_RETRIES <br> agent.scrapeMaxRetries                             | 0       | Scrape maximum retries (0 disables scrape retries)         |
 | --chunk            | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs                      | 32      | Threshold for chunking data to Proxy and buffer size (KBs) |
 | --gzip             | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes                            | 1024    | Minimum size for content to be gzipped (bytes)             |
-| --tf-disabled      | TRANSPORT_FILTER_DISABLED <br> proxy.transportFilterDisabled               | false   | Transport filter disabled                                  |
+| --tf-disabled      | TRANSPORT_FILTER_DISABLED <br> agent.transportFilterDisabled               | false   | Transport filter disabled                                  |
 | --trust_all_x509   | TRUST_ALL_X509_CERTIFICATES <br> agent.http.enableTrustAllX509Certificates | false   | Disable SSL verification for agent https endpoints         |
 | --cert, -t         | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath                      |         | Certificate chain file path                                |
 | --key, -k          | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath                    |         | Private key file path                                      |
@@ -338,6 +339,22 @@ The default value is 1 minute.
 An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/docker/nginx.conf)
 and an example agent/proxy conf file
 is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/nginx-proxy.conf)
+
+## gRPC Reflection
+
+The [gRPC Reflection](https://grpc.io/docs/guides/reflection/) service is enabled by default.
+
+To disable gRPC Reflection support, set the `REFLECTION_DISABLED` environment var,
+the `--reflection_disabled` CLI option, or the `proxy.reflectionDisabled` property to true.
+
+To use [grpcurl](https://github.com/fullstorydev/grpcurl) to test the reflection service, run:
+
+```bash
+grpcurl -plaintext localhost:50051 list
+```
+
+If you use the grpcurl `-plaintext` option, make sure that you run the proxy in plaintext
+mode, i.e., do not define any TLS properties.
 
 ## Grafana
 

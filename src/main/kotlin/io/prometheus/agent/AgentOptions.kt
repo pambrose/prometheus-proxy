@@ -32,6 +32,7 @@ import io.prometheus.common.EnvVars.PROXY_HOSTNAME
 import io.prometheus.common.EnvVars.SCRAPE_MAX_RETRIES
 import io.prometheus.common.EnvVars.SCRAPE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.TRUST_ALL_X509_CERTIFICATES
+import org.checkerframework.checker.units.qual.m
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(
@@ -87,7 +88,7 @@ class AgentOptions(
   override fun assignConfigVals() {
     configVals.agent
       .also { agentConfigVals ->
-
+        m
         if (proxyHostname.isEmpty()) {
           val configHostname = agentConfigVals.proxy.hostname
           val str = if (":" in configHostname)

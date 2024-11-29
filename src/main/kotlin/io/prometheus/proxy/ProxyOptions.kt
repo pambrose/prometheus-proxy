@@ -25,6 +25,7 @@ import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.AGENT_PORT
 import io.prometheus.common.EnvVars.PROXY_CONFIG
 import io.prometheus.common.EnvVars.PROXY_PORT
+import io.prometheus.common.EnvVars.REFLECTION_DISABLED
 import io.prometheus.common.EnvVars.SD_ENABLED
 import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
@@ -54,57 +55,66 @@ class ProxyOptions(
   var sdTargetPrefix = ""
     private set
 
+  @Parameter(names = ["--ref-disabled"], description = "gRPC Reflection disabled")
+  var reflectionDisabled = false
+    private set
+
   init {
     parseOptions()
   }
 
   override fun assignConfigVals() {
-    with(configVals.proxy) {
-      if (proxyHttpPort == -1)
-        proxyHttpPort = PROXY_PORT.getEnv(http.port)
-      logger.info { "proxyHttpPort: $proxyHttpPort" }
+    configVals.proxy
+      .also { proxyConfigVals ->
+        if (proxyHttpPort == -1)
+          proxyHttpPort = PROXY_PORT.getEnv(proxyConfigVals.http.port)
+        logger.info { "proxyHttpPort: $proxyHttpPort" }
 
-      if (proxyAgentPort == -1)
-        proxyAgentPort = AGENT_PORT.getEnv(agent.port)
-      logger.info { "proxyAgentPort: $proxyAgentPort" }
+        if (proxyAgentPort == -1)
+          proxyAgentPort = AGENT_PORT.getEnv(proxyConfigVals.agent.port)
+        logger.info { "proxyAgentPort: $proxyAgentPort" }
 
-      if (!sdEnabled)
-        sdEnabled = SD_ENABLED.getEnv(false)
-      logger.info { "sdEnabled: $sdEnabled" }
+        if (!sdEnabled)
+          sdEnabled = SD_ENABLED.getEnv(false)
+        logger.info { "sdEnabled: $sdEnabled" }
 
-      if (sdPath.isEmpty())
-        sdPath = SD_PATH.getEnv(service.discovery.path)
-      if (sdEnabled)
-        require(sdPath.isNotEmpty()) { "sdPath is empty" }
-      else
-        logger.info { "sdPath: $sdPath" }
+        if (sdPath.isEmpty())
+          sdPath = SD_PATH.getEnv(proxyConfigVals.service.discovery.path)
+        if (sdEnabled)
+          require(sdPath.isNotEmpty()) { "sdPath is empty" }
+        else
+          logger.info { "sdPath: $sdPath" }
 
-      if (sdTargetPrefix.isEmpty())
-        sdTargetPrefix = SD_TARGET_PREFIX.getEnv(service.discovery.targetPrefix)
-      if (sdEnabled)
-        require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
-      else
-        logger.info { "sdTargetPrefix: $sdTargetPrefix" }
+        if (sdTargetPrefix.isEmpty())
+          sdTargetPrefix = SD_TARGET_PREFIX.getEnv(proxyConfigVals.service.discovery.targetPrefix)
+        if (sdEnabled)
+          require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
+        else
+          logger.info { "sdTargetPrefix: $sdTargetPrefix" }
 
-      assignAdminEnabled(admin.enabled)
-      assignAdminPort(admin.port)
-      assignMetricsEnabled(metrics.enabled)
-      assignMetricsPort(metrics.port)
-      assignTransportFilterDisabled(transportFilterDisabled)
-      assignDebugEnabled(admin.debugEnabled)
+        if (!reflectionDisabled)
+          reflectionDisabled = REFLECTION_DISABLED.getEnv(proxyConfigVals.reflectionDisabled)
+        logger.info { "reflectionDisabled: $reflectionDisabled" }
 
-      with(tls) {
-        assignCertChainFilePath(certChainFilePath)
-        assignPrivateKeyFilePath(privateKeyFilePath)
-        assignTrustCertCollectionFilePath(trustCertCollectionFilePath)
+        assignAdminEnabled(proxyConfigVals.admin.enabled)
+        assignAdminPort(proxyConfigVals.admin.port)
+        assignMetricsEnabled(proxyConfigVals.metrics.enabled)
+        assignMetricsPort(proxyConfigVals.metrics.port)
+        assignTransportFilterDisabled(proxyConfigVals.transportFilterDisabled)
+        assignDebugEnabled(proxyConfigVals.admin.debugEnabled)
+
+        with(proxyConfigVals.tls) {
+          assignCertChainFilePath(certChainFilePath)
+          assignPrivateKeyFilePath(privateKeyFilePath)
+          assignTrustCertCollectionFilePath(trustCertCollectionFilePath)
+        }
+
+        with(proxyConfigVals.internal) {
+          logger.info { "proxy.internal.scrapeRequestTimeoutSecs: $scrapeRequestTimeoutSecs" }
+          logger.info { "proxy.internal.staleAgentCheckPauseSecs: $staleAgentCheckPauseSecs" }
+          logger.info { "proxy.internal.maxAgentInactivitySecs: $maxAgentInactivitySecs" }
+        }
       }
-
-      with(internal) {
-        logger.info { "proxy.internal.scrapeRequestTimeoutSecs: $scrapeRequestTimeoutSecs" }
-        logger.info { "proxy.internal.staleAgentCheckPauseSecs: $staleAgentCheckPauseSecs" }
-        logger.info { "proxy.internal.maxAgentInactivitySecs: $maxAgentInactivitySecs" }
-      }
-    }
   }
 
   companion object {
