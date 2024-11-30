@@ -4,8 +4,8 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
   val configVersion: String by System.getProperties()
   val detektVersion: String by System.getProperties()
-  val kotestPluginVersion: String by System.getProperties()
-  val kotlinterVersion: String by System.getProperties()
+//  val kotestPluginVersion: String by System.getProperties()
+//  val kotlinterVersion: String by System.getProperties()
   val kotlinVersion: String by System.getProperties()
   val koverVersion: String by System.getProperties()
   val protobufVersion: String by System.getProperties()
