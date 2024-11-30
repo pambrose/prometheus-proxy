@@ -25,15 +25,21 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
-import io.prometheus.grpc.krotodc.UnregisterPathResponse
+import io.prometheus.grpc.UnregisterPathResponse
 
-internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode: Boolean) {
-  class AgentContextInfo(val isConsolidated: Boolean, val agentContexts: MutableList<AgentContext>) {
+internal class ProxyPathManager(
+  private val proxy: Proxy,
+  private val isTestMode: Boolean,
+) {
+  class AgentContextInfo(
+    val isConsolidated: Boolean,
+    val labels: String,
+    val agentContexts: MutableList<AgentContext>,
+  ) {
     fun isNotValid() = !isConsolidated && agentContexts[0].isNotValid()
 
-    override fun toString(): String {
-      return "AgentContextInfo(consolidated=$isConsolidated, agentContexts=$agentContexts)"
-    }
+    override fun toString(): String =
+      "AgentContextInfo(consolidated=$isConsolidated, labels=$labels,agentContexts=$agentContexts)"
   }
 
   private val pathMap = newConcurrentMap<String, AgentContextInfo>()
@@ -50,6 +56,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
 
   fun addPath(
     path: String,
+    labels: String,
     agentContext: AgentContext,
   ) {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
@@ -58,7 +65,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
         if (agentInfo.isNull()) {
-          pathMap[path] = AgentContextInfo(true, mutableListOf(agentContext))
+          pathMap[path] = AgentContextInfo(true, labels, mutableListOf(agentContext))
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated)
             logger.warn {
@@ -69,7 +76,7 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
         }
       } else {
         if (agentInfo.isNotNull()) logger.info { "Overwriting path /$path for ${agentInfo.agentContexts[0]}" }
-        pathMap[path] = AgentContextInfo(false, mutableListOf(agentContext))
+        pathMap[path] = AgentContextInfo(false, labels, mutableListOf(agentContext))
       }
 
       if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
@@ -110,7 +117,13 @@ internal class ProxyPathManager(private val proxy: Proxy, private val isTestMode
             true to ""
           }
         }
-      return UnregisterPathResponse(valid = results.first, reason = results.second)
+      return UnregisterPathResponse
+        .newBuilder()
+        .also {
+          it.valid = results.first
+          it.reason = results.second
+        }
+        .build()
     }
   }
 

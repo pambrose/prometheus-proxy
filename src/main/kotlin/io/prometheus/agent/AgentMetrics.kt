@@ -25,7 +25,9 @@ import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
 import io.prometheus.common.Utils.lambda
 
-internal class AgentMetrics(agent: Agent) {
+internal class AgentMetrics(
+  agent: Agent,
+) {
   val scrapeRequestCount =
     counter {
       name("agent_scrape_request_count")

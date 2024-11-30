@@ -47,10 +47,12 @@ import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
-import io.prometheus.grpc.krotodc.ScrapeRequest
+import io.prometheus.grpc.ScrapeRequest
 import kotlin.time.Duration.Companion.seconds
 
-internal class AgentHttpService(val agent: Agent) {
+internal class AgentHttpService(
+  val agent: Agent,
+) {
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
     return if (pathContext.isNull())

@@ -31,7 +31,9 @@ import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.proxy.ProxyServerInterceptor.Companion.META_AGENT_ID_KEY
 
-internal class AgentClientInterceptor(private val agent: Agent) : ClientInterceptor {
+internal class AgentClientInterceptor(
+  private val agent: Agent,
+) : ClientInterceptor {
   override fun <ReqT, RespT> interceptCall(
     method: MethodDescriptor<ReqT, RespT>,
     callOptions: CallOptions,

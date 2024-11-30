@@ -24,8 +24,7 @@ import com.github.pambrose.common.util.isNotNull
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults
-import io.prometheus.grpc.krotodc.ScrapeRequest
-import io.prometheus.grpc.krotodc.scraperequest.toProto
+import io.prometheus.grpc.ScrapeRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
@@ -47,16 +46,19 @@ internal class ScrapeRequestWrapper(
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
   val scrapeRequest =
-    ScrapeRequest(
-      agentId = agentContext.agentId,
-      scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement(),
-      path = path,
-      accept = accept.orEmpty(),
-      debugEnabled = debugEnabled,
-      encodedQueryParams = encodedQueryParams,
-      authHeader = authHeader,
-    ).apply { require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG } }
-      .toProto()
+    ScrapeRequest
+      .newBuilder()
+      .also {
+        require(agentContext.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+        it.agentId = agentContext.agentId
+        it.scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
+        it.path = path
+        it.accept = accept.orEmpty()
+        it.debugEnabled = debugEnabled
+        it.encodedQueryParams = encodedQueryParams
+        it.authHeader = authHeader
+      }
+      .build()
 
   var scrapeResults: ScrapeResults by nonNullableReference()
 

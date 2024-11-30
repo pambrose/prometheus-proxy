@@ -19,14 +19,10 @@
 package io.prometheus.common
 
 import com.google.protobuf.ByteString
-import io.prometheus.grpc.krotodc.ChunkData
-import io.prometheus.grpc.krotodc.ChunkedScrapeResponse
-import io.prometheus.grpc.krotodc.ChunkedScrapeResponse.ChunkOneOf.Chunk
-import io.prometheus.grpc.krotodc.ChunkedScrapeResponse.ChunkOneOf.Summary
-import io.prometheus.grpc.krotodc.ScrapeResponse
-import io.prometheus.grpc.krotodc.ScrapeResponse.ContentOneOf.ContentAsText
-import io.prometheus.grpc.krotodc.ScrapeResponse.ContentOneOf.ContentAsZipped
-import io.prometheus.grpc.krotodc.SummaryData
+import io.prometheus.grpc.ChunkData
+import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.ScrapeResponse
+import io.prometheus.grpc.SummaryData
 import java.util.zip.CRC32
 
 internal object GrpcObjects {
@@ -42,9 +38,9 @@ internal object GrpcObjects {
       url = url,
     ).also { results ->
       if (zipped)
-        results.contentAsZipped = (contentOneOf as ContentAsZipped).contentAsZipped.toByteArray()
+        results.contentAsZipped = contentAsZipped.toByteArray()
       else
-        results.contentAsText = (contentOneOf as ContentAsText).contentAsText
+        results.contentAsText = contentAsText
     }
 
   fun newScrapeResponseChunk(
@@ -53,31 +49,42 @@ internal object GrpcObjects {
     readByteCount: Int,
     checksum: CRC32,
     buffer: ByteArray,
-  ) = ChunkedScrapeResponse(
-    chunkOneOf = Chunk(
-      chunk = ChunkData(
-        chunkScrapeId = scrapeId,
-        chunkCount = totalChunkCount,
-        chunkByteCount = readByteCount,
-        chunkChecksum = checksum.value,
-        chunkBytes = ByteString.copyFrom(buffer),
-      ),
-    ),
-  )
+  ) =
+    ChunkedScrapeResponse
+      .newBuilder()
+      .apply {
+        chunk = ChunkData
+          .newBuilder()
+          .also {
+            it.chunkScrapeId = scrapeId
+            it.chunkCount = totalChunkCount
+            it.chunkByteCount = readByteCount
+            it.chunkChecksum = checksum.value
+            it.chunkBytes = ByteString.copyFrom(buffer)
+          }
+          .build()
+      }
+      .build()
 
   fun newScrapeResponseSummary(
     scrapeId: Long,
     totalChunkCount: Int,
     totalByteCount: Int,
     checksum: CRC32,
-  ) = ChunkedScrapeResponse(
-    chunkOneOf = Summary(
-      SummaryData(
-        summaryScrapeId = scrapeId,
-        summaryChunkCount = totalChunkCount,
-        summaryByteCount = totalByteCount,
-        summaryChecksum = checksum.value,
-      ),
-    ),
-  )
+  ) =
+    ChunkedScrapeResponse
+      .newBuilder()
+      .also {
+        it.summary =
+          SummaryData
+            .newBuilder()
+            .also {
+              it.summaryScrapeId = scrapeId
+              it.summaryChunkCount = totalChunkCount
+              it.summaryByteCount = totalByteCount
+              it.summaryChecksum = checksum.value
+            }
+            .build()
+      }
+      .build()
 }

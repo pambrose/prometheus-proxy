@@ -87,7 +87,6 @@ class AgentOptions(
   override fun assignConfigVals() {
     configVals.agent
       .also { agentConfigVals ->
-
         if (proxyHostname.isEmpty()) {
           val configHostname = agentConfigVals.proxy.hostname
           val str = if (":" in configHostname)

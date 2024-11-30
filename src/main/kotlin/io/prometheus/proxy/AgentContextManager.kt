@@ -23,7 +23,9 @@ import com.google.common.collect.Maps.newConcurrentMap
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.concurrent.ConcurrentMap
 
-internal class AgentContextManager(private val isTestMode: Boolean) {
+internal class AgentContextManager(
+  private val isTestMode: Boolean,
+) {
   // Map agent_id to AgentContext
   val agentContextMap: ConcurrentMap<String, AgentContext> = newConcurrentMap()
   val agentContextSize: Int get() = agentContextMap.size

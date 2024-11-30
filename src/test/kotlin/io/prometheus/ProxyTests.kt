@@ -30,9 +30,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.call
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
+import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -120,7 +120,10 @@ internal object ProxyTests {
     }
   }
 
-  private class HttpServerWrapper(val port: Int, val server: CIOApplicationEngine)
+  private class HttpServerWrapper(
+    val port: Int,
+    val server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>,
+  )
 
   private val contentMap = mutableMapOf<Int, String>()
 
@@ -150,7 +153,7 @@ internal object ProxyTests {
 
         HttpServerWrapper(
           port = port,
-          server = embeddedServer(CIO, port = port) {
+          server = embeddedServer(factory = CIO, port = port) {
             routing {
               get("/agent-$i") {
                 call.respondText(content, Text.Plain)

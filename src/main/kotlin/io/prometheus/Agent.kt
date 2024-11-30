@@ -25,7 +25,6 @@ import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
-import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
 import com.github.pambrose.common.util.randomId
@@ -51,6 +50,7 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
+import io.prometheus.common.Version
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -66,7 +66,11 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
 
-@Version(version = BuildConfig.APP_VERSION, date = BuildConfig.APP_RELEASE_DATE)
+@Version(
+  version = BuildConfig.APP_VERSION,
+  releaseDate = BuildConfig.APP_RELEASE_DATE,
+  buildTime = BuildConfig.BUILD_TIME,
+)
 class Agent(
   val options: AgentOptions,
   inProcessServerName: String = "",

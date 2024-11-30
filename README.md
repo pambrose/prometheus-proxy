@@ -62,16 +62,19 @@ agent {
     {
       name: "App1 metrics"
       path: app1_metrics
+      labels: "{\"key1\": \"value1\", \"key2\": 2}"
       url: "http://app1.local:9100/metrics"
     },
     {
       name: "App2 metrics"
       path: app2_metrics
+      labels: "{\"key3\": \"value3\", \"key4\": \"value4\"}"
       url: "http://app2.local:9100/metrics"
     },
     {
       name: "App3 metrics"
       path: app3_metrics
+      labels: "{\"key5\": \"value5\", \"key6\": \"value6\"}"
       url: "http://app3.local:9100/metrics"
     }
   ]
@@ -113,8 +116,8 @@ scrape_configs:
 The docker images are available via:
 
 ```bash
-docker pull pambrose/prometheus-proxy:1.22.0
-docker pull pambrose/prometheus-agent:1.22.0
+docker pull pambrose/prometheus-proxy:1.23.0
+docker pull pambrose/prometheus-agent:1.23.0
 ```
 
 Start a proxy container with:
@@ -123,7 +126,7 @@ Start a proxy container with:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:1.22.0
+        pambrose/prometheus-proxy:1.23.0
 ```
 
 Start an agent container with:
@@ -131,7 +134,7 @@ Start an agent container with:
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:1.22.0
+        pambrose/prometheus-agent:1.23.0
 ```
 
 Using the config
@@ -149,7 +152,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:1.22.0
+    pambrose/prometheus-agent:1.23.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -195,6 +198,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --sd_path          | SD_PATH          <br> proxy.service.discovery.path                         | "discovery"              | Service discovery endpoint path             |
 | --sd_target_prefix | SD_TARGET_PREFIX <br> proxy.service.discovery.targetPrefix                 | "http://localhost:8080/" | Service discovery target prefix             |
 | --tf-disabled      | TRANSPORT_FILTER_DISABLED <br> proxy.transportFilterDisabled               | false                    | Transport filter disabled                   |
+| --ref-disabled     | REFLECTION_DISABLED <br> proxy.reflectionDisabled                          | false                    | gRPC Reflection disabled                    |
 | --cert, -t         | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath                      |                          | Certificate chain file path                 |
 | --key, -k          | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath                    |                          | Private key file path                       |
 | --trust, -s        | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |                          | Trust certificate collection file path      |
@@ -219,7 +223,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --max_retries      | SCRAPE_MAX_RETRIES <br> agent.scrapeMaxRetries                             | 0       | Scrape maximum retries (0 disables scrape retries)         |
 | --chunk            | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs                      | 32      | Threshold for chunking data to Proxy and buffer size (KBs) |
 | --gzip             | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes                            | 1024    | Minimum size for content to be gzipped (bytes)             |
-| --tf-disabled      | TRANSPORT_FILTER_DISABLED <br> proxy.transportFilterDisabled               | false   | Transport filter disabled                                  |
+| --tf-disabled      | TRANSPORT_FILTER_DISABLED <br> agent.transportFilterDisabled               | false   | Transport filter disabled                                  |
 | --trust_all_x509   | TRUST_ALL_X509_CERTIFICATES <br> agent.http.enableTrustAllX509Certificates | false   | Disable SSL verification for agent https endpoints         |
 | --cert, -t         | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath                      |         | Certificate chain file path                                |
 | --key, -k          | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath                    |         | Private key file path                                      |
@@ -239,6 +243,8 @@ Misc notes:
 * Property values can be set as a java -D arg to or as a proxy or agent jar -D arg
 * For more information about the proxy service discovery options, see the
   Prometheus [documentation](https://prometheus.io/docs/prometheus/latest/http_sd/)
+* A pathConfig `labels` value is a quote-escaped JSON string with key/value pairs. It is used to add additional service
+  discovery context to a target.
 
 ### Admin Servlets
 
@@ -297,7 +303,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:1.22.0
+    pambrose/prometheus-proxy:1.23.0
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -305,7 +311,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:1.22.0
+    pambrose/prometheus-agent:1.23.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -338,6 +344,22 @@ The default value is 1 minute.
 An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/docker/nginx.conf)
 and an example agent/proxy conf file
 is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/nginx-proxy.conf)
+
+## gRPC Reflection
+
+The [gRPC Reflection](https://grpc.io/docs/guides/reflection/) service is enabled by default.
+
+To disable gRPC Reflection support, set the `REFLECTION_DISABLED` environment var,
+the `--reflection_disabled` CLI option, or the `proxy.reflectionDisabled` property to true.
+
+To use [grpcurl](https://github.com/fullstorydev/grpcurl) to test the reflection service, run:
+
+```bash
+grpcurl -plaintext localhost:50051 list
+```
+
+If you use the grpcurl `-plaintext` option, make sure that you run the proxy in plaintext
+mode, i.e., do not define any TLS properties.
 
 ## Grafana
 

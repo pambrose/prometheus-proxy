@@ -18,7 +18,9 @@
 
 package io.prometheus.agent
 
-internal class RequestFailureException(message: String) : Exception(message) {
+internal class RequestFailureException(
+  message: String,
+) : Exception(message) {
   companion object {
     private const val serialVersionUID = 8748724180953791199L
   }

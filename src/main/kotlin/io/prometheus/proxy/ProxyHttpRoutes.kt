@@ -25,17 +25,15 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.formUrlEncode
 import io.ktor.http.isSuccess
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.call
 import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.header
 import io.ktor.server.request.path
 import io.ktor.server.response.ApplicationResponse
 import io.ktor.server.response.header
 import io.ktor.server.routing.Routing
+import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import io.ktor.util.pipeline.PipelineContext
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
@@ -55,6 +53,7 @@ import kotlin.time.Duration.Companion.seconds
 
 object ProxyHttpRoutes {
   private val logger = KotlinLogging.logger {}
+  private val format = Json { prettyPrint = true }
 
   fun Application.configureHttpRoutes(proxy: Proxy) {
     routing {
@@ -75,8 +74,7 @@ object ProxyHttpRoutes {
     if (proxy.options.sdEnabled) {
       logger.info { "Adding /${proxy.options.sdPath} service discovery endpoint" }
       get(proxy.options.sdPath) {
-        val json = proxy.buildSdJson()
-        val format = Json { prettyPrint = true }
+        val json = proxy.buildServiceDiscoveryJson()
         val prettyPrint = format.encodeToString(json)
         call.respondWith(prettyPrint, ContentType.Application.Json)
       }
@@ -112,7 +110,7 @@ object ProxyHttpRoutes {
     }
   }
 
-  private suspend fun PipelineContext<Unit, ApplicationCall>.processRequestsBasedOnPath(
+  private suspend fun RoutingContext.processRequestsBasedOnPath(
     proxy: Proxy,
     path: String,
     responseResults: ResponseResults,
@@ -126,7 +124,7 @@ object ProxyHttpRoutes {
     }
   }
 
-  private suspend fun PipelineCall.processRequests(
+  private suspend fun RoutingContext.processRequests(
     agentContextInfo: ProxyPathManager.AgentContextInfo,
     proxy: Proxy,
     path: String,
@@ -148,7 +146,7 @@ object ProxyHttpRoutes {
     }
   }
 
-  private suspend fun PipelineCall.executeScrapeRequests(
+  private suspend fun RoutingContext.executeScrapeRequests(
     agentContextInfo: ProxyPathManager.AgentContextInfo,
     proxy: Proxy,
     path: String,
@@ -270,8 +268,6 @@ object ProxyHttpRoutes {
       debugEnabled = proxy.options.debugEnabled,
     )
 }
-
-typealias PipelineCall = PipelineContext<*, ApplicationCall>
 
 class ScrapeRequestResponse(
   val statusCode: HttpStatusCode,

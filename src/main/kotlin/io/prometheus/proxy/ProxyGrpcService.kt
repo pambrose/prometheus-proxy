@@ -35,6 +35,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
+import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import io.prometheus.Proxy
 import kotlin.time.Duration.Companion.seconds
 
@@ -91,6 +92,9 @@ internal class ProxyGrpcService(
         }
 
       addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
+
+      if (!options.reflectionDisabled)
+        addService(ProtoReflectionServiceV1.newInstance())
 
       if (!options.transportFilterDisabled)
         addTransportFilter(ProxyServerTransportFilter(proxy))
