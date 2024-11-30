@@ -30,7 +30,7 @@ plugins {
 }
 
 group = "io.prometheus"
-version = "1.23.0"
+version = "1.23.1"
 
 buildConfig {
   packageName("io.prometheus")
