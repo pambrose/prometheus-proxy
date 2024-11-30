@@ -24,6 +24,7 @@ import com.google.common.collect.Maps.newConcurrentMap
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
+import io.prometheus.common.Utils.defaultEmptyJsonObject
 
 internal class AgentPathManager(
   private val agent: Agent,
@@ -44,32 +45,38 @@ internal class AgentPathManager(
           NAME to """"${it.name}"""",
           PATH to it.path,
           URL to it.url,
+          LABELS to it.labels,
         )
       }
-      .onEach { logger.info { "Proxy path /${it[PATH]} will be assigned to ${it[URL]}" } }
+      .onEach {
+        logger.info { "Proxy path /${it[PATH]} will be assigned to ${it[URL]} with labels ${it[LABELS]}" }
+      }
 
   suspend fun registerPaths() =
     pathConfigs.forEach {
       val path = it[PATH]
       val url = it[URL]
-      if (path.isNotNull() && url.isNotNull())
-        registerPath(path, url)
+      val labels = it[LABELS]
+      if (path.isNotNull() && url.isNotNull() && labels.isNotNull())
+        registerPath(path, url, labels)
       else
-        logger.error { "Null path/url values: $path/$url" }
+        logger.error { "Null path/url/labels value: $path/$url/$labels" }
     }
 
   suspend fun registerPath(
     pathVal: String,
     url: String,
+    labels: String = "{}",
   ) {
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
     require(url.isNotEmpty()) { "Empty URL" }
 
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
-    val pathId = agent.grpcService.registerPathOnProxy(path).pathId
+    val labelsJson = labels.defaultEmptyJsonObject()
+    val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
     if (!agent.isTestMode)
-      logger.info { "Registered $url as /$path" }
-    pathContextMap[path] = PathContext(pathId, path, url)
+      logger.info { "Registered $url as /$path with labels: $labelsJson" }
+    pathContextMap[path] = PathContext(pathId, path, url, labelsJson)
   }
 
   suspend fun unregisterPath(pathVal: String) {
@@ -96,11 +103,13 @@ internal class AgentPathManager(
     private const val NAME = "name"
     private const val PATH = "path"
     private const val URL = "url"
+    private const val LABELS = "labels"
   }
 
   data class PathContext(
     val pathId: Long,
     val path: String,
     val url: String,
+    val labels: String,
   )
 }

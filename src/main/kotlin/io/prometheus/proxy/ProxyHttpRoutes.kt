@@ -53,6 +53,7 @@ import kotlin.time.Duration.Companion.seconds
 
 object ProxyHttpRoutes {
   private val logger = KotlinLogging.logger {}
+  private val format = Json { prettyPrint = true }
 
   fun Application.configureHttpRoutes(proxy: Proxy) {
     routing {
@@ -73,8 +74,7 @@ object ProxyHttpRoutes {
     if (proxy.options.sdEnabled) {
       logger.info { "Adding /${proxy.options.sdPath} service discovery endpoint" }
       get(proxy.options.sdPath) {
-        val json = proxy.buildSdJson()
-        val format = Json { prettyPrint = true }
+        val json = proxy.buildServiceDiscoveryJson()
         val prettyPrint = format.encodeToString(json)
         call.respondWith(prettyPrint, ContentType.Application.Json)
       }

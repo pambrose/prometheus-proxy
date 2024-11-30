@@ -112,7 +112,7 @@ internal class ProxyServiceImpl(
     proxy.agentContextManager.getAgentContext(request.agentId)
       ?.apply {
         valid = true
-        proxy.pathManager.addPath(request.path, this)
+        proxy.pathManager.addPath(request.path, request.labels, this)
         markActivityTime(false)
       } ?: logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
 

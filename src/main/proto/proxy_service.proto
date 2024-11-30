@@ -23,6 +23,7 @@ message RegisterAgentResponse {
 message RegisterPathRequest {
   string agent_id = 1;
   string path = 2;
+  string labels = 3;
 }
 
 message RegisterPathResponse {

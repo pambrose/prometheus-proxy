@@ -33,11 +33,13 @@ internal class ProxyPathManager(
 ) {
   class AgentContextInfo(
     val isConsolidated: Boolean,
+    val labels: String,
     val agentContexts: MutableList<AgentContext>,
   ) {
     fun isNotValid() = !isConsolidated && agentContexts[0].isNotValid()
 
-    override fun toString(): String = "AgentContextInfo(consolidated=$isConsolidated, agentContexts=$agentContexts)"
+    override fun toString(): String =
+      "AgentContextInfo(consolidated=$isConsolidated, labels=$labels,agentContexts=$agentContexts)"
   }
 
   private val pathMap = newConcurrentMap<String, AgentContextInfo>()
@@ -54,6 +56,7 @@ internal class ProxyPathManager(
 
   fun addPath(
     path: String,
+    labels: String,
     agentContext: AgentContext,
   ) {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
@@ -62,7 +65,7 @@ internal class ProxyPathManager(
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
         if (agentInfo.isNull()) {
-          pathMap[path] = AgentContextInfo(true, mutableListOf(agentContext))
+          pathMap[path] = AgentContextInfo(true, labels, mutableListOf(agentContext))
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated)
             logger.warn {
@@ -73,7 +76,7 @@ internal class ProxyPathManager(
         }
       } else {
         if (agentInfo.isNotNull()) logger.info { "Overwriting path /$path for ${agentInfo.agentContexts[0]}" }
-        pathMap[path] = AgentContextInfo(false, mutableListOf(agentContext))
+        pathMap[path] = AgentContextInfo(false, labels, mutableListOf(agentContext))
       }
 
       if (!isTestMode) logger.info { "Added path /$path for $agentContext" }

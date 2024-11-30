@@ -62,16 +62,19 @@ agent {
     {
       name: "App1 metrics"
       path: app1_metrics
+      labels: "{\"key1\": \"value1\", \"key2\": 2}"
       url: "http://app1.local:9100/metrics"
     },
     {
       name: "App2 metrics"
       path: app2_metrics
+      labels: "{\"key3\": \"value3\", \"key4\": \"value4\"}"
       url: "http://app2.local:9100/metrics"
     },
     {
       name: "App3 metrics"
       path: app3_metrics
+      labels: "{\"key5\": \"value5\", \"key6\": \"value6\"}"
       url: "http://app3.local:9100/metrics"
     }
   ]
@@ -240,6 +243,8 @@ Misc notes:
 * Property values can be set as a java -D arg to or as a proxy or agent jar -D arg
 * For more information about the proxy service discovery options, see the
   Prometheus [documentation](https://prometheus.io/docs/prometheus/latest/http_sd/)
+* A pathConfig `labels` value is a quote-escaped JSON string with key/value pairs. It is used to add additional service
+  discovery context to a target.
 
 ### Admin Servlets
 

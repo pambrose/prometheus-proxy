@@ -27,6 +27,7 @@ import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.github.pambrose.common.util.getBanner
+import com.github.pambrose.common.util.isNotNull
 import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -38,6 +39,7 @@ import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
+import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.Version
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
@@ -53,6 +55,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.time.LocalDateTime
@@ -234,7 +237,7 @@ class Proxy(
 
   fun isBlitzRequest(path: String) = with(proxyConfigVals.internal) { blitz.enabled && path == blitz.path }
 
-  fun buildSdJson(): JsonArray =
+  fun buildServiceDiscoveryJson(): JsonArray =
     buildJsonArray {
       pathManager.allPaths.forEach { path ->
         addJsonObject {
@@ -244,9 +247,19 @@ class Proxy(
           putJsonObject("labels") {
             put("__metrics_path__", JsonPrimitive(path))
 
-            val agentContexts = pathManager.getAgentContextInfo(path)?.agentContexts
-            put("agentName", JsonPrimitive(agentContexts?.joinToString { it.agentName }))
-            put("hostName", JsonPrimitive(agentContexts?.joinToString { it.hostName }))
+            val agentContextInfo = pathManager.getAgentContextInfo(path)
+
+            if (agentContextInfo.isNotNull()) {
+              val agentContexts = agentContextInfo.agentContexts
+              put("agentName", JsonPrimitive(agentContexts.joinToString { it.agentName }))
+              put("hostName", JsonPrimitive(agentContexts.joinToString { it.hostName }))
+
+              val labels = agentContextInfo.labels
+              val json = labels.toJsonElement()
+              json.jsonObject.forEach { (k, v) -> put(k, v) }
+            } else {
+              logger.warn { "No agent context info for path: $path" }
+            }
           }
         }
       }

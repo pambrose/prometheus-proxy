@@ -23,6 +23,7 @@ import com.beust.jcommander.JCommander
 import com.github.pambrose.common.util.Version.Companion.versionDesc
 import io.prometheus.Proxy
 import kotlinx.datetime.LocalDateTime
+import kotlinx.serialization.json.Json
 import java.net.URLDecoder
 import java.util.*
 import kotlin.system.exitProcess
@@ -70,6 +71,10 @@ object Utils {
 
   internal fun String.capitalizeFirstChar(): String =
     replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+
+  internal fun String.defaultEmptyJsonObject() = if (isEmpty()) "{}" else this
+
+  fun String.toJsonElement() = Json.parseToJsonElement(this)
 
   fun LocalDateTime.abbrevDayOfWeek(): String = dayOfWeek.name.lowercase().capitalizeFirstChar().substring(0, 3)
 }

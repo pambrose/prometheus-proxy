@@ -216,7 +216,7 @@ internal class AgentGrpcService(
         }
     }
 
-  suspend fun registerPathOnProxy(path: String): RegisterPathResponse {
+  suspend fun registerPathOnProxy(path: String, labelsJson: String): RegisterPathResponse {
     val request =
       RegisterPathRequest
         .newBuilder()
@@ -225,6 +225,7 @@ internal class AgentGrpcService(
           require(path.isNotEmpty()) { EMPTY_PATH_MSG }
           it.agentId = agent.agentId
           it.path = path
+          it.labels = labelsJson
         }
         .build()
     return stub.registerPath(request)//.toDataClass()
