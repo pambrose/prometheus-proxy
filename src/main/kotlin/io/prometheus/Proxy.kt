@@ -128,7 +128,7 @@ class Proxy(
             listOf(
               toPlainText(),
               pathManager.toPlainText(),
-              if (recentReqs.size > 0) "\n${recentReqs.size} most recent requests:" else "",
+              if (recentReqs.isNotEmpty()) "\n${recentReqs.size} most recent requests:" else "",
               recentReqs.reversed().joinToString("\n"),
             ).joinToString("\n")
           },
