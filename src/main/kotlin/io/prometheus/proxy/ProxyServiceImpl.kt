@@ -178,7 +178,7 @@ internal class ProxyServiceImpl(
   override suspend fun writeResponsesToProxy(requests: Flow<ScrapeResponse>): Empty {
     runCatching {
       requests.collect { response ->
-        val scrapeResults = response/*.toDataClass()*/.toScrapeResults()
+        val scrapeResults = response.toScrapeResults()
         proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
       }
     }.onFailure { throwable ->

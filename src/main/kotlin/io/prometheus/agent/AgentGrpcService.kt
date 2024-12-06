@@ -228,7 +228,7 @@ internal class AgentGrpcService(
           it.labels = labelsJson
         }
         .build()
-    return stub.registerPath(request)//.toDataClass()
+    return stub.registerPath(request)
       .apply {
         agent.markMsgSent()
         if (!valid)
@@ -246,7 +246,7 @@ internal class AgentGrpcService(
           it.agentId = agent.agentId
           it.path = path
         }.build()
-    return stub.unregisterPath(request)//.toDataClass()
+    return stub.unregisterPath(request)
       .apply {
         agent.markMsgSent()
         if (!valid)
@@ -260,7 +260,7 @@ internal class AgentGrpcService(
         if (agentId.isNotEmpty())
           runCatching {
             val request = HeartBeatRequest.newBuilder().also { it.agentId = agentId }.build()
-            stub.sendHeartBeat(request)//.toDataClass()
+            stub.sendHeartBeat(request)
               .apply {
                 agent.markMsgSent()
                 if (!valid) {
@@ -294,9 +294,8 @@ internal class AgentGrpcService(
           .readRequestsFromProxy(agentInfo)
           .collect { grpcRequest: ScrapeRequest ->
             // The actual fetch happens at the other end of the channel, not here.
-            val request = grpcRequest//.toDataClass()
-            logger.debug { "readRequestsFromProxy():\n$request" }
-            connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(request) }
+            logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
+            connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(grpcRequest) }
             agent.scrapeRequestBacklogSize.incrementAndGet()
           }
       }
@@ -313,7 +312,7 @@ internal class AgentGrpcService(
 
       if (!scrapeResults.zipped) {
         logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.contentAsText.length}" }
-        nonChunkedChannel.send(scrapeResults.toScrapeResponse()/*.toProto()*/)
+        nonChunkedChannel.send(scrapeResults.toScrapeResponse())
         agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
       } else {
         val zipped = scrapeResults.contentAsZipped
@@ -323,7 +322,7 @@ internal class AgentGrpcService(
 
         if (zipped.size < chunkContentSize) {
           logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
-          nonChunkedChannel.send(scrapeResults.toScrapeResponse() /*.toProto()*/)
+          nonChunkedChannel.send(scrapeResults.toScrapeResponse())
           agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
         } else {
           scrapeResults.toScrapeResponseHeader()
@@ -347,14 +346,14 @@ internal class AgentGrpcService(
             newScrapeResponseChunk(scrapeId, totalChunkCount, readByteCount, checksum, buffer)
               .also {
                 logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapeId" }
-                chunkedChannel.send(it/*.toProto()*/)
+                chunkedChannel.send(it)
               }
           }
 
           newScrapeResponseSummary(scrapeId, totalChunkCount, totalByteCount, checksum)
             .also {
               logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
-              chunkedChannel.send(it /*.toProto()*/)
+              chunkedChannel.send(it)
               agent.metrics { scrapeResultCount.labels(agent.launchId, "chunked").inc() }
             }
         }
@@ -376,9 +375,7 @@ internal class AgentGrpcService(
       CoroutineExceptionHandler { _, e ->
         if (agent.isRunning)
           Status.fromThrowable(e)
-            .apply {
-              logger.error { "Error in writeResponsesToProxyUntilDisconnected(): $code $description" }
-            }
+            .apply { logger.error { "Error in writeResponsesToProxyUntilDisconnected(): $code $description" } }
       }
 
     coroutineScope {
