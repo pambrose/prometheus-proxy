@@ -71,8 +71,8 @@ internal class AgentHttpService(
       val url = pathContext.url + decodeParams(scrapeRequest.encodedQueryParams)
       logger.debug { "Fetching $pathContext ${if (url.isNotBlank()) "URL: $url" else ""}" }
 
+      // Content is fetched here
       try {
-        // Content is fetched here
         fetchContent(url, scrapeRequest, scrapeResults)
       } finally {
         requestTimer?.observeDuration()

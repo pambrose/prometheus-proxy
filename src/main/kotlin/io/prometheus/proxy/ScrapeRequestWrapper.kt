@@ -58,7 +58,7 @@ internal class ScrapeRequestWrapper(
         it.encodedQueryParams = encodedQueryParams
         it.authHeader = authHeader
       }
-      .build()
+      .build()!!
 
   var scrapeResults: ScrapeResults by nonNullableReference()
 

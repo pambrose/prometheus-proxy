@@ -30,6 +30,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.withCharset
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
@@ -56,7 +57,6 @@ import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.collections.set
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -88,7 +88,7 @@ internal object ProxyTests {
         routing {
           get("/$agentPath") {
             delay(60.seconds)
-            call.respondText("This is never reached", Text.Plain)
+            call.respondText("This is never reached", Text.Plain.withCharset(Charsets.UTF_8))
             error("This should not be reached")
           }
         }
@@ -156,7 +156,7 @@ internal object ProxyTests {
           server = embeddedServer(factory = CIO, port = port) {
             routing {
               get("/agent-$i") {
-                call.respondText(content, Text.Plain)
+                call.respondText(content, Text.Plain.withCharset(Charsets.UTF_8))
               }
             }
           },

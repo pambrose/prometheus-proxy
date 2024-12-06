@@ -148,7 +148,7 @@ internal class ProxyServiceImpl(
     PathMapSizeResponse
       .newBuilder()
       .also { it.pathCount = proxy.pathManager.pathMapSize }
-      .build()
+      .build()!!
 
   override suspend fun sendHeartBeat(request: HeartBeatRequest) =
     proxy.agentContextManager.getAgentContext(request.agentId)
@@ -162,7 +162,7 @@ internal class ProxyServiceImpl(
             it.valid = agentContext.isNotNull()
             it.reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
           }
-          .build()
+          .build()!!
       }
 
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> =

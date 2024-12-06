@@ -64,7 +64,7 @@ internal object GrpcObjects {
           }
           .build()
       }
-      .build()
+      .build()!!
 
   fun newScrapeResponseSummary(
     scrapeId: Long,
@@ -86,5 +86,5 @@ internal object GrpcObjects {
             }
             .build()
       }
-      .build()
+      .build()!!
 }
