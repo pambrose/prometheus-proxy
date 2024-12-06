@@ -18,7 +18,7 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.ktor.http.ContentType.Text.Plain
+import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.HttpStatusCode.Companion.NotFound
@@ -105,7 +105,7 @@ internal object ProxyHttpConfig {
     }
 
     status(NotFound) { call, cause ->
-      call.respond(TextContent("${cause.value} ${cause.description}", Plain.withCharset(Charsets.UTF_8), cause))
+      call.respond(TextContent("${cause.value} ${cause.description}", Text.Plain.withCharset(Charsets.UTF_8), cause))
     }
   }
 }
