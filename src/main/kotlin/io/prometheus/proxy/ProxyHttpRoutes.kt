@@ -79,7 +79,7 @@ object ProxyHttpRoutes {
       get(proxy.options.sdPath) {
         val json = proxy.buildServiceDiscoveryJson()
         val prettyPrint = format.encodeToString(json)
-        call.respondWith(prettyPrint, ContentType.Application.Json)
+        call.respondWith(prettyPrint, ContentType.Application.Json.withCharset(Charsets.UTF_8))
       }
     } else {
       logger.info { "Not adding /${proxy.options.sdPath} service discovery endpoint" }
