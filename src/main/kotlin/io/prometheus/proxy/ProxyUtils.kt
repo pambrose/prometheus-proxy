@@ -18,8 +18,10 @@ package io.prometheus.proxy
 
 import io.github.oshai.kotlinlogging.KLogger
 import io.ktor.http.ContentType
+import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.withCharset
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.header
 import io.ktor.server.response.respondText
@@ -119,7 +121,7 @@ object ProxyUtils {
 
   suspend fun ApplicationCall.respondWith(
     text: String,
-    contentType: ContentType = ContentType.Text.Plain,
+    contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
     status: HttpStatusCode = HttpStatusCode.OK,
   ) {
     response.header(HttpHeaders.CacheControl, CACHE_CONTROL_VALUE)

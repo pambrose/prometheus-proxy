@@ -74,7 +74,7 @@ internal class ScrapeResults(
         it.failureReason = failureReason
         it.url = url
       }
-      .build()
+      .build()!!
 
   fun toScrapeResponseHeader() =
     ChunkedScrapeResponse
@@ -92,7 +92,7 @@ internal class ScrapeResults(
             it.headerContentType = contentType
           }
           .build()
-      }.build()
+      }.build()!!
 
   companion object {
     private val logger = KotlinLogging.logger {}

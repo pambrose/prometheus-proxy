@@ -75,7 +75,7 @@ internal class AgentPathManager(
     val labelsJson = labels.defaultEmptyJsonObject()
     val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
     if (!agent.isTestMode)
-      logger.info { "Registered $url as /$path with labels: $labelsJson" }
+      logger.info { "Registered $url as /$path with labels $labelsJson" }
     pathContextMap[path] = PathContext(pathId, path, url, labelsJson)
   }
 

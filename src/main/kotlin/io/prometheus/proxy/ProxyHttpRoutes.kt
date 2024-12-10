@@ -17,13 +17,16 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.util.isNull
+import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.unzip
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.http.ContentType
+import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.formUrlEncode
 import io.ktor.http.isSuccess
+import io.ktor.http.withCharset
 import io.ktor.server.application.Application
 import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.header
@@ -76,7 +79,7 @@ object ProxyHttpRoutes {
       get(proxy.options.sdPath) {
         val json = proxy.buildServiceDiscoveryJson()
         val prettyPrint = format.encodeToString(json)
-        call.respondWith(prettyPrint, ContentType.Application.Json)
+        call.respondWith(prettyPrint, ContentType.Application.Json.withCharset(Charsets.UTF_8))
       }
     } else {
       logger.info { "Not adding /${proxy.options.sdPath} service discovery endpoint" }
@@ -100,11 +103,13 @@ object ProxyHttpRoutes {
         path.isBlank() -> emptyPathResponse(proxy, logger, responseResults)
         path == FAVICON_FILENAME -> invalidPathResponse(path, proxy, logger, responseResults)
         proxy.isBlitzRequest(path) -> responseResults.contentText = "42"
-        else -> processRequestsBasedOnPath(proxy, path, responseResults, queryParams)
+        else -> processRequestsBasedOnPath(proxy, path, queryParams, responseResults)
       }
 
       responseResults.apply {
         incrementScrapeRequestCount(proxy, updateMsg)
+        if (proxy.options.debugEnabled)
+          logger.info { "CT check - handleClientRequests() contentType: $contentType" }
         call.respondWith(contentText, contentType, statusCode)
       }
     }
@@ -113,8 +118,8 @@ object ProxyHttpRoutes {
   private suspend fun RoutingContext.processRequestsBasedOnPath(
     proxy: Proxy,
     path: String,
-    responseResults: ResponseResults,
     queryParams: String,
+    responseResults: ResponseResults,
   ) {
     val agentContextInfo = proxy.pathManager.getAgentContextInfo(path)
     when {
@@ -137,6 +142,10 @@ object ProxyHttpRoutes {
     val updateMsgs: String = results.joinToString("\n") { it.updateMsg }
     // Grab the contentType of the first OK in the list
     val okContentType: ContentType? = results.firstOrNull { it.statusCode == HttpStatusCode.OK }?.contentType
+    if (proxy.options.debugEnabled) {
+      logger.info { "CT check - processRequests() contentTypes: ${contentTypes.joinToString(", ")}" }
+      logger.info { "CT check - processRequests() okContentType: $okContentType" }
+    }
 
     responseResults.apply {
       statusCode = if (statusCodes.contains(HttpStatusCode.OK)) HttpStatusCode.OK else statusCodes[0]
@@ -155,9 +164,7 @@ object ProxyHttpRoutes {
     coroutineScope {
       agentContextInfo.agentContexts
         .map { agentContext ->
-          async {
-            submitScrapeRequest(agentContext, proxy, path, queryParams, call.request, call.response)
-          }
+          async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request, call.response) }
         }
         .map { deferred -> deferred.await() }
         .onEach { response -> logActivityForResponse(path, response, proxy) }
@@ -213,40 +220,43 @@ object ProxyHttpRoutes {
 
     scrapeRequest.scrapeResults.also { scrapeResults ->
       HttpStatusCode.fromValue(scrapeResults.statusCode).also { statusCode ->
-        scrapeResults.contentType.split("/").also { contentTypeElems ->
 
-          val contentType =
-            if (contentTypeElems.size == 2)
-              ContentType(contentTypeElems[0], contentTypeElems[1])
-            else
-              ContentType.Text.Plain
+        val contentType =
+          runCatching {
+            if (proxy.options.debugEnabled)
+              logger.info { "CT check - submitScrapeRequest() contentType: ${scrapeResults.contentType}" }
+            ContentType.parse(scrapeResults.contentType)
+          }.getOrElse {
+            logger.debug { "Error parsing content type: ${scrapeResults.contentType} -- ${it.simpleClassName}" }
+            Text.Plain.withCharset(Charsets.UTF_8)
+          }
+        logger.debug { "Content type: $contentType" }
 
-          // Do not return content on error status codes
-          return if (!statusCode.isSuccess())
-            scrapeRequest.scrapeResults.run {
-              ScrapeRequestResponse(
-                statusCode = statusCode,
-                contentType = contentType,
-                failureReason = failureReason,
-                url = url,
-                updateMsg = "path_not_found",
-                fetchDuration = scrapeRequest.ageDuration(),
-              )
-            }
-          else
-            scrapeRequest.scrapeResults.run {
-              // Unzip content here
-              ScrapeRequestResponse(
-                statusCode = statusCode,
-                contentType = contentType,
-                contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
-                failureReason = failureReason,
-                url = url,
-                updateMsg = "success",
-                fetchDuration = scrapeRequest.ageDuration(),
-              )
-            }
-        }
+        // Do not return content on error status codes
+        return if (!statusCode.isSuccess())
+          scrapeRequest.scrapeResults.run {
+            ScrapeRequestResponse(
+              statusCode = statusCode,
+              contentType = contentType,
+              failureReason = failureReason,
+              url = url,
+              updateMsg = "path_not_found",
+              fetchDuration = scrapeRequest.ageDuration(),
+            )
+          }
+        else
+          scrapeRequest.scrapeResults.run {
+            // Unzip content here
+            ScrapeRequestResponse(
+              statusCode = statusCode,
+              contentType = contentType,
+              contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
+              failureReason = failureReason,
+              url = url,
+              updateMsg = "success",
+              fetchDuration = scrapeRequest.ageDuration(),
+            )
+          }
       }
     }
   }
@@ -272,7 +282,7 @@ object ProxyHttpRoutes {
 class ScrapeRequestResponse(
   val statusCode: HttpStatusCode,
   val updateMsg: String,
-  var contentType: ContentType = ContentType.Text.Plain,
+  var contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
   var contentText: String = "",
   val failureReason: String = "",
   val url: String = "",
@@ -281,7 +291,7 @@ class ScrapeRequestResponse(
 
 class ResponseResults(
   var statusCode: HttpStatusCode = HttpStatusCode.OK,
-  var contentType: ContentType = ContentType.Text.Plain,
+  var contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
   var contentText: String = "",
   var updateMsg: String = "",
 )

@@ -28,6 +28,7 @@ import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.isNotNull
+import com.github.pambrose.common.util.simpleClassName
 import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -127,7 +128,7 @@ class Proxy(
             listOf(
               toPlainText(),
               pathManager.toPlainText(),
-              if (recentReqs.size > 0) "\n${recentReqs.size} most recent requests:" else "",
+              if (recentReqs.isNotEmpty()) "\n${recentReqs.size} most recent requests:" else "",
               recentReqs.reversed().joinToString("\n"),
             ).joinToString("\n")
           },
@@ -255,8 +256,12 @@ class Proxy(
               put("hostName", JsonPrimitive(agentContexts.joinToString { it.hostName }))
 
               val labels = agentContextInfo.labels
-              val json = labels.toJsonElement()
-              json.jsonObject.forEach { (k, v) -> put(k, v) }
+              runCatching {
+                val json = labels.toJsonElement()
+                json.jsonObject.forEach { (k, v) -> put(k, v) }
+              }.onFailure { e ->
+                logger.warn { "Invalid JSON in labels value: $labels - ${e.simpleClassName}: ${e.message}" }
+              }
             } else {
               logger.warn { "No agent context info for path: $path" }
             }
