@@ -36,7 +36,7 @@ buildConfig {
   packageName("io.prometheus")
   buildConfigField("String", "APP_NAME", "\"${project.name}\"")
   buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
-  buildConfigField("String", "APP_RELEASE_DATE", "\"11/29/2024\"")
+  buildConfigField("String", "APP_RELEASE_DATE", "\"12/09/2024\"")
   buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
 }
 
