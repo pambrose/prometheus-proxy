@@ -108,6 +108,8 @@ object ProxyHttpRoutes {
 
       responseResults.apply {
         incrementScrapeRequestCount(proxy, updateMsg)
+        if (proxy.options.debugEnabled)
+          logger.info { "CT check - handleClientRequests() contentType: $contentType" }
         call.respondWith(contentText, contentType, statusCode)
       }
     }
@@ -140,6 +142,10 @@ object ProxyHttpRoutes {
     val updateMsgs: String = results.joinToString("\n") { it.updateMsg }
     // Grab the contentType of the first OK in the list
     val okContentType: ContentType? = results.firstOrNull { it.statusCode == HttpStatusCode.OK }?.contentType
+    if (proxy.options.debugEnabled) {
+      logger.info { "CT check - processRequests() contentTypes: ${contentTypes.joinToString(", ")}" }
+      logger.info { "CT check - processRequests() okContentType: $okContentType" }
+    }
 
     responseResults.apply {
       statusCode = if (statusCodes.contains(HttpStatusCode.OK)) HttpStatusCode.OK else statusCodes[0]
@@ -217,6 +223,8 @@ object ProxyHttpRoutes {
 
         val contentType =
           runCatching {
+            if (proxy.options.debugEnabled)
+              logger.info { "CT check - submitScrapeRequest() contentType: ${scrapeResults.contentType}" }
             ContentType.parse(scrapeResults.contentType)
           }.getOrElse {
             logger.debug { "Error parsing content type: ${scrapeResults.contentType} -- ${it.simpleClassName}" }
