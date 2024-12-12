@@ -26,6 +26,7 @@ import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
+import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.simpleClassName
@@ -41,7 +42,6 @@ import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
 import io.prometheus.common.Utils.toJsonElement
-import io.prometheus.common.Version
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
