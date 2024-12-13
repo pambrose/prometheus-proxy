@@ -61,7 +61,7 @@ class AdminDefaultPathTest {
     with(agentConfigVals.admin) {
       blockingGet("$port/$versionPath".withPrefix()) { response ->
         response.status shouldBeEqualTo HttpStatusCode.OK
-        response.bodyAsText() shouldContain "Version"
+        response.bodyAsText() shouldContain "version"
       }
     }
   }
@@ -71,7 +71,7 @@ class AdminDefaultPathTest {
     with(agentConfigVals.admin) {
       blockingGet("$port/$versionPath".withPrefix()) { response ->
         response.status shouldBeEqualTo HttpStatusCode.OK
-        response.bodyAsText() shouldContain "Version"
+        response.bodyAsText() shouldContain "version"
       }
     }
   }
