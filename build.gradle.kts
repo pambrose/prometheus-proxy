@@ -124,7 +124,7 @@ dependencies {
 
   implementation("io.zipkin.brave:brave-instrumentation-grpc:$zipkinVersion")
 
-  implementation("io.github.oshai:kotlin-logging-jvm:$loggingVersion")
+  implementation("io.github.oshai:kotlin-logging:$loggingVersion")
   implementation("ch.qos.logback:logback-classic:$logbackVersion")
   implementation("org.slf4j:jul-to-slf4j:$slf4jVersion")
 
