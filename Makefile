@@ -1,4 +1,4 @@
-VERSION=1.23.1
+VERSION=1.23.2
 
 default: versioncheck
 
@@ -11,10 +11,8 @@ clean:
 stubs:
 	./gradlew generateProto
 
-compile: stubs
+build: clean stubs
 	./gradlew build -xtest
-
-build: compile
 
 jars:
 	./gradlew agentJar proxyJar
@@ -28,7 +26,7 @@ reports:
 tsconfig:
 	java -jar ./etc/jars/tscfg-0.9.997.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
-distro: clean compile jars
+distro: build jars
 
 #PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x,linux/ppc64le
 PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x
@@ -71,4 +69,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=8.11.1 --distribution-type=bin
+	./gradlew wrapper --gradle-version=8.12.1 --distribution-type=bin

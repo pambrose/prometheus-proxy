@@ -45,13 +45,14 @@ internal class ProxyHttpService(
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
-  private fun getConfig(httpPort: Int): Configuration.() -> Unit = lambda {
-    connector {
-      host = "0.0.0.0"
-      port = httpPort
+  private fun getConfig(httpPort: Int): Configuration.() -> Unit =
+    lambda {
+      connector {
+        host = "0.0.0.0"
+        port = httpPort
+      }
+      connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS)
     }
-    connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS)
-  }
 
   private val httpServer =
     embeddedServer(factory = CIO, configure = getConfig(httpPort)) {

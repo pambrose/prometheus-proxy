@@ -57,7 +57,7 @@ class AdminNonDefaultPathTest {
 
       blockingGet("$port/$versionPath".withPrefix()) { response ->
         response.status shouldBeEqualTo HttpStatusCode.OK
-        response.bodyAsText() shouldContain "Version"
+        response.bodyAsText() shouldContain "version"
       }
     }
   }

@@ -1,11 +1,12 @@
 import com.google.protobuf.gradle.id
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jmailen.gradle.kotlinter.tasks.LintTask
 
 plugins {
   val configVersion: String by System.getProperties()
   val detektVersion: String by System.getProperties()
 //  val kotestPluginVersion: String by System.getProperties()
-//  val kotlinterVersion: String by System.getProperties()
+  val kotlinterVersion: String by System.getProperties()
   val kotlinVersion: String by System.getProperties()
   val koverVersion: String by System.getProperties()
   val protobufVersion: String by System.getProperties()
@@ -18,7 +19,7 @@ plugins {
   kotlin("jvm") version kotlinVersion
   kotlin("plugin.serialization") version kotlinVersion
   id("com.google.protobuf") version protobufVersion   // Keep in sync with grpc
-  // id ("org.jmailen.kotlinter)" version kotlinterVersion
+  id("org.jmailen.kotlinter") version kotlinterVersion
   id("com.github.ben-manes.versions") version versionsVersion
   id("com.github.johnrengelman.shadow") version shadowVersion
   id("com.github.gmazzo.buildconfig") version configVersion
@@ -30,13 +31,13 @@ plugins {
 }
 
 group = "io.prometheus"
-version = "1.23.1"
+version = "1.23.2"
 
 buildConfig {
   packageName("io.prometheus")
   buildConfigField("String", "APP_NAME", "\"${project.name}\"")
   buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
-  buildConfigField("String", "APP_RELEASE_DATE", "\"12/09/2024\"")
+  buildConfigField("String", "APP_RELEASE_DATE", "\"2/10/2025\"")
   buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
 }
 
@@ -124,7 +125,7 @@ dependencies {
 
   implementation("io.zipkin.brave:brave-instrumentation-grpc:$zipkinVersion")
 
-  implementation("io.github.oshai:kotlin-logging-jvm:$loggingVersion")
+  implementation("io.github.oshai:kotlin-logging:$loggingVersion")
   implementation("ch.qos.logback:logback-classic:$logbackVersion")
   implementation("org.slf4j:jul-to-slf4j:$slf4jVersion")
 
@@ -270,12 +271,12 @@ tasks.withType<Test> {
   }
 }
 
-// This will keep generated code out of the kotlinter checks
-//tasks.named("lintKotlinMain") {
-//    source = source - fileTree("$buildDir/generated")
-//}
+tasks.withType<LintTask> {
+  this.source = this.source.minus(fileTree("build/generated")).asFileTree
 
-//kotlinter {
-//    ignoreFailures = false
-//    reporters = ['checkstyle', 'plain']
-//}
+}
+
+kotlinter {
+  //ignoreFailures = false
+  reporters = arrayOf("checkstyle", "plain")
+}
