@@ -49,42 +49,40 @@ internal object GrpcObjects {
     readByteCount: Int,
     checksum: CRC32,
     buffer: ByteArray,
-  ) =
-    ChunkedScrapeResponse
-      .newBuilder()
-      .apply {
-        chunk = ChunkData
-          .newBuilder()
-          .also {
-            it.chunkScrapeId = scrapeId
-            it.chunkCount = totalChunkCount
-            it.chunkByteCount = readByteCount
-            it.chunkChecksum = checksum.value
-            it.chunkBytes = ByteString.copyFrom(buffer)
-          }
-          .build()
-      }
-      .build()!!
+  ) = ChunkedScrapeResponse
+    .newBuilder()
+    .apply {
+      chunk = ChunkData
+        .newBuilder()
+        .also {
+          it.chunkScrapeId = scrapeId
+          it.chunkCount = totalChunkCount
+          it.chunkByteCount = readByteCount
+          it.chunkChecksum = checksum.value
+          it.chunkBytes = ByteString.copyFrom(buffer)
+        }
+        .build()
+    }
+    .build()!!
 
   fun newScrapeResponseSummary(
     scrapeId: Long,
     totalChunkCount: Int,
     totalByteCount: Int,
     checksum: CRC32,
-  ) =
-    ChunkedScrapeResponse
-      .newBuilder()
-      .also {
-        it.summary =
-          SummaryData
-            .newBuilder()
-            .also {
-              it.summaryScrapeId = scrapeId
-              it.summaryChunkCount = totalChunkCount
-              it.summaryByteCount = totalByteCount
-              it.summaryChecksum = checksum.value
-            }
-            .build()
-      }
-      .build()!!
+  ) = ChunkedScrapeResponse
+    .newBuilder()
+    .also {
+      it.summary =
+        SummaryData
+          .newBuilder()
+          .also {
+            it.summaryScrapeId = scrapeId
+            it.summaryChunkCount = totalChunkCount
+            it.summaryByteCount = totalByteCount
+            it.summaryChecksum = checksum.value
+          }
+          .build()
+    }
+    .build()!!
 }

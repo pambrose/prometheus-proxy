@@ -216,7 +216,10 @@ internal class AgentGrpcService(
         }
     }
 
-  suspend fun registerPathOnProxy(path: String, labelsJson: String): RegisterPathResponse {
+  suspend fun registerPathOnProxy(
+    path: String,
+    labelsJson: String,
+  ): RegisterPathResponse {
     val request =
       RegisterPathRequest
         .newBuilder()
