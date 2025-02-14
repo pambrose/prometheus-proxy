@@ -37,6 +37,7 @@ import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import io.prometheus.Proxy
+import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.time.Duration.Companion.seconds
 
 internal class ProxyGrpcService(
@@ -93,11 +94,26 @@ internal class ProxyGrpcService(
 
       addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
 
+      if (!options.transportFilterDisabled)
+        addTransportFilter(ProxyServerTransportFilter(proxy))
+
       if (!options.reflectionDisabled)
         addService(ProtoReflectionServiceV1.newInstance())
 
-      if (!options.transportFilterDisabled)
-        addTransportFilter(ProxyServerTransportFilter(proxy))
+      handshakeTimeout(options.handshakeTimeoutSecs, SECONDS)
+      keepAliveTime(options.keepAliveTimeSecs, SECONDS)
+      keepAliveTimeout(options.keepAliveTimeoutSecs, SECONDS)
+      permitKeepAliveWithoutCalls(options.permitKeepAliveWithoutCalls)
+      permitKeepAliveTime(options.permitKeepAliveTimeSecs, SECONDS)
+
+      if (options.maxConnectionIdleSecs > 0)
+        maxConnectionIdle(options.maxConnectionIdleSecs, SECONDS)
+
+      if (options.maxConnectionAgeSecs > 0)
+        maxConnectionAge(options.maxConnectionAgeSecs, SECONDS)
+
+      if (options.maxConnectionAgeGraceSecs > 0)
+        maxConnectionAgeGrace(options.maxConnectionAgeGraceSecs, SECONDS)
     }
 
   override fun startUp() {

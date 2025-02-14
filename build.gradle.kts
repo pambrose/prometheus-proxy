@@ -110,14 +110,14 @@ dependencies {
 
   implementation("io.prometheus:simpleclient:$prometheusVersion")
 
-  implementation("io.ktor:ktor-client-jvm:$ktorVersion")
-  implementation("io.ktor:ktor-client-cio-jvm:$ktorVersion")
-  implementation("io.ktor:ktor-client-auth-jvm:$ktorVersion")
-  implementation("io.ktor:ktor-network-jvm:$ktorVersion")
-  implementation("io.ktor:ktor-network-tls-jvm:$ktorVersion")
+  implementation("io.ktor:ktor-client:$ktorVersion")
+  implementation("io.ktor:ktor-client-cio:$ktorVersion")
+  implementation("io.ktor:ktor-client-auth:$ktorVersion")
+  implementation("io.ktor:ktor-network:$ktorVersion")
+  implementation("io.ktor:ktor-network-tls:$ktorVersion")
 
-  implementation("io.ktor:ktor-server-jvm:$ktorVersion")
-  implementation("io.ktor:ktor-server-cio-jvm:$ktorVersion")
+  implementation("io.ktor:ktor-server:$ktorVersion")
+  implementation("io.ktor:ktor-server-cio:$ktorVersion")
   implementation("io.ktor:ktor-server-call-logging:$ktorVersion")
   implementation("io.ktor:ktor-server-compression:$ktorVersion")
 

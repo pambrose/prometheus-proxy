@@ -30,6 +30,13 @@ enum class EnvVars {
   SD_TARGET_PREFIX,
   REFLECTION_DISABLED,
 
+  HANDSHAKE_TIMEOUT_SECS,
+  PERMIT_KEEPALIVE_WITHOUT_CALLS,
+  PERMIT_KEEPALIVE_TIME_SECS,
+  MAX_CONNECTION_IDLE_SECS,
+  MAX_CONNECTION_AGE_SECS,
+  MAX_CONNECTION_AGE_GRACE_SECS,
+
   // Agent
   AGENT_CONFIG,
   PROXY_HOSTNAME,
@@ -40,6 +47,8 @@ enum class EnvVars {
   CHUNK_CONTENT_SIZE_KBS,
   MIN_GZIP_SIZE_BYTES,
   TRUST_ALL_X509_CERTIFICATES,
+
+  KEEPALIVE_WITHOUT_CALLS,
 
   // Common
   DEBUG_ENABLED,
@@ -53,6 +62,9 @@ enum class EnvVars {
   PRIVATE_KEY_FILE_PATH,
   TRUST_CERT_COLLECTION_FILE_PATH,
   OVERRIDE_AUTHORITY,
+
+  KEEPALIVE_TIME_SECS,
+  KEEPALIVE_TIMEOUT_SECS,
   ;
 
   fun getEnv(defaultVal: String) = getenv(name) ?: defaultVal
@@ -60,4 +72,6 @@ enum class EnvVars {
   fun getEnv(defaultVal: Boolean) = getenv(name)?.toBoolean() ?: defaultVal
 
   fun getEnv(defaultVal: Int) = getenv(name)?.toInt() ?: defaultVal
+
+  fun getEnv(defaultVal: Long) = getenv(name)?.toLong() ?: defaultVal
 }

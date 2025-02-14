@@ -87,7 +87,9 @@ then the *prometheus.yml* scrape_config would target the three apps with:
 * http://mymachine.local:8080/app2_metrics
 * http://mymachine.local:8080/app3_metrics
 
-If the endpoints were restricted with basic auth/bearer authentication, you could either include the basic-auth credentials in the URL with: `http://user:pass@hostname/metrics` or they could be configured with `basic_auth`/`bearer_token` in the scrape-config.
+If the endpoints were restricted with basic auth/bearer authentication, you could either include the basic-auth
+credentials in the URL with: `http://user:pass@hostname/metrics` or they could be configured with `basic_auth`/
+`bearer_token` in the scrape-config.
 
 The `prometheus.yml` file would include:
 
@@ -101,8 +103,8 @@ scrape_configs:
   - job_name: 'app2 metrics'
     metrics_path: '/app2_metrics'
     basic_auth:
-        username: 'user'
-        password: 's3cr3t'
+      username: 'user'
+      password: 's3cr3t'
     static_configs:
       - targets: [ 'mymachine.local:8080' ]
   - job_name: 'app3 metrics'
@@ -184,54 +186,65 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 
 ### Proxy CLI Options
 
-| Options            | ENV VAR<br>Property                                                        | Default                  | Description                                 |
-|--------------------|----------------------------------------------------------------------------|--------------------------|---------------------------------------------|
-| --config, -c       | PROXY_CONFIG                                                               |                          | Agent config file or url                    |
-| --port, -p         | PROXY_PORT       <br> proxy.http.port                                      | 8080                     | Proxy listen port                           |
-| --agent_port, -a   | AGENT_PORT       <br> proxy.agent.port                                     | 50051                    | gRPC listen port for agents                 |
-| --admin, -r        | ADMIN_ENABLED    <br> proxy.admin.enabled                                  | false                    | Enable admin servlets                       |
-| --admin_port, -i   | ADMIN_PORT       <br> proxy.admin.port                                     | 8092                     | Admin servlets port                         |
-| --debug, -b        | DEBUG_ENABLED    <br> proxy.admin.debugEnabled                             | false                    | Enable proxy debug servlet<br>on admin port |
-| --metrics, -e      | METRICS_ENABLED  <br> proxy.metrics.enabled                                | false                    | Enable proxy metrics                        |
-| --metrics_port, -m | METRICS_PORT     <br> proxy.metrics.port                                   | 8082                     | Proxy metrics listen port                   |
-| --sd_enabled       | SD_ENABLED       <br> proxy.service.discovery.enabled                      | false                    | Service discovery endpoint enabled          |
-| --sd_path          | SD_PATH          <br> proxy.service.discovery.path                         | "discovery"              | Service discovery endpoint path             |
-| --sd_target_prefix | SD_TARGET_PREFIX <br> proxy.service.discovery.targetPrefix                 | "http://localhost:8080/" | Service discovery target prefix             |
-| --tf-disabled      | TRANSPORT_FILTER_DISABLED <br> proxy.transportFilterDisabled               | false                    | Transport filter disabled                   |
-| --ref-disabled     | REFLECTION_DISABLED <br> proxy.reflectionDisabled                          | false                    | gRPC Reflection disabled                    |
-| --cert, -t         | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath                      |                          | Certificate chain file path                 |
-| --key, -k          | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath                    |                          | Private key file path                       |
-| --trust, -s        | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |                          | Trust certificate collection file path      |
-| --version, -v      |                                                                            |                          | Print version info and exit                 |
-| --usage, -u        |                                                                            |                          | Print usage message and exit                |
-| -D                 |                                                                            |                          | Dynamic property assignment                 |
+| Options                          | ENV VAR<br>Property                                                        | Default                  | Description                                                                                                             |
+|----------------------------------|----------------------------------------------------------------------------|--------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| --config, -c                     | PROXY_CONFIG                                                               |                          | Agent config file or url                                                                                                |
+| --port, -p                       | PROXY_PORT       <br> proxy.http.port                                      | 8080                     | Proxy listen port                                                                                                       |
+| --agent_port, -a                 | AGENT_PORT       <br> proxy.agent.port                                     | 50051                    | gRPC listen port for agents                                                                                             |
+| --admin, -r                      | ADMIN_ENABLED    <br> proxy.admin.enabled                                  | false                    | Enable admin servlets                                                                                                   |
+| --admin_port, -i                 | ADMIN_PORT       <br> proxy.admin.port                                     | 8092                     | Admin servlets port                                                                                                     |
+| --debug, -b                      | DEBUG_ENABLED    <br> proxy.admin.debugEnabled                             | false                    | Enable proxy debug servlet<br>on admin port                                                                             |
+| --metrics, -e                    | METRICS_ENABLED  <br> proxy.metrics.enabled                                | false                    | Enable proxy metrics                                                                                                    |
+| --metrics_port, -m               | METRICS_PORT     <br> proxy.metrics.port                                   | 8082                     | Proxy metrics listen port                                                                                               |
+| --sd_enabled                     | SD_ENABLED       <br> proxy.service.discovery.enabled                      | false                    | Service discovery endpoint enabled                                                                                      |
+| --sd_path                        | SD_PATH          <br> proxy.service.discovery.path                         | "discovery"              | Service discovery endpoint path                                                                                         |
+| --sd_target_prefix               | SD_TARGET_PREFIX <br> proxy.service.discovery.targetPrefix                 | "http://localhost:8080/" | Service discovery target prefix                                                                                         |
+| --tf_disabled                    | TRANSPORT_FILTER_DISABLED <br> proxy.transportFilterDisabled               | false                    | Transport filter disabled                                                                                               |
+| --ref_disabled                   | REFLECTION_DISABLED <br> proxy.reflectionDisabled                          | false                    | gRPC Reflection disabled                                                                                                |
+| --handshake_timeout_secs         | HANDSHAKE_TIMEOUT_SECS <br> proxy.grpc.handshakeTimeoutSecs                | 120                      | gRPC Handshake timeout (seconds)                                                                                        |
+| --keepalive_time_secs            | KEEPALIVE_TIME_SECS <br> proxy.grpc.keepAliveTimeSecs                      | 7200                     | gRPC The interval between PING frames (seconds)                                                                         |
+| --keepalive_timeout_secs         | KEEPALIVE_TIMEOUT_SECS <br> proxy.grpc.keepAliveTimeoutSecs                | 20                       | gRPC The timeout for a PING frame to be acknowledged (seconds)                                                          |
+| --permit_keepalive_without_calls | PERMIT_KEEPALIVE_WITHOUT_CALLS <br> proxy.grpc.permitKeepAliveWithoutCalls | false                    | gRPC Is it permissible to send keepalive pings from the client without any outstanding streams                          |
+| --permit_keepalive_time_secs     | PERMIT_KEEPALIVE_TIME_SECS <br> proxy.grpc.permitKeepAliveTimeSecs         | 300                      | gRPC Min allowed time between a server receiving successive PING frames without sending any DATA/HEADER frame (seconds) |
+| --max_connection_idle_secs       | MAX_CONNECTION_IDLE_SECS <br> proxy.grpc.maxConnectionIdleSecs             | INT_MAX                  | gRPC Max time that a channel may have no outstanding rpcs (seconds)                                                     |
+| --max_connection_age_secs        | MAX_CONNECTION_AGE_SECS <br> proxy.grpc.maxConnectionAgeSecs               | INT_MAX                  | gRPC Max time that a channel may exist (seconds)                                                                        |
+| --max_connection_age_grace_secs  | MAX_CONNECTION_AGE_GRACE_SECS <br> proxy.grpc.maxConnectionAgeGraceSecs    | INT_MAX                  | gRPC Grace period after the channel reaches its max age (seconds)                                                       |
+| --cert, -t                       | CERT_CHAIN_FILE_PATH <br> proxy.tls.certChainFilePath                      |                          | Certificate chain file path                                                                                             |
+| --key, -k                        | PRIVATE_KEY_FILE_PATH <br> proxy.tls.privateKeyFilePath                    |                          | Private key file path                                                                                                   |
+| --trust, -s                      | TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath |                          | Trust certificate collection file path                                                                                  |
+| --version, -v                    |                                                                            |                          | Print version info and exit                                                                                             |
+| --usage, -u                      |                                                                            |                          | Print usage message and exit                                                                                            |
+| -D                               |                                                                            |                          | Dynamic property assignment                                                                                             |
 
 ### Agent CLI Options
 
-| Options            | ENV VAR<br>Property                                                        | Default | Description                                                |
-|:-------------------|:---------------------------------------------------------------------------|:--------|:-----------------------------------------------------------|
-| --config, -c       | AGENT_CONFIG                                                               |         | Agent config file or url (required)                        |
-| --proxy, -p        | PROXY_HOSTNAME  <br> agent.proxy.hostname                                  |         | Proxy hostname (can include :port)                         |
-| --name, -n         | AGENT_NAME      <br> agent.name                                            |         | Agent name                                                 |
-| --admin, -r        | ADMIN_ENABLED   <br> agent.admin.enabled                                   | false   | Enable admin servlets                                      |
-| --admin_port, -i   | ADMIN_PORT      <br> agent.admin.port                                      | 8093    | Admin servlets port                                        |
-| --debug, -b        | DEBUG_ENABLED   <br> agent.admin.debugEnabled                              | false   | Enable agent debug servlet<br>on admin port                |
-| --metrics, -e      | METRICS_ENABLED <br> agent.metrics.enabled                                 | false   | Enable agent metrics                                       |
-| --metrics_port, -m | METRICS_PORT    <br> agent.metrics.port                                    | 8083    | Agent metrics listen port                                  |
-| --consolidated, -o | CONSOLIDATED <br> agent.consolidated                                       | false   | Enable multiple agents per registered path                 |
-| --timeout          | SCRAPE_TIMEOUT_SECS <br> agent.scrapeTimeoutSecs                           | 15      | Scrape timeout time (seconds)                              |
-| --max_retries      | SCRAPE_MAX_RETRIES <br> agent.scrapeMaxRetries                             | 0       | Scrape maximum retries (0 disables scrape retries)         |
-| --chunk            | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs                      | 32      | Threshold for chunking data to Proxy and buffer size (KBs) |
-| --gzip             | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes                            | 1024    | Minimum size for content to be gzipped (bytes)             |
-| --tf-disabled      | TRANSPORT_FILTER_DISABLED <br> agent.transportFilterDisabled               | false   | Transport filter disabled                                  |
-| --trust_all_x509   | TRUST_ALL_X509_CERTIFICATES <br> agent.http.enableTrustAllX509Certificates | false   | Disable SSL verification for agent https endpoints         |
-| --cert, -t         | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath                      |         | Certificate chain file path                                |
-| --key, -k          | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath                    |         | Private key file path                                      |
-| --trust, -s        | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |         | Trust certificate collection file path                     |
-| --override         | OVERRIDE_AUTHORITY <br> agent.tls.overrideAuthority                        |         | Override authority (for testing)                           |
-| --version, -v      |                                                                            |         | Print version info and exit                                |
-| --usage, -u        |                                                                            |         | Print usage message and exit                               |
-| -D                 |                                                                            |         | Dynamic property assignment                                |
+| Options                   | ENV VAR<br>Property                                                        | Default | Description                                                                                    |
+|:--------------------------|:---------------------------------------------------------------------------|:--------|:-----------------------------------------------------------------------------------------------|
+| --config, -c              | AGENT_CONFIG                                                               |         | Agent config file or url (required)                                                            |
+| --proxy, -p               | PROXY_HOSTNAME  <br> agent.proxy.hostname                                  |         | Proxy hostname (can include :port)                                                             |
+| --name, -n                | AGENT_NAME      <br> agent.name                                            |         | Agent name                                                                                     |
+| --admin, -r               | ADMIN_ENABLED   <br> agent.admin.enabled                                   | false   | Enable admin servlets                                                                          |
+| --admin_port, -i          | ADMIN_PORT      <br> agent.admin.port                                      | 8093    | Admin servlets port                                                                            |
+| --debug, -b               | DEBUG_ENABLED   <br> agent.admin.debugEnabled                              | false   | Enable agent debug servlet<br>on admin port                                                    |
+| --metrics, -e             | METRICS_ENABLED <br> agent.metrics.enabled                                 | false   | Enable agent metrics                                                                           |
+| --metrics_port, -m        | METRICS_PORT    <br> agent.metrics.port                                    | 8083    | Agent metrics listen port                                                                      |
+| --consolidated, -o        | CONSOLIDATED <br> agent.consolidated                                       | false   | Enable multiple agents per registered path                                                     |
+| --timeout                 | SCRAPE_TIMEOUT_SECS <br> agent.scrapeTimeoutSecs                           | 15      | Scrape timeout time (seconds)                                                                  |
+| --max_retries             | SCRAPE_MAX_RETRIES <br> agent.scrapeMaxRetries                             | 0       | Scrape maximum retries (0 disables scrape retries)                                             |
+| --chunk                   | CHUNK_CONTENT_SIZE_KBS <br> agent.chunkContentSizeKbs                      | 32      | Threshold for chunking data to Proxy and buffer size (KBs)                                     |
+| --gzip                    | MIN_GZIP_SIZE_BYTES <br> agent.minGzipSizeBytes                            | 1024    | Minimum size for content to be gzipped (bytes)                                                 |
+| --tf_disabled             | TRANSPORT_FILTER_DISABLED <br> agent.transportFilterDisabled               | false   | Transport filter disabled                                                                      |
+| --trust_all_x509          | TRUST_ALL_X509_CERTIFICATES <br> agent.http.enableTrustAllX509Certificates | false   | Disable SSL verification for agent https endpoints                                             |
+| --keepalive_time_secs     | KEEPALIVE_TIME_SECS <br> agent.grpc.keepAliveTimeSecs                      | INT_MAX | gRPC The interval between PING frames (seconds)                                                |
+| --keepalive_timeout_secs  | KEEPALIVE_TIMEOUT_SECS <br> agent.grpc.keepAliveTimeoutSecs                | 20      | gRPC The timeout for a PING frame to be acknowledged (seconds)                                 |
+| --keepalive_without_calls | KEEPALIVE_WITHOUT_CALLS <br> agent.grpc.keepAliveWithoutCalls              | false   | gRPC Is it permissible to send keepalive pings from the client without any outstanding streams |
+| --cert, -t                | CERT_CHAIN_FILE_PATH <br> agent.tls.certChainFilePath                      |         | Certificate chain file path                                                                    |
+| --key, -k                 | PRIVATE_KEY_FILE_PATH <br> agent.tls.privateKeyFilePath                    |         | Private key file path                                                                          |
+| --trust, -s               | TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath |         | Trust certificate collection file path                                                         |
+| --override                | OVERRIDE_AUTHORITY <br> agent.tls.overrideAuthority                        |         | Override authority (for testing)                                                               |
+| --version, -v             |                                                                            |         | Print version info and exit                                                                    |
+| --usage, -u               |                                                                            |         | Print usage message and exit                                                                   |
+| -D                        |                                                                            |         | Dynamic property assignment                                                                    |
 
 Misc notes:
 

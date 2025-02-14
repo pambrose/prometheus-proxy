@@ -26,6 +26,7 @@ import io.prometheus.common.EnvVars.AGENT_CONFIG
 import io.prometheus.common.EnvVars.AGENT_NAME
 import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
 import io.prometheus.common.EnvVars.CONSOLIDATED
+import io.prometheus.common.EnvVars.KEEPALIVE_WITHOUT_CALLS
 import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
 import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
@@ -80,6 +81,10 @@ class AgentOptions(
   var trustAllX509Certificates = false
     private set
 
+  @Parameter(names = ["--keepalive_without_calls"], description = "gRPC KeepAlive without calls")
+  var keepAliveWithoutCalls = false
+    private set
+
   init {
     parseOptions()
   }
@@ -131,6 +136,14 @@ class AgentOptions(
           trustAllX509Certificates =
             TRUST_ALL_X509_CERTIFICATES.getEnv(agentConfigVals.http.enableTrustAllX509Certificates)
         logger.info { "trustAllX509Certificates: $trustAllX509Certificates" }
+
+        assignKeepAliveTimeSecs(agentConfigVals.grpc.keepAliveTimeSecs)
+        assignKeepAliveTimeoutSecs(agentConfigVals.grpc.keepAliveTimeoutSecs)
+
+        if (!keepAliveWithoutCalls)
+          keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
+        logger.info { "grpcKeepAliveWithoutCalls: $keepAliveWithoutCalls" }
+
 
         assignAdminEnabled(agentConfigVals.admin.enabled)
         assignAdminPort(agentConfigVals.admin.port)
