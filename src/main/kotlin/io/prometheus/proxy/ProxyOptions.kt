@@ -128,51 +128,52 @@ class ProxyOptions(
 
         if (handshakeTimeoutSecs == -1L)
           handshakeTimeoutSecs = HANDSHAKE_TIMEOUT_SECS.getEnv(proxyConfigVals.grpc.handshakeTimeoutSecs)
-        logger.info { "grpcHandshakeTimeoutSecs: $handshakeTimeoutSecs" }
-
-        assignKeepAliveTimeSecs(proxyConfigVals.grpc.keepAliveTimeSecs)
-        assignKeepAliveTimeoutSecs(proxyConfigVals.grpc.keepAliveTimeoutSecs)
+        val hsTimeout = if (handshakeTimeoutSecs == -1L) "default (120)" else handshakeTimeoutSecs
+        logger.info { "grpc.handshakeTimeoutSecs: $hsTimeout" }
 
         if (!permitKeepAliveWithoutCalls)
           permitKeepAliveWithoutCalls =
             PERMIT_KEEPALIVE_WITHOUT_CALLS.getEnv(proxyConfigVals.grpc.permitKeepAliveWithoutCalls)
-        logger.info { "grpcPermitKeepAliveWithoutCalls: $permitKeepAliveWithoutCalls" }
+        logger.info { "grpc.permitKeepAliveWithoutCalls: $permitKeepAliveWithoutCalls" }
 
         if (permitKeepAliveTimeSecs == -1L)
           permitKeepAliveTimeSecs = PERMIT_KEEPALIVE_TIME_SECS.getEnv(proxyConfigVals.grpc.permitKeepAliveTimeSecs)
-        logger.info { "grpcPermitKeepAliveTimeSecs: $permitKeepAliveTimeSecs" }
+        val kaTime = if (permitKeepAliveTimeSecs == -1L) "default (300)" else permitKeepAliveTimeSecs
+        logger.info { "grpc.permitKeepAliveTimeSecs: $kaTime" }
 
         if (maxConnectionIdleSecs == -1L)
           maxConnectionIdleSecs = MAX_CONNECTION_IDLE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionIdleSecs)
-        logger.info { "grpcMaxConnectionIdleSecs: ${if (maxConnectionIdleSecs == -1L) "INT_MAX" else maxConnectionIdleSecs}" }
+        val idleVal = if (maxConnectionIdleSecs == -1L) "default (INT_MAX)" else maxConnectionIdleSecs
+        logger.info { "grpc.maxConnectionIdleSecs: $idleVal" }
 
         if (maxConnectionAgeSecs == -1L)
           maxConnectionAgeSecs = MAX_CONNECTION_AGE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeSecs)
-        logger.info { "grpcMaxConnectionAgeSecs: ${if (maxConnectionAgeSecs == -1L) "INT_MAX" else maxConnectionAgeSecs}" }
+        val ageVal = if (maxConnectionAgeSecs == -1L) "default (INT_MAX)" else maxConnectionAgeSecs
+        logger.info { "grpc.maxConnectionAgeSecs: $ageVal" }
 
         if (maxConnectionAgeGraceSecs == -1L)
           maxConnectionAgeGraceSecs =
             MAX_CONNECTION_AGE_GRACE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeGraceSecs)
-        logger.info { "grpcMaxConnectionAgeGraceSecs: ${if (maxConnectionAgeGraceSecs == -1L) "INT_MAX" else maxConnectionAgeGraceSecs}" }
+        val graceVal = if (maxConnectionAgeGraceSecs == -1L) "default (INT_MAX)" else maxConnectionAgeGraceSecs
+        logger.info { "grpc.maxConnectionAgeGraceSecs: $graceVal" }
 
+        with(proxyConfigVals) {
+          assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
+          assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
+          assignAdminEnabled(admin.enabled)
+          assignAdminPort(admin.port)
+          assignMetricsEnabled(metrics.enabled)
+          assignMetricsPort(metrics.port)
+          assignTransportFilterDisabled(transportFilterDisabled)
+          assignDebugEnabled(admin.debugEnabled)
 
-        assignAdminEnabled(proxyConfigVals.admin.enabled)
-        assignAdminPort(proxyConfigVals.admin.port)
-        assignMetricsEnabled(proxyConfigVals.metrics.enabled)
-        assignMetricsPort(proxyConfigVals.metrics.port)
-        assignTransportFilterDisabled(proxyConfigVals.transportFilterDisabled)
-        assignDebugEnabled(proxyConfigVals.admin.debugEnabled)
+          assignCertChainFilePath(tls.certChainFilePath)
+          assignPrivateKeyFilePath(tls.privateKeyFilePath)
+          assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
 
-        with(proxyConfigVals.tls) {
-          assignCertChainFilePath(certChainFilePath)
-          assignPrivateKeyFilePath(privateKeyFilePath)
-          assignTrustCertCollectionFilePath(trustCertCollectionFilePath)
-        }
-
-        with(proxyConfigVals.internal) {
-          logger.info { "proxy.internal.scrapeRequestTimeoutSecs: $scrapeRequestTimeoutSecs" }
-          logger.info { "proxy.internal.staleAgentCheckPauseSecs: $staleAgentCheckPauseSecs" }
-          logger.info { "proxy.internal.maxAgentInactivitySecs: $maxAgentInactivitySecs" }
+          logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
+          logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }
+          logger.info { "internal.maxAgentInactivitySecs: ${internal.maxAgentInactivitySecs}" }
         }
       }
   }

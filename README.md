@@ -258,6 +258,7 @@ Misc notes:
   Prometheus [documentation](https://prometheus.io/docs/prometheus/latest/http_sd/)
 * A pathConfig `labels` value is a quote-escaped JSON string with key/value pairs. It is used to add additional service
   discovery context to a target.
+* The gRPC keepalive values are described [here](https://grpc.io/docs/guides/keepalive/).
 
 ### Admin Servlets
 

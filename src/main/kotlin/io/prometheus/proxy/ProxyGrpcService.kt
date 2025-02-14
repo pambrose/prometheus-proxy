@@ -100,19 +100,28 @@ internal class ProxyGrpcService(
       if (!options.reflectionDisabled)
         addService(ProtoReflectionServiceV1.newInstance())
 
-      handshakeTimeout(options.handshakeTimeoutSecs, SECONDS)
-      keepAliveTime(options.keepAliveTimeSecs, SECONDS)
-      keepAliveTimeout(options.keepAliveTimeoutSecs, SECONDS)
-      permitKeepAliveWithoutCalls(options.permitKeepAliveWithoutCalls)
-      permitKeepAliveTime(options.permitKeepAliveTimeSecs, SECONDS)
+      if (options.handshakeTimeoutSecs > -1L)
+        handshakeTimeout(options.handshakeTimeoutSecs, SECONDS)
 
-      if (options.maxConnectionIdleSecs > 0)
+      if (options.keepAliveTimeSecs > -1L)
+        keepAliveTime(options.keepAliveTimeSecs, SECONDS)
+
+      if (options.keepAliveTimeoutSecs > -1L)
+        keepAliveTimeout(options.keepAliveTimeoutSecs, SECONDS)
+
+      if (options.permitKeepAliveWithoutCalls)
+        permitKeepAliveWithoutCalls(options.permitKeepAliveWithoutCalls)
+
+      if (options.permitKeepAliveTimeSecs > -1L)
+        permitKeepAliveTime(options.permitKeepAliveTimeSecs, SECONDS)
+
+      if (options.maxConnectionIdleSecs > -1L)
         maxConnectionIdle(options.maxConnectionIdleSecs, SECONDS)
 
-      if (options.maxConnectionAgeSecs > 0)
+      if (options.maxConnectionAgeSecs > -1L)
         maxConnectionAge(options.maxConnectionAgeSecs, SECONDS)
 
-      if (options.maxConnectionAgeGraceSecs > 0)
+      if (options.maxConnectionAgeGraceSecs > -1L)
         maxConnectionAgeGrace(options.maxConnectionAgeGraceSecs, SECONDS)
     }
 

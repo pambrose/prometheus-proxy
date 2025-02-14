@@ -137,32 +137,32 @@ class AgentOptions(
             TRUST_ALL_X509_CERTIFICATES.getEnv(agentConfigVals.http.enableTrustAllX509Certificates)
         logger.info { "trustAllX509Certificates: $trustAllX509Certificates" }
 
-        assignKeepAliveTimeSecs(agentConfigVals.grpc.keepAliveTimeSecs)
-        assignKeepAliveTimeoutSecs(agentConfigVals.grpc.keepAliveTimeoutSecs)
-
         if (!keepAliveWithoutCalls)
           keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
-        logger.info { "grpcKeepAliveWithoutCalls: $keepAliveWithoutCalls" }
+        logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
 
+        with(agentConfigVals) {
+          assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
+          assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
+          assignAdminEnabled(admin.enabled)
+          assignAdminPort(admin.port)
+          assignMetricsEnabled(metrics.enabled)
+          assignMetricsPort(metrics.port)
+          assignTransportFilterDisabled(transportFilterDisabled)
+          assignDebugEnabled(admin.debugEnabled)
 
-        assignAdminEnabled(agentConfigVals.admin.enabled)
-        assignAdminPort(agentConfigVals.admin.port)
-        assignMetricsEnabled(agentConfigVals.metrics.enabled)
-        assignMetricsPort(agentConfigVals.metrics.port)
-        assignTransportFilterDisabled(agentConfigVals.transportFilterDisabled)
-        assignDebugEnabled(agentConfigVals.admin.debugEnabled)
+          assignCertChainFilePath(tls.certChainFilePath)
+          assignPrivateKeyFilePath(tls.privateKeyFilePath)
+          assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
 
-        assignCertChainFilePath(agentConfigVals.tls.certChainFilePath)
-        assignPrivateKeyFilePath(agentConfigVals.tls.privateKeyFilePath)
-        assignTrustCertCollectionFilePath(agentConfigVals.tls.trustCertCollectionFilePath)
+          logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+          logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
 
-        logger.info { "agent.scrapeTimeoutSecs: ${agentConfigVals.scrapeTimeoutSecs.seconds}" }
-        logger.info { "agent.internal.cioTimeoutSecs: ${agentConfigVals.internal.cioTimeoutSecs.seconds}" }
-        logger.info {
-          "agent.internal.heartbeatCheckPauseMillis: ${agentConfigVals.internal.heartbeatCheckPauseMillis}"
-        }
-        logger.info {
-          "agent.internal.heartbeatMaxInactivitySecs: ${agentConfigVals.internal.heartbeatMaxInactivitySecs}"
+          val pauseVal = internal.heartbeatCheckPauseMillis
+          logger.info { "agent.internal.heartbeatCheckPauseMillis: $pauseVal" }
+
+          val inactivityVal = internal.heartbeatMaxInactivitySecs
+          logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
         }
       }
   }

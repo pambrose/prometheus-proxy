@@ -149,9 +149,14 @@ internal class AgentGrpcService(
         if (agent.isZipkinEnabled)
           intercept(grpcTracing.newClientInterceptor())
 
-        keepAliveTime(options.keepAliveTimeSecs, SECONDS)
-        keepAliveTimeout(options.keepAliveTimeoutSecs, SECONDS)
-        keepAliveWithoutCalls(options.keepAliveWithoutCalls)
+        if (options.keepAliveTimeSecs > -1L)
+          keepAliveTime(options.keepAliveTimeSecs, SECONDS)
+
+        if (options.keepAliveTimeoutSecs > -1L)
+          keepAliveTimeout(options.keepAliveTimeoutSecs, SECONDS)
+
+        if (options.keepAliveWithoutCalls)
+          keepAliveWithoutCalls(options.keepAliveWithoutCalls)
       }
 
     val interceptors =
