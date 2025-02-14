@@ -26,6 +26,7 @@ import io.prometheus.common.EnvVars.AGENT_CONFIG
 import io.prometheus.common.EnvVars.AGENT_NAME
 import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
 import io.prometheus.common.EnvVars.CONSOLIDATED
+import io.prometheus.common.EnvVars.KEEPALIVE_WITHOUT_CALLS
 import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
 import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
@@ -80,6 +81,10 @@ class AgentOptions(
   var trustAllX509Certificates = false
     private set
 
+  @Parameter(names = ["--keepalive_without_calls"], description = "gRPC KeepAlive without calls")
+  var keepAliveWithoutCalls = false
+    private set
+
   init {
     parseOptions()
   }
@@ -132,24 +137,32 @@ class AgentOptions(
             TRUST_ALL_X509_CERTIFICATES.getEnv(agentConfigVals.http.enableTrustAllX509Certificates)
         logger.info { "trustAllX509Certificates: $trustAllX509Certificates" }
 
-        assignAdminEnabled(agentConfigVals.admin.enabled)
-        assignAdminPort(agentConfigVals.admin.port)
-        assignMetricsEnabled(agentConfigVals.metrics.enabled)
-        assignMetricsPort(agentConfigVals.metrics.port)
-        assignTransportFilterDisabled(agentConfigVals.transportFilterDisabled)
-        assignDebugEnabled(agentConfigVals.admin.debugEnabled)
+        if (!keepAliveWithoutCalls)
+          keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
+        logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
 
-        assignCertChainFilePath(agentConfigVals.tls.certChainFilePath)
-        assignPrivateKeyFilePath(agentConfigVals.tls.privateKeyFilePath)
-        assignTrustCertCollectionFilePath(agentConfigVals.tls.trustCertCollectionFilePath)
+        with(agentConfigVals) {
+          assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
+          assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
+          assignAdminEnabled(admin.enabled)
+          assignAdminPort(admin.port)
+          assignMetricsEnabled(metrics.enabled)
+          assignMetricsPort(metrics.port)
+          assignTransportFilterDisabled(transportFilterDisabled)
+          assignDebugEnabled(admin.debugEnabled)
 
-        logger.info { "agent.scrapeTimeoutSecs: ${agentConfigVals.scrapeTimeoutSecs.seconds}" }
-        logger.info { "agent.internal.cioTimeoutSecs: ${agentConfigVals.internal.cioTimeoutSecs.seconds}" }
-        logger.info {
-          "agent.internal.heartbeatCheckPauseMillis: ${agentConfigVals.internal.heartbeatCheckPauseMillis}"
-        }
-        logger.info {
-          "agent.internal.heartbeatMaxInactivitySecs: ${agentConfigVals.internal.heartbeatMaxInactivitySecs}"
+          assignCertChainFilePath(tls.certChainFilePath)
+          assignPrivateKeyFilePath(tls.privateKeyFilePath)
+          assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
+
+          logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+          logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
+
+          val pauseVal = internal.heartbeatCheckPauseMillis
+          logger.info { "agent.internal.heartbeatCheckPauseMillis: $pauseVal" }
+
+          val inactivityVal = internal.heartbeatMaxInactivitySecs
+          logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
         }
       }
   }

@@ -61,6 +61,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit.SECONDS
 import java.util.zip.CRC32
 import kotlin.properties.Delegates.notNull
 
@@ -147,6 +148,15 @@ internal class AgentGrpcService(
       ) {
         if (agent.isZipkinEnabled)
           intercept(grpcTracing.newClientInterceptor())
+
+        if (options.keepAliveTimeSecs > -1L)
+          keepAliveTime(options.keepAliveTimeSecs, SECONDS)
+
+        if (options.keepAliveTimeoutSecs > -1L)
+          keepAliveTimeout(options.keepAliveTimeoutSecs, SECONDS)
+
+        if (options.keepAliveWithoutCalls)
+          keepAliveWithoutCalls(options.keepAliveWithoutCalls)
       }
 
     val interceptors =

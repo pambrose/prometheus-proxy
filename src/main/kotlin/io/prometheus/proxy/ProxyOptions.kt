@@ -23,6 +23,12 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.AGENT_PORT
+import io.prometheus.common.EnvVars.HANDSHAKE_TIMEOUT_SECS
+import io.prometheus.common.EnvVars.MAX_CONNECTION_AGE_GRACE_SECS
+import io.prometheus.common.EnvVars.MAX_CONNECTION_AGE_SECS
+import io.prometheus.common.EnvVars.MAX_CONNECTION_IDLE_SECS
+import io.prometheus.common.EnvVars.PERMIT_KEEPALIVE_TIME_SECS
+import io.prometheus.common.EnvVars.PERMIT_KEEPALIVE_WITHOUT_CALLS
 import io.prometheus.common.EnvVars.PROXY_CONFIG
 import io.prometheus.common.EnvVars.PROXY_PORT
 import io.prometheus.common.EnvVars.REFLECTION_DISABLED
@@ -59,6 +65,30 @@ class ProxyOptions(
   var reflectionDisabled = false
     private set
 
+  @Parameter(names = ["--handshake_timeout_secs"], description = "gRPC Handshake timeout (secs)")
+  var handshakeTimeoutSecs = -1L
+    private set
+
+  @Parameter(names = ["--permit_keepalive_without_calls"], description = "gRPC Permit KeepAlive without calls")
+  var permitKeepAliveWithoutCalls = false
+    private set
+
+  @Parameter(names = ["--permit_keepalive_time_secs"], description = "gRPC Permit KeepAlive time (secs)")
+  var permitKeepAliveTimeSecs = -1L
+    private set
+
+  @Parameter(names = ["--max_connection_idle_secs"], description = "gRPC Max connection idle (secs)")
+  var maxConnectionIdleSecs = -1L
+    private set
+
+  @Parameter(names = ["--max_connection_age_secs"], description = "gRPC Max connection age (secs)")
+  var maxConnectionAgeSecs = -1L
+    private set
+
+  @Parameter(names = ["--max_connection_age_grace_secs"], description = "gRPC Max connection age grace (secs)")
+  var maxConnectionAgeGraceSecs = -1L
+    private set
+
   init {
     parseOptions()
   }
@@ -75,7 +105,7 @@ class ProxyOptions(
         logger.info { "proxyAgentPort: $proxyAgentPort" }
 
         if (!sdEnabled)
-          sdEnabled = SD_ENABLED.getEnv(false)
+          sdEnabled = SD_ENABLED.getEnv(proxyConfigVals.service.discovery.enabled)
         logger.info { "sdEnabled: $sdEnabled" }
 
         if (sdPath.isEmpty())
@@ -96,23 +126,54 @@ class ProxyOptions(
           reflectionDisabled = REFLECTION_DISABLED.getEnv(proxyConfigVals.reflectionDisabled)
         logger.info { "reflectionDisabled: $reflectionDisabled" }
 
-        assignAdminEnabled(proxyConfigVals.admin.enabled)
-        assignAdminPort(proxyConfigVals.admin.port)
-        assignMetricsEnabled(proxyConfigVals.metrics.enabled)
-        assignMetricsPort(proxyConfigVals.metrics.port)
-        assignTransportFilterDisabled(proxyConfigVals.transportFilterDisabled)
-        assignDebugEnabled(proxyConfigVals.admin.debugEnabled)
+        if (handshakeTimeoutSecs == -1L)
+          handshakeTimeoutSecs = HANDSHAKE_TIMEOUT_SECS.getEnv(proxyConfigVals.grpc.handshakeTimeoutSecs)
+        val hsTimeout = if (handshakeTimeoutSecs == -1L) "default (120)" else handshakeTimeoutSecs
+        logger.info { "grpc.handshakeTimeoutSecs: $hsTimeout" }
 
-        with(proxyConfigVals.tls) {
-          assignCertChainFilePath(certChainFilePath)
-          assignPrivateKeyFilePath(privateKeyFilePath)
-          assignTrustCertCollectionFilePath(trustCertCollectionFilePath)
-        }
+        if (!permitKeepAliveWithoutCalls)
+          permitKeepAliveWithoutCalls =
+            PERMIT_KEEPALIVE_WITHOUT_CALLS.getEnv(proxyConfigVals.grpc.permitKeepAliveWithoutCalls)
+        logger.info { "grpc.permitKeepAliveWithoutCalls: $permitKeepAliveWithoutCalls" }
 
-        with(proxyConfigVals.internal) {
-          logger.info { "proxy.internal.scrapeRequestTimeoutSecs: $scrapeRequestTimeoutSecs" }
-          logger.info { "proxy.internal.staleAgentCheckPauseSecs: $staleAgentCheckPauseSecs" }
-          logger.info { "proxy.internal.maxAgentInactivitySecs: $maxAgentInactivitySecs" }
+        if (permitKeepAliveTimeSecs == -1L)
+          permitKeepAliveTimeSecs = PERMIT_KEEPALIVE_TIME_SECS.getEnv(proxyConfigVals.grpc.permitKeepAliveTimeSecs)
+        val kaTime = if (permitKeepAliveTimeSecs == -1L) "default (300)" else permitKeepAliveTimeSecs
+        logger.info { "grpc.permitKeepAliveTimeSecs: $kaTime" }
+
+        if (maxConnectionIdleSecs == -1L)
+          maxConnectionIdleSecs = MAX_CONNECTION_IDLE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionIdleSecs)
+        val idleVal = if (maxConnectionIdleSecs == -1L) "default (INT_MAX)" else maxConnectionIdleSecs
+        logger.info { "grpc.maxConnectionIdleSecs: $idleVal" }
+
+        if (maxConnectionAgeSecs == -1L)
+          maxConnectionAgeSecs = MAX_CONNECTION_AGE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeSecs)
+        val ageVal = if (maxConnectionAgeSecs == -1L) "default (INT_MAX)" else maxConnectionAgeSecs
+        logger.info { "grpc.maxConnectionAgeSecs: $ageVal" }
+
+        if (maxConnectionAgeGraceSecs == -1L)
+          maxConnectionAgeGraceSecs =
+            MAX_CONNECTION_AGE_GRACE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeGraceSecs)
+        val graceVal = if (maxConnectionAgeGraceSecs == -1L) "default (INT_MAX)" else maxConnectionAgeGraceSecs
+        logger.info { "grpc.maxConnectionAgeGraceSecs: $graceVal" }
+
+        with(proxyConfigVals) {
+          assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
+          assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
+          assignAdminEnabled(admin.enabled)
+          assignAdminPort(admin.port)
+          assignMetricsEnabled(metrics.enabled)
+          assignMetricsPort(metrics.port)
+          assignTransportFilterDisabled(transportFilterDisabled)
+          assignDebugEnabled(admin.debugEnabled)
+
+          assignCertChainFilePath(tls.certChainFilePath)
+          assignPrivateKeyFilePath(tls.privateKeyFilePath)
+          assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
+
+          logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
+          logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }
+          logger.info { "internal.maxAgentInactivitySecs: ${internal.maxAgentInactivitySecs}" }
         }
       }
   }

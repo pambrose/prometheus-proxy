@@ -1,4 +1,4 @@
-VERSION=1.23.2
+VERSION=2.0.0
 
 default: versioncheck
 
@@ -24,7 +24,7 @@ reports:
 	./gradlew koverMergedHtmlReport
 
 tsconfig:
-	java -jar ./etc/jars/tscfg-0.9.997.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
+	java -jar ./etc/jars/tscfg-1.2.4.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
 distro: build jars
 

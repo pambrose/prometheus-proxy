@@ -1,6 +1,8 @@
 import com.google.protobuf.gradle.id
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jmailen.gradle.kotlinter.tasks.LintTask
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 plugins {
   val configVersion: String by System.getProperties()
@@ -31,13 +33,14 @@ plugins {
 }
 
 group = "io.prometheus"
-version = "1.23.2"
+version = "2.0.0"
 
 buildConfig {
   packageName("io.prometheus")
   buildConfigField("String", "APP_NAME", "\"${project.name}\"")
   buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
-  buildConfigField("String", "APP_RELEASE_DATE", "\"2/10/2025\"")
+  val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
+  buildConfigField("String", "APP_RELEASE_DATE", "\"${LocalDate.now().format(formatter)}\"")
   buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
 }
 
@@ -110,14 +113,14 @@ dependencies {
 
   implementation("io.prometheus:simpleclient:$prometheusVersion")
 
-  implementation("io.ktor:ktor-client-jvm:$ktorVersion")
-  implementation("io.ktor:ktor-client-cio-jvm:$ktorVersion")
-  implementation("io.ktor:ktor-client-auth-jvm:$ktorVersion")
-  implementation("io.ktor:ktor-network-jvm:$ktorVersion")
-  implementation("io.ktor:ktor-network-tls-jvm:$ktorVersion")
+  implementation("io.ktor:ktor-client:$ktorVersion")
+  implementation("io.ktor:ktor-client-cio:$ktorVersion")
+  implementation("io.ktor:ktor-client-auth:$ktorVersion")
+  implementation("io.ktor:ktor-network:$ktorVersion")
+  implementation("io.ktor:ktor-network-tls:$ktorVersion")
 
-  implementation("io.ktor:ktor-server-jvm:$ktorVersion")
-  implementation("io.ktor:ktor-server-cio-jvm:$ktorVersion")
+  implementation("io.ktor:ktor-server:$ktorVersion")
+  implementation("io.ktor:ktor-server-cio:$ktorVersion")
   implementation("io.ktor:ktor-server-call-logging:$ktorVersion")
   implementation("io.ktor:ktor-server-compression:$ktorVersion")
 

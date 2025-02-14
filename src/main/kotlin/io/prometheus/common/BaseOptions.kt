@@ -33,6 +33,8 @@ import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
 import io.prometheus.common.EnvVars.CERT_CHAIN_FILE_PATH
 import io.prometheus.common.EnvVars.DEBUG_ENABLED
+import io.prometheus.common.EnvVars.KEEPALIVE_TIMEOUT_SECS
+import io.prometheus.common.EnvVars.KEEPALIVE_TIME_SECS
 import io.prometheus.common.EnvVars.METRICS_ENABLED
 import io.prometheus.common.EnvVars.METRICS_PORT
 import io.prometheus.common.EnvVars.PRIVATE_KEY_FILE_PATH
@@ -92,6 +94,14 @@ abstract class BaseOptions protected constructor(
   var trustCertCollectionFilePath = ""
     private set
 
+  @Parameter(names = ["--keepalive_time_secs"], description = "gRPC KeepAlive time (secs)")
+  var keepAliveTimeSecs = -1L
+    private set
+
+  @Parameter(names = ["--keepalive_timeout_secs"], description = "gRPC KeepAlive timeout (secs)")
+  var keepAliveTimeoutSecs = -1L
+    private set
+
   @Parameter(
     names = ["-v", "--version"],
     description = "Print version info and exit",
@@ -138,6 +148,20 @@ abstract class BaseOptions protected constructor(
     readConfig(envConfig, exitOnMissingConfig)
     configVals = ConfigVals(config)
     assignConfigVals()
+  }
+
+  protected fun assignKeepAliveTimeSecs(defaultVal: Long) {
+    if (keepAliveTimeSecs == -1L)
+      keepAliveTimeSecs = KEEPALIVE_TIME_SECS.getEnv(defaultVal)
+    logger.info { "grpc.keepAliveTimeSecs: ${if (keepAliveTimeSecs == -1L) "default (7200)" else keepAliveTimeSecs}" }
+  }
+
+  protected fun assignKeepAliveTimeoutSecs(defaultVal: Long) {
+    if (keepAliveTimeoutSecs == -1L)
+      keepAliveTimeoutSecs = KEEPALIVE_TIMEOUT_SECS.getEnv(defaultVal)
+    logger.info {
+      "grpc.keepAliveTimeoutSecs: ${if (keepAliveTimeoutSecs == -1L) "default (20)" else keepAliveTimeoutSecs}"
+    }
   }
 
   protected fun assignAdminEnabled(defaultVal: Boolean) {
