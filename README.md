@@ -187,7 +187,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 ### Proxy CLI Options
 
 | CLI Option<br>ENV VAR<br>Property                                                                                | Default                  | Description                                                                                                             |
-|------------------------------------------------------------------------------------------------------------------|--------------------------|-------------------------------------------------------------------------------------------------------------------------|
+|:-----------------------------------------------------------------------------------------------------------------|:-------------------------|:------------------------------------------------------------------------------------------------------------------------|
 | --config, -c                    <br> PROXY_CONFIG                                                                |                          | Agent config file or url                                                                                                |
 | --port, -p                      <br> PROXY_PORT                      <br> proxy.http.port                        | 8080                     | Proxy listen port                                                                                                       |
 | --agent_port, -a                <br> AGENT_PORT                      <br> proxy.agent.port                       | 50051                    | gRPC listen port for agents                                                                                             |
