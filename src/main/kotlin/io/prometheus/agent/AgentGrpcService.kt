@@ -395,18 +395,18 @@ internal class AgentGrpcService(
       val nonChunkedChannel = Channel<ScrapeResponse>(Channel.UNLIMITED)
       val chunkedChannel = Channel<ChunkedScrapeResponse>(Channel.UNLIMITED)
 
-      launch(Dispatchers.Default + exceptionHandler()) {
+      launch(Dispatchers.IO + exceptionHandler()) {
         processScrapeResults(agent, connectionContext.scrapeResultsChannel, nonChunkedChannel, chunkedChannel)
       }
 
       connectionContext
         .use {
           coroutineScope {
-            launch(Dispatchers.Default + exceptionHandler()) {
+            launch(Dispatchers.IO + exceptionHandler()) {
               stub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
             }
 
-            launch(Dispatchers.Default + exceptionHandler()) {
+            launch(Dispatchers.IO + exceptionHandler()) {
               stub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
             }
           }

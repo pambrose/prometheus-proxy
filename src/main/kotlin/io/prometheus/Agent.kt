@@ -166,20 +166,20 @@ class Agent(
         val connectionContext = AgentConnectionContext()
 
         coroutineScope {
-          launch(Dispatchers.Default + exceptionHandler("readRequestsFromProxy")) {
+          launch(Dispatchers.IO + exceptionHandler("readRequestsFromProxy")) {
             grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
           }
 
-          launch(Dispatchers.Default + exceptionHandler("startHeartBeat")) {
+          launch(Dispatchers.IO + exceptionHandler("startHeartBeat")) {
             startHeartBeat(connectionContext)
           }
 
           // This exceptionHandler is not necessary
-          launch(Dispatchers.Default + exceptionHandler("writeResponsesToProxyUntilDisconnected")) {
+          launch(Dispatchers.IO + exceptionHandler("writeResponsesToProxyUntilDisconnected")) {
             grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
           }
 
-          launch(Dispatchers.Default + exceptionHandler("scrapeResultsChannel.send")) {
+          launch(Dispatchers.IO + exceptionHandler("scrapeResultsChannel.send")) {
             // This is terminated by connectionContext.close()
             for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
               // The url fetch occurs during the invoke() on the scrapeRequestAction

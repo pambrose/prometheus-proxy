@@ -41,11 +41,11 @@ open class CommonCompanion {
     CollectorRegistry.defaultRegistry.clear()
 
     runBlocking {
-      launch(Dispatchers.Default + exceptionHandler(logger)) {
+      launch(Dispatchers.IO + exceptionHandler(logger)) {
         proxy = proxySetup.invoke()
       }
 
-      launch(Dispatchers.Default + exceptionHandler(logger)) {
+      launch(Dispatchers.IO + exceptionHandler(logger)) {
         agent = agentSetup.invoke().apply { awaitInitialConnection(10.seconds) }
       }
     }
@@ -59,7 +59,7 @@ open class CommonCompanion {
     runBlocking {
       for (service in listOf(proxy, agent)) {
         logger.info { "Stopping ${service.simpleClassName}" }
-        launch(Dispatchers.Default + exceptionHandler(logger)) { service.stopSync() }
+        launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
       }
     }
 
