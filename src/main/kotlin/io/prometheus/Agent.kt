@@ -51,7 +51,6 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -140,14 +139,8 @@ class Agent(
   }
 
   override fun run() {
-    fun exceptionHandler(name: String) =
-      CoroutineExceptionHandler { _, e ->
-        if (grpcService.agent.isRunning)
-          Status.fromThrowable(e).apply { logger.error { "Error in $name(): $code $description" } }
-      }
-
     suspend fun connectToProxy() {
-      // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != ""
+      // Reset gRPC stubs if the previous iteration had a successful connection, i.e., the agentId != ""
       if (agentId.isNotEmpty()) {
         grpcService.resetGrpcStubs()
         logger.info { "Resetting agentId" }
@@ -166,25 +159,46 @@ class Agent(
         val connectionContext = AgentConnectionContext()
 
         coroutineScope {
-          launch(Dispatchers.IO + exceptionHandler("readRequestsFromProxy")) {
-            grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
+          launch(Dispatchers.IO) {
+            runCatching {
+              grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
+            }.onFailure { e ->
+              if (grpcService.agent.isRunning)
+                Status.fromThrowable(e).apply { logger.error(e) { "readRequestsFromProxy(): $code $description" } }
+            }
           }
 
-          launch(Dispatchers.IO + exceptionHandler("startHeartBeat")) {
-            startHeartBeat(connectionContext)
+          launch(Dispatchers.IO) {
+            runCatching {
+              startHeartBeat(connectionContext)
+            }.onFailure { e ->
+              if (grpcService.agent.isRunning)
+                Status.fromThrowable(e).apply { logger.error(e) { "startHeartBeat(): $code $description" } }
+            }
           }
 
           // This exceptionHandler is not necessary
-          launch(Dispatchers.IO + exceptionHandler("writeResponsesToProxyUntilDisconnected")) {
-            grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
+          launch(Dispatchers.IO) {
+            runCatching {
+              grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
+            }.onFailure { e ->
+              if (grpcService.agent.isRunning)
+                Status.fromThrowable(e)
+                  .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): $code $description" } }
+            }
           }
 
-          launch(Dispatchers.IO + exceptionHandler("scrapeResultsChannel.send")) {
-            // This is terminated by connectionContext.close()
-            for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
-              // The url fetch occurs during the invoke() on the scrapeRequestAction
-              val scrapeResponse = scrapeRequestAction.invoke()
-              connectionContext.scrapeResultsChannel.send(scrapeResponse)
+          launch(Dispatchers.IO) {
+            runCatching {
+              // This is terminated by connectionContext.close()
+              for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
+                // The url fetch occurs during the invoke() on the scrapeRequestAction
+                val scrapeResponse = scrapeRequestAction.invoke()
+                connectionContext.scrapeResultsChannel.send(scrapeResponse)
+              }
+            }.onFailure { e ->
+              if (grpcService.agent.isRunning)
+                Status.fromThrowable(e).apply { logger.error(e) { "scrapeResultsChannel.send(): $code $description" } }
             }
           }
         }
