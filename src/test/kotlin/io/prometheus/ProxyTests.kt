@@ -56,7 +56,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldNotBeNull
-import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -193,19 +194,19 @@ internal object ProxyTests {
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.inWholeMilliseconds) {
           httpClient { client ->
-            val counter = AtomicInteger(0)
+            val counter = AtomicInt(0)
             repeat(args.sequentialQueryCount) { cnt ->
               val job =
                 launch(dispatcher + exceptionHandler(logger)) {
                   callProxy(client, pathMap, "Sequential $cnt")
-                  counter.incrementAndGet()
+                  counter += 1
                 }
 
               job.join()
               job.getCancellationException().cause.shouldBeNull()
             }
 
-            counter.get() shouldBeEqualTo args.sequentialQueryCount
+            counter.load() shouldBeEqualTo args.sequentialQueryCount
           }
         }
       }
@@ -216,13 +217,13 @@ internal object ProxyTests {
       .use { dispatcher ->
         withTimeoutOrNull(1.minutes.inWholeMilliseconds) {
           httpClient { client ->
-            val counter = AtomicInteger(0)
+            val counter = AtomicInt(0)
             val jobs =
               List(args.parallelQueryCount) { cnt ->
                 launch(dispatcher + exceptionHandler(logger)) {
                   delay((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random().milliseconds)
                   callProxy(client, pathMap, "Parallel $cnt")
-                  counter.incrementAndGet()
+                  counter += 1
                 }
               }
 
@@ -231,25 +232,25 @@ internal object ProxyTests {
               job.getCancellationException().cause.shouldBeNull()
             }
 
-            counter.get() shouldBeEqualTo args.parallelQueryCount
+            counter.load() shouldBeEqualTo args.parallelQueryCount
           }
         }
       }
 
     logger.debug { "Unregistering paths" }
-    val counter = AtomicInteger(0)
-    val errorCnt = AtomicInteger(0)
+    val counter = AtomicInt(0)
+    val errorCnt = AtomicInt(0)
     pathMap.forEach { path ->
       try {
         args.agent.pathManager.unregisterPath("proxy-${path.key}")
-        counter.incrementAndGet()
+        counter += 1
       } catch (e: RequestFailureException) {
-        errorCnt.incrementAndGet()
+        errorCnt += 1
       }
     }
 
-    counter.get() shouldBeEqualTo pathMap.size
-    errorCnt.get() shouldBeEqualTo 0
+    counter.load() shouldBeEqualTo pathMap.size
+    errorCnt.load() shouldBeEqualTo 0
     args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize
 
     logger.info { "Shutting down ${httpServers.size} httpServers" }

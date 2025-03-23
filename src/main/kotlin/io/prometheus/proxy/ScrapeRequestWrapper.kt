@@ -27,7 +27,8 @@ import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.ScrapeRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.atomic.AtomicLong
+import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.fetchAndIncrement
 import kotlin.time.Duration
 import kotlin.time.TimeSource.Monotonic
 
@@ -51,7 +52,7 @@ internal class ScrapeRequestWrapper(
       .also {
         require(agentContext.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         it.agentId = agentContext.agentId
-        it.scrapeId = SCRAPE_ID_GENERATOR.getAndIncrement()
+        it.scrapeId = SCRAPE_ID_GENERATOR.fetchAndIncrement()
         it.path = path
         it.accept = accept.orEmpty()
         it.debugEnabled = debugEnabled

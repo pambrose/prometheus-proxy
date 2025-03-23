@@ -47,7 +47,8 @@ import io.prometheus.grpc.UnregisterPathResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import java.util.concurrent.CancellationException
-import java.util.concurrent.atomic.AtomicLong
+import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.fetchAndIncrement
 
 internal class ProxyServiceImpl(
   private val proxy: Proxy,
@@ -119,7 +120,7 @@ internal class ProxyServiceImpl(
     return RegisterPathResponse
       .newBuilder()
       .also {
-        it.pathId = if (valid) PATH_ID_GENERATOR.getAndIncrement() else -1
+        it.pathId = if (valid) PATH_ID_GENERATOR.fetchAndIncrement() else -1
         it.valid = valid
         it.reason = "Invalid agentId: ${request.agentId} (registerPath)"
         it.pathCount = proxy.pathManager.pathMapSize

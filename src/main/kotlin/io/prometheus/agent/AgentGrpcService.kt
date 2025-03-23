@@ -62,6 +62,8 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.zip.CRC32
+import kotlin.concurrent.atomics.minusAssign
+import kotlin.concurrent.atomics.plusAssign
 import kotlin.properties.Delegates.notNull
 
 internal class AgentGrpcService(
@@ -305,7 +307,7 @@ internal class AgentGrpcService(
             // The actual fetch happens at the other end of the channel, not here.
             logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
             connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(grpcRequest) }
-            agent.scrapeRequestBacklogSize.incrementAndGet()
+            agent.scrapeRequestBacklogSize += 1
           }
       }
   }
@@ -369,7 +371,7 @@ internal class AgentGrpcService(
       }
 
       agent.markMsgSent()
-      agent.scrapeRequestBacklogSize.decrementAndGet()
+      agent.scrapeRequestBacklogSize -= 1
     }
   } finally {
     nonChunkedChannel.close()

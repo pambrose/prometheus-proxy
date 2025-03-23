@@ -57,7 +57,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
-import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.atomics.AtomicInt
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -92,7 +92,7 @@ class Agent(
   private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
   internal val agentName = options.agentName.ifBlank { "Unnamed-${hostInfo.hostName}" }
-  internal val scrapeRequestBacklogSize = AtomicInteger(0)
+  internal val scrapeRequestBacklogSize = AtomicInt(0)
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
@@ -149,7 +149,7 @@ class Agent(
 
       // Reset values for each connection attempt
       pathManager.clear()
-      scrapeRequestBacklogSize.set(0)
+      scrapeRequestBacklogSize.store(0)
       lastMsgSentMark = clock.markNow()
 
       if (grpcService.connectAgent(configVals.agent.transportFilterDisabled)) {
@@ -244,7 +244,7 @@ class Agent(
     healthCheckRegistry.register(
       "scrape_request_backlog_check",
       newBacklogHealthCheck(
-        backlogSize = scrapeRequestBacklogSize.get(),
+        backlogSize = scrapeRequestBacklogSize.load(),
         size = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize,
       ),
     )
