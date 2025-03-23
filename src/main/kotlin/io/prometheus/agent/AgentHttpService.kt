@@ -77,7 +77,7 @@ internal class AgentHttpService(
       } finally {
         requestTimer?.observeDuration()
       }
-      agent.updateScrapeCounter(scrapeResults.scrapeCounterMsg.get())
+      agent.updateScrapeCounter(scrapeResults.scrapeCounterMsg.load())
     }
 
   private suspend fun fetchContent(
@@ -144,10 +144,10 @@ internal class AgentHttpService(
         validResponse = true
 
         scrapeRequest.debugEnabled.ifTrue { setDebugInfo(url) }
-        scrapeCounterMsg.set(SUCCESS_MSG)
+        scrapeCounterMsg.store(SUCCESS_MSG)
       } else {
         scrapeRequest.debugEnabled.ifTrue { setDebugInfo(url, "Unsuccessful response code $statusCode") }
-        scrapeCounterMsg.set(UNSUCCESSFUL_MSG)
+        scrapeCounterMsg.store(UNSUCCESSFUL_MSG)
       }
     }
   }
@@ -208,7 +208,7 @@ internal class AgentHttpService(
     private fun handleInvalidPath(scrapeRequest: ScrapeRequest): ScrapeResults {
       val scrapeResults = with(scrapeRequest) { ScrapeResults(agentId = agentId, scrapeId = scrapeId) }
       logger.warn { "Invalid path in fetchScrapeUrl(): ${scrapeRequest.path}" }
-      scrapeResults.scrapeCounterMsg.set(INVALID_PATH_MSG)
+      scrapeResults.scrapeCounterMsg.store(INVALID_PATH_MSG)
       scrapeRequest.debugEnabled.ifTrue { scrapeResults.setDebugInfo("None", "Invalid path: ${scrapeRequest.path}") }
       return scrapeResults
     }

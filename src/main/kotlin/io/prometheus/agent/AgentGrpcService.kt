@@ -52,7 +52,6 @@ import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -63,6 +62,8 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.zip.CRC32
+import kotlin.concurrent.atomics.minusAssign
+import kotlin.concurrent.atomics.plusAssign
 import kotlin.properties.Delegates.notNull
 
 internal class AgentGrpcService(
@@ -297,19 +298,16 @@ internal class AgentGrpcService(
     connectionContext
       .use {
         val agentInfo =
-          AgentInfo
-            .newBuilder()
-            .also {
-              require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
-              it.agentId = agent.agentId
-            }.build()
-        stub
-          .readRequestsFromProxy(agentInfo)
+          AgentInfo.newBuilder().also {
+            require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+            it.agentId = agent.agentId
+          }.build()
+        stub.readRequestsFromProxy(agentInfo)
           .collect { grpcRequest: ScrapeRequest ->
             // The actual fetch happens at the other end of the channel, not here.
             logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
             connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(grpcRequest) }
-            agent.scrapeRequestBacklogSize.incrementAndGet()
+            agent.scrapeRequestBacklogSize += 1
           }
       }
   }
@@ -373,7 +371,7 @@ internal class AgentGrpcService(
       }
 
       agent.markMsgSent()
-      agent.scrapeRequestBacklogSize.decrementAndGet()
+      agent.scrapeRequestBacklogSize -= 1
     }
   } finally {
     nonChunkedChannel.close()
@@ -384,30 +382,39 @@ internal class AgentGrpcService(
     agent: Agent,
     connectionContext: AgentConnectionContext,
   ) {
-    fun exceptionHandler() =
-      CoroutineExceptionHandler { _, e ->
-        if (agent.isRunning)
-          Status.fromThrowable(e)
-            .apply { logger.error { "Error in writeResponsesToProxyUntilDisconnected(): $code $description" } }
-      }
-
     coroutineScope {
       val nonChunkedChannel = Channel<ScrapeResponse>(Channel.UNLIMITED)
       val chunkedChannel = Channel<ChunkedScrapeResponse>(Channel.UNLIMITED)
 
-      launch(Dispatchers.Default + exceptionHandler()) {
-        processScrapeResults(agent, connectionContext.scrapeResultsChannel, nonChunkedChannel, chunkedChannel)
+      launch(Dispatchers.IO) {
+        runCatching {
+          processScrapeResults(agent, connectionContext.scrapeResultsChannel, nonChunkedChannel, chunkedChannel)
+        }.onFailure { e ->
+          if (agent.isRunning)
+            Status.fromThrowable(e).apply { logger.error(e) { "processScrapeResults(): $code $description" } }
+        }
       }
 
       connectionContext
         .use {
           coroutineScope {
-            launch(Dispatchers.Default + exceptionHandler()) {
-              stub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
+            launch(Dispatchers.IO) {
+              runCatching {
+                stub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
+              }.onFailure { e ->
+                if (agent.isRunning)
+                  Status.fromThrowable(e).apply { logger.error(e) { "writeResponsesToProxy(): $code $description" } }
+              }
             }
 
-            launch(Dispatchers.Default + exceptionHandler()) {
-              stub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
+            launch(Dispatchers.IO) {
+              runCatching {
+                stub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
+              }.onFailure { e ->
+                if (agent.isRunning)
+                  Status.fromThrowable(e)
+                    .apply { logger.error(e) { "writeChunkedResponsesToProxy(): $code $description" } }
+              }
             }
           }
 

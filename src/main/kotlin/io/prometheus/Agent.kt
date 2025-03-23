@@ -51,14 +51,13 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
-import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.atomics.AtomicInt
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -93,7 +92,7 @@ class Agent(
   private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
   internal val agentName = options.agentName.ifBlank { "Unnamed-${hostInfo.hostName}" }
-  internal val scrapeRequestBacklogSize = AtomicInteger(0)
+  internal val scrapeRequestBacklogSize = AtomicInt(0)
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
@@ -140,14 +139,8 @@ class Agent(
   }
 
   override fun run() {
-    fun exceptionHandler(name: String) =
-      CoroutineExceptionHandler { _, e ->
-        if (grpcService.agent.isRunning)
-          Status.fromThrowable(e).apply { logger.error { "Error in $name(): $code $description" } }
-      }
-
     suspend fun connectToProxy() {
-      // Reset gRPC stubs if previous iteration had a successful connection, i.e., the agentId != ""
+      // Reset gRPC stubs if the previous iteration had a successful connection, i.e., the agentId != ""
       if (agentId.isNotEmpty()) {
         grpcService.resetGrpcStubs()
         logger.info { "Resetting agentId" }
@@ -156,7 +149,7 @@ class Agent(
 
       // Reset values for each connection attempt
       pathManager.clear()
-      scrapeRequestBacklogSize.set(0)
+      scrapeRequestBacklogSize.store(0)
       lastMsgSentMark = clock.markNow()
 
       if (grpcService.connectAgent(configVals.agent.transportFilterDisabled)) {
@@ -166,25 +159,46 @@ class Agent(
         val connectionContext = AgentConnectionContext()
 
         coroutineScope {
-          launch(Dispatchers.Default + exceptionHandler("readRequestsFromProxy")) {
-            grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
+          launch(Dispatchers.IO) {
+            runCatching {
+              grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
+            }.onFailure { e ->
+              if (grpcService.agent.isRunning)
+                Status.fromThrowable(e).apply { logger.error(e) { "readRequestsFromProxy(): $code $description" } }
+            }
           }
 
-          launch(Dispatchers.Default + exceptionHandler("startHeartBeat")) {
-            startHeartBeat(connectionContext)
+          launch(Dispatchers.IO) {
+            runCatching {
+              startHeartBeat(connectionContext)
+            }.onFailure { e ->
+              if (grpcService.agent.isRunning)
+                Status.fromThrowable(e).apply { logger.error(e) { "startHeartBeat(): $code $description" } }
+            }
           }
 
           // This exceptionHandler is not necessary
-          launch(Dispatchers.Default + exceptionHandler("writeResponsesToProxyUntilDisconnected")) {
-            grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
+          launch(Dispatchers.IO) {
+            runCatching {
+              grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
+            }.onFailure { e ->
+              if (grpcService.agent.isRunning)
+                Status.fromThrowable(e)
+                  .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): $code $description" } }
+            }
           }
 
-          launch(Dispatchers.Default + exceptionHandler("scrapeResultsChannel.send")) {
-            // This is terminated by connectionContext.close()
-            for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
-              // The url fetch occurs during the invoke() on the scrapeRequestAction
-              val scrapeResponse = scrapeRequestAction.invoke()
-              connectionContext.scrapeResultsChannel.send(scrapeResponse)
+          launch(Dispatchers.IO) {
+            runCatching {
+              // This is terminated by connectionContext.close()
+              for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
+                // The url fetch occurs during the invoke() on the scrapeRequestAction
+                val scrapeResponse = scrapeRequestAction.invoke()
+                connectionContext.scrapeResultsChannel.send(scrapeResponse)
+              }
+            }.onFailure { e ->
+              if (grpcService.agent.isRunning)
+                Status.fromThrowable(e).apply { logger.error(e) { "scrapeResultsChannel.send(): $code $description" } }
             }
           }
         }
@@ -230,7 +244,7 @@ class Agent(
     healthCheckRegistry.register(
       "scrape_request_backlog_check",
       newBacklogHealthCheck(
-        backlogSize = scrapeRequestBacklogSize.get(),
+        backlogSize = scrapeRequestBacklogSize.load(),
         size = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize,
       ),
     )

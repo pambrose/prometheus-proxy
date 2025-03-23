@@ -33,7 +33,7 @@ import io.prometheus.grpc.ScrapeResponse
 import kotlinx.coroutines.TimeoutCancellationException
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
-import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.atomics.AtomicReference
 
 internal class ScrapeResults(
   val agentId: String,

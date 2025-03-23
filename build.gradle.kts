@@ -33,7 +33,7 @@ plugins {
 }
 
 group = "io.prometheus"
-version = "2.0.0"
+version = "2.1.0"
 
 buildConfig {
   packageName("io.prometheus")
@@ -59,6 +59,7 @@ val grpcVersion: String by project
 val jcommanderVersion: String by project
 val jettyVersion: String by project
 val junitVersion: String by project
+val junitPlatformVersion: String by project
 val kluentVersion: String by project
 val kotlinVersion: String by project
 val ktorVersion: String by project
@@ -133,8 +134,8 @@ dependencies {
   implementation("org.slf4j:jul-to-slf4j:$slf4jVersion")
 
   testImplementation("org.amshove.kluent:kluent:$kluentVersion")
-  testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
-  testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
+  testImplementation("org.junit.jupiter:junit-jupiter:$junitVersion")
+  testRuntimeOnly("org.junit.platform:junit-platform-launcher:$junitPlatformVersion")
 }
 
 publishing {
@@ -248,20 +249,25 @@ tasks.compileKotlin {
 
 kotlin {
   jvmToolchain(11)
+
+  sourceSets.all {
+    listOf(
+      "kotlin.time.ExperimentalTime",
+      "kotlin.contracts.ExperimentalContracts",
+      "kotlin.ExperimentalUnsignedTypes",
+      "kotlinx.coroutines.ExperimentalCoroutinesApi",
+      "kotlinx.coroutines.InternalCoroutinesApi",
+      "kotlinx.coroutines.DelicateCoroutinesApi",
+      "kotlin.concurrent.atomics.ExperimentalAtomicApi",
+    ).forEach {
+      languageSettings.optIn(it)
+    }
+  }
 }
 
 tasks.withType<KotlinCompile> {
   compilerOptions {
-    freeCompilerArgs = listOf(
-      "-Xbackend-threads=8",
-      "-opt-in=kotlin.time.ExperimentalTime",
-      "-opt-in=kotlin.contracts.ExperimentalContracts",
-      "-opt-in=kotlin.ExperimentalUnsignedTypes",
-      "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
-      "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
-      "-opt-in=kotlinx.coroutines.DelicateCoroutinesApi",
-      "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi"
-    )
+    freeCompilerArgs = listOf("-Xbackend-threads=8")
   }
 }
 
@@ -280,6 +286,5 @@ tasks.withType<LintTask> {
 }
 
 kotlinter {
-  //ignoreFailures = false
   reporters = arrayOf("checkstyle", "plain")
 }

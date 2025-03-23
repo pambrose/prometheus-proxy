@@ -23,18 +23,21 @@ import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.channels.Channel
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.concurrent.atomics.minusAssign
+import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
 
 internal class AgentContext(
   private val remoteAddr: String,
 ) {
-  val agentId = AGENT_ID_GENERATOR.incrementAndGet().toString()
+  val agentId = AGENT_ID_GENERATOR.incrementAndFetch().toString()
 
   private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(Channel.UNLIMITED)
-  private val channelBacklogSize = AtomicInteger(0)
+  private val channelBacklogSize = AtomicInt(0)
 
   private val clock = Monotonic
   private var lastActivityTimeMark: TimeMark by nonNullableReference(clock.markNow())
@@ -59,7 +62,7 @@ internal class AgentContext(
     get() = lastActivityTimeMark.elapsedNow()
 
   val scrapeRequestBacklogSize: Int
-    get() = channelBacklogSize.get()
+    get() = channelBacklogSize.load()
 
   init {
     markActivityTime(true)
@@ -74,13 +77,13 @@ internal class AgentContext(
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
     scrapeRequestChannel.send(scrapeRequest)
-    channelBacklogSize.incrementAndGet()
+    channelBacklogSize += 1
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
     scrapeRequestChannel.receiveCatching().getOrNull()
       ?.apply {
-        channelBacklogSize.decrementAndGet()
+        channelBacklogSize -= 1
       }
 
   fun isValid() = valid && !scrapeRequestChannel.isClosedForReceive
