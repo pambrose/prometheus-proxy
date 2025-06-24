@@ -1,5 +1,4 @@
 import com.google.protobuf.gradle.id
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jmailen.gradle.kotlinter.tasks.LintTask
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -58,8 +57,6 @@ val gengrpcVersion: String by project
 val grpcVersion: String by project
 val jcommanderVersion: String by project
 val jettyVersion: String by project
-val junitVersion: String by project
-val junitPlatformVersion: String by project
 val kluentVersion: String by project
 val kotlinVersion: String by project
 val ktorVersion: String by project
@@ -134,8 +131,7 @@ dependencies {
   implementation("org.slf4j:jul-to-slf4j:$slf4jVersion")
 
   testImplementation("org.amshove.kluent:kluent:$kluentVersion")
-  testImplementation("org.junit.jupiter:junit-jupiter:$junitVersion")
-  testRuntimeOnly("org.junit.platform:junit-platform-launcher:$junitPlatformVersion")
+  testImplementation(kotlin("test"))
 }
 
 publishing {
@@ -265,11 +261,11 @@ kotlin {
   }
 }
 
-tasks.withType<KotlinCompile> {
-  compilerOptions {
-    freeCompilerArgs = listOf("-Xbackend-threads=8")
-  }
-}
+//tasks.withType<KotlinCompile> {
+//  compilerOptions {
+//    freeCompilerArgs = listOf("-Xbackend-threads=8")
+//  }
+//}
 
 tasks.withType<Test> {
   useJUnitPlatform()
@@ -287,4 +283,11 @@ tasks.withType<LintTask> {
 
 kotlinter {
   reporters = arrayOf("checkstyle", "plain")
+}
+
+idea {
+  module {
+    isDownloadSources = true
+    isDownloadJavadoc = true
+  }
 }
