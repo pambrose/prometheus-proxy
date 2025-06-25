@@ -4,28 +4,18 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 plugins {
-  val configVersion: String by System.getProperties()
-  val detektVersion: String by System.getProperties()
-//  val kotestPluginVersion: String by System.getProperties()
-  val kotlinterVersion: String by System.getProperties()
-  val kotlinVersion: String by System.getProperties()
-  val koverVersion: String by System.getProperties()
-  val protobufVersion: String by System.getProperties()
-  val shadowVersion: String by System.getProperties()
-  val versionsVersion: String by System.getProperties()
-
   idea
   java
   `maven-publish`
-  kotlin("jvm") version kotlinVersion
-  kotlin("plugin.serialization") version kotlinVersion
-  id("com.google.protobuf") version protobufVersion   // Keep in sync with grpc
-  id("org.jmailen.kotlinter") version kotlinterVersion
-  id("com.github.ben-manes.versions") version versionsVersion
-  id("com.github.johnrengelman.shadow") version shadowVersion
-  id("com.github.gmazzo.buildconfig") version configVersion
-  id("org.jetbrains.kotlinx.kover") version koverVersion
-  id("io.gitlab.arturbosch.detekt") version detektVersion
+  alias(libs.plugins.kotlin.jvm)
+  alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.protobuf)   // Keep in sync with grpc
+  alias(libs.plugins.kotlinter)
+  alias(libs.plugins.versions)
+  alias(libs.plugins.shadow)
+  alias(libs.plugins.buildconfig)
+  alias(libs.plugins.kover)
+  alias(libs.plugins.detekt)
   // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
   // id("jacoco")
   // id("com.github.kt3k.coveralls") version "2.12.0"
@@ -44,250 +34,236 @@ buildConfig {
 }
 
 repositories {
-  mavenLocal()
+  // mavenLocal()
   google()
   mavenCentral()
   maven { url = uri("https://jitpack.io") }
 }
 
-val annotationVersion: String by project
-val datetimeVersion: String by project
-val dropwizardVersion: String by project
-val gengrpcVersion: String by project
-val grpcVersion: String by project
-val jcommanderVersion: String by project
-val jettyVersion: String by project
-val kluentVersion: String by project
-val kotlinVersion: String by project
-val ktorVersion: String by project
-val logbackVersion: String by project
-val loggingVersion: String by project
-val tcnativeVersion: String by project
-val prometheusVersion: String by project
-val protobufVersion: String by project
-val protocVersion: String by project
-val serializationVersion: String by project
-val slf4jVersion: String by project
-val typesafeVersion: String by project
-val utilsVersion: String by project
-val zipkinVersion: String by project
-
 dependencies {
-  implementation("org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion")
+  implementation(libs.kotlin.reflect)
+  implementation(libs.kotlin.serialization)
 
-  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$serializationVersion")
+  implementation(libs.grpc.netty)
+  implementation(libs.grpc.protobuf)
+  implementation(libs.grpc.stub)
+  implementation(libs.grpc.services)
 
-  implementation("io.grpc:grpc-netty-shaded:$grpcVersion")
-  implementation("io.grpc:grpc-protobuf:$grpcVersion")
-  implementation("io.grpc:grpc-stub:$grpcVersion")
-  implementation("io.grpc:grpc-services:$grpcVersion")
-
-//  implementation("com.google.protobuf:protobuf-java:$protobufVersion")
-//  implementation("com.google.protobuf:protobuf-java-util:$protobufVersion")
-
-  implementation("io.grpc:grpc-kotlin-stub:$gengrpcVersion")
+  implementation(libs.grpc.kotlin.stub)
 
   // Required
-  implementation("io.netty:netty-tcnative-boringssl-static:$tcnativeVersion")
+  implementation(libs.netty.tcnative)
 
-  implementation("com.github.pambrose.common-utils:core-utils:$utilsVersion")
-  implementation("com.github.pambrose.common-utils:corex-utils:$utilsVersion")
-  implementation("com.github.pambrose.common-utils:dropwizard-utils:$utilsVersion")
-  implementation("com.github.pambrose.common-utils:guava-utils:$utilsVersion")
-  implementation("com.github.pambrose.common-utils:grpc-utils:$utilsVersion")
-  implementation("com.github.pambrose.common-utils:jetty-utils:$utilsVersion")
-  implementation("com.github.pambrose.common-utils:ktor-client-utils:$utilsVersion")
-  implementation("com.github.pambrose.common-utils:prometheus-utils:$utilsVersion")
-  implementation("com.github.pambrose.common-utils:service-utils:$utilsVersion")
-  implementation("com.github.pambrose.common-utils:zipkin-utils:$utilsVersion")
+  implementation(libs.utils.core)
+  implementation(libs.utils.corex)
+  implementation(libs.utils.dropwizard)
+  implementation(libs.utils.guava)
+  implementation(libs.utils.grpc)
+  implementation(libs.utils.jetty)
+  implementation(libs.utils.ktor.client)
+  implementation(libs.utils.prometheus)
+  implementation(libs.utils.service)
+  implementation(libs.utils.zipkin)
 
-  implementation("org.eclipse.jetty:jetty-servlet:$jettyVersion")
+  implementation(libs.jetty.servlet)
 
-  implementation("javax.annotation:javax.annotation-api:$annotationVersion")
-  implementation("org.jcommander:jcommander:$jcommanderVersion")
-  implementation("com.typesafe:config:$typesafeVersion")
+  implementation(libs.annotation.api)
+  implementation(libs.jcommander)
+  implementation(libs.typesafe.config)
 
-  implementation("org.jetbrains.kotlinx:kotlinx-datetime:$datetimeVersion")
+  implementation(libs.kotlin.datetime)
 
-  implementation("io.prometheus:simpleclient:$prometheusVersion")
+  implementation(libs.prometheus.simpleclient)
 
-  implementation("io.ktor:ktor-client:$ktorVersion")
-  implementation("io.ktor:ktor-client-cio:$ktorVersion")
-  implementation("io.ktor:ktor-client-auth:$ktorVersion")
-  implementation("io.ktor:ktor-network:$ktorVersion")
-  implementation("io.ktor:ktor-network-tls:$ktorVersion")
+  implementation(libs.ktor.client)
+  implementation(libs.ktor.client.cio)
+  implementation(libs.ktor.client.auth)
+  implementation(libs.ktor.network)
+  implementation(libs.ktor.network.tls)
 
-  implementation("io.ktor:ktor-server:$ktorVersion")
-  implementation("io.ktor:ktor-server-cio:$ktorVersion")
-  implementation("io.ktor:ktor-server-call-logging:$ktorVersion")
-  implementation("io.ktor:ktor-server-compression:$ktorVersion")
+  implementation(libs.ktor.server)
+  implementation(libs.ktor.server.cio)
+  implementation(libs.ktor.server.call.logging)
+  implementation(libs.ktor.server.compression)
 
-  implementation("io.dropwizard.metrics:metrics-healthchecks:$dropwizardVersion")
+  implementation(libs.dropwizard.metrics)
 
-  implementation("io.zipkin.brave:brave-instrumentation-grpc:$zipkinVersion")
+  implementation(libs.zipkin.brave)
 
-  implementation("io.github.oshai:kotlin-logging:$loggingVersion")
-  implementation("ch.qos.logback:logback-classic:$logbackVersion")
-  implementation("org.slf4j:jul-to-slf4j:$slf4jVersion")
+  implementation(libs.kotlin.logging)
+  implementation(libs.logback.classic)
+  implementation(libs.slf4j.jul)
 
-  testImplementation("org.amshove.kluent:kluent:$kluentVersion")
+  testImplementation(libs.kluent)
   testImplementation(kotlin("test"))
 }
 
-publishing {
-  publications {
-    create<MavenPublication>("mavenJava") {
-      from(components["java"])
-      versionMapping {
-        usage("java-api") {
-          fromResolutionOf("runtimeClasspath")
-        }
-        usage("java-runtime") {
-          fromResolutionResult()
+configureKotlin()
+configureGrpc()
+configureJars()
+configurePublishing()
+configureTesting()
+configureKotlinter()
+configureDetekt()
+
+fun Project.configureKotlin() {
+  tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
+  }
+
+  configurations.all {
+    resolutionStrategy.cacheChangingModulesFor(0, "seconds")
+  }
+
+  idea {
+    module {
+      isDownloadSources = true
+      isDownloadJavadoc = true
+    }
+  }
+
+  kotlin {
+    jvmToolchain(11)
+
+    sourceSets.all {
+      listOf(
+        "kotlin.time.ExperimentalTime",
+        "kotlin.contracts.ExperimentalContracts",
+        "kotlin.ExperimentalUnsignedTypes",
+        "kotlinx.coroutines.ExperimentalCoroutinesApi",
+        "kotlinx.coroutines.InternalCoroutinesApi",
+        "kotlinx.coroutines.DelicateCoroutinesApi",
+        "kotlin.concurrent.atomics.ExperimentalAtomicApi",
+      ).forEach {
+        languageSettings.optIn(it)
+      }
+    }
+  }
+}
+
+fun Project.configureGrpc() {
+  tasks.compileKotlin {
+    dependsOn(":generateProto")
+  }
+
+  protobuf {
+    protoc {
+      artifact = "com.google.protobuf:protoc:${libs.versions.protoc.get()}"
+    }
+    plugins {
+      id("grpc") {
+        artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.get()}"
+      }
+      id("grpckt") {
+        artifact = "io.grpc:protoc-gen-grpc-kotlin:${libs.versions.gengrpc.get()}:jdk8@jar"
+      }
+    }
+    generateProtoTasks {
+      all().forEach { task ->
+        task.plugins {
+          id("grpc")    // Generate Java gRPC classes
+          id("grpckt")  // Generate Kotlin gRPC using the custom plugin from library
         }
       }
     }
   }
 }
 
-tasks.compileKotlin {
-  dependsOn(":generateProto")
+fun Project.configureJars() {
+  // Required for multiple uberjar targets
+  tasks.shadowJar {
+    mergeServiceFiles()
+  }
+
+  val agentJar by tasks.registering(Jar::class) {
+    dependsOn(tasks.shadowJar)
+    archiveFileName.set("prometheus-agent.jar")
+    manifest {
+      attributes("Main-Class" to "io.prometheus.Agent")
+    }
+    from(zipTree(tasks.shadowJar.get().archiveFile))
+  }
+
+  val proxyJar by tasks.registering(Jar::class) {
+    dependsOn(tasks.shadowJar)
+    archiveFileName.set("prometheus-proxy.jar")
+    manifest {
+      attributes("Main-Class" to "io.prometheus.Proxy")
+    }
+    from(zipTree(tasks.shadowJar.get().archiveFile))
+  }
 }
 
-protobuf {
-  protoc {
-    artifact = "com.google.protobuf:protoc:$protocVersion"
-  }
-  plugins {
-    id("grpc") {
-      artifact = "io.grpc:protoc-gen-grpc-java:$grpcVersion"
-    }
-    id("grpckt") {
-      artifact = "io.grpc:protoc-gen-grpc-kotlin:$gengrpcVersion:jdk8@jar"
+fun Project.configureTesting() {
+  tasks.withType<Test> {
+    useJUnitPlatform()
+    testLogging {
+      events("passed", "skipped", "failed", "standardOut", "standardError")
+      exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+      showStandardStreams = true
     }
   }
-  generateProtoTasks {
-    all().forEach { task ->
-      task.plugins {
-        id("grpc")    // Generate Java gRPC classes
-        id("grpckt")  // Generate Kotlin gRPC using the custom plugin from library
+}
+
+fun Project.configurePublishing() {
+  publishing {
+    publications {
+      create<MavenPublication>("mavenJava") {
+        from(components["java"])
+        versionMapping {
+          usage("java-api") {
+            fromResolutionOf("runtimeClasspath")
+          }
+          usage("java-runtime") {
+            fromResolutionResult()
+          }
+        }
       }
     }
   }
-}
 
-configurations.all {
-  resolutionStrategy.cacheChangingModulesFor(0, "seconds")
-}
-
-tasks.named<Jar>("jar") {
-  duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
-val sourcesJar by tasks.registering(Jar::class) {
-  dependsOn(tasks.classes)
-  archiveClassifier.set("sources")
-  from(sourceSets.main.get().allSource)
-}
-
-val javadocJar by tasks.registering(Jar::class) {
-  dependsOn(tasks.javadoc)
-  archiveClassifier.set("javadoc")
-  from(tasks.javadoc.get().destinationDir)
-}
-
-artifacts {
-  archives(sourcesJar)
-  //archives(javadocJar)
-}
-
-java {
-  withSourcesJar()
-}
-
-detekt {
-  buildUponDefaultConfig = true
-  allRules = false
-  config.setFrom("$projectDir/config/detekt/detekt.yml")
-  baseline = file("$projectDir/config/detekt/baseline.xml")
-}
-
-tasks.withType<JavaCompile> {
-  options.encoding = "UTF-8"
-}
-
-// Required for multiple uberjar targets
-tasks.shadowJar {
-  mergeServiceFiles()
-}
-
-val agentJar by tasks.registering(Jar::class) {
-  dependsOn(tasks.shadowJar)
-  archiveFileName.set("prometheus-agent.jar")
-  manifest {
-    attributes("Main-Class" to "io.prometheus.Agent")
+  tasks.named<Jar>("jar") {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
   }
-  from(zipTree(tasks.shadowJar.get().archiveFile))
-}
 
-val proxyJar by tasks.registering(Jar::class) {
-  dependsOn(tasks.shadowJar)
-  archiveFileName.set("prometheus-proxy.jar")
-  manifest {
-    attributes("Main-Class" to "io.prometheus.Proxy")
+  val sourcesJar by tasks.registering(Jar::class) {
+    dependsOn(tasks.classes)
+    archiveClassifier.set("sources")
+    from(sourceSets.main.get().allSource)
   }
-  from(zipTree(tasks.shadowJar.get().archiveFile))
-}
 
-tasks.compileKotlin {
-  dependsOn(":generateProto")
-}
+  val javadocJar by tasks.registering(Jar::class) {
+    dependsOn(tasks.javadoc)
+    archiveClassifier.set("javadoc")
+    from(tasks.javadoc.get().destinationDir)
+  }
 
-kotlin {
-  jvmToolchain(11)
+  artifacts {
+    archives(sourcesJar)
+    //archives(javadocJar)
+  }
 
-  sourceSets.all {
-    listOf(
-      "kotlin.time.ExperimentalTime",
-      "kotlin.contracts.ExperimentalContracts",
-      "kotlin.ExperimentalUnsignedTypes",
-      "kotlinx.coroutines.ExperimentalCoroutinesApi",
-      "kotlinx.coroutines.InternalCoroutinesApi",
-      "kotlinx.coroutines.DelicateCoroutinesApi",
-      "kotlin.concurrent.atomics.ExperimentalAtomicApi",
-    ).forEach {
-      languageSettings.optIn(it)
-    }
+  java {
+    withSourcesJar()
   }
 }
 
-//tasks.withType<KotlinCompile> {
-//  compilerOptions {
-//    freeCompilerArgs = listOf("-Xbackend-threads=8")
-//  }
-//}
+fun Project.configureKotlinter() {
+  tasks.withType<LintTask> {
+    this.source = this.source.minus(fileTree("build/generated")).asFileTree
 
-tasks.withType<Test> {
-  useJUnitPlatform()
-  testLogging {
-    events("passed", "skipped", "failed", "standardOut", "standardError")
-    exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-    showStandardStreams = true
+  }
+
+  kotlinter {
+    reporters = arrayOf("checkstyle", "plain")
   }
 }
 
-tasks.withType<LintTask> {
-  this.source = this.source.minus(fileTree("build/generated")).asFileTree
-
-}
-
-kotlinter {
-  reporters = arrayOf("checkstyle", "plain")
-}
-
-idea {
-  module {
-    isDownloadSources = true
-    isDownloadJavadoc = true
+fun Project.configureDetekt() {
+  detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    config.setFrom("$projectDir/config/detekt/detekt.yml")
+    baseline = file("$projectDir/config/detekt/baseline.xml")
   }
 }
