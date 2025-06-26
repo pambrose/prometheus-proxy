@@ -43,7 +43,10 @@ internal class ProxyServerTransportFilter(
   override fun transportTerminated(attributes: Attributes) {
     attributes.get(AGENT_ID_KEY)?.also { agentId ->
       val context = proxy.removeAgentContext(agentId, "Termination")
-      logger.info { "Disconnected ${if (context.isNotNull()) "from $context" else "with invalid agentId: $agentId"}" }
+      if (context.isNotNull())
+        logger.info { "Disconnected from $context" }
+      else
+        logger.error { "Disconnected with invalid agentId: $agentId" }
     } ?: logger.error { "Missing agentId in transportTerminated()" }
     super.transportTerminated(attributes)
   }

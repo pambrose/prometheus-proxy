@@ -57,7 +57,7 @@ object ProxyUtils {
       message = "Invalid path request /$path",
       proxy = proxy,
       logger = logger,
-      logLevel = KLogger::info,
+      logLevel = KLogger::error,
       responseResults = responseResults,
       updateMsg = "invalid_path",
       statusCode = HttpStatusCode.NotFound,

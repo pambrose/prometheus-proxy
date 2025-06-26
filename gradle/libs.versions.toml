@@ -29,7 +29,7 @@ protoc = "3.25.4"
 serialization = "1.8.1"
 slf4j = "2.0.13"
 typesafe = "1.4.3"
-utils = "2.3.11-SNAPSHOT"
+utils = "2.3.11"
 zipkin = "6.3.0"
 
 [libraries]

@@ -209,6 +209,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --max_connection_idle_secs      <br> MAX_CONNECTION_IDLE_SECS        <br> proxy.grpc.maxConnectionIdleSecs       | INT_MAX                  | gRPC Max time that a channel may have no outstanding rpcs (seconds)                                                     |
 | --max_connection_age_secs       <br> MAX_CONNECTION_AGE_SECS         <br> proxy.grpc.maxConnectionAgeSecs        | INT_MAX                  | gRPC Max time that a channel may exist (seconds)                                                                        |
 | --max_connection_age_grace_secs <br> MAX_CONNECTION_AGE_GRACE_SECS   <br> proxy.grpc.maxConnectionAgeGraceSecs   | INT_MAX                  | gRPC Grace period after the channel reaches its max age (seconds)                                                       |
+| --log_level                     <br> PROXY_LOG_LEVEL                 <br> proxy.logLevel                         | "info"                   | Log level ("trace", "debug", "info", "warn", "error", "off")                                                            |
 | --cert, -t                      <br> CERT_CHAIN_FILE_PATH            <br> proxy.tls.certChainFilePath            |                          | Certificate chain file path                                                                                             |
 | --key, -k                       <br> PRIVATE_KEY_FILE_PATH           <br> proxy.tls.privateKeyFilePath           |                          | Private key file path                                                                                                   |
 | --trust, -s                     <br> TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath  |                          | Trust certificate collection file path                                                                                  |
@@ -238,6 +239,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --keepalive_time_secs     <br> KEEPALIVE_TIME_SECS             <br> agent.grpc.keepAliveTimeSecs              | INT_MAX | gRPC The interval between PING frames (seconds)                                                |
 | --keepalive_timeout_secs  <br> KEEPALIVE_TIMEOUT_SECS          <br> agent.grpc.keepAliveTimeoutSecs           | 20      | gRPC The timeout for a PING frame to be acknowledged (seconds)                                 |
 | --keepalive_without_calls <br> KEEPALIVE_WITHOUT_CALLS         <br> agent.grpc.keepAliveWithoutCalls          | false   | gRPC Is it permissible to send keepalive pings from the client without any outstanding streams |
+| --log_level               <br> AGENT_LOG_LEVEL                 <br> agent.logLevel                            | "info"  | Log level ("trace", "debug", "info", "warn", "error", "off")                                   |
 | --cert, -t                <br> CERT_CHAIN_FILE_PATH            <br> agent.tls.certChainFilePath               |         | Certificate chain file path                                                                    |
 | --key, -k                 <br> PRIVATE_KEY_FILE_PATH           <br> agent.tls.privateKeyFilePath              |         | Private key file path                                                                          |
 | --trust, -s               <br> TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath     |         | Trust certificate collection file path                                                         |
@@ -259,6 +261,13 @@ Misc notes:
 * A pathConfig `labels` value is a quote-escaped JSON string with key/value pairs. It is used to add additional service
   discovery context to a target.
 * The gRPC keepalive values are described [here](https://grpc.io/docs/guides/keepalive/).
+
+### Logging
+
+The log level can be set with the `PROXY_LOG_LEVEL` and `AGENT_LOG_LEVEL` environment vars, the `--log_level` CLI
+option,
+or the `proxy.logLevel` and `agent.logLevel` properties. The log level can be one of: `trace`, `debug`, `info`, `warn`,
+`error`, or `off`.
 
 ### Admin Servlets
 
