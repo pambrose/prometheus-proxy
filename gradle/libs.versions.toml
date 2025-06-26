@@ -6,7 +6,7 @@ kotlinter = "5.1.1"
 kotlin = "2.2.0"
 kover = "0.9.1"
 protobuf = "0.9.5"
-shadow = "8.1.1"
+shadow = "8.3.7"
 versions = "0.52.0"
 
 # Libraries
@@ -100,7 +100,7 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 protobuf = { id = "com.google.protobuf", version.ref = "protobuf" }
 kotlinter = { id = "org.jmailen.kotlinter", version.ref = "kotlinter" }
 versions = { id = "com.github.ben-manes.versions", version.ref = "versions" }
-shadow = { id = "com.github.johnrengelman.shadow", version.ref = "shadow" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "config" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
