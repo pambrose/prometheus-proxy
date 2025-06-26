@@ -102,6 +102,10 @@ abstract class BaseOptions protected constructor(
   var keepAliveTimeoutSecs = -1L
     private set
 
+  @Parameter(names = ["--log_level"], description = "Log level")
+  var logLevel = ""
+    protected set
+
   @Parameter(
     names = ["-v", "--version"],
     description = "Print version info and exit",

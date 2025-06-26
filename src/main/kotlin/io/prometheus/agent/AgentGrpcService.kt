@@ -182,7 +182,7 @@ internal class AgentGrpcService(
       true
     }.getOrElse { e ->
       agent.metrics { connectCount.labels(agent.launchId, "failure").inc() }
-      logger.info {
+      logger.error {
         "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
       }
       false

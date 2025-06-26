@@ -95,7 +95,7 @@ internal class ProxyServiceImpl(
         assignProperties(request)
         markActivityTime(false)
         logger.info { "Connected to $this" }
-      } ?: logger.info { "registerAgent() missing AgentContext agentId: ${request.agentId}" }
+      } ?: logger.error { "registerAgent() missing AgentContext agentId: ${request.agentId}" }
 
     return RegisterAgentResponse
       .newBuilder()
@@ -156,7 +156,7 @@ internal class ProxyServiceImpl(
       .let { agentContext ->
         proxy.metrics { heartbeatCount.inc() }
         agentContext?.markActivityTime(false)
-          ?: logger.info { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
+          ?: logger.error { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
         HeartBeatResponse
           .newBuilder()
           .also {

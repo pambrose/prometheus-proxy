@@ -18,11 +18,15 @@
 
 package io.prometheus.common
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
 import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
 import com.github.pambrose.common.util.Version.Companion.versionDesc
 import io.prometheus.Proxy
 import kotlinx.serialization.json.Json
+import org.slf4j.Logger.ROOT_LOGGER_NAME
+import org.slf4j.LoggerFactory
 import java.net.URLDecoder
 import java.util.*
 import kotlin.system.exitProcess
@@ -57,4 +61,22 @@ object Utils {
   internal fun String.defaultEmptyJsonObject() = if (isEmpty()) "{}" else this
 
   fun String.toJsonElement() = Json.parseToJsonElement(this)
+
+  fun setLogLevel(
+    context: String,
+    logLevel: String,
+  ) {
+    val level =
+      when (logLevel.toLowercase()) {
+        "trace" -> Level.TRACE
+        "debug" -> Level.DEBUG
+        "info" -> Level.INFO
+        "warn" -> Level.WARN
+        "error" -> Level.ERROR
+        "off" -> Level.OFF
+        else -> throw IllegalArgumentException("Invalid $context log level: $logLevel")
+      }
+    val rootLogger = LoggerFactory.getLogger(ROOT_LOGGER_NAME) as Logger
+    rootLogger.level = level
+  }
 }

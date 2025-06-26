@@ -30,11 +30,13 @@ import io.prometheus.common.EnvVars.MAX_CONNECTION_IDLE_SECS
 import io.prometheus.common.EnvVars.PERMIT_KEEPALIVE_TIME_SECS
 import io.prometheus.common.EnvVars.PERMIT_KEEPALIVE_WITHOUT_CALLS
 import io.prometheus.common.EnvVars.PROXY_CONFIG
+import io.prometheus.common.EnvVars.PROXY_LOG_LEVEL
 import io.prometheus.common.EnvVars.PROXY_PORT
 import io.prometheus.common.EnvVars.REFLECTION_DISABLED
 import io.prometheus.common.EnvVars.SD_ENABLED
 import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
+import io.prometheus.common.Utils.setLogLevel
 
 class ProxyOptions(
   argv: Array<String>,
@@ -174,6 +176,15 @@ class ProxyOptions(
           logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
           logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }
           logger.info { "internal.maxAgentInactivitySecs: ${internal.maxAgentInactivitySecs}" }
+        }
+
+        if (logLevel.isEmpty())
+          logLevel = PROXY_LOG_LEVEL.getEnv(proxyConfigVals.logLevel)
+        if (logLevel.isNotEmpty()) {
+          logger.info { "proxy logLevel: $logLevel" }
+          setLogLevel("proxy", logLevel)
+        } else {
+          logger.info { "proxy logLevel: info" }
         }
       }
   }
