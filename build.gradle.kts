@@ -22,7 +22,7 @@ plugins {
 }
 
 group = "io.prometheus"
-version = "2.2.0"
+version = "2.2.1"
 
 buildConfig {
   packageName("io.prometheus")
@@ -94,8 +94,8 @@ dependencies {
   implementation(libs.logback.classic)
   implementation(libs.slf4j.jul)
 
-  testImplementation(libs.kluent)
   testImplementation(kotlin("test"))
+  testImplementation(libs.kluent)
 }
 
 configureKotlin()
@@ -195,8 +195,9 @@ fun Project.configureJars() {
 }
 
 fun Project.configureTesting() {
-  tasks.withType<Test> {
+  tasks.test {
     useJUnitPlatform()
+
     testLogging {
       events("passed", "skipped", "failed", "standardOut", "standardError")
       exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
@@ -255,6 +256,8 @@ fun Project.configureKotlinter() {
   }
 
   kotlinter {
+    ignoreFormatFailures = false
+    ignoreLintFailures = false
     reporters = arrayOf("checkstyle", "plain")
   }
 }
