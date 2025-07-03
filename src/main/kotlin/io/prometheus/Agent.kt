@@ -55,6 +55,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlin.concurrent.atomics.AtomicInt
@@ -190,11 +192,16 @@ class Agent(
 
           launch(Dispatchers.IO) {
             runCatching {
+              // Limits the number of concurrent coroutines
+              val semaphore = Semaphore(options.concurrentScrapes)
+
               // This is terminated by connectionContext.close()
               for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
-                // The url fetch occurs during the invoke() on the scrapeRequestAction
-                val scrapeResponse = scrapeRequestAction.invoke()
-                connectionContext.scrapeResultsChannel.send(scrapeResponse)
+                semaphore.withPermit {
+                  // The url fetch occurs during the invoke() on the scrapeRequestAction
+                  val scrapeResponse = scrapeRequestAction.invoke()
+                  connectionContext.scrapeResultsChannel.send(scrapeResponse)
+                }
               }
             }.onFailure { e ->
               if (grpcService.agent.isRunning)

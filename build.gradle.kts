@@ -111,6 +111,10 @@ fun Project.configureKotlin() {
     options.encoding = "UTF-8"
   }
 
+  tasks.named("build") {
+    mustRunAfter("clean")
+  }
+
   configurations.all {
     resolutionStrategy.cacheChangingModulesFor(0, "seconds")
   }
