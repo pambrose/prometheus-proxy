@@ -192,13 +192,13 @@ class Agent(
 
           launch(Dispatchers.IO) {
             runCatching {
-              // Limits the number of concurrent coroutines
+              // Limits the number of concurrent scrapes below
               val semaphore = Semaphore(options.maxConcurrentScrapes)
 
               // This is terminated by connectionContext.close()
               for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
                 semaphore.withPermit {
-                  // The url fetch occurs during the invoke() on the scrapeRequestAction
+                  // The url fetch occurs here during the invoke() on the scrapeRequestAction
                   val scrapeResponse = scrapeRequestAction.invoke()
                   connectionContext.scrapeResultsChannel.send(scrapeResponse)
                 }
