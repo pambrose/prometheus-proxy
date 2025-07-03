@@ -22,6 +22,8 @@ import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
+import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.shouldBe
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
@@ -30,8 +32,6 @@ import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.Utils.lambda
 import kotlinx.coroutines.runBlocking
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeGreaterThan
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -52,7 +52,7 @@ class NettyTestWithAdminMetricsTest :
         get("8093/debug".withPrefix()) { response ->
           val body = response.bodyAsText()
           body.length shouldBeGreaterThan 100
-          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.status shouldBe HttpStatusCode.OK
         }
       }
 
@@ -60,7 +60,7 @@ class NettyTestWithAdminMetricsTest :
         get("8092/debug".withPrefix()) { response ->
           val body = response.bodyAsText()
           body.length shouldBeGreaterThan 100
-          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.status shouldBe HttpStatusCode.OK
         }
       }
     }

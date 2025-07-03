@@ -17,7 +17,7 @@ gengrpc = "1.4.3"
 grpc = "1.73.0"
 jcommander = "2.0"
 jetty = "10.0.25"
-kluent = "1.73"
+kotest = "6.0.0.M4"
 ktor = "3.2.0"
 logback = "1.5.18"
 logging = "7.0.7"
@@ -92,7 +92,7 @@ logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "lo
 slf4j-jul = { module = "org.slf4j:jul-to-slf4j", version.ref = "slf4j" }
 
 # Testing
-kluent = { module = "org.amshove.kluent:kluent", version.ref = "kluent" }
+kotest = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

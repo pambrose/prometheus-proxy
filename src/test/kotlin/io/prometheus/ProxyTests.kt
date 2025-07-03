@@ -26,6 +26,9 @@ import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType.Text
@@ -53,9 +56,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withTimeoutOrNull
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeNull
-import org.amshove.kluent.shouldNotBeNull
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
@@ -107,7 +107,7 @@ internal object ProxyTests {
     pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
 
     blockingGet("$PROXY_PORT/$proxyPath".withPrefix()) { response ->
-      response.status shouldBeEqualTo HttpStatusCode.RequestTimeout
+      response.status shouldBe HttpStatusCode.RequestTimeout
     }
 
     pathManager.unregisterPath("/$proxyPath")
@@ -186,7 +186,7 @@ internal object ProxyTests {
       pathMap[i] = index
     }
 
-    args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize + args.pathCount
+    args.agent.grpcService.pathMapSize() shouldBe originalSize + args.pathCount
 
     // Call the proxy sequentially
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
@@ -206,7 +206,7 @@ internal object ProxyTests {
               job.getCancellationException().cause.shouldBeNull()
             }
 
-            counter.load() shouldBeEqualTo args.sequentialQueryCount
+            counter.load() shouldBe args.sequentialQueryCount
           }
         }
       }
@@ -232,7 +232,7 @@ internal object ProxyTests {
               job.getCancellationException().cause.shouldBeNull()
             }
 
-            counter.load() shouldBeEqualTo args.parallelQueryCount
+            counter.load() shouldBe args.parallelQueryCount
           }
         }
       }
@@ -249,9 +249,9 @@ internal object ProxyTests {
       }
     }
 
-    counter.load() shouldBeEqualTo pathMap.size
-    errorCnt.load() shouldBeEqualTo 0
-    args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize
+    counter.load() shouldBe pathMap.size
+    errorCnt.load() shouldBe 0
+    args.agent.grpcService.pathMapSize() shouldBe originalSize
 
     logger.info { "Shutting down ${httpServers.size} httpServers" }
     coroutineScope {
@@ -281,8 +281,8 @@ internal object ProxyTests {
     withHttpClient(httpClient) {
       get("$PROXY_PORT/proxy-$index".withPrefix()) { response ->
         val body = response.bodyAsText()
-        body shouldBeEqualTo contentMap[httpIndex]
-        response.status shouldBeEqualTo HttpStatusCode.OK
+        body shouldBe contentMap[httpIndex]
+        response.status shouldBe HttpStatusCode.OK
       }
     }
   }

@@ -94,8 +94,8 @@ dependencies {
   implementation(libs.logback.classic)
   implementation(libs.slf4j.jul)
 
+  testImplementation(libs.kotest)
   testImplementation(kotlin("test"))
-  testImplementation(libs.kluent)
 }
 
 configureKotlin()
