@@ -193,7 +193,7 @@ class Agent(
           launch(Dispatchers.IO) {
             runCatching {
               // Limits the number of concurrent coroutines
-              val semaphore = Semaphore(options.concurrentScrapes)
+              val semaphore = Semaphore(options.maxConcurrentScrapes)
 
               // This is terminated by connectionContext.close()
               for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {

@@ -26,9 +26,9 @@ import io.prometheus.common.EnvVars.AGENT_CONFIG
 import io.prometheus.common.EnvVars.AGENT_LOG_LEVEL
 import io.prometheus.common.EnvVars.AGENT_NAME
 import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
-import io.prometheus.common.EnvVars.CONCURRENT_SCRAPES
 import io.prometheus.common.EnvVars.CONSOLIDATED
 import io.prometheus.common.EnvVars.KEEPALIVE_WITHOUT_CALLS
+import io.prometheus.common.EnvVars.MAX_CONCURRENT_SCRAPES
 import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
 import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
@@ -72,8 +72,8 @@ class AgentOptions(
   var scrapeMaxRetries = -1
     private set
 
-  @Parameter(names = ["--concurrent_scrapes"], description = "Concurrent scrapes")
-  var concurrentScrapes = -1
+  @Parameter(names = ["--max_concurrent_scrapes"], description = "Max concurrent scrapes")
+  var maxConcurrentScrapes = -1
     private set
 
   @Parameter(names = ["--chunk"], description = "Threshold for chunking content to Proxy and buffer size (KBs)")
@@ -125,10 +125,10 @@ class AgentOptions(
           scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
         logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
 
-        if (concurrentScrapes == -1)
-          concurrentScrapes = CONCURRENT_SCRAPES.getEnv(agentConfigVals.concurrentScrapes)
-        require(concurrentScrapes > 0) { "concurrentScrapes must be greater than 0" }
-        logger.info { "concurrentScrapes: $concurrentScrapes" }
+        if (maxConcurrentScrapes == -1)
+          maxConcurrentScrapes = MAX_CONCURRENT_SCRAPES.getEnv(agentConfigVals.maxConcurrentScrapes)
+        require(maxConcurrentScrapes > 0) { "maxConcurrentScrapes must be greater than 0" }
+        logger.info { "maxConcurrentScrapes: $maxConcurrentScrapes" }
 
         if (chunkContentSizeKbs == -1)
           chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
