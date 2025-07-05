@@ -20,7 +20,6 @@ package io.prometheus.agent
 
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders.ACCEPT
@@ -44,23 +43,35 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
 import io.prometheus.Agent
+import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
 import io.prometheus.grpc.ScrapeRequest
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentHttpService(
   val agent: Agent,
 ) {
+  private val httpClientCache =
+    with(agent) {
+      HttpClientCache(
+        maxCacheSize = options.maxCacheSize,
+        maxAge = options.maxCacheAgeMins.minutes,
+        maxIdleTime = options.maxCacheIdleMins.minutes,
+        cleanupInterval = options.cacheCleanupIntervalMins.minutes,
+      )
+    }
+
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
-    return if (pathContext.isNull())
-      handleInvalidPath(scrapeRequest)
-    else
+    return if (pathContext.isNotNull())
       fetchContentFromUrl(scrapeRequest, pathContext)
+    else
+      handleInvalidPath(scrapeRequest)
   }
 
   private suspend fun AgentHttpService.fetchContentFromUrl(
@@ -91,13 +102,14 @@ internal class AgentHttpService(
       val urlObj = Url(url)
       val username = urlObj.user
       val password = urlObj.password
-      newHttpClient(scrapeRequest, username, password).use { client ->
-        client.get(
-          url = url,
-          setUp = prepareRequestHeaders(scrapeRequest),
-          block = processHttpResponse(url, scrapeRequest, scrapeResults),
-        )
-      }
+      val clientKey = ClientKey(username, password)
+      val client = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(scrapeRequest, username, password) }
+
+      client.get(
+        url = url,
+        setUp = prepareRequestHeaders(scrapeRequest),
+        block = processHttpResponse(url, scrapeRequest, scrapeResults),
+      )
     }.onFailure { e ->
       with(scrapeResults) {
         statusCode = errorCode(e, url)
@@ -208,6 +220,10 @@ internal class AgentHttpService(
         }
       }
     }
+
+  suspend fun close() {
+    httpClientCache.close()
+  }
 
   companion object {
     private val logger = KotlinLogging.logger {}

@@ -181,10 +181,10 @@ class ProxyOptions(
         if (logLevel.isEmpty())
           logLevel = PROXY_LOG_LEVEL.getEnv(proxyConfigVals.logLevel)
         if (logLevel.isNotEmpty()) {
-          logger.info { "proxy logLevel: $logLevel" }
+          logger.info { "proxy.logLevel: $logLevel" }
           setLogLevel("proxy", logLevel)
         } else {
-          logger.info { "proxy logLevel: info" }
+          logger.info { "proxy.logLevel: info" }
         }
       }
   }
