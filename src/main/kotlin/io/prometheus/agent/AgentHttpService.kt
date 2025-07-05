@@ -20,7 +20,6 @@ package io.prometheus.agent
 
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders.ACCEPT
@@ -33,32 +32,46 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.auth.Auth
 import io.ktor.client.plugins.auth.providers.BasicAuthCredentials
 import io.ktor.client.plugins.auth.providers.basic
+import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
 import io.prometheus.Agent
+import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
 import io.prometheus.grpc.ScrapeRequest
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentHttpService(
   val agent: Agent,
 ) {
+  private val httpClientCache =
+    with(agent) {
+      HttpClientCache(
+        maxCacheSize = options.maxCacheSize,
+        maxAge = options.maxCacheAgeMins.minutes,
+        maxIdleTime = options.maxCacheIdleMins.minutes,
+        cleanupInterval = options.cacheCleanupIntervalMins.minutes,
+      )
+    }
+
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
-    return if (pathContext.isNull())
-      handleInvalidPath(scrapeRequest)
-    else
+    return if (pathContext.isNotNull())
       fetchContentFromUrl(scrapeRequest, pathContext)
+    else
+      handleInvalidPath(scrapeRequest)
   }
 
   private suspend fun AgentHttpService.fetchContentFromUrl(
@@ -86,13 +99,17 @@ internal class AgentHttpService(
     scrapeResults: ScrapeResults,
   ) {
     runCatching {
-      newHttpClient(url).use { client ->
-        client.get(
-          url = url,
-          setUp = prepareRequestHeaders(scrapeRequest),
-          block = processHttpResponse(url, scrapeRequest, scrapeResults),
-        )
-      }
+      val urlObj = Url(url)
+      val username = urlObj.user
+      val password = urlObj.password
+      val clientKey = ClientKey(username, password)
+      val client = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(scrapeRequest, username, password) }
+
+      client.get(
+        url = url,
+        setUp = prepareRequestHeaders(scrapeRequest),
+        block = processHttpResponse(url, scrapeRequest, scrapeResults),
+      )
     }.onFailure { e ->
       with(scrapeResults) {
         statusCode = errorCode(e, url)
@@ -105,12 +122,9 @@ internal class AgentHttpService(
 
   private fun prepareRequestHeaders(request: ScrapeRequest): HttpRequestBuilder.() -> Unit =
     lambda {
-      request.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
-      val authHeader = request.authHeader.ifBlank { null }
-      authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
     }
 
   private fun processHttpResponse(
@@ -152,7 +166,11 @@ internal class AgentHttpService(
     }
   }
 
-  private fun newHttpClient(url: String): HttpClient =
+  private fun newHttpClient(
+    scrapeRequest: ScrapeRequest,
+    username: String?,
+    password: String?,
+  ): HttpClient =
     HttpClient(CIO) {
       expectSuccess = false
       engine {
@@ -166,6 +184,13 @@ internal class AgentHttpService(
             trustManager = TrustAllX509TrustManager
           }
         }
+      }
+
+      // Set default headers
+      defaultRequest {
+        scrapeRequest.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
+        val authHeader = scrapeRequest.authHeader.ifBlank { null }
+        authHeader?.also { header(HttpHeaders.Authorization, it) }
       }
 
       install(HttpTimeout)
@@ -185,19 +210,20 @@ internal class AgentHttpService(
         }
       }
 
-      val urlObj = Url(url)
-      val user = urlObj.user
-      val passwd = urlObj.password
-      if (user.isNotNull() && passwd.isNotNull()) {
+      if (username.isNotNull() && password.isNotNull()) {
         install(Auth) {
           basic {
             credentials {
-              BasicAuthCredentials(user, passwd)
+              BasicAuthCredentials(username, password)
             }
           }
         }
       }
     }
+
+  suspend fun close() {
+    httpClientCache.close()
+  }
 
   companion object {
     private val logger = KotlinLogging.logger {}

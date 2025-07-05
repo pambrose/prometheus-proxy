@@ -19,15 +19,15 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import io.kotest.matchers.comparables.shouldBeGreaterThan
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestUtils.startAgent
 import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.Utils.lambda
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeGreaterThan
-import org.amshove.kluent.shouldContain
-import org.amshove.kluent.shouldStartWith
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -40,7 +40,7 @@ class AdminDefaultPathTest {
   fun proxyPingPathTest() {
     with(proxyConfigVals.admin) {
       blockingGet("$port/$pingPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldStartWith "pong"
       }
     }
@@ -50,7 +50,7 @@ class AdminDefaultPathTest {
   fun agentPingPathTest() {
     with(agentConfigVals.admin) {
       blockingGet("$port/$pingPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldStartWith "pong"
       }
     }
@@ -60,7 +60,7 @@ class AdminDefaultPathTest {
   fun proxyVersionPathTest() {
     with(agentConfigVals.admin) {
       blockingGet("$port/$versionPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldContain "version"
       }
     }
@@ -70,7 +70,7 @@ class AdminDefaultPathTest {
   fun agentVersionPathTest() {
     with(agentConfigVals.admin) {
       blockingGet("$port/$versionPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldContain "version"
       }
     }
@@ -80,7 +80,7 @@ class AdminDefaultPathTest {
   fun proxyHealthCheckPathTest() {
     with(proxyConfigVals.admin) {
       blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText().length shouldBeGreaterThan 10
       }
     }

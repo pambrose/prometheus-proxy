@@ -20,6 +20,9 @@ package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
 import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
@@ -28,9 +31,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeNull
-import org.amshove.kluent.shouldNotBeNull
 import kotlin.time.Duration.Companion.seconds
 
 internal object SimpleTests {
@@ -39,14 +39,14 @@ internal object SimpleTests {
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
     blockingGet("$PROXY_PORT/".withPrefix()) { response ->
-      response.status shouldBeEqualTo HttpStatusCode.NotFound
+      response.status shouldBe HttpStatusCode.NotFound
     }
   }
 
   fun invalidPathTest(caller: String) {
     logger.debug { "Calling invalidPathTest() from $caller" }
     blockingGet("$PROXY_PORT/invalid_path".withPrefix()) { response ->
-      response.status shouldBeEqualTo HttpStatusCode.NotFound
+      response.status shouldBe HttpStatusCode.NotFound
     }
   }
 
@@ -65,10 +65,10 @@ internal object SimpleTests {
       pathManager.let { manager ->
         manager.registerPath(path, "$PROXY_PORT/$path".withPrefix())
         cnt++
-        manager.pathMapSize() shouldBeEqualTo originalSize + cnt
+        manager.pathMapSize() shouldBe originalSize + cnt
         manager.unregisterPath(path)
         cnt--
-        manager.pathMapSize() shouldBeEqualTo originalSize + cnt
+        manager.pathMapSize() shouldBe originalSize + cnt
       }
     }
   }
@@ -82,7 +82,7 @@ internal object SimpleTests {
 
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
     blockingGet("$PROXY_PORT/$badPath".withPrefix()) { response ->
-      response.status shouldBeEqualTo HttpStatusCode.NotFound
+      response.status shouldBe HttpStatusCode.NotFound
     }
     pathManager.unregisterPath(badPath)
   }
@@ -115,8 +115,8 @@ internal object SimpleTests {
       }
     }.shouldNotBeNull()
 
-    paths.size shouldBeEqualTo TestConstants.REPS
-    pathManager.pathMapSize() shouldBeEqualTo (originalSize + TestConstants.REPS)
+    paths.size shouldBe TestConstants.REPS
+    pathManager.pathMapSize() shouldBe (originalSize + TestConstants.REPS)
 
     withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
       val jobs =
@@ -132,6 +132,6 @@ internal object SimpleTests {
       }
     }.shouldNotBeNull()
 
-    pathManager.pathMapSize() shouldBeEqualTo originalSize
+    pathManager.pathMapSize() shouldBe originalSize
   }
 }
