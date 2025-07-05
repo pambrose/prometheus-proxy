@@ -33,11 +33,13 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.auth.Auth
 import io.ktor.client.plugins.auth.providers.BasicAuthCredentials
 import io.ktor.client.plugins.auth.providers.basic
+import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
@@ -86,7 +88,10 @@ internal class AgentHttpService(
     scrapeResults: ScrapeResults,
   ) {
     runCatching {
-      newHttpClient(url).use { client ->
+      val urlObj = Url(url)
+      val username = urlObj.user
+      val password = urlObj.password
+      newHttpClient(scrapeRequest, username, password).use { client ->
         client.get(
           url = url,
           setUp = prepareRequestHeaders(scrapeRequest),
@@ -105,12 +110,9 @@ internal class AgentHttpService(
 
   private fun prepareRequestHeaders(request: ScrapeRequest): HttpRequestBuilder.() -> Unit =
     lambda {
-      request.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
-      val authHeader = request.authHeader.ifBlank { null }
-      authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
     }
 
   private fun processHttpResponse(
@@ -152,7 +154,11 @@ internal class AgentHttpService(
     }
   }
 
-  private fun newHttpClient(url: String): HttpClient =
+  private fun newHttpClient(
+    scrapeRequest: ScrapeRequest,
+    username: String?,
+    password: String?,
+  ): HttpClient =
     HttpClient(CIO) {
       expectSuccess = false
       engine {
@@ -166,6 +172,13 @@ internal class AgentHttpService(
             trustManager = TrustAllX509TrustManager
           }
         }
+      }
+
+      // Set default headers
+      defaultRequest {
+        scrapeRequest.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
+        val authHeader = scrapeRequest.authHeader.ifBlank { null }
+        authHeader?.also { header(HttpHeaders.Authorization, it) }
       }
 
       install(HttpTimeout)
@@ -185,14 +198,11 @@ internal class AgentHttpService(
         }
       }
 
-      val urlObj = Url(url)
-      val user = urlObj.user
-      val passwd = urlObj.password
-      if (user.isNotNull() && passwd.isNotNull()) {
+      if (username.isNotNull() && password.isNotNull()) {
         install(Auth) {
           basic {
             credentials {
-              BasicAuthCredentials(user, passwd)
+              BasicAuthCredentials(username, password)
             }
           }
         }
