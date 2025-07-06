@@ -20,28 +20,30 @@ import com.github.pambrose.common.util.simpleClassName
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 
-abstract class AbstractTests(
+abstract class AbstractHarnessTests(
   private val args: ProxyCallTestArgs,
 ) {
   @Test
-  fun proxyCallTest() = runBlocking { ProxyTests.proxyCallTest(args) }
+  fun proxyCallTest() = runBlocking { HarnessTests.proxyCallTest(args) }
 
   @Test
-  fun missingPathTest() = SimpleTests.missingPathTest(simpleClassName)
+  fun missingPathTest() = BasicHarnessTests.missingPathTest(simpleClassName)
 
   @Test
-  fun invalidPathTest() = SimpleTests.invalidPathTest(simpleClassName)
+  fun invalidPathTest() = BasicHarnessTests.invalidPathTest(simpleClassName)
 
   @Test
-  fun addRemovePathsTest() = runBlocking { SimpleTests.addRemovePathsTest(args.agent.pathManager, simpleClassName) }
+  fun addRemovePathsTest() =
+    runBlocking { BasicHarnessTests.addRemovePathsTest(args.agent.pathManager, simpleClassName) }
 
   @Test
   fun threadedAddRemovePathsTest() =
-    runBlocking { SimpleTests.threadedAddRemovePathsTest(args.agent.pathManager, simpleClassName) }
+    runBlocking { BasicHarnessTests.threadedAddRemovePathsTest(args.agent.pathManager, simpleClassName) }
 
   @Test
-  fun invalidAgentUrlTest() = runBlocking { SimpleTests.invalidAgentUrlTest(args.agent.pathManager, simpleClassName) }
+  fun invalidAgentUrlTest() =
+    runBlocking { BasicHarnessTests.invalidAgentUrlTest(args.agent.pathManager, simpleClassName) }
 
   @Test
-  fun timeoutTest() = runBlocking { ProxyTests.timeoutTest(args.agent.pathManager, simpleClassName) }
+  fun timeoutTest() = runBlocking { HarnessTests.timeoutTest(args.agent.pathManager, simpleClassName) }
 }

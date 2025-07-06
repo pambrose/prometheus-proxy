@@ -25,7 +25,7 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.Utils.getVersionDesc
-import io.prometheus.harness.support.TestConstants.PROXY_PORT
+import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.serialization.KSerializer
@@ -76,7 +76,7 @@ object TestUtils {
     adminEnabled: Boolean = false,
     debugEnabled: Boolean = false,
     metricsEnabled: Boolean = false,
-    argv: List<String> = emptyList(),
+    args: List<String> = emptyList(),
   ): Proxy {
     logger.apply {
       info { getBanner("banners/proxy.txt", logger) }
@@ -86,8 +86,8 @@ object TestUtils {
     val proxyOptions = ProxyOptions(
       mutableListOf<String>()
         .apply {
-          addAll(TestConstants.CONFIG_ARG)
-          addAll(argv)
+          addAll(HarnessConstants.CONFIG_ARG)
+          addAll(args)
           add("-Dproxy.admin.enabled=$adminEnabled")
           add("-Dproxy.admin.debugEnabled=$debugEnabled")
           add("-Dproxy.metrics.enabled=$metricsEnabled")
@@ -108,7 +108,8 @@ object TestUtils {
     metricsEnabled: Boolean = false,
     scrapeTimeoutSecs: Int = -1,
     chunkContentSizeKbs: Int = -1,
-    argv: List<String> = emptyList(),
+    maxConcurrentScrapes: Int = -1,
+    args: List<String> = emptyList(),
   ): Agent {
     logger.apply {
       info { getBanner("banners/agent.txt", logger) }
@@ -118,8 +119,8 @@ object TestUtils {
     val agentOptions = AgentOptions(
       args = mutableListOf<String>()
         .apply {
-          addAll(TestConstants.CONFIG_ARG)
-          addAll(argv)
+          addAll(HarnessConstants.CONFIG_ARG)
+          addAll(args)
           add("-Dagent.admin.enabled=$adminEnabled")
           add("-Dagent.admin.debugEnabled=$debugEnabled")
           add("-Dagent.metrics.enabled=$metricsEnabled")
@@ -127,6 +128,8 @@ object TestUtils {
             add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
           if (chunkContentSizeKbs != -1)
             add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
+          if (maxConcurrentScrapes != -1)
+            add("-Dagent.maxConcurrentScrapes=$maxConcurrentScrapes")
         },
       exitOnMissingConfig = false,
     )

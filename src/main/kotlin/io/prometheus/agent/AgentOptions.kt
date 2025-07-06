@@ -44,9 +44,9 @@ import io.prometheus.common.Utils.setLogLevel
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(
-  argv: Array<String>,
+  args: Array<String>,
   exitOnMissingConfig: Boolean,
-) : BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
+) : BaseOptions(Agent::class.java.name, args, AGENT_CONFIG.name, exitOnMissingConfig) {
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
     this(args.toTypedArray(), exitOnMissingConfig)
 

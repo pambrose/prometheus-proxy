@@ -51,7 +51,7 @@ import kotlin.system.exitProcess
 // @Parameters(separators = "=")
 abstract class BaseOptions protected constructor(
   private val progName: String,
-  private val argv: Array<String>,
+  private val args: Array<String>,
   private val envConfig: String,
   private val exitOnMissingConfig: Boolean = false,
 ) {
@@ -128,14 +128,14 @@ abstract class BaseOptions protected constructor(
   protected abstract fun assignConfigVals()
 
   protected fun parseOptions() {
-    fun parseArgs(argv: Array<String>?) {
+    fun parseArgs(args: Array<String>?) {
       try {
         val jcom =
           JCommander(this)
             .apply {
               programName = progName
               setCaseSensitiveOptions(false)
-              parse(*(argv.orEmpty()))
+              parse(*(args.orEmpty()))
             }
 
         if (usage) {
@@ -148,7 +148,7 @@ abstract class BaseOptions protected constructor(
       }
     }
 
-    parseArgs(argv)
+    parseArgs(args)
     readConfig(envConfig, exitOnMissingConfig)
     configVals = ConfigVals(config)
     assignConfigVals()

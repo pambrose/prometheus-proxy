@@ -27,7 +27,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.Utils.lambda
-import io.prometheus.harness.support.CommonCompanion
+import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
@@ -87,7 +87,7 @@ class AdminNonDefaultPathTest {
     }
   }
 
-  companion object : CommonCompanion() {
+  companion object : HarnessSetup() {
     @JvmStatic
     @BeforeAll
     fun setUp() =
@@ -95,7 +95,7 @@ class AdminNonDefaultPathTest {
         proxySetup = lambda {
           startProxy(
             adminEnabled = true,
-            argv = listOf(
+            args = listOf(
               "-Dproxy.admin.port=8099",
               "-Dproxy.admin.pingPath=pingPath2",
               "-Dproxy.admin.versionPath=versionPath2",

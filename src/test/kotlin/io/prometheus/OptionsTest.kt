@@ -22,7 +22,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.prometheus.agent.AgentOptions
-import io.prometheus.harness.support.TestConstants.OPTIONS_CONFIG
+import io.prometheus.harness.support.HarnessConstants.OPTIONS_CONFIG
 import io.prometheus.proxy.ProxyOptions
 import org.junit.jupiter.api.Test
 

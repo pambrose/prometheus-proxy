@@ -269,6 +269,7 @@ class Agent(
 
           launch(Dispatchers.IO) {
             runCatching {
+              logger.info { "Starting scrape request processing with maxConcurrentScrapes: ${options.maxConcurrentScrapes}" }
               // Limits the number of concurrent scrapes below
               val semaphore = Semaphore(options.maxConcurrentScrapes)
 
@@ -430,20 +431,20 @@ class Agent(
     private val logger = KotlinLogging.logger {}
 
     @JvmStatic
-    fun main(argv: Array<String>) {
-      startSyncAgent(argv, true)
+    fun main(args: Array<String>) {
+      startSyncAgent(args, true)
     }
 
     @JvmStatic
     fun startSyncAgent(
-      argv: Array<String>,
+      args: Array<String>,
       exitOnMissingConfig: Boolean,
     ) {
       logger.apply {
         info { getBanner("banners/agent.txt", this) }
         info { getVersionDesc() }
       }
-      Agent(options = AgentOptions(argv, exitOnMissingConfig)) { startSync() }
+      Agent(options = AgentOptions(args, exitOnMissingConfig)) { startSync() }
     }
 
     @Suppress("unused")

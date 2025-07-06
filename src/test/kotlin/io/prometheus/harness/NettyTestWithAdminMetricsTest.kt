@@ -27,11 +27,12 @@ import io.kotest.matchers.shouldBe
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.Utils.lambda
-import io.prometheus.harness.support.AbstractTests
-import io.prometheus.harness.support.CommonCompanion
+import io.prometheus.harness.support.AbstractHarnessTests
+import io.prometheus.harness.support.HarnessConstants.CONCURRENT_SCRAPES
+import io.prometheus.harness.support.HarnessConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.harness.support.HarnessConstants.DEFAULT_TIMEOUT
+import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.ProxyCallTestArgs
-import io.prometheus.harness.support.TestConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.harness.support.TestConstants.DEFAULT_TIMEOUT
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
@@ -42,7 +43,7 @@ import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 class NettyTestWithAdminMetricsTest :
-  AbstractTests(
+  AbstractHarnessTests(
     args = ProxyCallTestArgs(
       agent = agent,
       startPort = 10300,
@@ -70,7 +71,7 @@ class NettyTestWithAdminMetricsTest :
     }
   }
 
-  companion object : CommonCompanion() {
+  companion object : HarnessSetup() {
     @JvmStatic
     @BeforeAll
     fun setUp() =
@@ -89,6 +90,7 @@ class NettyTestWithAdminMetricsTest :
             metricsEnabled = true,
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
             chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
+            maxConcurrentScrapes = CONCURRENT_SCRAPES,
           )
         },
         actions = lambda {

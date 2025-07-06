@@ -28,7 +28,7 @@ import kotlinx.coroutines.runBlocking
 import kotlin.properties.Delegates
 import kotlin.time.Duration.Companion.seconds
 
-open class CommonCompanion {
+open class HarnessSetup {
   private val logger = KotlinLogging.logger {}
   protected var proxy: Proxy by Delegates.notNull()
   protected var agent: Agent by Delegates.notNull()

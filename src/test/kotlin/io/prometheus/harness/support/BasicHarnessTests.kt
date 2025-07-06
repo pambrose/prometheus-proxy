@@ -16,7 +16,7 @@
 
 package io.prometheus.harness.support
 
-import com.github.pambrose.common.dsl.KtorDsl
+import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -30,19 +30,19 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
-internal object SimpleTests {
+internal object BasicHarnessTests {
   private val logger = KotlinLogging.logger {}
 
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
-    KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/".withPrefix()) { response ->
+    blockingGet("${HarnessConstants.PROXY_PORT}/".withPrefix()) { response ->
       response.status shouldBe HttpStatusCode.Companion.NotFound
     }
   }
 
   fun invalidPathTest(caller: String) {
     logger.debug { "Calling invalidPathTest() from $caller" }
-    KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/invalid_path".withPrefix()) { response ->
+    blockingGet("${HarnessConstants.PROXY_PORT}/invalid_path".withPrefix()) { response ->
       response.status shouldBe HttpStatusCode.Companion.NotFound
     }
   }
@@ -57,10 +57,10 @@ internal object SimpleTests {
     val originalSize = pathManager.pathMapSize()
 
     var cnt = 0
-    repeat(TestConstants.REPS) { i ->
+    repeat(HarnessConstants.REPS) { i ->
       val path = "test-$i"
       pathManager.let { manager ->
-        manager.registerPath(path, "${TestConstants.PROXY_PORT}/$path".withPrefix())
+        manager.registerPath(path, "${HarnessConstants.PROXY_PORT}/$path".withPrefix())
         cnt++
         manager.pathMapSize() shouldBe originalSize + cnt
         manager.unregisterPath(path)
@@ -78,7 +78,7 @@ internal object SimpleTests {
     logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
-    KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/$badPath".withPrefix()) { response ->
+    blockingGet("${HarnessConstants.PROXY_PORT}/$badPath".withPrefix()) { response ->
       response.status shouldBe HttpStatusCode.Companion.NotFound
     }
     pathManager.unregisterPath(badPath)
@@ -97,10 +97,10 @@ internal object SimpleTests {
     withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
       val mutex = Mutex()
       val jobs =
-        List(TestConstants.REPS) { i ->
+        List(HarnessConstants.REPS) { i ->
           launch(Dispatchers.Default + exceptionHandler(logger)) {
             val path = "test-$i}"
-            val url = "${TestConstants.PROXY_PORT}/$path".withPrefix()
+            val url = "${HarnessConstants.PROXY_PORT}/$path".withPrefix()
             mutex.withLock { paths += path }
             pathManager.registerPath(path, url)
           }
@@ -112,8 +112,8 @@ internal object SimpleTests {
       }
     }.shouldNotBeNull()
 
-    paths.size shouldBe TestConstants.REPS
-    pathManager.pathMapSize() shouldBe (originalSize + TestConstants.REPS)
+    paths.size shouldBe HarnessConstants.REPS
+    pathManager.pathMapSize() shouldBe (originalSize + HarnessConstants.REPS)
 
     withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
       val jobs =

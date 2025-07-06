@@ -39,8 +39,8 @@ import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
 import io.prometheus.common.Utils.setLogLevel
 
 class ProxyOptions(
-  argv: Array<String>,
-) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
+  args: Array<String>,
+) : BaseOptions(Proxy::class.java.simpleName, args, PROXY_CONFIG.name) {
   constructor(args: List<String>) : this(args.toTypedArray())
 
   @Parameter(names = ["-p", "--port"], description = "Proxy listen port")

@@ -18,7 +18,7 @@ package io.prometheus.harness.support
 
 import java.io.File
 
-object TestConstants {
+object HarnessConstants {
   const val REPS = 1000
   const val PROXY_PORT = 9505
   const val DEFAULT_TIMEOUT = 3
@@ -26,8 +26,10 @@ object TestConstants {
 
   const val HTTP_SERVER_COUNT = 5
   const val PATH_COUNT = 50
-  const val SEQUENTIAL_QUERY_COUNT = 200
+  const val SEQUENTIAL_QUERY_COUNT = 1000
   const val PARALLEL_QUERY_COUNT = 10
+  const val CONCURRENT_SCRAPES = 100
+
   const val MIN_DELAY_MILLIS = 400
   const val MAX_DELAY_MILLIS = 600
 

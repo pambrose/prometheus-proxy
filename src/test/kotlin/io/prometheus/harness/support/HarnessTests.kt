@@ -44,13 +44,13 @@ import io.ktor.server.routing.routing
 import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.harness.support.TestConstants.HTTP_SERVER_COUNT
-import io.prometheus.harness.support.TestConstants.MAX_DELAY_MILLIS
-import io.prometheus.harness.support.TestConstants.MIN_DELAY_MILLIS
-import io.prometheus.harness.support.TestConstants.PARALLEL_QUERY_COUNT
-import io.prometheus.harness.support.TestConstants.PATH_COUNT
-import io.prometheus.harness.support.TestConstants.PROXY_PORT
-import io.prometheus.harness.support.TestConstants.SEQUENTIAL_QUERY_COUNT
+import io.prometheus.harness.support.HarnessConstants.HTTP_SERVER_COUNT
+import io.prometheus.harness.support.HarnessConstants.MAX_DELAY_MILLIS
+import io.prometheus.harness.support.HarnessConstants.MIN_DELAY_MILLIS
+import io.prometheus.harness.support.HarnessConstants.PARALLEL_QUERY_COUNT
+import io.prometheus.harness.support.HarnessConstants.PATH_COUNT
+import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
+import io.prometheus.harness.support.HarnessConstants.SEQUENTIAL_QUERY_COUNT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -73,7 +73,7 @@ class ProxyCallTestArgs(
   val caller: String,
 )
 
-internal object ProxyTests {
+internal object HarnessTests {
   private val logger = KotlinLogging.logger {}
   private val contentMap = mutableMapOf<Int, String>()
 
@@ -198,7 +198,7 @@ internal object ProxyTests {
             repeat(args.sequentialQueryCount) { cnt ->
               val job =
                 launch(dispatcher + exceptionHandler(logger)) {
-                  callProxy(client, pathMap, "Sequential $cnt")
+                  callRandomProxyPath(client, pathMap, "Sequential $cnt")
                   counter += 1
                 }
 
@@ -222,7 +222,7 @@ internal object ProxyTests {
               List(args.parallelQueryCount) { cnt ->
                 launch(dispatcher + exceptionHandler(logger)) {
                   delay((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random().milliseconds)
-                  callProxy(client, pathMap, "Parallel $cnt")
+                  callRandomProxyPath(client, pathMap, "Parallel $cnt")
                   counter += 1
                 }
               }
@@ -266,7 +266,7 @@ internal object ProxyTests {
     logger.info { "Finished shutting down ${httpServers.size} httpServers" }
   }
 
-  private suspend fun callProxy(
+  private suspend fun callRandomProxyPath(
     httpClient: HttpClient,
     pathMap: Map<Int, Int>,
     msg: String,

@@ -438,12 +438,12 @@ class Proxy(
     private val logger = KotlinLogging.logger {}
 
     @JvmStatic
-    fun main(argv: Array<String>) {
+    fun main(args: Array<String>) {
       logger.apply {
         info { getBanner("banners/proxy.txt", logger) }
         info { getVersionDesc(false) }
       }
-      Proxy(options = ProxyOptions(argv)) { startSync() }
+      Proxy(options = ProxyOptions(args)) { startSync() }
     }
   }
 }
