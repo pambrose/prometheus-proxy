@@ -56,7 +56,7 @@ import kotlin.time.Duration.Companion.seconds
 internal class AgentHttpService(
   val agent: Agent,
 ) {
-  private val httpClientCache =
+  internal val httpClientCache =
     with(agent) {
       HttpClientCache(
         maxCacheSize = options.maxCacheSize,

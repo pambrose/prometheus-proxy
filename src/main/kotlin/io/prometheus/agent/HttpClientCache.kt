@@ -39,6 +39,8 @@ internal class HttpClientCache(
   private val cleanupInterval: Duration = 5.minutes,
 ) {
   private val cache = ConcurrentHashMap<String, CacheEntry>()
+
+  // Use a LinkedHashMap to maintain access order
   private val accessOrder = LinkedHashMap<String, Long>()
   private val accessMutex = Mutex()
   private val cleanupJob: Job
