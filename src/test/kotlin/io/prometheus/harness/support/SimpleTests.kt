@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,15 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+package io.prometheus.harness.support
 
-package io.prometheus
-
-import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import com.github.pambrose.common.dsl.KtorDsl
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
 import io.prometheus.agent.AgentPathManager
-import io.prometheus.support.TestConstants
-import io.prometheus.support.TestConstants.PROXY_PORT
-import io.prometheus.support.exceptionHandler
-import io.prometheus.support.withPrefix
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -41,15 +35,15 @@ internal object SimpleTests {
 
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
-    blockingGet("$PROXY_PORT/".withPrefix()) { response ->
-      response.status shouldBe HttpStatusCode.NotFound
+    KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/".withPrefix()) { response ->
+      response.status shouldBe HttpStatusCode.Companion.NotFound
     }
   }
 
   fun invalidPathTest(caller: String) {
     logger.debug { "Calling invalidPathTest() from $caller" }
-    blockingGet("$PROXY_PORT/invalid_path".withPrefix()) { response ->
-      response.status shouldBe HttpStatusCode.NotFound
+    KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/invalid_path".withPrefix()) { response ->
+      response.status shouldBe HttpStatusCode.Companion.NotFound
     }
   }
 
@@ -66,7 +60,7 @@ internal object SimpleTests {
     repeat(TestConstants.REPS) { i ->
       val path = "test-$i"
       pathManager.let { manager ->
-        manager.registerPath(path, "$PROXY_PORT/$path".withPrefix())
+        manager.registerPath(path, "${TestConstants.PROXY_PORT}/$path".withPrefix())
         cnt++
         manager.pathMapSize() shouldBe originalSize + cnt
         manager.unregisterPath(path)
@@ -84,8 +78,8 @@ internal object SimpleTests {
     logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
-    blockingGet("$PROXY_PORT/$badPath".withPrefix()) { response ->
-      response.status shouldBe HttpStatusCode.NotFound
+    KtorDsl.blockingGet("${TestConstants.PROXY_PORT}/$badPath".withPrefix()) { response ->
+      response.status shouldBe HttpStatusCode.Companion.NotFound
     }
     pathManager.unregisterPath(badPath)
   }
@@ -106,7 +100,7 @@ internal object SimpleTests {
         List(TestConstants.REPS) { i ->
           launch(Dispatchers.Default + exceptionHandler(logger)) {
             val path = "test-$i}"
-            val url = "$PROXY_PORT/$path".withPrefix()
+            val url = "${TestConstants.PROXY_PORT}/$path".withPrefix()
             mutex.withLock { paths += path }
             pathManager.registerPath(path, url)
           }

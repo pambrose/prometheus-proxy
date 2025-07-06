@@ -16,7 +16,7 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus.support
+package io.prometheus.harness.support
 
 import com.github.pambrose.common.util.getBanner
 import io.github.oshai.kotlinlogging.KLogger
@@ -25,8 +25,8 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.Utils.getVersionDesc
+import io.prometheus.harness.support.TestConstants.PROXY_PORT
 import io.prometheus.proxy.ProxyOptions
-import io.prometheus.support.TestConstants.PROXY_PORT
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable

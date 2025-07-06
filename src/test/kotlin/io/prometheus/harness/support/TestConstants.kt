@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.prometheus.support
+package io.prometheus.harness.support
 
 import java.io.File
 

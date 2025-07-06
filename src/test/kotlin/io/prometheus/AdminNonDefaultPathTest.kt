@@ -27,10 +27,10 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.Utils.lambda
-import io.prometheus.support.CommonCompanion
-import io.prometheus.support.TestUtils.startAgent
-import io.prometheus.support.TestUtils.startProxy
-import io.prometheus.support.withPrefix
+import io.prometheus.harness.support.CommonCompanion
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.harness.support.withPrefix
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -91,7 +91,7 @@ class AdminNonDefaultPathTest {
     @JvmStatic
     @BeforeAll
     fun setUp() =
-      setItUp(
+      setupProxyAndAgent(
         proxySetup = lambda {
           startProxy(
             adminEnabled = true,
@@ -109,6 +109,6 @@ class AdminNonDefaultPathTest {
 
     @JvmStatic
     @AfterAll
-    fun takeDown() = takeItDown()
+    fun takeDown() = takeDownProxyAndAgent()
   }
 }

@@ -16,7 +16,7 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus.highlevel
+package io.prometheus.harness
 
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
@@ -26,15 +26,15 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
-import io.prometheus.ProxyCallTestArgs
-import io.prometheus.TestTemplate
 import io.prometheus.common.Utils.lambda
-import io.prometheus.support.CommonCompanion
-import io.prometheus.support.TestConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.support.TestConstants.DEFAULT_TIMEOUT
-import io.prometheus.support.TestUtils.startAgent
-import io.prometheus.support.TestUtils.startProxy
-import io.prometheus.support.withPrefix
+import io.prometheus.harness.support.AbstractTests
+import io.prometheus.harness.support.CommonCompanion
+import io.prometheus.harness.support.ProxyCallTestArgs
+import io.prometheus.harness.support.TestConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.harness.support.TestConstants.DEFAULT_TIMEOUT
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.harness.support.withPrefix
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -42,7 +42,7 @@ import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 class NettyTestWithAdminMetricsTest :
-  TestTemplate(
+  AbstractTests(
     args = ProxyCallTestArgs(
       agent = agent,
       startPort = 10300,
@@ -74,7 +74,7 @@ class NettyTestWithAdminMetricsTest :
     @JvmStatic
     @BeforeAll
     fun setUp() =
-      setItUp(
+      setupProxyAndAgent(
         proxySetup = lambda {
           startProxy(
             adminEnabled = true,
@@ -99,6 +99,6 @@ class NettyTestWithAdminMetricsTest :
 
     @JvmStatic
     @AfterAll
-    fun takeDown() = takeItDown()
+    fun takeDown() = takeDownProxyAndAgent()
   }
 }

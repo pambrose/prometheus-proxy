@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.prometheus.support
+package io.prometheus.harness.support
 
 import com.github.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -33,7 +33,7 @@ open class CommonCompanion {
   protected var proxy: Proxy by Delegates.notNull()
   protected var agent: Agent by Delegates.notNull()
 
-  protected fun setItUp(
+  protected fun setupProxyAndAgent(
     proxySetup: () -> Proxy,
     agentSetup: () -> Agent,
     actions: () -> Unit = Utils.lambda {},
@@ -55,7 +55,7 @@ open class CommonCompanion {
     logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
   }
 
-  protected fun takeItDown() {
+  protected fun takeDownProxyAndAgent() {
     runBlocking {
       for (service in listOf(proxy, agent)) {
         logger.info { "Stopping ${service.simpleClassName}" }

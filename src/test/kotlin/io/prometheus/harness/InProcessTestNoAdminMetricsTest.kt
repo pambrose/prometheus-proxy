@@ -16,22 +16,22 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus.highlevel
+package io.prometheus.harness
 
 import com.github.pambrose.common.util.simpleClassName
-import io.prometheus.ProxyCallTestArgs
-import io.prometheus.TestTemplate
 import io.prometheus.common.Utils.lambda
-import io.prometheus.support.CommonCompanion
-import io.prometheus.support.TestConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.support.TestConstants.DEFAULT_TIMEOUT
-import io.prometheus.support.TestUtils.startAgent
-import io.prometheus.support.TestUtils.startProxy
+import io.prometheus.harness.support.AbstractTests
+import io.prometheus.harness.support.CommonCompanion
+import io.prometheus.harness.support.ProxyCallTestArgs
+import io.prometheus.harness.support.TestConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.harness.support.TestConstants.DEFAULT_TIMEOUT
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
 class InProcessTestNoAdminMetricsTest :
-  TestTemplate(
+  AbstractTests(
     args = ProxyCallTestArgs(
       agent = agent,
       startPort = 10100,
@@ -42,7 +42,7 @@ class InProcessTestNoAdminMetricsTest :
     @JvmStatic
     @BeforeAll
     fun setUp() =
-      setItUp(
+      setupProxyAndAgent(
         proxySetup = lambda { startProxy("nometrics") },
         agentSetup = lambda {
           startAgent(
@@ -55,6 +55,6 @@ class InProcessTestNoAdminMetricsTest :
 
     @JvmStatic
     @AfterAll
-    fun takeDown() = takeItDown()
+    fun takeDown() = takeDownProxyAndAgent()
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.harness.support
 
 import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
@@ -41,17 +41,16 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.support.TestConstants.HTTP_SERVER_COUNT
-import io.prometheus.support.TestConstants.MAX_DELAY_MILLIS
-import io.prometheus.support.TestConstants.MIN_DELAY_MILLIS
-import io.prometheus.support.TestConstants.PARALLEL_QUERY_COUNT
-import io.prometheus.support.TestConstants.PATH_COUNT
-import io.prometheus.support.TestConstants.PROXY_PORT
-import io.prometheus.support.TestConstants.SEQUENTIAL_QUERY_COUNT
-import io.prometheus.support.exceptionHandler
-import io.prometheus.support.withPrefix
+import io.prometheus.harness.support.TestConstants.HTTP_SERVER_COUNT
+import io.prometheus.harness.support.TestConstants.MAX_DELAY_MILLIS
+import io.prometheus.harness.support.TestConstants.MIN_DELAY_MILLIS
+import io.prometheus.harness.support.TestConstants.PARALLEL_QUERY_COUNT
+import io.prometheus.harness.support.TestConstants.PATH_COUNT
+import io.prometheus.harness.support.TestConstants.PROXY_PORT
+import io.prometheus.harness.support.TestConstants.SEQUENTIAL_QUERY_COUNT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
