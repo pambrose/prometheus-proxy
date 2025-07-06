@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,22 +16,25 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.highlevel
 
 import com.github.pambrose.common.util.simpleClassName
-import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.TestConstants.DEFAULT_TIMEOUT
-import io.prometheus.TestUtils.startAgent
-import io.prometheus.TestUtils.startProxy
+import io.prometheus.ProxyCallTestArgs
+import io.prometheus.TestTemplate
 import io.prometheus.common.Utils.lambda
+import io.prometheus.support.CommonCompanion
+import io.prometheus.support.TestConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.support.TestConstants.DEFAULT_TIMEOUT
+import io.prometheus.support.TestUtils.startAgent
+import io.prometheus.support.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class NettyTestNoAdminMetricsTest :
-  CommonTests(
-    ProxyCallTestArgs(
+class InProcessTestWithAdminMetricsTest :
+  TestTemplate(
+    args = ProxyCallTestArgs(
       agent = agent,
-      startPort = 10900,
+      startPort = 10700,
       caller = simpleClassName,
     ),
   ) {
@@ -40,9 +43,18 @@ class NettyTestNoAdminMetricsTest :
     @BeforeAll
     fun setUp() =
       setItUp(
-        proxySetup = lambda { startProxy() },
+        proxySetup = lambda {
+          startProxy(
+            serverName = "withmetrics",
+            adminEnabled = true,
+            metricsEnabled = true,
+          )
+        },
         agentSetup = lambda {
           startAgent(
+            serverName = "withmetrics",
+            adminEnabled = true,
+            metricsEnabled = true,
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
             chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
           )

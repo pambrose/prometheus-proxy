@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,22 +16,25 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.highlevel
 
 import com.github.pambrose.common.util.simpleClassName
-import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.TestConstants.DEFAULT_TIMEOUT
-import io.prometheus.TestUtils.startAgent
-import io.prometheus.TestUtils.startProxy
+import io.prometheus.ProxyCallTestArgs
+import io.prometheus.TestTemplate
 import io.prometheus.common.Utils.lambda
+import io.prometheus.support.CommonCompanion
+import io.prometheus.support.TestConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.support.TestConstants.DEFAULT_TIMEOUT
+import io.prometheus.support.TestUtils.startAgent
+import io.prometheus.support.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class TlsNoMutualAuthTest :
-  CommonTests(
-    ProxyCallTestArgs(
+class TlsWithMutualAuthTest :
+  TestTemplate(
+    args = ProxyCallTestArgs(
       agent = agent,
-      startPort = 10200,
+      startPort = 10800,
       caller = simpleClassName,
     ),
   ) {
@@ -42,7 +45,7 @@ class TlsNoMutualAuthTest :
       setItUp(
         proxySetup = lambda {
           startProxy(
-            serverName = "nomutualauth",
+            serverName = "withmutualauth",
             argv = listOf(
               "--agent_port",
               "50440",
@@ -50,17 +53,23 @@ class TlsNoMutualAuthTest :
               "testing/certs/server1.pem",
               "--key",
               "testing/certs/server1.key",
+              "--trust",
+              "testing/certs/ca.pem",
             ),
           )
         },
         agentSetup = lambda {
           startAgent(
-            serverName = "nomutualauth",
+            serverName = "withmutualauth",
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
             chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
             argv = listOf(
               "--proxy",
               "localhost:50440",
+              "--cert",
+              "testing/certs/client.pem",
+              "--key",
+              "testing/certs/client.key",
               "--trust",
               "testing/certs/ca.pem",
               "--override",

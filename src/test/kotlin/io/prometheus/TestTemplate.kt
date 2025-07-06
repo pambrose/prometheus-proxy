@@ -28,7 +28,7 @@ import io.prometheus.SimpleTests.threadedAddRemovePathsTest
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 
-abstract class CommonTests(
+abstract class TestTemplate(
   private val args: ProxyCallTestArgs,
 ) {
   @Test
@@ -51,13 +51,4 @@ abstract class CommonTests(
 
   @Test
   fun timeoutTest() = runBlocking { timeoutTest(args.agent.pathManager, simpleClassName) }
-
-  companion object {
-    const val HTTP_SERVER_COUNT = 5
-    const val PATH_COUNT = 50
-    const val SEQUENTIAL_QUERY_COUNT = 200
-    const val PARALLEL_QUERY_COUNT = 10
-    const val MIN_DELAY_MILLIS = 400
-    const val MAX_DELAY_MILLIS = 600
-  }
 }

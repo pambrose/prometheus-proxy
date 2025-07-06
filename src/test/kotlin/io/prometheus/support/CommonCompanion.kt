@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,29 +14,29 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
-package io.prometheus
+package io.prometheus.support
 
 import com.github.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.prometheus.Agent
+import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.Utils.lambda
+import io.prometheus.common.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlin.properties.Delegates.notNull
+import kotlin.properties.Delegates
 import kotlin.time.Duration.Companion.seconds
 
 open class CommonCompanion {
   private val logger = KotlinLogging.logger {}
-  protected var proxy: Proxy by notNull()
-  protected var agent: Agent by notNull()
+  protected var proxy: Proxy by Delegates.notNull()
+  protected var agent: Agent by Delegates.notNull()
 
   protected fun setItUp(
     proxySetup: () -> Proxy,
     agentSetup: () -> Agent,
-    actions: () -> Unit = lambda {},
+    actions: () -> Unit = Utils.lambda {},
   ) {
     CollectorRegistry.defaultRegistry.clear()
 

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,22 +16,23 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.support
 
 import com.github.pambrose.common.util.getBanner
 import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.prometheus.TestConstants.PROXY_PORT
+import io.prometheus.Agent
+import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.proxy.ProxyOptions
+import io.prometheus.support.TestConstants.PROXY_PORT
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json

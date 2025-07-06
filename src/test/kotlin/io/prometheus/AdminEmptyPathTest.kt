@@ -21,10 +21,12 @@ package io.prometheus
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
-import io.prometheus.TestUtils.startAgent
-import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.Utils.lambda
+import io.prometheus.support.CommonCompanion
+import io.prometheus.support.TestUtils.startAgent
+import io.prometheus.support.TestUtils.startProxy
+import io.prometheus.support.withPrefix
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test

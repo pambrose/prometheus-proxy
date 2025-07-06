@@ -29,6 +29,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
@@ -61,7 +65,28 @@ internal class HttpClientCache(
     val client: HttpClient,
     val createdAt: Long = System.currentTimeMillis(),
     var lastAccessedAt: Long = System.currentTimeMillis(),
-  )
+  ) {
+    private val markedForClose = AtomicBoolean(false)
+    private val inUseCount = AtomicInt(0)
+
+    fun markForClose() {
+      markedForClose.store(true)
+    }
+
+    fun isMarkedForClose() = markedForClose.load()
+
+    fun markInUse() {
+      inUseCount.incrementAndFetch()
+    }
+
+    fun markNotInUse() {
+      inUseCount.decrementAndFetch()
+    }
+
+    fun isInUse() = inUseCount.load() > 0
+
+    fun isNotInUse() = !isInUse()
+  }
 
   data class ClientKey(
     val username: String?,
@@ -70,10 +95,11 @@ internal class HttpClientCache(
     override fun toString(): String = "${username ?: "__no_username__"}:${password ?: "__no_password__"}"
   }
 
+  // When an entry is returned from the cache, it is marked as in use.
   suspend fun getOrCreateClient(
     key: ClientKey,
     clientFactory: () -> HttpClient,
-  ): HttpClient {
+  ): CacheEntry {
     val keyString = key.toString()
     val now = System.currentTimeMillis()
 
@@ -84,14 +110,26 @@ internal class HttpClientCache(
           updateAccessOrder(keyString, now)
 
           logger.debug { "Using cached HTTP client for key: $keyString" }
-          return@withLock entry.client
+          entry.markInUse()
+          return@withLock entry
         } else {
           logger.debug { "Removing expired HTTP client for key: $keyString" }
           removeEntry(keyString)
         }
       }
 
-      createAndCacheClient(keyString, clientFactory, now)
+      createAndCacheClient(keyString, clientFactory, now).apply { markInUse() }
+    }
+  }
+
+  // Called with mutex
+  // When an agent is done with client for a given scrape, the entry is marked as not in use.
+  // It is then closed if it is not in use and marked for close.
+  suspend fun checkIfNeedsToBeClosed(entry: CacheEntry) {
+    accessMutex.withLock {
+      entry.markNotInUse()
+      if (entry.isNotInUse() && entry.isMarkedForClose())
+        entry.client.close()
     }
   }
 
@@ -100,7 +138,7 @@ internal class HttpClientCache(
     keyString: String,
     clientFactory: () -> HttpClient,
     now: Long,
-  ): HttpClient {
+  ): CacheEntry {
     if (cache.size >= maxCacheSize) {
       evictLeastRecentlyUsed()
     }
@@ -111,7 +149,7 @@ internal class HttpClientCache(
     updateAccessOrder(keyString, now)
 
     logger.debug { "Created and cached new HTTP client for key: $keyString" }
-    return client
+    return entry
   }
 
   private fun updateAccessOrder(
@@ -141,7 +179,8 @@ internal class HttpClientCache(
 
   // Called with mutex
   private fun removeEntry(keyString: String) {
-    cache.remove(keyString)?.client?.close()
+    val entry = cache.remove(keyString)
+    entry?.markForClose()
     accessOrder.remove(keyString)
   }
 

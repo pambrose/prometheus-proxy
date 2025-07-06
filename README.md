@@ -15,7 +15,7 @@ endpoints.
 [Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints running
 behind a firewall and preserves the pull model.
 
-The `prometheus-proxy` runtime comprises 2 services:
+The `prometheus-proxy` runtime comprises two services:
 
 * `proxy`: runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus
   to the `agent` behind the firewall.
@@ -259,7 +259,7 @@ Misc notes:
 * JSON config files must have a *.json* suffix
 * Java Properties config files must have a *.properties*  or *.prop* suffix
 * HOCON config files must have a *.conf* suffix
-* Option values are evaluated in the order: CLI, environment vars, and finally config file vals
+* Option values are evaluated in the order: CLI, environment variables and finally config file vals
 * Property values can be set as a java -D arg to or as a proxy or agent jar -D arg
 * For more information about the proxy service discovery options, see the
   Prometheus [documentation](https://prometheus.io/docs/prometheus/latest/http_sd/)
@@ -274,6 +274,30 @@ option,
 or the `proxy.logLevel` and `agent.logLevel` properties. The log level can be one of: `trace`, `debug`, `info`, `warn`,
 `error`, or `off`.
 
+### Tuning the Agent HTTP Client Cache
+
+The agent caches HTTP clients for reuse. The cache can be tuned with the following options:
+
+* `--max_cache_size` or `agent.http.clientCache.maxSize`: Maximum number of HTTP clients to cache
+* `--max_cache_age_mins` or `agent.http.clientCache.maxAgeMins`: Maximum age of cached clients in minutes
+* `--max_cache_idle_mins` or `agent.http.clientCache.maxIdleMins`: Maximum idle time before the client is evicted in
+  minutes
+* `--cache_cleanup_interval_mins` or `agent.http.clientCache.cleanupIntervalMins`: Interval between cache cleanup runs
+  in minutes
+
+The default values are:
+
+* `maxCacheSize`: 100
+* `maxCacheAgeMins`: 30
+* `maxCacheIdleMins`: 10
+* `cacheCleanupIntervalMins`: 5
+
+The cache entries are keyed by the username and password used to access the agent. They are evicted when they reach the
+`maxCacheAgeMins` or when they have been idle for `maxCacheIdleMins`. The cache is cleaned up every
+`cacheCleanupIntervalMins`. They are reused when the same username and password are used to access the agent. All URLs
+without authentication are considered to have the same username and password and are therefore also candidates for
+reuse.
+
 ### Admin Servlets
 
 These admin servlets are available when the admin servlet is enabled:
@@ -286,7 +310,7 @@ These admin servlets are available when the admin servlet is enabled:
 The admin servlets can be enabled with the `ADMIN_ENABLED` environment var, the `--admin` CLI option, or with the
 `proxy.admin.enabled` and `agent.admin.enabled` properties.
 
-The debug servlet can be enabled with the `DEBUG_ENABLED` environment var, the `--debug` CLI option , or with the
+The debug servlet can be enabled with the `DEBUG_ENABLED` environment var, the `--debug` CLI option, or with the
 `proxy.admin.debugEnabled` and `agent.admin.debugEnabled` properties. The debug servlet requires that the admin servlets
 are enabled. The debug servlet is at: `/debug` on the admin port.
 
@@ -369,7 +393,7 @@ from the proxy when agents are terminated. Instead, agent contexts will be remov
 after they age out from inactivity. The maximum age is controlled by the `proxy.internal.maxAgentInactivitySecs` value.
 The default value is 1 minute.
 
-An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/docker/nginx.conf)
+An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/docker/nginx.conf),
 and an example agent/proxy conf file
 is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/nginx-proxy.conf)
 

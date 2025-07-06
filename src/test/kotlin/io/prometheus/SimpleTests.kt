@@ -24,8 +24,11 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
-import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
+import io.prometheus.support.TestConstants
+import io.prometheus.support.TestConstants.PROXY_PORT
+import io.prometheus.support.exceptionHandler
+import io.prometheus.support.withPrefix
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex

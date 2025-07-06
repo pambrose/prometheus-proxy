@@ -41,15 +41,17 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import io.prometheus.CommonTests.Companion.HTTP_SERVER_COUNT
-import io.prometheus.CommonTests.Companion.MAX_DELAY_MILLIS
-import io.prometheus.CommonTests.Companion.MIN_DELAY_MILLIS
-import io.prometheus.CommonTests.Companion.PARALLEL_QUERY_COUNT
-import io.prometheus.CommonTests.Companion.PATH_COUNT
-import io.prometheus.CommonTests.Companion.SEQUENTIAL_QUERY_COUNT
-import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
+import io.prometheus.support.TestConstants.HTTP_SERVER_COUNT
+import io.prometheus.support.TestConstants.MAX_DELAY_MILLIS
+import io.prometheus.support.TestConstants.MIN_DELAY_MILLIS
+import io.prometheus.support.TestConstants.PARALLEL_QUERY_COUNT
+import io.prometheus.support.TestConstants.PATH_COUNT
+import io.prometheus.support.TestConstants.PROXY_PORT
+import io.prometheus.support.TestConstants.SEQUENTIAL_QUERY_COUNT
+import io.prometheus.support.exceptionHandler
+import io.prometheus.support.withPrefix
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -74,6 +76,7 @@ class ProxyCallTestArgs(
 
 internal object ProxyTests {
   private val logger = KotlinLogging.logger {}
+  private val contentMap = mutableMapOf<Int, String>()
 
   suspend fun timeoutTest(
     pathManager: AgentPathManager,
@@ -125,8 +128,6 @@ internal object ProxyTests {
     val port: Int,
     val server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>,
   )
-
-  private val contentMap = mutableMapOf<Int, String>()
 
   suspend fun proxyCallTest(args: ProxyCallTestArgs) {
     logger.info { "Calling proxyCallTest() from ${args.caller}" }

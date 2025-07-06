@@ -25,10 +25,12 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
-import io.prometheus.TestUtils.startAgent
-import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.Utils.lambda
+import io.prometheus.support.CommonCompanion
+import io.prometheus.support.TestUtils.startAgent
+import io.prometheus.support.TestUtils.startProxy
+import io.prometheus.support.withPrefix
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test

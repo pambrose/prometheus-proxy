@@ -103,13 +103,16 @@ internal class AgentHttpService(
       val username = urlObj.user
       val password = urlObj.password
       val clientKey = ClientKey(username, password)
-      val client = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(scrapeRequest, username, password) }
-
-      client.get(
-        url = url,
-        setUp = prepareRequestHeaders(scrapeRequest),
-        block = processHttpResponse(url, scrapeRequest, scrapeResults),
-      )
+      val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(scrapeRequest, username, password) }
+      try {
+        entry.client.get(
+          url = url,
+          setUp = prepareRequestHeaders(scrapeRequest),
+          block = processHttpResponse(url, scrapeRequest, scrapeResults),
+        )
+      } finally {
+        httpClientCache.checkIfNeedsToBeClosed(entry)
+      }
     }.onFailure { e ->
       with(scrapeResults) {
         statusCode = errorCode(e, url)

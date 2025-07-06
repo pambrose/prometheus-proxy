@@ -154,7 +154,7 @@ class AgentOptions(
 
         if (maxConcurrentScrapes == -1)
           maxConcurrentScrapes = MAX_CONCURRENT_SCRAPES.getEnv(agentConfigVals.maxConcurrentScrapes)
-        require(maxConcurrentScrapes > 0) { "maxConcurrentScrapes must be greater than 0" }
+        require(maxConcurrentScrapes > 0) { "maxConcurrentScrapes must be > 0" }
         logger.info { "maxConcurrentScrapes: $maxConcurrentScrapes" }
 
         if (chunkContentSizeKbs == -1)
@@ -220,22 +220,24 @@ class AgentOptions(
 
       if (maxCacheSize == -1)
         maxCacheSize = MAX_CLIENT_CACHE_SIZE.getEnv(clientCache.maxSize)
-      require(maxConcurrentScrapes > 1) { "http.clientCache.maxSize must be greater than 1" }
+      require(maxCacheSize > 1) { "http.clientCache.maxSize must be > 1: ($maxCacheSize)" }
       logger.info { "http.clientCache.maxSize: $maxCacheSize" }
 
       if (maxCacheAgeMins == -1)
         maxCacheAgeMins = MAX_CLIENT_CACHE_AGE_MINS.getEnv(clientCache.maxAgeMins)
-      require(maxConcurrentScrapes > 1) { "http.clientCache.maxCacheAgeMins must be greater than 1" }
+      require(maxCacheAgeMins > 1) { "http.clientCache.maxCacheAgeMins must be > 1: ($maxCacheAgeMins)" }
       logger.info { "http.clientCache.maxCacheAgeMins: $maxCacheAgeMins" }
 
       if (maxCacheIdleMins == -1)
         maxCacheIdleMins = MAX_CLIENT_CACHE_IDLE_MINS.getEnv(clientCache.maxIdleMins)
-      require(maxConcurrentScrapes > 1) { "http.clientCache.maxCacheIdleMins must be greater than 1" }
+      require(maxCacheIdleMins > 1) { "http.clientCache.maxCacheIdleMins must be > 1: ($maxCacheIdleMins)" }
       logger.info { "http.clientCache.maxCacheIdleMins: $maxCacheIdleMins" }
 
       if (cacheCleanupIntervalMins == -1)
         cacheCleanupIntervalMins = CLIENT_CACHE_CLEANUP_INTERVAL_MINS.getEnv(clientCache.cleanupIntervalMins)
-      require(maxConcurrentScrapes > 1) { "http.clientCache.cleanupIntervalMins must be greater than 1" }
+      require(cacheCleanupIntervalMins > 1) {
+        "http.clientCache.cleanupIntervalMins must be > 1: ($cacheCleanupIntervalMins)"
+      }
       logger.info { "http.clientCache.cleanupIntervalMins: $cacheCleanupIntervalMins" }
     }
   }
