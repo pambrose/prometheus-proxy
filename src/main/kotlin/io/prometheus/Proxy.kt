@@ -146,7 +146,6 @@ import kotlin.time.Duration.Companion.milliseconds
  * @since 1.0.0
  * @see ProxyOptions for configuration details
  * @see Agent for the corresponding agent component
- * @see ProxyFactory for dependency injection support
  */
 @Version(
   version = BuildConfig.APP_VERSION,
