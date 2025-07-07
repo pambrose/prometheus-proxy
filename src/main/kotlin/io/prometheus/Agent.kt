@@ -163,7 +163,7 @@ class Agent(
   isTestMode = testMode,
 ) {
   private val clock = Monotonic
-  private val agentHttpService = AgentHttpService(this)
+  internal val agentHttpService = AgentHttpService(this)
   private val initialConnectionLatch = CountDownLatch(1)
 
   // Prime the limiter

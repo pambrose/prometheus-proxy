@@ -69,23 +69,28 @@ internal class HttpClientCache(
     private val markedForClose = AtomicBoolean(false)
     private val inUseCount = AtomicInt(0)
 
-    fun markForClose() {
-      markedForClose.store(true)
+    private fun isMarkedForClose() = markedForClose.load()
+
+    private fun markInUse() = inUseCount.incrementAndFetch()
+
+    private fun markNotInUse() = inUseCount.decrementAndFetch()
+
+    private fun isInUse() = inUseCount.load() > 0
+
+    private fun isNotInUse() = !isInUse()
+
+    // Called with mutex
+    fun markForClose() = markedForClose.store(true)
+
+    // Called with mutex
+    fun onStartedWithClient() = markInUse()
+
+    // Called with mutex
+    fun onFinishedWithClient() {
+      markNotInUse()
+      if (isNotInUse() && isMarkedForClose())
+        client.close()
     }
-
-    fun isMarkedForClose() = markedForClose.load()
-
-    fun markInUse() {
-      inUseCount.incrementAndFetch()
-    }
-
-    fun markNotInUse() {
-      inUseCount.decrementAndFetch()
-    }
-
-    fun isInUse() = inUseCount.load() > 0
-
-    fun isNotInUse() = !isInUse()
   }
 
   data class ClientKey(
@@ -94,6 +99,8 @@ internal class HttpClientCache(
   ) {
     override fun toString(): String = "${username ?: "__no_username__"}:${password ?: "__no_password__"}"
   }
+
+  fun currentCacheSize() = cache.size
 
   // When an entry is returned from the cache, it is marked as in use.
   suspend fun getOrCreateClient(
@@ -110,7 +117,7 @@ internal class HttpClientCache(
           updateAccessOrder(keyString, now)
 
           logger.debug { "Using cached HTTP client for key: $keyString" }
-          entry.markInUse()
+          entry.onStartedWithClient()
           return@withLock entry
         } else {
           logger.debug { "Removing expired HTTP client for key: $keyString" }
@@ -118,7 +125,7 @@ internal class HttpClientCache(
         }
       }
 
-      createAndCacheClient(keyString, clientFactory, now).apply { markInUse() }
+      createAndCacheClient(keyString, clientFactory, now).apply { onStartedWithClient() }
     }
   }
 
@@ -127,9 +134,7 @@ internal class HttpClientCache(
   // It is then closed if it is not in use and marked for close.
   suspend fun checkIfNeedsToBeClosed(entry: CacheEntry) {
     accessMutex.withLock {
-      entry.markNotInUse()
-      if (entry.isNotInUse() && entry.isMarkedForClose())
-        entry.client.close()
+      entry.onFinishedWithClient()
     }
   }
 
@@ -147,8 +152,7 @@ internal class HttpClientCache(
     val entry = CacheEntry(client, now, now)
     cache[keyString] = entry
     updateAccessOrder(keyString, now)
-
-    logger.debug { "Created and cached new HTTP client for key: $keyString" }
+    logger.info { "Created and cached HTTP client for key: $keyString" }
     return entry
   }
 

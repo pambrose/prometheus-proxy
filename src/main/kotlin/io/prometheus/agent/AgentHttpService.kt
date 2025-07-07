@@ -213,6 +213,7 @@ internal class AgentHttpService(
         }
       }
 
+      // Setup authentication if username and password are specified
       if (username.isNotNull() && password.isNotNull()) {
         install(Auth) {
           basic {
