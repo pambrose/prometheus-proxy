@@ -40,7 +40,7 @@ docker-push:
 	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:${VERSION} .
 	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:${VERSION} .
 
-all: distro docker-push
+release: distro docker-push
 
 build-coverage:
 	./mvnw clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report
