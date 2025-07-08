@@ -269,8 +269,8 @@ class Agent(
 
           launch(Dispatchers.IO) {
             runCatching {
-              val max = options.maxConcurrentScrapes
-              logger.info { "Starting scrape request processing with maxConcurrentScrapes: $max" }
+              val max = options.maxConcurrentHttpClients
+              logger.info { "Starting scrape request processing with maxConcurrentClients: $max" }
               // Limits the number of concurrent scrapes below
               val semaphore = Semaphore(max)
 

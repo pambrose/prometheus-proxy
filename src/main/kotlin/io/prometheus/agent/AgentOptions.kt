@@ -33,7 +33,7 @@ import io.prometheus.common.EnvVars.KEEPALIVE_WITHOUT_CALLS
 import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_AGE_MINS
 import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_IDLE_MINS
 import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_SIZE
-import io.prometheus.common.EnvVars.MAX_CONCURRENT_SCRAPES
+import io.prometheus.common.EnvVars.MAX_CONCURRENT_CLIENTS
 import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
 import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
@@ -77,10 +77,6 @@ class AgentOptions(
   var scrapeMaxRetries = -1
     private set
 
-  @Parameter(names = ["--max_concurrent_scrapes"], description = "Max concurrent scrapes")
-  var maxConcurrentScrapes = -1
-    private set
-
   @Parameter(names = ["--chunk"], description = "Threshold for chunking content to Proxy and buffer size (KBs)")
   var chunkContentSizeKbs = -1
     private set
@@ -91,6 +87,10 @@ class AgentOptions(
 
   @Parameter(names = ["--trust_all_x509"], description = "Disable SSL verification for https agent endpoints")
   var trustAllX509Certificates = false
+    private set
+
+  @Parameter(names = ["--max_concurrent_clients"], description = "Maximum number of concurrent HTTP clients")
+  var maxConcurrentHttpClients = -1
     private set
 
   @Parameter(names = ["--max_cache_size"], description = "Maximum number of HTTP clients to cache")
@@ -152,11 +152,6 @@ class AgentOptions(
           scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
         logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
 
-        if (maxConcurrentScrapes == -1)
-          maxConcurrentScrapes = MAX_CONCURRENT_SCRAPES.getEnv(agentConfigVals.maxConcurrentScrapes)
-        require(maxConcurrentScrapes > 0) { "maxConcurrentScrapes must be > 0" }
-        logger.info { "maxConcurrentScrapes: $maxConcurrentScrapes" }
-
         if (chunkContentSizeKbs == -1)
           chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
         // Multiply the value time KB
@@ -217,6 +212,11 @@ class AgentOptions(
       if (!trustAllX509Certificates)
         trustAllX509Certificates = TRUST_ALL_X509_CERTIFICATES.getEnv(enableTrustAllX509Certificates)
       logger.info { "http.trustAllX509Certificates: $trustAllX509Certificates" }
+
+      if (maxConcurrentHttpClients == -1)
+        maxConcurrentHttpClients = MAX_CONCURRENT_CLIENTS.getEnv(maxConcurrentClients)
+      require(maxConcurrentHttpClients > 0) { "http.maxConcurrentClients must be > 0" }
+      logger.info { "http.maxConcurrentClients: $maxConcurrentHttpClients" }
 
       if (maxCacheSize == -1)
         maxCacheSize = MAX_CLIENT_CACHE_SIZE.getEnv(clientCache.maxSize)

@@ -176,8 +176,7 @@ internal class AgentHttpService(
         val timeout = agent.configVals.agent.internal.cioTimeoutSecs.seconds
         requestTimeout = timeout.inWholeMilliseconds
 
-        val enableTrustAllX509Certificates = agent.configVals.agent.http.enableTrustAllX509Certificates
-        if (enableTrustAllX509Certificates) {
+        if (agent.options.trustAllX509Certificates) {
           https {
             // trustManager = SslSettings.getTrustManager()
             trustManager = TrustAllX509TrustManager

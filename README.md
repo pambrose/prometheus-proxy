@@ -232,11 +232,11 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --consolidated, -o            <br> CONSOLIDATED                       <br> agent.consolidated                         | false   | Enable multiple agents per registered path                                                     |
 | --timeout                     <br> SCRAPE_TIMEOUT_SECS                <br> agent.scrapeTimeoutSecs                    | 15      | Scrape timeout time (seconds)                                                                  |
 | --max_retries                 <br> SCRAPE_MAX_RETRIES                 <br> agent.scrapeMaxRetries                     | 0       | Scrape maximum retries (0 disables scrape retries)                                             |
-| --max_concurrent_scrapes      <br> MAX_CONCURRENT_SCRAPES             <br> agent.maxConcurrentScrapes                 | 1       | Maximum concurrent scrape count                                                                |
 | --chunk                       <br> CHUNK_CONTENT_SIZE_KBS             <br> agent.chunkContentSizeKbs                  | 32      | Threshold for chunking data to Proxy and buffer size (KBs)                                     |
 | --gzip                        <br> MIN_GZIP_SIZE_BYTES                <br> agent.minGzipSizeBytes                     | 1024    | Minimum size for content to be gzipped (bytes)                                                 |
 | --tf_disabled                 <br> TRANSPORT_FILTER_DISABLED          <br> agent.transportFilterDisabled              | false   | Transport filter disabled                                                                      |
 | --trust_all_x509              <br> TRUST_ALL_X509_CERTIFICATES        <br> agent.http.enableTrustAllX509Certificates  | false   | Disable SSL verification for agent https endpoints                                             |
+| --max_concurrent_clients      <br> MAX_CONCURRENT_CLIENTS             <br> agent.http.maxConcurrentClients            | 1       | Maximum number of concurrent HTTP clients                                                      |
 | --max_cache_size              <br> MAX_CLIENT_CACHE_SIZE              <br> agent.http.clientCache.maxSize             | 100     | Maximum number of HTTP clients to cache                                                        |
 | --max_cache_age_mins          <br> MAX_CLIENT_CACHE_AGE_MINS          <br> agent.http.clientCache.maxAgeMins          | 30      | Maximum age of cached HTTP clients (minutes)                                                   |
 | --max_cache_idle_mins         <br> MAX_CLIENT_CACHE_IDLE_MINS         <br> agent.http.clientCache.maxIdleMins         | 10      | Maximum idle time before HTTP client is evicted (minutes)                                      |
@@ -278,9 +278,12 @@ or the `proxy.logLevel` and `agent.logLevel` properties. The log level can be on
 
 The agent caches HTTP clients for reuse. The cache can be tuned with the following options:
 
-* `--max_cache_size` or `agent.http.clientCache.maxSize`: Maximum number of HTTP clients to cache
-* `--max_cache_age_mins` or `agent.http.clientCache.maxAgeMins`: Maximum age of cached clients in minutes
-* `--max_cache_idle_mins` or `agent.http.clientCache.maxIdleMins`: Maximum idle time before the client is evicted in
+* `--max_cache_size`, `MAX_CLIENT_CACHE_SIZE` or `agent.http.clientCache.maxSize`: Maximum number of HTTP clients to
+  cache
+* `--max_cache_age_mins`, `MAX_CLIENT_CACHE_AGE_MINS` or `agent.http.clientCache.maxAgeMins`: Maximum age of cached
+  clients in minutes
+* `--max_cache_idle_mins`, `MAX_CLIENT_CACHE_IDLE_MINS` or `agent.http.clientCache.maxIdleMins`: Maximum idle time
+  before the client is evicted in
   minutes
 * `--cache_cleanup_interval_mins` or `agent.http.clientCache.cleanupIntervalMins`: Interval between cache cleanup runs
   in minutes
@@ -297,6 +300,12 @@ The cache entries are keyed by the username and password used to access the agen
 `cacheCleanupIntervalMins`. They are reused when the same username and password are used to access the agent. All URLs
 without authentication are considered to have the same username and password and are therefore also candidates for
 reuse.
+
+### Agent HTTP Client Usage
+
+The agent uses HTTP clients to scrape metrics endpoints. The maximum number of HTTP clients used concurrently is
+controlled by the `--max_concurrent_clients` CLI option, the `MAX_CONCURRENT_CLIENTS` environment var,
+or the `agent.http.maxConcurrentClients` property. The default value is 1.
 
 ### Admin Servlets
 

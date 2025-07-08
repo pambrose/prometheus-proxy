@@ -28,7 +28,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.Utils.lambda
 import io.prometheus.harness.support.AbstractHarnessTests
-import io.prometheus.harness.support.HarnessConstants.CONCURRENT_SCRAPES
+import io.prometheus.harness.support.HarnessConstants.CONCURRENT_CLIENTS
 import io.prometheus.harness.support.HarnessConstants.DEFAULT_CHUNK_SIZE
 import io.prometheus.harness.support.HarnessConstants.DEFAULT_TIMEOUT
 import io.prometheus.harness.support.HarnessSetup
@@ -90,7 +90,7 @@ class NettyTestWithAdminMetricsTest :
             metricsEnabled = true,
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
             chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
-            maxConcurrentScrapes = CONCURRENT_SCRAPES,
+            maxConcurrentClients = CONCURRENT_CLIENTS,
           )
         },
         actions = lambda {
