@@ -22,7 +22,7 @@ plugins {
 }
 
 group = "io.prometheus"
-version = "2.2.1-beta2"
+version = "2.2.1-beta3"
 
 buildConfig {
   packageName("io.prometheus")
