@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import com.github.pambrose.common.util.isNotNull
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -83,10 +84,10 @@ internal class HttpClientCache(
     fun markForClose() = markedForClose.store(true)
 
     // Called with mutex
-    fun onStartedWithClient() = markInUse()
+    fun onStartWithClient() = markInUse()
 
     // Called with mutex
-    fun onFinishedWithClient() {
+    fun onDoneWithClient() {
       markNotInUse()
       if (isNotInUse() && isMarkedForClose())
         client.close()
@@ -97,7 +98,14 @@ internal class HttpClientCache(
     val username: String?,
     val password: String?,
   ) {
-    override fun toString(): String = "${username ?: "__no_username__"}:${password ?: "__no_password__"}"
+    fun hasAuth() = username.isNotNull() && password.isNotNull()
+
+    // If either the username or password is null, it is considered a no_auth key
+    override fun toString() = if (hasAuth()) "$username:$password" else NO_AUTH
+
+    companion object {
+      internal const val NO_AUTH = "__no_auth__"
+    }
   }
 
   fun currentCacheSize() = cache.size
@@ -115,9 +123,8 @@ internal class HttpClientCache(
         if (isEntryValid(entry, now)) {
           entry.lastAccessedAt = now
           updateAccessOrder(keyString, now)
-
           logger.debug { "Using cached HTTP client for key: $keyString" }
-          entry.onStartedWithClient()
+          entry.onStartWithClient()
           return@withLock entry
         } else {
           logger.debug { "Removing expired HTTP client for key: $keyString" }
@@ -125,16 +132,16 @@ internal class HttpClientCache(
         }
       }
 
-      createAndCacheClient(keyString, clientFactory, now).apply { onStartedWithClient() }
+      createAndCacheClient(keyString, clientFactory, now).apply { onStartWithClient() }
     }
   }
 
   // Called with mutex
   // When an agent is done with client for a given scrape, the entry is marked as not in use.
   // It is then closed if it is not in use and marked for close.
-  suspend fun checkIfNeedsToBeClosed(entry: CacheEntry) {
+  suspend fun onFinishedWithClient(entry: CacheEntry) {
     accessMutex.withLock {
-      entry.onFinishedWithClient()
+      entry.onDoneWithClient()
     }
   }
 

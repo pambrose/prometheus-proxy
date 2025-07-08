@@ -99,11 +99,8 @@ internal class AgentHttpService(
     scrapeResults: ScrapeResults,
   ) {
     runCatching {
-      val urlObj = Url(url)
-      val username = urlObj.user
-      val password = urlObj.password
-      val clientKey = ClientKey(username, password)
-      val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(scrapeRequest, username, password) }
+      val clientKey = with(Url(url)) { ClientKey(user, password) }
+      val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(scrapeRequest, clientKey) }
       try {
         entry.client.get(
           url = url,
@@ -111,7 +108,7 @@ internal class AgentHttpService(
           block = processHttpResponse(url, scrapeRequest, scrapeResults),
         )
       } finally {
-        httpClientCache.checkIfNeedsToBeClosed(entry)
+        httpClientCache.onFinishedWithClient(entry)
       }
     }.onFailure { e ->
       with(scrapeResults) {
@@ -171,8 +168,7 @@ internal class AgentHttpService(
 
   private fun newHttpClient(
     scrapeRequest: ScrapeRequest,
-    username: String?,
-    password: String?,
+    clientKey: ClientKey,
   ): HttpClient =
     HttpClient(CIO) {
       expectSuccess = false
@@ -214,11 +210,12 @@ internal class AgentHttpService(
       }
 
       // Setup authentication if username and password are specified
-      if (username.isNotNull() && password.isNotNull()) {
+      if (clientKey.hasAuth()) {
         install(Auth) {
           basic {
             credentials {
-              BasicAuthCredentials(username, password)
+              // These are known to be non-null because of the hasAuth() check above
+              BasicAuthCredentials(clientKey.username!!, clientKey.password!!)
             }
           }
         }
