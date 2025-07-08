@@ -150,7 +150,7 @@ internal class AgentHttpService(
           logger.info { "CT check - setScrapeDetailsAndDebugInfo() contentType: $contentType" }
         // Zip the content here
         val content = response.bodyAsText()
-        zipped = content.length > agent.configVals.agent.minGzipSizeBytes
+        zipped = content.length > agent.options.minGzipSizeBytes
         if (zipped)
           contentAsZipped = content.zip()
         else
