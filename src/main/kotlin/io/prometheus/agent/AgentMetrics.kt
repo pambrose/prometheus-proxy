@@ -70,6 +70,14 @@ internal class AgentMetrics(
       labelValues = listOf(agent.launchId),
       data = lambda { agent.scrapeRequestBacklogSize.load().toDouble() },
     )
+
+    SamplerGaugeCollector(
+      "agent_client_cache_size",
+      "Agent client cache size",
+      labelNames = listOf(LAUNCH_ID),
+      labelValues = listOf(agent.launchId),
+      data = lambda { agent.agentHttpService.httpClientCache.currentCacheSize().toDouble() },
+    )
   }
 
   companion object {

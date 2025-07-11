@@ -58,7 +58,7 @@ object Utils {
   fun decodeParams(encodedQueryParams: String): String =
     if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8.name())}" else ""
 
-  internal fun String.defaultEmptyJsonObject() = if (isEmpty()) "{}" else this
+  internal fun String.defaultEmptyJsonObject() = ifEmpty { "{}" }
 
   fun String.toJsonElement() = Json.parseToJsonElement(this)
 

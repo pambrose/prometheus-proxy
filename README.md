@@ -15,7 +15,7 @@ endpoints.
 [Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints running
 behind a firewall and preserves the pull model.
 
-The `prometheus-proxy` runtime comprises 2 services:
+The `prometheus-proxy` runtime comprises two services:
 
 * `proxy`: runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus
   to the `agent` behind the firewall.
@@ -118,8 +118,8 @@ scrape_configs:
 The docker images are available via:
 
 ```bash
-docker pull pambrose/prometheus-proxy:2.2.0
-docker pull pambrose/prometheus-agent:2.2.0
+docker pull pambrose/prometheus-proxy:2.2.1-beta3
+docker pull pambrose/prometheus-agent:2.2.1-beta3
 ```
 
 Start a proxy container with:
@@ -128,7 +128,7 @@ Start a proxy container with:
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:2.2.0
+        pambrose/prometheus-proxy:2.2.1-beta3
 ```
 
 Start an agent container with:
@@ -136,7 +136,7 @@ Start an agent container with:
 ```bash
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:2.2.0
+        pambrose/prometheus-agent:2.2.1-beta3
 ```
 
 Using the config
@@ -154,7 +154,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:2.2.0
+    pambrose/prometheus-agent:2.2.1-beta3
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -202,13 +202,13 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --tf_disabled                   <br> TRANSPORT_FILTER_DISABLED       <br> proxy.transportFilterDisabled          | false                    | Transport filter disabled                                                                                               |
 | --ref_disabled                  <br> REFLECTION_DISABLED             <br> proxy.reflectionDisabled               | false                    | gRPC Reflection disabled                                                                                                |
 | --handshake_timeout_secs        <br> HANDSHAKE_TIMEOUT_SECS          <br> proxy.grpc.handshakeTimeoutSecs        | 120                      | gRPC Handshake timeout (seconds)                                                                                        |
-| --keepalive_time_secs           <br> KEEPALIVE_TIME_SECS             <br> proxy.grpc.keepAliveTimeSecs           | 7200                     | gRPC The interval between PING frames (seconds)                                                                         |
-| --keepalive_timeout_secs        <br> KEEPALIVE_TIMEOUT_SECS          <br> proxy.grpc.keepAliveTimeoutSecs        | 20                       | gRPC The timeout for a PING frame to be acknowledged (seconds)                                                          |
-| --permit_keepalive_without_calls<br> PERMIT_KEEPALIVE_WITHOUT_CALLS  <br> proxy.grpc.permitKeepAliveWithoutCalls | false                    | gRPC Is it permissible to send keepalive pings from the client without any outstanding streams                          |
-| --permit_keepalive_time_secs    <br> PERMIT_KEEPALIVE_TIME_SECS      <br> proxy.grpc.permitKeepAliveTimeSecs     | 300                      | gRPC Min allowed time between a server receiving successive PING frames without sending any DATA/HEADER frame (seconds) |
-| --max_connection_idle_secs      <br> MAX_CONNECTION_IDLE_SECS        <br> proxy.grpc.maxConnectionIdleSecs       | INT_MAX                  | gRPC Max time that a channel may have no outstanding rpcs (seconds)                                                     |
-| --max_connection_age_secs       <br> MAX_CONNECTION_AGE_SECS         <br> proxy.grpc.maxConnectionAgeSecs        | INT_MAX                  | gRPC Max time that a channel may exist (seconds)                                                                        |
-| --max_connection_age_grace_secs <br> MAX_CONNECTION_AGE_GRACE_SECS   <br> proxy.grpc.maxConnectionAgeGraceSecs   | INT_MAX                  | gRPC Grace period after the channel reaches its max age (seconds)                                                       |
+| --keepalive_time_secs           <br> KEEPALIVE_TIME_SECS             <br> proxy.grpc.keepAliveTimeSecs           | 7200                     | The interval between gRPC PING frames (seconds)                                                                         |
+| --keepalive_timeout_secs        <br> KEEPALIVE_TIMEOUT_SECS          <br> proxy.grpc.keepAliveTimeoutSecs        | 20                       | The timeout for a gRPC PING frame to be acknowledged (seconds)                                                          |
+| --permit_keepalive_without_calls<br> PERMIT_KEEPALIVE_WITHOUT_CALLS  <br> proxy.grpc.permitKeepAliveWithoutCalls | false                    | Is it permissible to send gRPC keepalive pings from the client without any outstanding streams                          |
+| --permit_keepalive_time_secs    <br> PERMIT_KEEPALIVE_TIME_SECS      <br> proxy.grpc.permitKeepAliveTimeSecs     | 300                      | Min allowed time between a gRPC server receiving successive PING frames without sending any DATA/HEADER frame (seconds) |
+| --max_connection_idle_secs      <br> MAX_CONNECTION_IDLE_SECS        <br> proxy.grpc.maxConnectionIdleSecs       | INT_MAX                  | Max time that a gRPC channel may have no outstanding rpcs (seconds)                                                     |
+| --max_connection_age_secs       <br> MAX_CONNECTION_AGE_SECS         <br> proxy.grpc.maxConnectionAgeSecs        | INT_MAX                  | Max time that a gRPC channel may exist (seconds)                                                                        |
+| --max_connection_age_grace_secs <br> MAX_CONNECTION_AGE_GRACE_SECS   <br> proxy.grpc.maxConnectionAgeGraceSecs   | INT_MAX                  | Grace period after the gRPC channel reaches its max age (seconds)                                                       |
 | --log_level                     <br> PROXY_LOG_LEVEL                 <br> proxy.logLevel                         | "info"                   | Log level ("trace", "debug", "info", "warn", "error", "off")                                                            |
 | --cert, -t                      <br> CERT_CHAIN_FILE_PATH            <br> proxy.tls.certChainFilePath            |                          | Certificate chain file path                                                                                             |
 | --key, -k                       <br> PRIVATE_KEY_FILE_PATH           <br> proxy.tls.privateKeyFilePath           |                          | Private key file path                                                                                                   |
@@ -219,34 +219,39 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 
 ### Agent CLI Options
 
-| CLI Option<br> ENV VAR<br>Property                                                                            | Default | Description                                                                                    |
-|:--------------------------------------------------------------------------------------------------------------|:--------|:-----------------------------------------------------------------------------------------------|
-| --config, -c              <br> AGENT_CONFIG                                                                   |         | Agent config file or url (required)                                                            |
-| --proxy, -p               <br> PROXY_HOSTNAME                  <br> agent.proxy.hostname                      |         | Proxy hostname (can include :port)                                                             |
-| --name, -n                <br> AGENT_NAME                      <br> agent.name                                |         | Agent name                                                                                     |
-| --admin, -r               <br> ADMIN_ENABLED                   <br> agent.admin.enabled                       | false   | Enable admin servlets                                                                          |
-| --admin_port, -i          <br> ADMIN_PORT                      <br> agent.admin.port                          | 8093    | Admin servlets port                                                                            |
-| --debug, -b               <br> DEBUG_ENABLED                   <br> agent.admin.debugEnabled                  | false   | Enable agent debug servlet<br>on admin port                                                    |
-| --metrics, -e             <br> METRICS_ENABLED                 <br> agent.metrics.enabled                     | false   | Enable agent metrics                                                                           |
-| --metrics_port, -m        <br> METRICS_PORT                    <br> agent.metrics.port                        | 8083    | Agent metrics listen port                                                                      |
-| --consolidated, -o        <br> CONSOLIDATED                    <br> agent.consolidated                        | false   | Enable multiple agents per registered path                                                     |
-| --timeout                 <br> SCRAPE_TIMEOUT_SECS             <br> agent.scrapeTimeoutSecs                   | 15      | Scrape timeout time (seconds)                                                                  |
-| --max_retries             <br> SCRAPE_MAX_RETRIES              <br> agent.scrapeMaxRetries                    | 0       | Scrape maximum retries (0 disables scrape retries)                                             |
-| --chunk                   <br> CHUNK_CONTENT_SIZE_KBS          <br> agent.chunkContentSizeKbs                 | 32      | Threshold for chunking data to Proxy and buffer size (KBs)                                     |
-| --gzip                    <br> MIN_GZIP_SIZE_BYTES             <br> agent.minGzipSizeBytes                    | 1024    | Minimum size for content to be gzipped (bytes)                                                 |
-| --tf_disabled             <br> TRANSPORT_FILTER_DISABLED       <br> agent.transportFilterDisabled             | false   | Transport filter disabled                                                                      |
-| --trust_all_x509          <br> TRUST_ALL_X509_CERTIFICATES     <br> agent.http.enableTrustAllX509Certificates | false   | Disable SSL verification for agent https endpoints                                             |
-| --keepalive_time_secs     <br> KEEPALIVE_TIME_SECS             <br> agent.grpc.keepAliveTimeSecs              | INT_MAX | gRPC The interval between PING frames (seconds)                                                |
-| --keepalive_timeout_secs  <br> KEEPALIVE_TIMEOUT_SECS          <br> agent.grpc.keepAliveTimeoutSecs           | 20      | gRPC The timeout for a PING frame to be acknowledged (seconds)                                 |
-| --keepalive_without_calls <br> KEEPALIVE_WITHOUT_CALLS         <br> agent.grpc.keepAliveWithoutCalls          | false   | gRPC Is it permissible to send keepalive pings from the client without any outstanding streams |
-| --log_level               <br> AGENT_LOG_LEVEL                 <br> agent.logLevel                            | "info"  | Log level ("trace", "debug", "info", "warn", "error", "off")                                   |
-| --cert, -t                <br> CERT_CHAIN_FILE_PATH            <br> agent.tls.certChainFilePath               |         | Certificate chain file path                                                                    |
-| --key, -k                 <br> PRIVATE_KEY_FILE_PATH           <br> agent.tls.privateKeyFilePath              |         | Private key file path                                                                          |
-| --trust, -s               <br> TRUST_CERT_COLLECTION_FILE_PATH <br> agent.tls.trustCertCollectionFilePath     |         | Trust certificate collection file path                                                         |
-| --override                <br> OVERRIDE_AUTHORITY              <br> agent.tls.overrideAuthority               |         | Override authority (for testing)                                                               |
-| --version, -v                                                                                                 |         | Print version info and exit                                                                    |
-| --usage, -u                                                                                                   |         | Print usage message and exit                                                                   |
-| -D                                                                                                            |         | Dynamic property assignment                                                                    |
+| CLI Option<br> ENV VAR<br>Property                                                                                    | Default | Description                                                                                    |
+|:----------------------------------------------------------------------------------------------------------------------|:--------|:-----------------------------------------------------------------------------------------------|
+| --config, -c                  <br> AGENT_CONFIG                                                                       |         | Agent config file or url (required)                                                            |
+| --proxy, -p                   <br> PROXY_HOSTNAME                     <br> agent.proxy.hostname                       |         | Proxy hostname (can include :port)                                                             |
+| --name, -n                    <br> AGENT_NAME                         <br> agent.name                                 |         | Agent name                                                                                     |
+| --admin, -r                   <br> ADMIN_ENABLED                      <br> agent.admin.enabled                        | false   | Enable admin servlets                                                                          |
+| --admin_port, -i              <br> ADMIN_PORT                         <br> agent.admin.port                           | 8093    | Admin servlets port                                                                            |
+| --debug, -b                   <br> DEBUG_ENABLED                      <br> agent.admin.debugEnabled                   | false   | Enable agent debug servlet<br>on admin port                                                    |
+| --metrics, -e                 <br> METRICS_ENABLED                    <br> agent.metrics.enabled                      | false   | Enable agent metrics                                                                           |
+| --metrics_port, -m            <br> METRICS_PORT                       <br> agent.metrics.port                         | 8083    | Agent metrics listen port                                                                      |
+| --consolidated, -o            <br> CONSOLIDATED                       <br> agent.consolidated                         | false   | Enable multiple agents per registered path                                                     |
+| --timeout                     <br> SCRAPE_TIMEOUT_SECS                <br> agent.scrapeTimeoutSecs                    | 15      | Scrape timeout time (seconds)                                                                  |
+| --max_retries                 <br> SCRAPE_MAX_RETRIES                 <br> agent.scrapeMaxRetries                     | 0       | Scrape maximum retries (0 disables scrape retries)                                             |
+| --chunk                       <br> CHUNK_CONTENT_SIZE_KBS             <br> agent.chunkContentSizeKbs                  | 32      | Threshold for chunking data to Proxy and buffer size (KBs)                                     |
+| --gzip                        <br> MIN_GZIP_SIZE_BYTES                <br> agent.minGzipSizeBytes                     | 1024    | Minimum size for content to be gzipped (bytes)                                                 |
+| --tf_disabled                 <br> TRANSPORT_FILTER_DISABLED          <br> agent.transportFilterDisabled              | false   | Transport filter disabled                                                                      |
+| --trust_all_x509              <br> TRUST_ALL_X509_CERTIFICATES        <br> agent.http.enableTrustAllX509Certificates  | false   | Disable SSL verification for agent https endpoints                                             |
+| --max_concurrent_clients      <br> MAX_CONCURRENT_CLIENTS             <br> agent.http.maxConcurrentClients            | 1       | Maximum number of concurrent HTTP clients                                                      |
+| --max_cache_size              <br> MAX_CLIENT_CACHE_SIZE              <br> agent.http.clientCache.maxSize             | 100     | Maximum number of HTTP clients to cache                                                        |
+| --max_cache_age_mins          <br> MAX_CLIENT_CACHE_AGE_MINS          <br> agent.http.clientCache.maxAgeMins          | 30      | Maximum age of cached HTTP clients (minutes)                                                   |
+| --max_cache_idle_mins         <br> MAX_CLIENT_CACHE_IDLE_MINS         <br> agent.http.clientCache.maxIdleMins         | 10      | Maximum idle time before HTTP client is evicted (minutes)                                      |
+| --cache_cleanup_interval_mins <br> CLIENT_CACHE_CLEANUP_INTERVAL_MINS <br> agent.http.clientCache.cleanupIntervalMins | 5       | Interval between HTTP client cache cleanup runs (minutes)                                      |
+| --keepalive_time_secs         <br> KEEPALIVE_TIME_SECS                <br> agent.grpc.keepAliveTimeSecs               | INT_MAX | The interval between gRPC PING frames (seconds)                                                |
+| --keepalive_timeout_secs      <br> KEEPALIVE_TIMEOUT_SECS             <br> agent.grpc.keepAliveTimeoutSecs            | 20      | The timeout for a PING gRPC frame to be acknowledged (seconds)                                 |
+| --keepalive_without_calls     <br> KEEPALIVE_WITHOUT_CALLS            <br> agent.grpc.keepAliveWithoutCalls           | false   | Is it permissible to send gRPC keepalive pings from the client without any outstanding streams |
+| --log_level                   <br> AGENT_LOG_LEVEL                    <br> agent.logLevel                             | "info"  | Log level ("trace", "debug", "info", "warn", "error", "off")                                   |
+| --cert, -t                    <br> CERT_CHAIN_FILE_PATH               <br> agent.tls.certChainFilePath                |         | Certificate chain file path                                                                    |
+| --key, -k                     <br> PRIVATE_KEY_FILE_PATH              <br> agent.tls.privateKeyFilePath               |         | Private key file path                                                                          |
+| --trust, -s                   <br> TRUST_CERT_COLLECTION_FILE_PATH    <br> agent.tls.trustCertCollectionFilePath      |         | Trust certificate collection file path                                                         |
+| --override                    <br> OVERRIDE_AUTHORITY                 <br> agent.tls.overrideAuthority                |         | Override authority (for testing)                                                               |
+| --version, -v                                                                                                         |         | Print version info and exit                                                                    |
+| --usage, -u                                                                                                           |         | Print usage message and exit                                                                   |
+| -D                                                                                                                    |         | Dynamic property assignment                                                                    |
 
 Misc notes:
 
@@ -254,7 +259,7 @@ Misc notes:
 * JSON config files must have a *.json* suffix
 * Java Properties config files must have a *.properties*  or *.prop* suffix
 * HOCON config files must have a *.conf* suffix
-* Option values are evaluated in the order: CLI, environment vars, and finally config file vals
+* Option values are evaluated in the order: CLI, environment variables and finally config file vals
 * Property values can be set as a java -D arg to or as a proxy or agent jar -D arg
 * For more information about the proxy service discovery options, see the
   Prometheus [documentation](https://prometheus.io/docs/prometheus/latest/http_sd/)
@@ -269,6 +274,39 @@ option,
 or the `proxy.logLevel` and `agent.logLevel` properties. The log level can be one of: `trace`, `debug`, `info`, `warn`,
 `error`, or `off`.
 
+### Tuning the Agent HTTP Client Cache
+
+The agent caches HTTP clients for reuse. The cache can be tuned with the following options:
+
+* `--max_cache_size`, `MAX_CLIENT_CACHE_SIZE` or `agent.http.clientCache.maxSize`: Maximum number of HTTP clients to
+  cache
+* `--max_cache_age_mins`, `MAX_CLIENT_CACHE_AGE_MINS` or `agent.http.clientCache.maxAgeMins`: Maximum age of cached
+  clients in minutes
+* `--max_cache_idle_mins`, `MAX_CLIENT_CACHE_IDLE_MINS` or `agent.http.clientCache.maxIdleMins`: Maximum idle time
+  before the client is evicted in
+  minutes
+* `--cache_cleanup_interval_mins` or `agent.http.clientCache.cleanupIntervalMins`: Interval between cache cleanup runs
+  in minutes
+
+The default values are:
+
+* `maxCacheSize`: 100
+* `maxCacheAgeMins`: 30
+* `maxCacheIdleMins`: 10
+* `cacheCleanupIntervalMins`: 5
+
+The cache entries are keyed by the username and password used to access the agent. They are evicted when they reach the
+`maxCacheAgeMins` or when they have been idle for `maxCacheIdleMins`. The cache is cleaned up every
+`cacheCleanupIntervalMins`. They are reused when the same username and password are used to access the agent. All URLs
+without authentication are considered to have the same username and password and are therefore also candidates for
+reuse.
+
+### Agent HTTP Client Usage
+
+The agent uses HTTP clients to scrape metrics endpoints. The maximum number of HTTP clients used concurrently is
+controlled by the `--max_concurrent_clients` CLI option, the `MAX_CONCURRENT_CLIENTS` environment var,
+or the `agent.http.maxConcurrentClients` property. The default value is 1.
+
 ### Admin Servlets
 
 These admin servlets are available when the admin servlet is enabled:
@@ -281,7 +319,7 @@ These admin servlets are available when the admin servlet is enabled:
 The admin servlets can be enabled with the `ADMIN_ENABLED` environment var, the `--admin` CLI option, or with the
 `proxy.admin.enabled` and `agent.admin.enabled` properties.
 
-The debug servlet can be enabled with the `DEBUG_ENABLED` environment var, the `--debug` CLI option , or with the
+The debug servlet can be enabled with the `DEBUG_ENABLED` environment var, the `--debug` CLI option, or with the
 `proxy.admin.debugEnabled` and `agent.admin.debugEnabled` properties. The debug servlet requires that the admin servlets
 are enabled. The debug servlet is at: `/debug` on the admin port.
 
@@ -326,7 +364,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:2.2.0
+    pambrose/prometheus-proxy:2.2.1-beta3
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -334,7 +372,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:2.2.0
+    pambrose/prometheus-agent:2.2.1-beta3
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -364,7 +402,7 @@ from the proxy when agents are terminated. Instead, agent contexts will be remov
 after they age out from inactivity. The maximum age is controlled by the `proxy.internal.maxAgentInactivitySecs` value.
 The default value is 1 minute.
 
-An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/docker/nginx.conf)
+An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/docker/nginx.conf),
 and an example agent/proxy conf file
 is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/nginx-proxy.conf)
 

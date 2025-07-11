@@ -72,15 +72,15 @@ internal object GrpcObjects {
     checksum: CRC32,
   ) = ChunkedScrapeResponse
     .newBuilder()
-    .also {
-      it.summary =
+    .also { chunkedScrapeResponseBuilder ->
+      chunkedScrapeResponseBuilder.summary =
         SummaryData
           .newBuilder()
-          .also {
-            it.summaryScrapeId = scrapeId
-            it.summaryChunkCount = totalChunkCount
-            it.summaryByteCount = totalByteCount
-            it.summaryChecksum = checksum.value
+          .also { summaryDataBuilder ->
+            summaryDataBuilder.summaryScrapeId = scrapeId
+            summaryDataBuilder.summaryChunkCount = totalChunkCount
+            summaryDataBuilder.summaryByteCount = totalByteCount
+            summaryDataBuilder.summaryChecksum = checksum.value
           }
           .build()
     }
