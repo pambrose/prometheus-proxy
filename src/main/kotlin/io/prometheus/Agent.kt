@@ -47,6 +47,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
+import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
 import kotlinx.coroutines.Dispatchers
@@ -243,7 +244,7 @@ class Agent(
               grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
-                Status.fromThrowable(e).apply { logger.error(e) { "readRequestsFromProxy(): $code $description" } }
+                Status.fromThrowable(e).apply { logger.error(e) { "readRequestsFromProxy(): ${exceptionDetails(e)}" } }
             }
           }
 
@@ -252,7 +253,7 @@ class Agent(
               startHeartBeat(connectionContext)
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
-                Status.fromThrowable(e).apply { logger.error(e) { "startHeartBeat(): $code $description" } }
+                Status.fromThrowable(e).apply { logger.error(e) { "startHeartBeat(): ${exceptionDetails(e)}" } }
             }
           }
 
@@ -263,7 +264,7 @@ class Agent(
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
                 Status.fromThrowable(e)
-                  .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): $code $description" } }
+                  .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): ${exceptionDetails(e)}" } }
             }
           }
 
@@ -284,7 +285,8 @@ class Agent(
               }
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
-                Status.fromThrowable(e).apply { logger.error(e) { "scrapeResultsChannel.send(): $code $description" } }
+                Status.fromThrowable(e)
+                  .apply { logger.error(e) { "scrapeResultsChannel.send(): ${exceptionDetails(e)}" } }
             }
           }
         }

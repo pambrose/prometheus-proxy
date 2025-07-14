@@ -23,6 +23,8 @@ import ch.qos.logback.classic.Logger
 import com.beust.jcommander.IParameterValidator
 import com.beust.jcommander.JCommander
 import com.github.pambrose.common.util.Version.Companion.versionDesc
+import com.github.pambrose.common.util.simpleClassName
+import io.grpc.Status
 import io.prometheus.Proxy
 import kotlinx.serialization.json.Json
 import org.slf4j.Logger.ROOT_LOGGER_NAME
@@ -79,4 +81,6 @@ object Utils {
     val rootLogger = LoggerFactory.getLogger(ROOT_LOGGER_NAME) as Logger
     rootLogger.level = level
   }
+
+  fun Status.exceptionDetails(e: Throwable) = "$code $description ${e.simpleClassName} - ${e.message}"
 }

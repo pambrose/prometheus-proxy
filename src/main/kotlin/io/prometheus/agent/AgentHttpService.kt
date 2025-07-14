@@ -176,10 +176,12 @@ internal class AgentHttpService(
         // If internal.cioTimeoutSecs is set to a non-default and httpClientTimeoutSecs is set to the default, then use
         // internal.cioTimeoutSecs value. Otherwise, use httpClientTimeoutSecs.
         val timeout =
-          (if (agent.configVals.agent.internal.cioTimeoutSecs != 90 && agent.options.httpClientTimeoutSecs == 90)
-            agent.configVals.agent.internal.cioTimeoutSecs
-          else
-            agent.options.httpClientTimeoutSecs).seconds
+          (
+            if (agent.configVals.agent.internal.cioTimeoutSecs != 90 && agent.options.httpClientTimeoutSecs == 90)
+              agent.configVals.agent.internal.cioTimeoutSecs
+            else
+              agent.options.httpClientTimeoutSecs
+            ).seconds
         requestTimeout = timeout.inWholeMilliseconds
 
         if (agent.options.trustAllX509Certificates) {
