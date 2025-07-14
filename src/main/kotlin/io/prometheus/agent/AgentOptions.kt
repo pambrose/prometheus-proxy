@@ -28,6 +28,7 @@ import io.prometheus.common.EnvVars.AGENT_LOG_LEVEL
 import io.prometheus.common.EnvVars.AGENT_NAME
 import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
 import io.prometheus.common.EnvVars.CLIENT_CACHE_CLEANUP_INTERVAL_MINS
+import io.prometheus.common.EnvVars.CLIENT_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.CONSOLIDATED
 import io.prometheus.common.EnvVars.KEEPALIVE_WITHOUT_CALLS
 import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_AGE_MINS
@@ -91,6 +92,10 @@ class AgentOptions(
 
   @Parameter(names = ["--max_concurrent_clients"], description = "Maximum number of concurrent HTTP clients")
   var maxConcurrentHttpClients = -1
+    private set
+
+  @Parameter(names = ["--client_timeout_secs"], description = "HTTP client timeout (seconds)")
+  var httpClientTimeoutSecs = -1
     private set
 
   @Parameter(names = ["--max_cache_size"], description = "Maximum number of HTTP clients to cache")
@@ -217,6 +222,11 @@ class AgentOptions(
         maxConcurrentHttpClients = MAX_CONCURRENT_CLIENTS.getEnv(maxConcurrentClients)
       require(maxConcurrentHttpClients > 0) { "http.maxConcurrentClients must be > 0" }
       logger.info { "http.maxConcurrentClients: $maxConcurrentHttpClients" }
+
+      if (httpClientTimeoutSecs == -1)
+        httpClientTimeoutSecs = CLIENT_TIMEOUT_SECS.getEnv(clientTimeoutSecs)
+      require(httpClientTimeoutSecs > 0) { "http.clientTimeoutSecs must be > 0" }
+      logger.info { "http.clientTimeoutSecs: $httpClientTimeoutSecs" }
 
       if (maxCacheSize == -1)
         maxCacheSize = MAX_CLIENT_CACHE_SIZE.getEnv(clientCache.maxSize)

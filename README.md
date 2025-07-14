@@ -237,6 +237,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --tf_disabled                 <br> TRANSPORT_FILTER_DISABLED          <br> agent.transportFilterDisabled              | false   | Transport filter disabled                                                                      |
 | --trust_all_x509              <br> TRUST_ALL_X509_CERTIFICATES        <br> agent.http.enableTrustAllX509Certificates  | false   | Disable SSL verification for agent https endpoints                                             |
 | --max_concurrent_clients      <br> MAX_CONCURRENT_CLIENTS             <br> agent.http.maxConcurrentClients            | 1       | Maximum number of concurrent HTTP clients                                                      |
+| --client_timeout_secs         <br> CLIENT_TIMEOUT_SECS                <br> agent.http.clientTimeoutSecs               | 90      | HTTP client timeout (seconds)                                                                  |
 | --max_cache_size              <br> MAX_CLIENT_CACHE_SIZE              <br> agent.http.clientCache.maxSize             | 100     | Maximum number of HTTP clients to cache                                                        |
 | --max_cache_age_mins          <br> MAX_CLIENT_CACHE_AGE_MINS          <br> agent.http.clientCache.maxAgeMins          | 30      | Maximum age of cached HTTP clients (minutes)                                                   |
 | --max_cache_idle_mins         <br> MAX_CLIENT_CACHE_IDLE_MINS         <br> agent.http.clientCache.maxIdleMins         | 10      | Maximum idle time before HTTP client is evicted (minutes)                                      |
@@ -259,7 +260,7 @@ Misc notes:
 * JSON config files must have a *.json* suffix
 * Java Properties config files must have a *.properties*  or *.prop* suffix
 * HOCON config files must have a *.conf* suffix
-* Option values are evaluated in the order: CLI, environment variables and finally config file vals
+* Option values are evaluated in the order: CLI, environment variables, and finally config file vals
 * Property values can be set as a java -D arg to or as a proxy or agent jar -D arg
 * For more information about the proxy service discovery options, see the
   Prometheus [documentation](https://prometheus.io/docs/prometheus/latest/http_sd/)
@@ -306,6 +307,10 @@ reuse.
 The agent uses HTTP clients to scrape metrics endpoints. The maximum number of HTTP clients used concurrently is
 controlled by the `--max_concurrent_clients` CLI option, the `MAX_CONCURRENT_CLIENTS` environment var,
 or the `agent.http.maxConcurrentClients` property. The default value is 1.
+
+The HTTP client timeout is controlled by the `--client_timeout_secs` CLI option, the `CLIENT_TIMEOUT_SECS` environment
+var, or the `agent.http.clientTimeoutSecs` property. The default value is 90 seconds. This value replaces the
+`agent.configVals.agent.internal.cioTimeoutSecs` value.
 
 ### Admin Servlets
 
