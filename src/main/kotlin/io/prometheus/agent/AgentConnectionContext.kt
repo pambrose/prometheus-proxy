@@ -23,11 +23,12 @@ import io.ktor.utils.io.core.Closeable
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 
 internal class AgentConnectionContext : Closeable {
   private var disconnected by atomicBoolean(false)
-  val scrapeRequestsChannel = Channel<ScrapeRequestAction>(Channel.UNLIMITED)
-  val scrapeResultsChannel = Channel<ScrapeResults>(Channel.UNLIMITED)
+  val scrapeRequestsChannel = Channel<ScrapeRequestAction>(UNLIMITED)
+  val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED)
 
   override fun close() {
     disconnected = true

@@ -30,7 +30,7 @@ internal class ProxyServerTransportFilter(
   private val proxy: Proxy,
 ) : ServerTransportFilter() {
   override fun transportReady(attributes: Attributes): Attributes {
-    val remoteAddress = attributes.get(REMOTE_ADDR_KEY)?.toString() ?: UNKNOWN_ADDRESS
+    val remoteAddress = attributes.get(REMOTE_ADDR_KEY) ?: UNKNOWN_ADDRESS
     val agentContext = AgentContext(remoteAddress)
     proxy.agentContextManager.addAgentContext(agentContext)
 
