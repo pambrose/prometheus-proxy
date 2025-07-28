@@ -1,4 +1,5 @@
 import com.google.protobuf.gradle.id
+import org.jmailen.gradle.kotlinter.tasks.FormatTask
 import org.jmailen.gradle.kotlinter.tasks.LintTask
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -253,11 +254,18 @@ fun Project.configurePublishing() {
   }
 }
 
-fun Project.configureKotlinter() {
-  tasks.withType<LintTask> {
-    this.source = this.source.minus(fileTree("build/generated")).asFileTree
+tasks.withType<LintTask> {
+  // This will exclude all files under build/generated/
+  this.source = this.source.minus(fileTree("build/generated")).asFileTree
+}
+tasks.withType<FormatTask> {
+  this.source = this.source.minus(fileTree("build/generated")).asFileTree
+}
 
-  }
+fun Project.configureKotlinter() {
+//  tasks.withType<LintTask> {
+//    this.source = this.source.minus(fileTree("build/generated")).asFileTree
+//  }
 
   kotlinter {
     ignoreFormatFailures = false
