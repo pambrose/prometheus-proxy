@@ -56,7 +56,6 @@ dependencies {
   implementation(libs.netty.tcnative)
 
   implementation(libs.utils.core)
-  implementation(libs.utils.corex)
   implementation(libs.utils.dropwizard)
   implementation(libs.utils.guava)
   implementation(libs.utils.grpc)

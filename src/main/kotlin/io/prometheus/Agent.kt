@@ -16,7 +16,6 @@
 
 package io.prometheus
 
-import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.service.GenericService
@@ -52,6 +51,7 @@ import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore

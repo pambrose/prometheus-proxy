@@ -17,7 +17,6 @@
 package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
-import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.github.pambrose.common.service.GenericService
@@ -49,6 +48,7 @@ import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRequestManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive

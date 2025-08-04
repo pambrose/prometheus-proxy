@@ -18,7 +18,6 @@
 
 package io.prometheus.harness.support
 
-import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.httpClient
@@ -53,6 +52,7 @@ import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessConstants.SEQUENTIAL_QUERY_COUNT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.newSingleThreadContext
