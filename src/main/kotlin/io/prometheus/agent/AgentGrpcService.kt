@@ -40,6 +40,7 @@ import io.prometheus.common.GrpcObjects.newScrapeResponseSummary
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeartBeatRequest
@@ -54,6 +55,7 @@ import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
@@ -383,15 +385,16 @@ internal class AgentGrpcService(
     connectionContext: AgentConnectionContext,
   ) {
     coroutineScope {
-      val nonChunkedChannel = Channel<ScrapeResponse>(Channel.UNLIMITED)
-      val chunkedChannel = Channel<ChunkedScrapeResponse>(Channel.UNLIMITED)
+      val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
+      val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
 
       launch(Dispatchers.IO) {
         runCatching {
           processScrapeResults(agent, connectionContext.scrapeResultsChannel, nonChunkedChannel, chunkedChannel)
         }.onFailure { e ->
           if (agent.isRunning)
-            Status.fromThrowable(e).apply { logger.error(e) { "processScrapeResults(): $code $description" } }
+            Status.fromThrowable(e)
+              .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
         }
       }
 
@@ -403,7 +406,8 @@ internal class AgentGrpcService(
                 stub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
               }.onFailure { e ->
                 if (agent.isRunning)
-                  Status.fromThrowable(e).apply { logger.error(e) { "writeResponsesToProxy(): $code $description" } }
+                  Status.fromThrowable(e)
+                    .apply { logger.error(e) { "writeResponsesToProxy(): ${exceptionDetails(e)}" } }
               }
             }
 
@@ -413,7 +417,7 @@ internal class AgentGrpcService(
               }.onFailure { e ->
                 if (agent.isRunning)
                   Status.fromThrowable(e)
-                    .apply { logger.error(e) { "writeChunkedResponsesToProxy(): $code $description" } }
+                    .apply { logger.error(e) { "writeChunkedResponsesToProxy(): ${exceptionDetails(e)}" } }
               }
             }
           }

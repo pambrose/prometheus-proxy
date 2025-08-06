@@ -14,11 +14,8 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus
 
-import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.service.GenericService
@@ -49,12 +46,16 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
+import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlin.concurrent.atomics.AtomicInt
@@ -65,6 +66,85 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
 
+/**
+ * Prometheus Agent that connects to a Proxy to enable metrics scraping across firewalls.
+ *
+ * The Agent is the component that runs inside the firewall alongside the services being monitored.
+ * It establishes an outbound connection to the Proxy, registers the metrics endpoints it can scrape,
+ * and responds to scrape requests by fetching metrics from the actual endpoints and returning them
+ * to the Proxy.
+ *
+ * ## Architecture
+ *
+ * The Agent maintains a persistent gRPC connection to the Proxy and handles:
+ * - **Connection Management**: Establishes and maintains connection to proxy with automatic reconnection
+ * - **Path Registration**: Registers configured metrics endpoints with the proxy
+ * - **Scrape Processing**: Responds to scrape requests by fetching metrics from local endpoints
+ * - **Concurrent Scraping**: Handles multiple concurrent scrape requests with configurable limits
+ * - **Heartbeat**: Sends periodic heartbeat messages to maintain connection health
+ * - **Metrics Collection**: Exposes operational metrics about the agent itself
+ *
+ * ## Configuration
+ *
+ * Agents are configured via HOCON configuration files that specify:
+ * - Proxy connection details (hostname, port, TLS settings)
+ * - Path configurations (endpoints to scrape and their metadata)
+ * - Operational parameters (timeouts, concurrency limits, retry policies)
+ * - Admin and metrics endpoints for monitoring the agent itself
+ *
+ * ## Usage Examples
+ *
+ * ### Basic Usage
+ * ```kotlin
+ * val agent = Agent(AgentOptions(args))
+ * agent.startSync()
+ * ```
+ *
+ * ### Embedded Usage
+ * ```kotlin
+ * val agentInfo = Agent.startAsyncAgent("config.conf", true)
+ * println("Started agent: ${agentInfo.agentName}")
+ * ```
+ *
+ * ### With Custom Initialization
+ * ```kotlin
+ * val agent = Agent(options) {
+ *     // Custom initialization logic
+ *     logger.info { "Agent initialized with custom settings" }
+ * }
+ * agent.startSync()
+ * ```
+ *
+ * ## Connection Lifecycle
+ *
+ * 1. **Startup**: Agent reads configuration and initializes services
+ * 2. **Connection**: Establishes gRPC connection to proxy
+ * 3. **Registration**: Registers configured paths with proxy
+ * 4. **Operation**: Processes scrape requests and sends heartbeats
+ * 5. **Reconnection**: Automatically reconnects on connection failures
+ * 6. **Shutdown**: Gracefully closes connections and cleans up resources
+ *
+ * ## Error Handling
+ *
+ * The Agent includes robust error handling for:
+ * - Network connectivity issues with exponential backoff
+ * - Individual scrape failures without affecting other scrapes
+ * - Configuration errors with detailed error messages
+ * - Resource exhaustion with proper cleanup
+ *
+ * @param options Configuration options for the agent, typically loaded from command line or config files
+ * @param inProcessServerName Optional in-process server name for testing scenarios. When specified,
+ *                           the agent will connect to an in-process gRPC server instead of a network server.
+ * @param testMode Whether to run in test mode. Test mode may disable certain features or use
+ *                 different defaults suitable for testing environments.
+ * @param initBlock Optional initialization block executed after construction but before startup.
+ *                  Useful for custom configuration or testing setup.
+ *
+ * @since 1.0.0
+ * @see AgentOptions for configuration details
+ * @see Proxy for the corresponding proxy component
+ * @see EmbeddedAgentInfo for information about embedded agent instances
+ */
 @Version(
   version = BuildConfig.APP_VERSION,
   releaseDate = BuildConfig.APP_RELEASE_DATE,
@@ -84,7 +164,7 @@ class Agent(
   isTestMode = testMode,
 ) {
   private val clock = Monotonic
-  private val agentHttpService = AgentHttpService(this)
+  internal val agentHttpService = AgentHttpService(this)
   private val initialConnectionLatch = CountDownLatch(1)
 
   // Prime the limiter
@@ -164,7 +244,7 @@ class Agent(
               grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
-                Status.fromThrowable(e).apply { logger.error(e) { "readRequestsFromProxy(): $code $description" } }
+                Status.fromThrowable(e).apply { logger.error(e) { "readRequestsFromProxy(): ${exceptionDetails(e)}" } }
             }
           }
 
@@ -173,7 +253,7 @@ class Agent(
               startHeartBeat(connectionContext)
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
-                Status.fromThrowable(e).apply { logger.error(e) { "startHeartBeat(): $code $description" } }
+                Status.fromThrowable(e).apply { logger.error(e) { "startHeartBeat(): ${exceptionDetails(e)}" } }
             }
           }
 
@@ -184,21 +264,29 @@ class Agent(
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
                 Status.fromThrowable(e)
-                  .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): $code $description" } }
+                  .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): ${exceptionDetails(e)}" } }
             }
           }
 
           launch(Dispatchers.IO) {
             runCatching {
-              // This is terminated by connectionContext.close()
+              val max = options.maxConcurrentHttpClients
+              logger.info { "Starting scrape request processing with maxConcurrentClients: $max" }
+              // Limits the number of concurrent scrapes below
+              val semaphore = Semaphore(max)
+
+              // This for stmt is terminated by connectionContext.close()
               for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
-                // The url fetch occurs during the invoke() on the scrapeRequestAction
-                val scrapeResponse = scrapeRequestAction.invoke()
-                connectionContext.scrapeResultsChannel.send(scrapeResponse)
+                semaphore.withPermit {
+                  // The url fetch occurs here during scrapeRequestAction.invoke()
+                  val scrapeResponse = scrapeRequestAction.invoke()
+                  connectionContext.scrapeResultsChannel.send(scrapeResponse)
+                }
               }
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
-                Status.fromThrowable(e).apply { logger.error(e) { "scrapeResultsChannel.send(): $code $description" } }
+                Status.fromThrowable(e)
+                  .apply { logger.error(e) { "scrapeResultsChannel.send(): ${exceptionDetails(e)}" } }
             }
           }
         }
@@ -248,6 +336,13 @@ class Agent(
         size = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize,
       ),
     )
+    healthCheckRegistry.register(
+      "http_client_cache_size_check",
+      newBacklogHealthCheck(
+        backlogSize = agentHttpService.httpClientCache.getCacheStats().totalEntries,
+        size = options.maxCacheSize + 1,
+      ),
+    )
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) {
@@ -272,18 +367,50 @@ class Agent(
     }
   }
 
+  /**
+   * Updates the scrape counter metrics for the specified operation type.
+   *
+   * This method increments the counter for scrape operations, categorized by type
+   * (e.g., "success", "failure", "timeout"). The metrics are labeled with the
+   * agent's launch ID for tracking across agent restarts.
+   *
+   * @param type The type/category of scrape operation. Empty strings are ignored.
+   */
   internal fun updateScrapeCounter(type: String) {
     if (type.isNotEmpty())
       metrics { scrapeRequestCount.labels(launchId, type).inc() }
   }
 
+  /**
+   * Marks the current time as when the last message was sent to the proxy.
+   *
+   * This timestamp is used by the heartbeat mechanism to determine when to send
+   * keep-alive messages to maintain the connection with the proxy.
+   */
   internal fun markMsgSent() {
     lastMsgSentMark = clock.markNow()
   }
 
+  /**
+   * Waits for the initial connection to the proxy to be established.
+   *
+   * This method blocks until either the agent successfully connects to the proxy
+   * and completes registration, or the specified timeout is reached.
+   *
+   * @param timeout Maximum time to wait for initial connection
+   * @return true if connection was established within the timeout, false otherwise
+   */
   internal fun awaitInitialConnection(timeout: Duration) =
     initialConnectionLatch.await(timeout.inWholeMilliseconds, MILLISECONDS)
 
+  /**
+   * Executes metrics operations if metrics collection is enabled.
+   *
+   * This method provides a safe way to perform metrics operations that will only
+   * execute if metrics collection is enabled in the agent configuration.
+   *
+   * @param args Lambda function containing metrics operations to execute
+   */
   internal fun metrics(args: AgentMetrics.() -> Unit) {
     if (isMetricsEnabled)
       args.invoke(metrics)
@@ -307,20 +434,20 @@ class Agent(
     private val logger = KotlinLogging.logger {}
 
     @JvmStatic
-    fun main(argv: Array<String>) {
-      startSyncAgent(argv, true)
+    fun main(args: Array<String>) {
+      startSyncAgent(args, true)
     }
 
     @JvmStatic
     fun startSyncAgent(
-      argv: Array<String>,
+      args: Array<String>,
       exitOnMissingConfig: Boolean,
     ) {
       logger.apply {
         info { getBanner("banners/agent.txt", this) }
         info { getVersionDesc() }
       }
-      Agent(options = AgentOptions(argv, exitOnMissingConfig)) { startSync() }
+      Agent(options = AgentOptions(args, exitOnMissingConfig)) { startSync() }
     }
 
     @Suppress("unused")

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,16 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.harness.support
 
 import com.github.pambrose.common.util.getBanner
 import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.prometheus.TestConstants.PROXY_PORT
+import io.prometheus.Agent
+import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.Utils.getVersionDesc
+import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.serialization.KSerializer
@@ -31,7 +33,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
@@ -75,7 +76,7 @@ object TestUtils {
     adminEnabled: Boolean = false,
     debugEnabled: Boolean = false,
     metricsEnabled: Boolean = false,
-    argv: List<String> = emptyList(),
+    args: List<String> = emptyList(),
   ): Proxy {
     logger.apply {
       info { getBanner("banners/proxy.txt", logger) }
@@ -85,8 +86,8 @@ object TestUtils {
     val proxyOptions = ProxyOptions(
       mutableListOf<String>()
         .apply {
-          addAll(TestConstants.CONFIG_ARG)
-          addAll(argv)
+          addAll(HarnessConstants.CONFIG_ARG)
+          addAll(args)
           add("-Dproxy.admin.enabled=$adminEnabled")
           add("-Dproxy.admin.debugEnabled=$debugEnabled")
           add("-Dproxy.metrics.enabled=$metricsEnabled")
@@ -107,7 +108,8 @@ object TestUtils {
     metricsEnabled: Boolean = false,
     scrapeTimeoutSecs: Int = -1,
     chunkContentSizeKbs: Int = -1,
-    argv: List<String> = emptyList(),
+    maxConcurrentClients: Int = -1,
+    args: List<String> = emptyList(),
   ): Agent {
     logger.apply {
       info { getBanner("banners/agent.txt", logger) }
@@ -117,8 +119,8 @@ object TestUtils {
     val agentOptions = AgentOptions(
       args = mutableListOf<String>()
         .apply {
-          addAll(TestConstants.CONFIG_ARG)
-          addAll(argv)
+          addAll(HarnessConstants.CONFIG_ARG)
+          addAll(args)
           add("-Dagent.admin.enabled=$adminEnabled")
           add("-Dagent.admin.debugEnabled=$debugEnabled")
           add("-Dagent.metrics.enabled=$metricsEnabled")
@@ -126,6 +128,8 @@ object TestUtils {
             add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
           if (chunkContentSizeKbs != -1)
             add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
+          if (maxConcurrentClients != -1)
+            add("-Dagent.http.maxConcurrentClients=$maxConcurrentClients")
         },
       exitOnMissingConfig = false,
     )
