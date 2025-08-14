@@ -243,7 +243,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
 target for `--mount` options.
 
-## ⚙️ Advanced Features {advanced-features}
+## ⚙️ Advanced Features {#advanced-features}
 
 ### Embedded Agent
 
