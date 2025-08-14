@@ -22,6 +22,3 @@
     and upload the *build/libs/prometheus-proxy.jar* and  *build/libs/prometheus-agent.jar* files.
 
 11) Build and push docker images with: `make docker-push`
-
-12) Update the *prometheus-proxy* and *prometheus-agent* repository descriptions on [Docker hub](https://hub.docker.com)
-    with the latest version of *README.md*.
