@@ -7,15 +7,26 @@
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 [![ktlint](https://img.shields.io/badge/ktlint%20code--style-%E2%9D%A4-FF4081)](https://pinterest.github.io/ktlint/)
 
-A **firewall-friendly solution** that enables [Prometheus](https://prometheus.io) to scrape metrics from endpoints
-behind firewalls while
-preserving the native pull model architecture.
-
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for
 collecting metrics. The pull model is problematic when a firewall separates a Prometheus server and its metrics
 endpoints.
-[Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to reach metrics endpoints running
-behind a firewall and preserves the pull model.
+
+[Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to scrape metrics endpoints running
+behind a firewall and preserves the native pull-based model architecture.
+
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Docker](#docker-usage)
+- [Advanced Features](#advanced-features)
+- [Configuration Options](#configuration-options)
+- [Security](#security--tls)
+- [Troubleshooting](#troubleshooting)
+- [Examples & Use Cases](#examples--use-cases)
+- [License](#license)
+
+## 🏗️ Architecture
 
 The `prometheus-proxy` runtime comprises two services:
 
@@ -23,8 +34,6 @@ The `prometheus-proxy` runtime comprises two services:
   to the `agent` behind the firewall.
 * `agent`: runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the
   scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
-
-## 🏗️ Architecture
 
 Prometheus Proxy solves the firewall problem by using a persistent gRPC connection initiated from inside the firewall.
 Here's a simplified network diagram of how the deployed `proxy` and `agent` work:
