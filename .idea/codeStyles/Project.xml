@@ -11,6 +11,9 @@
       <option name="NAME_COUNT_TO_USE_STAR_IMPORT_FOR_MEMBERS" value="2147483647" />
       <option name="CODE_STYLE_DEFAULTS" value="KOTLIN_OFFICIAL" />
     </JetCodeStyleSettings>
+    <Markdown>
+      <option name="WRAP_TEXT_INSIDE_BLOCKQUOTES" value="false" />
+    </Markdown>
     <codeStyleSettings language="JAVA">
       <indentOptions>
         <option name="INDENT_SIZE" value="2" />

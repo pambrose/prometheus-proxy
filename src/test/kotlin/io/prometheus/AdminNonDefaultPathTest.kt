@@ -19,16 +19,18 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import io.kotest.matchers.comparables.shouldBeGreaterThan
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
-import io.prometheus.TestUtils.startAgent
-import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.Utils.lambda
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeGreaterThan
-import org.amshove.kluent.shouldContain
-import org.amshove.kluent.shouldStartWith
+import io.prometheus.harness.support.HarnessSetup
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.harness.support.withPrefix
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -39,11 +41,11 @@ class AdminNonDefaultPathTest {
   @Test
   fun proxyPingPathTest() {
     with(proxyConfigVals.admin) {
-      port shouldBeEqualTo 8099
-      pingPath shouldBeEqualTo "pingPath2"
+      port shouldBe 8099
+      pingPath shouldBe "pingPath2"
 
       blockingGet("$port/$pingPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldStartWith "pong"
       }
     }
@@ -52,11 +54,11 @@ class AdminNonDefaultPathTest {
   @Test
   fun proxyVersionPathTest() {
     with(proxyConfigVals.admin) {
-      port shouldBeEqualTo 8099
-      versionPath shouldBeEqualTo "versionPath2"
+      port shouldBe 8099
+      versionPath shouldBe "versionPath2"
 
       blockingGet("$port/$versionPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldContain "version"
       }
     }
@@ -65,10 +67,10 @@ class AdminNonDefaultPathTest {
   @Test
   fun proxyHealthCheckPathTest() {
     with(proxyConfigVals.admin) {
-      healthCheckPath shouldBeEqualTo "healthCheckPath2"
+      healthCheckPath shouldBe "healthCheckPath2"
 
       blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.OK
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText().length shouldBeGreaterThan 10
       }
     }
@@ -77,7 +79,7 @@ class AdminNonDefaultPathTest {
   @Test
   fun proxyThreadDumpPathTest() {
     with(proxyConfigVals.admin) {
-      threadDumpPath shouldBeEqualTo "threadDumpPath2"
+      threadDumpPath shouldBe "threadDumpPath2"
 
       blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
         response.bodyAsText().length shouldBeGreaterThan 10
@@ -85,15 +87,15 @@ class AdminNonDefaultPathTest {
     }
   }
 
-  companion object : CommonCompanion() {
+  companion object : HarnessSetup() {
     @JvmStatic
     @BeforeAll
     fun setUp() =
-      setItUp(
+      setupProxyAndAgent(
         proxySetup = lambda {
           startProxy(
             adminEnabled = true,
-            argv = listOf(
+            args = listOf(
               "-Dproxy.admin.port=8099",
               "-Dproxy.admin.pingPath=pingPath2",
               "-Dproxy.admin.versionPath=versionPath2",
@@ -107,6 +109,6 @@ class AdminNonDefaultPathTest {
 
     @JvmStatic
     @AfterAll
-    fun takeDown() = takeItDown()
+    fun takeDown() = takeDownProxyAndAgent()
   }
 }

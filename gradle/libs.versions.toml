@@ -2,7 +2,7 @@
 # Plugins
 config = "5.6.7"
 detekt = "1.23.8"
-kotlinter = "5.1.1"
+kotlinter = "5.2.0"
 kotlin = "2.2.0"
 kover = "0.9.1"
 protobuf = "0.9.5"
@@ -11,25 +11,25 @@ versions = "0.52.0"
 
 # Libraries
 annotation = "1.3.2"
-datetime = "0.6.2"
+datetime = " 0.7.1-0.6.x-compat"
 dropwizard = "4.2.33"
 gengrpc = "1.4.3"
-grpc = "1.73.0"
+grpc = "1.74.0"
 jcommander = "2.0"
 jetty = "10.0.25"
-kluent = "1.73"
-ktor = "3.2.0"
+kotest = "6.0.0.M16"
+ktor = "3.2.3"
 logback = "1.5.18"
-logging = "7.0.7"
+logging = "7.0.12"
 # Keep in sync with grpc
 tcnative = "2.0.72.Final"
 prometheus = "0.16.0"
 # Keep in sync with grpc
 protoc = "3.25.4"
-serialization = "1.8.1"
+serialization = "1.9.0"
 slf4j = "2.0.13"
-typesafe = "1.4.3"
-utils = "2.3.11"
+typesafe = "1.4.4"
+utils = "2.4.0"
 zipkin = "6.3.0"
 
 [libraries]
@@ -48,7 +48,6 @@ netty-tcnative = { module = "io.netty:netty-tcnative-boringssl-static", version.
 
 # Common Utils
 utils-core = { module = "com.github.pambrose.common-utils:core-utils", version.ref = "utils" }
-utils-corex = { module = "com.github.pambrose.common-utils:corex-utils", version.ref = "utils" }
 utils-dropwizard = { module = "com.github.pambrose.common-utils:dropwizard-utils", version.ref = "utils" }
 utils-guava = { module = "com.github.pambrose.common-utils:guava-utils", version.ref = "utils" }
 utils-grpc = { module = "com.github.pambrose.common-utils:grpc-utils", version.ref = "utils" }
@@ -92,7 +91,7 @@ logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "lo
 slf4j-jul = { module = "org.slf4j:jul-to-slf4j", version.ref = "slf4j" }
 
 # Testing
-kluent = { module = "org.amshove.kluent:kluent", version.ref = "kluent" }
+kotest = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

@@ -22,12 +22,19 @@ import com.beust.jcommander.Parameter
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
+import io.prometheus.common.ConfigVals
 import io.prometheus.common.EnvVars.AGENT_CONFIG
 import io.prometheus.common.EnvVars.AGENT_LOG_LEVEL
 import io.prometheus.common.EnvVars.AGENT_NAME
 import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
+import io.prometheus.common.EnvVars.CLIENT_CACHE_CLEANUP_INTERVAL_MINS
+import io.prometheus.common.EnvVars.CLIENT_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.CONSOLIDATED
 import io.prometheus.common.EnvVars.KEEPALIVE_WITHOUT_CALLS
+import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_AGE_MINS
+import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_IDLE_MINS
+import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_SIZE
+import io.prometheus.common.EnvVars.MAX_CONCURRENT_CLIENTS
 import io.prometheus.common.EnvVars.MIN_GZIP_SIZE_BYTES
 import io.prometheus.common.EnvVars.OVERRIDE_AUTHORITY
 import io.prometheus.common.EnvVars.PROXY_HOSTNAME
@@ -38,9 +45,9 @@ import io.prometheus.common.Utils.setLogLevel
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(
-  argv: Array<String>,
+  args: Array<String>,
   exitOnMissingConfig: Boolean,
-) : BaseOptions(Agent::class.java.name, argv, AGENT_CONFIG.name, exitOnMissingConfig) {
+) : BaseOptions(Agent::class.java.name, args, AGENT_CONFIG.name, exitOnMissingConfig) {
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
     this(args.toTypedArray(), exitOnMissingConfig)
 
@@ -81,6 +88,36 @@ class AgentOptions(
 
   @Parameter(names = ["--trust_all_x509"], description = "Disable SSL verification for https agent endpoints")
   var trustAllX509Certificates = false
+    private set
+
+  @Parameter(names = ["--max_concurrent_clients"], description = "Maximum number of concurrent HTTP clients")
+  var maxConcurrentHttpClients = -1
+    private set
+
+  @Parameter(names = ["--client_timeout_secs"], description = "HTTP client timeout (seconds)")
+  var httpClientTimeoutSecs = -1
+    private set
+
+  @Parameter(names = ["--max_cache_size"], description = "Maximum number of HTTP clients to cache")
+  var maxCacheSize = -1
+    private set
+
+  @Parameter(names = ["--max_cache_age_mins"], description = "Maximum age of cached HTTP clients (minutes)")
+  var maxCacheAgeMins = -1
+    private set
+
+  @Parameter(
+    names = ["--max_cache_idle_mins"],
+    description = "Maximum idle time before HTTP client is evicted (minutes)",
+  )
+  var maxCacheIdleMins = -1
+    private set
+
+  @Parameter(
+    names = ["--cache_cleanup_interval_mins"],
+    description = "Interval between HTTP client cache cleanup runs (minutes)",
+  )
+  var cacheCleanupIntervalMins = -1
     private set
 
   @Parameter(names = ["--keepalive_without_calls"], description = "gRPC KeepAlive without calls")
@@ -134,10 +171,7 @@ class AgentOptions(
           overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agentConfigVals.tls.overrideAuthority)
         logger.info { "overrideAuthority: $overrideAuthority" }
 
-        if (!trustAllX509Certificates)
-          trustAllX509Certificates =
-            TRUST_ALL_X509_CERTIFICATES.getEnv(agentConfigVals.http.enableTrustAllX509Certificates)
-        logger.info { "trustAllX509Certificates: $trustAllX509Certificates" }
+        assignHttpClientConfigVals(agentConfigVals)
 
         if (!keepAliveWithoutCalls)
           keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
@@ -170,12 +204,52 @@ class AgentOptions(
         if (logLevel.isEmpty())
           logLevel = AGENT_LOG_LEVEL.getEnv(agentConfigVals.logLevel)
         if (logLevel.isNotEmpty()) {
-          logger.info { "agent logLevel: $logLevel" }
+          logger.info { "agent.logLevel: $logLevel" }
           setLogLevel("agent", logLevel)
         } else {
-          logger.info { "agent logLevel: info" }
+          logger.info { "agent.logLevel: info" }
         }
       }
+  }
+
+  private fun assignHttpClientConfigVals(agentConfigVals: ConfigVals.Agent) {
+    with(agentConfigVals.http) {
+      if (!trustAllX509Certificates)
+        trustAllX509Certificates = TRUST_ALL_X509_CERTIFICATES.getEnv(enableTrustAllX509Certificates)
+      logger.info { "http.trustAllX509Certificates: $trustAllX509Certificates" }
+
+      if (maxConcurrentHttpClients == -1)
+        maxConcurrentHttpClients = MAX_CONCURRENT_CLIENTS.getEnv(maxConcurrentClients)
+      require(maxConcurrentHttpClients > 0) { "http.maxConcurrentClients must be > 0" }
+      logger.info { "http.maxConcurrentClients: $maxConcurrentHttpClients" }
+
+      if (httpClientTimeoutSecs == -1)
+        httpClientTimeoutSecs = CLIENT_TIMEOUT_SECS.getEnv(clientTimeoutSecs)
+      require(httpClientTimeoutSecs > 0) { "http.clientTimeoutSecs must be > 0" }
+      logger.info { "http.clientTimeoutSecs: $httpClientTimeoutSecs" }
+
+      if (maxCacheSize == -1)
+        maxCacheSize = MAX_CLIENT_CACHE_SIZE.getEnv(clientCache.maxSize)
+      require(maxCacheSize > 1) { "http.clientCache.maxSize must be > 1: ($maxCacheSize)" }
+      logger.info { "http.clientCache.maxSize: $maxCacheSize" }
+
+      if (maxCacheAgeMins == -1)
+        maxCacheAgeMins = MAX_CLIENT_CACHE_AGE_MINS.getEnv(clientCache.maxAgeMins)
+      require(maxCacheAgeMins > 1) { "http.clientCache.maxCacheAgeMins must be > 1: ($maxCacheAgeMins)" }
+      logger.info { "http.clientCache.maxCacheAgeMins: $maxCacheAgeMins" }
+
+      if (maxCacheIdleMins == -1)
+        maxCacheIdleMins = MAX_CLIENT_CACHE_IDLE_MINS.getEnv(clientCache.maxIdleMins)
+      require(maxCacheIdleMins > 1) { "http.clientCache.maxCacheIdleMins must be > 1: ($maxCacheIdleMins)" }
+      logger.info { "http.clientCache.maxCacheIdleMins: $maxCacheIdleMins" }
+
+      if (cacheCleanupIntervalMins == -1)
+        cacheCleanupIntervalMins = CLIENT_CACHE_CLEANUP_INTERVAL_MINS.getEnv(clientCache.cleanupIntervalMins)
+      require(cacheCleanupIntervalMins > 1) {
+        "http.clientCache.cleanupIntervalMins must be > 1: ($cacheCleanupIntervalMins)"
+      }
+      logger.info { "http.clientCache.cleanupIntervalMins: $cacheCleanupIntervalMins" }
+    }
   }
 
   companion object {

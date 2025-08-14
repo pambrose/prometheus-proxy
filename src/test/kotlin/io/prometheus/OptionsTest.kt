@@ -18,12 +18,12 @@
 
 package io.prometheus
 
-import io.prometheus.TestConstants.OPTIONS_CONFIG
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.shouldBe
 import io.prometheus.agent.AgentOptions
+import io.prometheus.harness.support.HarnessConstants.OPTIONS_CONFIG
 import io.prometheus.proxy.ProxyOptions
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeFalse
-import org.amshove.kluent.shouldBeTrue
 import org.junit.jupiter.api.Test
 
 class OptionsTest {
@@ -32,7 +32,7 @@ class OptionsTest {
     val configVals = readProxyOptions(listOf())
     configVals.proxy
       .apply {
-        http.port shouldBeEqualTo 8080
+        http.port shouldBe 8080
         internal.zipkin.enabled.shouldBeFalse()
       }
   }
@@ -42,7 +42,7 @@ class OptionsTest {
     val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG))
     configVals.proxy
       .apply {
-        http.port shouldBeEqualTo 8181
+        http.port shouldBe 8181
         internal.zipkin.enabled.shouldBeTrue()
       }
   }
@@ -52,7 +52,7 @@ class OptionsTest {
     val configVals = readProxyOptions(listOf("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"))
     configVals.proxy
       .apply {
-        http.port shouldBeEqualTo 9393
+        http.port shouldBe 9393
         internal.zipkin.enabled.shouldBeTrue()
       }
   }
@@ -60,21 +60,21 @@ class OptionsTest {
   @Test
   fun verifyQuotedPropValue() {
     val configVals = readProxyOptions(listOf("-Dproxy.http.port=9394"))
-    configVals.proxy.http.port shouldBeEqualTo 9394
+    configVals.proxy.http.port shouldBe 9394
   }
 
   @Test
   fun verifyPathConfigs() {
     val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
-    configVals.agent.pathConfigs.size shouldBeEqualTo 3
+    configVals.agent.pathConfigs.size shouldBe 3
   }
 
   @Test
   fun verifyProxyDefaults() {
     ProxyOptions(listOf())
       .apply {
-        proxyHttpPort shouldBeEqualTo 8080
-        proxyAgentPort shouldBeEqualTo 50051
+        proxyHttpPort shouldBe 8080
+        proxyAgentPort shouldBe 50051
       }
   }
 
@@ -83,10 +83,10 @@ class OptionsTest {
     val options = AgentOptions(listOf("--name", "test-name", "--proxy", "host5"), false)
     options
       .apply {
-        metricsEnabled shouldBeEqualTo false
-        dynamicParams.size shouldBeEqualTo 0
-        agentName shouldBeEqualTo "test-name"
-        proxyHostname shouldBeEqualTo "host5"
+        metricsEnabled shouldBe false
+        dynamicParams.size shouldBe 0
+        agentName shouldBe "test-name"
+        proxyHostname shouldBe "host5"
       }
   }
 

@@ -1,4 +1,5 @@
 import com.google.protobuf.gradle.id
+import org.jmailen.gradle.kotlinter.tasks.FormatTask
 import org.jmailen.gradle.kotlinter.tasks.LintTask
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -22,7 +23,7 @@ plugins {
 }
 
 group = "io.prometheus"
-version = "2.2.0"
+version = "2.3.0"
 
 buildConfig {
   packageName("io.prometheus")
@@ -55,7 +56,6 @@ dependencies {
   implementation(libs.netty.tcnative)
 
   implementation(libs.utils.core)
-  implementation(libs.utils.corex)
   implementation(libs.utils.dropwizard)
   implementation(libs.utils.guava)
   implementation(libs.utils.grpc)
@@ -94,7 +94,7 @@ dependencies {
   implementation(libs.logback.classic)
   implementation(libs.slf4j.jul)
 
-  testImplementation(libs.kluent)
+  testImplementation(libs.kotest)
   testImplementation(kotlin("test"))
 }
 
@@ -111,6 +111,10 @@ fun Project.configureKotlin() {
     options.encoding = "UTF-8"
   }
 
+  tasks.named("build") {
+    mustRunAfter("clean")
+  }
+
   configurations.all {
     resolutionStrategy.cacheChangingModulesFor(0, "seconds")
   }
@@ -123,7 +127,7 @@ fun Project.configureKotlin() {
   }
 
   kotlin {
-    jvmToolchain(11)
+    jvmToolchain(17)
 
     sourceSets.all {
       listOf(
@@ -195,8 +199,9 @@ fun Project.configureJars() {
 }
 
 fun Project.configureTesting() {
-  tasks.withType<Test> {
+  tasks.test {
     useJUnitPlatform()
+
     testLogging {
       events("passed", "skipped", "failed", "standardOut", "standardError")
       exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
@@ -248,13 +253,22 @@ fun Project.configurePublishing() {
   }
 }
 
-fun Project.configureKotlinter() {
-  tasks.withType<LintTask> {
-    this.source = this.source.minus(fileTree("build/generated")).asFileTree
+tasks.withType<LintTask> {
+  // This will exclude all files under build/generated/
+  this.source = this.source.minus(fileTree("build/generated")).asFileTree
+}
+tasks.withType<FormatTask> {
+  this.source = this.source.minus(fileTree("build/generated")).asFileTree
+}
 
-  }
+fun Project.configureKotlinter() {
+//  tasks.withType<LintTask> {
+//    this.source = this.source.minus(fileTree("build/generated")).asFileTree
+//  }
 
   kotlinter {
+    ignoreFormatFailures = false
+    ignoreLintFailures = false
     reporters = arrayOf("checkstyle", "plain")
   }
 }

@@ -39,8 +39,8 @@ import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
 import io.prometheus.common.Utils.setLogLevel
 
 class ProxyOptions(
-  argv: Array<String>,
-) : BaseOptions(Proxy::class.java.simpleName, argv, PROXY_CONFIG.name) {
+  args: Array<String>,
+) : BaseOptions(Proxy::class.java.simpleName, args, PROXY_CONFIG.name) {
   constructor(args: List<String>) : this(args.toTypedArray())
 
   @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
@@ -63,7 +63,8 @@ class ProxyOptions(
   var sdTargetPrefix = ""
     private set
 
-  @Parameter(names = ["--ref-disabled"], description = "gRPC Reflection disabled")
+  // Use both options here to avoid breaking people with the typo fix
+  @Parameter(names = ["--ref-disabled", "--ref_disabled"], description = "gRPC Reflection disabled")
   var reflectionDisabled = false
     private set
 
@@ -71,23 +72,23 @@ class ProxyOptions(
   var handshakeTimeoutSecs = -1L
     private set
 
-  @Parameter(names = ["--permit_keepalive_without_calls"], description = "gRPC Permit KeepAlive without calls")
+  @Parameter(names = ["--permit_keepalive_without_calls"], description = "Permit gRPC KeepAlive without calls")
   var permitKeepAliveWithoutCalls = false
     private set
 
-  @Parameter(names = ["--permit_keepalive_time_secs"], description = "gRPC Permit KeepAlive time (secs)")
+  @Parameter(names = ["--permit_keepalive_time_secs"], description = "Permit gRPC KeepAlive time (secs)")
   var permitKeepAliveTimeSecs = -1L
     private set
 
-  @Parameter(names = ["--max_connection_idle_secs"], description = "gRPC Max connection idle (secs)")
+  @Parameter(names = ["--max_connection_idle_secs"], description = "Max gRPC connection idle (secs)")
   var maxConnectionIdleSecs = -1L
     private set
 
-  @Parameter(names = ["--max_connection_age_secs"], description = "gRPC Max connection age (secs)")
+  @Parameter(names = ["--max_connection_age_secs"], description = "Max gRPC connection age (secs)")
   var maxConnectionAgeSecs = -1L
     private set
 
-  @Parameter(names = ["--max_connection_age_grace_secs"], description = "gRPC Max connection age grace (secs)")
+  @Parameter(names = ["--max_connection_age_grace_secs"], description = "Max gRPC connection age grace (secs)")
   var maxConnectionAgeGraceSecs = -1L
     private set
 
@@ -181,10 +182,10 @@ class ProxyOptions(
         if (logLevel.isEmpty())
           logLevel = PROXY_LOG_LEVEL.getEnv(proxyConfigVals.logLevel)
         if (logLevel.isNotEmpty()) {
-          logger.info { "proxy logLevel: $logLevel" }
+          logger.info { "proxy.logLevel: $logLevel" }
           setLogLevel("proxy", logLevel)
         } else {
-          logger.info { "proxy logLevel: info" }
+          logger.info { "proxy.logLevel: info" }
         }
       }
   }

@@ -7,6 +7,8 @@ build/
 ### IntelliJ IDEA ###
 .idea/modules.xml
 .idea/jarRepositories.xml
+.idea/AndroidProjectSystem.xml
+.idea/AugmentWebviewStateStore.xml
 .idea/compiler.xml
 .idea/libraries/
 *.iws

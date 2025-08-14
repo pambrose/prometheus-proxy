@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,68 +16,55 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.harness
 
 import com.github.pambrose.common.util.simpleClassName
-import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.TestConstants.DEFAULT_TIMEOUT
-import io.prometheus.TestUtils.startAgent
-import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.Utils.lambda
+import io.prometheus.harness.support.AbstractHarnessTests
+import io.prometheus.harness.support.HarnessConstants.CONCURRENT_CLIENTS
+import io.prometheus.harness.support.HarnessConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.harness.support.HarnessConstants.DEFAULT_TIMEOUT
+import io.prometheus.harness.support.HarnessSetup
+import io.prometheus.harness.support.ProxyCallTestArgs
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 
-class TlsWithMutualAuthTest :
-  CommonTests(
-    ProxyCallTestArgs(
+class InProcessTestWithAdminMetricsTest :
+  AbstractHarnessTests(
+    args = ProxyCallTestArgs(
       agent = agent,
-      startPort = 10800,
+      startPort = 10700,
       caller = simpleClassName,
     ),
   ) {
-  companion object : CommonCompanion() {
+  companion object : HarnessSetup() {
     @JvmStatic
     @BeforeAll
     fun setUp() =
-      setItUp(
+      setupProxyAndAgent(
         proxySetup = lambda {
           startProxy(
-            serverName = "withmutualauth",
-            argv = listOf(
-              "--agent_port",
-              "50440",
-              "--cert",
-              "testing/certs/server1.pem",
-              "--key",
-              "testing/certs/server1.key",
-              "--trust",
-              "testing/certs/ca.pem",
-            ),
+            serverName = "withmetrics",
+            adminEnabled = true,
+            metricsEnabled = true,
           )
         },
         agentSetup = lambda {
           startAgent(
-            serverName = "withmutualauth",
+            serverName = "withmetrics",
+            adminEnabled = true,
+            metricsEnabled = true,
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
             chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
-            argv = listOf(
-              "--proxy",
-              "localhost:50440",
-              "--cert",
-              "testing/certs/client.pem",
-              "--key",
-              "testing/certs/client.key",
-              "--trust",
-              "testing/certs/ca.pem",
-              "--override",
-              "foo.test.google.fr",
-            ),
+            maxConcurrentClients = CONCURRENT_CLIENTS,
           )
         },
       )
 
     @JvmStatic
     @AfterAll
-    fun takeDown() = takeItDown()
+    fun takeDown() = takeDownProxyAndAgent()
   }
 }

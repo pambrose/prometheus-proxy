@@ -20,7 +20,6 @@ package io.prometheus.agent
 
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders.ACCEPT
@@ -33,32 +32,46 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.auth.Auth
 import io.ktor.client.plugins.auth.providers.BasicAuthCredentials
 import io.ktor.client.plugins.auth.providers.basic
+import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
 import io.prometheus.Agent
+import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
 import io.prometheus.grpc.ScrapeRequest
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentHttpService(
   val agent: Agent,
 ) {
+  internal val httpClientCache =
+    with(agent) {
+      HttpClientCache(
+        maxCacheSize = options.maxCacheSize,
+        maxAge = options.maxCacheAgeMins.minutes,
+        maxIdleTime = options.maxCacheIdleMins.minutes,
+        cleanupInterval = options.cacheCleanupIntervalMins.minutes,
+      )
+    }
+
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
-    return if (pathContext.isNull())
-      handleInvalidPath(scrapeRequest)
-    else
+    return if (pathContext.isNotNull())
       fetchContentFromUrl(scrapeRequest, pathContext)
+    else
+      handleInvalidPath(scrapeRequest)
   }
 
   private suspend fun AgentHttpService.fetchContentFromUrl(
@@ -86,12 +99,16 @@ internal class AgentHttpService(
     scrapeResults: ScrapeResults,
   ) {
     runCatching {
-      newHttpClient(url).use { client ->
-        client.get(
+      val clientKey = with(Url(url)) { ClientKey(user, password) }
+      val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(scrapeRequest, clientKey) }
+      try {
+        entry.client.get(
           url = url,
           setUp = prepareRequestHeaders(scrapeRequest),
           block = processHttpResponse(url, scrapeRequest, scrapeResults),
         )
+      } finally {
+        httpClientCache.onFinishedWithClient(entry)
       }
     }.onFailure { e ->
       with(scrapeResults) {
@@ -105,12 +122,9 @@ internal class AgentHttpService(
 
   private fun prepareRequestHeaders(request: ScrapeRequest): HttpRequestBuilder.() -> Unit =
     lambda {
-      request.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
-      val authHeader = request.authHeader.ifBlank { null }
-      authHeader?.also { header(io.ktor.http.HttpHeaders.Authorization, it) }
     }
 
   private fun processHttpResponse(
@@ -136,7 +150,7 @@ internal class AgentHttpService(
           logger.info { "CT check - setScrapeDetailsAndDebugInfo() contentType: $contentType" }
         // Zip the content here
         val content = response.bodyAsText()
-        zipped = content.length > agent.configVals.agent.minGzipSizeBytes
+        zipped = content.length > agent.options.minGzipSizeBytes
         if (zipped)
           contentAsZipped = content.zip()
         else
@@ -152,20 +166,37 @@ internal class AgentHttpService(
     }
   }
 
-  private fun newHttpClient(url: String): HttpClient =
+  private fun newHttpClient(
+    scrapeRequest: ScrapeRequest,
+    clientKey: ClientKey,
+  ): HttpClient =
     HttpClient(CIO) {
       expectSuccess = false
       engine {
-        val timeout = agent.configVals.agent.internal.cioTimeoutSecs.seconds
+        // If internal.cioTimeoutSecs is set to a non-default and httpClientTimeoutSecs is set to the default, then use
+        // internal.cioTimeoutSecs value. Otherwise, use httpClientTimeoutSecs.
+        val timeout =
+          (
+            if (agent.configVals.agent.internal.cioTimeoutSecs != 90 && agent.options.httpClientTimeoutSecs == 90)
+              agent.configVals.agent.internal.cioTimeoutSecs
+            else
+              agent.options.httpClientTimeoutSecs
+            ).seconds
         requestTimeout = timeout.inWholeMilliseconds
 
-        val enableTrustAllX509Certificates = agent.configVals.agent.http.enableTrustAllX509Certificates
-        if (enableTrustAllX509Certificates) {
+        if (agent.options.trustAllX509Certificates) {
           https {
             // trustManager = SslSettings.getTrustManager()
             trustManager = TrustAllX509TrustManager
           }
         }
+      }
+
+      // Set default headers
+      defaultRequest {
+        scrapeRequest.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
+        val authHeader = scrapeRequest.authHeader.ifBlank { null }
+        authHeader?.also { header(HttpHeaders.Authorization, it) }
       }
 
       install(HttpTimeout)
@@ -185,19 +216,22 @@ internal class AgentHttpService(
         }
       }
 
-      val urlObj = Url(url)
-      val user = urlObj.user
-      val passwd = urlObj.password
-      if (user.isNotNull() && passwd.isNotNull()) {
+      // Setup authentication if username and password are specified
+      if (clientKey.hasAuth()) {
         install(Auth) {
           basic {
             credentials {
-              BasicAuthCredentials(user, passwd)
+              // These are known to be non-null because of the hasAuth() check above
+              BasicAuthCredentials(clientKey.username!!, clientKey.password!!)
             }
           }
         }
       }
     }
+
+  suspend fun close() {
+    httpClientCache.close()
+  }
 
   companion object {
     private val logger = KotlinLogging.logger {}

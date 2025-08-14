@@ -23,6 +23,7 @@ import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -36,7 +37,7 @@ internal class AgentContext(
 ) {
   val agentId = AGENT_ID_GENERATOR.incrementAndFetch().toString()
 
-  private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(Channel.UNLIMITED)
+  private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(UNLIMITED)
   private val channelBacklogSize = AtomicInt(0)
 
   private val clock = Monotonic

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,30 +16,35 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.harness
 
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.sleep
+import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.shouldBe
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
-import io.prometheus.TestConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.TestConstants.DEFAULT_TIMEOUT
-import io.prometheus.TestUtils.startAgent
-import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.Utils.lambda
+import io.prometheus.harness.support.AbstractHarnessTests
+import io.prometheus.harness.support.HarnessConstants.CONCURRENT_CLIENTS
+import io.prometheus.harness.support.HarnessConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.harness.support.HarnessConstants.DEFAULT_TIMEOUT
+import io.prometheus.harness.support.HarnessSetup
+import io.prometheus.harness.support.ProxyCallTestArgs
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.harness.support.withPrefix
 import kotlinx.coroutines.runBlocking
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeGreaterThan
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 class NettyTestWithAdminMetricsTest :
-  CommonTests(
-    ProxyCallTestArgs(
+  AbstractHarnessTests(
+    args = ProxyCallTestArgs(
       agent = agent,
       startPort = 10300,
       caller = simpleClassName,
@@ -52,7 +57,7 @@ class NettyTestWithAdminMetricsTest :
         get("8093/debug".withPrefix()) { response ->
           val body = response.bodyAsText()
           body.length shouldBeGreaterThan 100
-          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.status shouldBe HttpStatusCode.OK
         }
       }
 
@@ -60,17 +65,17 @@ class NettyTestWithAdminMetricsTest :
         get("8092/debug".withPrefix()) { response ->
           val body = response.bodyAsText()
           body.length shouldBeGreaterThan 100
-          response.status shouldBeEqualTo HttpStatusCode.OK
+          response.status shouldBe HttpStatusCode.OK
         }
       }
     }
   }
 
-  companion object : CommonCompanion() {
+  companion object : HarnessSetup() {
     @JvmStatic
     @BeforeAll
     fun setUp() =
-      setItUp(
+      setupProxyAndAgent(
         proxySetup = lambda {
           startProxy(
             adminEnabled = true,
@@ -85,6 +90,7 @@ class NettyTestWithAdminMetricsTest :
             metricsEnabled = true,
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
             chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
+            maxConcurrentClients = CONCURRENT_CLIENTS,
           )
         },
         actions = lambda {
@@ -95,6 +101,6 @@ class NettyTestWithAdminMetricsTest :
 
     @JvmStatic
     @AfterAll
-    fun takeDown() = takeItDown()
+    fun takeDown() = takeDownProxyAndAgent()
   }
 }

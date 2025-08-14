@@ -18,10 +18,6 @@ package io.prometheus.common
 
 import com.google.protobuf.Empty
 
-internal object Constants {
-  const val UNKNOWN = "Unknown"
-}
-
 internal object Messages {
   const val EMPTY_AGENT_ID_MSG = "Empty agentId"
   const val EMPTY_PATH_MSG = "Empty path"

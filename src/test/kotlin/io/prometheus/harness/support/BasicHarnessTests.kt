@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,39 +14,36 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
-package io.prometheus
+package io.prometheus.harness.support
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
-import io.prometheus.TestConstants.PROXY_PORT
 import io.prometheus.agent.AgentPathManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeNull
-import org.amshove.kluent.shouldNotBeNull
 import kotlin.time.Duration.Companion.seconds
 
-internal object SimpleTests {
+internal object BasicHarnessTests {
   private val logger = KotlinLogging.logger {}
 
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
-    blockingGet("$PROXY_PORT/".withPrefix()) { response ->
-      response.status shouldBeEqualTo HttpStatusCode.NotFound
+    blockingGet("${HarnessConstants.PROXY_PORT}/".withPrefix()) { response ->
+      response.status shouldBe HttpStatusCode.Companion.NotFound
     }
   }
 
   fun invalidPathTest(caller: String) {
     logger.debug { "Calling invalidPathTest() from $caller" }
-    blockingGet("$PROXY_PORT/invalid_path".withPrefix()) { response ->
-      response.status shouldBeEqualTo HttpStatusCode.NotFound
+    blockingGet("${HarnessConstants.PROXY_PORT}/invalid_path".withPrefix()) { response ->
+      response.status shouldBe HttpStatusCode.Companion.NotFound
     }
   }
 
@@ -60,15 +57,15 @@ internal object SimpleTests {
     val originalSize = pathManager.pathMapSize()
 
     var cnt = 0
-    repeat(TestConstants.REPS) { i ->
+    repeat(HarnessConstants.REPS) { i ->
       val path = "test-$i"
       pathManager.let { manager ->
-        manager.registerPath(path, "$PROXY_PORT/$path".withPrefix())
+        manager.registerPath(path, "${HarnessConstants.PROXY_PORT}/$path".withPrefix())
         cnt++
-        manager.pathMapSize() shouldBeEqualTo originalSize + cnt
+        manager.pathMapSize() shouldBe originalSize + cnt
         manager.unregisterPath(path)
         cnt--
-        manager.pathMapSize() shouldBeEqualTo originalSize + cnt
+        manager.pathMapSize() shouldBe originalSize + cnt
       }
     }
   }
@@ -81,8 +78,8 @@ internal object SimpleTests {
     logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
-    blockingGet("$PROXY_PORT/$badPath".withPrefix()) { response ->
-      response.status shouldBeEqualTo HttpStatusCode.NotFound
+    blockingGet("${HarnessConstants.PROXY_PORT}/$badPath".withPrefix()) { response ->
+      response.status shouldBe HttpStatusCode.Companion.NotFound
     }
     pathManager.unregisterPath(badPath)
   }
@@ -100,10 +97,10 @@ internal object SimpleTests {
     withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
       val mutex = Mutex()
       val jobs =
-        List(TestConstants.REPS) { i ->
+        List(HarnessConstants.REPS) { i ->
           launch(Dispatchers.Default + exceptionHandler(logger)) {
             val path = "test-$i}"
-            val url = "$PROXY_PORT/$path".withPrefix()
+            val url = "${HarnessConstants.PROXY_PORT}/$path".withPrefix()
             mutex.withLock { paths += path }
             pathManager.registerPath(path, url)
           }
@@ -115,8 +112,8 @@ internal object SimpleTests {
       }
     }.shouldNotBeNull()
 
-    paths.size shouldBeEqualTo TestConstants.REPS
-    pathManager.pathMapSize() shouldBeEqualTo (originalSize + TestConstants.REPS)
+    paths.size shouldBe HarnessConstants.REPS
+    pathManager.pathMapSize() shouldBe (originalSize + HarnessConstants.REPS)
 
     withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
       val jobs =
@@ -132,6 +129,6 @@ internal object SimpleTests {
       }
     }.shouldNotBeNull()
 
-    pathManager.pathMapSize() shouldBeEqualTo originalSize
+    pathManager.pathMapSize() shouldBe originalSize
   }
 }

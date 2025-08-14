@@ -21,13 +21,13 @@ package io.prometheus
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigSyntax
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.shouldBe
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeFalse
-import org.amshove.kluent.shouldBeTrue
 import org.junit.jupiter.api.Test
 
 class DataClassTest {
@@ -48,27 +48,27 @@ class DataClassTest {
     newAdminConfig(vals.agent.admin.enabled, vals.agent.admin.port, vals.agent.admin)
       .also {
         it.enabled.shouldBeFalse()
-        it.port shouldBeEqualTo 888
+        it.port shouldBe 888
       }
 
     newAdminConfig(true, 444, configVals("agent.admin.pingPath=a pingpath val").agent.admin)
       .also {
-        it.pingPath shouldBeEqualTo "a pingpath val"
+        it.pingPath shouldBe "a pingpath val"
       }
 
     newAdminConfig(true, 444, configVals("agent.admin.versionPath=a versionpath val").agent.admin)
       .also {
-        it.versionPath shouldBeEqualTo "a versionpath val"
+        it.versionPath shouldBe "a versionpath val"
       }
 
     newAdminConfig(true, 444, configVals("agent.admin.healthCheckPath=a healthCheckPath val").agent.admin)
       .also {
-        it.healthCheckPath shouldBeEqualTo "a healthCheckPath val"
+        it.healthCheckPath shouldBe "a healthCheckPath val"
       }
 
     newAdminConfig(true, 444, configVals("agent.admin.threadDumpPath=a threadDumpPath val").agent.admin)
       .also {
-        it.threadDumpPath shouldBeEqualTo "a threadDumpPath val"
+        it.threadDumpPath shouldBe "a threadDumpPath val"
       }
   }
 
@@ -81,12 +81,12 @@ class DataClassTest {
 
     newMetricsConfig(true, 555, configVals("agent.metrics.hostname=testval").agent.metrics)
       .also {
-        it.port shouldBeEqualTo 555
+        it.port shouldBe 555
       }
 
     newMetricsConfig(true, 555, configVals("agent.metrics.path=a path val").agent.metrics)
       .also {
-        it.path shouldBeEqualTo "a path val"
+        it.path shouldBe "a path val"
       }
 
     newMetricsConfig(true, 555, configVals("agent.metrics.standardExportsEnabled=true").agent.metrics)
@@ -129,22 +129,22 @@ class DataClassTest {
 
     newZipkinConfig(configVals("agent.internal.zipkin.hostname=testval").agent.internal.zipkin)
       .also {
-        it.hostname shouldBeEqualTo "testval"
+        it.hostname shouldBe "testval"
       }
 
     newZipkinConfig(configVals("agent.internal.zipkin.port=999").agent.internal.zipkin)
       .also {
-        it.port shouldBeEqualTo 999
+        it.port shouldBe 999
       }
 
     newZipkinConfig(configVals("agent.internal.zipkin.path=a path val").agent.internal.zipkin)
       .also {
-        it.path shouldBeEqualTo "a path val"
+        it.path shouldBe "a path val"
       }
 
     newZipkinConfig(configVals("agent.internal.zipkin.serviceName=a service name").agent.internal.zipkin)
       .also {
-        it.serviceName shouldBeEqualTo "a service name"
+        it.serviceName shouldBe "a service name"
       }
   }
 }

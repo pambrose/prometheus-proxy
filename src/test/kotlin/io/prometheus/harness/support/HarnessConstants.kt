@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,24 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
-package io.prometheus
+package io.prometheus.harness.support
 
 import java.io.File
 
-object TestConstants {
+object HarnessConstants {
   const val REPS = 1000
   const val PROXY_PORT = 9505
   const val DEFAULT_TIMEOUT = 3
   const val DEFAULT_CHUNK_SIZE = 5
+
+  const val HTTP_SERVER_COUNT = 5
+  const val PATH_COUNT = 50
+  const val SEQUENTIAL_QUERY_COUNT = 1000
+  const val PARALLEL_QUERY_COUNT = 10
+  const val CONCURRENT_CLIENTS = 100
+
+  const val MIN_DELAY_MILLIS = 400
+  const val MAX_DELAY_MILLIS = 600
 
   private const val TRAVIS_FILE = "etc/test-configs/travis.conf"
   private const val JUNIT_FILE = "etc/test-configs/junit-test.conf"

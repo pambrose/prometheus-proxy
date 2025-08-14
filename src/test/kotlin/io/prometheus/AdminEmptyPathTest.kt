@@ -19,12 +19,14 @@
 package io.prometheus
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
-import io.prometheus.TestUtils.startAgent
-import io.prometheus.TestUtils.startProxy
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.Utils.lambda
-import org.amshove.kluent.shouldBeEqualTo
+import io.prometheus.harness.support.HarnessSetup
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.harness.support.withPrefix
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -35,11 +37,11 @@ class AdminEmptyPathTest {
   @Test
   fun proxyPingPathTest() {
     with(proxyConfigVals.admin) {
-      port shouldBeEqualTo 8098
-      pingPath shouldBeEqualTo ""
+      port shouldBe 8098
+      pingPath shouldBe ""
 
       blockingGet("$port/$pingPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.NotFound
+        response.status shouldBe HttpStatusCode.NotFound
       }
     }
   }
@@ -47,11 +49,11 @@ class AdminEmptyPathTest {
   @Test
   fun proxyVersionPathTest() {
     with(proxyConfigVals.admin) {
-      port shouldBeEqualTo 8098
-      versionPath shouldBeEqualTo ""
+      port shouldBe 8098
+      versionPath shouldBe ""
 
       blockingGet("$port/$versionPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.NotFound
+        response.status shouldBe HttpStatusCode.NotFound
       }
     }
   }
@@ -59,10 +61,10 @@ class AdminEmptyPathTest {
   @Test
   fun proxyHealthCheckPathTest() {
     with(proxyConfigVals.admin) {
-      healthCheckPath shouldBeEqualTo ""
+      healthCheckPath shouldBe ""
 
       blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.NotFound
+        response.status shouldBe HttpStatusCode.NotFound
       }
     }
   }
@@ -70,23 +72,23 @@ class AdminEmptyPathTest {
   @Test
   fun proxyThreadDumpPathTest() {
     with(proxyConfigVals.admin) {
-      threadDumpPath shouldBeEqualTo ""
+      threadDumpPath shouldBe ""
 
       blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
-        response.status shouldBeEqualTo HttpStatusCode.NotFound
+        response.status shouldBe HttpStatusCode.NotFound
       }
     }
   }
 
-  companion object : CommonCompanion() {
+  companion object : HarnessSetup() {
     @JvmStatic
     @BeforeAll
     fun setUp() =
-      setItUp(
+      setupProxyAndAgent(
         proxySetup = lambda {
           startProxy(
             adminEnabled = true,
-            argv = listOf(
+            args = listOf(
               "-Dproxy.admin.port=8098",
               "-Dproxy.admin.pingPath=\"\"",
               "-Dproxy.admin.versionPath=\"\"",
@@ -100,6 +102,6 @@ class AdminEmptyPathTest {
 
     @JvmStatic
     @AfterAll
-    fun takeDown() = takeItDown()
+    fun takeDown() = takeDownProxyAndAgent()
   }
 }

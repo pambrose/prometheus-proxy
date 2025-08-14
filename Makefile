@@ -1,4 +1,4 @@
-VERSION=2.2.0
+VERSION=2.3.0
 
 default: versioncheck
 
@@ -35,10 +35,12 @@ IMAGE_PREFIX := pambrose/prometheus
 docker-push:
 	# prepare multiarch
 	docker buildx use buildx 2>/dev/null || docker buildx create --use --name=buildx
-	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:latest -t ${IMAGE_PREFIX}-proxy:${VERSION} .
-	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:latest -t ${IMAGE_PREFIX}-agent:${VERSION} .
+#	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:latest -t ${IMAGE_PREFIX}-proxy:${VERSION} .
+#	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:latest -t ${IMAGE_PREFIX}-agent:${VERSION} .
+	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:${VERSION} .
+	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:${VERSION} .
 
-all: distro docker-push
+release: distro docker-push
 
 build-coverage:
 	./mvnw clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report
@@ -69,4 +71,4 @@ refresh:
 	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=8.14.2 --distribution-type=bin
+	./gradlew wrapper --gradle-version=9.0.0 --distribution-type=bin

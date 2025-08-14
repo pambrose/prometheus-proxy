@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,8 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.harness.support
 
-import com.github.pambrose.common.coroutine.delay
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.dsl.KtorDsl.httpClient
@@ -26,6 +25,9 @@ import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType.Text
@@ -38,24 +40,23 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import io.prometheus.CommonTests.Companion.HTTP_SERVER_COUNT
-import io.prometheus.CommonTests.Companion.MAX_DELAY_MILLIS
-import io.prometheus.CommonTests.Companion.MIN_DELAY_MILLIS
-import io.prometheus.CommonTests.Companion.PARALLEL_QUERY_COUNT
-import io.prometheus.CommonTests.Companion.PATH_COUNT
-import io.prometheus.CommonTests.Companion.SEQUENTIAL_QUERY_COUNT
-import io.prometheus.TestConstants.PROXY_PORT
+import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
+import io.prometheus.harness.support.HarnessConstants.HTTP_SERVER_COUNT
+import io.prometheus.harness.support.HarnessConstants.MAX_DELAY_MILLIS
+import io.prometheus.harness.support.HarnessConstants.MIN_DELAY_MILLIS
+import io.prometheus.harness.support.HarnessConstants.PARALLEL_QUERY_COUNT
+import io.prometheus.harness.support.HarnessConstants.PATH_COUNT
+import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
+import io.prometheus.harness.support.HarnessConstants.SEQUENTIAL_QUERY_COUNT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withTimeoutOrNull
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeNull
-import org.amshove.kluent.shouldNotBeNull
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
@@ -72,8 +73,9 @@ class ProxyCallTestArgs(
   val caller: String,
 )
 
-internal object ProxyTests {
+internal object HarnessTests {
   private val logger = KotlinLogging.logger {}
+  private val contentMap = mutableMapOf<Int, String>()
 
   suspend fun timeoutTest(
     pathManager: AgentPathManager,
@@ -107,7 +109,7 @@ internal object ProxyTests {
     pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
 
     blockingGet("$PROXY_PORT/$proxyPath".withPrefix()) { response ->
-      response.status shouldBeEqualTo HttpStatusCode.RequestTimeout
+      response.status shouldBe HttpStatusCode.RequestTimeout
     }
 
     pathManager.unregisterPath("/$proxyPath")
@@ -125,8 +127,6 @@ internal object ProxyTests {
     val port: Int,
     val server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>,
   )
-
-  private val contentMap = mutableMapOf<Int, String>()
 
   suspend fun proxyCallTest(args: ProxyCallTestArgs) {
     logger.info { "Calling proxyCallTest() from ${args.caller}" }
@@ -186,7 +186,7 @@ internal object ProxyTests {
       pathMap[i] = index
     }
 
-    args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize + args.pathCount
+    args.agent.grpcService.pathMapSize() shouldBe originalSize + args.pathCount
 
     // Call the proxy sequentially
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
@@ -198,7 +198,7 @@ internal object ProxyTests {
             repeat(args.sequentialQueryCount) { cnt ->
               val job =
                 launch(dispatcher + exceptionHandler(logger)) {
-                  callProxy(client, pathMap, "Sequential $cnt")
+                  callRandomProxyPath(client, pathMap, "Sequential $cnt")
                   counter += 1
                 }
 
@@ -206,7 +206,7 @@ internal object ProxyTests {
               job.getCancellationException().cause.shouldBeNull()
             }
 
-            counter.load() shouldBeEqualTo args.sequentialQueryCount
+            counter.load() shouldBe args.sequentialQueryCount
           }
         }
       }
@@ -222,7 +222,7 @@ internal object ProxyTests {
               List(args.parallelQueryCount) { cnt ->
                 launch(dispatcher + exceptionHandler(logger)) {
                   delay((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random().milliseconds)
-                  callProxy(client, pathMap, "Parallel $cnt")
+                  callRandomProxyPath(client, pathMap, "Parallel $cnt")
                   counter += 1
                 }
               }
@@ -232,7 +232,7 @@ internal object ProxyTests {
               job.getCancellationException().cause.shouldBeNull()
             }
 
-            counter.load() shouldBeEqualTo args.parallelQueryCount
+            counter.load() shouldBe args.parallelQueryCount
           }
         }
       }
@@ -249,9 +249,9 @@ internal object ProxyTests {
       }
     }
 
-    counter.load() shouldBeEqualTo pathMap.size
-    errorCnt.load() shouldBeEqualTo 0
-    args.agent.grpcService.pathMapSize() shouldBeEqualTo originalSize
+    counter.load() shouldBe pathMap.size
+    errorCnt.load() shouldBe 0
+    args.agent.grpcService.pathMapSize() shouldBe originalSize
 
     logger.info { "Shutting down ${httpServers.size} httpServers" }
     coroutineScope {
@@ -266,7 +266,7 @@ internal object ProxyTests {
     logger.info { "Finished shutting down ${httpServers.size} httpServers" }
   }
 
-  private suspend fun callProxy(
+  private suspend fun callRandomProxyPath(
     httpClient: HttpClient,
     pathMap: Map<Int, Int>,
     msg: String,
@@ -281,8 +281,8 @@ internal object ProxyTests {
     withHttpClient(httpClient) {
       get("$PROXY_PORT/proxy-$index".withPrefix()) { response ->
         val body = response.bodyAsText()
-        body shouldBeEqualTo contentMap[httpIndex]
-        response.status shouldBeEqualTo HttpStatusCode.OK
+        body shouldBe contentMap[httpIndex]
+        response.status shouldBe HttpStatusCode.OK
       }
     }
   }
