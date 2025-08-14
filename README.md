@@ -4,8 +4,6 @@
 [![Build Status](https://app.travis-ci.com/pambrose/prometheus-proxy.svg?branch=master)](https://app.travis-ci.com/pambrose/prometheus-proxy)
 [![codebeat badge](https://codebeat.co/badges/8dbe1dc6-628e-44a4-99f9-d468831ff0cc)](https://codebeat.co/projects/github-com-pambrose-prometheus-proxy-master)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/422df508473443df9fbd8ea00fdee973)](https://app.codacy.com/gh/pambrose/prometheus-proxy/dashboard)
-[![codecov](https://codecov.io/gh/pambrose/prometheus-proxy/branch/master/graph/badge.svg)](https://codecov.io/gh/pambrose/prometheus-proxy)
-[![Coverage Status](https://coveralls.io/repos/github/pambrose/prometheus-proxy/badge.svg?branch=master)](https://coveralls.io/github/pambrose/prometheus-proxy?branch=master)
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 [![ktlint](https://img.shields.io/badge/ktlint%20code--style-%E2%9D%A4-FF4081)](https://pinterest.github.io/ktlint/)
 
@@ -35,7 +33,8 @@ Here's a simplified network diagram of how the deployed `proxy` and `agent` work
 
 Endpoints running behind a firewall require a `prometheus-agent` (the agent) to be run inside the firewall. An agent can
 run as a stand-alone server, embedded in another java server, or as a java agent. Agents connect to
-a `prometheus-proxy` (the proxy) and register the paths for which they will provide data. One proxy can work one or many
+a `prometheus-proxy` (the proxy) and register the paths for which they will provide data. One proxy can work with one or
+many
 agents.
 
 ### Components
@@ -194,6 +193,8 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
         --restart unless-stopped \
         pambrose/prometheus-agent:2.3.0
 ```
+
+Or use docker-compose: see `etc/compose/proxy.yml` for a working example.
 
 Using the config
 file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf), the proxy
@@ -450,7 +451,7 @@ changed in the configuration file. To disable an admin servlet, assign its prope
 | TLS without mutual auth | [`examples/tls-no-mutual-auth.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/tls-no-mutual-auth.conf)     |
 | TLS with mutual auth    | [`examples/tls-with-mutual-auth.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/tls-with-mutual-auth.conf) |
 | Prometheus federation   | [`examples/federate.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf)                         |
-| Nginx reverse proxy     | [`nginx/nginx-proxy.conf`](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/nginx-proxy.conf)                         |
+| Nginx reverse proxy     | [`nginx/nginx-proxy.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/nginx-proxy.conf)                         |
 
 ## 🔐 Advanced Configuration
 
@@ -480,9 +481,9 @@ To use the prometheus_proxy with nginx as a reverse proxy, disable the transport
 `TRANSPORT_FILTER_DISABLED` environment var, the `--tf_disabled` CLI option, or the `agent.transportFilterDisabled`/
 `proxy.transportFilterDisabled` properties. Agents and the Proxy must run with the same `transportFilterDisabled` value.
 
-An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/docker/nginx.conf),
+An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf),
 and an example agent/proxy conf file
-is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/nginx-proxy.conf)
+is [here](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/nginx-proxy.conf)
 
 ```bash
 # Both proxy and agent must use the same transport filter settings
