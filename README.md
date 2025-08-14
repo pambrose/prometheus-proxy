@@ -20,7 +20,7 @@ behind a firewall and preserves the native pull-based model architecture.
 - [Quick Start](#-quick-start)
 - [Configuration Examples](#-configuration-examples)
 - [Docker Usage](#-docker-usage)
-- [Advanced Features](#advanced-features)
+- [Advanced Features](#%EF%B8%8F-advanced-features)
 - [Monitoring & Observability](#-monitoring--observability)
 - [Configuration Options](#-configuration-options)
 - [Examples & Use Cases](#-examples--use-cases)
@@ -243,7 +243,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
 target for `--mount` options.
 
-## ⚙️ Advanced Features {#advanced-features}
+## ⚙️ Advanced Features
 
 ### Embedded Agent
 
