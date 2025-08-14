@@ -76,9 +76,22 @@ agents.
    java -jar prometheus-agent.jar \
      -Dagent.proxy.hostname=mymachine.local \
      --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
+
+   # or use --proxy option
+   java -jar prometheus-agent.jar \
+     --proxy mymachine.local \
+     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
    ```
 
 4. Configure Prometheus to scrape from the proxy at `http://mymachine.local:8080`
+
+5. Verify it works with:
+   ```bash
+   curl -s http://mymachine.local:8080/app1_metrics | head
+
+   # or, if SD is enabled
+   curl -s http://mymachine.local:8080/discovery | jq '.'
+   ```
 
 ### Docker Quick Start
 
@@ -225,18 +238,16 @@ target for `--mount` options.
 If you are running a JVM-based program, you can run with the agent embedded directly in your app and not use an external
 agent. This approach eliminates the need for a separate agent process when your application already runs on the JVM.
 
-```Java
-// Start embedded agent
-EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
+  ```Java
+  // Start embedded agent
+  EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
 
-// Your application code runs here
-// The agent runs in the background
+  // Your application code runs here
+  // The agent runs in the background
 
-// Shutdown when the application terminates
-agentInfo.
-
-close();
-```
+  // Shutdown when the application terminates
+  agentInfo.close();
+  ```
 
 ### Service Discovery
 
@@ -245,7 +256,8 @@ Enable Prometheus service discovery support:
 ```bash
 java -jar prometheus-proxy.jar \
   --sd_enabled \
-  --sd_path discovery
+  --sd_path discovery \
+  --sd_target_prefix http://proxy-host:8080/
 ```
 
 Access discovery endpoint at: `http://proxy-host:8080/discovery`
