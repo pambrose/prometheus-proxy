@@ -16,18 +16,18 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## Table of Contents
 
-- [Architecture](#architecture)
-- [Quick Start](#quick-start)
-- [Configuration Examples](#configuration-examples)
-- [Docker Usage](#docker-usage)
-- [Advanced Features](#advanced-features)
-- [Monitoring & Observability](#monitoring--observability)
-- [Configuration Options](#configuration-options)
-- [Examples & Use Cases](#examples--use-cases)
-- [Advanced Configuration](#advanced-configuration)
-- [Security & TLS](#security--tls)
-- [Troubleshooting](#troubleshooting)
-- [License](#license)
+- [Architecture](#-architecture)
+- [Quick Start](#-quick-start)
+- [Configuration Examples](#-configuration-examples)
+- [Docker Usage](#-docker-usage)
+- [Advanced Features](#-advanced-features)
+- [Monitoring & Observability](#-monitoring--observability)
+- [Configuration Options](#-configuration-options)
+- [Examples & Use Cases](#-examples--use-cases)
+- [Advanced Configuration](#-advanced-configuration)
+- [Security & TLS](#-security--tls)
+- [Troubleshooting](#-troubleshooting)
+- [License](#-license)
 
 ## 🏗️ Architecture
 
