@@ -1,4 +1,4 @@
-VERSION=2.2.1-beta4
+VERSION=2.3.0
 
 default: versioncheck
 
