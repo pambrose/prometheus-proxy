@@ -252,12 +252,12 @@ agent. This approach eliminates the need for a separate agent process when your 
 
   ```Java
   // Start embedded agent
-  EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
+EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
 
-  // Your application code runs here
-  // The agent runs in the background and does not block your application
+// Your application code runs here
+// The agent runs in the background and does not block your application
 
-  // Shutdown the agent when the application terminates
+// Shutdown the agent when the application terminates
   agentInfo.close();
   ```
 
@@ -501,7 +501,7 @@ Another example config can be found in
 
 ### Nginx Reverse Proxy Support
 
-To use the prometheus_proxy with nginx as a reverse proxy, disable the transport filter with the
+To use the Prometheus Proxy with nginx as a reverse proxy, disable the transport filter with the
 `TRANSPORT_FILTER_DISABLED` environment var, the `--tf_disabled` CLI option, or the `agent.transportFilterDisabled`/
 `proxy.transportFilterDisabled` properties. Agents and the Proxy must run with the same `transportFilterDisabled` value.
 
