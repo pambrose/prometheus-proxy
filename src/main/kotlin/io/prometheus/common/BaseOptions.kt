@@ -78,7 +78,8 @@ abstract class BaseOptions protected constructor(
   var debugEnabled = false
     private set
 
-  @Parameter(names = ["--tf-disabled"], description = "Transport filter disabled")
+  // Use both options here to avoid breaking people with the typo fix
+  @Parameter(names = ["--tf-disabled", "--tf_disabled"], description = "Transport filter disabled")
   var transportFilterDisabled = false
     private set
 

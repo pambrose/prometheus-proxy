@@ -9,6 +9,10 @@
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 [![ktlint](https://img.shields.io/badge/ktlint%20code--style-%E2%9D%A4-FF4081)](https://pinterest.github.io/ktlint/)
 
+A **firewall-friendly solution** that enables [Prometheus](https://prometheus.io) to scrape metrics from endpoints
+behind firewalls while
+preserving the native pull model architecture.
+
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for
 collecting metrics. The pull model is problematic when a firewall separates a Prometheus server and its metrics
 endpoints.
@@ -22,34 +26,76 @@ The `prometheus-proxy` runtime comprises two services:
 * `agent`: runs in the same network domain as all the monitored hosts/services/apps (inside the firewall). It maps the
   scraping queries coming from the `proxy` to the actual `/metrics` scraping endpoints of the hosts/services/apps.
 
+## 🏗️ Architecture
+
+Prometheus Proxy solves the firewall problem by using a persistent gRPC connection initiated from inside the firewall.
 Here's a simplified network diagram of how the deployed `proxy` and `agent` work:
 
-![network diagram](https://github.com/pambrose/prometheus-proxy/raw/master/docs/prometheus-proxy.png)
+![Architecture Diagram](https://github.com/pambrose/prometheus-proxy/raw/master/docs/prometheus-proxy.png)
 
 Endpoints running behind a firewall require a `prometheus-agent` (the agent) to be run inside the firewall. An agent can
 run as a stand-alone server, embedded in another java server, or as a java agent. Agents connect to
 a `prometheus-proxy` (the proxy) and register the paths for which they will provide data. One proxy can work one or many
 agents.
 
-## Requirements
+### Components
 
-Requires Java 11 or newer.
+- **🌐 Proxy** - Runs outside the firewall alongside Prometheus
+  - HTTP server (port 8080) - Serves metrics to Prometheus
+  - gRPC server (port 50051) - Accepts agent connections
+  - Service discovery support for dynamic targets
 
-## CLI Usage
+- **🔗 Agent** - Runs inside the firewall with monitored services
+  - Connects to proxy via gRPC (outbound connection only)
+  - Scrapes local metrics endpoints
+  - Registers available paths with proxy
 
-Download the proxy and agent uber-jars from [here](https://github.com/pambrose/prometheus-proxy/releases).
+### Key Benefits
 
-Start a `proxy` with:
+- ✅ **Firewall-friendly** - Only requires outbound connection from agent
+- ✅ **Preserves pull model** - Prometheus continues to pull as normal
+- ✅ **High performance** - Built with Kotlin coroutines and gRPC
+- ✅ **Secure** - Optional TLS with mutual authentication
+- ✅ **Scalable** - One proxy supports many agents
+- ✅ **Zero changes** to existing Prometheus configuration patterns
+
+## 🚀 Quick Start
+
+**Requirements:** Java 17 or newer
+
+### CLI Quick Start
+
+1. Download the latest proxy and agent JAR files from [releases](https://github.com/pambrose/prometheus-proxy/releases)
+
+2. Start the **proxy** (runs outside the firewall with Prometheus):
+   ```bash
+   java -jar prometheus-proxy.jar
+   ```
+
+3. Start the **agent** (runs inside the firewall with your services):
+   ```bash
+   java -jar prometheus-agent.jar \
+     -Dagent.proxy.hostname=mymachine.local \
+     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
+   ```
+
+4. Configure Prometheus to scrape from the proxy at `http://mymachine.local:8080`
+
+### Docker Quick Start
 
 ```bash
-java -jar prometheus-proxy.jar
+# Start proxy
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:2.3.0
+
+# Start agent
+docker run --rm \
+  --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+  pambrose/prometheus-agent:2.3.0
 ```
 
-Start an `agent` with:
+## 📋 Configuration Examples
 
-```bash
-java -jar prometheus-agent.jar -Dagent.proxy.hostname=mymachine.local --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
-```
+### Agent Configuration
 
 If the prometheus-proxy were running on a machine named *mymachine.local* and the
 `agent.pathConfigs` value in
@@ -91,6 +137,8 @@ If the endpoints were restricted with basic auth/bearer authentication, you coul
 credentials in the URL with: `http://user:pass@hostname/metrics` or they could be configured with `basic_auth`/
 `bearer_token` in the scrape-config.
 
+### Corresponding Prometheus Configuration
+
 The `prometheus.yml` file would include:
 
 ```yaml
@@ -113,29 +161,37 @@ scrape_configs:
       - targets: [ 'mymachine.local:8080' ]
 ```
 
-## Docker Usage
+## 🐳 Docker Usage
 
-The docker images are available via:
+### Multi-Platform Images
+
+The docker images support multiple architectures (amd64, arm64, s390x):
 
 ```bash
 docker pull pambrose/prometheus-proxy:2.3.0
 docker pull pambrose/prometheus-agent:2.3.0
 ```
 
+### Production Docker Setup
+
 Start a proxy container with:
 
 ```bash
+# Proxy with admin and metrics enabled
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
+        --restart unless-stopped \
         pambrose/prometheus-proxy:2.3.0
 ```
 
 Start an agent container with:
 
 ```bash
+# Agent with remote config file
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+        --restart unless-stopped \
         pambrose/prometheus-agent:2.3.0
 ```
 
@@ -151,6 +207,7 @@ docker [mount](https://docs.docker.com/storage/bind-mounts/) option. Assuming th
 is in your current directory, run an agent container with:
 
 ```bash
+# Agent with local config file
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
@@ -160,16 +217,60 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
 target for `--mount` options.
 
-## Embedded Agent Usage
+## ⚙️ Advanced Features
+
+### Embedded Agent
 
 If you are running a JVM-based program, you can run with the agent embedded directly in your app and not use an external
-agent:
+agent. This approach eliminates the need for a separate agent process when your application already runs on the JVM.
 
 ```Java
+// Start embedded agent
 EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
+
+// Your application code runs here
+// The agent runs in the background
+
+// Shutdown when the application terminates
+agentInfo.
+
+close();
 ```
 
-## Configuration
+### Service Discovery
+
+Enable Prometheus service discovery support:
+
+```bash
+java -jar prometheus-proxy.jar \
+  --sd_enabled \
+  --sd_path discovery
+```
+
+Access discovery endpoint at: `http://proxy-host:8080/discovery`
+
+### Performance Tuning
+
+Configure concurrent scraping:
+
+```bash
+java -jar prometheus-agent.jar \
+  --max_concurrent_clients 5 \
+  --client_timeout_secs 30 \
+  --config myconfig.conf
+```
+
+## 📊 Monitoring & Observability
+
+### Built-in Metrics
+
+Both proxy and agent expose their own metrics:
+
+- **Proxy metrics:** `http://proxy-host:8082/proxy_metrics`
+- **Agent metrics:** `http://agent-host:8083/agent_metrics`
+- **Admin endpoints:** `http://host:admin-port/ping`, `/healthcheck`, `/version`
+
+## 🔧 Configuration Options
 
 The proxy and agent use the [Typesafe Config](https://github.com/typesafehub/config) library for configuration.
 Highlights include:
@@ -177,12 +278,17 @@ Highlights include:
 * support for files in three formats: Java properties, JSON, and a human-friendly JSON
   superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
 * config files can be files or urls
-* config values can come from CLI options, environment vars, Java system properties, and/or config files.
+* config values can come from CLI options, environment variables, Java system properties, and/or config files.
 * config files can reference environment variables
 
 All the proxy and agent properties are
 described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf). The only required
 argument is an agent config value, which should have an `agent.pathConfigs` value.
+
+Configuration values are evaluated in order: CLI options → environment variables → config file values.
+
+**📖 Complete configuration reference:** [
+`/etc/config/config.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf)
 
 ### Proxy CLI Options
 
@@ -254,7 +360,7 @@ argument is an agent config value, which should have an `agent.pathConfigs` valu
 | --usage, -u                                                                                                           |         | Print usage message and exit                                                                   |
 | -D                                                                                                                    |         | Dynamic property assignment                                                                    |
 
-Misc notes:
+### Configuration Notes
 
 * If you want to customize the logging, include the java arg `-Dlogback.configurationFile=/path/to/logback.xml`
 * JSON config files must have a *.json* suffix
@@ -262,45 +368,38 @@ Misc notes:
 * HOCON config files must have a *.conf* suffix
 * Option values are evaluated in the order: CLI, environment variables, and finally config file vals
 * Property values can be set as a java -D arg to or as a proxy or agent jar -D arg
-* For more information about the proxy service discovery options, see the
-  Prometheus [documentation](https://prometheus.io/docs/prometheus/latest/http_sd/)
+* For more information about the proxy service discovery options, see
+  the [Prometheus HTTP SD docs](https://prometheus.io/docs/prometheus/latest/http_sd/)
 * A pathConfig `labels` value is a quote-escaped JSON string with key/value pairs. It is used to add additional service
   discovery context to a target.
-* The gRPC keepalive values are described [here](https://grpc.io/docs/guides/keepalive/).
+* The gRPC keepalive values are described in the [gRPC keepalive guide](https://grpc.io/docs/guides/keepalive/).
 
-### Logging
+### Logging Configuration
 
-The log level can be set with the `PROXY_LOG_LEVEL` and `AGENT_LOG_LEVEL` environment vars, the `--log_level` CLI
-option,
-or the `proxy.logLevel` and `agent.logLevel` properties. The log level can be one of: `trace`, `debug`, `info`, `warn`,
-`error`, or `off`.
+Control logging levels with:
 
-### Tuning the Agent HTTP Client Cache
+- **Environment vars:** `PROXY_LOG_LEVEL`, `AGENT_LOG_LEVEL`
+- **CLI options:** `--log_level`
+- **Properties:** `proxy.logLevel`, `agent.logLevel`
 
-The agent caches HTTP clients for reuse. The cache can be tuned with the following options:
+**Available levels:** `trace`, `debug`, `info`, `warn`, `error`, `off`
 
-* `--max_cache_size`, `MAX_CLIENT_CACHE_SIZE` or `agent.http.clientCache.maxSize`: Maximum number of HTTP clients to
-  cache
-* `--max_cache_age_mins`, `MAX_CLIENT_CACHE_AGE_MINS` or `agent.http.clientCache.maxAgeMins`: Maximum age of cached
-  clients in minutes
-* `--max_cache_idle_mins`, `MAX_CLIENT_CACHE_IDLE_MINS` or `agent.http.clientCache.maxIdleMins`: Maximum idle time
-  before the client is evicted in
-  minutes
-* `--cache_cleanup_interval_mins` or `agent.http.clientCache.cleanupIntervalMins`: Interval between cache cleanup runs
-  in minutes
+**Custom logging:** Use `-Dlogback.configurationFile=/path/to/logback.xml`
 
-The default values are:
+### Agent HTTP Client Cache Tuning
 
-* `maxCacheSize`: 100
-* `maxCacheAgeMins`: 30
-* `maxCacheIdleMins`: 10
-* `cacheCleanupIntervalMins`: 5
+The agent caches HTTP clients for performance. The cache can be tuned with the following options:
+
+- **`maxCacheSize`** (100): Maximum clients to cache
+- **`maxCacheAgeMins`** (30): Maximum age before eviction
+- **`maxCacheIdleMins`** (10): Maximum idle time before eviction
+- **`cacheCleanupIntervalMins`** (5): Cleanup interval
 
 The cache entries are keyed by the username and password used to access the agent. They are evicted when they reach the
 `maxCacheAgeMins` or when they have been idle for `maxCacheIdleMins`. The cache is cleaned up every
-`cacheCleanupIntervalMins`. They are reused when the same username and password are used to access the agent. All URLs
-without authentication are considered to have the same username and password and are therefore also candidates for
-reuse.
+`cacheCleanupIntervalMins`. They are reused when the same username and password are used to access the agent.
+
+URLs without authentication share the same cache entry.
 
 ### Agent HTTP Client Usage
 
@@ -309,32 +408,118 @@ controlled by the `--max_concurrent_clients` CLI option, the `MAX_CONCURRENT_CLI
 or the `agent.http.maxConcurrentClients` property. The default value is 1.
 
 The HTTP client timeout is controlled by the `--client_timeout_secs` CLI option, the `CLIENT_TIMEOUT_SECS` environment
-var, or the `agent.http.clientTimeoutSecs` property. The default value is 90 seconds. This value replaces the
+variable, or the `agent.http.clientTimeoutSecs` property. The default value is 90 seconds. This value replaces the
 `agent.configVals.agent.internal.cioTimeoutSecs` value.
 
 ### Admin Servlets
 
 These admin servlets are available when the admin servlet is enabled:
 
-* /ping
-* /threaddump
-* /healthcheck
-* /version
+- **`/ping`** - Simple health check endpoint
+- **`/threaddump`** - JVM thread dump for debugging
+- **`/healthcheck`** - Comprehensive health status
+- **`/version`** - Application version information
+- **`/debug`** - Debug information (requires debug mode enabled)
 
-The admin servlets can be enabled with the `ADMIN_ENABLED` environment var, the `--admin` CLI option, or with the
-`proxy.admin.enabled` and `agent.admin.enabled` properties.
+Enable the admin servlets with `--admin` CLI option, `ADMIN_ENABLED` environment variable, or
+`proxy/agent.admin.enabled` property.
 
-The debug servlet can be enabled with the `DEBUG_ENABLED` environment var, the `--debug` CLI option, or with the
-`proxy.admin.debugEnabled` and `agent.admin.debugEnabled` properties. The debug servlet requires that the admin servlets
-are enabled. The debug servlet is at: `/debug` on the admin port.
+Enable the debug servlet with the `DEBUG_ENABLED` environment var, the `--debug` CLI option, or with the
+`proxy/agent.admin.debugEnabled` properties. The debug servlet also requires that the admin servlets
+are enabled.
 
 Descriptions of the servlets are [here](http://metrics.dropwizard.io/3.2.2/manual/servlets.html). The path names can be
 changed in the configuration file. To disable an admin servlet, assign its property path to "".
 
-## Adding TLS to Agent-Proxy Connections
+## 📝 Examples & Use Cases
+
+### Common Scenarios
+
+- **🏢 Enterprise environments** - Scrape metrics across firewall boundaries
+- **☁️ Multi-cloud deployments** - Bridge different network segments
+- **🔒 Secure environments** - Monitor internal services without opening inbound ports
+- **🌐 Federation** - Scrape existing Prometheus instances via `/federate` endpoint
+- **🚀 Kubernetes** - Monitor services across clusters or namespaces
+
+### Example Configurations
+
+| Use Case                | Configuration                                                                                                                       |
+|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| Basic setup             | [`examples/simple.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/simple.conf)                             |
+| Multiple applications   | [`examples/myapps.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/myapps.conf)                             |
+| TLS without mutual auth | [`examples/tls-no-mutual-auth.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/tls-no-mutual-auth.conf)     |
+| TLS with mutual auth    | [`examples/tls-with-mutual-auth.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/tls-with-mutual-auth.conf) |
+| Prometheus federation   | [`examples/federate.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf)                         |
+| Nginx reverse proxy     | [`nginx/nginx-proxy.conf`](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/nginx-proxy.conf)                         |
+
+## 🔐 Advanced Configuration
+
+### Prometheus Federation
+
+It's possible to scrape an existing prometheus server using the `/federate` endpoint.
+This enables using the existing service discovery features already built into Prometheus.
+
+```hocon
+agent {
+  pathConfigs: [
+    {
+      name: "Federated Prometheus"
+      path: "federated_metrics"
+      url: "http://prometheus-server:9090/federate?match[]={__name__=~\"job:.*\"}"
+    }
+  ]
+}
+```
+
+Another example config can be found in
+[federate.conf](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf).
+
+### Nginx Reverse Proxy Support
+
+To use the prometheus_proxy with nginx as a reverse proxy, disable the transport filter with the
+`TRANSPORT_FILTER_DISABLED` environment var, the `--tf_disabled` CLI option, or the `agent.transportFilterDisabled`/
+`proxy.transportFilterDisabled` properties. Agents and the Proxy must run with the same `transportFilterDisabled` value.
+
+An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/docker/nginx.conf),
+and an example agent/proxy conf file
+is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/nginx-proxy.conf)
+
+```bash
+# Both proxy and agent must use the same transport filter settings
+java -jar prometheus-proxy.jar --tf_disabled
+
+java -jar prometheus-agent.jar --tf_disabled --config myconfig.conf
+```
+
+**⚠️ Note:** With `transportFilterDisabled`, agent disconnections aren't immediately detected. Agent contexts on the
+proxy
+are removed after inactivity timeout (default: 1 minute, controlled by `proxy.internal.maxAgentInactivitySecs`).
+
+### gRPC Reflection
+
+[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is enabled by default for debugging and tooling.
+
+**Test with [grpcurl](https://github.com/fullstorydev/grpcurl):**
+
+```bash
+# List available services
+grpcurl -plaintext localhost:50051 list
+
+# Describe a service
+grpcurl -plaintext localhost:50051 describe io.prometheus.ProxyService
+```
+
+If you use grpcurl `-plaintext` option, make sure that you run the proxy in plaintext
+mode, i.e., do not define any TLS properties.
+
+**Disable reflection:** Use `--ref_disabled`, `REFLECTION_DISABLED`, or `proxy.reflectionDisabled=true`.
+
+## 🔐 Security & TLS
+
+### TLS Configuration Details
 
 Agents connect to a proxy using [gRPC](https://grpc.io). gRPC supports TLS with or without mutual authentication. The
-necessary certificate and key file paths can be specified via CLI args, environment variables and configuration file
+necessary certificate and key file paths can be specified via CLI args, environment variables, and configuration file
 settings.
 
 The gRPC docs describe [how to set up TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
@@ -351,16 +536,33 @@ Running TLS with mutual authentication requires these settings:
 * `certChainFilePath`, `privateKeyFilePath` and `trustCertCollectionFilePath` on the proxy
 * `certChainFilePath`, `privateKeyFilePath` and `trustCertCollectionFilePath` on the agent
 
-### Running with TLS
+Run a proxy and an agent with TLS (with mutual authentication) with:
 
-Run a proxy and an agent with TLS (no mutual auth) using the included testing certs and keys with:
+```bash
+# Proxy with TLS
+java -jar prometheus-proxy.jar \
+  --cert /path/to/server.crt \
+  --key /path/to/server.key \
+  --trust /path/to/ca.crt
+
+# Agent with TLS
+java -jar prometheus-agent.jar \
+  --config myconfig.conf \
+  --trust /path/to/ca.crt \
+  --cert /path/to/client.crt \
+  --key /path/to/client.key
+```
+
+Run a proxy and an agent with TLS (no mutual authentication) using the included testing certs and keys with:
 
 ```bash
 java -jar prometheus-proxy.jar --config examples/tls-no-mutual-auth.conf
+
 java -jar prometheus-agent.jar --config examples/tls-no-mutual-auth.conf
 ```
 
-Run a proxy and an agent docker container with TLS (no mutual auth) using the included testing certs and keys with:
+Run a proxy and an agent docker container with TLS (no mutual authentication) using the included testing certs and keys
+with:
 
 ```bash
 docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
@@ -383,54 +585,50 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
 target for `--mount` options.
 
-## Scraping HTTPS Endpoints
+### Scraping HTTPS Endpoints
 
 Disable SSL verification for agent https endpoints with the `TRUST_ALL_X509_CERTIFICATES` environment var,
 the `--trust_all_x509` CLI option, or the `agent.http.enableTrustAllX509Certificates` property.
 
-## Scraping a Prometheus Instance
-
-It's possible to scrape an existing prometheus server using the `/federate` endpoint.
-This enables using the existing service discovery features already built into Prometheus.
-
-An example config can be found in
-[federate.conf](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf).
-
-## Nginx Support
-
-To use the prometheus_proxy with nginx as a reverse proxy, disable the transport filter with the
-`TRANSPORT_FILTER_DISABLED` environment var, the `--tf-disabled` CLI option, or the `agent.transportFilterDisabled`/
-`proxy.transportFilterDisabled` properties. Agents and the Proxy must run with the same `transporFilterDisabled` value.
-
-When using `transporFilterDisabled`, you will not see agent contexts immediately removed
-from the proxy when agents are terminated. Instead, agent contexts will be removed from the proxy
-after they age out from inactivity. The maximum age is controlled by the `proxy.internal.maxAgentInactivitySecs` value.
-The default value is 1 minute.
-
-An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/docker/nginx.conf),
-and an example agent/proxy conf file
-is [here](https://github.com/pambrose/prometheus-proxy/tree/master/nginx/nginx-proxy.conf)
-
-## gRPC Reflection
-
-The [gRPC Reflection](https://grpc.io/docs/guides/reflection/) service is enabled by default.
-
-To disable gRPC Reflection support, set the `REFLECTION_DISABLED` environment var,
-the `--reflection_disabled` CLI option, or the `proxy.reflectionDisabled` property to true.
-
-To use [grpcurl](https://github.com/fullstorydev/grpcurl) to test the reflection service, run:
+To scrape HTTPS endpoints with a self-signed certificate:
 
 ```bash
-grpcurl -plaintext localhost:50051 list
+java -jar prometheus-agent.jar --trust_all_x509 --config myconfig.conf
 ```
 
-If you use the grpcurl `-plaintext` option, make sure that you run the proxy in plaintext
-mode, i.e., do not define any TLS properties.
+**⚠️ Security Note:** Only use `--trust_all_x509` in development/testing environments.
 
-## Grafana
+## 🔧 Troubleshooting
 
-[Grafana](https://grafana.com) dashboards for the proxy and agent
-are [here](https://github.com/pambrose/prometheus-proxy/tree/master/grafana).
+### Common Issues
+
+**Agent can't connect to proxy:**
+
+- Verify proxy hostname and port
+- Check firewall rules (agent needs outbound access to proxy port)
+- Ensure proxy is running and listening
+
+**TLS connection failures:**
+
+- Verify certificate paths and file permissions
+- Check certificate validity and chain
+- Ensure clock synchronization between proxy and agent
+
+**Metrics not appearing:**
+
+- Verify agent path configuration matches Prometheus scrape paths
+- Check agent logs for scraping errors
+- Confirm target endpoints are accessible from agent
+
+**Performance issues:**
+
+- Increase `max_concurrent_clients` for high-throughput scenarios
+- Tune HTTP client cache settings
+- Consider running multiple agents for load distribution
+
+## 📄 License
+
+This project is licensed under the Apache License 2.0 - see [License.txt](License.txt) for details.
 
 ## Related Links
 

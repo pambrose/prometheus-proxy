@@ -63,7 +63,8 @@ class ProxyOptions(
   var sdTargetPrefix = ""
     private set
 
-  @Parameter(names = ["--ref-disabled"], description = "gRPC Reflection disabled")
+  // Use both options here to avoid breaking people with the typo fix
+  @Parameter(names = ["--ref-disabled", "--ref_disabled"], description = "gRPC Reflection disabled")
   var reflectionDisabled = false
     private set
 
