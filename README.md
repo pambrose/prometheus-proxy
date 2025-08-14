@@ -243,9 +243,9 @@ agent. This approach eliminates the need for a separate agent process when your 
   EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
 
   // Your application code runs here
-  // The agent runs in the background
+  // The agent runs in the background and does not block your application
 
-  // Shutdown when the application terminates
+  // Shutdown the agent when the application terminates
   agentInfo.close();
   ```
 
