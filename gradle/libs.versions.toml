@@ -3,7 +3,7 @@
 config = "5.6.7"
 detekt = "1.23.8"
 kotlinter = "5.2.0"
-kotlin = "2.2.0"
+kotlin = "2.2.10"
 kover = "0.9.1"
 protobuf = "0.9.5"
 shadow = "8.3.7"
