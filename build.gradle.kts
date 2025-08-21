@@ -41,7 +41,7 @@ repositories {
 }
 
 dependencies {
-  implementation(libs.kotlin.bom)
+  implementation(platform(libs.kotlin.bom))
   implementation(libs.kotlin.reflect)
 
   implementation(libs.kotlinx.serialization)
