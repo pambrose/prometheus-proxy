@@ -75,22 +75,22 @@ internal class AgentHttpService(
   }
 
   private suspend fun AgentHttpService.fetchContentFromUrl(
-    scrapeRequest: ScrapeRequest,
+    req: ScrapeRequest,
     pathContext: AgentPathManager.PathContext,
   ): ScrapeResults =
-    ScrapeResults(agentId = scrapeRequest.agentId, scrapeId = scrapeRequest.scrapeId).also { scrapeResults ->
+    ScrapeResults(srAgentId = req.agentId, srScrapeId = req.scrapeId).also { results ->
       val requestTimer = if (agent.isMetricsEnabled) agent.startTimer(agent) else null
       // Add the incoming query params to the url
-      val url = pathContext.url + decodeParams(scrapeRequest.encodedQueryParams)
+      val url = pathContext.url + decodeParams(req.encodedQueryParams)
       logger.debug { "Fetching $pathContext ${if (url.isNotBlank()) "URL: $url" else ""}" }
 
       // Content is fetched here
       try {
-        fetchContent(url, scrapeRequest, scrapeResults)
+        fetchContent(url, req, results)
       } finally {
         requestTimer?.observeDuration()
       }
-      agent.updateScrapeCounter(scrapeResults.scrapeCounterMsg.load())
+      agent.updateScrapeCounter(results.scrapeCounterMsg.load())
     }
 
   private suspend fun fetchContent(
@@ -112,8 +112,8 @@ internal class AgentHttpService(
       }
     }.onFailure { e ->
       with(scrapeResults) {
-        statusCode = errorCode(e, url)
-        failureReason = e.message ?: e.simpleClassName
+        srStatusCode = errorCode(e, url)
+        srFailureReason = e.message ?: e.simpleClassName
         if (scrapeRequest.debugEnabled)
           setDebugInfo(url, "${e.simpleClassName} - ${e.message}")
       }
@@ -133,7 +133,7 @@ internal class AgentHttpService(
     scrapeResults: ScrapeResults,
   ): suspend (HttpResponse) -> Unit =
     lambda { response ->
-      scrapeResults.statusCode = response.status.value
+      scrapeResults.srStatusCode = response.status.value
       setScrapeDetailsAndDebugInfo(scrapeRequest, scrapeResults, response, url)
     }
 
@@ -145,22 +145,22 @@ internal class AgentHttpService(
   ) {
     with(scrapeResults) {
       if (response.status.isSuccess()) {
-        contentType = response.headers[CONTENT_TYPE].orEmpty()
+        srContentType = response.headers[CONTENT_TYPE].orEmpty()
         if (agent.options.debugEnabled)
-          logger.info { "CT check - setScrapeDetailsAndDebugInfo() contentType: $contentType" }
+          logger.info { "CT check - setScrapeDetailsAndDebugInfo() contentType: $srContentType" }
         // Zip the content here
         val content = response.bodyAsText()
-        zipped = content.length > agent.options.minGzipSizeBytes
-        if (zipped)
-          contentAsZipped = content.zip()
+        srZipped = content.length > agent.options.minGzipSizeBytes
+        if (srZipped)
+          srContentAsZipped = content.zip()
         else
-          contentAsText = content
-        validResponse = true
+          srContentAsText = content
+        srValidResponse = true
 
         scrapeRequest.debugEnabled.ifTrue { setDebugInfo(url) }
         scrapeCounterMsg.store(SUCCESS_MSG)
       } else {
-        scrapeRequest.debugEnabled.ifTrue { setDebugInfo(url, "Unsuccessful response code $statusCode") }
+        scrapeRequest.debugEnabled.ifTrue { setDebugInfo(url, "Unsuccessful response code $srStatusCode") }
         scrapeCounterMsg.store(UNSUCCESSFUL_MSG)
       }
     }
@@ -240,7 +240,7 @@ internal class AgentHttpService(
     private const val UNSUCCESSFUL_MSG = "unsuccessful"
 
     private fun handleInvalidPath(scrapeRequest: ScrapeRequest): ScrapeResults {
-      val scrapeResults = with(scrapeRequest) { ScrapeResults(agentId = agentId, scrapeId = scrapeId) }
+      val scrapeResults = with(scrapeRequest) { ScrapeResults(srAgentId = agentId, srScrapeId = scrapeId) }
       logger.warn { "Invalid path in fetchScrapeUrl(): ${scrapeRequest.path}" }
       scrapeResults.scrapeCounterMsg.store(INVALID_PATH_MSG)
       scrapeRequest.debugEnabled.ifTrue { scrapeResults.setDebugInfo("None", "Invalid path: ${scrapeRequest.path}") }

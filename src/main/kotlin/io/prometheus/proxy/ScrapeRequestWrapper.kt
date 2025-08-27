@@ -24,7 +24,7 @@ import com.github.pambrose.common.util.isNotNull
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults
-import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.concurrent.atomics.AtomicLong
@@ -35,11 +35,11 @@ import kotlin.time.TimeSource.Monotonic
 internal class ScrapeRequestWrapper(
   val agentContext: AgentContext,
   proxy: Proxy,
-  path: String,
-  encodedQueryParams: String,
-  authHeader: String,
-  accept: String?,
-  debugEnabled: Boolean,
+  pathVal: String,
+  encodedQueryParamsVal: String,
+  authHeaderVal: String,
+  acceptVal: String?,
+  debugEnabledVal: Boolean,
 ) {
   private val clock = Monotonic
   private val createTimeMark = clock.markNow()
@@ -47,19 +47,16 @@ internal class ScrapeRequestWrapper(
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
   val scrapeRequest =
-    ScrapeRequest
-      .newBuilder()
-      .also {
-        require(agentContext.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
-        it.agentId = agentContext.agentId
-        it.scrapeId = SCRAPE_ID_GENERATOR.fetchAndIncrement()
-        it.path = path
-        it.accept = accept.orEmpty()
-        it.debugEnabled = debugEnabled
-        it.encodedQueryParams = encodedQueryParams
-        it.authHeader = authHeader
-      }
-      .build()!!
+    scrapeRequest {
+      require(agentContext.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+      agentId = agentContext.agentId
+      scrapeId = SCRAPE_ID_GENERATOR.fetchAndIncrement()
+      path = pathVal
+      accept = acceptVal.orEmpty()
+      debugEnabled = debugEnabledVal
+      encodedQueryParams = encodedQueryParamsVal
+      authHeader = authHeaderVal
+    }
 
   var scrapeResults: ScrapeResults by nonNullableReference()
 

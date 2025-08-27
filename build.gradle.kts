@@ -56,6 +56,7 @@ dependencies {
   implementation(platform(libs.common.utils.bom))
   implementation(libs.bundles.common.utils)
 
+  implementation(libs.protobuf.kotlin)
   implementation(libs.grpc.kotlin.stub)
 
   // Required
@@ -144,10 +145,12 @@ fun Project.configureGrpc() {
       id("grpckt") {
         artifact = "io.grpc:protoc-gen-grpc-kotlin:${libs.versions.gengrpc.get()}:jdk8@jar"
       }
+      id("kotlin")
     }
     generateProtoTasks {
       all().forEach { task ->
         task.plugins {
+          id("kotlin")
           id("grpc")    // Generate Java gRPC classes
           id("grpckt")  // Generate Kotlin gRPC using the custom plugin from library
         }
@@ -236,18 +239,14 @@ fun Project.configurePublishing() {
   }
 }
 
-tasks.withType<LintTask> {
-  // This will exclude all files under build/generated/
-  this.source = this.source.minus(fileTree("build/generated")).asFileTree
-}
-tasks.withType<FormatTask> {
-  this.source = this.source.minus(fileTree("build/generated")).asFileTree
-}
-
 fun Project.configureKotlinter() {
-//  tasks.withType<LintTask> {
-//    this.source = this.source.minus(fileTree("build/generated")).asFileTree
-//  }
+  tasks.withType<LintTask> {
+    // This will exclude all files under build/generated/
+    this.source = this.source.minus(fileTree("build/generated")).asFileTree
+  }
+  tasks.withType<FormatTask> {
+    this.source = this.source.minus(fileTree("build/generated")).asFileTree
+  }
 
   kotlinter {
     ignoreFormatFailures = false

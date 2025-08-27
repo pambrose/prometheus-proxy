@@ -27,25 +27,26 @@ import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.http.HttpStatusCode.Companion.RequestTimeout
 import io.ktor.http.HttpStatusCode.Companion.ServiceUnavailable
 import io.ktor.network.sockets.SocketTimeoutException
-import io.prometheus.grpc.ChunkedScrapeResponse
-import io.prometheus.grpc.HeaderData
 import io.prometheus.grpc.ScrapeResponse
+import io.prometheus.grpc.chunkedScrapeResponse
+import io.prometheus.grpc.headerData
+import io.prometheus.grpc.scrapeResponse
 import kotlinx.coroutines.TimeoutCancellationException
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
 import kotlin.concurrent.atomics.AtomicReference
 
 internal class ScrapeResults(
-  val agentId: String,
-  val scrapeId: Long,
-  var validResponse: Boolean = false,
-  var statusCode: Int = NotFound.value,
-  var contentType: String = "",
-  var zipped: Boolean = false,
-  var contentAsText: String = "",
-  var contentAsZipped: ByteArray = EMPTY_BYTE_ARRAY,
-  var failureReason: String = "",
-  var url: String = "",
+  val srAgentId: String,
+  val srScrapeId: Long,
+  var srValidResponse: Boolean = false,
+  var srStatusCode: Int = NotFound.value,
+  var srContentType: String = "",
+  var srZipped: Boolean = false,
+  var srContentAsText: String = "",
+  var srContentAsZipped: ByteArray = EMPTY_BYTE_ARRAY,
+  var srFailureReason: String = "",
+  var srUrl: String = "",
 ) {
   val scrapeCounterMsg = AtomicReference("")
 
@@ -53,49 +54,58 @@ internal class ScrapeResults(
     url: String,
     failureReason: String = "",
   ) {
-    this.url = url
-    this.failureReason = failureReason
+    srUrl = url
+    srFailureReason = failureReason
   }
 
   fun toScrapeResponse() =
-    ScrapeResponse
-      .newBuilder()
-      .also {
-        it.agentId = agentId
-        it.scrapeId = scrapeId
-        it.validResponse = validResponse
-        it.statusCode = statusCode
-        it.contentType = contentType
-        it.zipped = zipped
-        if (zipped)
-          it.contentAsZipped = ByteString.copyFrom(contentAsZipped)
-        else
-          it.contentAsText = contentAsText
-        it.failureReason = failureReason
-        it.url = url
-      }
-      .build()!!
+    scrapeResponse {
+      agentId = srAgentId
+      scrapeId = srScrapeId
+      validResponse = srValidResponse
+      statusCode = srStatusCode
+      contentType = srContentType
+      zipped = srZipped
+      if (zipped)
+        contentAsZipped = ByteString.copyFrom(srContentAsZipped)
+      else
+        contentAsText = srContentAsText
+      failureReason = srFailureReason
+      url = srUrl
+    }
 
   fun toScrapeResponseHeader() =
-    ChunkedScrapeResponse
-      .newBuilder()
-      .apply {
-        header = HeaderData
-          .newBuilder()
-          .also {
-            it.headerValidResponse = validResponse
-            it.headerAgentId = agentId
-            it.headerScrapeId = scrapeId
-            it.headerStatusCode = statusCode
-            it.headerFailureReason = failureReason
-            it.headerUrl = url
-            it.headerContentType = contentType
-          }
-          .build()
-      }.build()!!
+    chunkedScrapeResponse {
+      header = headerData {
+        headerValidResponse = srValidResponse
+        headerAgentId = srAgentId
+        headerScrapeId = srScrapeId
+        headerStatusCode = srStatusCode
+        headerFailureReason = srFailureReason
+        headerUrl = srUrl
+        headerContentType = srContentType
+      }
+    }
 
   companion object {
     private val logger = KotlinLogging.logger {}
+
+    fun ScrapeResponse.toScrapeResults() =
+      ScrapeResults(
+        srAgentId = agentId,
+        srScrapeId = scrapeId,
+        srValidResponse = validResponse,
+        srStatusCode = statusCode,
+        srContentType = contentType,
+        srZipped = zipped,
+        srFailureReason = failureReason,
+        srUrl = url,
+      ).also { results ->
+        if (zipped)
+          results.srContentAsZipped = contentAsZipped.toByteArray()
+        else
+          results.srContentAsText = contentAsText
+      }
 
     fun errorCode(
       e: Throwable,

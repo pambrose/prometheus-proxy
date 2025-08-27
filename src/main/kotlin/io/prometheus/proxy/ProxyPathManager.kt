@@ -26,6 +26,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.grpc.UnregisterPathResponse
+import io.prometheus.grpc.unregisterPathResponse
 
 internal class ProxyPathManager(
   private val proxy: Proxy,
@@ -117,13 +118,10 @@ internal class ProxyPathManager(
             true to ""
           }
         }
-      return UnregisterPathResponse
-        .newBuilder()
-        .also {
-          it.valid = results.first
-          it.reason = results.second
-        }
-        .build()
+      return unregisterPathResponse {
+        valid = results.first
+        reason = results.second
+      }
     }
   }
 

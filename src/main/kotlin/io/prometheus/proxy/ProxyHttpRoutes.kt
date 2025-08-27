@@ -218,15 +218,15 @@ object ProxyHttpRoutes {
     logger.debug { "Results returned from $agentContext for $scrapeRequest" }
 
     scrapeRequest.scrapeResults.also { scrapeResults ->
-      HttpStatusCode.fromValue(scrapeResults.statusCode).also { statusCode ->
+      HttpStatusCode.fromValue(scrapeResults.srStatusCode).also { statusCode ->
 
         val contentType =
           runCatching {
             if (proxy.options.debugEnabled)
-              logger.info { "CT check - submitScrapeRequest() contentType: ${scrapeResults.contentType}" }
-            ContentType.parse(scrapeResults.contentType)
+              logger.info { "CT check - submitScrapeRequest() contentType: ${scrapeResults.srContentType}" }
+            ContentType.parse(scrapeResults.srContentType)
           }.getOrElse {
-            logger.debug { "Error parsing content type: ${scrapeResults.contentType} -- ${it.simpleClassName}" }
+            logger.debug { "Error parsing content type: ${scrapeResults.srContentType} -- ${it.simpleClassName}" }
             Text.Plain.withCharset(Charsets.UTF_8)
           }
         logger.debug { "Content type: $contentType" }
@@ -237,8 +237,8 @@ object ProxyHttpRoutes {
             ScrapeRequestResponse(
               statusCode = statusCode,
               contentType = contentType,
-              failureReason = failureReason,
-              url = url,
+              failureReason = srFailureReason,
+              url = srUrl,
               updateMsg = "path_not_found",
               fetchDuration = scrapeRequest.ageDuration(),
             )
@@ -249,9 +249,9 @@ object ProxyHttpRoutes {
             ScrapeRequestResponse(
               statusCode = statusCode,
               contentType = contentType,
-              contentText = if (zipped) contentAsZipped.unzip() else contentAsText,
-              failureReason = failureReason,
-              url = url,
+              contentText = if (srZipped) srContentAsZipped.unzip() else srContentAsText,
+              failureReason = srFailureReason,
+              url = srUrl,
               updateMsg = "success",
               fetchDuration = scrapeRequest.ageDuration(),
             )
@@ -270,11 +270,11 @@ object ProxyHttpRoutes {
     ScrapeRequestWrapper(
       agentContext = agentContext,
       proxy = proxy,
-      path = path,
-      encodedQueryParams = encodedQueryParams,
-      authHeader = request.header(HttpHeaders.Authorization).orEmpty(),
-      accept = request.header(HttpHeaders.Accept),
-      debugEnabled = proxy.options.debugEnabled,
+      pathVal = path,
+      encodedQueryParamsVal = encodedQueryParams,
+      authHeaderVal = request.header(HttpHeaders.Authorization).orEmpty(),
+      acceptVal = request.header(HttpHeaders.Accept),
+      debugEnabledVal = proxy.options.debugEnabled,
     )
 }
 
