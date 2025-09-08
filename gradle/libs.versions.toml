@@ -1,6 +1,6 @@
 [versions]
 # Plugins
-config = "5.6.7"
+config = "5.6.8"
 detekt = "1.23.8"
 kotlinter = "5.2.0"
 kotlin = "2.2.10"
@@ -17,7 +17,7 @@ gengrpc = "1.4.3"
 grpc = "1.75.0"
 jcommander = "2.0"
 jetty = "10.0.26"
-kotest = "6.0.2"
+kotest = "6.0.3"
 ktor = "3.2.3"
 logback = "1.5.18"
 logging = "7.0.13"
