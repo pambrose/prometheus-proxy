@@ -3,7 +3,7 @@
 config = "5.6.8"
 detekt = "1.23.8"
 kotlinter = "5.2.0"
-kotlin = "2.2.10"
+kotlin = "2.2.20"
 kover = "0.9.1"
 protobuf = "0.9.5"
 shadow = "8.3.7"
@@ -29,7 +29,7 @@ protoc = "4.32.0"
 serialization = "1.9.0"
 slf4j = "2.0.13"
 typesafe = "1.4.4"
-utils = "2.4.4"
+utils = "2.4.5"
 zipkin = "6.3.0"
 
 [libraries]
