@@ -36,14 +36,14 @@ internal object BasicHarnessTests {
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
     blockingGet("${HarnessConstants.PROXY_PORT}/".withPrefix()) { response ->
-      response.status shouldBe HttpStatusCode.Companion.NotFound
+      response.status shouldBe HttpStatusCode.NotFound
     }
   }
 
   fun invalidPathTest(caller: String) {
     logger.debug { "Calling invalidPathTest() from $caller" }
     blockingGet("${HarnessConstants.PROXY_PORT}/invalid_path".withPrefix()) { response ->
-      response.status shouldBe HttpStatusCode.Companion.NotFound
+      response.status shouldBe HttpStatusCode.NotFound
     }
   }
 
@@ -79,7 +79,7 @@ internal object BasicHarnessTests {
 
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
     blockingGet("${HarnessConstants.PROXY_PORT}/$badPath".withPrefix()) { response ->
-      response.status shouldBe HttpStatusCode.Companion.NotFound
+      response.status shouldBe HttpStatusCode.NotFound
     }
     pathManager.unregisterPath(badPath)
   }

@@ -47,6 +47,7 @@ import io.prometheus.proxy.ProxyUtils.invalidPathResponse
 import io.prometheus.proxy.ProxyUtils.proxyNotRunningResponse
 import io.prometheus.proxy.ProxyUtils.respondWith
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration
@@ -165,7 +166,7 @@ object ProxyHttpRoutes {
         .map { agentContext ->
           async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request, call.response) }
         }
-        .map { deferred -> deferred.await() }
+        .awaitAll()
         .onEach { response -> logActivityForResponse(path, response, proxy) }
     }
 
