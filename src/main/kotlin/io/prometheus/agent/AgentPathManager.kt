@@ -36,7 +36,7 @@ internal class AgentPathManager(
 
   fun clear() = pathContextMap.clear()
 
-  fun pathMapSize(): Int = agent.grpcService.pathMapSize()
+  suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
   private val pathConfigs =
     agentConfigVals.pathConfigs

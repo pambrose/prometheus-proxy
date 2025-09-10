@@ -61,7 +61,6 @@ import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
@@ -211,19 +210,17 @@ internal class AgentGrpcService(
     initialConnectionLatch.countDown()
   }
 
-  fun pathMapSize() =
-    runBlocking {
-      val request =
-        pathMapSizeRequest {
-          require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
-          agentId = agent.agentId
-        }
-      stub.pathMapSize(request)
-        .run {
-          agent.markMsgSent()
-          pathCount
-        }
-    }
+  suspend fun pathMapSize(): Int =
+    stub.pathMapSize(
+      pathMapSizeRequest {
+        require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+        agentId = agent.agentId
+      },
+    )
+      .run {
+        agent.markMsgSent()
+        pathCount
+      }
 
   suspend fun registerPathOnProxy(
     pathVal: String,
