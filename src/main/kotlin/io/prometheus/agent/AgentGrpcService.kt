@@ -216,47 +216,42 @@ internal class AgentGrpcService(
         require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         agentId = agent.agentId
       },
-    )
-      .run {
-        agent.markMsgSent()
-        pathCount
-      }
+    ).run {
+      agent.markMsgSent()
+      pathCount
+    }
 
   suspend fun registerPathOnProxy(
     pathVal: String,
     labelsJson: String,
-  ): RegisterPathResponse {
-    val request =
+  ): RegisterPathResponse =
+    stub.registerPath(
       registerPathRequest {
         require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
         agentId = agent.agentId
         path = pathVal
         labels = labelsJson
-      }
-    return stub.registerPath(request)
-      .apply {
-        agent.markMsgSent()
-        if (!valid)
-          throw RequestFailureException("registerPathOnProxy() - $reason")
-      }
-  }
+      },
+    ).apply {
+      agent.markMsgSent()
+      if (!valid)
+        throw RequestFailureException("registerPathOnProxy() - $reason")
+    }
 
-  suspend fun unregisterPathOnProxy(pathVal: String): UnregisterPathResponse {
-    val request =
+  suspend fun unregisterPathOnProxy(pathVal: String): UnregisterPathResponse =
+    stub.unregisterPath(
       unregisterPathRequest {
         require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
         agentId = agent.agentId
         path = pathVal
-      }
-    return stub.unregisterPath(request)
-      .apply {
-        agent.markMsgSent()
-        if (!valid)
-          throw RequestFailureException("unregisterPathOnProxy() - $reason")
-      }
-  }
+      },
+    ).apply {
+      agent.markMsgSent()
+      if (!valid)
+        throw RequestFailureException("unregisterPathOnProxy() - $reason")
+    }
 
   suspend fun sendHeartBeat() {
     agent.agentId
