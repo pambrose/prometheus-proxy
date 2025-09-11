@@ -23,7 +23,7 @@ plugins {
 }
 
 group = "io.prometheus"
-version = "2.3.0"
+version = "2.4.0"
 
 buildConfig {
   packageName("io.prometheus")
@@ -35,35 +35,32 @@ buildConfig {
 }
 
 repositories {
-  // mavenLocal()
   google()
   mavenCentral()
   maven { url = uri("https://jitpack.io") }
 }
 
 dependencies {
+  implementation(platform(libs.kotlin.bom))
   implementation(libs.kotlin.reflect)
-  implementation(libs.kotlin.serialization)
 
-  implementation(libs.grpc.netty)
-  implementation(libs.grpc.protobuf)
-  implementation(libs.grpc.stub)
-  implementation(libs.grpc.services)
+  implementation(libs.kotlinx.serialization)
+  implementation(libs.kotlinx.datetime)
 
+  implementation(platform(libs.grpc.bom))
+  implementation(libs.bundles.grpc)
+
+  implementation(platform(libs.ktor.bom))
+  implementation(libs.bundles.ktor)
+
+  implementation(platform(libs.common.utils.bom))
+  implementation(libs.bundles.common.utils)
+
+  implementation(libs.protobuf.kotlin)
   implementation(libs.grpc.kotlin.stub)
 
   // Required
   implementation(libs.netty.tcnative)
-
-  implementation(libs.utils.core)
-  implementation(libs.utils.dropwizard)
-  implementation(libs.utils.guava)
-  implementation(libs.utils.grpc)
-  implementation(libs.utils.jetty)
-  implementation(libs.utils.ktor.client)
-  implementation(libs.utils.prometheus)
-  implementation(libs.utils.service)
-  implementation(libs.utils.zipkin)
 
   implementation(libs.jetty.servlet)
 
@@ -71,20 +68,7 @@ dependencies {
   implementation(libs.jcommander)
   implementation(libs.typesafe.config)
 
-  implementation(libs.kotlin.datetime)
-
   implementation(libs.prometheus.simpleclient)
-
-  implementation(libs.ktor.client)
-  implementation(libs.ktor.client.cio)
-  implementation(libs.ktor.client.auth)
-  implementation(libs.ktor.network)
-  implementation(libs.ktor.network.tls)
-
-  implementation(libs.ktor.server)
-  implementation(libs.ktor.server.cio)
-  implementation(libs.ktor.server.call.logging)
-  implementation(libs.ktor.server.compression)
 
   implementation(libs.dropwizard.metrics)
 
@@ -161,10 +145,12 @@ fun Project.configureGrpc() {
       id("grpckt") {
         artifact = "io.grpc:protoc-gen-grpc-kotlin:${libs.versions.gengrpc.get()}:jdk8@jar"
       }
+      id("kotlin")
     }
     generateProtoTasks {
       all().forEach { task ->
         task.plugins {
+          id("kotlin")
           id("grpc")    // Generate Java gRPC classes
           id("grpckt")  // Generate Kotlin gRPC using the custom plugin from library
         }
@@ -253,18 +239,14 @@ fun Project.configurePublishing() {
   }
 }
 
-tasks.withType<LintTask> {
-  // This will exclude all files under build/generated/
-  this.source = this.source.minus(fileTree("build/generated")).asFileTree
-}
-tasks.withType<FormatTask> {
-  this.source = this.source.minus(fileTree("build/generated")).asFileTree
-}
-
 fun Project.configureKotlinter() {
-//  tasks.withType<LintTask> {
-//    this.source = this.source.minus(fileTree("build/generated")).asFileTree
-//  }
+  tasks.withType<LintTask> {
+    // This will exclude all files under build/generated/
+    this.source = this.source.minus(fileTree("build/generated")).asFileTree
+  }
+  tasks.withType<FormatTask> {
+    this.source = this.source.minus(fileTree("build/generated")).asFileTree
+  }
 
   kotlinter {
     ignoreFormatFailures = false

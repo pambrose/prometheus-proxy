@@ -1,9 +1,9 @@
 [versions]
 # Plugins
-config = "5.6.7"
+config = "5.6.8"
 detekt = "1.23.8"
 kotlinter = "5.2.0"
-kotlin = "2.2.0"
+kotlin = "2.2.20"
 kover = "0.9.1"
 protobuf = "0.9.5"
 shadow = "8.3.7"
@@ -11,51 +11,56 @@ versions = "0.52.0"
 
 # Libraries
 annotation = "1.3.2"
-datetime = " 0.7.1-0.6.x-compat"
-dropwizard = "4.2.33"
+datetime = "0.7.1-0.6.x-compat"
+dropwizard = "4.2.36"
 gengrpc = "1.4.3"
-grpc = "1.74.0"
+grpc = "1.75.0"
 jcommander = "2.0"
-jetty = "10.0.25"
-kotest = "6.0.0.M16"
+jetty = "10.0.26"
+kotest = "6.0.3"
 ktor = "3.2.3"
 logback = "1.5.18"
-logging = "7.0.12"
+logging = "7.0.13"
 # Keep in sync with grpc
-tcnative = "2.0.72.Final"
+tcnative = "2.0.73.Final"
 prometheus = "0.16.0"
 # Keep in sync with grpc
-protoc = "3.25.4"
+protoc = "4.32.0"
 serialization = "1.9.0"
 slf4j = "2.0.13"
 typesafe = "1.4.4"
-utils = "2.4.0"
+utils = "2.4.5"
 zipkin = "6.3.0"
 
 [libraries]
 # Kotlin
-kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
-kotlin-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
-kotlin-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
+kotlin-bom = { module = "org.jetbrains.kotlin:kotlin-bom", version.ref = "kotlin" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
+
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
+kotlinx-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
 # gRPC
-grpc-netty = { module = "io.grpc:grpc-netty-shaded", version.ref = "grpc" }
-grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
-grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
-grpc-services = { module = "io.grpc:grpc-services", version.ref = "grpc" }
+grpc-bom = { module = "io.grpc:grpc-bom", version.ref = "grpc" }
+grpc-netty = { module = "io.grpc:grpc-netty-shaded" }
+grpc-protobuf = { module = "io.grpc:grpc-protobuf" }
+grpc-stub = { module = "io.grpc:grpc-stub" }
+grpc-services = { module = "io.grpc:grpc-services" }
+
 grpc-kotlin-stub = { module = "io.grpc:grpc-kotlin-stub", version.ref = "gengrpc" }
 netty-tcnative = { module = "io.netty:netty-tcnative-boringssl-static", version.ref = "tcnative" }
 
 # Common Utils
-utils-core = { module = "com.github.pambrose.common-utils:core-utils", version.ref = "utils" }
-utils-dropwizard = { module = "com.github.pambrose.common-utils:dropwizard-utils", version.ref = "utils" }
-utils-guava = { module = "com.github.pambrose.common-utils:guava-utils", version.ref = "utils" }
-utils-grpc = { module = "com.github.pambrose.common-utils:grpc-utils", version.ref = "utils" }
-utils-jetty = { module = "com.github.pambrose.common-utils:jetty-utils", version.ref = "utils" }
-utils-ktor-client = { module = "com.github.pambrose.common-utils:ktor-client-utils", version.ref = "utils" }
-utils-prometheus = { module = "com.github.pambrose.common-utils:prometheus-utils", version.ref = "utils" }
-utils-service = { module = "com.github.pambrose.common-utils:service-utils", version.ref = "utils" }
-utils-zipkin = { module = "com.github.pambrose.common-utils:zipkin-utils", version.ref = "utils" }
+common-utils-bom = { module = "com.github.pambrose.common-utils:common-utils-bom", version.ref = "utils" }
+common-utils-core = { module = "com.github.pambrose.common-utils:core-utils" }
+common-utils-dropwizard = { module = "com.github.pambrose.common-utils:dropwizard-utils" }
+common-utils-guava = { module = "com.github.pambrose.common-utils:guava-utils" }
+common-utils-grpc = { module = "com.github.pambrose.common-utils:grpc-utils" }
+common-utils-jetty = { module = "com.github.pambrose.common-utils:jetty-utils" }
+common-utils-ktor-client = { module = "com.github.pambrose.common-utils:ktor-client-utils" }
+common-utils-prometheus = { module = "com.github.pambrose.common-utils:prometheus-utils" }
+common-utils-service = { module = "com.github.pambrose.common-utils:service-utils" }
+common-utils-zipkin = { module = "com.github.pambrose.common-utils:zipkin-utils" }
 
 # Jetty
 jetty-servlet = { module = "org.eclipse.jetty:jetty-servlet", version.ref = "jetty" }
@@ -69,21 +74,25 @@ typesafe-config = { module = "com.typesafe:config", version.ref = "typesafe" }
 prometheus-simpleclient = { module = "io.prometheus:simpleclient", version.ref = "prometheus" }
 
 # Ktor
-ktor-client = { module = "io.ktor:ktor-client", version.ref = "ktor" }
-ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
-ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor" }
-ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
-ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
-ktor-server = { module = "io.ktor:ktor-server", version.ref = "ktor" }
-ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
-ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging", version.ref = "ktor" }
-ktor-server-compression = { module = "io.ktor:ktor-server-compression", version.ref = "ktor" }
+ktor-bom = { module = "io.ktor:ktor-bom", version.ref = "ktor" }
+ktor-client = { module = "io.ktor:ktor-client" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio" }
+ktor-client-auth = { module = "io.ktor:ktor-client-auth" }
+ktor-network = { module = "io.ktor:ktor-network" }
+ktor-network-tls = { module = "io.ktor:ktor-network-tls" }
+ktor-server = { module = "io.ktor:ktor-server" }
+ktor-server-cio = { module = "io.ktor:ktor-server-cio" }
+ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging" }
+ktor-server-compression = { module = "io.ktor:ktor-server-compression" }
 
 # Dropwizard
 dropwizard-metrics = { module = "io.dropwizard.metrics:metrics-healthchecks", version.ref = "dropwizard" }
 
 # Zipkin
 zipkin-brave = { module = "io.zipkin.brave:brave-instrumentation-grpc", version.ref = "zipkin" }
+
+# Protobuf
+protobuf-kotlin = { module = "com.google.protobuf:protobuf-kotlin", version.ref = "protoc" }
 
 # Logging
 kotlin-logging = { module = "io.github.oshai:kotlin-logging", version.ref = "logging" }
@@ -103,3 +112,36 @@ shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "config" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+
+[bundles]
+ktor = [
+  "ktor-client",
+  "ktor-client-cio",
+  "ktor-client-auth",
+  "ktor-network",
+  "ktor-network-tls",
+  "ktor-server",
+  "ktor-server-cio",
+  "ktor-server-call-logging",
+  "ktor-server-compression"
+]
+
+grpc = [
+  "grpc-netty",
+  "grpc-protobuf",
+  "grpc-stub",
+  "grpc-services"
+]
+
+common-utils = [
+  "common-utils-core",
+  "common-utils-dropwizard",
+  "common-utils-guava",
+  "common-utils-grpc",
+  "common-utils-jetty",
+  "common-utils-ktor-client",
+  "common-utils-prometheus",
+  "common-utils-jetty",
+  "common-utils-service",
+  "common-utils-zipkin"
+]

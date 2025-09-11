@@ -37,7 +37,7 @@ internal class ScrapeRequestManager {
   }
 
   fun assignScrapeResults(scrapeResults: ScrapeResults) {
-    val scrapeId = scrapeResults.scrapeId
+    val scrapeId = scrapeResults.srScrapeId
     scrapeRequestMap[scrapeId]
       ?.also { wrapper ->
         wrapper.scrapeResults = scrapeResults

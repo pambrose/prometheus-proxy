@@ -26,6 +26,7 @@ import io.prometheus.agent.HttpClientCache.CacheEntry
 import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.agent.HttpClientCache.ClientKey.Companion.NO_AUTH
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
@@ -251,7 +252,7 @@ class HttpClientCacheTest {
       }
 
       // Wait for all jobs to complete
-      jobs.forEach { it.join() }
+      jobs.joinAll()
 
       // Should have only created one client (all should be the same)
       val uniqueClients = entries.map { it.client }.toSet()

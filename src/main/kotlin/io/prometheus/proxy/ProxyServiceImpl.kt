@@ -26,15 +26,13 @@ import io.grpc.Status
 import io.prometheus.Proxy
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
-import io.prometheus.common.GrpcObjects.toScrapeResults
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
+import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.common.Utils.toLowercase
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeartBeatRequest
-import io.prometheus.grpc.HeartBeatResponse
 import io.prometheus.grpc.PathMapSizeRequest
-import io.prometheus.grpc.PathMapSizeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.RegisterAgentRequest
 import io.prometheus.grpc.RegisterAgentResponse
@@ -44,6 +42,12 @@ import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
+import io.prometheus.grpc.agentInfo
+import io.prometheus.grpc.heartBeatResponse
+import io.prometheus.grpc.pathMapSizeResponse
+import io.prometheus.grpc.registerAgentResponse
+import io.prometheus.grpc.registerPathResponse
+import io.prometheus.grpc.unregisterPathResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import java.util.concurrent.CancellationException
@@ -77,55 +81,46 @@ internal class ProxyServiceImpl(
     proxy.metrics { connectCount.inc() }
     val agentContext = AgentContext(UNKNOWN_ADDRESS)
     proxy.agentContextManager.addAgentContext(agentContext)
-    return AgentInfo
-      .newBuilder()
-      .also {
-        require(agentContext.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
-        it.agentId = agentContext.agentId
-      }
-      .build()
+    return agentInfo {
+      require(agentContext.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+      agentId = agentContext.agentId
+    }
   }
 
   override suspend fun registerAgent(request: RegisterAgentRequest): RegisterAgentResponse {
-    var valid = false
+    var isValid = false
 
     proxy.agentContextManager.getAgentContext(request.agentId)
       ?.apply {
-        valid = true
+        isValid = true
         assignProperties(request)
         markActivityTime(false)
         logger.info { "Connected to $this" }
       } ?: logger.error { "registerAgent() missing AgentContext agentId: ${request.agentId}" }
 
-    return RegisterAgentResponse
-      .newBuilder()
-      .also {
-        it.valid = valid
-        it.reason = request.agentId
-        it.agentId = "Invalid agentId: ${request.agentId} (registerAgent)"
-      }
-      .build()
+    return registerAgentResponse {
+      valid = isValid
+      agentId = request.agentId
+      reason = "Invalid agentId: ${request.agentId} (registerAgent)"
+    }
   }
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
-    var valid = false
+    var isValid = false
 
     proxy.agentContextManager.getAgentContext(request.agentId)
       ?.apply {
-        valid = true
+        isValid = true
         proxy.pathManager.addPath(request.path, request.labels, this)
         markActivityTime(false)
       } ?: logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
 
-    return RegisterPathResponse
-      .newBuilder()
-      .also {
-        it.pathId = if (valid) PATH_ID_GENERATOR.fetchAndIncrement() else -1
-        it.valid = valid
-        it.reason = "Invalid agentId: ${request.agentId} (registerPath)"
-        it.pathCount = proxy.pathManager.pathMapSize
-      }
-      .build()
+    return registerPathResponse {
+      pathId = if (isValid) PATH_ID_GENERATOR.fetchAndIncrement() else -1
+      valid = isValid
+      reason = "Invalid agentId: ${request.agentId} (registerPath)"
+      pathCount = proxy.pathManager.pathMapSize
+    }
   }
 
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {
@@ -133,23 +128,19 @@ internal class ProxyServiceImpl(
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
     return if (agentContext.isNull()) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
-      UnregisterPathResponse
-        .newBuilder()
-        .also {
-          it.valid = false
-          it.reason = "Invalid agentId: $agentId (unregisterPath)"
-        }
-        .build()
+      unregisterPathResponse {
+        valid = false
+        reason = "Invalid agentId: $agentId (unregisterPath)"
+      }
     } else {
       proxy.pathManager.removePath(request.path, agentId).apply { agentContext.markActivityTime(false) }
     }
   }
 
   override suspend fun pathMapSize(request: PathMapSizeRequest) =
-    PathMapSizeResponse
-      .newBuilder()
-      .also { it.pathCount = proxy.pathManager.pathMapSize }
-      .build()!!
+    pathMapSizeResponse {
+      pathCount = proxy.pathManager.pathMapSize
+    }
 
   override suspend fun sendHeartBeat(request: HeartBeatRequest) =
     proxy.agentContextManager.getAgentContext(request.agentId)
@@ -157,13 +148,10 @@ internal class ProxyServiceImpl(
         proxy.metrics { heartbeatCount.inc() }
         agentContext?.markActivityTime(false)
           ?: logger.error { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
-        HeartBeatResponse
-          .newBuilder()
-          .also {
-            it.valid = agentContext.isNotNull()
-            it.reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
-          }
-          .build()!!
+        heartBeatResponse {
+          valid = agentContext.isNotNull()
+          reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
+        }
       }
 
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> =

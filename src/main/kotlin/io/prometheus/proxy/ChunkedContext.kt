@@ -37,14 +37,14 @@ internal class ChunkedContext(
   val scrapeResults =
     response.header.run {
       ScrapeResults(
-        validResponse = headerValidResponse,
-        scrapeId = headerScrapeId,
-        agentId = headerAgentId,
-        statusCode = headerStatusCode,
-        zipped = true,
-        failureReason = headerFailureReason,
-        url = headerUrl,
-        contentType = headerContentType,
+        srValidResponse = headerValidResponse,
+        srScrapeId = headerScrapeId,
+        srAgentId = headerAgentId,
+        srStatusCode = headerStatusCode,
+        srZipped = true,
+        srFailureReason = headerFailureReason,
+        srUrl = headerUrl,
+        srContentType = headerContentType,
       )
     }
 
@@ -73,6 +73,6 @@ internal class ChunkedContext(
     check(checksum.value == summaryChecksum)
 
     baos.flush()
-    scrapeResults.contentAsZipped = baos.toByteArray()
+    scrapeResults.srContentAsZipped = baos.toByteArray()
   }
 }
