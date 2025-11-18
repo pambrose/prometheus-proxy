@@ -301,17 +301,22 @@ class Agent(
           }
         }.onFailure { e ->
           when (e) {
-            is RequestFailureException ->
+            is RequestFailureException -> {
               logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
+            }
 
-            is StatusRuntimeException ->
+            is StatusRuntimeException -> {
               logger.info { "Disconnected from proxy at $proxyHost" }
+            }
 
-            is StatusException ->
+            is StatusException -> {
               logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
+            }
+
             // Catch anything else to avoid exiting retry loop
-            else ->
+            else -> {
               logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
+            }
           }
         }
       } finally {

@@ -83,7 +83,9 @@ internal object ProxyHttpConfig {
           "$status: $logMsg -> ${response.headers[HttpHeaders.Location]} - ${request.origin.remoteHost}"
         }
 
-        else -> "$status: ${request.toLogString()} - ${request.origin.remoteHost}"
+        else -> {
+          "$status: ${request.toLogString()} - ${request.origin.remoteHost}"
+        }
       }
     }
 

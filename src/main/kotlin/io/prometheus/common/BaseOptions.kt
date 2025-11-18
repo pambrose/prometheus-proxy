@@ -278,7 +278,7 @@ abstract class BaseOptions protected constructor(
         return fallback
       }
 
-      configName.isUrlPrefix() ->
+      configName.isUrlPrefix() -> {
         runCatching {
           val configSyntax = getConfigSyntax(configName)
           return ConfigFactory
@@ -290,8 +290,9 @@ abstract class BaseOptions protected constructor(
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
+      }
 
-      else ->
+      else -> {
         runCatching {
           return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
         }.onFailure { e ->
@@ -300,6 +301,7 @@ abstract class BaseOptions protected constructor(
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
+      }
     }
 
     exitProcess(1)

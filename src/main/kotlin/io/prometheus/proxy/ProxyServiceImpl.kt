@@ -218,7 +218,9 @@ internal class ProxyServiceImpl(
               }
           }
 
-          else -> error("Invalid field name in writeChunkedResponsesToProxy()")
+          else -> {
+            error("Invalid field name in writeChunkedResponsesToProxy()")
+          }
         }
       }
     }.onFailure { throwable ->
