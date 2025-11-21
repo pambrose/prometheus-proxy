@@ -1,6 +1,6 @@
 [versions]
 # Plugins
-config = "5.7.1"
+config = "6.0.0"
 detekt = "1.23.8"
 kotlinter = "5.3.0"
 kotlin = "2.2.21"
