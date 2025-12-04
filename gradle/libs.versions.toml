@@ -1,9 +1,9 @@
 [versions]
 # Plugins
-config = "6.0.0"
+config = "6.0.6"
 detekt = "1.23.8"
 kotlinter = "5.3.0"
-kotlin = "2.2.21"
+kotlin = "2.3.0-RC2"
 kover = "0.9.3"
 protobuf = "0.9.5"
 shadow = "8.3.7"
@@ -17,8 +17,8 @@ gengrpc = "1.5.0"
 grpc = "1.77.0"
 jcommander = "3.0"
 jetty = "10.0.26"
-kotest = "6.0.5"
-ktor = "3.3.2"
+kotest = "6.0.7"
+ktor = "3.3.3"
 logback = "1.5.21"
 logging = "7.0.13"
 # Keep in sync with grpc
