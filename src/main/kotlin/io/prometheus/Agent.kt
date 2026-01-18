@@ -351,7 +351,7 @@ class Agent(
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) {
-    with(agentConfigVals.internal) {
+    agentConfigVals.internal.apply {
       if (heartbeatEnabled) {
         val heartbeatPauseTime = heartbeatCheckPauseMillis.milliseconds
         val maxInactivityTime = heartbeatMaxInactivitySecs.seconds

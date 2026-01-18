@@ -1,0 +1,324 @@
+/*
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
+package io.prometheus.agent
+
+import com.typesafe.config.ConfigFactory
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.prometheus.Agent
+import io.prometheus.common.ConfigVals
+import io.prometheus.grpc.registerPathResponse
+import io.prometheus.grpc.unregisterPathResponse
+import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+
+class AgentPathManagerTest {
+  private fun createMockAgent(): Agent {
+    val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+
+    // Create a real ConfigVals with minimal config
+    val config = ConfigFactory.parseString(
+      """
+      agent {
+        pathConfigs = []
+      }
+      proxy {}
+      """.trimIndent(),
+    )
+    val configVals = ConfigVals(config)
+
+    val mockAgent = mockk<Agent>(relaxed = true)
+    every { mockAgent.grpcService } returns mockGrpcService
+    every { mockAgent.configVals } returns configVals
+    every { mockAgent.isTestMode } returns true
+
+    return mockAgent
+  }
+
+  @Test
+  fun `registerPath should register path with proxy`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 123L
+      }
+
+      manager.registerPath("metrics", "http://localhost:8080/metrics", """{"job":"test"}""")
+
+      coVerify { agent.grpcService.registerPathOnProxy("metrics", """{"job":"test"}""") }
+
+      val context = manager["metrics"]
+      context.shouldNotBeNull()
+      context.pathId shouldBe 123L
+      context.path shouldBe "metrics"
+      context.url shouldBe "http://localhost:8080/metrics"
+    }
+
+  @Test
+  fun `registerPath should strip leading slash from path`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 456L
+      }
+
+      manager.registerPath("/metrics", "http://localhost:8080/metrics")
+
+      coVerify { agent.grpcService.registerPathOnProxy("metrics", "{}") }
+
+      val context = manager["metrics"]
+      context.shouldNotBeNull()
+      context.path shouldBe "metrics"
+    }
+
+  @Test
+  fun `registerPath should use default empty labels when not provided`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 789L
+      }
+
+      manager.registerPath("health", "http://localhost:8080/health")
+
+      coVerify { agent.grpcService.registerPathOnProxy("health", "{}") }
+    }
+
+  @Test
+  fun `registerPath should throw when path is empty`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      val exception = assertThrows<IllegalArgumentException> {
+        manager.registerPath("", "http://localhost:8080/metrics")
+      }
+
+      exception.message shouldContain "Empty path"
+    }
+
+  @Test
+  fun `registerPath should throw when url is empty`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      val exception = assertThrows<IllegalArgumentException> {
+        manager.registerPath("metrics", "")
+      }
+
+      exception.message shouldContain "Empty URL"
+    }
+
+  @Test
+  fun `unregisterPath should remove path from map`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 123L
+      }
+      coEvery { agent.grpcService.unregisterPathOnProxy(any()) } returns unregisterPathResponse {
+        valid = true
+      }
+
+      manager.registerPath("metrics", "http://localhost:8080/metrics")
+      manager["metrics"].shouldNotBeNull()
+
+      manager.unregisterPath("metrics")
+
+      coVerify { agent.grpcService.unregisterPathOnProxy("metrics") }
+      manager["metrics"].shouldBeNull()
+    }
+
+  @Test
+  fun `unregisterPath should strip leading slash from path`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 123L
+      }
+      coEvery { agent.grpcService.unregisterPathOnProxy(any()) } returns unregisterPathResponse {
+        valid = true
+      }
+
+      manager.registerPath("metrics", "http://localhost:8080/metrics")
+
+      manager.unregisterPath("/metrics")
+
+      coVerify { agent.grpcService.unregisterPathOnProxy("metrics") }
+      manager["metrics"].shouldBeNull()
+    }
+
+  @Test
+  fun `unregisterPath should throw when path is empty`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      val exception = assertThrows<IllegalArgumentException> {
+        manager.unregisterPath("")
+      }
+
+      exception.message shouldContain "Empty path"
+    }
+
+  @Test
+  fun `unregisterPath should not throw when path not in map`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      coEvery { agent.grpcService.unregisterPathOnProxy(any()) } returns unregisterPathResponse {
+        valid = true
+      }
+
+      // Should not throw
+      manager.unregisterPath("nonexistent")
+
+      coVerify { agent.grpcService.unregisterPathOnProxy("nonexistent") }
+    }
+
+  @Test
+  fun `get operator should return null for non-existent path`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      manager["nonexistent"].shouldBeNull()
+    }
+
+  @Test
+  fun `get operator should return PathContext for registered path`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 999L
+      }
+
+      manager.registerPath("test", "http://localhost:9090/test", """{"env":"prod"}""")
+
+      val context = manager["test"]
+      context.shouldNotBeNull()
+      context.pathId shouldBe 999L
+      context.path shouldBe "test"
+      context.url shouldBe "http://localhost:9090/test"
+      context.labels shouldBe """{"env":"prod"}"""
+    }
+
+  @Test
+  fun `clear should remove all paths`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+
+      manager.registerPath("path1", "http://localhost:8080/path1")
+      manager.registerPath("path2", "http://localhost:8080/path2")
+      manager.registerPath("path3", "http://localhost:8080/path3")
+
+      manager["path1"].shouldNotBeNull()
+      manager["path2"].shouldNotBeNull()
+      manager["path3"].shouldNotBeNull()
+
+      manager.clear()
+
+      manager["path1"].shouldBeNull()
+      manager["path2"].shouldBeNull()
+      manager["path3"].shouldBeNull()
+    }
+
+  @Test
+  fun `pathMapSize should return size from grpc service`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      coEvery { agent.grpcService.pathMapSize() } returns 42
+
+      val size = manager.pathMapSize()
+
+      size shouldBe 42
+      coVerify { agent.grpcService.pathMapSize() }
+    }
+
+  @Test
+  fun `PathContext data class should have correct properties`(): Unit =
+    runBlocking {
+      val context = AgentPathManager.PathContext(
+        pathId = 123L,
+        path = "metrics",
+        url = "http://localhost:8080/metrics",
+        labels = """{"job":"test"}""",
+      )
+
+      context.pathId shouldBe 123L
+      context.path shouldBe "metrics"
+      context.url shouldBe "http://localhost:8080/metrics"
+      context.labels shouldBe """{"job":"test"}"""
+    }
+
+  @Test
+  fun `multiple paths can be registered`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+
+      manager.registerPath("metrics", "http://localhost:8080/metrics")
+      manager.registerPath("health", "http://localhost:8080/health")
+      manager.registerPath("info", "http://localhost:8080/info")
+
+      manager["metrics"].shouldNotBeNull()
+      manager["health"].shouldNotBeNull()
+      manager["info"].shouldNotBeNull()
+    }
+}

@@ -76,7 +76,7 @@ internal object ProxyHttpConfig {
   }
 
   private fun getFormattedLog(call: ApplicationCall) =
-    with(call) {
+    call.run {
       when (val status = response.status()) {
         HttpStatusCode.Found -> {
           val logMsg = request.toLogString()

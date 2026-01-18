@@ -40,7 +40,7 @@ class AdminDefaultPathTest {
 
   @Test
   fun proxyPingPathTest() {
-    with(proxyConfigVals.admin) {
+    proxyConfigVals.admin.apply {
       blockingGet("$port/$pingPath".withPrefix()) { response ->
         response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldStartWith "pong"
@@ -50,7 +50,7 @@ class AdminDefaultPathTest {
 
   @Test
   fun agentPingPathTest() {
-    with(agentConfigVals.admin) {
+    agentConfigVals.admin.apply {
       blockingGet("$port/$pingPath".withPrefix()) { response ->
         response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldStartWith "pong"
@@ -60,7 +60,7 @@ class AdminDefaultPathTest {
 
   @Test
   fun proxyVersionPathTest() {
-    with(agentConfigVals.admin) {
+    agentConfigVals.admin.apply {
       blockingGet("$port/$versionPath".withPrefix()) { response ->
         response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldContain "version"
@@ -70,7 +70,7 @@ class AdminDefaultPathTest {
 
   @Test
   fun agentVersionPathTest() {
-    with(agentConfigVals.admin) {
+    agentConfigVals.admin.apply {
       blockingGet("$port/$versionPath".withPrefix()) { response ->
         response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldContain "version"
@@ -80,7 +80,7 @@ class AdminDefaultPathTest {
 
   @Test
   fun proxyHealthCheckPathTest() {
-    with(proxyConfigVals.admin) {
+    proxyConfigVals.admin.apply {
       blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
         response.status shouldBe HttpStatusCode.OK
         response.bodyAsText().length shouldBeGreaterThan 10
@@ -90,7 +90,7 @@ class AdminDefaultPathTest {
 
   @Test
   fun agentHealthCheckPathTest() {
-    with(agentConfigVals.admin) {
+    agentConfigVals.admin.apply {
       blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
         response.bodyAsText().length shouldBeGreaterThan 10
       }
@@ -99,7 +99,7 @@ class AdminDefaultPathTest {
 
   @Test
   fun proxyThreadDumpPathTest() {
-    with(proxyConfigVals.admin) {
+    proxyConfigVals.admin.apply {
       blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
         response.bodyAsText().length shouldBeGreaterThan 10
       }
@@ -108,7 +108,7 @@ class AdminDefaultPathTest {
 
   @Test
   fun agentThreadDumpPathTest() {
-    with(agentConfigVals.admin) {
+    agentConfigVals.admin.apply {
       blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
         response.bodyAsText().length shouldBeGreaterThan 10
       }

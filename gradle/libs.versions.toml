@@ -1,11 +1,11 @@
 [versions]
 # Plugins
-config = "6.0.6"
+config = "6.0.7"
 detekt = "1.23.8"
 kotlinter = "5.3.0"
-kotlin = "2.3.0-RC2"
-kover = "0.9.3"
-protobuf = "0.9.5"
+kotlin = "2.3.0"
+kover = "0.9.4"
+protobuf = "0.9.6"
 shadow = "8.3.7"
 versions = "0.53.0"
 
@@ -14,22 +14,23 @@ annotation = "1.3.2"
 datetime = "0.7.1-0.6.x-compat"
 dropwizard = "4.2.37"
 gengrpc = "1.5.0"
-grpc = "1.77.0"
+grpc = "1.78.0"
 jcommander = "3.0"
 jetty = "10.0.26"
 kotest = "6.0.7"
 ktor = "3.3.3"
-logback = "1.5.21"
+logback = "1.5.25"
 logging = "7.0.13"
-# Keep in sync with grpc
-tcnative = "2.0.74.Final"
+mockk = "1.14.7"
 prometheus = "0.16.0"
 # Keep in sync with grpc
-protoc = "4.33.1"
+protoc = "4.33.4"
 serialization = "1.9.0"
 slf4j = "2.0.13"
+# Keep in sync with grpc
+tcnative = "2.0.74.Final"
 typesafe = "1.4.5"
-utils = "2.4.7"
+utils = "2.4.9"
 zipkin = "6.3.0"
 
 [libraries]
@@ -101,6 +102,7 @@ slf4j-jul = { module = "org.slf4j:jul-to-slf4j", version.ref = "slf4j" }
 
 # Testing
 kotest = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

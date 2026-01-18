@@ -79,6 +79,7 @@ dependencies {
   implementation(libs.slf4j.jul)
 
   testImplementation(libs.kotest)
+  testImplementation(libs.mockk)
   testImplementation(kotlin("test"))
 }
 

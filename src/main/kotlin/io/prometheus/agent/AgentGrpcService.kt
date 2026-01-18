@@ -75,7 +75,7 @@ internal class AgentGrpcService(
   private val inProcessServerName: String,
 ) {
   private var grpcStarted by atomicBoolean(false)
-  private var stub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub by notNull()
+  internal var stub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub by notNull()
   private val tracing by lazy { agent.zipkinReporterService.newTracing("grpc_client") }
   private val grpcTracing by lazy { GrpcTracing.create(tracing) }
 

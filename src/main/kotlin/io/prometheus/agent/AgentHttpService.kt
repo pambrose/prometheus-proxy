@@ -57,7 +57,7 @@ internal class AgentHttpService(
   val agent: Agent,
 ) {
   internal val httpClientCache =
-    with(agent) {
+    agent.run {
       HttpClientCache(
         maxCacheSize = options.maxCacheSize,
         maxAge = options.maxCacheAgeMins.minutes,
@@ -111,7 +111,7 @@ internal class AgentHttpService(
         httpClientCache.onFinishedWithClient(entry)
       }
     }.onFailure { e ->
-      with(scrapeResults) {
+      scrapeResults.apply {
         srStatusCode = errorCode(e, url)
         srFailureReason = e.message ?: e.simpleClassName
         if (scrapeRequest.debugEnabled)
@@ -143,7 +143,7 @@ internal class AgentHttpService(
     response: HttpResponse,
     url: String,
   ) {
-    with(scrapeResults) {
+    scrapeResults.apply {
       if (response.status.isSuccess()) {
         srContentType = response.headers[CONTENT_TYPE].orEmpty()
         if (agent.options.debugEnabled)

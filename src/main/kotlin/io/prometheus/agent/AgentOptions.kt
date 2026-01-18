@@ -177,7 +177,7 @@ class AgentOptions(
           keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
         logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
 
-        with(agentConfigVals) {
+        agentConfigVals.apply {
           assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
           assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
           assignAdminEnabled(admin.enabled)
@@ -213,7 +213,7 @@ class AgentOptions(
   }
 
   private fun assignHttpClientConfigVals(agentConfigVals: ConfigVals.Agent) {
-    with(agentConfigVals.http) {
+    agentConfigVals.http.apply {
       if (!trustAllX509Certificates)
         trustAllX509Certificates = TRUST_ALL_X509_CERTIFICATES.getEnv(enableTrustAllX509Certificates)
       logger.info { "http.trustAllX509Certificates: $trustAllX509Certificates" }

@@ -36,7 +36,7 @@ class AdminEmptyPathTest {
 
   @Test
   fun proxyPingPathTest() {
-    with(proxyConfigVals.admin) {
+    proxyConfigVals.admin.apply {
       port shouldBe 8098
       pingPath shouldBe ""
 
@@ -48,7 +48,7 @@ class AdminEmptyPathTest {
 
   @Test
   fun proxyVersionPathTest() {
-    with(proxyConfigVals.admin) {
+    proxyConfigVals.admin.apply {
       port shouldBe 8098
       versionPath shouldBe ""
 
@@ -60,7 +60,7 @@ class AdminEmptyPathTest {
 
   @Test
   fun proxyHealthCheckPathTest() {
-    with(proxyConfigVals.admin) {
+    proxyConfigVals.admin.apply {
       healthCheckPath shouldBe ""
 
       blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
@@ -71,7 +71,7 @@ class AdminEmptyPathTest {
 
   @Test
   fun proxyThreadDumpPathTest() {
-    with(proxyConfigVals.admin) {
+    proxyConfigVals.admin.apply {
       threadDumpPath shouldBe ""
 
       blockingGet("$port/$threadDumpPath".withPrefix()) { response ->

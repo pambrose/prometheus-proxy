@@ -160,7 +160,7 @@ class ProxyOptions(
         val graceVal = if (maxConnectionAgeGraceSecs == -1L) "default (INT_MAX)" else maxConnectionAgeGraceSecs
         logger.info { "grpc.maxConnectionAgeGraceSecs: $graceVal" }
 
-        with(proxyConfigVals) {
+        proxyConfigVals.apply {
           assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
           assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
           assignAdminEnabled(admin.enabled)
