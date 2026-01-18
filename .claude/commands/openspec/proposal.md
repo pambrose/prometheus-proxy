@@ -8,7 +8,6 @@ tags: [ openspec, change ]
 
 <!-- OPENSPEC:START -->
 **Guardrails**
-
 - Favor straightforward, minimal implementations first and add complexity only when it is requested or clearly required.
 - Keep changes tightly scoped to the requested outcome.
 - Refer to `openspec/AGENTS.md` (located inside the `openspec/` directory—run `ls openspec` or `openspec update` if you
@@ -41,5 +40,4 @@ tags: [ openspec, change ]
 - Search existing requirements with `rg -n "Requirement:|Scenario:" openspec/specs` before writing new ones.
 - Explore the codebase with `rg <keyword>`, `ls`, or direct file reads so proposals align with current implementation
   realities.
-
 <!-- OPENSPEC:END -->
