@@ -402,3 +402,150 @@ health checks run, not when registered.
 ## Fixes to Implement
 
 *None required for Section 3*
+
+---
+
+# Code Audit Findings - Concurrency Analysis
+
+## Summary
+
+Reviewed all concurrency patterns including coroutine scopes, race conditions, synchronization mechanisms, and deadlock
+scenarios.
+
+**Areas Reviewed:**
+
+- Coroutine scope usage and cancellation (Agent.kt, HttpClientCache.kt, AgentGrpcService.kt, ProxyHttpRoutes.kt)
+- Shared state and race conditions (ProxyPathManager.kt, AgentContextManager.kt, ScrapeRequestManager.kt)
+- Synchronization mechanisms (synchronized blocks, Mutex, atomics, ConcurrentHashMap)
+- Channel usage and cancellation (AgentConnectionContext.kt, AgentContext.kt, ScrapeRequestWrapper.kt)
+
+---
+
+## Critical Severity
+
+*None found*
+
+---
+
+## High Severity
+
+*None found*
+
+---
+
+## Medium Severity
+
+*None found*
+
+---
+
+## Low Severity
+
+### L6: Incomplete L1 fix - reason field always set in registerPathResponse
+
+**Location:** `ProxyServiceImpl.kt:120-126`
+
+**Description:**
+
+```kotlin
+return registerPathResponse {
+  pathId = if (isValid) PATH_ID_GENERATOR.fetchAndIncrement() else -1
+  valid = isValid
+  reason = "Invalid agentId: ${request.agentId} (registerPath)"  // Always set
+  pathCount = proxy.pathManager.pathMapSize
+}
+```
+
+The L1 fix was applied to `registerAgentResponse` but not to `registerPathResponse`. The reason field is still always
+set even when valid is true.
+
+**Fix:** Wrap reason assignment in `if (!isValid)` block, matching the fix in `registerAgentResponse`.
+
+---
+
+## Observations (No Fix Required)
+
+### O12: No GlobalScope usage
+
+The codebase properly avoids GlobalScope, using structured concurrency with `coroutineScope {}` blocks that wait for
+child coroutines to complete.
+
+### O13: Proper coroutine scope lifecycle in HttpClientCache
+
+**Location:** `HttpClientCache.kt:51-61`
+
+```kotlin
+private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+init {
+  scope.launch {
+    while (true) {
+      delay(cleanupInterval)
+      // cleanup logic
+    }
+  }
+}
+```
+
+The scope uses SupervisorJob (failures don't cancel siblings) and is properly cancelled in `close()` method.
+
+### O14: Proper Semaphore usage for concurrency limiting
+
+**Location:** `Agent.kt:277-285`
+
+```kotlin
+val semaphore = Semaphore(max)
+connectionContext.scrapeRequestActionsFlow().collect { scrapeRequestAction ->
+  semaphore.withPermit {
+    val scrapeResponse = scrapeRequestAction.invoke()
+    connectionContext.sendScrapeResults(scrapeResponse)
+  }
+}
+```
+
+The Semaphore properly limits concurrent HTTP scrapes to `maxConcurrentHttpClients`.
+
+### O15: Proper Mutex usage in HttpClientCache
+
+**Location:** `HttpClientCache.kt:50, 126, 153, 225`
+
+All cache operations are protected by a single Mutex with `withLock`, ensuring thread-safe access to both the
+ConcurrentHashMap and the LinkedHashMap tracking access order.
+
+### O16: Synchronized blocks properly used for compound operations
+
+**Location:** `ProxyPathManager.kt:54-56, 65-89, 99-131, 146-164`
+
+The pathMap uses synchronized blocks even though it's a ConcurrentMap. This is intentional and correct for compound
+operations (read-modify-write, iteration with modification) where ConcurrentMap's individual operation atomicity is
+insufficient.
+
+### O17: No deadlock potential identified
+
+The codebase uses single-lock acquisition patterns:
+
+- ProxyPathManager: synchronized(pathMap) only
+- HttpClientCache: accessMutex only
+- No nested lock acquisition across different lock objects
+
+### O18: Channel backlog tracking is eventually consistent
+
+**Location:** `AgentContext.kt:79-88`
+
+```kotlin
+suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
+  scrapeRequestChannel.send(scrapeRequest)
+  channelBacklogSize += 1  // Increment after send
+}
+```
+
+The backlog size is updated after channel operations, not atomically. This is acceptable since the value is only used
+for monitoring and will be eventually consistent.
+
+---
+
+## Fixes to Implement
+
+| ID | Severity | File                | Description                                          |
+|----|----------|---------------------|------------------------------------------------------|
+| L6 | Low      | ProxyServiceImpl.kt | Only set reason when invalid in registerPathResponse |

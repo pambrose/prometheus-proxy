@@ -120,7 +120,9 @@ internal class ProxyServiceImpl(
     return registerPathResponse {
       pathId = if (isValid) PATH_ID_GENERATOR.fetchAndIncrement() else -1
       valid = isValid
-      reason = "Invalid agentId: ${request.agentId} (registerPath)"
+      if (!isValid) {
+        reason = "Invalid agentId: ${request.agentId} (registerPath)"
+      }
       pathCount = proxy.pathManager.pathMapSize
     }
   }
