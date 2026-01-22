@@ -159,16 +159,18 @@ internal class ProxyPathManager(
     }
   }
 
-  fun toPlainText() =
-    if (pathMap.isEmpty()) {
-      "No agents connected."
-    } else {
-      val maxPath = pathMap.keys.maxOfOrNull { it.length } ?: 0
-      "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
-        pathMap
-          .toSortedMap()
-          .map { c -> "/${c.key.padEnd(maxPath)} ${c.value.agentContexts.size} ${c.value}" }
-          .joinToString("\n\n")
+  fun toPlainText(): String =
+    synchronized(pathMap) {
+      if (pathMap.isEmpty()) {
+        "No agents connected."
+      } else {
+        val maxPath = pathMap.keys.maxOfOrNull { it.length } ?: 0
+        "Proxy Path Map:\n" + "Path".padEnd(maxPath + 2) + "Agent Context\n" +
+          pathMap
+            .toSortedMap()
+            .map { c -> "/${c.key.padEnd(maxPath)} ${c.value.agentContexts.size} ${c.value}" }
+            .joinToString("\n\n")
+      }
     }
 
   companion object {
