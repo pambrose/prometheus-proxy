@@ -100,6 +100,10 @@ class ProxyPathManagerTest {
       info.agentContexts[0].agentId shouldBe context2.agentId
     }
 
+  // Tests consolidated path behavior: when multiple agents register the same path with
+  // consolidated=true, they are grouped together. Prometheus scrapes are load-balanced
+  // across all agents in the consolidated group. This differs from non-consolidated
+  // paths where a new registration overwrites the previous one.
   @Test
   fun `addPath should append to consolidated path`(): Unit =
     runBlocking {
@@ -187,6 +191,10 @@ class ProxyPathManagerTest {
       exception.message shouldContain "Empty agentId"
     }
 
+  // Tests partial removal from a consolidated path group. When one agent disconnects,
+  // only that agent is removed from the group - the path remains registered with the
+  // remaining agents. The path is only fully removed when the last agent disconnects.
+  // This ensures continuous availability during rolling deployments or agent restarts.
   @Test
   fun `removePath should remove one element from consolidated path`(): Unit =
     runBlocking {

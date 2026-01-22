@@ -169,6 +169,11 @@ class AgentContextManagerTest {
       manager.totalAgentScrapeRequestBacklogSize shouldBe 0
     }
 
+  // Tests thread-safety of the AgentContextManager under concurrent load.
+  // In production, multiple gRPC threads may simultaneously add/remove agent contexts
+  // as agents connect and disconnect. This test verifies that the underlying
+  // ConcurrentHashMap correctly handles 20 concurrent additions followed by
+  // 20 concurrent removals without data corruption or race conditions.
   @Test
   fun `concurrent access should handle multiple threads safely`(): Unit =
     runBlocking {

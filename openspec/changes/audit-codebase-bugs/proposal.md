@@ -15,6 +15,8 @@ manifest in production.
 - Check gRPC and HTTP client/server code for edge cases
 - Review configuration validation and boundary conditions
 - Document findings with severity and recommended fixes
+- Implement fixes for identified bugs
+- Write tests for all bug fixes to prevent regressions
 
 ## Impact
 
@@ -51,3 +53,6 @@ manifest in production.
   - Description of the issue
   - Recommended fix
 - No Critical severity bugs remaining undocumented
+- All identified bugs fixed with corresponding tests
+- Tests pass and demonstrate the bug was fixed (test should fail before fix, pass after)
+- Code coverage maintained or improved

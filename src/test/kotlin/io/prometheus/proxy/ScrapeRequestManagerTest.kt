@@ -177,6 +177,11 @@ class ScrapeRequestManagerTest {
       }
     }
 
+  // Tests the scrape request/response correlation mechanism. When Prometheus sends a
+  // scrape request, the proxy tracks it by scrapeId. When the agent returns results,
+  // assignScrapeResults matches the response to the original request and calls
+  // markComplete() to signal the waiting HTTP handler. This test verifies that
+  // multiple concurrent scrapes are correctly tracked and completed independently.
   @Test
   fun `multiple assignScrapeResults should call markComplete for each`(): Unit =
     runBlocking {

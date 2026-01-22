@@ -94,6 +94,9 @@ class ProxyServiceImplTest {
       exception.message shouldContain "do not have matching transportFilterDisabled config values"
     }
 
+  // Tests the transport filter security mechanism: when transportFilterDisabled=true on both
+  // proxy and agent, a direct gRPC connection is established without the transport filter.
+  // This creates an AgentContext that tracks the agent's state throughout its connection lifetime.
   @Test
   fun `connectAgentWithTransportFilterDisabled should create agent context`() =
     runBlocking {
@@ -328,6 +331,13 @@ class ProxyServiceImplTest {
       response.reason shouldContain "Invalid agentId"
     }
 
+  // Tests the gRPC streaming flow for scrape requests from proxy to agent.
+  // The proxy continuously streams scrape requests to the agent while:
+  // 1. The proxy is running
+  // 2. The agent context is valid
+  // This test simulates the agent becoming invalid after processing one request,
+  // which terminates the stream. The isValid() mock returns [true, false] to
+  // simulate one iteration of the loop before the agent disconnects.
   @Test
   fun `readRequestsFromProxy should emit scrape requests when agent is valid`(): Unit =
     runBlocking {

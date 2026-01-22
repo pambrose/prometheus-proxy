@@ -187,6 +187,10 @@ class AgentContextTest {
       result.shouldBeNull()
     }
 
+  // Verifies that the scrape request channel maintains FIFO (First-In-First-Out) ordering.
+  // This is critical for correct scrape behavior: Prometheus expects responses in the same
+  // order as requests. The underlying Channel implementation guarantees this ordering,
+  // but this test ensures the AgentContext wrapper doesn't break that guarantee.
   @Test
   fun `readScrapeRequest should return requests in FIFO order`(): Unit =
     runBlocking {
@@ -222,6 +226,11 @@ class AgentContextTest {
       }
     }
 
+  // Tests the graceful shutdown behavior of an agent context.
+  // When invalidate() is called, the context is marked invalid but existing queued
+  // requests can still be read (allowing in-flight operations to complete).
+  // This prevents data loss during agent disconnection while ensuring no new
+  // requests are accepted after invalidation.
   @Test
   fun `invalidate should close scrape request channel`(): Unit =
     runBlocking {
