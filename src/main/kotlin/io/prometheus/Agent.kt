@@ -341,13 +341,15 @@ class Agent(
         size = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize,
       ),
     )
-    healthCheckRegistry.register(
-      "http_client_cache_size_check",
-      newBacklogHealthCheck(
-        backlogSize = agentHttpService.httpClientCache.getCacheStats().totalEntries,
-        size = options.maxCacheSize + 1,
-      ),
-    )
+    runBlocking {
+      healthCheckRegistry.register(
+        "http_client_cache_size_check",
+        newBacklogHealthCheck(
+          backlogSize = agentHttpService.httpClientCache.getCacheStats().totalEntries,
+          size = options.maxCacheSize + 1,
+        ),
+      )
+    }
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) {

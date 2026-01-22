@@ -141,7 +141,7 @@ internal class HttpClientCache(
         cacheKey,
         maskedString,
         clientFactory = clientFactory,
-        now = now
+        now = now,
       ).apply { onStartWithClient() }
     }
   }
