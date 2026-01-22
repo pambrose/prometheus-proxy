@@ -32,9 +32,10 @@ object SslSettings {
   ): KeyStore =
     KeyStore.getInstance(KeyStore.getDefaultType())
       .apply {
-        val keyStoreFile = FileInputStream(fileName)
-        val keyStorePassword = password.toCharArray()
-        load(keyStoreFile, keyStorePassword)
+        FileInputStream(fileName).use { keyStoreFile ->
+          val keyStorePassword = password.toCharArray()
+          load(keyStoreFile, keyStorePassword)
+        }
       }
 
   fun getTrustManagerFactory(
