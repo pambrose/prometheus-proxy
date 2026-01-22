@@ -1,0 +1,301 @@
+/*
+ * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
+package io.prometheus.proxy
+
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
+import io.prometheus.grpc.chunkedScrapeResponse
+import io.prometheus.grpc.headerData
+import org.junit.jupiter.api.Test
+import java.util.zip.CRC32
+
+// Tests for ChunkedContext which manages the state of a chunked scrape response.
+// Large scrape responses are split into chunks to avoid gRPC message size limits.
+// ChunkedContext accumulates chunks and verifies checksums for data integrity.
+class ChunkedContextTest {
+  private fun createHeaderResponse(
+    validResponse: Boolean = true,
+    scrapeId: Long = 12345L,
+    agentId: String = "test-agent",
+    statusCode: Int = 200,
+    failureReason: String = "",
+    url: String = "http://localhost:8080/metrics",
+    contentType: String = "text/plain",
+  ) = chunkedScrapeResponse {
+    header = headerData {
+      headerValidResponse = validResponse
+      headerScrapeId = scrapeId
+      headerAgentId = agentId
+      headerStatusCode = statusCode
+      headerFailureReason = failureReason
+      headerUrl = url
+      headerContentType = contentType
+    }
+  }
+
+  // ==================== Constructor Tests ====================
+
+  @Test
+  fun `constructor should initialize with header data`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    context.shouldNotBeNull()
+    context.totalChunkCount shouldBe 0
+    context.totalByteCount shouldBe 0
+  }
+
+  @Test
+  fun `constructor should create scrapeResults from header`() {
+    val response = createHeaderResponse(
+      validResponse = true,
+      scrapeId = 999L,
+      agentId = "my-agent",
+      statusCode = 200,
+      url = "http://test/metrics",
+      contentType = "text/plain; charset=utf-8",
+    )
+    val context = ChunkedContext(response)
+
+    context.scrapeResults.apply {
+      srValidResponse.shouldBeTrue()
+      srScrapeId shouldBe 999L
+      srAgentId shouldBe "my-agent"
+      srStatusCode shouldBe 200
+      srUrl shouldBe "http://test/metrics"
+      srContentType shouldBe "text/plain; charset=utf-8"
+      srZipped.shouldBeTrue() // ChunkedContext always sets zipped to true
+    }
+  }
+
+  // ==================== applyChunk Tests ====================
+
+  @Test
+  fun `applyChunk should increment chunk count`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val data = "test data".toByteArray()
+    val checksum = CRC32().apply { update(data) }.value
+
+    context.applyChunk(data, data.size, 1, checksum)
+
+    context.totalChunkCount shouldBe 1
+  }
+
+  @Test
+  fun `applyChunk should accumulate byte count`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val data = "test data 12345".toByteArray()
+    val checksum = CRC32().apply { update(data) }.value
+
+    context.applyChunk(data, data.size, 1, checksum)
+
+    context.totalByteCount shouldBe data.size
+  }
+
+  @Test
+  fun `applyChunk should accumulate multiple chunks`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val crc = CRC32()
+
+    // First chunk
+    val data1 = "first chunk".toByteArray()
+    crc.update(data1)
+    context.applyChunk(data1, data1.size, 1, crc.value)
+
+    // Second chunk
+    val data2 = "second chunk".toByteArray()
+    crc.update(data2)
+    context.applyChunk(data2, data2.size, 2, crc.value)
+
+    context.totalChunkCount shouldBe 2
+    context.totalByteCount shouldBe data1.size + data2.size
+  }
+
+  @Test
+  fun `applyChunk should throw on chunk count mismatch`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val data = "test data".toByteArray()
+    val checksum = CRC32().apply { update(data) }.value
+
+    // Expect chunk count 1, but provide 2
+    shouldThrow<IllegalStateException> {
+      context.applyChunk(data, data.size, 2, checksum)
+    }
+  }
+
+  @Test
+  fun `applyChunk should throw on checksum mismatch`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val data = "test data".toByteArray()
+    val wrongChecksum = 12345L // Wrong checksum
+
+    shouldThrow<IllegalStateException> {
+      context.applyChunk(data, data.size, 1, wrongChecksum)
+    }
+  }
+
+  // ==================== applySummary Tests ====================
+
+  @Test
+  fun `applySummary should verify chunk count`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val crc = CRC32()
+    val data = "test data".toByteArray()
+    crc.update(data)
+    context.applyChunk(data, data.size, 1, crc.value)
+
+    // Apply summary with correct counts
+    context.applySummary(1, data.size, crc.value)
+
+    // Should complete without exception
+    context.scrapeResults.srContentAsZipped.shouldNotBeNull()
+  }
+
+  @Test
+  fun `applySummary should throw on chunk count mismatch`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val crc = CRC32()
+    val data = "test data".toByteArray()
+    crc.update(data)
+    context.applyChunk(data, data.size, 1, crc.value)
+
+    // Apply summary with wrong chunk count
+    shouldThrow<IllegalStateException> {
+      context.applySummary(5, data.size, crc.value) // Wrong chunk count
+    }
+  }
+
+  @Test
+  fun `applySummary should throw on byte count mismatch`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val crc = CRC32()
+    val data = "test data".toByteArray()
+    crc.update(data)
+    context.applyChunk(data, data.size, 1, crc.value)
+
+    // Apply summary with wrong byte count
+    shouldThrow<IllegalStateException> {
+      context.applySummary(1, 9999, crc.value) // Wrong byte count
+    }
+  }
+
+  @Test
+  fun `applySummary should throw on checksum mismatch`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val crc = CRC32()
+    val data = "test data".toByteArray()
+    crc.update(data)
+    context.applyChunk(data, data.size, 1, crc.value)
+
+    // Apply summary with wrong checksum
+    shouldThrow<IllegalStateException> {
+      context.applySummary(1, data.size, 12345L) // Wrong checksum
+    }
+  }
+
+  @Test
+  fun `applySummary should set content in scrapeResults`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val crc = CRC32()
+    val data = "metrics content here".toByteArray()
+    crc.update(data)
+    context.applyChunk(data, data.size, 1, crc.value)
+
+    context.applySummary(1, data.size, crc.value)
+
+    val content = context.scrapeResults.srContentAsZipped
+    content.shouldNotBeNull()
+    content.size shouldBe data.size
+    content.contentEquals(data).shouldBeTrue()
+  }
+
+  // ==================== Multi-Chunk Integration Tests ====================
+
+  @Test
+  fun `should handle multiple chunks and verify final summary`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val crc = CRC32()
+
+    // Simulate chunked transfer
+    val chunk1 = "chunk1-data-".toByteArray()
+    val chunk2 = "chunk2-data-".toByteArray()
+    val chunk3 = "chunk3-data".toByteArray()
+
+    crc.update(chunk1)
+    context.applyChunk(chunk1, chunk1.size, 1, crc.value)
+
+    crc.update(chunk2)
+    context.applyChunk(chunk2, chunk2.size, 2, crc.value)
+
+    crc.update(chunk3)
+    context.applyChunk(chunk3, chunk3.size, 3, crc.value)
+
+    val totalSize = chunk1.size + chunk2.size + chunk3.size
+    context.applySummary(3, totalSize, crc.value)
+
+    context.totalChunkCount shouldBe 3
+    context.totalByteCount shouldBe totalSize
+    context.scrapeResults.srContentAsZipped.shouldNotBeNull()
+  }
+
+  // ==================== Header Field Propagation Tests ====================
+
+  @Test
+  fun `scrapeResults should propagate failure reason from header`() {
+    val response = createHeaderResponse(
+      validResponse = false,
+      failureReason = "Connection timeout",
+    )
+    val context = ChunkedContext(response)
+
+    context.scrapeResults.srFailureReason shouldBe "Connection timeout"
+  }
+
+  @Test
+  fun `scrapeResults should handle empty content type`() {
+    val response = createHeaderResponse(contentType = "")
+    val context = ChunkedContext(response)
+
+    context.scrapeResults.srContentType shouldBe ""
+  }
+}
