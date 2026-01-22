@@ -16,17 +16,18 @@ directly to external Prometheus instances.
 
 ## Tech Stack
 
-- **Language**: Kotlin 2.3.x with Java 17+ requirement
+- **Language**: Kotlin 2.3.x with Java 17+ requirement (JVM toolchain: 17)
 - **Build System**: Gradle 9.x with Kotlin DSL
-- **RPC Framework**: gRPC (protobuf) for proxy-agent communication
-- **HTTP Framework**: Ktor for both client (agent scraping) and server (proxy serving)
-- **Metrics**: Prometheus Java Client, Dropwizard Metrics for health checks
-- **Configuration**: Typesafe Config (HOCON, JSON, properties support)
+- **RPC Framework**: gRPC 1.78.0 (protobuf) for proxy-agent communication
+- **HTTP Framework**: Ktor 3.3.3 for both client (agent scraping) and server (proxy serving)
+- **Metrics**: Prometheus Java Client 0.16.0, Dropwizard Metrics 4.2.37 for health checks
+- **Configuration**: Typesafe Config 1.4.5 (HOCON, JSON, properties support)
 - **Concurrency**: Kotlin Coroutines with structured concurrency
-- **Logging**: kotlin-logging with Logback backend
-- **Testing**: Kotest (test framework), MockK (mocking), Kover (coverage)
-- **Code Quality**: kotlinter (formatting), detekt (static analysis)
-- **Deployment**: Multi-arch Docker images (proxy and agent)
+- **Logging**: kotlin-logging 7.0.13 with Logback 1.5.25 backend, SLF4J 2.0.13
+- **Testing**: Kotest 6.0.7 (test framework), MockK 1.14.7 (mocking), Kover 0.9.4 (coverage)
+- **Code Quality**: kotlinter 5.3.0 (formatting), detekt 1.23.8 (static analysis)
+- **Deployment**: Multi-arch Docker images (amd64, arm64, s390x) published to Docker Hub
+- **Additional Libraries**: Zipkin Brave 6.3.0 for distributed tracing, Jetty 10.0.26 for HTTP serving
 
 ## Project Conventions
 
@@ -40,7 +41,22 @@ directly to external Prometheus instances.
   - `./gradlew detekt` for static analysis
 - **Naming**: Standard Kotlin conventions (camelCase for functions/properties, PascalCase for classes)
 - **Package Structure**: Organized by component (`io.prometheus.proxy`, `io.prometheus.agent`, `io.prometheus.common`)
+- **Imports**: Alphabetical ordering, explicit imports preferred (wildcard imports disabled)
+- **Line Length**: 120 characters maximum
+- **Indentation**: 2 spaces (tabs converted to spaces)
 - **Avoid**: Premature abstractions, over-engineering, unnecessary comments or docstrings for self-evident code
+
+### OpenSpec Workflow
+
+This project uses OpenSpec for managing changes and specifications:
+
+- **Change Proposals**: All significant changes require an OpenSpec proposal in `openspec/changes/[change-id]/`
+- **Specification Tracking**: Current system capabilities documented in `openspec/specs/`
+- **Workflow**: Stage 1 (propose) → Stage 2 (implement) → Stage 3 (archive)
+- **Commands**:
+  - `openspec list` - View active changes
+  - `openspec validate [change-id]` - Validate proposals
+  - `openspec archive [change-id]` - Archive completed changes
 
 ### Architecture Patterns
 
@@ -106,14 +122,17 @@ directly to external Prometheus instances.
 
 ## Important Constraints
 
-- **Java Version**: Requires Java 17 or higher
+- **Java Version**: Requires Java 17 or higher (configured JVM toolchain: 17)
 - **Kotlin Version**: Must stay on latest stable Kotlin version (currently 2.3.x)
+- **Gradle Version**: Uses Gradle 8.10.2 with version catalog support (libs.versions.toml)
 - **Backward Compatibility**: Avoid breaking changes in configuration format or gRPC protocol
 - **Performance**: Must handle concurrent scrapes efficiently (agent has configurable concurrency limits)
 - **Network**: Agents must be able to establish outbound gRPC connections to proxy
 - **Security**: TLS support required for production deployments
 - **No Breaking Changes**: Don't rename unused variables, add compatibility shims, or make breaking config changes
   without version bumps
+- **Architecture**: Maintain proxy-agent separation; proxy runs outside firewall, agents run inside
+- **Dependencies**: Keep dependencies updated but stable; prefer semantic versioning
 
 ## External Dependencies
 
@@ -124,5 +143,16 @@ directly to external Prometheus instances.
 - **Metrics Libraries**:
   - Prometheus Java Client for metrics exposition
   - Dropwizard Metrics for internal health monitoring
-- **Docker Registry**: Images published to `pambrose/prometheus-proxy` and `pambrose/prometheus-agent`
+- **Docker Registry**: Multi-arch images published to `pambrose/prometheus-proxy` and `pambrose/prometheus-agent`
+- **CI/CD**: Travis CI for automated testing, JitPack for artifact publishing
+- **Version Control**: Git with GitHub repository at `pambrose/prometheus-proxy`
+
+## Current Project Status
+
+- **Version**: 2.4.1 (released MM/DD/YYYY via build config)
+- **Stability**: Production-ready with active maintenance
+- **Community**: Open source under Apache License 2.0
+- **Documentation**: Comprehensive README with examples and troubleshooting
+- **Testing**: Good test coverage with integration tests for key scenarios
+- **Architecture**: Mature proxy-agent architecture with proven reliability
 - **Configuration Sources**: Supports loading from files, environment variables, and command-line arguments
