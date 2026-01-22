@@ -137,21 +137,33 @@ object ProxyHttpRoutes {
     responseResults: ResponseResults,
   ) {
     val results: List<ScrapeRequestResponse> = executeScrapeRequests(agentContextInfo, proxy, path, queryParams)
-    val statusCodes: List<HttpStatusCode> = results.map { it.statusCode }.toSet().toList()
-    val contentTypes: List<ContentType> = results.map { it.contentType }.toSet().toList()
-    val updateMsgs: String = results.joinToString("\n") { it.updateMsg }
-    // Grab the contentType of the first OK in the list
-    val okContentType: ContentType? = results.firstOrNull { it.statusCode == HttpStatusCode.OK }?.contentType
-    if (proxy.options.debugEnabled) {
-      logger.info { "CT check - processRequests() contentTypes: ${contentTypes.joinToString(", ")}" }
-      logger.info { "CT check - processRequests() okContentType: $okContentType" }
-    }
 
-    responseResults.apply {
-      statusCode = if (statusCodes.contains(HttpStatusCode.OK)) HttpStatusCode.OK else statusCodes[0]
-      contentType = okContentType ?: contentTypes[0]
-      contentText = results.joinToString("\n") { it.contentText }
-      updateMsg = updateMsgs
+    // Handle case where no results were returned (all agents failed or disconnected)
+    if (results.isEmpty()) {
+      logger.warn { "No scrape results returned for path: $path" }
+      responseResults.apply {
+        statusCode = HttpStatusCode.ServiceUnavailable
+        contentType = Text.Plain.withCharset(Charsets.UTF_8)
+        contentText = "No agents available to handle request"
+        updateMsg = "no_agents"
+      }
+    } else {
+      val statusCodes: List<HttpStatusCode> = results.map { it.statusCode }.toSet().toList()
+      val contentTypes: List<ContentType> = results.map { it.contentType }.toSet().toList()
+      val updateMsgs: String = results.joinToString("\n") { it.updateMsg }
+      // Grab the contentType of the first OK in the list
+      val okContentType: ContentType? = results.firstOrNull { it.statusCode == HttpStatusCode.OK }?.contentType
+      if (proxy.options.debugEnabled) {
+        logger.info { "CT check - processRequests() contentTypes: ${contentTypes.joinToString(", ")}" }
+        logger.info { "CT check - processRequests() okContentType: $okContentType" }
+      }
+
+      responseResults.apply {
+        statusCode = if (statusCodes.contains(HttpStatusCode.OK)) HttpStatusCode.OK else statusCodes[0]
+        contentType = okContentType ?: contentTypes[0]
+        contentText = results.joinToString("\n") { it.contentText }
+        updateMsg = updateMsgs
+      }
     }
   }
 

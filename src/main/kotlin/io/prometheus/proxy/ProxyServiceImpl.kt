@@ -101,7 +101,9 @@ internal class ProxyServiceImpl(
     return registerAgentResponse {
       valid = isValid
       agentId = request.agentId
-      reason = "Invalid agentId: ${request.agentId} (registerAgent)"
+      if (!isValid) {
+        reason = "Invalid agentId: ${request.agentId} (registerAgent)"
+      }
     }
   }
 
@@ -189,7 +191,7 @@ internal class ProxyServiceImpl(
         when (ooc.name.toLowercase()) {
           "header" -> {
             val scrapeId = response.header.headerScrapeId
-            logger.debug { "Reading header for scrapeId: $scrapeId}" }
+            logger.debug { "Reading header for scrapeId: $scrapeId" }
             chunkedContextMap[scrapeId] = ChunkedContext(response)
           }
 

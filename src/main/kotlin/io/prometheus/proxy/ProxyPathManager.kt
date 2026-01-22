@@ -76,7 +76,12 @@ internal class ProxyPathManager(
             agentInfo.agentContexts += agentContext
         }
       } else {
-        if (agentInfo.isNotNull()) logger.info { "Overwriting path /$path for ${agentInfo.agentContexts[0]}" }
+        if (agentInfo.isNotNull()) {
+          if (agentInfo.isConsolidated) {
+            logger.warn { "Non-consolidated agent overwriting consolidated path /$path" }
+          }
+          logger.info { "Overwriting path /$path for ${agentInfo.agentContexts[0]}" }
+        }
         pathMap[path] = AgentContextInfo(false, labels, mutableListOf(agentContext))
       }
 

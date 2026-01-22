@@ -21,7 +21,6 @@ package io.prometheus.proxy
 import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.server.cio.CIO
@@ -72,7 +71,7 @@ internal class ProxyHttpService(
     if (proxy.isZipkinEnabled)
       tracing.close()
     httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
-    sleep(2.seconds)
+    // sleep(2.seconds)
   }
 
   override fun toString() = toStringElements { add("port", httpPort) }

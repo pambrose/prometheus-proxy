@@ -205,9 +205,12 @@ class OptionsTest {
   fun `verifyProxyGrpcSettings should accept custom timeouts`() {
     val options = ProxyOptions(
       listOf(
-        "--handshake_timeout_secs", "60",
-        "--permit_keepalive_time_secs", "120",
-        "--max_connection_idle_secs", "300",
+        "--handshake_timeout_secs",
+        "60",
+        "--permit_keepalive_time_secs",
+        "120",
+        "--max_connection_idle_secs",
+        "300",
       ),
     )
     options.handshakeTimeoutSecs shouldBe 60L
@@ -217,12 +220,7 @@ class OptionsTest {
 
   @Test
   fun `verifyProxyConnectionAge settings should be configurable`() {
-    val options = ProxyOptions(
-      listOf(
-        "--max_connection_age_secs", "3600",
-        "--max_connection_age_grace_secs", "60",
-      ),
-    )
+    val options = ProxyOptions(listOf("--max_connection_age_secs", "3600", "--max_connection_age_grace_secs", "60"))
     options.maxConnectionAgeSecs shouldBe 3600L
     options.maxConnectionAgeGraceSecs shouldBe 60L
   }
