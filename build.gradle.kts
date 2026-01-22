@@ -114,6 +114,10 @@ fun Project.configureKotlin() {
   kotlin {
     jvmToolchain(17)
 
+    compilerOptions {
+      freeCompilerArgs.add("-Xreturn-value-checker=check")
+    }
+
     sourceSets.all {
       listOf(
         "kotlin.time.ExperimentalTime",

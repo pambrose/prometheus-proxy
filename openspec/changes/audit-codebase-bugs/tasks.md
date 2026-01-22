@@ -7,6 +7,11 @@
 - See `findings.md` for detailed bug descriptions
 - All fixes verified with passing test suite
 
+**Section 2 Status:** ✅ **COMPLETED** - 1 bug found and fixed
+
+- A1: Health check used stale backlog values - Fixed with dynamic health checks
+- All fixes verified with passing test suite
+
 ---
 
 ## 1. Proxy Component Review
@@ -28,10 +33,14 @@
 
 ## 2. Agent Component Review
 
-- [ ] 2.1 Review AgentHttpService for HTTP client issues (timeouts, retries, connection pooling)
-- [ ] 2.2 Review AgentGrpcService for gRPC client bugs (reconnection logic, backoff, error handling)
-- [ ] 2.3 Review AgentPathManager for path management issues
-- [ ] 2.4 Review scrape request handling (concurrency limits, timeout handling)
+- [x] 2.1 Review AgentHttpService for HTTP client issues (timeouts, retries, connection pooling)
+- [x] 2.2 Review AgentGrpcService for gRPC client bugs (reconnection logic, backoff, error handling)
+- [x] 2.3 Review AgentPathManager for path management issues
+- [x] 2.4 Review scrape request handling (concurrency limits, timeout handling)
+
+**Bugs Fixed:**
+
+- A1: Health check using stale backlog values in Agent.kt (Medium) - Fixed with dynamic health checks
 
 ## 3. Common Utilities Review
 

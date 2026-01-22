@@ -16,12 +16,13 @@
 
 package io.prometheus
 
+import com.codahale.metrics.health.HealthCheck
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
-import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
 import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
@@ -335,20 +336,26 @@ class Agent(
     super.registerHealthChecks()
     healthCheckRegistry.register(
       "scrape_request_backlog_check",
-      newBacklogHealthCheck(
-        backlogSize = scrapeRequestBacklogSize.load(),
-        size = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize,
-      ),
+      healthCheck {
+        val currentBacklog = scrapeRequestBacklogSize.load()
+        val threshold = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize
+        if (currentBacklog >= threshold)
+          HealthCheck.Result.unhealthy("Scrape request backlog size $currentBacklog >= threshold $threshold")
+        else
+          HealthCheck.Result.healthy()
+      },
     )
-    runBlocking {
-      healthCheckRegistry.register(
-        "http_client_cache_size_check",
-        newBacklogHealthCheck(
-          backlogSize = agentHttpService.httpClientCache.getCacheStats().totalEntries,
-          size = options.maxCacheSize + 1,
-        ),
-      )
-    }
+    healthCheckRegistry.register(
+      "http_client_cache_size_check",
+      healthCheck {
+        val currentSize = runBlocking { agentHttpService.httpClientCache.getCacheStats().totalEntries }
+        val threshold = options.maxCacheSize + 1
+        if (currentSize >= threshold)
+          HealthCheck.Result.unhealthy("HTTP client cache size $currentSize >= threshold $threshold")
+        else
+          HealthCheck.Result.healthy()
+      },
+    )
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) {

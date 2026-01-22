@@ -196,3 +196,111 @@ acceptable since backlog size is for monitoring only.
 | L1 | Low      | ProxyServiceImpl.kt | Only set reason when invalid                    |
 | L2 | Low      | ProxyHttpService.kt | Remove unnecessary sleep                        |
 | L4 | Low      | ProxyPathManager.kt | Add warning for consolidated mismatch           |
+
+---
+
+# Code Audit Findings - Agent Components
+
+## Summary
+
+Reviewed all agent component files for potential bugs, race conditions, and edge cases.
+
+**Files Reviewed:**
+
+- AgentHttpService.kt
+- AgentGrpcService.kt
+- AgentPathManager.kt
+- HttpClientCache.kt
+- AgentConnectionContext.kt
+- Agent.kt
+
+---
+
+## Critical Severity
+
+*None found*
+
+---
+
+## High Severity
+
+*None found*
+
+---
+
+## Medium Severity
+
+### A1: Health check uses stale backlog size
+
+**Location:** `Agent.kt:336-342`
+
+**Description:**
+
+```kotlin
+healthCheckRegistry.register(
+  "scrape_request_backlog_check",
+  newBacklogHealthCheck(
+    backlogSize = scrapeRequestBacklogSize.load(),  // Captured at registration time
+    size = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize,
+  ),
+)
+```
+
+The `backlogSize` parameter is evaluated once at health check registration time, not dynamically when the health check
+runs. This means the health check always compares against the initial backlog size (0), making it ineffective.
+
+**Fix:** Use a supplier/lambda pattern or check if `newBacklogHealthCheck` supports dynamic values. If not, create a
+custom health check that reads the current value.
+
+---
+
+## Low Severity
+
+### A2: Backlog size increment not atomic with channel send
+
+**Location:** `AgentGrpcService.kt:296-297`
+
+**Description:**
+
+```kotlin
+connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
+agent.scrapeRequestBacklogSize += 1
+```
+
+The backlog size increment happens after sending to the channel, not atomically. This could cause brief inconsistencies
+in monitoring. However, since this is only for monitoring and the values are eventually consistent, this is low
+severity.
+
+**Fix:** None required - acceptable for monitoring purposes.
+
+---
+
+## Observations (No Fix Required)
+
+### O4: HttpClientCache cleanup loop
+
+**Location:** `HttpClientCache.kt:54-61`
+
+The cleanup loop runs until the scope is cancelled in `close()`. This is correct behavior - the Agent's shutdown flow
+properly cancels this scope.
+
+### O5: Channel cancellation in AgentConnectionContext
+
+**Location:** `AgentConnectionContext.kt:46-50`
+
+Cancelling channels immediately on disconnect could lose pending scrape results. This is acceptable behavior since
+disconnection means results can't be delivered anyway.
+
+### O6: Proper in-use tracking in HttpClientCache
+
+**Location:** `HttpClientCache.kt:82-93`
+
+The cache properly tracks entries that are in use and only closes them when both marked for close AND not in use.
+
+---
+
+## Fixes to Implement
+
+| ID | Severity | File     | Description                                    |
+|----|----------|----------|------------------------------------------------|
+| A1 | Medium   | Agent.kt | Fix health check to use dynamic backlog values |
