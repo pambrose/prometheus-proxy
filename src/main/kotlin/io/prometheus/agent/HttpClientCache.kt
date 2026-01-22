@@ -23,8 +23,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -48,11 +48,10 @@ internal class HttpClientCache(
   // Use a LinkedHashMap to maintain access order
   private val accessOrder = LinkedHashMap<String, Long>()
   private val accessMutex = Mutex()
-  private val cleanupJob: Job
   private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
   init {
-    cleanupJob = scope.launch {
+    scope.launch {
       while (true) {
         delay(cleanupInterval)
         accessMutex.withLock {
@@ -100,8 +99,13 @@ internal class HttpClientCache(
   ) {
     fun hasAuth() = username.isNotNull() && password.isNotNull()
 
-    // If either the username or password is null, it is considered a no_auth key
-    override fun toString() = if (hasAuth()) "$username:$password" else NO_AUTH
+    override fun toString() = maskedKey()
+
+    // Mask credentials to avoid logging sensitive data
+    internal fun maskedKey() = if (hasAuth()) "***:***" else NO_AUTH
+
+    // Internal key for cache lookup (not logged)
+    internal fun cacheKey() = if (hasAuth()) "$username:$password" else NO_AUTH
 
     companion object {
       internal const val NO_AUTH = "__no_auth__"
@@ -115,24 +119,30 @@ internal class HttpClientCache(
     key: ClientKey,
     clientFactory: () -> HttpClient,
   ): CacheEntry {
-    val keyString = key.toString()
+    val cacheKey = key.cacheKey()
+    val maskedString = key.maskedKey()
     val now = System.currentTimeMillis()
 
     return accessMutex.withLock {
-      cache[keyString]?.let { entry ->
+      cache[cacheKey]?.let { entry ->
         if (isEntryValid(entry, now)) {
           entry.lastAccessedAt = now
-          updateAccessOrder(keyString, now)
-          logger.debug { "Using cached HTTP client for key: $keyString" }
+          updateAccessOrder(cacheKey, now)
+          logger.debug { "Using cached HTTP client for key: $maskedString" }
           entry.onStartWithClient()
           return@withLock entry
         } else {
-          logger.debug { "Removing expired HTTP client for key: $keyString" }
-          removeEntry(keyString)
+          logger.debug { "Removing expired HTTP client for key: $maskedString" }
+          removeEntry(cacheKey)
         }
       }
 
-      createAndCacheClient(keyString, clientFactory, now).apply { onStartWithClient() }
+      createAndCacheClient(
+        cacheKey,
+        maskedString,
+        clientFactory = clientFactory,
+        now = now
+      ).apply { onStartWithClient() }
     }
   }
 
@@ -148,6 +158,7 @@ internal class HttpClientCache(
   // Called with mutex
   private fun createAndCacheClient(
     keyString: String,
+    maskedKey: String,
     clientFactory: () -> HttpClient,
     now: Long,
   ): CacheEntry {
@@ -159,7 +170,7 @@ internal class HttpClientCache(
     val entry = CacheEntry(client, now, now)
     cache[keyString] = entry
     updateAccessOrder(keyString, now)
-    logger.info { "Created and cached HTTP client for key: $keyString" }
+    logger.info { "Created and cached HTTP client for key: $maskedKey" }
     return entry
   }
 
@@ -183,7 +194,9 @@ internal class HttpClientCache(
   private fun evictLeastRecentlyUsed() {
     val lruKey = accessOrder.entries.minByOrNull { it.value }?.key
     if (lruKey != null) {
-      logger.info { "Evicting LRU HTTP client for key: $lruKey" }
+      // Mask the key if it contains credentials (not NO_AUTH)
+      val logKey = if (lruKey != ClientKey.NO_AUTH && ":" in lruKey) "***:***" else lruKey
+      logger.info { "Evicting LRU HTTP client for key: $logKey" }
       removeEntry(lruKey)
     }
   }
@@ -210,22 +223,24 @@ internal class HttpClientCache(
 
   suspend fun close() {
     accessMutex.withLock {
-      cleanupJob.cancel()
+      // Cancel the entire scope
+      scope.cancel()
       cache.values.forEach { it.client.close() }
       cache.clear()
       accessOrder.clear()
     }
   }
 
-  fun getCacheStats(): CacheStats {
-    val now = System.currentTimeMillis()
-    val validEntries = cache.values.count { isEntryValid(it, now) }
-    return CacheStats(
-      totalEntries = cache.size,
-      validEntries = validEntries,
-      expiredEntries = cache.size - validEntries,
-    )
-  }
+  suspend fun getCacheStats(): CacheStats =
+    accessMutex.withLock {
+      val now = System.currentTimeMillis()
+      val validEntries = cache.values.count { isEntryValid(it, now) }
+      CacheStats(
+        totalEntries = cache.size,
+        validEntries = validEntries,
+        expiredEntries = cache.size - validEntries,
+      )
+    }
 
   data class CacheStats(
     val totalEntries: Int,

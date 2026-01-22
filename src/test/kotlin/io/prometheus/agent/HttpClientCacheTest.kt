@@ -332,17 +332,23 @@ class HttpClientCacheTest {
 
   @Test
   fun `should handle client key toString correctly`() {
+    // toString() should mask credentials for security
     val key1 = ClientKey("user", "pass")
-    key1.toString() shouldBe "user:pass"
+    key1.toString() shouldBe "***:***"
+    // cacheKey() returns actual value for internal use
+    key1.cacheKey() shouldBe "user:pass"
 
     val key2 = ClientKey(null, "pass")
     key2.toString() shouldBe NO_AUTH
+    key2.cacheKey() shouldBe NO_AUTH
 
     val key3 = ClientKey("user", null)
     key3.toString() shouldBe NO_AUTH
+    key3.cacheKey() shouldBe NO_AUTH
 
     val key4 = ClientKey(null, null)
     key4.toString() shouldBe NO_AUTH
+    key4.cacheKey() shouldBe NO_AUTH
   }
 
   @Test
