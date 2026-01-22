@@ -38,7 +38,6 @@ import io.prometheus.common.BaseOptions.Companion.HTTP_PREFIX
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
-import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
@@ -294,7 +293,7 @@ internal class AgentGrpcService(
           .collect { grpcRequest: ScrapeRequest ->
             // The actual fetch happens at the other end of the channel, not here.
             logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
-            connectionContext.scrapeRequestsChannel.send { agentHttpService.fetchScrapeUrl(grpcRequest) }
+            connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
             agent.scrapeRequestBacklogSize += 1
           }
       }
@@ -302,29 +301,29 @@ internal class AgentGrpcService(
 
   private suspend fun processScrapeResults(
     agent: Agent,
-    scrapeResultsChannel: Channel<ScrapeResults>,
+    connectionContext: AgentConnectionContext,
     nonChunkedChannel: Channel<ScrapeResponse>,
     chunkedChannel: Channel<ChunkedScrapeResponse>,
   ) = try {
-    for (results: ScrapeResults in scrapeResultsChannel) {
-      val scrapeId = results.srScrapeId
+    connectionContext.scrapeResultsFlow().collect { scrapeResults ->
+      val scrapeId = scrapeResults.srScrapeId
 
-      if (!results.srZipped) {
-        logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${results.srContentAsText.length}" }
-        nonChunkedChannel.send(results.toScrapeResponse())
+      if (!scrapeResults.srZipped) {
+        logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.srContentAsText.length}" }
+        nonChunkedChannel.send(scrapeResults.toScrapeResponse())
         agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
       } else {
-        val zipped = results.srContentAsZipped
+        val zipped = scrapeResults.srContentAsZipped
         val chunkContentSize = options.chunkContentSizeKbs
 
         logger.debug { "Comparing ${zipped.size} and $chunkContentSize" }
 
         if (zipped.size < chunkContentSize) {
           logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
-          nonChunkedChannel.send(results.toScrapeResponse())
+          nonChunkedChannel.send(scrapeResults.toScrapeResponse())
           agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
         } else {
-          results.toScrapeResponseHeader()
+          scrapeResults.toScrapeResponseHeader()
             .also {
               logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapeId " }
               chunkedChannel.send(it)
@@ -383,13 +382,13 @@ internal class AgentGrpcService(
     agent: Agent,
     connectionContext: AgentConnectionContext,
   ) {
-    coroutineScope {
-      val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
-      val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
+    val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
+    val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
 
+    coroutineScope {
       launch(Dispatchers.IO) {
         runCatching {
-          processScrapeResults(agent, connectionContext.scrapeResultsChannel, nonChunkedChannel, chunkedChannel)
+          processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
         }.onFailure { e ->
           if (agent.isRunning)
             Status.fromThrowable(e)

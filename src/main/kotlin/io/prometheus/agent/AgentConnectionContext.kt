@@ -24,15 +24,28 @@ import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import kotlinx.coroutines.flow.consumeAsFlow
 
 internal class AgentConnectionContext : Closeable {
   private var disconnected by atomicBoolean(false)
-  val scrapeRequestsChannel = Channel<ScrapeRequestAction>(UNLIMITED)
-  val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED)
+  private val scrapeRequestActionsChannel = Channel<ScrapeRequestAction>(UNLIMITED)
+  private val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED)
+
+  fun scrapeRequestActionsFlow() = scrapeRequestActionsChannel.consumeAsFlow()
+
+  fun scrapeResultsFlow() = scrapeResultsChannel.consumeAsFlow()
+
+  suspend fun sendScrapeRequestAction(scrapeRequestAction: ScrapeRequestAction) {
+    scrapeRequestActionsChannel.send(scrapeRequestAction)
+  }
+
+  suspend fun sendScrapeResults(scrapeResults: ScrapeResults) {
+    scrapeResultsChannel.send(scrapeResults)
+  }
 
   override fun close() {
     disconnected = true
-    scrapeRequestsChannel.cancel()
+    scrapeRequestActionsChannel.cancel()
     scrapeResultsChannel.cancel()
   }
 

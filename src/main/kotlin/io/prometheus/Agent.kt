@@ -275,12 +275,11 @@ class Agent(
               // Limits the number of concurrent scrapes below
               val semaphore = Semaphore(max)
 
-              // This for stmt is terminated by connectionContext.close()
-              for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
+              connectionContext.scrapeRequestActionsFlow().collect { scrapeRequestAction ->
                 semaphore.withPermit {
                   // The url fetch occurs here during scrapeRequestAction.invoke()
                   val scrapeResponse = scrapeRequestAction.invoke()
-                  connectionContext.scrapeResultsChannel.send(scrapeResponse)
+                  connectionContext.sendScrapeResults(scrapeResponse)
                 }
               }
             }.onFailure { e ->
