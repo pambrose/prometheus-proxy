@@ -304,3 +304,101 @@ The cache properly tracks entries that are in use and only closes them when both
 | ID | Severity | File     | Description                                    |
 |----|----------|----------|------------------------------------------------|
 | A1 | Medium   | Agent.kt | Fix health check to use dynamic backlog values |
+
+---
+
+# Code Audit Findings - Common Utilities
+
+## Summary
+
+Reviewed all common utility files for configuration loading, metrics, health checks, and SSL/TLS handling.
+
+**Files Reviewed:**
+
+- BaseOptions.kt
+- ConfigWrappers.kt
+- Utils.kt
+- EnvVars.kt
+- Constants.kt
+- TypeAliases.kt
+- ScrapeResults.kt
+- AgentMetrics.kt
+- ProxyMetrics.kt
+- SslSettings.kt
+- TrustAllX509TrustManager.kt
+
+---
+
+## Critical Severity
+
+*None found*
+
+---
+
+## High Severity
+
+*None found*
+
+---
+
+## Medium Severity
+
+*None found*
+
+---
+
+## Low Severity
+
+*None found*
+
+---
+
+## Observations (No Fix Required)
+
+### O7: EnvVars integer/long parsing could throw NumberFormatException
+
+**Location:** `EnvVars.kt:83-85`
+
+```kotlin
+fun getEnv(defaultVal: Int) = getenv(name)?.toInt() ?: defaultVal
+fun getEnv(defaultVal: Long) = getenv(name)?.toLong() ?: defaultVal
+```
+
+If an environment variable is set with an invalid numeric value, these will throw NumberFormatException. This is
+acceptable behavior - configuration errors should fail fast and loudly at startup.
+
+### O8: SslSettings not actively used in production
+
+**Location:** `SslSettings.kt`
+
+The file is marked with `@Suppress("unused")` and is only referenced in tests. The `getTrustManager` function could
+throw `NoSuchElementException` if no X509TrustManager is found, but since this code isn't used in production, no fix is
+required.
+
+### O9: TrustAllX509TrustManager is intentionally insecure
+
+**Location:** `TrustAllX509TrustManager.kt`
+
+This trust manager accepts all certificates without validation. This is intentional for testing/development scenarios
+where certificate verification needs to be bypassed. The empty `checkClientTrusted` and `checkServerTrusted`
+implementations are by design.
+
+### O10: Metrics use proper dynamic value collection
+
+**Location:** `AgentMetrics.kt:66-80`, `ProxyMetrics.kt:68-96`
+
+Both metrics classes use `SamplerGaugeCollector` with lambda functions to collect dynamic values. This ensures metrics
+reflect current state rather than captured values.
+
+### O11: Health checks in Proxy use proper dynamic evaluation
+
+**Location:** `Proxy.kt:256-296`
+
+The Proxy's health checks use `newMapHealthCheck` and `healthCheck{}` blocks that evaluate conditions dynamically when
+health checks run, not when registered.
+
+---
+
+## Fixes to Implement
+
+*None required for Section 3*
