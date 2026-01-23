@@ -122,8 +122,8 @@ internal class ScrapeResults(
         }
 
         is IOException -> {
-          logger.warn { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
-          NotFound.value
+          logger.warn(e) { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
+          ServiceUnavailable.value
         }
 
         else -> {

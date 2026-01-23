@@ -102,8 +102,8 @@ internal object ProxyHttpConfig {
   private fun StatusPagesConfig.configureStatusPages() {
     // Catch all
     exception<Throwable> { call, cause ->
-      logger.warn(cause) { " Throwable caught: ${cause.simpleClassName}" }
-      call.respond(NotFound)
+      logger.warn(cause) { "Throwable caught: ${cause.simpleClassName}" }
+      call.respond(HttpStatusCode.InternalServerError)
     }
 
     status(NotFound) { call, cause ->
