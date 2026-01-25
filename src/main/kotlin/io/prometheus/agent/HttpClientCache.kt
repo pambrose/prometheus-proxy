@@ -19,7 +19,7 @@
 package io.prometheus.agent
 
 import com.github.pambrose.common.util.isNotNull
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -221,13 +222,15 @@ internal class HttpClientCache(
     }
   }
 
-  suspend fun close() {
-    accessMutex.withLock {
-      // Cancel the entire scope
-      scope.cancel()
-      cache.values.forEach { it.client.close() }
-      cache.clear()
-      accessOrder.clear()
+  fun close() {
+    runBlocking {
+      accessMutex.withLock {
+        // Cancel the entire scope
+        scope.cancel()
+        cache.values.forEach { it.client.close() }
+        cache.clear()
+        accessOrder.clear()
+      }
     }
   }
 
@@ -249,6 +252,6 @@ internal class HttpClientCache(
   )
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }
