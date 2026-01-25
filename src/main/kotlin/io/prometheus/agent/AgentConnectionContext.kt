@@ -19,21 +19,24 @@
 package io.prometheus.agent
 
 import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
-import io.ktor.utils.io.core.Closeable
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
-import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-internal class AgentConnectionContext : Closeable {
+internal class AgentConnectionContext {
   private var disconnected by atomicBoolean(false)
   private val scrapeRequestActionsChannel = Channel<ScrapeRequestAction>(UNLIMITED)
   private val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED)
+  private val accessMutex = Mutex()
 
-  fun scrapeRequestActionsFlow() = scrapeRequestActionsChannel.consumeAsFlow()
+  fun scrapeRequestActions() = scrapeRequestActionsChannel
 
-  fun scrapeResultsFlow() = scrapeResultsChannel.consumeAsFlow()
+  fun scrapeResults() = scrapeResultsChannel
 
   suspend fun sendScrapeRequestAction(scrapeRequestAction: ScrapeRequestAction) {
     scrapeRequestActionsChannel.send(scrapeRequestAction)
@@ -43,11 +46,22 @@ internal class AgentConnectionContext : Closeable {
     scrapeResultsChannel.send(scrapeResults)
   }
 
-  override fun close() {
-    disconnected = true
-    scrapeRequestActionsChannel.cancel()
-    scrapeResultsChannel.cancel()
+  fun close() {
+    runBlocking {
+      accessMutex.withLock {
+        if (!disconnected) {
+          disconnected = true
+          scrapeRequestActionsChannel.cancel()
+          scrapeResultsChannel.cancel()
+          logger.info { "AgentConnectionContext closed" }
+        }
+      }
+    }
   }
 
   val connected get() = !disconnected
+
+  companion object {
+    private val logger = logger {}
+  }
 }

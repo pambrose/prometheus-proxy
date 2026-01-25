@@ -26,7 +26,7 @@ import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
 import com.google.protobuf.ByteString.copyFrom
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
@@ -74,9 +74,10 @@ internal class AgentGrpcService(
   private val inProcessServerName: String,
 ) {
   private var grpcStarted by atomicBoolean(false)
-  internal var stub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub by notNull()
   private val tracing by lazy { agent.zipkinReporterService.newTracing("grpc_client") }
   private val grpcTracing by lazy { GrpcTracing.create(tracing) }
+
+  internal var grpcStub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub by notNull()
 
   var channel: ManagedChannel by notNull()
 
@@ -167,7 +168,7 @@ internal class AgentGrpcService(
         if (!options.transportFilterDisabled)
           add(AgentClientInterceptor(agent))
       }
-    stub = ProxyServiceGrpcKt.ProxyServiceCoroutineStub(ClientInterceptors.intercept(channel, interceptors))
+    grpcStub = ProxyServiceGrpcKt.ProxyServiceCoroutineStub(ClientInterceptors.intercept(channel, interceptors))
   }
 
   // If successful, will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
@@ -175,9 +176,9 @@ internal class AgentGrpcService(
     runCatching {
       logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
       if (transportFilterDisabled)
-        stub.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE).also { agent.agentId = it.agentId }
+        grpcStub.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE).also { agent.agentId = it.agentId }
       else
-        stub.connectAgent(EMPTY_INSTANCE)
+        grpcStub.connectAgent(EMPTY_INSTANCE)
 
       logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
       agent.metrics { connectCount.labels(agent.launchId, "success").inc() }
@@ -200,7 +201,7 @@ internal class AgentGrpcService(
         hostName = agentHostName
         consolidated = agent.options.consolidated
       }
-    stub.registerAgent(request)
+    grpcStub.registerAgent(request)
       .also { response ->
         agent.markMsgSent()
         if (!response.valid)
@@ -210,7 +211,7 @@ internal class AgentGrpcService(
   }
 
   suspend fun pathMapSize(): Int =
-    stub.pathMapSize(
+    grpcStub.pathMapSize(
       pathMapSizeRequest {
         require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         agentId = agent.agentId
@@ -224,7 +225,7 @@ internal class AgentGrpcService(
     pathVal: String,
     labelsJson: String,
   ): RegisterPathResponse =
-    stub.registerPath(
+    grpcStub.registerPath(
       registerPathRequest {
         require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
@@ -239,7 +240,7 @@ internal class AgentGrpcService(
     }
 
   suspend fun unregisterPathOnProxy(pathVal: String): UnregisterPathResponse =
-    stub.unregisterPath(
+    grpcStub.unregisterPath(
       unregisterPathRequest {
         require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
@@ -261,7 +262,7 @@ internal class AgentGrpcService(
               heartBeatRequest {
                 agentId = anAgentId
               }
-            stub.sendHeartBeat(request)
+            grpcStub.sendHeartBeat(request)
               .apply {
                 agent.markMsgSent()
                 if (!valid) {
@@ -282,20 +283,17 @@ internal class AgentGrpcService(
     agentHttpService: AgentHttpService,
     connectionContext: AgentConnectionContext,
   ) {
-    connectionContext
-      .use {
-        val agentInfo =
-          agentInfo {
-            require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
-            agentId = agent.agentId
-          }
-        stub.readRequestsFromProxy(agentInfo)
-          .collect { grpcRequest: ScrapeRequest ->
-            // The actual fetch happens at the other end of the channel, not here.
-            logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
-            connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
-            agent.scrapeRequestBacklogSize += 1
-          }
+    val agentInfo =
+      agentInfo {
+        require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+        agentId = agent.agentId
+      }
+    grpcStub.readRequestsFromProxy(agentInfo)
+      .collect { grpcRequest: ScrapeRequest ->
+        // The actual fetch happens at the other end of the channel, not here.
+        logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
+        connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
+        agent.scrapeRequestBacklogSize += 1
       }
   }
 
@@ -304,8 +302,8 @@ internal class AgentGrpcService(
     connectionContext: AgentConnectionContext,
     nonChunkedChannel: Channel<ScrapeResponse>,
     chunkedChannel: Channel<ChunkedScrapeResponse>,
-  ) = try {
-    connectionContext.scrapeResultsFlow().collect { scrapeResults ->
+  ) {
+    for (scrapeResults in connectionContext.scrapeResults()) {
       val scrapeId = scrapeResults.srScrapeId
 
       if (!scrapeResults.srZipped) {
@@ -373,9 +371,6 @@ internal class AgentGrpcService(
       agent.markMsgSent()
       agent.scrapeRequestBacklogSize -= 1
     }
-  } finally {
-    nonChunkedChannel.close()
-    chunkedChannel.close()
   }
 
   suspend fun writeResponsesToProxyUntilDisconnected(
@@ -384,48 +379,47 @@ internal class AgentGrpcService(
   ) {
     val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
     val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
+    try {
+      coroutineScope {
+        // Ends by connectionContext.close()
+        launch(Dispatchers.IO) {
+          runCatching {
+            processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
+          }.onFailure { e ->
+            if (agent.isRunning)
+              Status.fromThrowable(e)
+                .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
+          }
+        }
 
-    coroutineScope {
-      launch(Dispatchers.IO) {
-        runCatching {
-          processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
-        }.onFailure { e ->
-          if (agent.isRunning)
-            Status.fromThrowable(e)
-              .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
+        // Ends by disconnection from server
+        launch(Dispatchers.IO) {
+          runCatching {
+            grpcStub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
+          }.onFailure { e ->
+            if (agent.isRunning)
+              Status.fromThrowable(e)
+                .apply { logger.error(e) { "writeResponsesToProxy(): ${exceptionDetails(e)}" } }
+          }
+        }
+
+        launch(Dispatchers.IO) {
+          runCatching {
+            grpcStub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
+          }.onFailure { e ->
+            if (agent.isRunning)
+              Status.fromThrowable(e)
+                .apply { logger.error(e) { "writeChunkedResponsesToProxy(): ${exceptionDetails(e)}" } }
+          }
         }
       }
-
-      connectionContext
-        .use {
-          coroutineScope {
-            launch(Dispatchers.IO) {
-              runCatching {
-                stub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
-              }.onFailure { e ->
-                if (agent.isRunning)
-                  Status.fromThrowable(e)
-                    .apply { logger.error(e) { "writeResponsesToProxy(): ${exceptionDetails(e)}" } }
-              }
-            }
-
-            launch(Dispatchers.IO) {
-              runCatching {
-                stub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
-              }.onFailure { e ->
-                if (agent.isRunning)
-                  Status.fromThrowable(e)
-                    .apply { logger.error(e) { "writeChunkedResponsesToProxy(): ${exceptionDetails(e)}" } }
-              }
-            }
-          }
-
-          logger.info { "Disconnected from proxy at ${agent.proxyHost}" }
-        }
+    } finally {
+      nonChunkedChannel.close()
+      chunkedChannel.close()
     }
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

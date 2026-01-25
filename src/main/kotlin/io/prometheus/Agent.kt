@@ -29,7 +29,7 @@ import com.github.pambrose.common.util.hostInfo
 import com.github.pambrose.common.util.randomId
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
@@ -237,31 +237,45 @@ class Agent(
         grpcService.registerAgent(initialConnectionLatch)
         pathManager.registerPaths()
 
+        // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
         val connectionContext = AgentConnectionContext()
 
         coroutineScope {
+          // Ends on disconnect from server
           launch(Dispatchers.IO) {
             runCatching {
               grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
-                Status.fromThrowable(e).apply { logger.error(e) { "readRequestsFromProxy(): ${exceptionDetails(e)}" } }
+                Status.fromThrowable(e)
+                  .apply { logger.error(e) { "readRequestsFromProxy(): ${exceptionDetails(e)}" } }
+            }.onSuccess {
+              logger.info { "readRequestsFromProxy() completed" }
             }
+          }.apply {
+            invokeOnCompletion { connectionContext.close() }
           }
 
+          // Ends on !isRunning || !connectionContext.connected (which is connectionContext.closed())
           launch(Dispatchers.IO) {
             runCatching {
               startHeartBeat(connectionContext)
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
-                Status.fromThrowable(e).apply { logger.error(e) { "startHeartBeat(): ${exceptionDetails(e)}" } }
+                Status.fromThrowable(e)
+                  .apply { logger.error(e) { "startHeartBeat(): ${exceptionDetails(e)}" } }
+            }.onSuccess {
+              logger.info { "startHeartBeat() completed" }
             }
+          }.apply {
+            invokeOnCompletion { connectionContext.close() }
           }
 
-          // This exceptionHandler is not necessary
+          // Ends on disconnect from server
           launch(Dispatchers.IO) {
             runCatching {
               grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
+              logger.info { "writeResponsesToProxyUntilDisconnected() completed" }
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
                 Status.fromThrowable(e)
@@ -269,6 +283,7 @@ class Agent(
             }
           }
 
+          // Ends on disconnect from server
           launch(Dispatchers.IO) {
             runCatching {
               val max = options.maxConcurrentHttpClients
@@ -276,7 +291,7 @@ class Agent(
               // Limits the number of concurrent scrapes below
               val semaphore = Semaphore(max)
 
-              connectionContext.scrapeRequestActionsFlow().collect { scrapeRequestAction ->
+              for (scrapeRequestAction in connectionContext.scrapeRequestActions()) {
                 semaphore.withPermit {
                   // The url fetch occurs here during scrapeRequestAction.invoke()
                   val scrapeResponse = scrapeRequestAction.invoke()
@@ -290,6 +305,7 @@ class Agent(
             }
           }
         }
+        logger.info { "connectToProxy() completed" }
       }
     }
 
@@ -298,6 +314,7 @@ class Agent(
         runCatching {
           runBlocking {
             connectToProxy()
+            logger.info { "Disconnected from proxy at $proxyHost" }
           }
         }.onFailure { e ->
           when (e) {
@@ -313,9 +330,9 @@ class Agent(
               logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
             }
 
-            // Catch anything else to avoid exiting retry loop
+            // Catch anything else to avoid exiting the retry loop
             else -> {
-              logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
+              logger.warn(e) { "Throwable caught ${e.simpleClassName} ${e.message}" }
             }
           }
         }
@@ -431,6 +448,7 @@ class Agent(
 
   override fun shutDown() {
     grpcService.shutDown()
+    agentHttpService.close()
     super.shutDown()
   }
 
@@ -444,7 +462,7 @@ class Agent(
     }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
 
     @JvmStatic
     fun main(args: Array<String>) {

@@ -24,7 +24,6 @@ import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
-import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -43,7 +42,6 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
-import io.ktor.utils.io.core.Closeable
 import io.prometheus.Agent
 import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.ScrapeResults
@@ -52,13 +50,12 @@ import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
 import io.prometheus.grpc.ScrapeRequest
-import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentHttpService(
   val agent: Agent,
-) : Closeable {
+) {
   internal val httpClientCache =
     agent.run {
       HttpClientCache(
@@ -232,7 +229,7 @@ internal class AgentHttpService(
       }
     }
 
-  override fun close() {
+  fun close() {
     httpClientCache.close()
   }
 
