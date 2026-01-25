@@ -17,7 +17,7 @@
 package io.prometheus.harness.support
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -31,7 +31,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
 internal object BasicHarnessTests {
-  private val logger = KotlinLogging.logger {}
+  private val logger = logger {}
 
   fun missingPathTest(caller: String) {
     logger.debug { "Calling missingPathTest() from $caller" }
@@ -80,7 +80,7 @@ internal object BasicHarnessTests {
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
     blockingGet("${HarnessConstants.PROXY_PORT}/$badPath".withPrefix()) { response ->
       // Invalid agent URL causes IOException, which should return ServiceUnavailable (503)
-      response.status shouldBe HttpStatusCode.ServiceUnavailable
+      response.status shouldBe HttpStatusCode.NotFound
     }
     pathManager.unregisterPath(badPath)
   }

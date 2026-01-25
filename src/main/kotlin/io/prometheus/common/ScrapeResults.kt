@@ -21,7 +21,7 @@ package io.prometheus.common
 import com.github.pambrose.common.util.EMPTY_BYTE_ARRAY
 import com.github.pambrose.common.util.simpleClassName
 import com.google.protobuf.ByteString
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.http.HttpStatusCode.Companion.RequestTimeout
@@ -88,7 +88,7 @@ internal class ScrapeResults(
     }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
 
     fun ScrapeResponse.toScrapeResults() =
       ScrapeResults(
@@ -123,7 +123,7 @@ internal class ScrapeResults(
 
         is IOException -> {
           logger.warn(e) { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
-          ServiceUnavailable.value
+          NotFound.value
         }
 
         else -> {
