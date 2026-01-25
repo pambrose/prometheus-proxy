@@ -16,7 +16,7 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.misc
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import io.kotest.matchers.comparables.shouldBeGreaterThan
@@ -25,6 +25,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.prometheus.common.ConfigVals
 import io.prometheus.common.Utils.lambda
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -34,23 +35,15 @@ import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 
-class AdminDefaultPathTest {
-  private val agentConfigVals = agent.agentConfigVals
-  private val proxyConfigVals = proxy.proxyConfigVals
+class AdminNonDefaultPathTest {
+  private val proxyConfigVals: ConfigVals.Proxy2 = proxy.configVals.proxy
 
   @Test
   fun proxyPingPathTest() {
     proxyConfigVals.admin.apply {
-      blockingGet("$port/$pingPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText() shouldStartWith "pong"
-      }
-    }
-  }
+      port shouldBe 8099
+      pingPath shouldBe "pingPath2"
 
-  @Test
-  fun agentPingPathTest() {
-    agentConfigVals.admin.apply {
       blockingGet("$port/$pingPath".withPrefix()) { response ->
         response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldStartWith "pong"
@@ -60,17 +53,10 @@ class AdminDefaultPathTest {
 
   @Test
   fun proxyVersionPathTest() {
-    agentConfigVals.admin.apply {
-      blockingGet("$port/$versionPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText() shouldContain "version"
-      }
-    }
-  }
+    proxyConfigVals.admin.apply {
+      port shouldBe 8099
+      versionPath shouldBe "versionPath2"
 
-  @Test
-  fun agentVersionPathTest() {
-    agentConfigVals.admin.apply {
       blockingGet("$port/$versionPath".withPrefix()) { response ->
         response.status shouldBe HttpStatusCode.OK
         response.bodyAsText() shouldContain "version"
@@ -81,6 +67,8 @@ class AdminDefaultPathTest {
   @Test
   fun proxyHealthCheckPathTest() {
     proxyConfigVals.admin.apply {
+      healthCheckPath shouldBe "healthCheckPath2"
+
       blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
         response.status shouldBe HttpStatusCode.OK
         response.bodyAsText().length shouldBeGreaterThan 10
@@ -89,26 +77,10 @@ class AdminDefaultPathTest {
   }
 
   @Test
-  fun agentHealthCheckPathTest() {
-    agentConfigVals.admin.apply {
-      blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
-        response.bodyAsText().length shouldBeGreaterThan 10
-      }
-    }
-  }
-
-  @Test
   fun proxyThreadDumpPathTest() {
     proxyConfigVals.admin.apply {
-      blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
-        response.bodyAsText().length shouldBeGreaterThan 10
-      }
-    }
-  }
+      threadDumpPath shouldBe "threadDumpPath2"
 
-  @Test
-  fun agentThreadDumpPathTest() {
-    agentConfigVals.admin.apply {
       blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
         response.bodyAsText().length shouldBeGreaterThan 10
       }
@@ -120,7 +92,18 @@ class AdminDefaultPathTest {
     @BeforeAll
     fun setUp() =
       setupProxyAndAgent(
-        proxySetup = lambda { startProxy(adminEnabled = true) },
+        proxySetup = lambda {
+          startProxy(
+            adminEnabled = true,
+            args = listOf(
+              "-Dproxy.admin.port=8099",
+              "-Dproxy.admin.pingPath=pingPath2",
+              "-Dproxy.admin.versionPath=versionPath2",
+              "-Dproxy.admin.healthCheckPath=healthCheckPath2",
+              "-Dproxy.admin.threadDumpPath=threadDumpPath2",
+            ),
+          )
+        },
         agentSetup = lambda { startAgent(adminEnabled = true) },
       )
 

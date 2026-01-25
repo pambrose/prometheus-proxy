@@ -16,7 +16,7 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.misc
 
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions

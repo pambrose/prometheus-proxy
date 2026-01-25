@@ -16,7 +16,7 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus
+package io.prometheus.misc
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
 import io.kotest.matchers.shouldBe
