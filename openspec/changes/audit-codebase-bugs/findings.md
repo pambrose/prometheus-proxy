@@ -549,3 +549,322 @@ for monitoring and will be eventually consistent.
 | ID | Severity | File                | Description                                          |
 |----|----------|---------------------|------------------------------------------------------|
 | L6 | Low      | ProxyServiceImpl.kt | Only set reason when invalid in registerPathResponse |
+
+---
+
+# Code Audit Findings - Resource Management
+
+## Summary
+
+Reviewed resource management including connection lifecycles, resource leaks, and shutdown sequences.
+
+**Areas Reviewed:**
+
+- Connection lifecycle management (gRPC channels, HTTP clients, servers)
+- Resource cleanup (streams, channels, sockets)
+- Shutdown sequences (Agent, Proxy, services)
+
+---
+
+## Critical Severity
+
+*None found*
+
+---
+
+## High Severity
+
+*None found*
+
+---
+
+## Medium Severity
+
+### R1: AgentHttpService not closed during Agent shutdown
+
+**Location:** `Agent.kt:432-435`
+
+**Description:**
+
+```kotlin
+override fun shutDown() {
+  grpcService.shutDown()
+  super.shutDown()
+}
+```
+
+The `agentHttpService.close()` method is never called during Agent shutdown. The HttpClientCache inside AgentHttpService
+has:
+
+1. A background coroutine that periodically cleans up expired entries - this would continue running
+2. HTTP clients in the cache that need to be closed
+
+**Fix:** Add `runBlocking { agentHttpService.close() }` to the shutDown method.
+
+---
+
+## Low Severity
+
+*None found*
+
+---
+
+## Observations (No Fix Required)
+
+### O19: Proper gRPC server shutdown in ProxyGrpcService
+
+**Location:** `ProxyGrpcService.kt:132-136`
+
+```kotlin
+override fun shutDown() {
+  if (proxy.isZipkinEnabled)
+    tracing.close()
+  grpcServer.shutdownGracefully(2.seconds)
+}
+```
+
+The gRPC server uses graceful shutdown with a timeout, allowing in-flight requests to complete.
+
+### O20: Proper gRPC channel shutdown in AgentGrpcService
+
+**Location:** `AgentGrpcService.kt:127-132`
+
+```kotlin
+fun shutDown() {
+  if (agent.isZipkinEnabled)
+    tracing.close()
+  if (grpcStarted)
+    channel.shutdownNow()
+}
+```
+
+The gRPC channel is properly shut down, and tracing is closed if enabled.
+
+### O21: Proper HTTP server shutdown in ProxyHttpService
+
+**Location:** `ProxyHttpService.kt:70-75`
+
+```kotlin
+override fun shutDown() {
+  if (proxy.isZipkinEnabled)
+    tracing.close()
+  httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
+}
+```
+
+The HTTP server is stopped with proper grace and timeout periods.
+
+### O22: HttpClientCache properly closes resources
+
+**Location:** `HttpClientCache.kt:224-231`
+
+```kotlin
+override fun close() {
+  runBlocking {
+    accessMutex.withLock {
+      scope.cancel()
+      cache.values.forEach { it.client.close() }
+      cache.clear()
+      accessOrder.clear()
+    }
+  }
+}
+```
+
+The close method properly cancels the background coroutine scope and closes all cached HTTP clients.
+
+### O23: AgentConnectionContext properly cancels channels
+
+**Location:** `AgentConnectionContext.kt:46-50`
+
+```kotlin
+override fun close() {
+  disconnected = true
+  scrapeRequestActionsChannel.cancel()
+  scrapeResultsChannel.cancel()
+}
+```
+
+Both channels are cancelled when the connection context is closed.
+
+### O24: SslSettings uses try-with-resources for FileInputStream
+
+**Location:** `SslSettings.kt:35-38`
+
+```kotlin
+FileInputStream(fileName).use { keyStoreFile ->
+  val keyStorePassword = password.toCharArray()
+  load(keyStoreFile, keyStorePassword)
+}
+```
+
+The FileInputStream is properly closed via the `use` block.
+
+---
+
+## Fixes to Implement
+
+| ID | Severity | File     | Description                                  |
+|----|----------|----------|----------------------------------------------|
+| R1 | Medium   | Agent.kt | Close agentHttpService during Agent shutdown |
+
+---
+
+# Code Audit Findings - Error Handling
+
+## Summary
+
+Reviewed error handling patterns including exception handling, error propagation across component boundaries, and retry
+logic for idempotency issues.
+
+**Areas Reviewed:**
+
+- Exception handling patterns (swallowed exceptions, improper logging)
+- Error propagation across gRPC and HTTP boundaries
+- Retry logic and idempotency concerns
+- Timeout and cancellation handling
+
+---
+
+## Critical Severity
+
+*None found*
+
+---
+
+## High Severity
+
+### E1: IOException maps to 404 instead of 503
+
+**Location:** `ScrapeResults.kt:124-127`
+
+**Description:**
+
+```kotlin
+is IOException -> {
+  logger.warn { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
+  NotFound.value  // WRONG: Should be ServiceUnavailable
+}
+```
+
+An `IOException` typically indicates network issues or connection failures, not that a resource doesn't exist. Returning
+404 (Not Found) is semantically incorrect and misleading to Prometheus. This should return 503 (Service Unavailable).
+
+**Fix:** Changed `NotFound.value` to `ServiceUnavailable.value` and added exception parameter to logger.
+
+---
+
+## Medium Severity
+
+*None found requiring fixes beyond observations*
+
+---
+
+## Low Severity
+
+### E2: Exception handler returns 404 instead of 500
+
+**Location:** `ProxyHttpConfig.kt:102-107`
+
+**Description:**
+
+```kotlin
+exception<Throwable> { call, cause ->
+  logger.warn(cause) { " Throwable caught: ${cause.simpleClassName}" }
+  call.respond(NotFound)  // WRONG: Should be InternalServerError
+}
+```
+
+All unexpected exceptions result in a 404 response, which masks actual server errors. A 500 (Internal Server Error)
+would be more appropriate for unexpected exceptions. This could hide real server issues from monitoring systems.
+
+**Fix:** Changed `call.respond(NotFound)` to `call.respond(HttpStatusCode.InternalServerError)`.
+
+### E3: Missing exception parameter in logger calls
+
+**Location:** `Agent.kt:313, 318`
+
+**Description:**
+
+```kotlin
+is StatusException -> {
+  logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
+}
+// ...
+else -> {
+  logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
+}
+```
+
+These exceptions are logged without passing the exception as the first parameter, causing full stack traces to be lost.
+This limits debugging capability for connection and unexpected errors.
+
+**Fix:** Changed to `logger.warn(e) { ... }` to include full stack traces.
+
+---
+
+## Observations (No Fix Required)
+
+### O25: Conditional exception logging during shutdown
+
+**Location:** `Agent.kt:246-290`, `AgentGrpcService.kt:390-419`
+
+Multiple places use the pattern:
+
+```kotlin
+.onFailure { e ->
+  if (agent.isRunning)
+    logger.error(e) { "..." }
+}
+```
+
+Exceptions are only logged if the agent/proxy is still running. During shutdown, exceptions are silently ignored. This
+is intentional to avoid noisy logs during expected shutdown scenarios, but could make debugging shutdown-related issues
+harder.
+
+### O26: Error propagation in gRPC Flow collection
+
+**Location:** `ProxyServiceImpl.kt:171-186, 188-239`
+
+Errors in `writeResponsesToProxy()` and `writeChunkedResponsesToProxy()` are caught and logged but always return
+`EMPTY_INSTANCE`. Callers cannot distinguish between successful and failed operations. This is by design for gRPC
+streaming where the response is already being sent.
+
+### O27: Channel close race condition potential
+
+**Location:** `AgentConnectionContext.kt:46-50`
+
+When connection closes, channels are cancelled immediately. Any pending scrape request actions are dropped without
+execution. This is acceptable since disconnection means results can't be delivered anyway.
+
+### O28: Scrape response after timeout is dropped
+
+**Location:** `ProxyHttpRoutes.kt:207-229`
+
+If proxy times out waiting for agent response, the request is removed from the map. If agent later sends a response, it
+is dropped with an error log. This is expected behavior but could cause confusion when debugging timing issues.
+
+### O29: Path registration not idempotent on reconnection
+
+**Location:** `AgentPathManager.kt:66-80`, `ProxyPathManager.kt:58-90`
+
+When an agent reconnects, paths are cleared locally and re-registered with new pathIds. This is by design - each
+connection gets fresh path registrations. Old paths from disconnected agents are cleaned up by
+AgentContextCleanupService.
+
+### O30: Retry logic uses exponential backoff
+
+**Location:** `AgentHttpService.kt:207-220`
+
+HTTP client properly uses Ktor's `HttpRequestRetry` plugin with exponential backoff and configurable max retries. Retry
+count is tracked via header for debugging.
+
+---
+
+## Fixes Implemented
+
+| ID | Severity | File               | Description                                  |
+|----|----------|--------------------|----------------------------------------------|
+| E1 | High     | ScrapeResults.kt   | IOException returns 503 instead of 404       |
+| E2 | Low      | ProxyHttpConfig.kt | Exception handler returns 500 instead of 404 |
+| E3 | Low      | Agent.kt           | Added exception parameter to logger calls    |

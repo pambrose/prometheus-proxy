@@ -26,6 +26,20 @@
 - Synchronization mechanisms correctly implemented
 - No deadlock potential identified
 
+**Section 5 Status:** ✅ **COMPLETED** - 1 bug found and fixed
+
+- R1: AgentHttpService not closed during Agent shutdown - Fixed
+- All other resource lifecycles properly managed
+- Shutdown sequences correctly implemented
+
+**Section 6 Status:** ✅ **COMPLETED** - 3 bugs found and fixed
+
+- E1: IOException mapped to 404 instead of 503 in ScrapeResults.kt - Fixed
+- E2: Exception handler returned 404 instead of 500 in ProxyHttpConfig.kt - Fixed
+- E3: Missing exception parameter in logger calls in Agent.kt - Fixed
+- Error propagation patterns documented as observations
+- Retry logic reviewed with no issues found
+
 ---
 
 ## 1. Proxy Component Review
@@ -89,15 +103,34 @@
 
 ## 5. Resource Management
 
-- [ ] 5.1 Review connection lifecycle (proper close/cleanup)
-- [ ] 5.2 Check for resource leaks (streams, channels, sockets)
-- [ ] 5.3 Review shutdown sequences for proper cleanup
+- [x] 5.1 Review connection lifecycle (proper close/cleanup)
+- [x] 5.2 Check for resource leaks (streams, channels, sockets)
+- [x] 5.3 Review shutdown sequences for proper cleanup
+
+**Bugs Fixed:**
+
+- R1: AgentHttpService not closed during Agent shutdown (Medium) - Fixed by adding
+  `runBlocking { agentHttpService.close() }` to Agent.shutDown()
+
+**Findings:**
+
+- gRPC servers use graceful shutdown with timeout
+- HTTP servers properly stopped with grace period
+- HttpClientCache properly cancels scope and closes clients
+- Channels properly cancelled on disconnect
+- FileInputStream uses try-with-resources
 
 ## 6. Error Handling
 
-- [ ] 6.1 Review exception handling patterns (swallowed exceptions, improper logging)
-- [ ] 6.2 Check error propagation across component boundaries
-- [ ] 6.3 Review retry logic for idempotency issues
+- [x] 6.1 Review exception handling patterns (swallowed exceptions, improper logging)
+- [x] 6.2 Check error propagation across component boundaries
+- [x] 6.3 Review retry logic for idempotency issues
+
+**Bugs Fixed:**
+
+- E1: IOException mapped to 404 instead of 503 in ScrapeResults.kt (High) - Fixed
+- E2: Exception handler returned 404 instead of 500 in ProxyHttpConfig.kt (Low) - Fixed
+- E3: Missing exception parameter in logger calls in Agent.kt (Low) - Fixed
 
 ## 7. Bug Fixes and Testing
 
