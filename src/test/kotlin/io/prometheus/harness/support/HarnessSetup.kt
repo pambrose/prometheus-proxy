@@ -17,7 +17,7 @@
 package io.prometheus.harness.support
 
 import com.github.pambrose.common.util.simpleClassName
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
@@ -25,13 +25,13 @@ import io.prometheus.common.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlin.properties.Delegates
+import kotlin.properties.Delegates.notNull
 import kotlin.time.Duration.Companion.seconds
 
 open class HarnessSetup {
-  private val logger = KotlinLogging.logger {}
-  protected var proxy: Proxy by Delegates.notNull()
-  protected var agent: Agent by Delegates.notNull()
+  private val logger = logger {}
+  protected var proxy: Proxy by notNull()
+  protected var agent: Agent by notNull()
 
   protected fun setupProxyAndAgent(
     proxySetup: () -> Proxy,

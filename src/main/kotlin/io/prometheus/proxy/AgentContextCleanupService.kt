@@ -23,7 +23,7 @@ import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.Utils.lambda
@@ -66,6 +66,6 @@ internal class AgentContextCleanupService(
     }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

@@ -21,6 +21,7 @@ package io.prometheus.proxy
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import java.util.concurrent.ConcurrentMap
 
 internal class AgentContextManager(
@@ -60,6 +61,6 @@ internal class AgentContextManager(
       }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

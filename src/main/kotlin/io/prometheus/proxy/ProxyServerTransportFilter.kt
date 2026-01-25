@@ -20,7 +20,7 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GrpcDsl.attributes
 import com.github.pambrose.common.util.isNotNull
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
@@ -52,7 +52,7 @@ internal class ProxyServerTransportFilter(
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
     internal const val AGENT_ID = "agent-id"
     private const val REMOTE_ADDR = "remote-addr"
     internal val AGENT_ID_KEY: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)

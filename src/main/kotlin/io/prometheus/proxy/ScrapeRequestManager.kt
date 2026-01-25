@@ -19,7 +19,7 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.Maps.newConcurrentMap
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.ScrapeResults
 import java.util.concurrent.ConcurrentMap
 
@@ -52,6 +52,6 @@ internal class ScrapeRequestManager {
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

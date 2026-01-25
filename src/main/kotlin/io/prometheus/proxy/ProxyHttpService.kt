@@ -22,7 +22,7 @@ import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.google.common.util.concurrent.MoreExecutors
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine.Configuration
 import io.ktor.server.engine.connector
@@ -77,6 +77,6 @@ internal class ProxyHttpService(
   override fun toString() = toStringElements { add("port", httpPort) }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

@@ -24,7 +24,7 @@ import com.github.pambrose.common.dsl.KtorDsl.httpClient
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -74,7 +74,7 @@ class ProxyCallTestArgs(
 )
 
 internal object HarnessTests {
-  private val logger = KotlinLogging.logger {}
+  private val logger = logger {}
   private val contentMap = mutableMapOf<Int, String>()
 
   suspend fun timeoutTest(

@@ -20,7 +20,7 @@ package io.prometheus.harness.support
 
 import com.github.pambrose.common.util.getBanner
 import io.github.oshai.kotlinlogging.KLogger
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
@@ -64,7 +64,7 @@ object CustomEnumSerializer : KSerializer<MyEnum> {
 }
 
 object TestUtils {
-  private val logger = KotlinLogging.logger {}
+  private val logger = logger {}
 
   @JvmStatic
   fun main(args: Array<String>) {

@@ -31,7 +31,7 @@ import com.github.pambrose.common.utils.TlsUtils.buildServerTlsContext
 import com.github.pambrose.common.utils.shutdownGracefully
 import com.github.pambrose.common.utils.shutdownWithJvm
 import com.google.common.util.concurrent.MoreExecutors
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
@@ -147,6 +147,6 @@ internal class ProxyGrpcService(
     }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

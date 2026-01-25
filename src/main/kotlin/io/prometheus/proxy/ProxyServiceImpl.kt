@@ -21,7 +21,7 @@ package io.prometheus.proxy
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.google.protobuf.Empty
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Status
 import io.prometheus.Proxy
 import io.prometheus.agent.RequestFailureException
@@ -239,7 +239,7 @@ internal class ProxyServiceImpl(
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
     private val PATH_ID_GENERATOR = AtomicLong(0L)
     internal const val UNKNOWN_ADDRESS = "Unknown"
   }

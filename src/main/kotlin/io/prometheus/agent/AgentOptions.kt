@@ -20,6 +20,7 @@ package io.prometheus.agent
 
 import com.beust.jcommander.Parameter
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.ConfigVals
@@ -253,6 +254,6 @@ class AgentOptions(
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

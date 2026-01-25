@@ -21,7 +21,7 @@ package io.prometheus.agent
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import com.google.common.collect.Maps.newConcurrentMap
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
@@ -99,7 +99,7 @@ internal class AgentPathManager(
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
     private const val NAME = "name"
     private const val PATH = "path"
     private const val URL = "url"

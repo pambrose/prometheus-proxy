@@ -17,7 +17,7 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.util.simpleClassName
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -45,7 +45,7 @@ import io.prometheus.Proxy
 import org.slf4j.event.Level
 
 internal object ProxyHttpConfig {
-  private val logger = KotlinLogging.logger {}
+  private val logger = logger {}
 
   fun Application.configureKtorServer(
     proxy: Proxy,

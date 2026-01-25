@@ -19,7 +19,7 @@ package io.prometheus.proxy
 import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.unzip
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders
@@ -55,7 +55,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 object ProxyHttpRoutes {
-  private val logger = KotlinLogging.logger {}
+  private val logger = logger {}
   private val format = Json { prettyPrint = true }
 
   fun Application.configureHttpRoutes(proxy: Proxy) {

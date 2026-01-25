@@ -18,7 +18,7 @@
 
 package io.prometheus.proxy
 
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.matchers.shouldBe
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -29,7 +29,7 @@ import io.prometheus.Proxy
 import org.junit.jupiter.api.Test
 
 class ProxyUtilsTest {
-  private val logger = KotlinLogging.logger {}
+  private val logger = logger {}
 
   @Test
   fun `invalidAgentContextResponse should set correct status and message`() {

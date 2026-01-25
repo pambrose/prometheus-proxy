@@ -19,7 +19,7 @@
 package io.prometheus.proxy
 
 import com.beust.jcommander.Parameter
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.AGENT_PORT
@@ -191,6 +191,6 @@ class ProxyOptions(
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

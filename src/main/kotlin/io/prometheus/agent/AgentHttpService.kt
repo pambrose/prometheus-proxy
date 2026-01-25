@@ -25,6 +25,7 @@ import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpRequestRetry
@@ -42,6 +43,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.core.Closeable
 import io.prometheus.Agent
 import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.ScrapeResults
@@ -50,12 +52,13 @@ import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
 import io.prometheus.grpc.ScrapeRequest
+import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 internal class AgentHttpService(
   val agent: Agent,
-) {
+) : Closeable {
   internal val httpClientCache =
     agent.run {
       HttpClientCache(
@@ -229,12 +232,12 @@ internal class AgentHttpService(
       }
     }
 
-  suspend fun close() {
+  override fun close() {
     httpClientCache.close()
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
     private const val INVALID_PATH_MSG = "invalid_path"
     private const val SUCCESS_MSG = "success"
     private const val UNSUCCESSFUL_MSG = "unsuccessful"
