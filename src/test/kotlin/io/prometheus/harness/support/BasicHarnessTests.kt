@@ -99,7 +99,7 @@ internal object BasicHarnessTests {
       val mutex = Mutex()
       val jobs =
         List(HarnessConstants.REPS) { i ->
-          launch(Dispatchers.Default + exceptionHandler(logger)) {
+          launch(Dispatchers.IO + exceptionHandler(logger)) {
             val path = "test-$i}"
             val url = "${HarnessConstants.PROXY_PORT}/$path".withPrefix()
             mutex.withLock { paths += path }
@@ -119,7 +119,7 @@ internal object BasicHarnessTests {
     withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
       val jobs =
         List(paths.size) {
-          launch(Dispatchers.Default + exceptionHandler(logger)) {
+          launch(Dispatchers.IO + exceptionHandler(logger)) {
             pathManager.unregisterPath(paths[it])
           }
         }

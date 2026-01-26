@@ -27,6 +27,7 @@ import io.ktor.network.sockets.SocketTimeoutException
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.grpc.scrapeResponse
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Test
@@ -260,7 +261,7 @@ class ScrapeResultsTest {
       try {
         withTimeout(1) {
           // Use delay instead of Thread.sleep to properly suspend and timeout
-          kotlinx.coroutines.delay(1000)
+          delay(1000)
         }
         null
       } catch (e: Exception) {

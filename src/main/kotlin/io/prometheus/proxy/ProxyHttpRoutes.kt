@@ -27,7 +27,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.formUrlEncode
 import io.ktor.http.isSuccess
 import io.ktor.http.withCharset
-import io.ktor.server.application.Application
 import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.header
 import io.ktor.server.request.path
@@ -36,7 +35,6 @@ import io.ktor.server.response.header
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
-import io.ktor.server.routing.routing
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
@@ -58,13 +56,7 @@ object ProxyHttpRoutes {
   private val logger = logger {}
   private val format = Json { prettyPrint = true }
 
-  fun Application.configureHttpRoutes(proxy: Proxy) {
-    routing {
-      handleRequests(proxy)
-    }
-  }
-
-  private fun Routing.handleRequests(proxy: Proxy) {
+  fun Routing.handleRequests(proxy: Proxy) {
     //      get("/__test__") {
     //        delay(30.seconds)
     //        call.respondWith("Test value", Plain, OK)

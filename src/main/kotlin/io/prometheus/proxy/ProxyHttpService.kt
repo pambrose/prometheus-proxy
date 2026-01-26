@@ -27,10 +27,11 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine.Configuration
 import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.routing.routing
 import io.prometheus.Proxy
 import io.prometheus.common.Utils.lambda
 import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
-import io.prometheus.proxy.ProxyHttpRoutes.configureHttpRoutes
+import io.prometheus.proxy.ProxyHttpRoutes.handleRequests
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit.SECONDS
 
@@ -56,7 +57,10 @@ internal class ProxyHttpService(
   private val httpServer =
     embeddedServer(factory = CIO, configure = getConfig(httpPort)) {
       configureKtorServer(proxy, isTestMode)
-      configureHttpRoutes(proxy)
+
+      routing {
+        handleRequests(proxy)
+      }
     }
 
   init {

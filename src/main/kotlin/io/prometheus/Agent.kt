@@ -249,8 +249,6 @@ class Agent(
               if (grpcService.agent.isRunning)
                 Status.fromThrowable(e)
                   .apply { logger.error(e) { "readRequestsFromProxy(): ${exceptionDetails(e)}" } }
-            }.onSuccess {
-              logger.info { "readRequestsFromProxy() completed" }
             }
           }.apply {
             invokeOnCompletion { connectionContext.close() }
@@ -264,8 +262,6 @@ class Agent(
               if (grpcService.agent.isRunning)
                 Status.fromThrowable(e)
                   .apply { logger.error(e) { "startHeartBeat(): ${exceptionDetails(e)}" } }
-            }.onSuccess {
-              logger.info { "startHeartBeat() completed" }
             }
           }.apply {
             invokeOnCompletion { connectionContext.close() }
