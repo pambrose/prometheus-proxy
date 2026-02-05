@@ -41,6 +41,7 @@ import io.prometheus.common.EnvVars.PRIVATE_KEY_FILE_PATH
 import io.prometheus.common.EnvVars.TRANSPORT_FILTER_DISABLED
 import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
 import io.prometheus.common.Utils.VersionValidator
+import io.prometheus.common.Utils.runCatchingCancellable
 import io.prometheus.common.Utils.toLowercase
 import java.io.File
 import java.io.FileNotFoundException
@@ -279,7 +280,7 @@ abstract class BaseOptions protected constructor(
       }
 
       configName.isUrlPrefix() -> {
-        runCatching {
+        runCatchingCancellable {
           val configSyntax = getConfigSyntax(configName)
           return ConfigFactory
             .parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
@@ -293,7 +294,7 @@ abstract class BaseOptions protected constructor(
       }
 
       else -> {
-        runCatching {
+        runCatchingCancellable {
           return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
         }.onFailure { e ->
           if (e.cause is FileNotFoundException)

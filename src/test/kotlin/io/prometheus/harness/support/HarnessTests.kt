@@ -98,27 +98,31 @@ internal object HarnessTests {
       }
 
     coroutineScope {
-      launch(Dispatchers.Default + exceptionHandler(logger)) {
+      launch(Dispatchers.IO + exceptionHandler(logger)) {
         logger.info { "Starting httpServer" }
         httpServer.start()
-        delay(5.seconds)
       }
     }
 
-    delay(2.seconds) // Give http server a chance to start
-    pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
+    // Give http server a chance to start
+    delay(2.seconds)
 
-    blockingGet("$PROXY_PORT/$proxyPath".withPrefix()) { response ->
-      response.status shouldBe HttpStatusCode.RequestTimeout
-    }
+    try {
+      pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
 
-    pathManager.unregisterPath("/$proxyPath")
+      blockingGet("$PROXY_PORT/$proxyPath".withPrefix()) { response ->
+        response.status shouldBe HttpStatusCode.RequestTimeout
+      }
 
-    coroutineScope {
-      launch(Dispatchers.Default + exceptionHandler(logger)) {
-        logger.info { "Stopping httpServer" }
-        httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
-        delay(5.seconds)
+      pathManager.unregisterPath("/$proxyPath")
+    } finally {
+      coroutineScope {
+        launch(Dispatchers.IO + exceptionHandler(logger)) {
+          delay(5.seconds)
+          logger.info { "Stopping httpServer" }
+          httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
+          // delay(5.seconds)
+        }
       }
     }
   }
@@ -168,7 +172,7 @@ internal object HarnessTests {
 
     coroutineScope {
       httpServers.forEach { wrapper ->
-        launch(Dispatchers.Default + exceptionHandler(logger)) {
+        launch(Dispatchers.IO + exceptionHandler(logger)) {
           logger.info { "Starting httpServer listening on ${wrapper.port}" }
           wrapper.server.start()
           delay(5.seconds)
@@ -256,7 +260,8 @@ internal object HarnessTests {
     logger.info { "Shutting down ${httpServers.size} httpServers" }
     coroutineScope {
       httpServers.forEach { httpServer ->
-        launch(Dispatchers.Default + exceptionHandler(logger)) {
+        launch(Dispatchers.IO + exceptionHandler(logger)) {
+          delay(5.seconds)
           logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
           httpServer.server.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
           delay(5.seconds)

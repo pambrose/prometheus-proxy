@@ -50,6 +50,7 @@ import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
+import io.prometheus.common.Utils.runCatchingCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -243,7 +244,7 @@ class Agent(
         coroutineScope {
           // Ends on disconnect from server
           launch(Dispatchers.IO) {
-            runCatching {
+            runCatchingCancellable {
               grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
@@ -256,7 +257,7 @@ class Agent(
 
           // Ends on !isRunning || !connectionContext.connected (which is connectionContext.closed())
           launch(Dispatchers.IO) {
-            runCatching {
+            runCatchingCancellable {
               startHeartBeat(connectionContext)
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
@@ -269,7 +270,7 @@ class Agent(
 
           // Ends on disconnect from server
           launch(Dispatchers.IO) {
-            runCatching {
+            runCatchingCancellable {
               grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
               logger.info { "writeResponsesToProxyUntilDisconnected() completed" }
             }.onFailure { e ->
@@ -281,7 +282,7 @@ class Agent(
 
           // Ends on disconnect from server
           launch(Dispatchers.IO) {
-            runCatching {
+            runCatchingCancellable {
               val max = options.maxConcurrentHttpClients
               logger.info { "Starting scrape request processing with maxConcurrentClients: $max" }
               // Limits the number of concurrent scrapes below
@@ -307,7 +308,7 @@ class Agent(
 
     while (isRunning) {
       try {
-        runCatching {
+        runCatchingCancellable {
           runBlocking {
             connectToProxy()
             logger.info { "Disconnected from proxy at $proxyHost" }

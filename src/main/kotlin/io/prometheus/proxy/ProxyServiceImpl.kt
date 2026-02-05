@@ -28,6 +28,7 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
+import io.prometheus.common.Utils.runCatchingCancellable
 import io.prometheus.common.Utils.toLowercase
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -169,7 +170,7 @@ internal class ProxyServiceImpl(
     }
 
   override suspend fun writeResponsesToProxy(requests: Flow<ScrapeResponse>): Empty {
-    runCatching {
+    runCatchingCancellable {
       requests.collect { response ->
         val scrapeResults = response.toScrapeResults()
         proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
@@ -186,7 +187,7 @@ internal class ProxyServiceImpl(
   }
 
   override suspend fun writeChunkedResponsesToProxy(requests: Flow<ChunkedScrapeResponse>): Empty {
-    runCatching {
+    runCatchingCancellable {
       requests.collect { response ->
         val ooc = response.chunkOneOfCase
         val chunkedContextMap = proxy.agentContextManager.chunkedContextMap

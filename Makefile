@@ -14,6 +14,9 @@ stubs:
 build: clean stubs
 	./gradlew build -xtest
 
+refresh:
+	./gradlew --refresh-dependencies dependencyUpdates
+
 jars:
 	./gradlew agentJar proxyJar
 
@@ -66,9 +69,6 @@ lint:
 
 versioncheck:
 	./gradlew dependencyUpdates
-
-refresh:
-	./gradlew --refresh-dependencies
 
 upgrade-wrapper:
 	./gradlew wrapper --gradle-version=9.3.0 --distribution-type=bin

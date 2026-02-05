@@ -39,6 +39,7 @@ import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.exceptionDetails
+import io.prometheus.common.Utils.runCatchingCancellable
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.RegisterPathResponse
@@ -173,7 +174,7 @@ internal class AgentGrpcService(
 
   // If successful, will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
   suspend fun connectAgent(transportFilterDisabled: Boolean) =
-    runCatching {
+    runCatchingCancellable {
       logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
       if (transportFilterDisabled)
         grpcStub.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE).also { agent.agentId = it.agentId }
@@ -257,7 +258,7 @@ internal class AgentGrpcService(
     agent.agentId
       .also { anAgentId ->
         if (anAgentId.isNotEmpty())
-          runCatching {
+          runCatchingCancellable {
             val request =
               heartBeatRequest {
                 agentId = anAgentId
@@ -383,7 +384,7 @@ internal class AgentGrpcService(
       coroutineScope {
         // Ends by connectionContext.close()
         launch(Dispatchers.IO) {
-          runCatching {
+          runCatchingCancellable {
             processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
           }.onFailure { e ->
             if (agent.isRunning)
@@ -394,7 +395,7 @@ internal class AgentGrpcService(
 
         // Ends by disconnection from server
         launch(Dispatchers.IO) {
-          runCatching {
+          runCatchingCancellable {
             grpcStub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
           }.onFailure { e ->
             if (agent.isRunning)
@@ -404,7 +405,7 @@ internal class AgentGrpcService(
         }
 
         launch(Dispatchers.IO) {
-          runCatching {
+          runCatchingCancellable {
             grpcStub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
           }.onFailure { e ->
             if (agent.isRunning)

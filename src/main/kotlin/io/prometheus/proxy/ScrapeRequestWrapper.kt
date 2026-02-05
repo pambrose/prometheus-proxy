@@ -24,6 +24,7 @@ import com.github.pambrose.common.util.isNotNull
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.Utils.runCatchingCancellable
 import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeoutOrNull
@@ -73,7 +74,7 @@ internal class ScrapeRequestWrapper(
   suspend fun suspendUntilComplete(waitMillis: Duration) =
     withTimeoutOrNull(waitMillis.inWholeMilliseconds) {
       // completeChannel will eventually close and never get a value, or timeout
-      runCatching {
+      runCatchingCancellable {
         completeChannel.receive()
         true
       }.getOrElse {

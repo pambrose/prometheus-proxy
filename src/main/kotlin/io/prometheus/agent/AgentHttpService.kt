@@ -49,6 +49,7 @@ import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
+import io.prometheus.common.Utils.runCatchingCancellable
 import io.prometheus.grpc.ScrapeRequest
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -98,7 +99,7 @@ internal class AgentHttpService(
     scrapeRequest: ScrapeRequest,
     scrapeResults: ScrapeResults,
   ) {
-    runCatching {
+    runCatchingCancellable {
       val clientKey = with(Url(url)) { ClientKey(user, password) }
       val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(scrapeRequest, clientKey) }
       try {

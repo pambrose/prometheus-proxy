@@ -27,6 +27,7 @@ import io.ktor.http.withCharset
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.install
+import io.ktor.server.http.HttpRequestLifecycle
 import io.ktor.server.logging.toLogString
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.calllogging.CallLoggingConfig
@@ -66,6 +67,10 @@ internal object ProxyHttpConfig {
 
     install(StatusPages) {
       configureStatusPages()
+    }
+
+    install(HttpRequestLifecycle) {
+      cancelCallOnClose = true
     }
   }
 
