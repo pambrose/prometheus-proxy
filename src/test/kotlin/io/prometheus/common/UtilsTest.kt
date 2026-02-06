@@ -19,18 +19,15 @@
 package io.prometheus.common
 
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
-import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
 import io.prometheus.common.Utils.setLogLevel
 import io.prometheus.common.Utils.toJsonElement
-import io.prometheus.common.Utils.toLowercase
 import kotlinx.serialization.json.JsonObject
 import org.junit.jupiter.api.Test
 
@@ -73,23 +70,23 @@ class UtilsTest {
     result shouldBe "?key=value"
   }
 
-  // ==================== toLowercase Tests ====================
+  // ==================== lowercase Tests ====================
 
   @Test
-  fun `toLowercase should convert string to lowercase`() {
-    "HELLO".toLowercase() shouldBe "hello"
-    "Hello World".toLowercase() shouldBe "hello world"
-    "MixedCase123".toLowercase() shouldBe "mixedcase123"
+  fun `lowercase should convert string to lowercase`() {
+    "HELLO".lowercase() shouldBe "hello"
+    "Hello World".lowercase() shouldBe "hello world"
+    "MixedCase123".lowercase() shouldBe "mixedcase123"
   }
 
   @Test
-  fun `toLowercase should handle empty string`() {
-    "".toLowercase() shouldBe ""
+  fun `lowercase should handle empty string`() {
+    "".lowercase() shouldBe ""
   }
 
   @Test
-  fun `toLowercase should handle already lowercase string`() {
-    "already lowercase".toLowercase() shouldBe "already lowercase"
+  fun `lowercase should handle already lowercase string`() {
+    "already lowercase".lowercase() shouldBe "already lowercase"
   }
 
   // ==================== defaultEmptyJsonObject Tests ====================
@@ -148,26 +145,6 @@ class UtilsTest {
 
     lambda(stringBlock)() shouldBe "hello"
     lambda(intBlock)() shouldBe 123
-  }
-
-  // ==================== ifTrue Extension Tests ====================
-
-  @Test
-  fun `ifTrue should execute block when true`() {
-    var executed = false
-
-    true.ifTrue { executed = true }
-
-    executed.shouldBeTrue()
-  }
-
-  @Test
-  fun `ifTrue should not execute block when false`() {
-    var executed = false
-
-    false.ifTrue { executed = true }
-
-    executed.shouldBeFalse()
   }
 
   // ==================== setLogLevel Tests ====================
