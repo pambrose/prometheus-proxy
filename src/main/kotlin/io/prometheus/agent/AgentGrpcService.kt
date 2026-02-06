@@ -67,7 +67,6 @@ import java.util.concurrent.TimeUnit.SECONDS
 import java.util.zip.CRC32
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
-import kotlin.properties.Delegates.notNull
 
 internal class AgentGrpcService(
   internal val agent: Agent,
@@ -78,9 +77,9 @@ internal class AgentGrpcService(
   private val tracing by lazy { agent.zipkinReporterService.newTracing("grpc_client") }
   private val grpcTracing by lazy { GrpcTracing.create(tracing) }
 
-  internal var grpcStub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub by notNull()
+  internal lateinit var grpcStub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub
 
-  var channel: ManagedChannel by notNull()
+  lateinit var channel: ManagedChannel
 
   val agentHostName: String
   val agentPort: Int
@@ -99,9 +98,9 @@ internal class AgentGrpcService(
         }
 
     if (":" in schemeStripped) {
-      val vals = schemeStripped.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-      agentHostName = vals[0]
-      agentPort = Integer.valueOf(vals[1])
+      val parts = schemeStripped.split(":")
+      agentHostName = parts[0]
+      agentPort = parts[1].toInt()
     } else {
       agentHostName = schemeStripped
       agentPort = 50051
@@ -125,16 +124,16 @@ internal class AgentGrpcService(
     resetGrpcStubs()
   }
 
-  @Synchronized
-  fun shutDown() {
+  fun shutDown() =
+    synchronized(this) {
     if (agent.isZipkinEnabled)
       tracing.close()
     if (grpcStarted)
       channel.shutdownNow()
   }
 
-  @Synchronized
-  fun resetGrpcStubs() {
+  fun resetGrpcStubs() =
+    synchronized(this) {
     logger.info { "Creating gRPC stubs" }
 
     if (grpcStarted)
