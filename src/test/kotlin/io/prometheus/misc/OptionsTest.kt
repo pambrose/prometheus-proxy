@@ -145,8 +145,8 @@ class OptionsTest {
   @Test
   fun `verifyAgentChunkSettings should accept custom chunk size`() {
     val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--chunk", "64"), false)
-    // chunkContentSizeKbs is multiplied by 1024 in processing
-    options.chunkContentSizeKbs shouldBe 64 * 1024
+    // chunkContentSizeBytes is multiplied by 1024 in processing
+    options.chunkContentSizeBytes shouldBe 64 * 1024
   }
 
   @Test
