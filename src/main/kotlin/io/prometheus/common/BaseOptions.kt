@@ -42,11 +42,9 @@ import io.prometheus.common.EnvVars.PRIVATE_KEY_FILE_PATH
 import io.prometheus.common.EnvVars.TRANSPORT_FILTER_DISABLED
 import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
 import io.prometheus.common.Utils.VersionValidator
-import io.prometheus.common.Utils.toLowercase
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URL
-import kotlin.properties.Delegates.notNull
 import kotlin.system.exitProcess
 
 // @Parameters(separators = "=")
@@ -122,9 +120,9 @@ abstract class BaseOptions protected constructor(
   var dynamicParams = mutableMapOf<String, String>()
     private set
 
-  private var config: Config by notNull()
+  private lateinit var config: Config
 
-  var configVals: ConfigVals by notNull()
+  lateinit var configVals: ConfigVals
     private set
 
   protected abstract fun assignConfigVals()
@@ -250,11 +248,11 @@ abstract class BaseOptions protected constructor(
       }
   }
 
-  private fun String.isUrlPrefix() = toLowercase().startsWith(HTTP_PREFIX) || toLowercase().startsWith(HTTPS_PREFIX)
+  private fun String.isUrlPrefix() = lowercase().startsWith(HTTP_PREFIX) || lowercase().startsWith(HTTPS_PREFIX)
 
-  private fun String.isJsonSuffix() = toLowercase().endsWith(".json") || toLowercase().endsWith(".jsn")
+  private fun String.isJsonSuffix() = lowercase().endsWith(".json") || lowercase().endsWith(".jsn")
 
-  private fun String.isPropertiesSuffix() = toLowercase().endsWith(".properties") || toLowercase().endsWith(".props")
+  private fun String.isPropertiesSuffix() = lowercase().endsWith(".properties") || lowercase().endsWith(".props")
 
   private fun getConfigSyntax(configName: String) =
     when {
