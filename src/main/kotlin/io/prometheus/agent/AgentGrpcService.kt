@@ -21,6 +21,7 @@ package io.prometheus.agent
 import brave.grpc.GrpcTracing
 import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.github.pambrose.common.dsl.GrpcDsl.channel
+import com.github.pambrose.common.util.runCatchingCancellable
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.utils.TlsContext
 import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
@@ -39,7 +40,6 @@ import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.exceptionDetails
-import io.prometheus.common.Utils.runCatchingCancellable
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.RegisterPathResponse

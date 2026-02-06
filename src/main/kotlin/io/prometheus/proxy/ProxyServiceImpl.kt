@@ -20,6 +20,7 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
+import com.github.pambrose.common.util.runCatchingCancellable
 import com.google.protobuf.Empty
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Status
@@ -28,7 +29,6 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
-import io.prometheus.common.Utils.runCatchingCancellable
 import io.prometheus.common.Utils.toLowercase
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse

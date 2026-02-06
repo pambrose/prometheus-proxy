@@ -22,6 +22,7 @@ import com.beust.jcommander.DynamicParameter
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
+import com.github.pambrose.common.util.runCatchingCancellable
 import com.github.pambrose.common.util.simpleClassName
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -41,7 +42,6 @@ import io.prometheus.common.EnvVars.PRIVATE_KEY_FILE_PATH
 import io.prometheus.common.EnvVars.TRANSPORT_FILTER_DISABLED
 import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
 import io.prometheus.common.Utils.VersionValidator
-import io.prometheus.common.Utils.runCatchingCancellable
 import io.prometheus.common.Utils.toLowercase
 import java.io.File
 import java.io.FileNotFoundException

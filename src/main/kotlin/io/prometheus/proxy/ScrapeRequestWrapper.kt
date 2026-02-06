@@ -21,10 +21,10 @@ package io.prometheus.proxy
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.isNotNull
+import com.github.pambrose.common.util.runCatchingCancellable
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults
-import io.prometheus.common.Utils.runCatchingCancellable
 import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeoutOrNull

@@ -27,6 +27,7 @@ import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
 import com.github.pambrose.common.util.randomId
+import com.github.pambrose.common.util.runCatchingCancellable
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -50,7 +51,6 @@ import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.lambda
-import io.prometheus.common.Utils.runCatchingCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
