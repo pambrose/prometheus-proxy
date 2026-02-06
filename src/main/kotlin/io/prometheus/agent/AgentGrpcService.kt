@@ -338,7 +338,7 @@ internal class AgentGrpcService(
           while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
             totalChunkCount++
             totalByteCount += readByteCount
-            checksum.update(buffer, 0, buffer.size)
+            checksum.update(buffer, 0, readByteCount)
 
             chunkedScrapeResponse {
               chunk = chunkData {
@@ -346,7 +346,7 @@ internal class AgentGrpcService(
                 chunkCount = totalChunkCount
                 chunkByteCount = readByteCount
                 chunkChecksum = checksum.value
-                chunkBytes = copyFrom(buffer)
+                chunkBytes = copyFrom(buffer, 0, readByteCount)
               }
             }.also {
               logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapeId" }
