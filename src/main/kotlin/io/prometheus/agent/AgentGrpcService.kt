@@ -40,6 +40,7 @@ import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.exceptionDetails
+import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.RegisterPathResponse
@@ -61,6 +62,7 @@ import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
@@ -97,14 +99,9 @@ internal class AgentGrpcService(
           }
         }
 
-    if (":" in schemeStripped) {
-      val parts = schemeStripped.split(":")
-      agentHostName = parts[0]
-      agentPort = parts[1].toInt()
-    } else {
-      agentHostName = schemeStripped
-      agentPort = 50051
-    }
+    val parsed = parseHostPort(schemeStripped, DEFAULT_GRPC_PORT)
+    agentHostName = parsed.host
+    agentPort = parsed.port
 
     tlsContext =
       agent.options.run {
@@ -312,7 +309,7 @@ internal class AgentGrpcService(
         agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
       } else {
         val zipped = scrapeResults.srContentAsZipped
-        val chunkContentSize = options.chunkContentSizeKbs
+        val chunkContentSize = options.chunkContentSizeBytes
 
         logger.debug { "Comparing ${zipped.size} and $chunkContentSize" }
 
@@ -334,7 +331,9 @@ internal class AgentGrpcService(
           val buffer = ByteArray(chunkContentSize)
           var readByteCount: Int
 
-          while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
+          while (withContext(Dispatchers.IO) {
+              bais.read(buffer)
+            }.also { readByteCount = it } > 0) {
             totalChunkCount++
             totalByteCount += readByteCount
             checksum.update(buffer, 0, readByteCount)
@@ -421,5 +420,6 @@ internal class AgentGrpcService(
 
   companion object {
     private val logger = logger {}
+    private const val DEFAULT_GRPC_PORT = 50051
   }
 }
