@@ -47,7 +47,6 @@ import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.decodeParams
-import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
 import io.prometheus.grpc.ScrapeRequest
 import kotlin.time.Duration.Companion.minutes
@@ -133,7 +132,7 @@ internal class AgentHttpService(
       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
-      request.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
+      if (request.accept.isNotEmpty()) header(ACCEPT, request.accept)
       request.authHeader.ifBlank { null }?.also { header(HttpHeaders.Authorization, it) }
     }
 
@@ -167,10 +166,10 @@ internal class AgentHttpService(
           srContentAsText = content
         srValidResponse = true
 
-        scrapeRequest.debugEnabled.ifTrue { setDebugInfo(url) }
+        if (scrapeRequest.debugEnabled) setDebugInfo(url)
         scrapeCounterMsg.store(SUCCESS_MSG)
       } else {
-        scrapeRequest.debugEnabled.ifTrue { setDebugInfo(url, "Unsuccessful response code $srStatusCode") }
+        if (scrapeRequest.debugEnabled) setDebugInfo(url, "Unsuccessful response code $srStatusCode")
         scrapeCounterMsg.store(UNSUCCESSFUL_MSG)
       }
     }
@@ -243,7 +242,7 @@ internal class AgentHttpService(
       val scrapeResults = with(scrapeRequest) { ScrapeResults(srAgentId = agentId, srScrapeId = scrapeId) }
       logger.warn { "Invalid path in fetchScrapeUrl(): ${scrapeRequest.path}" }
       scrapeResults.scrapeCounterMsg.store(INVALID_PATH_MSG)
-      scrapeRequest.debugEnabled.ifTrue { scrapeResults.setDebugInfo("None", "Invalid path: ${scrapeRequest.path}") }
+      if (scrapeRequest.debugEnabled) scrapeResults.setDebugInfo("None", "Invalid path: ${scrapeRequest.path}")
       return scrapeResults
     }
   }
