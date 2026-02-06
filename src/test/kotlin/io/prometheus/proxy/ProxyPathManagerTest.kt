@@ -371,6 +371,83 @@ class ProxyPathManagerTest {
       }
     }
 
+  // ==================== AgentContextInfo.isNotValid() (Bug #8) ====================
+
+  @Test
+  fun `non-consolidated path should be invalid when single agent is invalid`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+      every { context.isNotValid() } returns true
+
+      manager.addPath("/metrics", """{"job":"test"}""", context)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.isNotValid().shouldBeTrue()
+    }
+
+  @Test
+  fun `non-consolidated path should be valid when single agent is valid`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+      // isNotValid() returns false by default from createMockAgentContext
+
+      manager.addPath("/metrics", """{"job":"test"}""", context)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.isNotValid().shouldBeFalse()
+    }
+
+  // Bug #8: The old code had `fun isNotValid() = !isConsolidated && agentContexts[0].isNotValid()`
+  // which always returned false for consolidated paths. This meant consolidated paths with all
+  // invalid agents were still considered valid, causing requests to time out instead of getting
+  // an immediate error response.
+  @Test
+  fun `consolidated path should be invalid when all agents are invalid`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
+      every { context1.isNotValid() } returns true
+      every { context2.isNotValid() } returns true
+
+      manager.addPath("/metrics", """{"job":"test"}""", context1)
+      manager.addPath("/metrics", """{"job":"test"}""", context2)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.isConsolidated.shouldBeTrue()
+      // Before the fix, this returned false even with all agents invalid
+      info.isNotValid().shouldBeTrue()
+    }
+
+  @Test
+  fun `consolidated path should be valid when at least one agent is valid`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
+      every { context1.isNotValid() } returns true
+      every { context2.isNotValid() } returns false
+
+      manager.addPath("/metrics", """{"job":"test"}""", context1)
+      manager.addPath("/metrics", """{"job":"test"}""", context2)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.isConsolidated.shouldBeTrue()
+      info.isNotValid().shouldBeFalse()
+    }
+
+  // ==================== toPlainText ====================
+
   @Test
   fun `toPlainText should return message when no agents connected`(): Unit =
     runBlocking {

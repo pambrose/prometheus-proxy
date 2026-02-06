@@ -37,7 +37,7 @@ internal class ProxyPathManager(
     val labels: String,
     val agentContexts: MutableList<AgentContext>,
   ) {
-    fun isNotValid() = !isConsolidated && agentContexts[0].isNotValid()
+    fun isNotValid() = agentContexts.all { it.isNotValid() }
 
     override fun toString(): String =
       "AgentContextInfo(consolidated=$isConsolidated, labels=$labels,agentContexts=$agentContexts)"
