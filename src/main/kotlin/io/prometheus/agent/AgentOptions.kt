@@ -130,87 +130,84 @@ class AgentOptions(
   }
 
   override fun assignConfigVals() {
-    configVals.agent
-      .also { agentConfigVals ->
-        if (proxyHostname.isEmpty()) {
-          val configHostname = agentConfigVals.proxy.hostname
-          val str = if (":" in configHostname)
-            configHostname
-          else
-            "$configHostname:${agentConfigVals.proxy.port}"
-          proxyHostname = PROXY_HOSTNAME.getEnv(str)
-        }
-        logger.info { "proxyHostname: $proxyHostname" }
+    val agentConfigVals = configVals.agent
 
-        if (agentName.isEmpty())
-          agentName = AGENT_NAME.getEnv(agentConfigVals.name)
-        logger.info { "agentName: $agentName" }
+    if (proxyHostname.isEmpty()) {
+      val configHostname = agentConfigVals.proxy.hostname
+      val str = if (":" in configHostname)
+        configHostname
+      else
+        "$configHostname:${agentConfigVals.proxy.port}"
+      proxyHostname = PROXY_HOSTNAME.getEnv(str)
+    }
+    logger.info { "proxyHostname: $proxyHostname" }
 
-        if (!consolidated)
-          consolidated = CONSOLIDATED.getEnv(agentConfigVals.consolidated)
-        logger.info { "consolidated: $consolidated" }
+    if (agentName.isEmpty())
+      agentName = AGENT_NAME.getEnv(agentConfigVals.name)
+    logger.info { "agentName: $agentName" }
 
-        if (scrapeTimeoutSecs == -1)
-          scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
-        logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+    if (!consolidated)
+      consolidated = CONSOLIDATED.getEnv(agentConfigVals.consolidated)
+    logger.info { "consolidated: $consolidated" }
 
-        if (scrapeMaxRetries == -1)
-          scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
-        logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
+    if (scrapeTimeoutSecs == -1)
+      scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
+    logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
 
-        if (chunkContentSizeKbs == -1)
-          chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
-        // Multiply the value time KB
-        chunkContentSizeKbs *= 1024
-        logger.info { "chunkContentSizeKbs: $chunkContentSizeKbs" }
+    if (scrapeMaxRetries == -1)
+      scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
+    logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
 
-        if (minGzipSizeBytes == -1)
-          minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agentConfigVals.minGzipSizeBytes)
-        logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
+    if (chunkContentSizeKbs == -1)
+      chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
+    // Multiply the value time KB
+    chunkContentSizeKbs *= 1024
+    logger.info { "chunkContentSizeKbs: $chunkContentSizeKbs" }
 
-        if (overrideAuthority.isEmpty())
-          overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agentConfigVals.tls.overrideAuthority)
-        logger.info { "overrideAuthority: $overrideAuthority" }
+    if (minGzipSizeBytes == -1)
+      minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agentConfigVals.minGzipSizeBytes)
+    logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
 
-        assignHttpClientConfigVals(agentConfigVals)
+    if (overrideAuthority.isEmpty())
+      overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agentConfigVals.tls.overrideAuthority)
+    logger.info { "overrideAuthority: $overrideAuthority" }
 
-        if (!keepAliveWithoutCalls)
-          keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
-        logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
+    assignHttpClientConfigVals(agentConfigVals)
 
-        agentConfigVals.apply {
-          assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
-          assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
-          assignAdminEnabled(admin.enabled)
-          assignAdminPort(admin.port)
-          assignMetricsEnabled(metrics.enabled)
-          assignMetricsPort(metrics.port)
-          assignTransportFilterDisabled(transportFilterDisabled)
-          assignDebugEnabled(admin.debugEnabled)
+    if (!keepAliveWithoutCalls)
+      keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
+    logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
 
-          assignCertChainFilePath(tls.certChainFilePath)
-          assignPrivateKeyFilePath(tls.privateKeyFilePath)
-          assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
+    assignKeepAliveTimeSecs(agentConfigVals.grpc.keepAliveTimeSecs)
+    assignKeepAliveTimeoutSecs(agentConfigVals.grpc.keepAliveTimeoutSecs)
+    assignAdminEnabled(agentConfigVals.admin.enabled)
+    assignAdminPort(agentConfigVals.admin.port)
+    assignMetricsEnabled(agentConfigVals.metrics.enabled)
+    assignMetricsPort(agentConfigVals.metrics.port)
+    assignTransportFilterDisabled(agentConfigVals.transportFilterDisabled)
+    assignDebugEnabled(agentConfigVals.admin.debugEnabled)
 
-          logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
-          logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
+    assignCertChainFilePath(agentConfigVals.tls.certChainFilePath)
+    assignPrivateKeyFilePath(agentConfigVals.tls.privateKeyFilePath)
+    assignTrustCertCollectionFilePath(agentConfigVals.tls.trustCertCollectionFilePath)
 
-          val pauseVal = internal.heartbeatCheckPauseMillis
-          logger.info { "agent.internal.heartbeatCheckPauseMillis: $pauseVal" }
+    logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+    logger.info { "agent.internal.cioTimeoutSecs: ${agentConfigVals.internal.cioTimeoutSecs.seconds}" }
 
-          val inactivityVal = internal.heartbeatMaxInactivitySecs
-          logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
-        }
+    val pauseVal = agentConfigVals.internal.heartbeatCheckPauseMillis
+    logger.info { "agent.internal.heartbeatCheckPauseMillis: $pauseVal" }
 
-        if (logLevel.isEmpty())
-          logLevel = AGENT_LOG_LEVEL.getEnv(agentConfigVals.logLevel)
-        if (logLevel.isNotEmpty()) {
-          logger.info { "agent.logLevel: $logLevel" }
-          setLogLevel("agent", logLevel)
-        } else {
-          logger.info { "agent.logLevel: info" }
-        }
-      }
+    val inactivityVal = agentConfigVals.internal.heartbeatMaxInactivitySecs
+    logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
+
+    if (logLevel.isEmpty())
+      logLevel = AGENT_LOG_LEVEL.getEnv(agentConfigVals.logLevel)
+    if (logLevel.isNotEmpty()) {
+      logger.info { "agent.logLevel: $logLevel" }
+      setLogLevel("agent", logLevel)
+    } else {
+      logger.info { "agent.logLevel: info" }
+    }
   }
 
   private fun assignHttpClientConfigVals(agentConfigVals: ConfigVals.Agent) {
