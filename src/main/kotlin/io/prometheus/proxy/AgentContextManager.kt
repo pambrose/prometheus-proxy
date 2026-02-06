@@ -18,21 +18,18 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.isNull
-import com.google.common.collect.Maps.newConcurrentMap
-import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
-import java.util.concurrent.ConcurrentMap
+import java.util.concurrent.ConcurrentHashMap
 
 internal class AgentContextManager(
   private val isTestMode: Boolean,
 ) {
   // Map agent_id to AgentContext
-  val agentContextMap: ConcurrentMap<String, AgentContext> = newConcurrentMap()
+  val agentContextMap = ConcurrentHashMap<String, AgentContext>()
   val agentContextSize: Int get() = agentContextMap.size
 
   // Map scrape_id to ChunkedContext
-  val chunkedContextMap: ConcurrentMap<Long, ChunkedContext> = newConcurrentMap()
+  val chunkedContextMap = ConcurrentHashMap<Long, ChunkedContext>()
   val chunkedContextSize: Int get() = chunkedContextMap.size
 
   val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.sumOf { it.scrapeRequestBacklogSize }
@@ -47,18 +44,17 @@ internal class AgentContextManager(
   fun removeFromContextManager(
     agentId: String,
     reason: String,
-  ): AgentContext? =
-    agentContextMap.remove(agentId)
-      .let { agentContext ->
-        if (agentContext.isNull()) {
-          logger.warn { "Missing AgentContext for agentId: $agentId ($reason)" }
-        } else {
-          if (!isTestMode)
-            logger.info { "Removed $agentContext for agentId: $agentId ($reason)" }
-          agentContext.invalidate()
-        }
-        agentContext
-      }
+  ): AgentContext? {
+    val agentContext = agentContextMap.remove(agentId)
+    if (agentContext == null) {
+      logger.warn { "Missing AgentContext for agentId: $agentId ($reason)" }
+    } else {
+      if (!isTestMode)
+        logger.info { "Removed $agentContext for agentId: $agentId ($reason)" }
+      agentContext.invalidate()
+    }
+    return agentContext
+  }
 
   companion object {
     private val logger = logger {}
