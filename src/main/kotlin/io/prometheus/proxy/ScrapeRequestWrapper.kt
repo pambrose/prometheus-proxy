@@ -18,7 +18,6 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.runCatchingCancellable
@@ -59,7 +58,8 @@ internal class ScrapeRequestWrapper(
       authHeader = authHeaderVal
     }
 
-  var scrapeResults: ScrapeResults by nonNullableReference()
+  @Volatile
+  var scrapeResults: ScrapeResults? = null
 
   val scrapeId: Long
     get() = scrapeRequest.scrapeId
