@@ -44,7 +44,7 @@ class AgentGrpcServiceTest {
     every { mockOptions.privateKeyFilePath } returns ""
     every { mockOptions.trustCertCollectionFilePath } returns ""
     every { mockOptions.transportFilterDisabled } returns false
-    every { mockOptions.chunkContentSizeKbs } returns 32768
+    every { mockOptions.chunkContentSizeBytes } returns 32768
     every { mockOptions.keepAliveTimeSecs } returns -1L
     every { mockOptions.keepAliveTimeoutSecs } returns -1L
     every { mockOptions.keepAliveWithoutCalls } returns false
