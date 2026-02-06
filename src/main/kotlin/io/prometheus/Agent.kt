@@ -288,11 +288,20 @@ class Agent(
               // Limits the number of concurrent scrapes below
               val semaphore = Semaphore(max)
 
+              // The scrape request processing loop uses a Semaphore to limit concurrency,
+              // but the for loop runs within a single coroutine. Without launching a new
+              // coroutine per request, semaphore.withPermit is called sequentially — only
+              // one permit is ever held at a time, so the semaphore serves no purpose.
+              // All scrape requests are processed one at a time regardless of maxConcurrentHttpClients.
+              // The loop needs an inner `launch` so each iteration runs in its own coroutine, with the semaphore
+              // actually limiting how many execute concurrently.
               for (scrapeRequestAction in connectionContext.scrapeRequestActions()) {
-                semaphore.withPermit {
-                  // The url fetch occurs here during scrapeRequestAction.invoke()
-                  val scrapeResponse = scrapeRequestAction.invoke()
-                  connectionContext.sendScrapeResults(scrapeResponse)
+                launch {
+                  semaphore.withPermit {
+                    // The url fetch occurs here during scrapeRequestAction.invoke()
+                    val scrapeResponse = scrapeRequestAction.invoke()
+                    connectionContext.sendScrapeResults(scrapeResponse)
+                  }
                 }
               }
             }.onFailure { e ->
