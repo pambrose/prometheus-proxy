@@ -20,8 +20,8 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
-import com.google.common.collect.Maps.newConcurrentMap
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import java.util.concurrent.ConcurrentHashMap
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
@@ -43,7 +43,7 @@ internal class ProxyPathManager(
       "AgentContextInfo(consolidated=$isConsolidated, labels=$labels,agentContexts=$agentContexts)"
   }
 
-  private val pathMap = newConcurrentMap<String, AgentContextInfo>()
+  private val pathMap = ConcurrentHashMap<String, AgentContextInfo>()
 
   fun getAgentContextInfo(path: String) = pathMap[path]
 
@@ -51,9 +51,7 @@ internal class ProxyPathManager(
     get() = pathMap.size
 
   val allPaths: List<String>
-    get() = synchronized(pathMap) {
-      return pathMap.keys.toList()
-    }
+    get() = synchronized(pathMap) { pathMap.keys.toList() }
 
   fun addPath(
     path: String,
@@ -98,34 +96,38 @@ internal class ProxyPathManager(
 
     synchronized(pathMap) {
       val agentInfo = pathMap[path]
-      val results =
-        if (agentInfo.isNull()) {
-          val msg = "Unable to remove path /$path - path not found"
-          logger.error { msg }
-          false to msg
-        } else {
-          val agentContext = agentInfo.agentContexts.firstOrNull { it.agentId == agentId }
-          if (agentContext.isNull()) {
-            val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
-            val msg = "Unable to remove path /$path - invalid agentId: $agentId -- [$agentIds]"
-            logger.error { msg }
-            false to msg
-          } else {
-            if (agentInfo.isConsolidated && agentInfo.agentContexts.size > 1) {
-              agentInfo.agentContexts.remove(agentContext)
-              if (!isTestMode)
-                logger.info { "Removed element of path /$path for $agentInfo" }
-            } else {
-              pathMap.remove(path)
-              if (!isTestMode)
-                logger.info { "Removed path /$path for $agentInfo" }
-            }
-            true to ""
-          }
+      if (agentInfo == null) {
+        val msg = "Unable to remove path /$path - path not found"
+        logger.error { msg }
+        return unregisterPathResponse {
+          valid = false
+          reason = msg
         }
+      }
+
+      val agentContext = agentInfo.agentContexts.firstOrNull { it.agentId == agentId }
+      if (agentContext == null) {
+        val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
+        val msg = "Unable to remove path /$path - invalid agentId: $agentId -- [$agentIds]"
+        logger.error { msg }
+        return unregisterPathResponse {
+          valid = false
+          reason = msg
+        }
+      }
+
+      if (agentInfo.isConsolidated && agentInfo.agentContexts.size > 1) {
+        agentInfo.agentContexts.remove(agentContext)
+        if (!isTestMode)
+          logger.info { "Removed element of path /$path for $agentInfo" }
+      } else {
+        pathMap.remove(path)
+        if (!isTestMode)
+          logger.info { "Removed path /$path for $agentInfo" }
+      }
       return unregisterPathResponse {
-        valid = results.first
-        reason = results.second
+        valid = true
+        reason = ""
       }
     }
   }
