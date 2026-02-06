@@ -56,7 +56,7 @@ internal class ChunkedContext(
   ) {
     totalChunkCount++
     totalByteCount += chunkByteCount
-    checksum.update(data, 0, data.size)
+    checksum.update(data, 0, chunkByteCount)
     baos.write(data, 0, chunkByteCount)
 
     check(totalChunkCount == chunkCount)

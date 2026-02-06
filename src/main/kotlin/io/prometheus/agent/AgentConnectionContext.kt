@@ -24,15 +24,12 @@ import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 internal class AgentConnectionContext {
   private var disconnected by atomicBoolean(false)
   private val scrapeRequestActionsChannel = Channel<ScrapeRequestAction>(UNLIMITED)
   private val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED)
-  private val accessMutex = Mutex()
+  private val closeLock = Any()
 
   fun scrapeRequestActions() = scrapeRequestActionsChannel
 
@@ -47,14 +44,12 @@ internal class AgentConnectionContext {
   }
 
   fun close() {
-    runBlocking {
-      accessMutex.withLock {
-        if (!disconnected) {
-          disconnected = true
-          scrapeRequestActionsChannel.cancel()
-          scrapeResultsChannel.cancel()
-          logger.info { "AgentConnectionContext closed" }
-        }
+    synchronized(closeLock) {
+      if (!disconnected) {
+        disconnected = true
+        scrapeRequestActionsChannel.cancel()
+        scrapeResultsChannel.cancel()
+        logger.info { "AgentConnectionContext closed" }
       }
     }
   }

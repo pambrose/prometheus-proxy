@@ -298,4 +298,90 @@ class ChunkedContextTest {
 
     context.scrapeResults.srContentType shouldBe ""
   }
+
+  // ==================== Partial Last Chunk Tests (Bug #2) ====================
+
+  @Test
+  fun `applyChunk should checksum only chunkByteCount bytes when data array is larger`() {
+    // This simulates the last chunk of a chunked transfer where the buffer is
+    // larger than the actual bytes read (e.g., 1024-byte buffer with only 100 bytes read).
+    // Before the fix, checksum was computed on data.size instead of chunkByteCount,
+    // which included stale bytes from a previous read.
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val bufferSize = 1024
+    val actualBytes = 100
+    val buffer = ByteArray(bufferSize)
+
+    // Fill the first actualBytes with real data
+    val realData = "A".repeat(actualBytes).toByteArray()
+    realData.copyInto(buffer)
+    // Remaining bytes in buffer are zeros (stale data)
+
+    // Compute the expected checksum using only the actual bytes
+    val expectedChecksum = CRC32().apply { update(buffer, 0, actualBytes) }.value
+
+    // This should succeed: checksum is computed on chunkByteCount (100) bytes, not data.size (1024)
+    context.applyChunk(buffer, actualBytes, 1, expectedChecksum)
+
+    context.totalChunkCount shouldBe 1
+    context.totalByteCount shouldBe actualBytes
+  }
+
+  @Test
+  fun `applyChunk should reject checksum computed on full buffer when chunkByteCount is smaller`() {
+    // This verifies that the old buggy behavior (checksumming full data.size) would fail.
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val bufferSize = 1024
+    val actualBytes = 100
+    val buffer = ByteArray(bufferSize)
+    "A".repeat(actualBytes).toByteArray().copyInto(buffer)
+
+    // Compute checksum on the FULL buffer (the old buggy behavior)
+    val wrongChecksum = CRC32().apply { update(buffer, 0, bufferSize) }.value
+
+    // This should fail because the receiver now checksums only chunkByteCount bytes
+    shouldThrow<IllegalStateException> {
+      context.applyChunk(buffer, actualBytes, 1, wrongChecksum)
+    }
+  }
+
+  @Test
+  fun `full chunked transfer should work when last chunk is partial`() {
+    // Simulates a realistic chunked transfer: two full chunks and one partial last chunk.
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val chunkSize = 16
+    // Total data is 40 bytes: two full 16-byte chunks + one 8-byte partial chunk
+    val fullData = "ABCDEFGHIJKLMNOP".repeat(2).toByteArray() + "12345678".toByteArray()
+    // fullData is 40 bytes total
+
+    val crc = CRC32()
+    val buffer = ByteArray(chunkSize)
+    var chunkNum = 0
+
+    val bais = java.io.ByteArrayInputStream(fullData)
+    var readCount: Int
+    while (bais.read(buffer).also { readCount = it } > 0) {
+      chunkNum++
+      crc.update(buffer, 0, readCount)
+      // Pass the full buffer but only readCount as chunkByteCount
+      context.applyChunk(buffer.copyOf(), readCount, chunkNum, crc.value)
+    }
+
+    // 40 / 16 = 2 full + 1 partial = 3 chunks
+    context.totalChunkCount shouldBe 3
+    context.totalByteCount shouldBe 40
+
+    context.applySummary(3, 40, crc.value)
+
+    // Verify the reassembled content matches the original
+    context.scrapeResults.srContentAsZipped.shouldNotBeNull()
+    context.scrapeResults.srContentAsZipped.size shouldBe 40
+    context.scrapeResults.srContentAsZipped.contentEquals(fullData).shouldBeTrue()
+  }
 }

@@ -155,7 +155,8 @@ internal class ProxyServiceImpl(
           ?: logger.error { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
         heartBeatResponse {
           valid = agentContext.isNotNull()
-          reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
+          if (!valid)
+            reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
         }
       }
 

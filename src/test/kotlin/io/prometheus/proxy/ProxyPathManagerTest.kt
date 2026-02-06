@@ -284,6 +284,170 @@ class ProxyPathManagerTest {
       manager.pathMapSize shouldBe 0
     }
 
+  // ==================== removeFromPathManager Iteration Safety (Bug #4) ====================
+
+  @Test
+  fun `removeFromPathManager should remove all paths when many paths registered for one agent`(): Unit =
+    runBlocking {
+      // This test verifies that removeFromPathManager correctly removes ALL paths for a
+      // disconnecting agent. The old code modified the map during forEach iteration, which
+      // could cause ConcurrentHashMap's weakly consistent iterator to skip entries.
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      every { proxy.agentContextManager.getAgentContext(context.agentId) } returns context
+
+      val pathCount = 50
+      for (i in 1..pathCount) {
+        manager.addPath("/metrics$i", """{"job":"test$i"}""", context)
+      }
+      manager.pathMapSize shouldBe pathCount
+
+      manager.removeFromPathManager(context.agentId, "disconnect")
+
+      manager.pathMapSize shouldBe 0
+    }
+
+  @Test
+  fun `removeFromPathManager should only remove paths for the specified agent`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val agent1 = createMockAgentContext()
+      val agent2 = createMockAgentContext()
+
+      every { proxy.agentContextManager.getAgentContext(agent1.agentId) } returns agent1
+      every { proxy.agentContextManager.getAgentContext(agent2.agentId) } returns agent2
+
+      // Register paths for both agents
+      for (i in 1..20) {
+        manager.addPath("/agent1_metrics$i", """{"job":"a1"}""", agent1)
+      }
+      for (i in 1..10) {
+        manager.addPath("/agent2_metrics$i", """{"job":"a2"}""", agent2)
+      }
+      manager.pathMapSize shouldBe 30
+
+      // Remove only agent1's paths
+      manager.removeFromPathManager(agent1.agentId, "disconnect")
+
+      // Only agent2's paths should remain
+      manager.pathMapSize shouldBe 10
+      for (i in 1..10) {
+        manager.getAgentContextInfo("/agent2_metrics$i").shouldNotBeNull()
+      }
+      for (i in 1..20) {
+        manager.getAgentContextInfo("/agent1_metrics$i").shouldBeNull()
+      }
+    }
+
+  @Test
+  fun `removeFromPathManager should remove agent from consolidated paths without removing the path`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val agent1 = createMockAgentContext(consolidated = true)
+      val agent2 = createMockAgentContext(consolidated = true)
+
+      every { proxy.agentContextManager.getAgentContext(agent1.agentId) } returns agent1
+
+      // Both agents share consolidated paths
+      for (i in 1..10) {
+        manager.addPath("/shared$i", """{"job":"shared"}""", agent1)
+        manager.addPath("/shared$i", """{"job":"shared"}""", agent2)
+      }
+      manager.pathMapSize shouldBe 10
+
+      // Remove agent1 -- paths should remain with only agent2
+      manager.removeFromPathManager(agent1.agentId, "disconnect")
+
+      manager.pathMapSize shouldBe 10
+      for (i in 1..10) {
+        val info = manager.getAgentContextInfo("/shared$i")
+        info.shouldNotBeNull()
+        info.agentContexts.shouldHaveSize(1)
+        info.agentContexts[0].agentId shouldBe agent2.agentId
+      }
+    }
+
+  // ==================== AgentContextInfo.isNotValid() (Bug #8) ====================
+
+  @Test
+  fun `non-consolidated path should be invalid when single agent is invalid`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+      every { context.isNotValid() } returns true
+
+      manager.addPath("/metrics", """{"job":"test"}""", context)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.isNotValid().shouldBeTrue()
+    }
+
+  @Test
+  fun `non-consolidated path should be valid when single agent is valid`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+      // isNotValid() returns false by default from createMockAgentContext
+
+      manager.addPath("/metrics", """{"job":"test"}""", context)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.isNotValid().shouldBeFalse()
+    }
+
+  // Bug #8: The old code had `fun isNotValid() = !isConsolidated && agentContexts[0].isNotValid()`
+  // which always returned false for consolidated paths. This meant consolidated paths with all
+  // invalid agents were still considered valid, causing requests to time out instead of getting
+  // an immediate error response.
+  @Test
+  fun `consolidated path should be invalid when all agents are invalid`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
+      every { context1.isNotValid() } returns true
+      every { context2.isNotValid() } returns true
+
+      manager.addPath("/metrics", """{"job":"test"}""", context1)
+      manager.addPath("/metrics", """{"job":"test"}""", context2)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.isConsolidated.shouldBeTrue()
+      // Before the fix, this returned false even with all agents invalid
+      info.isNotValid().shouldBeTrue()
+    }
+
+  @Test
+  fun `consolidated path should be valid when at least one agent is valid`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
+      every { context1.isNotValid() } returns true
+      every { context2.isNotValid() } returns false
+
+      manager.addPath("/metrics", """{"job":"test"}""", context1)
+      manager.addPath("/metrics", """{"job":"test"}""", context2)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.isConsolidated.shouldBeTrue()
+      info.isNotValid().shouldBeFalse()
+    }
+
+  // ==================== toPlainText ====================
+
   @Test
   fun `toPlainText should return message when no agents connected`(): Unit =
     runBlocking {

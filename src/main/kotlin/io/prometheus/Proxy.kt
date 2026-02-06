@@ -209,11 +209,17 @@ class Proxy(
         addServlet(
           DEBUG,
           LambdaServlet {
+            val recentReqsText =
+              synchronized(recentReqs) {
+                if (recentReqs.isNotEmpty())
+                  "\n${recentReqs.size} most recent requests:\n" + recentReqs.reversed().joinToString("\n")
+                else
+                  ""
+              }
             listOf(
               toPlainText(),
               pathManager.toPlainText(),
-              if (recentReqs.isNotEmpty()) "\n${recentReqs.size} most recent requests:" else "",
-              recentReqs.reversed().joinToString("\n"),
+              recentReqsText,
             ).joinToString("\n")
           },
         )

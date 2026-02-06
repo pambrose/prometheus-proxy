@@ -293,8 +293,8 @@ internal class AgentGrpcService(
       .collect { grpcRequest: ScrapeRequest ->
         // The actual fetch happens at the other end of the channel, not here.
         logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
-        connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
         agent.scrapeRequestBacklogSize += 1
+        connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
       }
   }
 
@@ -338,7 +338,7 @@ internal class AgentGrpcService(
           while (bais.read(buffer).also { bytesRead -> readByteCount = bytesRead } > 0) {
             totalChunkCount++
             totalByteCount += readByteCount
-            checksum.update(buffer, 0, buffer.size)
+            checksum.update(buffer, 0, readByteCount)
 
             chunkedScrapeResponse {
               chunk = chunkData {
@@ -346,7 +346,7 @@ internal class AgentGrpcService(
                 chunkCount = totalChunkCount
                 chunkByteCount = readByteCount
                 chunkChecksum = checksum.value
-                chunkBytes = copyFrom(buffer)
+                chunkBytes = copyFrom(buffer, 0, readByteCount)
               }
             }.also {
               logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapeId" }
