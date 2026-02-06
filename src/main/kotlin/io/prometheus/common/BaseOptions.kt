@@ -244,7 +244,7 @@ abstract class BaseOptions protected constructor(
         // Strip quotes
         val qval = if (v.startsWith("\"") && v.endsWith("\"")) v.substring(1, v.length - 1) else v
         val prop = "$k=$qval"
-        System.setProperty(k, prop)
+        System.setProperty(k, qval)
         val newConfig = ConfigFactory.parseString(prop, PROPS)
         config = newConfig.withFallback(config).resolve()
       }

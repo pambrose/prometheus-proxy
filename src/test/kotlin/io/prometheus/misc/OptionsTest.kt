@@ -251,6 +251,51 @@ class OptionsTest {
     configVals.proxy.internal.zipkin.enabled.shouldBeTrue()
   }
 
+  // ==================== Dynamic Parameter Tests (Bug #3) ====================
+
+  @Test
+  fun `dynamic param should set system property to value only, not key=value`() {
+    val propKey = "proxy.http.port"
+    val propValue = "6161"
+    try {
+      readProxyOptions(listOf("-D$propKey=$propValue"))
+
+      // Before the fix, System.getProperty returned "proxy.http.port=6161" instead of "6161"
+      System.getProperty(propKey) shouldBe propValue
+    } finally {
+      System.clearProperty(propKey)
+    }
+  }
+
+  @Test
+  fun `dynamic param with quoted value should set system property correctly`() {
+    val propKey = "proxy.http.port"
+    val propValue = "\"7272\""
+    try {
+      readProxyOptions(listOf("-D$propKey=$propValue"))
+
+      // Quotes are stripped, so the system property should be the bare value
+      System.getProperty(propKey) shouldBe "7272"
+    } finally {
+      System.clearProperty(propKey)
+    }
+  }
+
+  @Test
+  fun `dynamic param should still apply to config correctly`() {
+    val propKey = "proxy.http.port"
+    try {
+      val configVals = readProxyOptions(listOf("-D$propKey=8282"))
+
+      // Config should reflect the value
+      configVals.proxy.http.port shouldBe 8282
+      // System property should be the bare value
+      System.getProperty(propKey) shouldBe "8282"
+    } finally {
+      System.clearProperty(propKey)
+    }
+  }
+
   private fun readProxyOptions(argList: List<String>) = ProxyOptions(argList).configVals
 
   private fun readAgentOptions(argList: List<String>) = AgentOptions(argList, false).configVals
