@@ -18,12 +18,20 @@
 
 package io.prometheus.agent
 
+import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class AgentGrpcServiceTest {
   private fun createMockAgent(proxyHostname: String): Agent {
@@ -199,5 +207,75 @@ class AgentGrpcServiceTest {
 
       // Clean up
       service.shutDown()
+    }
+
+  // Bug #9: The old code incremented scrapeRequestBacklogSize AFTER sending the action to the
+  // channel. Because processScrapeResults runs in a separate coroutine, it could consume the
+  // action and decrement the counter before the producer incremented it, causing the counter
+  // to go negative. The fix moves the increment to BEFORE the channel send.
+  // This test simulates the same producer-consumer channel pattern and verifies the counter
+  // never goes negative.
+  @Test
+  fun `backlog counter should never go negative with increment-before-send pattern`(): Unit =
+    runBlocking {
+      val channel = Channel<Int>(UNLIMITED)
+      val backlogSize = AtomicInteger(0)
+      val wentNegative = AtomicBoolean(false)
+      val itemCount = 10_000
+
+      coroutineScope {
+        // Producer: mirrors readRequestsFromProxy — increment BEFORE send (the fix)
+        launch(Dispatchers.IO) {
+          repeat(itemCount) { i ->
+            backlogSize.incrementAndGet()
+            channel.send(i)
+          }
+          channel.close()
+        }
+
+        // Consumer: mirrors processScrapeResults — decrement after receive
+        launch(Dispatchers.IO) {
+          for (@Suppress("UnusedPrivateProperty") item in channel) {
+            val current = backlogSize.decrementAndGet()
+            if (current < 0) {
+              wentNegative.set(true)
+            }
+          }
+        }
+      }
+
+      wentNegative.get() shouldBe false
+      backlogSize.get() shouldBe 0
+    }
+
+  @Test
+  fun `backlog counter should remain non-negative throughout processing`(): Unit =
+    runBlocking {
+      val channel = Channel<Int>(UNLIMITED)
+      val backlogSize = AtomicInteger(0)
+      val minObserved = AtomicInteger(Int.MAX_VALUE)
+      val itemCount = 10_000
+
+      coroutineScope {
+        // Producer: increment before send
+        launch(Dispatchers.IO) {
+          repeat(itemCount) { i ->
+            backlogSize.incrementAndGet()
+            channel.send(i)
+          }
+          channel.close()
+        }
+
+        // Consumer: decrement and track minimum value observed
+        launch(Dispatchers.IO) {
+          for (@Suppress("UnusedPrivateProperty") item in channel) {
+            val current = backlogSize.decrementAndGet()
+            minObserved.updateAndGet { min -> minOf(min, current) }
+          }
+        }
+      }
+
+      minObserved.get() shouldBeGreaterThanOrEqual 0
+      backlogSize.get() shouldBe 0
     }
 }

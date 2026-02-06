@@ -293,8 +293,8 @@ internal class AgentGrpcService(
       .collect { grpcRequest: ScrapeRequest ->
         // The actual fetch happens at the other end of the channel, not here.
         logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
-        connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
         agent.scrapeRequestBacklogSize += 1
+        connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
       }
   }
 
