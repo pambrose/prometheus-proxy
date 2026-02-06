@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.ktor.client.HttpClient
@@ -32,6 +33,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -375,4 +378,72 @@ class HttpClientCacheTest {
       // Clean up
       cache.onFinishedWithClient(entry2)
     }
+
+  // Bug #10: The old code called scope.cancel() inside accessMutex.withLock in close().
+  // If the cleanup coroutine held the mutex when close() was called, close() would block
+  // on runBlocking waiting for the mutex indefinitely. The fix cancels the scope before
+  // acquiring the mutex, so the cleanup coroutine is stopped first.
+  // This test uses a very short cleanup interval to ensure the cleanup coroutine is actively
+  // cycling while close() is called, and verifies close() completes promptly.
+  @Test
+  fun `close should complete promptly with active cleanup coroutine`() {
+    val fastCleanupCache = HttpClientCache(
+      maxCacheSize = 5,
+      maxAge = 500.milliseconds,
+      maxIdleTime = 200.milliseconds,
+      cleanupInterval = 10.milliseconds, // Very fast to maximize mutex contention
+    )
+
+    runBlocking {
+      // Populate cache to give the cleanup coroutine work to do
+      val entries = mutableListOf<CacheEntry>()
+      for (i in 1..5) {
+        val key = ClientKey("user$i", "pass$i")
+        val entry = fastCleanupCache.getOrCreateClient(key) { createMockHttpClient() }
+        entries.add(entry)
+      }
+      entries.forEach { fastCleanupCache.onFinishedWithClient(it) }
+
+      // Let entries expire so cleanup has work to do
+      delay(300.milliseconds)
+    }
+
+    // close() should complete within a reasonable time even though
+    // the cleanup coroutine is actively running every 10ms
+    val latch = CountDownLatch(1)
+    val closeThread = Thread {
+      fastCleanupCache.close()
+      latch.countDown()
+    }
+    closeThread.start()
+
+    // If close() deadlocked (old bug), this would time out
+    latch.await(5, TimeUnit.SECONDS).shouldBeTrue()
+    fastCleanupCache.currentCacheSize() shouldBe 0
+  }
+
+  @Test
+  fun `close should clear all entries even when cleanup coroutine is active`() {
+    val fastCleanupCache = HttpClientCache(
+      maxCacheSize = 10,
+      maxAge = 30_000.milliseconds, // Long maxAge so entries don't expire
+      maxIdleTime = 30_000.milliseconds,
+      cleanupInterval = 10.milliseconds,
+    )
+
+    runBlocking {
+      for (i in 1..5) {
+        val key = ClientKey("user$i", "pass$i")
+        val entry = fastCleanupCache.getOrCreateClient(key) { createMockHttpClient() }
+        fastCleanupCache.onFinishedWithClient(entry)
+      }
+      fastCleanupCache.currentCacheSize() shouldBe 5
+
+      // Let the cleanup coroutine run a few cycles
+      delay(50.milliseconds)
+    }
+
+    fastCleanupCache.close()
+    fastCleanupCache.currentCacheSize() shouldBe 0
+  }
 }
