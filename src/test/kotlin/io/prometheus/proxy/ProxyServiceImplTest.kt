@@ -312,6 +312,28 @@ class ProxyServiceImplTest {
       verify { mockAgentContext.markActivityTime(false) }
     }
 
+  // Bug #5: reason was unconditionally set to the error message even on valid heartbeats
+  @Test
+  fun `sendHeartBeat should not set reason when valid`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "test-agent-456"
+
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+
+      val request = heartBeatRequest {
+        agentId = testAgentId
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val response = service.sendHeartBeat(request)
+
+      response.valid.shouldBeTrue()
+      // Before the fix, this was "Invalid agentId: test-agent-456 (sendHeartBeat)"
+      response.reason shouldBe ""
+    }
+
   @Test
   fun `sendHeartBeat should fail with missing agent context`(): Unit =
     runBlocking {
@@ -329,6 +351,26 @@ class ProxyServiceImplTest {
 
       response.valid.shouldBeFalse()
       response.reason shouldContain "Invalid agentId"
+    }
+
+  @Test
+  fun `sendHeartBeat should set reason only when invalid`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val testAgentId = "missing-agent-789"
+
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns null
+
+      val request = heartBeatRequest {
+        agentId = testAgentId
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val response = service.sendHeartBeat(request)
+
+      response.valid.shouldBeFalse()
+      response.reason shouldContain testAgentId
+      response.reason shouldContain "sendHeartBeat"
     }
 
   // Tests the gRPC streaming flow for scrape requests from proxy to agent.
