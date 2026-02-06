@@ -29,7 +29,6 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
-import io.prometheus.common.Utils.toLowercase
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.HeartBeatRequest
@@ -60,10 +59,9 @@ internal class ProxyServiceImpl(
 ) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
   override suspend fun connectAgent(request: Empty): Empty {
     if (proxy.options.transportFilterDisabled) {
-      "Agent (false) and Proxy (true) do not have matching transportFilterDisabled config values".also { msg ->
-        logger.error { msg }
-        throw RequestFailureException(msg)
-      }
+      val msg = "Agent (false) and Proxy (true) do not have matching transportFilterDisabled config values"
+      logger.error { msg }
+      throw RequestFailureException(msg)
     }
 
     proxy.metrics { connectCount.inc() }
@@ -72,11 +70,9 @@ internal class ProxyServiceImpl(
 
   override suspend fun connectAgentWithTransportFilterDisabled(request: Empty): AgentInfo {
     if (!proxy.options.transportFilterDisabled) {
-      "Agent (true) and Proxy (false) do not have matching transportFilterDisabled config values"
-        .also { msg ->
-          logger.error { msg }
-          throw RequestFailureException(msg)
-        }
+      val msg = "Agent (true) and Proxy (false) do not have matching transportFilterDisabled config values"
+      logger.error { msg }
+      throw RequestFailureException(msg)
     }
 
     proxy.metrics { connectCount.inc() }
@@ -192,7 +188,7 @@ internal class ProxyServiceImpl(
       requests.collect { response ->
         val ooc = response.chunkOneOfCase
         val chunkedContextMap = proxy.agentContextManager.chunkedContextMap
-        when (ooc.name.toLowercase()) {
+        when (ooc.name.lowercase()) {
           "header" -> {
             val scrapeId = response.header.headerScrapeId
             logger.debug { "Reading header for scrapeId: $scrapeId" }
