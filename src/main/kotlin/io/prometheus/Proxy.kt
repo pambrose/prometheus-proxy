@@ -27,7 +27,6 @@ import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.simpleClassName
-import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.BaseOptions.Companion.DEBUG
@@ -292,7 +291,7 @@ class Proxy(
                 if (vals.isEmpty()) {
                   HealthCheck.Result.healthy()
                 } else {
-                  val s = Joiner.on(", ").join(vals)
+                  val s = vals.joinToString(", ")
                   HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
                 }
               }
