@@ -49,7 +49,6 @@ import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.ifTrue
 import io.prometheus.common.Utils.lambda
-import io.prometheus.common.Utils.runCatchingCancellable
 import io.prometheus.grpc.ScrapeRequest
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -99,7 +98,15 @@ internal class AgentHttpService(
     scrapeRequest: ScrapeRequest,
     scrapeResults: ScrapeResults,
   ) {
-    runCatchingCancellable {
+    // Do not rethrow CancellationException here
+    // Ktor's HttpTimeout plugin signals timeouts by cancelling the coroutine's
+    // execution context with a CancellationException wrapping
+    // an HttpRequestTimeoutException. runCatchingCancellable rethrows CancellationException,
+    // so the .onFailure handler that sets the
+    // 408 status codes never fired. The agent never sent a timeout response back to the proxy,
+    // causing the proxy to wait indefinitely
+    // until the test client's own timeout fired.
+    runCatching {
       val clientKey = with(Url(url)) { ClientKey(user, password) }
       val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(scrapeRequest, clientKey) }
       try {
