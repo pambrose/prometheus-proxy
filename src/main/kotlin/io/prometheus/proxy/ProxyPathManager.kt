@@ -144,21 +144,25 @@ internal class ProxyPathManager(
       logger.info { "Removing paths for agentId: $agentId ($reason)" }
 
       synchronized(pathMap) {
+        // Collect keys to remove in a first pass to avoid modifying the map during iteration
+        val keysToRemove = mutableListOf<String>()
         pathMap.forEach { (k, v) ->
           if (v.agentContexts.size == 1) {
             if (v.agentContexts[0].agentId == agentId)
-              pathMap.remove(k)
-                ?.also {
-                  if (!isTestMode)
-                    logger.info { "Removed path /$k for $it" }
-                } ?: logger.warn { "Missing ${agentContext.desc}path /$k for agentId: $agentId" }
+              keysToRemove += k
           } else {
             val removed = v.agentContexts.removeIf { it.agentId == agentId }
             if (removed)
               logger.info { "Removed path /$k for $agentContext" }
-            else
-              logger.warn { "Missing path /$k for agentId: $agentId" }
           }
+        }
+
+        keysToRemove.forEach { k ->
+          pathMap.remove(k)
+            ?.also {
+              if (!isTestMode)
+                logger.info { "Removed path /$k for $it" }
+            } ?: logger.warn { "Missing ${agentContext.desc}path /$k for agentId: $agentId" }
         }
       }
     }
