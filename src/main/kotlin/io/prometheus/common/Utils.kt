@@ -26,7 +26,6 @@ import com.github.pambrose.common.util.Version.Companion.versionDesc
 import com.github.pambrose.common.util.simpleClassName
 import io.grpc.Status
 import io.prometheus.Proxy
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import org.slf4j.Logger.ROOT_LOGGER_NAME
 import org.slf4j.LoggerFactory
@@ -84,10 +83,4 @@ object Utils {
   }
 
   fun Status.exceptionDetails(e: Throwable) = "$code $description ${e.simpleClassName} - ${e.message}"
-
-  inline fun <R> runCatchingCancellable(block: () -> R): Result<R> =
-    runCatching(block).onFailure {
-      if (it is CancellationException)
-        throw it
-    }
 }
