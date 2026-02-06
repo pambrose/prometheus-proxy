@@ -61,7 +61,7 @@ class TlsNoMutualAuthTest :
           startAgent(
             serverName = "nomutualauth",
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
+            chunkContentSizeBytes = DEFAULT_CHUNK_SIZE,
             maxConcurrentClients = CONCURRENT_CLIENTS,
             args = listOf(
               "--proxy",
