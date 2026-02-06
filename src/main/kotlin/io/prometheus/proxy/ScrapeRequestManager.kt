@@ -18,14 +18,13 @@
 
 package io.prometheus.proxy
 
-import com.google.common.collect.Maps.newConcurrentMap
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.ScrapeResults
-import java.util.concurrent.ConcurrentMap
+import java.util.concurrent.ConcurrentHashMap
 
 internal class ScrapeRequestManager {
   // Map scrape_id to agent_id
-  val scrapeRequestMap: ConcurrentMap<Long, ScrapeRequestWrapper> = newConcurrentMap()
+  val scrapeRequestMap = ConcurrentHashMap<Long, ScrapeRequestWrapper>()
 
   val scrapeMapSize: Int
     get() = scrapeRequestMap.size
