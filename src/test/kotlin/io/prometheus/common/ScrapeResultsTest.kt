@@ -57,7 +57,7 @@ class ScrapeResultsTest {
     )
 
     results.srValidResponse.shouldBeFalse()
-    results.srStatusCode shouldBe HttpStatusCode.NotFound.value
+    results.srStatusCode shouldBe HttpStatusCode.ServiceUnavailable.value
     results.srContentType.shouldBeEmpty()
     results.srZipped.shouldBeFalse()
     results.srContentAsText.shouldBeEmpty()
@@ -282,11 +282,23 @@ class ScrapeResultsTest {
   }
 
   @Test
-  fun `errorCode should return NotFound for IOException`() {
+  fun `errorCode should return ServiceUnavailable for IOException`() {
     val exception = IOException("connection refused")
     val code = errorCode(exception, "http://test.com")
 
-    code shouldBe HttpStatusCode.NotFound.value
+    code shouldBe HttpStatusCode.ServiceUnavailable.value
+  }
+
+  @Test
+  fun `errorCode should return ServiceUnavailable for IOException subclasses`() {
+    val connectException = java.net.ConnectException("Connection refused")
+    errorCode(connectException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
+
+    val unknownHostException = java.net.UnknownHostException("unknown-host.local")
+    errorCode(unknownHostException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
+
+    val noRouteException = java.net.NoRouteToHostException("No route to host")
+    errorCode(noRouteException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
   }
 
   @Test

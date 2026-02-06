@@ -23,7 +23,6 @@ import com.github.pambrose.common.util.simpleClassName
 import com.google.protobuf.ByteString
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.plugins.HttpRequestTimeoutException
-import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.http.HttpStatusCode.Companion.RequestTimeout
 import io.ktor.http.HttpStatusCode.Companion.ServiceUnavailable
 import io.ktor.network.sockets.SocketTimeoutException
@@ -40,7 +39,7 @@ internal class ScrapeResults(
   val srAgentId: String,
   val srScrapeId: Long,
   var srValidResponse: Boolean = false,
-  var srStatusCode: Int = NotFound.value,
+  var srStatusCode: Int = ServiceUnavailable.value,
   var srContentType: String = "",
   var srZipped: Boolean = false,
   var srContentAsText: String = "",
@@ -123,7 +122,7 @@ internal class ScrapeResults(
 
         is IOException -> {
           logger.warn { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
-          NotFound.value
+          ServiceUnavailable.value
         }
 
         else -> {
