@@ -43,18 +43,19 @@ internal class AgentContextCleanupService(
     val maxAgentInactivityTime = configVals.maxAgentInactivitySecs.seconds
     val pauseTime = configVals.staleAgentCheckPauseSecs.seconds
     while (isRunning) {
-      proxy.agentContextManager.agentContextMap
-        .forEach { (agentId, agentContext) ->
-          val inactiveTime = agentContext.inactivityDuration
-          if (inactiveTime > maxAgentInactivityTime) {
-            logger.info {
-              val id = agentContext.agentId
-              "Evicting agentId $id after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
-            }
-            proxy.removeAgentContext(agentId, "Eviction")
-            proxy.metrics { agentEvictionCount.inc() }
-          }
+      val agentsToEvict =
+        proxy.agentContextManager.agentContextMap
+          .filter { (_, agentContext) -> agentContext.inactivityDuration > maxAgentInactivityTime }
+          .map { (agentId, agentContext) -> agentId to agentContext }
+
+      agentsToEvict.forEach { (agentId, agentContext) ->
+        val inactiveTime = agentContext.inactivityDuration
+        logger.info {
+          "Evicting agentId $agentId after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
         }
+        proxy.removeAgentContext(agentId, "Eviction")
+        proxy.metrics { agentEvictionCount.inc() }
+      }
       sleep(pauseTime)
     }
   }
