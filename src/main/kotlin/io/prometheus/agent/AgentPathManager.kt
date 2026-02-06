@@ -19,8 +19,7 @@
 package io.prometheus.agent
 
 import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
-import com.google.common.collect.Maps.newConcurrentMap
+import java.util.concurrent.ConcurrentHashMap
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
@@ -30,7 +29,7 @@ internal class AgentPathManager(
   private val agent: Agent,
 ) {
   private val agentConfigVals = agent.configVals.agent
-  private val pathContextMap = newConcurrentMap<String, PathContext>()
+  private val pathContextMap = ConcurrentHashMap<String, PathContext>()
 
   operator fun get(path: String): PathContext? = pathContextMap[path]
 
@@ -85,9 +84,10 @@ internal class AgentPathManager(
     val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
     agent.grpcService.unregisterPathOnProxy(path)
     val pathContext = pathContextMap.remove(path)
-    when {
-      pathContext.isNull() -> logger.info { "No path value /$path found in pathContextMap when unregistering" }
-      !agent.isTestMode -> logger.info { "Unregistered /$path for ${pathContext.url}" }
+    if (pathContext == null) {
+      logger.info { "No path value /$path found in pathContextMap when unregistering" }
+    } else if (!agent.isTestMode) {
+      logger.info { "Unregistered /$path for ${pathContext.url}" }
     }
   }
 
