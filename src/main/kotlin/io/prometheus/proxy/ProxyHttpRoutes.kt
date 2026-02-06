@@ -225,46 +225,51 @@ object ProxyHttpRoutes {
 
     logger.debug { "Results returned from $agentContext for $scrapeRequest" }
 
-    scrapeRequest.scrapeResults.also { scrapeResults ->
-      HttpStatusCode.fromValue(scrapeResults.srStatusCode).also { statusCode ->
+    val scrapeResults = scrapeRequest.scrapeResults
+      ?: return ScrapeRequestResponse(
+        statusCode = HttpStatusCode.ServiceUnavailable,
+        updateMsg = "missing_results",
+        fetchDuration = scrapeRequest.ageDuration(),
+      )
 
-        val contentType =
-          runCatching {
-            if (proxy.options.debugEnabled)
-              logger.info { "CT check - submitScrapeRequest() contentType: ${scrapeResults.srContentType}" }
-            ContentType.parse(scrapeResults.srContentType)
-          }.getOrElse {
-            logger.debug { "Error parsing content type: ${scrapeResults.srContentType} -- ${it.simpleClassName}" }
-            Text.Plain.withCharset(Charsets.UTF_8)
-          }
-        logger.debug { "Content type: $contentType" }
+    HttpStatusCode.fromValue(scrapeResults.srStatusCode).also { statusCode ->
 
-        // Do not return content on error status codes
-        return if (!statusCode.isSuccess())
-          scrapeRequest.scrapeResults.run {
-            ScrapeRequestResponse(
-              statusCode = statusCode,
-              contentType = contentType,
-              failureReason = srFailureReason,
-              url = srUrl,
-              updateMsg = "path_not_found",
-              fetchDuration = scrapeRequest.ageDuration(),
-            )
-          }
-        else
-          scrapeRequest.scrapeResults.run {
-            // Unzip content here
-            ScrapeRequestResponse(
-              statusCode = statusCode,
-              contentType = contentType,
-              contentText = if (srZipped) srContentAsZipped.unzip() else srContentAsText,
-              failureReason = srFailureReason,
-              url = srUrl,
-              updateMsg = "success",
-              fetchDuration = scrapeRequest.ageDuration(),
-            )
-          }
-      }
+      val contentType =
+        runCatching {
+          if (proxy.options.debugEnabled)
+            logger.info { "CT check - submitScrapeRequest() contentType: ${scrapeResults.srContentType}" }
+          ContentType.parse(scrapeResults.srContentType)
+        }.getOrElse {
+          logger.debug { "Error parsing content type: ${scrapeResults.srContentType} -- ${it.simpleClassName}" }
+          Text.Plain.withCharset(Charsets.UTF_8)
+        }
+      logger.debug { "Content type: $contentType" }
+
+      // Do not return content on error status codes
+      return if (!statusCode.isSuccess())
+        scrapeResults.run {
+          ScrapeRequestResponse(
+            statusCode = statusCode,
+            contentType = contentType,
+            failureReason = srFailureReason,
+            url = srUrl,
+            updateMsg = "path_not_found",
+            fetchDuration = scrapeRequest.ageDuration(),
+          )
+        }
+      else
+        scrapeResults.run {
+          // Unzip content here
+          ScrapeRequestResponse(
+            statusCode = statusCode,
+            contentType = contentType,
+            contentText = if (srZipped) srContentAsZipped.unzip() else srContentAsText,
+            failureReason = srFailureReason,
+            url = srUrl,
+            updateMsg = "success",
+            fetchDuration = scrapeRequest.ageDuration(),
+          )
+        }
     }
   }
 
