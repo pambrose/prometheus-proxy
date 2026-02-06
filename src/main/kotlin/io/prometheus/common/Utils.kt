@@ -76,4 +76,52 @@ object Utils {
   }
 
   fun Status.exceptionDetails(e: Throwable) = "$code $description ${e.simpleClassName} - ${e.message}"
+
+  data class HostPort(
+    val host: String,
+    val port: Int,
+  )
+
+  fun parseHostPort(
+    hostPort: String,
+    defaultPort: Int,
+  ): HostPort =
+    when {
+      // Bracketed IPv6: [::1]:50051 or [::1]
+      hostPort.startsWith("[") -> {
+        val closeBracket = hostPort.indexOf(']')
+        when {
+          closeBracket == -1 -> {
+            HostPort(hostPort, defaultPort)
+          }
+
+          closeBracket + 1 < hostPort.length && hostPort[closeBracket + 1] == ':' -> {
+            HostPort(
+              hostPort.substring(0, closeBracket + 1),
+              hostPort.substring(closeBracket + 2).toInt(),
+            )
+          }
+
+          else -> {
+            HostPort(hostPort.substring(0, closeBracket + 1), defaultPort)
+          }
+        }
+      }
+
+      // No colon: plain hostname
+      ':' !in hostPort -> {
+        HostPort(hostPort, defaultPort)
+      }
+
+      // Multiple colons without brackets: unbracketed IPv6 (no port)
+      hostPort.indexOf(':') != hostPort.lastIndexOf(':') -> {
+        HostPort(hostPort, defaultPort)
+      }
+
+      // Single colon: host:port
+      else -> {
+        val colonIndex = hostPort.indexOf(':')
+        HostPort(hostPort.substring(0, colonIndex), hostPort.substring(colonIndex + 1).toInt())
+      }
+    }
 }
