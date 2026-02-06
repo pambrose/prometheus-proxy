@@ -89,7 +89,7 @@ class NettyTestWithAdminMetricsTest :
             debugEnabled = true,
             metricsEnabled = true,
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
+            chunkContentSizeBytes = DEFAULT_CHUNK_SIZE,
             maxConcurrentClients = CONCURRENT_CLIENTS,
           )
         },

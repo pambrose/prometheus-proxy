@@ -107,7 +107,7 @@ object TestUtils {
     debugEnabled: Boolean = false,
     metricsEnabled: Boolean = false,
     scrapeTimeoutSecs: Int = -1,
-    chunkContentSizeKbs: Int = -1,
+    chunkContentSizeBytes: Int = -1,
     maxConcurrentClients: Int = -1,
     args: List<String> = emptyList(),
   ): Agent {
@@ -126,8 +126,8 @@ object TestUtils {
           add("-Dagent.metrics.enabled=$metricsEnabled")
           if (scrapeTimeoutSecs != -1)
             add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
-          if (chunkContentSizeKbs != -1)
-            add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
+          if (chunkContentSizeBytes != -1)
+            add("-Dagent.chunkContentSizeBytes=$chunkContentSizeBytes")
           if (maxConcurrentClients != -1)
             add("-Dagent.http.maxConcurrentClients=$maxConcurrentClients")
         },
