@@ -108,7 +108,7 @@ internal class AgentHttpService(
     // until the test client's own timeout fired.
     runCatching {
       val clientKey = with(Url(url)) { ClientKey(user, password) }
-      val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(scrapeRequest, clientKey) }
+      val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(clientKey) }
       try {
         entry.client.get(
           url = url,
@@ -133,6 +133,8 @@ internal class AgentHttpService(
       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
+      request.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
+      request.authHeader.ifBlank { null }?.also { header(HttpHeaders.Authorization, it) }
     }
 
   private fun processHttpResponse(
@@ -174,10 +176,7 @@ internal class AgentHttpService(
     }
   }
 
-  private fun newHttpClient(
-    scrapeRequest: ScrapeRequest,
-    clientKey: ClientKey,
-  ): HttpClient =
+  private fun newHttpClient(clientKey: ClientKey): HttpClient =
     HttpClient(CIO) {
       expectSuccess = false
       engine {
@@ -198,13 +197,6 @@ internal class AgentHttpService(
             trustManager = TrustAllX509TrustManager
           }
         }
-      }
-
-      // Set default headers
-      defaultRequest {
-        scrapeRequest.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
-        val authHeader = scrapeRequest.authHeader.ifBlank { null }
-        authHeader?.also { header(HttpHeaders.Authorization, it) }
       }
 
       install(HttpTimeout)

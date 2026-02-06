@@ -67,8 +67,9 @@ object ProxyHttpRoutes {
 
   private fun Routing.handleServiceDiscoveryEndpoint(proxy: Proxy) {
     if (proxy.options.sdEnabled) {
-      logger.info { "Adding /${proxy.options.sdPath} service discovery endpoint" }
-      get(proxy.options.sdPath) {
+      val sdPath = proxy.options.sdPath.ensureLeadingSlash()
+      logger.info { "Adding $sdPath service discovery endpoint" }
+      get(sdPath) {
         val json = proxy.buildServiceDiscoveryJson()
         val prettyPrint = format.encodeToString(json)
         call.respondWith(prettyPrint, ContentType.Application.Json.withCharset(Charsets.UTF_8))
@@ -77,6 +78,8 @@ object ProxyHttpRoutes {
       logger.info { "Not adding /${proxy.options.sdPath} service discovery endpoint" }
     }
   }
+
+  internal fun String.ensureLeadingSlash() = if (startsWith("/")) this else "/$this"
 
   private fun Routing.handleClientRequests(proxy: Proxy) {
     get("/*") {
