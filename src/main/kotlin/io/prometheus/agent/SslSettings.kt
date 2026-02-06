@@ -41,7 +41,7 @@ object SslSettings {
   fun getTrustManagerFactory(
     fileName: String,
     password: String,
-  ): TrustManagerFactory? =
+  ): TrustManagerFactory =
     TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
       .apply {
         init(getKeyStore(fileName, password))
@@ -50,15 +50,15 @@ object SslSettings {
   fun getSslContext(
     fileName: String,
     password: String,
-  ): SSLContext? =
+  ): SSLContext =
     SSLContext.getInstance("TLS")
       .apply {
-        init(null, getTrustManagerFactory(fileName, password)?.trustManagers, null)
+        init(null, getTrustManagerFactory(fileName, password).trustManagers, null)
       }
 
   fun getTrustManager(
     fileName: String,
     password: String,
   ): X509TrustManager =
-    getTrustManagerFactory(fileName, password)?.trustManagers?.first { it is X509TrustManager } as X509TrustManager
+    getTrustManagerFactory(fileName, password).trustManagers.first { it is X509TrustManager } as X509TrustManager
 }
