@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction", "SwallowedException")
 
 package io.prometheus.proxy
 
