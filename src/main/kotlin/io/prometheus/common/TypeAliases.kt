@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package io.prometheus.common
+@file:Suppress("ktlint:standard:filename")
 
-@Suppress("unused")
-object TypeAliases
+package io.prometheus.common
 
 internal typealias ScrapeRequestAction = suspend () -> ScrapeResults
