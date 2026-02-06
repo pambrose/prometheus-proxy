@@ -80,7 +80,15 @@ enum class EnvVars {
 
   fun getEnv(defaultVal: Boolean) = getenv(name)?.toBoolean() ?: defaultVal
 
-  fun getEnv(defaultVal: Int) = getenv(name)?.toInt() ?: defaultVal
+  fun getEnv(defaultVal: Int): Int {
+    val value = getenv(name) ?: return defaultVal
+    return value.toIntOrNull()
+      ?: throw IllegalArgumentException("Environment variable $name has invalid integer value: '$value'")
+  }
 
-  fun getEnv(defaultVal: Long) = getenv(name)?.toLong() ?: defaultVal
+  fun getEnv(defaultVal: Long): Long {
+    val value = getenv(name) ?: return defaultVal
+    return value.toLongOrNull()
+      ?: throw IllegalArgumentException("Environment variable $name has invalid long value: '$value'")
+  }
 }
