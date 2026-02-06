@@ -45,7 +45,12 @@ internal class ProxyPathManager(
 
   private val pathMap = ConcurrentHashMap<String, AgentContextInfo>()
 
-  fun getAgentContextInfo(path: String) = pathMap[path]
+  fun getAgentContextInfo(path: String): AgentContextInfo? =
+    synchronized(pathMap) {
+      pathMap[path]?.let { info ->
+        AgentContextInfo(info.isConsolidated, info.labels, info.agentContexts.toMutableList())
+      }
+    }
 
   val pathMapSize: Int
     get() = pathMap.size
