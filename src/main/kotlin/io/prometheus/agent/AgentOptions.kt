@@ -42,6 +42,7 @@ import io.prometheus.common.EnvVars.PROXY_HOSTNAME
 import io.prometheus.common.EnvVars.SCRAPE_MAX_RETRIES
 import io.prometheus.common.EnvVars.SCRAPE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.TRUST_ALL_X509_CERTIFICATES
+import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.setLogLevel
 import kotlin.time.Duration.Companion.seconds
 
@@ -80,7 +81,7 @@ class AgentOptions(
     private set
 
   @Parameter(names = ["--chunk"], description = "Threshold for chunking content to Proxy and buffer size (KBs)")
-  var chunkContentSizeKbs = -1
+  var chunkContentSizeBytes = -1
     private set
 
   @Parameter(names = ["--gzip"], description = "Minimum size for content to be gzipped (bytes)")
@@ -134,10 +135,9 @@ class AgentOptions(
 
     if (proxyHostname.isEmpty()) {
       val configHostname = agentConfigVals.proxy.hostname
-      val str = if (":" in configHostname)
-        configHostname
-      else
-        "$configHostname:${agentConfigVals.proxy.port}"
+      val defaultPort = agentConfigVals.proxy.port
+      val parsed = parseHostPort(configHostname, defaultPort)
+      val str = "${parsed.host}:${parsed.port}"
       proxyHostname = PROXY_HOSTNAME.getEnv(str)
     }
     logger.info { "proxyHostname: $proxyHostname" }
@@ -158,11 +158,11 @@ class AgentOptions(
       scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
     logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
 
-    if (chunkContentSizeKbs == -1)
-      chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
+    if (chunkContentSizeBytes == -1)
+      chunkContentSizeBytes = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
     // Multiply the value time KB
-    chunkContentSizeKbs *= 1024
-    logger.info { "chunkContentSizeKbs: $chunkContentSizeKbs" }
+    chunkContentSizeBytes *= 1024
+    logger.info { "chunkContentSizeBytes: $chunkContentSizeBytes" }
 
     if (minGzipSizeBytes == -1)
       minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agentConfigVals.minGzipSizeBytes)
