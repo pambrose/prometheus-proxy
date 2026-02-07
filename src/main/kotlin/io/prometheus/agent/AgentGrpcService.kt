@@ -331,9 +331,7 @@ internal class AgentGrpcService(
           val buffer = ByteArray(chunkContentSize)
           var readByteCount: Int
 
-          while (withContext(Dispatchers.IO) {
-              bais.read(buffer)
-            }.also { readByteCount = it } > 0) {
+          while (withContext(Dispatchers.IO) { bais.read(buffer) }.also { readByteCount = it } > 0) {
             totalChunkCount++
             totalByteCount += readByteCount
             checksum.update(buffer, 0, readByteCount)
