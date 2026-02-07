@@ -23,7 +23,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.withCharset
 import io.ktor.server.cio.CIO as ServerCIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
@@ -32,6 +34,7 @@ import io.ktor.server.routing.routing
 import io.prometheus.proxy.ProxyHttpRoutes.ensureLeadingSlash
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import kotlin.time.Duration.Companion.milliseconds
 
 // Bug #12: The service discovery endpoint was registered using the raw sdPath config value,
 // which defaults to "discovery" (no leading slash). The fix normalizes the path with
@@ -118,4 +121,94 @@ class ProxyHttpRoutesTest {
         server.stop(0, 0)
       }
     }
+
+  // ==================== ScrapeRequestResponse Tests ====================
+
+  @Test
+  fun `ScrapeRequestResponse should store all properties`() {
+    val response = ScrapeRequestResponse(
+      statusCode = HttpStatusCode.OK,
+      updateMsg = "success",
+      contentType = ContentType.Application.Json.withCharset(Charsets.UTF_8),
+      contentText = """{"metric":"value"}""",
+      failureReason = "",
+      url = "http://localhost:8080/metrics",
+      fetchDuration = 150.milliseconds,
+    )
+
+    response.statusCode shouldBe HttpStatusCode.OK
+    response.updateMsg shouldBe "success"
+    response.contentText shouldBe """{"metric":"value"}"""
+    response.failureReason shouldBe ""
+    response.url shouldBe "http://localhost:8080/metrics"
+    response.fetchDuration shouldBe 150.milliseconds
+  }
+
+  @Test
+  fun `ScrapeRequestResponse should default to plain text content type`() {
+    val response = ScrapeRequestResponse(
+      statusCode = HttpStatusCode.ServiceUnavailable,
+      updateMsg = "timed_out",
+      fetchDuration = 5000.milliseconds,
+    )
+
+    response.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
+    response.contentText shouldBe ""
+    response.failureReason shouldBe ""
+    response.url shouldBe ""
+  }
+
+  @Test
+  fun `ScrapeRequestResponse should handle error status codes`() {
+    val response = ScrapeRequestResponse(
+      statusCode = HttpStatusCode.NotFound,
+      updateMsg = "path_not_found",
+      failureReason = "Agent not found for path",
+      url = "http://localhost/metrics",
+      fetchDuration = 50.milliseconds,
+    )
+
+    response.statusCode shouldBe HttpStatusCode.NotFound
+    response.updateMsg shouldBe "path_not_found"
+    response.failureReason shouldBe "Agent not found for path"
+  }
+
+  // ==================== ResponseResults Tests ====================
+
+  @Test
+  fun `ResponseResults should have correct defaults`() {
+    val results = ResponseResults()
+
+    results.statusCode shouldBe HttpStatusCode.OK
+    results.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
+    results.contentText shouldBe ""
+    results.updateMsg shouldBe ""
+  }
+
+  @Test
+  fun `ResponseResults should accept custom values`() {
+    val results = ResponseResults(
+      statusCode = HttpStatusCode.ServiceUnavailable,
+      contentType = ContentType.Application.Json.withCharset(Charsets.UTF_8),
+      contentText = """{"error":"proxy stopped"}""",
+      updateMsg = "proxy_stopped",
+    )
+
+    results.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+    results.contentText shouldBe """{"error":"proxy stopped"}"""
+    results.updateMsg shouldBe "proxy_stopped"
+  }
+
+  @Test
+  fun `ResponseResults properties should be mutable`() {
+    val results = ResponseResults()
+
+    results.statusCode = HttpStatusCode.NotFound
+    results.contentText = "modified content"
+    results.updateMsg = "modified_msg"
+
+    results.statusCode shouldBe HttpStatusCode.NotFound
+    results.contentText shouldBe "modified content"
+    results.updateMsg shouldBe "modified_msg"
+  }
 }
