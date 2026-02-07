@@ -38,11 +38,7 @@ import io.ktor.server.routing.get
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
-import io.prometheus.proxy.ProxyUtils.emptyPathResponse
 import io.prometheus.proxy.ProxyUtils.incrementScrapeRequestCount
-import io.prometheus.proxy.ProxyUtils.invalidAgentContextResponse
-import io.prometheus.proxy.ProxyUtils.invalidPathResponse
-import io.prometheus.proxy.ProxyUtils.proxyNotRunningResponse
 import io.prometheus.proxy.ProxyUtils.respondWith
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -87,26 +83,24 @@ object ProxyHttpRoutes {
 
       val path = call.request.path().drop(1)
       val queryParams = call.request.queryParameters.formUrlEncode()
-      val responseResults = ResponseResults()
 
       logger.debug {
         "Servicing request for path: $path${if (queryParams.isNotEmpty()) " with query params $queryParams" else ""}"
       }
 
-      when {
-        !proxy.isRunning -> proxyNotRunningResponse(logger, responseResults)
-        path.isBlank() -> emptyPathResponse(proxy, logger, responseResults)
-        path == FAVICON_FILENAME -> invalidPathResponse(path, proxy, logger, responseResults)
-        proxy.isBlitzRequest(path) -> responseResults.contentText = "42"
-        else -> processRequestsBasedOnPath(proxy, path, queryParams, responseResults)
-      }
+      val responseResults =
+        when {
+          !proxy.isRunning -> ProxyUtils.proxyNotRunningResponse()
+          path.isBlank() -> ProxyUtils.emptyPathResponse(proxy)
+          path == FAVICON_FILENAME -> ProxyUtils.invalidPathResponse(path, proxy)
+          proxy.isBlitzRequest(path) -> ResponseResults(contentText = "42")
+          else -> processRequestsBasedOnPath(proxy, path, queryParams)
+        }
 
-      responseResults.apply {
-        incrementScrapeRequestCount(proxy, updateMsg)
-        if (proxy.options.debugEnabled)
-          logger.info { "CT check - handleClientRequests() contentType: $contentType" }
-        call.respondWith(contentText, contentType, statusCode)
-      }
+      incrementScrapeRequestCount(proxy, responseResults.updateMsg)
+      if (proxy.options.debugEnabled)
+        logger.info { "CT check - handleClientRequests() contentType: ${responseResults.contentType}" }
+      call.respondWith(responseResults.contentText, responseResults.contentType, responseResults.statusCode)
     }
   }
 
@@ -114,13 +108,12 @@ object ProxyHttpRoutes {
     proxy: Proxy,
     path: String,
     queryParams: String,
-    responseResults: ResponseResults,
-  ) {
+  ): ResponseResults {
     val agentContextInfo = proxy.pathManager.getAgentContextInfo(path)
-    when {
-      agentContextInfo.isNull() -> invalidPathResponse(path, proxy, logger, responseResults)
-      agentContextInfo.isNotValid() -> invalidAgentContextResponse(path, proxy, logger, responseResults)
-      else -> processRequests(agentContextInfo, proxy, path, queryParams, responseResults)
+    return when {
+      agentContextInfo.isNull() -> ProxyUtils.invalidPathResponse(path, proxy)
+      agentContextInfo.isNotValid() -> ProxyUtils.invalidAgentContextResponse(path, proxy)
+      else -> processRequests(agentContextInfo, proxy, path, queryParams)
     }
   }
 
@@ -129,37 +122,36 @@ object ProxyHttpRoutes {
     proxy: Proxy,
     path: String,
     queryParams: String,
-    responseResults: ResponseResults,
-  ) {
+  ): ResponseResults {
     val results: List<ScrapeRequestResponse> = executeScrapeRequests(agentContextInfo, proxy, path, queryParams)
 
     // Handle case where no results were returned (all agents failed or disconnected)
     if (results.isEmpty()) {
       logger.warn { "No scrape results returned for path: $path" }
-      responseResults.apply {
-        statusCode = HttpStatusCode.ServiceUnavailable
-        contentType = Text.Plain.withCharset(Charsets.UTF_8)
-        contentText = "No agents available to handle request"
-        updateMsg = "no_agents"
-      }
-    } else {
-      val statusCodes: List<HttpStatusCode> = results.map { it.statusCode }.toSet().toList()
-      val contentTypes: List<ContentType> = results.map { it.contentType }.toSet().toList()
-      val updateMsgs: String = results.joinToString("\n") { it.updateMsg }
-      // Grab the contentType of the first OK in the list
-      val okContentType: ContentType? = results.firstOrNull { it.statusCode == HttpStatusCode.OK }?.contentType
-      if (proxy.options.debugEnabled) {
-        logger.info { "CT check - processRequests() contentTypes: ${contentTypes.joinToString(", ")}" }
-        logger.info { "CT check - processRequests() okContentType: $okContentType" }
-      }
-
-      responseResults.apply {
-        statusCode = if (statusCodes.contains(HttpStatusCode.OK)) HttpStatusCode.OK else statusCodes[0]
-        contentType = okContentType ?: contentTypes[0]
-        contentText = results.joinToString("\n") { it.contentText }
-        updateMsg = updateMsgs
-      }
+      return ResponseResults(
+        statusCode = HttpStatusCode.ServiceUnavailable,
+        contentType = Text.Plain.withCharset(Charsets.UTF_8),
+        contentText = "No agents available to handle request",
+        updateMsg = "no_agents",
+      )
     }
+
+    val statusCodes: List<HttpStatusCode> = results.map { it.statusCode }.toSet().toList()
+    val contentTypes: List<ContentType> = results.map { it.contentType }.toSet().toList()
+    val updateMsgs: String = results.joinToString("\n") { it.updateMsg }
+    // Grab the contentType of the first OK in the list
+    val okContentType: ContentType? = results.firstOrNull { it.statusCode == HttpStatusCode.OK }?.contentType
+    if (proxy.options.debugEnabled) {
+      logger.info { "CT check - processRequests() contentTypes: ${contentTypes.joinToString(", ")}" }
+      logger.info { "CT check - processRequests() okContentType: $okContentType" }
+    }
+
+    return ResponseResults(
+      statusCode = if (statusCodes.contains(HttpStatusCode.OK)) HttpStatusCode.OK else statusCodes[0],
+      contentType = okContentType ?: contentTypes[0],
+      contentText = results.joinToString("\n") { it.contentText },
+      updateMsg = updateMsgs,
+    )
   }
 
   private suspend fun RoutingContext.executeScrapeRequests(

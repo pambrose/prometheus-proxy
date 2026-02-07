@@ -18,7 +18,6 @@
 
 package io.prometheus.proxy
 
-import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.matchers.shouldBe
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -29,52 +28,45 @@ import io.prometheus.Proxy
 import org.junit.jupiter.api.Test
 
 class ProxyUtilsTest {
-  private val logger = logger {}
-
   @Test
-  fun `invalidAgentContextResponse should set correct status and message`() {
+  fun `invalidAgentContextResponse should return correct status and message`() {
     val mockProxy = mockk<Proxy>(relaxed = true)
-    val responseResults = ResponseResults()
 
-    ProxyUtils.invalidAgentContextResponse("test-path", mockProxy, logger, responseResults)
+    val result = ProxyUtils.invalidAgentContextResponse("test-path", mockProxy)
 
-    responseResults.statusCode shouldBe HttpStatusCode.NotFound
-    responseResults.updateMsg shouldBe "invalid_agent_context"
+    result.statusCode shouldBe HttpStatusCode.NotFound
+    result.updateMsg shouldBe "invalid_agent_context"
     verify { mockProxy.logActivity("Invalid AgentContext for /test-path") }
   }
 
   @Test
-  fun `invalidPathResponse should set correct status and message`() {
+  fun `invalidPathResponse should return correct status and message`() {
     val mockProxy = mockk<Proxy>(relaxed = true)
-    val responseResults = ResponseResults()
 
-    ProxyUtils.invalidPathResponse("invalid-path", mockProxy, logger, responseResults)
+    val result = ProxyUtils.invalidPathResponse("invalid-path", mockProxy)
 
-    responseResults.statusCode shouldBe HttpStatusCode.NotFound
-    responseResults.updateMsg shouldBe "invalid_path"
+    result.statusCode shouldBe HttpStatusCode.NotFound
+    result.updateMsg shouldBe "invalid_path"
     verify { mockProxy.logActivity("Invalid path request /invalid-path") }
   }
 
   @Test
-  fun `emptyPathResponse should set correct status and message`() {
+  fun `emptyPathResponse should return correct status and message`() {
     val mockProxy = mockk<Proxy>(relaxed = true)
-    val responseResults = ResponseResults()
 
-    ProxyUtils.emptyPathResponse(mockProxy, logger, responseResults)
+    val result = ProxyUtils.emptyPathResponse(mockProxy)
 
-    responseResults.statusCode shouldBe HttpStatusCode.NotFound
-    responseResults.updateMsg shouldBe "missing_path"
+    result.statusCode shouldBe HttpStatusCode.NotFound
+    result.updateMsg shouldBe "missing_path"
     verify { mockProxy.logActivity(any()) }
   }
 
   @Test
-  fun `proxyNotRunningResponse should set ServiceUnavailable status`() {
-    val responseResults = ResponseResults()
+  fun `proxyNotRunningResponse should return ServiceUnavailable status`() {
+    val result = ProxyUtils.proxyNotRunningResponse()
 
-    ProxyUtils.proxyNotRunningResponse(logger, responseResults)
-
-    responseResults.statusCode shouldBe HttpStatusCode.ServiceUnavailable
-    responseResults.updateMsg shouldBe "proxy_stopped"
+    result.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+    result.updateMsg shouldBe "proxy_stopped"
   }
 
   @Test
@@ -105,43 +97,51 @@ class ProxyUtilsTest {
   }
 
   @Test
-  fun `ResponseResults should be mutable`() {
-    val responseResults = ResponseResults()
-
-    responseResults.statusCode = HttpStatusCode.BadRequest
-    responseResults.contentText = "Error message"
-    responseResults.updateMsg = "test_update"
-
-    responseResults.statusCode shouldBe HttpStatusCode.BadRequest
-    responseResults.contentText shouldBe "Error message"
-    responseResults.updateMsg shouldBe "test_update"
-  }
-
-  @Test
   fun `invalidPathResponse should handle various path formats`() {
     val mockProxy = mockk<Proxy>(relaxed = true)
 
     // Test with empty path
-    val responseResults1 = ResponseResults()
-    ProxyUtils.invalidPathResponse("", mockProxy, logger, responseResults1)
-    responseResults1.statusCode shouldBe HttpStatusCode.NotFound
+    val result1 = ProxyUtils.invalidPathResponse("", mockProxy)
+    result1.statusCode shouldBe HttpStatusCode.NotFound
     verify { mockProxy.logActivity("Invalid path request /") }
 
     // Test with path containing special characters
-    val responseResults2 = ResponseResults()
-    ProxyUtils.invalidPathResponse("metrics/test", mockProxy, logger, responseResults2)
-    responseResults2.statusCode shouldBe HttpStatusCode.NotFound
+    val result2 = ProxyUtils.invalidPathResponse("metrics/test", mockProxy)
+    result2.statusCode shouldBe HttpStatusCode.NotFound
     verify { mockProxy.logActivity("Invalid path request /metrics/test") }
   }
 
   @Test
-  fun `emptyPathResponse should use info log level`() {
+  fun `emptyPathResponse should use correct status`() {
     val mockProxy = mockk<Proxy>(relaxed = true)
-    val responseResults = ResponseResults()
 
-    ProxyUtils.emptyPathResponse(mockProxy, logger, responseResults)
+    val result = ProxyUtils.emptyPathResponse(mockProxy)
 
-    responseResults.statusCode shouldBe HttpStatusCode.NotFound
+    result.statusCode shouldBe HttpStatusCode.NotFound
     verify { mockProxy.logActivity(any()) }
+  }
+
+  // DESIGN-1: Verify that helper functions return independent ResponseResults instances
+  // rather than mutating a shared object (the old output-parameter anti-pattern).
+  @Test
+  fun `helper functions should return independent ResponseResults instances`() {
+    val mockProxy = mockk<Proxy>(relaxed = true)
+
+    val result1 = ProxyUtils.invalidPathResponse("path1", mockProxy)
+    val result2 = ProxyUtils.invalidAgentContextResponse("path2", mockProxy)
+    val result3 = ProxyUtils.emptyPathResponse(mockProxy)
+    val result4 = ProxyUtils.proxyNotRunningResponse()
+
+    // Each call returns its own independent instance
+    result1.updateMsg shouldBe "invalid_path"
+    result2.updateMsg shouldBe "invalid_agent_context"
+    result3.updateMsg shouldBe "missing_path"
+    result4.updateMsg shouldBe "proxy_stopped"
+
+    // Mutating one result does not affect others
+    result1.contentText = "modified"
+    result2.contentText shouldBe ""
+    result3.contentText shouldBe ""
+    result4.contentText shouldBe ""
   }
 }

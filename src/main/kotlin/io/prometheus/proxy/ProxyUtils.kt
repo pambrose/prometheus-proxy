@@ -16,7 +16,7 @@
 
 package io.prometheus.proxy
 
-import io.github.oshai.kotlinlogging.KLogger
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders
@@ -30,86 +30,49 @@ import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.MISSING_PATH_MSG
 
 object ProxyUtils {
+  private val logger = logger {}
+
   fun invalidAgentContextResponse(
     path: String,
     proxy: Proxy,
-    logger: KLogger,
-    responseResults: ResponseResults,
-  ) {
-    updateResponse(
-      message = "Invalid AgentContext for /$path",
-      proxy = proxy,
-      logger = logger,
-      logLevel = KLogger::error,
-      responseResults = responseResults,
-      updateMsg = "invalid_agent_context",
+  ): ResponseResults {
+    val message = "Invalid AgentContext for /$path"
+    proxy.logActivity(message)
+    logger.error { message }
+    return ResponseResults(
       statusCode = HttpStatusCode.NotFound,
+      updateMsg = "invalid_agent_context",
     )
   }
 
   fun invalidPathResponse(
     path: String,
     proxy: Proxy,
-    logger: KLogger,
-    responseResults: ResponseResults,
-  ) {
-    updateResponse(
-      message = "Invalid path request /$path",
-      proxy = proxy,
-      logger = logger,
-      logLevel = KLogger::error,
-      responseResults = responseResults,
+  ): ResponseResults {
+    val message = "Invalid path request /$path"
+    proxy.logActivity(message)
+    logger.error { message }
+    return ResponseResults(
+      statusCode = HttpStatusCode.NotFound,
       updateMsg = "invalid_path",
-      statusCode = HttpStatusCode.NotFound,
     )
   }
 
-  fun emptyPathResponse(
-    proxy: Proxy,
-    logger: KLogger,
-    responseResults: ResponseResults,
-  ) {
-    updateResponse(
-      message = MISSING_PATH_MSG,
-      proxy = proxy,
-      logger = logger,
-      logLevel = KLogger::info,
-      responseResults = responseResults,
+  fun emptyPathResponse(proxy: Proxy): ResponseResults {
+    proxy.logActivity(MISSING_PATH_MSG)
+    logger.info { MISSING_PATH_MSG }
+    return ResponseResults(
+      statusCode = HttpStatusCode.NotFound,
       updateMsg = "missing_path",
-      statusCode = HttpStatusCode.NotFound,
     )
   }
 
-  fun proxyNotRunningResponse(
-    logger: KLogger,
-    responseResults: ResponseResults,
-  ) {
-    updateResponse(
-      message = "Proxy stopped",
-      proxy = null,
-      logger = logger,
-      logLevel = KLogger::error,
-      responseResults = responseResults,
-      updateMsg = "proxy_stopped",
+  fun proxyNotRunningResponse(): ResponseResults {
+    logger.error { "Proxy stopped" }
+    return ResponseResults(
       statusCode = HttpStatusCode.ServiceUnavailable,
+      updateMsg = "proxy_stopped",
     )
-  }
-
-  private fun updateResponse(
-    message: String,
-    proxy: Proxy?,
-    logger: KLogger,
-    logLevel: (KLogger, () -> String) -> Unit,
-    responseResults: ResponseResults,
-    updateMsg: String,
-    statusCode: HttpStatusCode,
-  ) {
-    proxy?.logActivity(message)
-    logLevel(logger) { message }
-    responseResults.apply {
-      this.updateMsg = updateMsg
-      this.statusCode = statusCode
-    }
   }
 
   fun incrementScrapeRequestCount(
