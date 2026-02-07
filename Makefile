@@ -23,7 +23,7 @@ jars:
 tests:
 	./gradlew --rerun-tasks check
 
-noharness-tests:
+nh-tests:
 	./gradlew test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
 
 reports:

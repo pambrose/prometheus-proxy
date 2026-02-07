@@ -23,6 +23,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotBeEmpty
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -320,5 +321,61 @@ class AgentPathManagerTest {
       manager["metrics"].shouldNotBeNull()
       manager["health"].shouldNotBeNull()
       manager["info"].shouldNotBeNull()
+    }
+
+  // ==================== toPlainText Tests ====================
+
+  @Test
+  fun `toPlainText should return header when no paths configured`(): Unit =
+    runBlocking {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      val text = manager.toPlainText()
+
+      text shouldContain "Agent Path Configs"
+    }
+
+  @Test
+  fun `toPlainText with configured paths should include path details`(): Unit =
+    runBlocking {
+      val config = ConfigFactory.parseString(
+        """
+        agent {
+          pathConfigs = [
+            {
+              name = "node_exporter"
+              path = "metrics"
+              url = "http://localhost:9100/metrics"
+              labels = "{}"
+            },
+            {
+              name = "app_metrics"
+              path = "app"
+              url = "http://localhost:8080/metrics"
+              labels = "{}"
+            }
+          ]
+        }
+        proxy {}
+        """.trimIndent(),
+      )
+      val configVals = ConfigVals(config)
+
+      val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+
+      val mockAgent = mockk<Agent>(relaxed = true)
+      every { mockAgent.grpcService } returns mockGrpcService
+      every { mockAgent.configVals } returns configVals
+      every { mockAgent.isTestMode } returns true
+
+      val manager = AgentPathManager(mockAgent)
+
+      val text = manager.toPlainText()
+
+      text shouldContain "Agent Path Configs"
+      text shouldContain "metrics"
+      text shouldContain "app"
+      text.shouldNotBeEmpty()
     }
 }

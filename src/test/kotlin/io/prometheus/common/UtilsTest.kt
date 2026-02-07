@@ -18,14 +18,18 @@
 
 package io.prometheus.common
 
+import io.grpc.Status
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
+import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.lambda
+import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.setLogLevel
 import io.prometheus.common.Utils.toJsonElement
 import kotlinx.serialization.json.JsonObject
@@ -196,6 +200,148 @@ class UtilsTest {
 
     versionDesc.shouldNotBeEmpty()
     // JSON output should contain braces or JSON structure
+  }
+
+  // ==================== parseHostPort Tests ====================
+
+  @Test
+  fun `parseHostPort should parse simple host and port`() {
+    val result = parseHostPort("localhost:8080", 50051)
+
+    result shouldBe HostPort("localhost", 8080)
+  }
+
+  @Test
+  fun `parseHostPort should use default port when no port specified`() {
+    val result = parseHostPort("example.com", 50051)
+
+    result shouldBe HostPort("example.com", 50051)
+  }
+
+  @Test
+  fun `parseHostPort should handle bracketed IPv6 with port`() {
+    val result = parseHostPort("[::1]:50051", 9090)
+
+    result shouldBe HostPort("[::1]", 50051)
+  }
+
+  @Test
+  fun `parseHostPort should handle bracketed IPv6 without port`() {
+    val result = parseHostPort("[::1]", 50051)
+
+    result shouldBe HostPort("[::1]", 50051)
+  }
+
+  @Test
+  fun `parseHostPort should handle unbracketed IPv6 without port`() {
+    val result = parseHostPort("::1", 50051)
+
+    result shouldBe HostPort("::1", 50051)
+  }
+
+  @Test
+  fun `parseHostPort should handle full IPv6 address without brackets`() {
+    val result = parseHostPort("2001:db8::1", 50051)
+
+    result shouldBe HostPort("2001:db8::1", 50051)
+  }
+
+  @Test
+  fun `parseHostPort should handle IPv4 address with port`() {
+    val result = parseHostPort("192.168.1.100:5000", 50051)
+
+    result shouldBe HostPort("192.168.1.100", 5000)
+  }
+
+  @Test
+  fun `parseHostPort should handle IPv4 address without port`() {
+    val result = parseHostPort("192.168.1.100", 50051)
+
+    result shouldBe HostPort("192.168.1.100", 50051)
+  }
+
+  @Test
+  fun `parseHostPort should handle hostname with custom port`() {
+    val result = parseHostPort("proxy.example.org:9090", 50051)
+
+    result shouldBe HostPort("proxy.example.org", 9090)
+  }
+
+  @Test
+  fun `parseHostPort should handle bracketed IPv6 with missing close bracket`() {
+    val result = parseHostPort("[::1", 50051)
+
+    result shouldBe HostPort("[::1", 50051)
+  }
+
+  @Test
+  fun `parseHostPort should handle bracketed full IPv6 with port`() {
+    val result = parseHostPort("[2001:db8::1]:8443", 50051)
+
+    result shouldBe HostPort("[2001:db8::1]", 8443)
+  }
+
+  // ==================== HostPort Data Class Tests ====================
+
+  @Test
+  fun `HostPort should support equality`() {
+    val hp1 = HostPort("localhost", 8080)
+    val hp2 = HostPort("localhost", 8080)
+    val hp3 = HostPort("localhost", 9090)
+
+    (hp1 == hp2) shouldBe true
+    (hp1 == hp3) shouldBe false
+  }
+
+  @Test
+  fun `HostPort should support copy`() {
+    val hp = HostPort("localhost", 8080)
+    val copied = hp.copy(port = 9090)
+
+    copied.host shouldBe "localhost"
+    copied.port shouldBe 9090
+  }
+
+  // ==================== exceptionDetails Tests ====================
+
+  @Test
+  fun `exceptionDetails should include status code`() {
+    val status = Status.UNAVAILABLE.withDescription("service down")
+    val exception = RuntimeException("connection lost")
+
+    val details = status.exceptionDetails(exception)
+
+    details shouldContain "UNAVAILABLE"
+  }
+
+  @Test
+  fun `exceptionDetails should include description`() {
+    val status = Status.NOT_FOUND.withDescription("agent not found")
+    val exception = RuntimeException("missing")
+
+    val details = status.exceptionDetails(exception)
+
+    details shouldContain "agent not found"
+  }
+
+  @Test
+  fun `exceptionDetails should include exception message`() {
+    val status = Status.INTERNAL
+    val exception = IllegalStateException("something broke")
+
+    val details = status.exceptionDetails(exception)
+
+    details shouldContain "something broke"
+  }
+
+  @Test
+  fun `exceptionDetails should include exception class name`() {
+    val status = Status.CANCELLED
+    val exception = java.io.IOException("timeout")
+
+    val details = status.exceptionDetails(exception)
+
+    details shouldContain "IOException"
   }
 
   // ==================== Type Check Helper ====================

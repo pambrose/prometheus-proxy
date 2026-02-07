@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import com.google.protobuf.ByteString
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -33,14 +34,21 @@ import io.prometheus.Proxy
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.grpc.agentInfo
+import io.prometheus.grpc.chunkData
+import io.prometheus.grpc.chunkedScrapeResponse
+import io.prometheus.grpc.headerData
 import io.prometheus.grpc.heartBeatRequest
 import io.prometheus.grpc.pathMapSizeRequest
 import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.grpc.registerPathRequest
+import io.prometheus.grpc.scrapeResponse
+import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.util.zip.CRC32
 
 class ProxyServiceImplTest {
   private fun createMockProxy(
@@ -428,5 +436,179 @@ class ProxyServiceImplTest {
       flow.collect { emittedRequests.add(it) }
 
       emittedRequests.size shouldBe 0
+    }
+
+  // ==================== writeResponsesToProxy Tests ====================
+
+  @Test
+  fun `writeResponsesToProxy should process non-chunked scrape responses`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+
+      val response = scrapeResponse {
+        agentId = "agent-1"
+        scrapeId = 100L
+        validResponse = true
+        statusCode = 200
+        contentType = "text/plain"
+        zipped = false
+        contentAsText = "metrics data"
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeResponsesToProxy(flowOf(response))
+
+      result shouldBe EMPTY_INSTANCE
+    }
+
+  @Test
+  fun `writeResponsesToProxy should handle empty flow`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeResponsesToProxy(flowOf())
+
+      result shouldBe EMPTY_INSTANCE
+    }
+
+  @Test
+  fun `writeResponsesToProxy should process multiple responses`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+
+      val response1 = scrapeResponse {
+        agentId = "agent-1"
+        scrapeId = 101L
+        validResponse = true
+        statusCode = 200
+      }
+      val response2 = scrapeResponse {
+        agentId = "agent-1"
+        scrapeId = 102L
+        validResponse = true
+        statusCode = 200
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeResponsesToProxy(flowOf(response1, response2))
+
+      result shouldBe EMPTY_INSTANCE
+    }
+
+  // ==================== writeChunkedResponsesToProxy Tests ====================
+
+  @Test
+  fun `writeChunkedResponsesToProxy should handle empty flow`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(flowOf())
+
+      result shouldBe EMPTY_INSTANCE
+    }
+
+  @Test
+  fun `writeChunkedResponsesToProxy should process header-chunk-summary sequence`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val scrapeId = 200L
+      val data = "test chunk data".toByteArray()
+      val crc = CRC32()
+      crc.update(data)
+
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrapeId
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+          headerUrl = "http://test/metrics"
+        }
+      }
+
+      val chunk = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = scrapeId
+          chunkCount = 1
+          chunkByteCount = data.size
+          chunkChecksum = crc.value
+          chunkBytes = ByteString.copyFrom(data)
+        }
+      }
+
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = scrapeId
+          summaryChunkCount = 1
+          summaryByteCount = data.size
+          summaryChecksum = crc.value
+        }
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk, summary))
+
+      result shouldBe EMPTY_INSTANCE
+    }
+
+  @Test
+  fun `writeChunkedResponsesToProxy should process multi-chunk sequence`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val scrapeId = 300L
+      val data1 = "chunk-one-data".toByteArray()
+      val data2 = "chunk-two-data".toByteArray()
+      val crc = CRC32()
+
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrapeId
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+          headerUrl = "http://test/metrics"
+        }
+      }
+
+      crc.update(data1)
+      val chunk1 = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = scrapeId
+          chunkCount = 1
+          chunkByteCount = data1.size
+          chunkChecksum = crc.value
+          chunkBytes = ByteString.copyFrom(data1)
+        }
+      }
+
+      crc.update(data2)
+      val chunk2 = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = scrapeId
+          chunkCount = 2
+          chunkByteCount = data2.size
+          chunkChecksum = crc.value
+          chunkBytes = ByteString.copyFrom(data2)
+        }
+      }
+
+      val totalSize = data1.size + data2.size
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = scrapeId
+          summaryChunkCount = 2
+          summaryByteCount = totalSize
+          summaryChecksum = crc.value
+        }
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk1, chunk2, summary))
+
+      result shouldBe EMPTY_INSTANCE
     }
 }
