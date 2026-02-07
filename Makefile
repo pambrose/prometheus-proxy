@@ -12,7 +12,7 @@ stubs:
 	./gradlew generateProto
 
 build: clean stubs
-	./gradlew build -xtest
+	./gradlew build -x test
 
 refresh:
 	./gradlew --refresh-dependencies dependencyUpdates
@@ -22,6 +22,9 @@ jars:
 
 tests:
 	./gradlew --rerun-tasks check
+
+noharness-tests:
+	./gradlew test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
 
 reports:
 	./gradlew koverMergedHtmlReport
