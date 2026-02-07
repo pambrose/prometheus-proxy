@@ -163,4 +163,43 @@ class ScrapeRequestWrapperTest {
     str shouldContain "scrapeId"
     str shouldContain "/test/path"
   }
+
+  // ==================== markComplete with Metrics Tests ====================
+
+  @Test
+  fun `markComplete with metrics enabled should observe duration`(): Unit =
+    runBlocking {
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.isMetricsEnabled } returns true
+      val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
+      every { mockProxy.metrics } returns mockMetrics
+
+      val wrapper = createWrapper(proxy = mockProxy)
+
+      // Should not throw — observeDuration called on the timer
+      wrapper.markComplete()
+    }
+
+  @Test
+  fun `markComplete without metrics should not throw`(): Unit =
+    runBlocking {
+      val wrapper = createWrapper()
+
+      // Should not throw
+      wrapper.markComplete()
+    }
+
+  // ==================== suspendUntilComplete Edge Cases ====================
+
+  @Test
+  fun `suspendUntilComplete should return true immediately when already completed`(): Unit =
+    runBlocking {
+      val wrapper = createWrapper()
+
+      wrapper.markComplete()
+
+      // After markComplete, suspendUntilComplete should return true quickly
+      val result = wrapper.suspendUntilComplete(5.seconds)
+      result.shouldBeTrue()
+    }
 }

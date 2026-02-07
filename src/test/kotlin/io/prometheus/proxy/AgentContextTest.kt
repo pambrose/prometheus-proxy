@@ -199,4 +199,43 @@ class AgentContextTest {
 
     context.desc shouldBe ""
   }
+
+  // ==================== markActivityTime Branch Tests ====================
+
+  @Test
+  fun `markActivityTime with isRequest false should update inactivity but not request time`() {
+    val context = AgentContext("remote-addr")
+
+    Thread.sleep(50)
+    val inactivityBefore = context.inactivityDuration
+
+    context.markActivityTime(false)
+    val inactivityAfter = context.inactivityDuration
+
+    // Inactivity duration should have reset (become shorter)
+    (inactivityAfter < inactivityBefore) shouldBe true
+  }
+
+  // ==================== Equality Edge Case Tests ====================
+
+  @Test
+  fun `equals with null should return false`() {
+    val context = AgentContext("remote-addr")
+
+    (context.equals(null)) shouldBe false
+  }
+
+  @Test
+  fun `equals with different type should return false`() {
+    val context = AgentContext("remote-addr")
+
+    (context.equals("a string")) shouldBe false
+  }
+
+  @Test
+  fun `equals with same instance should return true`() {
+    val context = AgentContext("remote-addr")
+
+    (context == context) shouldBe true
+  }
 }

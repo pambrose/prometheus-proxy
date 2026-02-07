@@ -220,4 +220,56 @@ class AgentContextCleanupServiceTest {
       // Verify no removal was attempted
       verify(exactly = 0) { mockProxy.removeAgentContext(any(), any()) }
     }
+
+  // ==================== Multiple Stale Agents Test ====================
+
+  @Test
+  fun `cleanup should evict multiple stale agents in single cycle`(): Unit =
+    runBlocking {
+      val configVals = createConfigVals(
+        maxAgentInactivitySecs = 1,
+        staleAgentCheckPauseSecs = 1,
+      )
+
+      val agentContextManager = AgentContextManager(isTestMode = true)
+
+      // Create multiple stale agents
+      val staleAgent1 = mockk<AgentContext>(relaxed = true)
+      every { staleAgent1.agentId } returns "stale-1"
+      every { staleAgent1.inactivityDuration } returns 5.seconds
+
+      val staleAgent2 = mockk<AgentContext>(relaxed = true)
+      every { staleAgent2.agentId } returns "stale-2"
+      every { staleAgent2.inactivityDuration } returns 10.seconds
+
+      val staleAgent3 = mockk<AgentContext>(relaxed = true)
+      every { staleAgent3.agentId } returns "stale-3"
+      every { staleAgent3.inactivityDuration } returns 15.seconds
+
+      agentContextManager.agentContextMap["stale-1"] = staleAgent1
+      agentContextManager.agentContextMap["stale-2"] = staleAgent2
+      agentContextManager.agentContextMap["stale-3"] = staleAgent3
+
+      val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.agentContextManager } returns agentContextManager
+      every { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers {
+        val block = firstArg<ProxyMetrics.() -> Unit>()
+        block(mockMetrics)
+      }
+      every { mockProxy.removeAgentContext(any(), any()) } answers {
+        agentContextManager.agentContextMap.remove(firstArg<String>())
+      }
+
+      val service = AgentContextCleanupService(mockProxy, configVals)
+
+      service.startAsync()
+      Thread.sleep(1500)
+      service.stopAsync().awaitTerminated()
+
+      // All three stale agents should have been evicted
+      verify(atLeast = 1) { mockProxy.removeAgentContext("stale-1", "Eviction") }
+      verify(atLeast = 1) { mockProxy.removeAgentContext("stale-2", "Eviction") }
+      verify(atLeast = 1) { mockProxy.removeAgentContext("stale-3", "Eviction") }
+    }
 }

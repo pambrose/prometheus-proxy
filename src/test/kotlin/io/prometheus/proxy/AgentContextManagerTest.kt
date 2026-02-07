@@ -5,6 +5,8 @@ package io.prometheus.proxy
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 
 class AgentContextManagerTest {
@@ -169,4 +171,56 @@ class AgentContextManagerTest {
     contexts.take(50).forEach { manager.removeFromContextManager(it.agentId, "test") }
     manager.agentContextSize shouldBe 50
   }
+
+  // ==================== removeFromContextManager Non-Test Mode ====================
+
+  @Test
+  fun `removeFromContextManager should still invalidate context in non-test mode`() {
+    val manager = AgentContextManager(isTestMode = false)
+    val context = AgentContext("remote-addr")
+
+    manager.addAgentContext(context)
+    val removed = manager.removeFromContextManager(context.agentId, "test")
+
+    removed.shouldNotBeNull()
+    removed.isNotValid() shouldBe true
+    manager.agentContextSize shouldBe 0
+  }
+
+  // ==================== ChunkedContext Map Tests ====================
+
+  @Test
+  fun `chunkedContextMap should track entries correctly`() {
+    val manager = AgentContextManager(isTestMode = true)
+    val mockChunkedContext = mockk<ChunkedContext>(relaxed = true)
+
+    manager.chunkedContextMap[1L] = mockChunkedContext
+    manager.chunkedContextSize shouldBe 1
+
+    manager.chunkedContextMap[2L] = mockChunkedContext
+    manager.chunkedContextSize shouldBe 2
+
+    manager.chunkedContextMap.remove(1L)
+    manager.chunkedContextSize shouldBe 1
+  }
+
+  // ==================== Non-Zero Backlog Aggregation ====================
+
+  @Test
+  fun `totalAgentScrapeRequestBacklogSize should sum non-zero backlogs`(): Unit =
+    runBlocking {
+      val manager = AgentContextManager(isTestMode = true)
+      val context1 = AgentContext("remote-1")
+      val context2 = AgentContext("remote-2")
+
+      manager.addAgentContext(context1)
+      manager.addAgentContext(context2)
+
+      // Write scrape requests to create backlog
+      context1.writeScrapeRequest(mockk(relaxed = true))
+      context1.writeScrapeRequest(mockk(relaxed = true))
+      context2.writeScrapeRequest(mockk(relaxed = true))
+
+      manager.totalAgentScrapeRequestBacklogSize shouldBe 3
+    }
 }

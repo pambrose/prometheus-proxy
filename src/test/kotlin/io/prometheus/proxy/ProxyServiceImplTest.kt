@@ -33,6 +33,8 @@ import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
+import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.agentInfo
 import io.prometheus.grpc.chunkData
 import io.prometheus.grpc.chunkedScrapeResponse
@@ -44,6 +46,8 @@ import io.prometheus.grpc.registerPathRequest
 import io.prometheus.grpc.scrapeResponse
 import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -610,5 +614,142 @@ class ProxyServiceImplTest {
       val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk1, chunk2, summary))
 
       result shouldBe EMPTY_INSTANCE
+    }
+
+  // ==================== readRequestsFromProxy Edge Case Tests ====================
+
+  @Test
+  fun `readRequestsFromProxy should stop when proxy stops running`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(isRunning = true)
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "test-agent-proxy-stop"
+
+      every { mockAgentContext.agentId } returns testAgentId
+      every { mockAgentContext.isValid() } returns true
+      // Simulate proxy stopping after first check
+      every { proxy.isRunning } returnsMany listOf(true, false)
+      coEvery { mockAgentContext.readScrapeRequest() } returns null
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+
+      val request = agentInfo { agentId = testAgentId }
+      val service = ProxyServiceImpl(proxy)
+      val flow = service.readRequestsFromProxy(request)
+
+      val emittedRequests = mutableListOf<io.prometheus.grpc.ScrapeRequest>()
+      flow.collect { emittedRequests.add(it) }
+
+      emittedRequests.size shouldBe 0
+    }
+
+  @Test
+  fun `readRequestsFromProxy should skip null readScrapeRequest results`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(isRunning = true)
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "test-agent-null-read"
+
+      every { mockAgentContext.agentId } returns testAgentId
+      // Valid for two iterations then invalid
+      every { mockAgentContext.isValid() } returnsMany listOf(true, true, false)
+      // Return null both times (channel drained)
+      coEvery { mockAgentContext.readScrapeRequest() } returns null
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+
+      val request = agentInfo { agentId = testAgentId }
+      val service = ProxyServiceImpl(proxy)
+      val flow = service.readRequestsFromProxy(request)
+
+      val emittedRequests = mutableListOf<io.prometheus.grpc.ScrapeRequest>()
+      flow.collect { emittedRequests.add(it) }
+
+      // readScrapeRequest returned null, so nothing emitted
+      emittedRequests.size shouldBe 0
+    }
+
+  // ==================== writeResponsesToProxy Error Handling Tests ====================
+
+  @Test
+  fun `writeResponsesToProxy should handle flow error gracefully when proxy running`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(isRunning = true)
+      val service = ProxyServiceImpl(proxy)
+
+      val errorFlow: Flow<ScrapeResponse> = flow {
+        throw RuntimeException("Simulated flow error")
+      }
+
+      // Should not throw — error is caught in onFailure
+      val result = service.writeResponsesToProxy(errorFlow)
+      result shouldBe EMPTY_INSTANCE
+    }
+
+  @Test
+  fun `writeResponsesToProxy should suppress error when proxy not running`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(isRunning = false)
+      val service = ProxyServiceImpl(proxy)
+
+      val errorFlow: Flow<ScrapeResponse> = flow {
+        throw RuntimeException("Simulated flow error")
+      }
+
+      val result = service.writeResponsesToProxy(errorFlow)
+      result shouldBe EMPTY_INSTANCE
+    }
+
+  // ==================== writeChunkedResponsesToProxy Error Handling Tests ====================
+
+  @Test
+  fun `writeChunkedResponsesToProxy should handle flow error gracefully`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(isRunning = true)
+      val service = ProxyServiceImpl(proxy)
+
+      val errorFlow: Flow<ChunkedScrapeResponse> = flow {
+        throw RuntimeException("Simulated chunked flow error")
+      }
+
+      val result = service.writeChunkedResponsesToProxy(errorFlow)
+      result shouldBe EMPTY_INSTANCE
+    }
+
+  @Test
+  fun `writeChunkedResponsesToProxy should suppress error when proxy not running`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(isRunning = false)
+      val service = ProxyServiceImpl(proxy)
+
+      val errorFlow: Flow<ChunkedScrapeResponse> = flow {
+        throw RuntimeException("Simulated chunked flow error")
+      }
+
+      val result = service.writeChunkedResponsesToProxy(errorFlow)
+      result shouldBe EMPTY_INSTANCE
+    }
+
+  @Test
+  fun `writeResponsesToProxy should call assignScrapeResults for each response`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      val service = ProxyServiceImpl(proxy)
+
+      val response1 = scrapeResponse {
+        agentId = "agent-1"
+        scrapeId = 501L
+        validResponse = true
+        statusCode = 200
+      }
+      val response2 = scrapeResponse {
+        agentId = "agent-1"
+        scrapeId = 502L
+        validResponse = true
+        statusCode = 200
+      }
+
+      service.writeResponsesToProxy(flowOf(response1, response2))
+
+      verify(exactly = 2) { scrapeRequestManager.assignScrapeResults(any()) }
     }
 }

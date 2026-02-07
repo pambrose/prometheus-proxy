@@ -203,4 +203,37 @@ class ScrapeRequestManagerTest {
       verify { wrapper1.markComplete() }
       verify { wrapper2.markComplete() }
     }
+
+  // ==================== assignScrapeResults Verification Tests ====================
+
+  @Test
+  fun `assignScrapeResults should set scrapeResults on wrapper`(): Unit =
+    runBlocking {
+      val manager = ScrapeRequestManager()
+      val wrapper = createMockWrapper(100L)
+      val results = mockk<ScrapeResults>(relaxed = true)
+
+      every { results.srScrapeId } returns 100L
+
+      manager.addToScrapeRequestMap(wrapper)
+      manager.assignScrapeResults(results)
+
+      verify { wrapper.scrapeResults = results }
+    }
+
+  @Test
+  fun `assignScrapeResults should call markActivityTime on agent context`(): Unit =
+    runBlocking {
+      val manager = ScrapeRequestManager()
+      val wrapper = createMockWrapper(200L)
+      val agentContext = wrapper.agentContext
+      val results = mockk<ScrapeResults>(relaxed = true)
+
+      every { results.srScrapeId } returns 200L
+
+      manager.addToScrapeRequestMap(wrapper)
+      manager.assignScrapeResults(results)
+
+      verify { agentContext.markActivityTime(true) }
+    }
 }

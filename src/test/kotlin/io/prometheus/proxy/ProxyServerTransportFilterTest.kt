@@ -117,4 +117,44 @@ class ProxyServerTransportFilterTest {
     val emptyAttrs = Attributes.newBuilder().build()
     filter.transportTerminated(emptyAttrs)
   }
+
+  // ==================== Remote Address Tests ====================
+
+  @Test
+  fun `transportReady should use remote addr from REMOTE_ADDR_KEY when available`() {
+    val (mockProxy, agentContextManager) = createMockProxy()
+    val filter = ProxyServerTransportFilter(mockProxy)
+
+    // Create attributes with a remote address
+    val remoteAddrKey = Attributes.Key.create<java.net.SocketAddress>("remote-addr")
+    val socketAddr = java.net.InetSocketAddress("192.168.1.100", 50000)
+    val inputAttrs = Attributes.newBuilder()
+      .set(remoteAddrKey, socketAddr)
+      .build()
+
+    val resultAttrs = filter.transportReady(inputAttrs)
+
+    resultAttrs.get(AGENT_ID_KEY).shouldNotBeNull()
+    agentContextManager.agentContextSize shouldBe 1
+  }
+
+  // ==================== Transport Filter Lifecycle ====================
+
+  @Test
+  fun `transportTerminated should call removeAgentContext with correct reason`() {
+    val (mockProxy, agentContextManager) = createMockProxy()
+    val filter = ProxyServerTransportFilter(mockProxy)
+
+    val resultAttrs = filter.transportReady(Attributes.newBuilder().build())
+    val agentId = resultAttrs.get(AGENT_ID_KEY)!!
+
+    every { mockProxy.removeAgentContext(any(), any()) } answers {
+      agentContextManager.removeFromContextManager(firstArg(), secondArg())
+    }
+
+    filter.transportTerminated(resultAttrs)
+
+    verify { mockProxy.removeAgentContext(agentId, "Termination") }
+    agentContextManager.agentContextSize shouldBe 0
+  }
 }

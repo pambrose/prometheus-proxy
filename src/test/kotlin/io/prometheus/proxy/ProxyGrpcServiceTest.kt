@@ -12,21 +12,32 @@ import io.prometheus.Proxy
 import org.junit.jupiter.api.Test
 
 class ProxyGrpcServiceTest {
-  private fun createMockProxy(): Proxy {
+  private fun createMockProxy(
+    transportFilterDisabled: Boolean = true,
+    reflectionDisabled: Boolean = false,
+    handshakeTimeoutSecs: Long = -1L,
+    keepAliveTimeSecs: Long = -1L,
+    keepAliveTimeoutSecs: Long = -1L,
+    permitKeepAliveWithoutCalls: Boolean = false,
+    permitKeepAliveTimeSecs: Long = -1L,
+    maxConnectionIdleSecs: Long = -1L,
+    maxConnectionAgeSecs: Long = -1L,
+    maxConnectionAgeGraceSecs: Long = -1L,
+  ): Proxy {
     val mockOptions = mockk<ProxyOptions>(relaxed = true)
     every { mockOptions.certChainFilePath } returns ""
     every { mockOptions.privateKeyFilePath } returns ""
     every { mockOptions.trustCertCollectionFilePath } returns ""
-    every { mockOptions.transportFilterDisabled } returns true
-    every { mockOptions.reflectionDisabled } returns false
-    every { mockOptions.handshakeTimeoutSecs } returns -1L
-    every { mockOptions.keepAliveTimeSecs } returns -1L
-    every { mockOptions.keepAliveTimeoutSecs } returns -1L
-    every { mockOptions.permitKeepAliveWithoutCalls } returns false
-    every { mockOptions.permitKeepAliveTimeSecs } returns -1L
-    every { mockOptions.maxConnectionIdleSecs } returns -1L
-    every { mockOptions.maxConnectionAgeSecs } returns -1L
-    every { mockOptions.maxConnectionAgeGraceSecs } returns -1L
+    every { mockOptions.transportFilterDisabled } returns transportFilterDisabled
+    every { mockOptions.reflectionDisabled } returns reflectionDisabled
+    every { mockOptions.handshakeTimeoutSecs } returns handshakeTimeoutSecs
+    every { mockOptions.keepAliveTimeSecs } returns keepAliveTimeSecs
+    every { mockOptions.keepAliveTimeoutSecs } returns keepAliveTimeoutSecs
+    every { mockOptions.permitKeepAliveWithoutCalls } returns permitKeepAliveWithoutCalls
+    every { mockOptions.permitKeepAliveTimeSecs } returns permitKeepAliveTimeSecs
+    every { mockOptions.maxConnectionIdleSecs } returns maxConnectionIdleSecs
+    every { mockOptions.maxConnectionAgeSecs } returns maxConnectionAgeSecs
+    every { mockOptions.maxConnectionAgeGraceSecs } returns maxConnectionAgeGraceSecs
 
     val mockProxy = mockk<Proxy>(relaxed = true)
     every { mockProxy.options } returns mockOptions
@@ -84,6 +95,94 @@ class ProxyGrpcServiceTest {
 
     // Should not throw
     val service = ProxyGrpcService(mockProxy, port = 0)
+    service.shouldNotBeNull()
+  }
+
+  // ==================== HealthCheck Result Tests ====================
+
+  @Test
+  fun `healthCheck should be healthy before shutdown`() {
+    val mockProxy = createMockProxy()
+    val service = ProxyGrpcService(mockProxy, inProcessName = "health-check-test")
+
+    service.startAsync().awaitRunning()
+
+    val result = service.healthCheck.execute()
+    result.isHealthy shouldBe true
+
+    service.stopAsync().awaitTerminated()
+  }
+
+  @Test
+  fun `healthCheck should be unhealthy after shutdown`() {
+    val mockProxy = createMockProxy()
+    val service = ProxyGrpcService(mockProxy, inProcessName = "health-shutdown-test")
+
+    service.startAsync().awaitRunning()
+    service.stopAsync().awaitTerminated()
+
+    val result = service.healthCheck.execute()
+    result.isHealthy shouldBe false
+    result.message shouldContain "not running"
+  }
+
+  // ==================== Server Lifecycle Tests ====================
+
+  @Test
+  fun `InProcess server should start and stop gracefully`() {
+    val mockProxy = createMockProxy()
+    val service = ProxyGrpcService(mockProxy, inProcessName = "lifecycle-test")
+
+    service.startAsync().awaitRunning()
+    service.isRunning shouldBe true
+
+    service.stopAsync().awaitTerminated()
+  }
+
+  @Test
+  fun `Netty server should start and stop gracefully on ephemeral port`() {
+    val mockProxy = createMockProxy()
+    val service = ProxyGrpcService(mockProxy, port = 0)
+
+    service.startAsync().awaitRunning()
+    service.isRunning shouldBe true
+
+    service.stopAsync().awaitTerminated()
+  }
+
+  // ==================== Server Configuration Branch Tests ====================
+
+  @Test
+  fun `should create server with transport filter enabled`() {
+    val mockProxy = createMockProxy(transportFilterDisabled = false)
+
+    val service = ProxyGrpcService(mockProxy, inProcessName = "transport-filter-test")
+    service.shouldNotBeNull()
+  }
+
+  @Test
+  fun `should create server with keepalive settings`() {
+    // Must use Netty (port) rather than InProcess — InProcess does not support keepAlive
+    val mockProxy = createMockProxy(
+      handshakeTimeoutSecs = 60L,
+      keepAliveTimeSecs = 120L,
+      keepAliveTimeoutSecs = 20L,
+      permitKeepAliveWithoutCalls = true,
+      permitKeepAliveTimeSecs = 300L,
+      maxConnectionIdleSecs = 600L,
+      maxConnectionAgeSecs = 3600L,
+      maxConnectionAgeGraceSecs = 30L,
+    )
+
+    val service = ProxyGrpcService(mockProxy, port = 0)
+    service.shouldNotBeNull()
+  }
+
+  @Test
+  fun `should create server with reflection disabled`() {
+    val mockProxy = createMockProxy(reflectionDisabled = true)
+
+    val service = ProxyGrpcService(mockProxy, inProcessName = "no-reflection-test")
     service.shouldNotBeNull()
   }
 }
