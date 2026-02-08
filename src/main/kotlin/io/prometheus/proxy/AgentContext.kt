@@ -78,8 +78,8 @@ internal class AgentContext(
     }
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
-    scrapeRequestChannel.send(scrapeRequest)
     channelBacklogSize += 1
+    scrapeRequestChannel.send(scrapeRequest)
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
