@@ -26,6 +26,15 @@ tests:
 nh-tests:
 	./gradlew test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
 
+ip-tests:
+	./gradlew test --tests "io.prometheus.harness.InProcess*"
+
+netty-tests:
+	./gradlew test --tests "io.prometheus.harness.Netty*"
+
+tls-tests:
+	./gradlew test --tests "io.prometheus.harness.Tls*"
+
 reports:
 	./gradlew koverMergedHtmlReport
 

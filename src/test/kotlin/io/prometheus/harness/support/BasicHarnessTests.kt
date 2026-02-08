@@ -80,7 +80,7 @@ internal object BasicHarnessTests {
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
     blockingGet("${HarnessConstants.PROXY_PORT}/$badPath".withPrefix()) { response ->
       // Invalid agent URL causes IOException, which should return ServiceUnavailable (503)
-      response.status shouldBe HttpStatusCode.NotFound
+      response.status shouldBe HttpStatusCode.ServiceUnavailable
     }
     pathManager.unregisterPath(badPath)
   }

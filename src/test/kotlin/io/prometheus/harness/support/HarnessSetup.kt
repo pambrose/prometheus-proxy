@@ -41,9 +41,13 @@ open class HarnessSetup {
     CollectorRegistry.defaultRegistry.clear()
 
     runBlocking {
+      // Start proxy first and wait for it to be fully running before starting the agent.
+      // The proxy's gRPC server starts during startUp(), but isRunning only becomes true
+      // after startUp() completes. Starting both in parallel can cause the agent to connect
+      // before isRunning is true, which makes readRequestsFromProxy exit immediately.
       launch(Dispatchers.IO + exceptionHandler(logger)) {
         proxy = proxySetup.invoke()
-      }
+      }.join()
 
       launch(Dispatchers.IO + exceptionHandler(logger)) {
         agent = agentSetup.invoke().apply { awaitInitialConnection(10.seconds) }

@@ -177,27 +177,29 @@ class AgentOptions(
       keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
     logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
 
-    assignKeepAliveTimeSecs(agentConfigVals.grpc.keepAliveTimeSecs)
-    assignKeepAliveTimeoutSecs(agentConfigVals.grpc.keepAliveTimeoutSecs)
-    assignAdminEnabled(agentConfigVals.admin.enabled)
-    assignAdminPort(agentConfigVals.admin.port)
-    assignMetricsEnabled(agentConfigVals.metrics.enabled)
-    assignMetricsPort(agentConfigVals.metrics.port)
-    assignTransportFilterDisabled(agentConfigVals.transportFilterDisabled)
-    assignDebugEnabled(agentConfigVals.admin.debugEnabled)
+    agentConfigVals.apply {
+      assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
+      assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
+      assignAdminEnabled(admin.enabled)
+      assignAdminPort(admin.port)
+      assignMetricsEnabled(metrics.enabled)
+      assignMetricsPort(metrics.port)
+      assignTransportFilterDisabled(transportFilterDisabled)
+      assignDebugEnabled(admin.debugEnabled)
 
-    assignCertChainFilePath(agentConfigVals.tls.certChainFilePath)
-    assignPrivateKeyFilePath(agentConfigVals.tls.privateKeyFilePath)
-    assignTrustCertCollectionFilePath(agentConfigVals.tls.trustCertCollectionFilePath)
+      assignCertChainFilePath(tls.certChainFilePath)
+      assignPrivateKeyFilePath(tls.privateKeyFilePath)
+      assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
 
-    logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
-    logger.info { "agent.internal.cioTimeoutSecs: ${agentConfigVals.internal.cioTimeoutSecs.seconds}" }
+      logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+      logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
 
-    val pauseVal = agentConfigVals.internal.heartbeatCheckPauseMillis
-    logger.info { "agent.internal.heartbeatCheckPauseMillis: $pauseVal" }
+      val pauseVal = internal.heartbeatCheckPauseMillis
+      logger.info { "agent.internal.heartbeatCheckPauseMillis: $pauseVal" }
 
-    val inactivityVal = agentConfigVals.internal.heartbeatMaxInactivitySecs
-    logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
+      val inactivityVal = internal.heartbeatMaxInactivitySecs
+      logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
+    }
 
     if (logLevel.isEmpty())
       logLevel = AGENT_LOG_LEVEL.getEnv(agentConfigVals.logLevel)
