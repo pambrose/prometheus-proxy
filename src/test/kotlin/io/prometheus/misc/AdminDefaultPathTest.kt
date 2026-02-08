@@ -92,6 +92,7 @@ class AdminDefaultPathTest {
   fun agentHealthCheckPathTest() {
     agentConfigVals.admin.apply {
       blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText().length shouldBeGreaterThan 10
       }
     }
@@ -101,6 +102,7 @@ class AdminDefaultPathTest {
   fun proxyThreadDumpPathTest() {
     proxyConfigVals.admin.apply {
       blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText().length shouldBeGreaterThan 10
       }
     }
@@ -110,6 +112,7 @@ class AdminDefaultPathTest {
   fun agentThreadDumpPathTest() {
     agentConfigVals.admin.apply {
       blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+        response.status shouldBe HttpStatusCode.OK
         response.bodyAsText().length shouldBeGreaterThan 10
       }
     }

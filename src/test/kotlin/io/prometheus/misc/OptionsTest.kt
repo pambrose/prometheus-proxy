@@ -20,7 +20,9 @@ package io.prometheus.misc
 
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.agent.AgentOptions
 import io.prometheus.harness.support.HarnessConstants.OPTIONS_CONFIG
 import io.prometheus.proxy.ProxyOptions
@@ -294,6 +296,105 @@ class OptionsTest {
     } finally {
       System.clearProperty(propKey)
     }
+  }
+
+  // ==================== Agent Trust and KeepAlive Tests ====================
+
+  @Test
+  fun `agent trustAllX509Certificates should be settable via command line`() {
+    val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--trust_all_x509"), false)
+    options.trustAllX509Certificates.shouldBeTrue()
+  }
+
+  @Test
+  fun `agent trustAllX509Certificates should default to false`() {
+    val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+    options.trustAllX509Certificates.shouldBeFalse()
+  }
+
+  @Test
+  fun `agent keepAliveWithoutCalls should be settable via command line`() {
+    val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--keepalive_without_calls"), false)
+    options.keepAliveWithoutCalls.shouldBeTrue()
+  }
+
+  // ==================== Agent HTTP Client Cache Default Tests ====================
+
+  @Test
+  fun `agent HTTP client cache settings should have valid defaults`() {
+    val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+    options.maxCacheSize shouldBeGreaterThan 1
+    options.maxCacheAgeMins shouldBeGreaterThan 1
+    options.maxCacheIdleMins shouldBeGreaterThan 1
+    options.cacheCleanupIntervalMins shouldBeGreaterThan 1
+  }
+
+  // ==================== Agent Internal Config Defaults ====================
+
+  @Test
+  fun `agent internal config should have expected defaults`() {
+    val configVals = readAgentOptions(listOf())
+    configVals.agent.internal.apply {
+      cioTimeoutSecs shouldBe 90
+      heartbeatEnabled.shouldBeTrue()
+      reconnectPauseSecs shouldBe 3
+      heartbeatCheckPauseMillis shouldBe 500
+      heartbeatMaxInactivitySecs shouldBe 5
+      scrapeRequestBacklogUnhealthySize shouldBe 25
+    }
+  }
+
+  // ==================== Config Precedence Tests ====================
+
+  @Test
+  fun `dynamic param should override config file value`() {
+    val propKey = "proxy.http.port"
+    try {
+      val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG, "-D$propKey=4444"))
+      // Dynamic param (4444) should override junit-test.conf (8181)
+      configVals.proxy.http.port shouldBe 4444
+    } finally {
+      System.clearProperty(propKey)
+    }
+  }
+
+  @Test
+  fun `multiple dynamic params should all be applied`() {
+    val portKey = "proxy.http.port"
+    val zipkinKey = "proxy.internal.zipkin.enabled"
+    try {
+      val configVals = readProxyOptions(listOf("-D$portKey=3333", "-D$zipkinKey=true"))
+      configVals.proxy.http.port shouldBe 3333
+      configVals.proxy.internal.zipkin.enabled.shouldBeTrue()
+    } finally {
+      System.clearProperty(portKey)
+      System.clearProperty(zipkinKey)
+    }
+  }
+
+  // ==================== Proxy Request Logging and Path Config Labels ====================
+
+  @Test
+  fun `proxy requestLoggingEnabled should default to true`() {
+    val configVals = readProxyOptions(listOf())
+    configVals.proxy.http.requestLoggingEnabled.shouldBeTrue()
+  }
+
+  @Test
+  fun `agent path config labels should default to empty JSON object`() {
+    val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
+    val pathConfigs = configVals.agent.pathConfigs
+    pathConfigs.forEach { pathConfig ->
+      pathConfig.labels.shouldNotBeEmpty()
+      pathConfig.labels shouldBe "{}"
+    }
+  }
+
+  @Test
+  fun `agent proxy hostname and port should have defaults from config`() {
+    val configVals = readAgentOptions(listOf())
+    configVals.agent.proxy.hostname shouldBe "localhost"
+    configVals.agent.proxy.port shouldBe 50051
   }
 
   private fun readProxyOptions(argList: List<String>) = ProxyOptions(argList).configVals
