@@ -10,7 +10,6 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
-import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 import org.junit.jupiter.api.Test
 
 class ProxyServerTransportFilterTest {
