@@ -22,9 +22,11 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.Utils
+import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.net.ServerSocket
 import kotlin.properties.Delegates.notNull
 import kotlin.time.Duration.Companion.seconds
 
@@ -39,6 +41,9 @@ open class HarnessSetup {
     actions: () -> Unit = Utils.lambda {},
   ) {
     CollectorRegistry.defaultRegistry.clear()
+
+    // Wait for the proxy HTTP port to be available (previous test may not have fully released it)
+    waitForPortAvailable(PROXY_PORT)
 
     // Start the proxy first and then allow the agent to connect
     proxy = proxySetup.invoke()
@@ -58,5 +63,20 @@ open class HarnessSetup {
     }
 
     logger.info { "Stopped ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+  }
+
+  private fun waitForPortAvailable(
+    port: Int,
+    maxAttempts: Int = 50,
+    delayMs: Long = 200,
+  ) {
+    repeat(maxAttempts) {
+      try {
+        ServerSocket(port).use { return }
+      } catch (_: Exception) {
+        Thread.sleep(delayMs)
+      }
+    }
+    logger.warn { "Port $port may not be available after ${maxAttempts * delayMs}ms" }
   }
 }
