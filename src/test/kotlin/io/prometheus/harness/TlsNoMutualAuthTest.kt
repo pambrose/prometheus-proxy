@@ -20,8 +20,8 @@ package io.prometheus.harness
 
 import com.github.pambrose.common.util.simpleClassName
 import io.prometheus.harness.HarnessConstants.CONCURRENT_CLIENTS
-import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.harness.HarnessConstants.DEFAULT_TIMEOUT
+import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
+import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.AbstractHarnessTests
 import io.prometheus.harness.support.HarnessSetup
@@ -62,8 +62,8 @@ class TlsNoMutualAuthTest :
         agentSetup = {
           startAgent(
             serverName = "nomutualauth",
-            scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-            chunkContentSizeBytes = DEFAULT_CHUNK_SIZE,
+            scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
+            chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
             maxConcurrentClients = CONCURRENT_CLIENTS,
             args = listOf(
               "--proxy",
