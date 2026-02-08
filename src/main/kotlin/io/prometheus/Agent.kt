@@ -454,7 +454,7 @@ class Agent(
 
   override fun shutDown() {
     grpcService.shutDown()
-    agentHttpService.close()
+    runBlocking { agentHttpService.close() }
     super.shutDown()
   }
 
