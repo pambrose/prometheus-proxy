@@ -67,7 +67,6 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.zip.CRC32
-import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
 
 internal class AgentGrpcService(
@@ -366,7 +365,6 @@ internal class AgentGrpcService(
       }
 
       agent.markMsgSent()
-      agent.scrapeRequestBacklogSize -= 1
     }
   }
 

@@ -60,6 +60,7 @@ import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.minusAssign
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -296,10 +297,14 @@ class Agent(
               // actually limiting how many execute concurrently.
               for (scrapeRequestAction in connectionContext.scrapeRequestActions()) {
                 launch {
-                  semaphore.withPermit {
-                    // The url fetch occurs here during scrapeRequestAction.invoke()
-                    val scrapeResponse = scrapeRequestAction.invoke()
-                    connectionContext.sendScrapeResults(scrapeResponse)
+                  try {
+                    semaphore.withPermit {
+                      // The url fetch occurs here during scrapeRequestAction.invoke()
+                      val scrapeResponse = scrapeRequestAction.invoke()
+                      connectionContext.sendScrapeResults(scrapeResponse)
+                    }
+                  } finally {
+                    scrapeRequestBacklogSize -= 1
                   }
                 }
               }
@@ -471,7 +476,7 @@ class Agent(
 
     @JvmStatic
     fun main(args: Array<String>) {
-      startSyncAgent(args, true)
+      startSyncAgent(args, exitOnMissingConfig = true)
     }
 
     @JvmStatic
