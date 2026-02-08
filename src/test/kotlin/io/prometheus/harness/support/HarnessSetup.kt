@@ -33,7 +33,6 @@ open class HarnessSetup {
   private val logger = logger {}
   protected var proxy: Proxy by notNull()
   protected var agent: Agent by notNull()
-  var proxyPort: Int = 0
 
   protected fun setupProxyAndAgent(
     proxyPort: Int,
@@ -41,10 +40,9 @@ open class HarnessSetup {
     agentSetup: () -> Agent,
     actions: () -> Unit = Utils.lambda {},
   ) {
-    this.proxyPort = proxyPort
     CollectorRegistry.defaultRegistry.clear()
 
-    // Wait for the proxy HTTP port to be available (previous test may not have fully released it)
+    // Wait for the proxy port to be available (previous test may not have fully released it)
     waitForPortAvailable(proxyPort)
 
     // Start the proxy first and then allow the agent to connect
