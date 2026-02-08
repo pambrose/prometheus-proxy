@@ -154,8 +154,8 @@ internal class AgentHttpService(
     scrapeResults.apply {
       if (response.status.isSuccess()) {
         srContentType = response.headers[CONTENT_TYPE].orEmpty()
-        if (agent.options.debugEnabled)
-          logger.info { "CT check - setScrapeDetailsAndDebugInfo() contentType: $srContentType" }
+//        if (agent.options.debugEnabled)
+//          logger.info { "CT check - setScrapeDetailsAndDebugInfo() contentType: $srContentType" }
         // Zip the content here
         val content = response.bodyAsText()
         srZipped = content.length > agent.options.minGzipSizeBytes
