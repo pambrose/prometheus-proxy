@@ -25,8 +25,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.cio.CIO as ServerCIO
+import io.ktor.http.content.TextContent
+import io.ktor.http.withCharset
+import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.compression.CompressionConfig
 import io.ktor.server.plugins.compression.deflate
@@ -37,12 +40,9 @@ import io.ktor.server.plugins.statuspages.StatusPagesConfig
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import io.ktor.http.ContentType.Text
-import io.ktor.http.content.TextContent
-import io.ktor.http.withCharset
-import io.ktor.server.application.install
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import io.ktor.server.cio.CIO as ServerCIO
 
 // Tests for ProxyHttpConfig which configures Ktor server plugins for the proxy HTTP service.
 // Note: Full integration tests with testApplication would require ktor-server-test-host dependency.
@@ -189,7 +189,7 @@ class ProxyHttpConfigTest {
         }
         routing {
           get("/throw") {
-            throw RuntimeException("Test exception")
+            throw IllegalStateException("Test exception")
           }
         }
       }.start(wait = false)

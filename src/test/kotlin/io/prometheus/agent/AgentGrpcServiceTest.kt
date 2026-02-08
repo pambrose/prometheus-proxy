@@ -49,7 +49,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class AgentGrpcServiceTest {
   private fun createMockAgent(proxyHostname: String): Agent {
-    val mockMetrics = mockk<AgentMetrics>(relaxed = true)
     val mockOptions = mockk<AgentOptions>(relaxed = true)
 
     every { mockOptions.proxyHostname } returns proxyHostname
