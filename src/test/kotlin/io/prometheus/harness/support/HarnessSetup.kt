@@ -21,7 +21,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -33,18 +32,16 @@ open class HarnessSetup {
   private val logger = logger {}
   protected var proxy: Proxy by notNull()
   protected var agent: Agent by notNull()
-  var proxyPort: Int = 0
 
   protected fun setupProxyAndAgent(
     proxyPort: Int,
     proxySetup: () -> Proxy,
     agentSetup: () -> Agent,
-    actions: () -> Unit = Utils.lambda {},
+    actions: () -> Unit = {},
   ) {
-    this.proxyPort = proxyPort
     CollectorRegistry.defaultRegistry.clear()
 
-    // Wait for the proxy HTTP port to be available (previous test may not have fully released it)
+    // Wait for the proxy port to be available (previous test may not have fully released it)
     waitForPortAvailable(proxyPort)
 
     // Start the proxy first and then allow the agent to connect

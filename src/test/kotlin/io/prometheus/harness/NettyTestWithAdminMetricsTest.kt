@@ -26,12 +26,11 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
-import io.prometheus.common.Utils.lambda
+import io.prometheus.harness.HarnessConstants.CONCURRENT_CLIENTS
+import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
+import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
+import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.AbstractHarnessTests
-import io.prometheus.harness.support.HarnessConstants.CONCURRENT_CLIENTS
-import io.prometheus.harness.support.HarnessConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.harness.support.HarnessConstants.DEFAULT_TIMEOUT
-import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -79,24 +78,24 @@ class NettyTestWithAdminMetricsTest :
     fun setUp() =
       setupProxyAndAgent(
         proxyPort = PROXY_PORT,
-        proxySetup = lambda {
+        proxySetup = {
           startProxy(
             adminEnabled = true,
             debugEnabled = true,
             metricsEnabled = true,
           )
         },
-        agentSetup = lambda {
+        agentSetup = {
           startAgent(
             adminEnabled = true,
             debugEnabled = true,
             metricsEnabled = true,
-            scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-            chunkContentSizeBytes = DEFAULT_CHUNK_SIZE,
+            scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
+            chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
             maxConcurrentClients = CONCURRENT_CLIENTS,
           )
         },
-        actions = lambda {
+        actions = {
           // Wait long enough to trigger heartbeat for code coverage
           sleep(15.seconds)
         },

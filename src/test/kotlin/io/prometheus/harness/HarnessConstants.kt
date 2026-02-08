@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-package io.prometheus.harness.support
+package io.prometheus.harness
 
 import java.io.File
 
 object HarnessConstants {
-  const val REPS = 1000
   const val PROXY_PORT = 9505
-  const val DEFAULT_TIMEOUT = 3
-  const val DEFAULT_CHUNK_SIZE = 5
+  const val ADD_REMOVE_REPS = 1000
 
   const val HTTP_SERVER_COUNT = 5
   const val PATH_COUNT = 50
@@ -32,6 +30,9 @@ object HarnessConstants {
 
   const val MIN_DELAY_MILLIS = 400
   const val MAX_DELAY_MILLIS = 600
+
+  const val DEFAULT_SCRAPE_TIMEOUT_SECS = 3
+  const val DEFAULT_CHUNK_SIZE_BYTES = 5
 
   private const val TRAVIS_FILE = "etc/test-configs/travis.conf"
   private const val JUNIT_FILE = "etc/test-configs/junit-test.conf"

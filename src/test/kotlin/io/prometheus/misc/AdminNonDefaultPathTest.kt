@@ -27,7 +27,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.Utils.lambda
-import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
+import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy

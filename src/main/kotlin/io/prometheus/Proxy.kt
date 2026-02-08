@@ -36,7 +36,6 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Utils.getVersionDesc
-import io.prometheus.common.Utils.lambda
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
@@ -162,7 +161,7 @@ class Proxy(
   adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.proxy.admin),
   metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.proxy.metrics),
   zipkinConfig = newZipkinConfig(options.configVals.proxy.internal.zipkin),
-  versionBlock = lambda { getVersionDesc(true) },
+  versionBlock = { getVersionDesc(true) },
   isTestMode = testMode,
 ) {
   private val httpService = ProxyHttpService(this, proxyPort, isTestMode)

@@ -43,12 +43,12 @@ import io.ktor.server.routing.routing
 import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.harness.support.HarnessConstants.HTTP_SERVER_COUNT
-import io.prometheus.harness.support.HarnessConstants.MAX_DELAY_MILLIS
-import io.prometheus.harness.support.HarnessConstants.MIN_DELAY_MILLIS
-import io.prometheus.harness.support.HarnessConstants.PARALLEL_QUERY_COUNT
-import io.prometheus.harness.support.HarnessConstants.PATH_COUNT
-import io.prometheus.harness.support.HarnessConstants.SEQUENTIAL_QUERY_COUNT
+import io.prometheus.harness.HarnessConstants.HTTP_SERVER_COUNT
+import io.prometheus.harness.HarnessConstants.MAX_DELAY_MILLIS
+import io.prometheus.harness.HarnessConstants.MIN_DELAY_MILLIS
+import io.prometheus.harness.HarnessConstants.PARALLEL_QUERY_COUNT
+import io.prometheus.harness.HarnessConstants.PATH_COUNT
+import io.prometheus.harness.HarnessConstants.SEQUENTIAL_QUERY_COUNT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -62,7 +62,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-class ProxyCallTestArgs(
+data class ProxyCallTestArgs(
   val agent: Agent,
   val proxyPort: Int,
   val httpServerCount: Int = HTTP_SERVER_COUNT,
@@ -98,15 +98,11 @@ internal object HarnessTests {
         }
       }
 
-    coroutineScope {
-      launch(Dispatchers.IO + exceptionHandler(logger)) {
-        logger.info { "Starting httpServer" }
-        httpServer.start()
-      }
-    }
+    logger.info { "Starting httpServer" }
+    httpServer.start()
 
     // Give http server a chance to start
-    delay(2.seconds)
+    // delay(2.seconds)
 
     try {
       pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
