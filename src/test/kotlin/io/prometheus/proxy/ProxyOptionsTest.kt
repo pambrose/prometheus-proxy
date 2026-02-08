@@ -11,9 +11,9 @@ class ProxyOptionsTest {
   // ==================== Default Values ====================
 
   @Test
-  fun `default proxyHttpPort should be 8080`() {
+  fun `default proxyPort should be 8080`() {
     val options = ProxyOptions(listOf())
-    options.proxyHttpPort shouldBe 8080
+    options.proxyPort shouldBe 8080
   }
 
   @Test
@@ -67,9 +67,9 @@ class ProxyOptionsTest {
   // ==================== Command-Line Override Tests ====================
 
   @Test
-  fun `proxyHttpPort should be settable via -p flag`() {
+  fun `proxyPort should be settable via -p flag`() {
     val options = ProxyOptions(listOf("-p", "9090"))
-    options.proxyHttpPort shouldBe 9090
+    options.proxyPort shouldBe 9090
   }
 
   @Test
@@ -170,7 +170,7 @@ class ProxyOptionsTest {
   @Test
   fun `list constructor should work`() {
     val options = ProxyOptions(listOf("-p", "7070"))
-    options.proxyHttpPort shouldBe 7070
+    options.proxyPort shouldBe 7070
   }
 
   @Test

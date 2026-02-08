@@ -27,23 +27,29 @@ abstract class AbstractHarnessTests(
   fun proxyCallTest() = runBlocking { HarnessTests.proxyCallTest(args) }
 
   @Test
-  fun missingPathTest() = BasicHarnessTests.missingPathTest(simpleClassName)
+  fun missingPathTest() = BasicHarnessTests.missingPathTest(args.proxyPort, simpleClassName)
 
   @Test
-  fun invalidPathTest() = BasicHarnessTests.invalidPathTest(simpleClassName)
+  fun invalidPathTest() = BasicHarnessTests.invalidPathTest(args.proxyPort, simpleClassName)
 
   @Test
   fun addRemovePathsTest() =
-    runBlocking { BasicHarnessTests.addRemovePathsTest(args.agent.pathManager, simpleClassName) }
+    runBlocking { BasicHarnessTests.addRemovePathsTest(args.agent.pathManager, args.proxyPort, simpleClassName) }
 
   @Test
   fun threadedAddRemovePathsTest() =
-    runBlocking { BasicHarnessTests.threadedAddRemovePathsTest(args.agent.pathManager, simpleClassName) }
+    runBlocking {
+      BasicHarnessTests.threadedAddRemovePathsTest(
+        args.agent.pathManager,
+        args.proxyPort,
+        simpleClassName,
+      )
+    }
 
   @Test
   fun invalidAgentUrlTest() =
-    runBlocking { BasicHarnessTests.invalidAgentUrlTest(args.agent.pathManager, simpleClassName) }
+    runBlocking { BasicHarnessTests.invalidAgentUrlTest(args.agent.pathManager, args.proxyPort, simpleClassName) }
 
   @Test
-  fun timeoutTest() = runBlocking { HarnessTests.timeoutTest(args.agent.pathManager, simpleClassName) }
+  fun timeoutTest() = runBlocking { HarnessTests.timeoutTest(args.agent.pathManager, simpleClassName, args.proxyPort) }
 }

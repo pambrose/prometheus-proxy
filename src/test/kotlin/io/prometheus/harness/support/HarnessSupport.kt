@@ -25,6 +25,7 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.Utils.getVersionDesc
+import io.prometheus.harness.support.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -86,7 +87,7 @@ object TestUtils {
     val proxyOptions = ProxyOptions(
       mutableListOf<String>()
         .apply {
-          addAll(HarnessConstants.CONFIG_ARG)
+          addAll(CONFIG_ARG)
           addAll(args)
           add("-Dproxy.admin.enabled=$adminEnabled")
           add("-Dproxy.admin.debugEnabled=$debugEnabled")
@@ -95,7 +96,7 @@ object TestUtils {
     )
     return Proxy(
       options = proxyOptions,
-      proxyHttpPort = PROXY_PORT,
+      proxyPort = PROXY_PORT,
       inProcessServerName = serverName,
       testMode = true,
     ) { startSync() }
@@ -119,7 +120,7 @@ object TestUtils {
     val agentOptions = AgentOptions(
       args = mutableListOf<String>()
         .apply {
-          addAll(HarnessConstants.CONFIG_ARG)
+          addAll(CONFIG_ARG)
           addAll(args)
           add("-Dagent.admin.enabled=$adminEnabled")
           add("-Dagent.admin.debugEnabled=$debugEnabled")

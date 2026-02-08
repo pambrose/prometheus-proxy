@@ -201,7 +201,7 @@ class BaseOptionsTest {
     )
 
     val options = ProxyOptions(listOf("-c", confFile.absolutePath))
-    options.proxyHttpPort shouldBe 9999
+    options.proxyPort shouldBe 9999
   }
 
   @Test
@@ -222,7 +222,7 @@ class BaseOptionsTest {
     )
 
     val options = ProxyOptions(listOf("-c", jsonFile.absolutePath))
-    options.proxyHttpPort shouldBe 7777
+    options.proxyPort shouldBe 7777
   }
 
   @Test
@@ -233,13 +233,13 @@ class BaseOptionsTest {
     propsFile.writeText("proxy.http.port=6666")
 
     val options = ProxyOptions(listOf("-c", propsFile.absolutePath))
-    options.proxyHttpPort shouldBe 6666
+    options.proxyPort shouldBe 6666
   }
 
   @Test
   fun `dynamic params should strip surrounding quotes`() {
     val options = ProxyOptions(listOf("-Dproxy.http.port=\"5555\""))
-    options.proxyHttpPort shouldBe 5555
+    options.proxyPort shouldBe 5555
   }
 
   // ==================== ConfigVals Tests ====================
