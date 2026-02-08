@@ -68,6 +68,11 @@ internal class ScrapeRequestWrapper(
 
   fun markComplete() {
     requestTimer?.observeDuration()
+    // Required
+    closeChannel()
+  }
+
+  fun closeChannel() {
     completeChannel.close()
   }
 
