@@ -6,7 +6,6 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldNotBeEmpty
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
@@ -163,5 +162,83 @@ class AgentOptionsTest {
       false,
     )
     options.overrideAuthority shouldBe "my-authority"
+  }
+
+  // ==================== CLI Args for HTTP Client and Cache ====================
+
+  @Test
+  fun `maxConcurrentHttpClients should be settable via command line`() {
+    val options = AgentOptions(
+      listOf("--name", "test", "--proxy", "host", "--max_concurrent_clients", "25"),
+      false,
+    )
+    options.maxConcurrentHttpClients shouldBe 25
+  }
+
+  @Test
+  fun `httpClientTimeoutSecs should be settable via command line`() {
+    val options = AgentOptions(
+      listOf("--name", "test", "--proxy", "host", "--client_timeout_secs", "120"),
+      false,
+    )
+    options.httpClientTimeoutSecs shouldBe 120
+  }
+
+  @Test
+  fun `maxCacheSize should be settable via command line`() {
+    val options = AgentOptions(
+      listOf("--name", "test", "--proxy", "host", "--max_cache_size", "200"),
+      false,
+    )
+    options.maxCacheSize shouldBe 200
+  }
+
+  @Test
+  fun `maxCacheAgeMins should be settable via command line`() {
+    val options = AgentOptions(
+      listOf("--name", "test", "--proxy", "host", "--max_cache_age_mins", "60"),
+      false,
+    )
+    options.maxCacheAgeMins shouldBe 60
+  }
+
+  @Test
+  fun `maxCacheIdleMins should be settable via command line`() {
+    val options = AgentOptions(
+      listOf("--name", "test", "--proxy", "host", "--max_cache_idle_mins", "20"),
+      false,
+    )
+    options.maxCacheIdleMins shouldBe 20
+  }
+
+  @Test
+  fun `cacheCleanupIntervalMins should be settable via command line`() {
+    val options = AgentOptions(
+      listOf("--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "15"),
+      false,
+    )
+    options.cacheCleanupIntervalMins shouldBe 15
+  }
+
+  // ==================== Validation Tests ====================
+
+  @Test
+  fun `maxConcurrentHttpClients of 0 should throw IllegalArgumentException`() {
+    assertThrows<IllegalArgumentException> {
+      AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--max_concurrent_clients", "0"),
+        false,
+      )
+    }
+  }
+
+  @Test
+  fun `httpClientTimeoutSecs of 0 should throw IllegalArgumentException`() {
+    assertThrows<IllegalArgumentException> {
+      AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--client_timeout_secs", "0"),
+        false,
+      )
+    }
   }
 }

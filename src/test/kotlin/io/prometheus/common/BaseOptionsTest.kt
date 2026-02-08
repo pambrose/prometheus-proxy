@@ -3,11 +3,15 @@
 package io.prometheus.common
 
 import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
+import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.agent.AgentOptions
 import io.prometheus.proxy.ProxyOptions
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.io.File
 
 class BaseOptionsTest {
   // ==================== Shared Option Defaults (via ProxyOptions) ====================
@@ -179,5 +183,71 @@ class BaseOptionsTest {
       false,
     )
     options.logLevel shouldBe "DEBUG"
+  }
+
+  // ==================== Config File Loading Tests ====================
+
+  @Test
+  fun `should load config from conf file`(
+    @TempDir tempDir: File,
+  ) {
+    val confFile = File(tempDir, "test.conf")
+    confFile.writeText(
+      """
+      proxy {
+        http.port = 9999
+      }
+      """.trimIndent(),
+    )
+
+    val options = ProxyOptions(listOf("-c", confFile.absolutePath))
+    options.proxyHttpPort shouldBe 9999
+  }
+
+  @Test
+  fun `should load config from json file`(
+    @TempDir tempDir: File,
+  ) {
+    val jsonFile = File(tempDir, "test.json")
+    jsonFile.writeText(
+      """
+      {
+        "proxy": {
+          "http": {
+            "port": 7777
+          }
+        }
+      }
+      """.trimIndent(),
+    )
+
+    val options = ProxyOptions(listOf("-c", jsonFile.absolutePath))
+    options.proxyHttpPort shouldBe 7777
+  }
+
+  @Test
+  fun `should load config from properties file`(
+    @TempDir tempDir: File,
+  ) {
+    val propsFile = File(tempDir, "test.properties")
+    propsFile.writeText("proxy.http.port=6666")
+
+    val options = ProxyOptions(listOf("-c", propsFile.absolutePath))
+    options.proxyHttpPort shouldBe 6666
+  }
+
+  @Test
+  fun `dynamic params should strip surrounding quotes`() {
+    val options = ProxyOptions(listOf("-Dproxy.http.port=\"5555\""))
+    options.proxyHttpPort shouldBe 5555
+  }
+
+  // ==================== ConfigVals Tests ====================
+
+  @Test
+  fun `configVals should be initialized after construction`() {
+    val options = ProxyOptions(listOf())
+    options.configVals.proxy.http.port shouldBeGreaterThan 0
+    options.configVals.proxy.admin.pingPath.shouldNotBeEmpty()
   }
 }

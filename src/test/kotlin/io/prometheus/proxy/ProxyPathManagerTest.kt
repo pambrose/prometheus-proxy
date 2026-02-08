@@ -473,4 +473,134 @@ class ProxyPathManagerTest {
       text shouldContain "Proxy Path Map"
       text shouldContain "/metrics"
     }
+
+  // ==================== Consolidated/Non-Consolidated Mismatch Tests ====================
+
+  @Test
+  fun `addPath should warn when consolidated agent adds to non-consolidated path`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val nonConsolidatedContext = createMockAgentContext(consolidated = false)
+      val consolidatedContext = createMockAgentContext(consolidated = true)
+
+      // First register as non-consolidated
+      manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext)
+      // Then try to add consolidated — should not throw, mismatch is logged
+      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
+
+      // Path still exists (overwritten or warned)
+      manager.pathMapSize shouldBe 1
+    }
+
+  @Test
+  fun `addPath should warn when non-consolidated agent overwrites consolidated path`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val consolidatedContext = createMockAgentContext(consolidated = true)
+      val nonConsolidatedContext = createMockAgentContext(consolidated = false)
+
+      // First register as consolidated
+      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
+      // Then overwrite with non-consolidated
+      manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext)
+
+      manager.pathMapSize shouldBe 1
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.isConsolidated.shouldBeFalse()
+      info.agentContexts.shouldHaveSize(1)
+      info.agentContexts[0].agentId shouldBe nonConsolidatedContext.agentId
+    }
+
+  // ==================== removeFromPathManager Edge Cases ====================
+
+  @Test
+  fun `removeFromPathManager should throw when agentId is empty`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+
+      val exception = assertThrows<IllegalArgumentException> {
+        manager.removeFromPathManager("", "test")
+      }
+
+      exception.message shouldContain "Empty agentId"
+    }
+
+  @Test
+  fun `removeFromPathManager should handle missing agent context gracefully`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+
+      every { proxy.agentContextManager.getAgentContext("missing-agent") } returns null
+
+      // Should not throw
+      manager.removeFromPathManager("missing-agent", "disconnect")
+    }
+
+  // ==================== getAgentContextInfo Defensive Copy ====================
+
+  @Test
+  fun `getAgentContextInfo should return a defensive copy`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      manager.addPath("/metrics", """{"job":"test"}""", context)
+
+      val info1 = manager.getAgentContextInfo("/metrics")
+      info1.shouldNotBeNull()
+
+      // Modify the returned list
+      info1.agentContexts.clear()
+
+      // Original should be unaffected
+      val info2 = manager.getAgentContextInfo("/metrics")
+      info2.shouldNotBeNull()
+      info2.agentContexts.shouldHaveSize(1)
+    }
+
+  // ==================== toPlainText with Multiple Paths ====================
+
+  @Test
+  fun `toPlainText should format paths with different lengths correctly`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+
+      manager.addPath("/a", """{}""", createMockAgentContext())
+      manager.addPath("/very-long-metrics-path", """{}""", createMockAgentContext())
+      manager.addPath("/medium", """{}""", createMockAgentContext())
+
+      val text = manager.toPlainText()
+
+      text shouldContain "Proxy Path Map"
+      text shouldContain "/a"
+      text shouldContain "/very-long-metrics-path"
+      text shouldContain "/medium"
+    }
+
+  // ==================== AgentContextInfo Tests ====================
+
+  @Test
+  fun `AgentContextInfo toString should include key fields`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      manager.addPath("/metrics", """{"job":"test"}""", context)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+
+      val str = info.toString()
+      str shouldContain "AgentContextInfo"
+      str shouldContain "consolidated"
+      str shouldContain "labels"
+    }
 }

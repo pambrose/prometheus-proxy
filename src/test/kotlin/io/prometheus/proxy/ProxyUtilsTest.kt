@@ -19,12 +19,23 @@
 package io.prometheus.proxy
 
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.withCharset
+import io.ktor.server.cio.CIO as ServerCIO
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.proxy.ProxyUtils.respondWith
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 
 class ProxyUtilsTest {
@@ -144,4 +155,84 @@ class ProxyUtilsTest {
     result3.contentText shouldBe ""
     result4.contentText shouldBe ""
   }
+
+  // ==================== respondWith Integration Tests ====================
+
+  @Test
+  fun `respondWith should set CacheControl header and respond with text`(): Unit =
+    runBlocking {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/test-respond") {
+            call.respondWith("test content")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/test-respond")
+        response.status shouldBe HttpStatusCode.OK
+        response.bodyAsText() shouldBe "test content"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `respondWith should use custom content type`(): Unit =
+    runBlocking {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/test-json") {
+            call.respondWith(
+              """{"key":"value"}""",
+              ContentType.Application.Json.withCharset(Charsets.UTF_8),
+            )
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/test-json")
+        response.status shouldBe HttpStatusCode.OK
+        response.bodyAsText() shouldContain "key"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `respondWith should use custom status code`(): Unit =
+    runBlocking {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/test-error") {
+            call.respondWith("error", status = HttpStatusCode.ServiceUnavailable)
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/test-error")
+        response.status shouldBe HttpStatusCode.ServiceUnavailable
+        response.bodyAsText() shouldBe "error"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
 }

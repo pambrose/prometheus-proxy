@@ -20,11 +20,28 @@ package io.prometheus.proxy
 
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.cio.CIO as ServerCIO
+import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.compression.CompressionConfig
 import io.ktor.server.plugins.compression.deflate
 import io.ktor.server.plugins.compression.gzip
 import io.ktor.server.plugins.compression.minimumSize
+import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.plugins.statuspages.StatusPagesConfig
+import io.ktor.server.response.respond
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
+import io.ktor.http.ContentType.Text
+import io.ktor.http.content.TextContent
+import io.ktor.http.withCharset
+import io.ktor.server.application.install
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 
 // Tests for ProxyHttpConfig which configures Ktor server plugins for the proxy HTTP service.
@@ -122,5 +139,111 @@ class ProxyHttpConfigTest {
     val minimumSize = 1024L
 
     minimumSize shouldBe 1024L
+  }
+
+  // ==================== StatusPages Integration Tests ====================
+
+  @Test
+  fun `StatusPages NotFound handler should return correct text`(): Unit =
+    runBlocking {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        install(StatusPages) {
+          status(HttpStatusCode.NotFound) { call, cause ->
+            call.respond(
+              TextContent(
+                "${cause.value} ${cause.description}",
+                Text.Plain.withCharset(Charsets.UTF_8),
+                cause,
+              ),
+            )
+          }
+        }
+        routing {
+          // No routes - all requests should 404
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/nonexistent")
+        response.status shouldBe HttpStatusCode.NotFound
+        response.bodyAsText() shouldContain "404"
+        response.bodyAsText() shouldContain "Not Found"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `StatusPages exception handler should return InternalServerError`(): Unit =
+    runBlocking {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        install(StatusPages) {
+          exception<Throwable> { call, _ ->
+            call.respond(HttpStatusCode.InternalServerError)
+          }
+        }
+        routing {
+          get("/throw") {
+            throw RuntimeException("Test exception")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/throw")
+        response.status shouldBe HttpStatusCode.InternalServerError
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  // ==================== getFormattedLog Tests ====================
+
+  @Test
+  fun `Found status should have value 302`() {
+    HttpStatusCode.Found.value shouldBe 302
+    HttpStatusCode.Found.description shouldBe "Found"
+  }
+
+  @Test
+  fun `InternalServerError status should have value 500`() {
+    HttpStatusCode.InternalServerError.value shouldBe 500
+  }
+
+  // ==================== StatusPagesConfig Tests ====================
+
+  @Test
+  fun `StatusPagesConfig should support exception handler configuration`() {
+    val config = StatusPagesConfig()
+
+    // Apply exception handler similar to ProxyHttpConfig
+    config.exception<Throwable> { call, _ ->
+      call.respond(HttpStatusCode.InternalServerError)
+    }
+
+    config.shouldNotBeNull()
+  }
+
+  @Test
+  fun `StatusPagesConfig should support status handler configuration`() {
+    val config = StatusPagesConfig()
+
+    config.status(HttpStatusCode.NotFound) { call, cause ->
+      call.respond(
+        TextContent("${cause.value} ${cause.description}", Text.Plain.withCharset(Charsets.UTF_8), cause),
+      )
+    }
+
+    config.shouldNotBeNull()
   }
 }

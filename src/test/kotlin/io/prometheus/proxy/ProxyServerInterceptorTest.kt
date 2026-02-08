@@ -4,11 +4,8 @@ package io.prometheus.proxy
 
 import io.grpc.Attributes
 import io.grpc.Metadata
-import io.grpc.Metadata.ASCII_STRING_MARSHALLER
-import io.grpc.MethodDescriptor
 import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk

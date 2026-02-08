@@ -132,37 +132,58 @@ class HttpClientCacheTest {
   @Test
   fun `should evict least recently used client when cache is full`() =
     runBlocking {
-      // Fill cache to capacity
-      val entries = mutableListOf<CacheEntry>()
-      for (i in 1..5) {
-        val key = ClientKey("user$i", "pass$i")
-        val entry = cache.getOrCreateClient(key) { createMockHttpClient() }
-        entries.add(entry)
+      // Use a dedicated cache with long expiry to prevent the cleanup coroutine
+      // from removing idle entries during the test. The shared cache's 500ms idle
+      // time can be exceeded under load (e.g. when running the full test suite),
+      // causing the cleanup coroutine to shrink the cache before the eviction step.
+      val lruCache = HttpClientCache(
+        maxCacheSize = 5,
+        maxAge = 30.seconds,
+        maxIdleTime = 30.seconds,
+        cleanupInterval = 30.seconds,
+      )
+
+      try {
+        // Fill cache to capacity
+        val entries = mutableListOf<CacheEntry>()
+        for (i in 1..5) {
+          val key = ClientKey("user$i", "pass$i")
+          val entry = lruCache.getOrCreateClient(key) { createMockHttpClient() }
+          entries.add(entry)
+        }
+
+        lruCache.currentCacheSize() shouldBe 5
+
+        // Ensure the re-access gets a strictly later timestamp.
+        // Without this, all entries can share the same System.currentTimeMillis()
+        // value, and minByOrNull picks user1 (first in insertion order) as the
+        // LRU victim instead of user2.
+        delay(2)
+
+        // Access the first entry to make it most recently used
+        val firstKey = ClientKey("user1", "pass1")
+        val firstEntry = lruCache.getOrCreateClient(firstKey) { createMockHttpClient() }
+        firstEntry.client shouldBe entries[0].client
+
+        // Add a new entry, which should evict the least recently used (user2)
+        val newKey = ClientKey("user6", "pass6")
+        val newEntry = lruCache.getOrCreateClient(newKey) { createMockHttpClient() }
+
+        lruCache.currentCacheSize() shouldBe 5
+
+        // Try to get user2 again - should create a new client since it was evicted
+        val evictedKey = ClientKey("user2", "pass2")
+        val evictedEntry = lruCache.getOrCreateClient(evictedKey) { createMockHttpClient() }
+        evictedEntry.client shouldNotBe entries[1].client
+
+        // Clean up
+        entries.forEach { lruCache.onFinishedWithClient(it) }
+        lruCache.onFinishedWithClient(firstEntry)
+        lruCache.onFinishedWithClient(newEntry)
+        lruCache.onFinishedWithClient(evictedEntry)
+      } finally {
+        lruCache.close()
       }
-
-      cache.currentCacheSize() shouldBe 5
-
-      // Access the first entry to make it most recently used
-      val firstKey = ClientKey("user1", "pass1")
-      val firstEntry = cache.getOrCreateClient(firstKey) { createMockHttpClient() }
-      firstEntry.client shouldBe entries[0].client
-
-      // Add a new entry, which should evict the least recently used (user2)
-      val newKey = ClientKey("user6", "pass6")
-      val newEntry = cache.getOrCreateClient(newKey) { createMockHttpClient() }
-
-      cache.currentCacheSize() shouldBe 5
-
-      // Try to get user2 again - should create a new client since it was evicted
-      val evictedKey = ClientKey("user2", "pass2")
-      val evictedEntry = cache.getOrCreateClient(evictedKey) { createMockHttpClient() }
-      evictedEntry.client shouldNotBe entries[1].client
-
-      // Clean up
-      entries.forEach { cache.onFinishedWithClient(it) }
-      cache.onFinishedWithClient(firstEntry)
-      cache.onFinishedWithClient(newEntry)
-      cache.onFinishedWithClient(evictedEntry)
     }
 
   @Test
@@ -446,4 +467,67 @@ class HttpClientCacheTest {
     fastCleanupCache.close()
     fastCleanupCache.currentCacheSize() shouldBe 0
   }
+
+  @Test
+  fun `onDoneWithClient should close client when entry is marked for close and not in use`(): Unit =
+    runBlocking {
+      val key = ClientKey("user1", "pass1")
+
+      // Get a client entry (marks it as in use)
+      val entry = cache.getOrCreateClient(key) { createMockHttpClient() }
+      cache.currentCacheSize() shouldBe 1
+
+      // Now evict it (triggers markForClose) by filling cache past capacity
+      for (i in 2..6) {
+        val k = ClientKey("user$i", "pass$i")
+        val e = cache.getOrCreateClient(k) { createMockHttpClient() }
+        cache.onFinishedWithClient(e)
+      }
+
+      // The original entry was evicted (marked for close), but still in use
+      // When we call onFinishedWithClient, it should close the client
+      cache.onFinishedWithClient(entry)
+
+      // The evicted entry's client was closed - getting the same key creates a new client
+      val newEntry = cache.getOrCreateClient(key) { createMockHttpClient() }
+      newEntry.client shouldNotBe entry.client
+
+      cache.onFinishedWithClient(newEntry)
+    }
+
+  @Test
+  fun `cleanupExpiredEntries should remove all expired entries`(): Unit =
+    runBlocking {
+      // Create a cache with short expiry but long cleanup interval (manual cleanup)
+      val testCache = HttpClientCache(
+        maxCacheSize = 10,
+        maxAge = 200.milliseconds,
+        maxIdleTime = 100.milliseconds,
+        cleanupInterval = 100.milliseconds,
+      )
+
+      try {
+        // Create multiple entries
+        val entries = mutableListOf<CacheEntry>()
+        for (i in 1..3) {
+          val key = ClientKey("user$i", "pass$i")
+          val entry = testCache.getOrCreateClient(key) { createMockHttpClient() }
+          entries.add(entry)
+          testCache.onFinishedWithClient(entry)
+        }
+
+        testCache.currentCacheSize() shouldBe 3
+
+        // Wait for entries to expire
+        delay(300.milliseconds)
+
+        // Wait for cleanup to run
+        delay(200.milliseconds)
+
+        // All expired entries should be removed by cleanup
+        testCache.currentCacheSize() shouldBe 0
+      } finally {
+        testCache.close()
+      }
+    }
 }

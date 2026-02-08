@@ -147,4 +147,127 @@ class DataClassTest {
         it.serviceName shouldBe "a service name"
       }
   }
+
+  // ==================== Proxy Admin Config Tests ====================
+
+  @Test
+  fun proxyAdminConfigTest() {
+    var vals = configVals("proxy.admin.enabled=true")
+    newAdminConfig(vals.proxy.admin.enabled, -1, vals.proxy.admin)
+      .also {
+        it.enabled.shouldBeTrue()
+      }
+
+    vals = configVals("proxy.admin.port=777")
+    newAdminConfig(vals.proxy.admin.enabled, vals.proxy.admin.port, vals.proxy.admin)
+      .also {
+        it.enabled.shouldBeFalse()
+        it.port shouldBe 777
+      }
+
+    newAdminConfig(true, 444, configVals("proxy.admin.pingPath=proxy ping val").proxy.admin)
+      .also {
+        it.pingPath shouldBe "proxy ping val"
+      }
+
+    newAdminConfig(true, 444, configVals("proxy.admin.versionPath=proxy version val").proxy.admin)
+      .also {
+        it.versionPath shouldBe "proxy version val"
+      }
+
+    newAdminConfig(true, 444, configVals("proxy.admin.healthCheckPath=proxy healthCheck val").proxy.admin)
+      .also {
+        it.healthCheckPath shouldBe "proxy healthCheck val"
+      }
+
+    newAdminConfig(true, 444, configVals("proxy.admin.threadDumpPath=proxy threadDump val").proxy.admin)
+      .also {
+        it.threadDumpPath shouldBe "proxy threadDump val"
+      }
+  }
+
+  // ==================== Proxy Metrics Config Tests ====================
+
+  @Test
+  fun proxyMetricsConfigTest() {
+    newMetricsConfig(true, 666, configVals("proxy.metrics.enabled=true").proxy.metrics)
+      .also {
+        it.enabled.shouldBeTrue()
+      }
+
+    newMetricsConfig(true, 666, configVals("proxy.metrics.path=proxy path val").proxy.metrics)
+      .also {
+        it.path shouldBe "proxy path val"
+      }
+
+    newMetricsConfig(true, 666, configVals("proxy.metrics.standardExportsEnabled=true").proxy.metrics)
+      .also {
+        it.standardExportsEnabled.shouldBeTrue()
+      }
+
+    newMetricsConfig(true, 666, configVals("proxy.metrics.memoryPoolsExportsEnabled=true").proxy.metrics)
+      .also {
+        it.memoryPoolsExportsEnabled.shouldBeTrue()
+      }
+
+    newMetricsConfig(true, 666, configVals("proxy.metrics.garbageCollectorExportsEnabled=true").proxy.metrics)
+      .also {
+        it.garbageCollectorExportsEnabled.shouldBeTrue()
+      }
+
+    newMetricsConfig(true, 666, configVals("proxy.metrics.threadExportsEnabled=true").proxy.metrics)
+      .also {
+        it.threadExportsEnabled.shouldBeTrue()
+      }
+
+    newMetricsConfig(true, 666, configVals("proxy.metrics.classLoadingExportsEnabled=true").proxy.metrics)
+      .also {
+        it.classLoadingExportsEnabled.shouldBeTrue()
+      }
+
+    newMetricsConfig(true, 666, configVals("proxy.metrics.versionInfoExportsEnabled=true").proxy.metrics)
+      .also {
+        it.versionInfoExportsEnabled.shouldBeTrue()
+      }
+  }
+
+  // ==================== gRPC Metrics Config Tests ====================
+
+  @Test
+  fun grpcMetricsConfigTest() {
+    // Agent gRPC metrics
+    configVals("agent.metrics.grpc.metricsEnabled=true").agent.metrics.grpc
+      .also {
+        it.metricsEnabled.shouldBeTrue()
+      }
+
+    configVals("agent.metrics.grpc.allMetricsReported=true").agent.metrics.grpc
+      .also {
+        it.allMetricsReported.shouldBeTrue()
+      }
+
+    // Proxy gRPC metrics
+    configVals("proxy.metrics.grpc.metricsEnabled=true").proxy.metrics.grpc
+      .also {
+        it.metricsEnabled.shouldBeTrue()
+      }
+
+    configVals("proxy.metrics.grpc.allMetricsReported=true").proxy.metrics.grpc
+      .also {
+        it.allMetricsReported.shouldBeTrue()
+      }
+
+    // Defaults should be false
+    configVals("agent.name=test").agent.metrics.grpc
+      .also {
+        it.metricsEnabled.shouldBeFalse()
+        it.allMetricsReported.shouldBeFalse()
+      }
+
+    configVals("proxy.http.port=8080").proxy.metrics.grpc
+      .also {
+        it.metricsEnabled.shouldBeFalse()
+        it.allMetricsReported.shouldBeFalse()
+      }
+  }
 }

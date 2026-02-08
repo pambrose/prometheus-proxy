@@ -193,4 +193,39 @@ class AgentMetricsTest {
     metrics.scrapeResultCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 2.0
     metrics.connectCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 1.0
   }
+
+  // ==================== Gauge Tests ====================
+
+  @Test
+  fun `start time gauge should be registered and set`() {
+    val agent = createMockAgent()
+    val metrics = AgentMetrics(agent)
+
+    // The agent_start_time_seconds gauge is created and set in the init block
+    // Verify it was registered by checking the default registry
+    val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
+    val startTimeMetric = samples.find { it.name == "agent_start_time_seconds" }
+    startTimeMetric.shouldNotBeNull()
+
+    // The gauge value should be a positive timestamp
+    val sample = startTimeMetric.samples.firstOrNull()
+    sample.shouldNotBeNull()
+    sample.value shouldBeGreaterThanOrEqual 0.0
+  }
+
+  @Test
+  fun `SamplerGaugeCollector should be constructable with agent metrics`() {
+    val agent = createMockAgent()
+
+    // Creating AgentMetrics should register SamplerGaugeCollectors without exception
+    val metrics = AgentMetrics(agent)
+
+    // Verify the backlog and cache size gauges are registered
+    val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
+    val backlogMetric = samples.find { it.name == "agent_scrape_backlog_size" }
+    backlogMetric.shouldNotBeNull()
+
+    val cacheMetric = samples.find { it.name == "agent_client_cache_size" }
+    cacheMetric.shouldNotBeNull()
+  }
 }

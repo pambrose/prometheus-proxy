@@ -178,4 +178,24 @@ class ProxyOptionsTest {
     val options = ProxyOptions(listOf())
     options.configVals.proxy.http.port shouldBe 8080
   }
+
+  // ==================== KeepAlive Defaults Tests ====================
+
+  @Test
+  fun `keepAliveTimeSecs should default to -1`() {
+    val options = ProxyOptions(listOf())
+    options.keepAliveTimeSecs shouldBe -1L
+  }
+
+  @Test
+  fun `keepAliveTimeoutSecs should default to -1`() {
+    val options = ProxyOptions(listOf())
+    options.keepAliveTimeoutSecs shouldBe -1L
+  }
+
+  @Test
+  fun `permitKeepAliveTimeSecs should default to -1`() {
+    val options = ProxyOptions(listOf())
+    options.permitKeepAliveTimeSecs shouldBe -1L
+  }
 }
