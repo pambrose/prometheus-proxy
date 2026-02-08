@@ -79,14 +79,14 @@ class NettyTestWithAdminMetricsTest :
         proxySetup = lambda {
           startProxy(
             adminEnabled = true,
-            debugEnabled = true,
+            debugEnabled = false,
             metricsEnabled = true,
           )
         },
         agentSetup = lambda {
           startAgent(
             adminEnabled = true,
-            debugEnabled = true,
+            debugEnabled = false,
             metricsEnabled = true,
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,
             chunkContentSizeBytes = DEFAULT_CHUNK_SIZE,
