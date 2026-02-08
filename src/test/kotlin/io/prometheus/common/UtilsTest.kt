@@ -32,7 +32,9 @@ import io.prometheus.common.Utils.lambda
 import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.setLogLevel
 import io.prometheus.common.Utils.toJsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.Test
 
 class UtilsTest {
@@ -281,6 +283,27 @@ class UtilsTest {
     result shouldBe HostPort("[2001:db8::1]", 8443)
   }
 
+  @Test
+  fun `parseHostPort should throw for non-numeric port`() {
+    shouldThrow<NumberFormatException> {
+      parseHostPort("host:abc", 50051)
+    }
+  }
+
+  @Test
+  fun `parseHostPort should handle port 0`() {
+    val result = parseHostPort("host:0", 50051)
+
+    result shouldBe HostPort("host", 0)
+  }
+
+  @Test
+  fun `parseHostPort should handle maximum port number`() {
+    val result = parseHostPort("host:65535", 50051)
+
+    result shouldBe HostPort("host", 65535)
+  }
+
   // ==================== HostPort Data Class Tests ====================
 
   @Test
@@ -342,6 +365,23 @@ class UtilsTest {
     val details = status.exceptionDetails(exception)
 
     details shouldContain "IOException"
+  }
+
+  // ==================== toJsonElement Edge Case Tests ====================
+
+  @Test
+  fun `toJsonElement should parse JSON array`() {
+    val json = "[1, 2, 3]"
+    val element = json.toJsonElement()
+
+    (element is JsonArray).shouldBeTrue()
+  }
+
+  @Test
+  fun `toJsonElement should parse JSON primitives`() {
+    "42".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
+    "true".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
+    "\"hello\"".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
   }
 
   // ==================== Type Check Helper ====================

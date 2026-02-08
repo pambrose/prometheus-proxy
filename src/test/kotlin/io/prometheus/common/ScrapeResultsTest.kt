@@ -22,6 +22,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.http.HttpStatusCode
 import io.ktor.network.sockets.SocketTimeoutException
 import io.prometheus.common.ScrapeResults.Companion.errorCode
@@ -32,6 +33,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Test
 import java.io.IOException
+import java.net.http.HttpConnectTimeoutException
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 @OptIn(ExperimentalAtomicApi::class)
@@ -302,11 +304,74 @@ class ScrapeResultsTest {
   }
 
   @Test
+  fun `errorCode should return RequestTimeout for HttpConnectTimeoutException`() {
+    val exception = HttpConnectTimeoutException("connect timeout")
+    val code = errorCode(exception, "http://test.com")
+
+    code shouldBe HttpStatusCode.RequestTimeout.value
+  }
+
+  @Test
+  fun `errorCode should return RequestTimeout for HttpRequestTimeoutException`() {
+    val exception = HttpRequestTimeoutException("http://test.com", 5000L)
+    val code = errorCode(exception, "http://test.com")
+
+    code shouldBe HttpStatusCode.RequestTimeout.value
+  }
+
+  @Test
   fun `errorCode should return ServiceUnavailable for other exceptions`() {
     val exception = RuntimeException("unexpected error")
     val code = errorCode(exception, "http://test.com")
 
     code shouldBe HttpStatusCode.ServiceUnavailable.value
+  }
+
+  // ==================== Round-Trip Tests ====================
+
+  @Test
+  fun `toScrapeResponse and toScrapeResults should round-trip text content`() {
+    val original = ScrapeResults(
+      srAgentId = "round-trip-agent",
+      srScrapeId = 800L,
+      srValidResponse = true,
+      srStatusCode = 200,
+      srContentType = "text/plain",
+      srZipped = false,
+      srContentAsText = "metric_name 42.0",
+      srFailureReason = "",
+      srUrl = "http://localhost:9090/metrics",
+    )
+
+    val roundTripped = original.toScrapeResponse().toScrapeResults()
+
+    roundTripped.srAgentId shouldBe original.srAgentId
+    roundTripped.srScrapeId shouldBe original.srScrapeId
+    roundTripped.srValidResponse shouldBe original.srValidResponse
+    roundTripped.srStatusCode shouldBe original.srStatusCode
+    roundTripped.srContentType shouldBe original.srContentType
+    roundTripped.srZipped shouldBe original.srZipped
+    roundTripped.srContentAsText shouldBe original.srContentAsText
+    roundTripped.srFailureReason shouldBe original.srFailureReason
+    roundTripped.srUrl shouldBe original.srUrl
+  }
+
+  @Test
+  fun `toScrapeResponse should propagate default failure values`() {
+    val results = ScrapeResults(
+      srAgentId = "default-agent",
+      srScrapeId = 900L,
+    )
+
+    val response = results.toScrapeResponse()
+
+    response.validResponse.shouldBeFalse()
+    response.statusCode shouldBe HttpStatusCode.ServiceUnavailable.value
+    response.contentType.shouldBeEmpty()
+    response.zipped.shouldBeFalse()
+    response.contentAsText.shouldBeEmpty()
+    response.failureReason.shouldBeEmpty()
+    response.url.shouldBeEmpty()
   }
 
   // ==================== scrapeCounterMsg Tests ====================
