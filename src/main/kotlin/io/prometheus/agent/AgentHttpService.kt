@@ -227,7 +227,7 @@ internal class AgentHttpService(
       }
     }
 
-  fun close() {
+  suspend fun close() {
     httpClientCache.close()
   }
 

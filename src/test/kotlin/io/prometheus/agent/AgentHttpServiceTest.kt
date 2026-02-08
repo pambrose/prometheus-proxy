@@ -121,24 +121,26 @@ class AgentHttpServiceTest {
   // ==================== Close Tests ====================
 
   @Test
-  fun `close should close httpClientCache`() {
-    val mockAgent = createMockAgent()
-    val service = AgentHttpService(mockAgent)
+  fun `close should close httpClientCache`() =
+    runBlocking {
+      val mockAgent = createMockAgent()
+      val service = AgentHttpService(mockAgent)
 
-    // Should not throw
-    service.close()
-  }
+      // Should not throw
+      service.close()
+    }
 
   // ==================== HttpClientCache Tests ====================
 
   @Test
-  fun `httpClientCache should be initialized from agent options`() {
-    val mockAgent = createMockAgent()
-    val service = AgentHttpService(mockAgent)
+  fun `httpClientCache should be initialized from agent options`() =
+    runBlocking {
+      val mockAgent = createMockAgent()
+      val service = AgentHttpService(mockAgent)
 
-    service.httpClientCache shouldBe service.httpClientCache // exists and is stable
-    service.close()
-  }
+      service.httpClientCache shouldBe service.httpClientCache // exists and is stable
+      service.close()
+    }
 
   // ==================== Valid Path Fetching Tests ====================
 

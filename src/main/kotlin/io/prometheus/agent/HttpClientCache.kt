@@ -27,7 +27,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -222,17 +221,15 @@ internal class HttpClientCache(
     }
   }
 
-  fun close() {
+  suspend fun close() {
     // Cancel the scope first, before acquiring the mutex, to stop the cleanup coroutine.
     // The old code called scope.cancel() inside accessMutex.withLock, which could deadlock
     // if the cleanup coroutine held the mutex when close() tried to acquire it via runBlocking.
     scope.cancel()
-    runBlocking {
-      accessMutex.withLock {
-        cache.values.forEach { it.client.close() }
-        cache.clear()
-        accessOrder.clear()
-      }
+    accessMutex.withLock {
+      cache.values.forEach { it.client.close() }
+      cache.clear()
+      accessOrder.clear()
     }
   }
 

@@ -433,7 +433,7 @@ class HttpClientCacheTest {
     // the cleanup coroutine is actively running every 10ms
     val latch = CountDownLatch(1)
     val closeThread = Thread {
-      fastCleanupCache.close()
+      runBlocking { fastCleanupCache.close() }
       latch.countDown()
     }
     closeThread.start()
@@ -464,7 +464,7 @@ class HttpClientCacheTest {
       delay(50.milliseconds)
     }
 
-    fastCleanupCache.close()
+    runBlocking { fastCleanupCache.close() }
     fastCleanupCache.currentCacheSize() shouldBe 0
   }
 
