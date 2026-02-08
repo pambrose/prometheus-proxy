@@ -676,7 +676,7 @@ class ProxyServiceImplTest {
       val service = ProxyServiceImpl(proxy)
 
       val errorFlow: Flow<ScrapeResponse> = flow {
-        throw RuntimeException("Simulated flow error")
+        throw IllegalStateException("Simulated flow error")
       }
 
       // Should not throw — error is caught in onFailure
@@ -691,7 +691,7 @@ class ProxyServiceImplTest {
       val service = ProxyServiceImpl(proxy)
 
       val errorFlow: Flow<ScrapeResponse> = flow {
-        throw RuntimeException("Simulated flow error")
+        throw IllegalStateException("Simulated flow error")
       }
 
       val result = service.writeResponsesToProxy(errorFlow)
@@ -707,7 +707,7 @@ class ProxyServiceImplTest {
       val service = ProxyServiceImpl(proxy)
 
       val errorFlow: Flow<ChunkedScrapeResponse> = flow {
-        throw RuntimeException("Simulated chunked flow error")
+        throw IllegalStateException("Simulated chunked flow error")
       }
 
       val result = service.writeChunkedResponsesToProxy(errorFlow)
@@ -721,7 +721,7 @@ class ProxyServiceImplTest {
       val service = ProxyServiceImpl(proxy)
 
       val errorFlow: Flow<ChunkedScrapeResponse> = flow {
-        throw RuntimeException("Simulated chunked flow error")
+        throw IllegalStateException("Simulated chunked flow error")
       }
 
       val result = service.writeChunkedResponsesToProxy(errorFlow)

@@ -219,10 +219,12 @@ class AgentContextTest {
   // ==================== Equality Edge Case Tests ====================
 
   @Test
+  @Suppress("EqualsNullCall")
   fun `equals with null should return false`() {
     val context = AgentContext("remote-addr")
 
     (context.equals(null)) shouldBe false
+    (context == null) shouldBe false
   }
 
   @Test
