@@ -61,6 +61,11 @@ internal class ProxyHttpService(
       routing {
         handleRequests(proxy)
       }
+
+//      EmbeddedServer.monitor.subscribe(ApplicationStarted) {
+//        // This runs when Ktor signals the application has started
+//        println("Ktor application started")
+//      }
     }
 
   init {

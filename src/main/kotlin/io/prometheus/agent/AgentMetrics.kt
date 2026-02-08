@@ -23,7 +23,6 @@ import com.github.pambrose.common.dsl.PrometheusDsl.gauge
 import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
-import io.prometheus.common.Utils.lambda
 
 internal class AgentMetrics(
   agent: Agent,
@@ -68,7 +67,7 @@ internal class AgentMetrics(
       "Agent scrape backlog size",
       labelNames = listOf(LAUNCH_ID),
       labelValues = listOf(agent.launchId),
-      data = lambda { agent.scrapeRequestBacklogSize.load().toDouble() },
+      data = { agent.scrapeRequestBacklogSize.load().toDouble() },
     )
 
     SamplerGaugeCollector(
@@ -76,7 +75,7 @@ internal class AgentMetrics(
       "Agent client cache size",
       labelNames = listOf(LAUNCH_ID),
       labelValues = listOf(agent.launchId),
-      data = lambda { agent.agentHttpService.httpClientCache.currentCacheSize().toDouble() },
+      data = { agent.agentHttpService.httpClientCache.currentCacheSize().toDouble() },
     )
   }
 

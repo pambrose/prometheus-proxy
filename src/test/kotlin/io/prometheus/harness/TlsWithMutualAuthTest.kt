@@ -19,12 +19,11 @@
 package io.prometheus.harness
 
 import com.github.pambrose.common.util.simpleClassName
-import io.prometheus.common.Utils.lambda
+import io.prometheus.harness.HarnessConstants.CONCURRENT_CLIENTS
+import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE
+import io.prometheus.harness.HarnessConstants.DEFAULT_TIMEOUT
+import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.AbstractHarnessTests
-import io.prometheus.harness.support.HarnessConstants.CONCURRENT_CLIENTS
-import io.prometheus.harness.support.HarnessConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.harness.support.HarnessConstants.DEFAULT_TIMEOUT
-import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -47,7 +46,7 @@ class TlsWithMutualAuthTest :
     fun setUp() =
       setupProxyAndAgent(
         proxyPort = PROXY_PORT,
-        proxySetup = lambda {
+        proxySetup = {
           startProxy(
             serverName = "withmutualauth",
             args = listOf(
@@ -62,7 +61,7 @@ class TlsWithMutualAuthTest :
             ),
           )
         },
-        agentSetup = lambda {
+        agentSetup = {
           startAgent(
             serverName = "withmutualauth",
             scrapeTimeoutSecs = DEFAULT_TIMEOUT,

@@ -25,8 +25,8 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.Utils.getVersionDesc
-import io.prometheus.harness.support.HarnessConstants.CONFIG_ARG
-import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
+import io.prometheus.harness.HarnessConstants.CONFIG_ARG
+import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.serialization.KSerializer

@@ -21,7 +21,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -38,7 +37,7 @@ open class HarnessSetup {
     proxyPort: Int,
     proxySetup: () -> Proxy,
     agentSetup: () -> Agent,
-    actions: () -> Unit = Utils.lambda {},
+    actions: () -> Unit = {},
   ) {
     CollectorRegistry.defaultRegistry.clear()
 

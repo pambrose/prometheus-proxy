@@ -24,7 +24,7 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.agent.AgentOptions
-import io.prometheus.harness.support.HarnessConstants.OPTIONS_CONFIG
+import io.prometheus.harness.HarnessConstants.OPTIONS_CONFIG
 import io.prometheus.proxy.ProxyOptions
 import org.junit.jupiter.api.Test
 
