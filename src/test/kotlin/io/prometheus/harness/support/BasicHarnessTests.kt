@@ -33,22 +33,29 @@ import kotlin.time.Duration.Companion.seconds
 internal object BasicHarnessTests {
   private val logger = logger {}
 
-  fun missingPathTest(caller: String) {
+  fun missingPathTest(
+    proxyPort: Int,
+    caller: String,
+  ) {
     logger.debug { "Calling missingPathTest() from $caller" }
-    blockingGet("${HarnessConstants.PROXY_PORT}/".withPrefix()) { response ->
+    blockingGet("$proxyPort/".withPrefix()) { response ->
       response.status shouldBe HttpStatusCode.NotFound
     }
   }
 
-  fun invalidPathTest(caller: String) {
+  fun invalidPathTest(
+    proxyPort: Int,
+    caller: String,
+  ) {
     logger.debug { "Calling invalidPathTest() from $caller" }
-    blockingGet("${HarnessConstants.PROXY_PORT}/invalid_path".withPrefix()) { response ->
+    blockingGet("$proxyPort/invalid_path".withPrefix()) { response ->
       response.status shouldBe HttpStatusCode.NotFound
     }
   }
 
   suspend fun addRemovePathsTest(
     pathManager: AgentPathManager,
+    proxyPort: Int,
     caller: String,
   ) {
     logger.debug { "Calling addRemovePathsTest() from $caller" }
@@ -60,7 +67,7 @@ internal object BasicHarnessTests {
     repeat(HarnessConstants.REPS) { i ->
       val path = "test-$i"
       pathManager.let { manager ->
-        manager.registerPath(path, "${HarnessConstants.PROXY_PORT}/$path".withPrefix())
+        manager.registerPath(path, "$proxyPort/$path".withPrefix())
         cnt++
         manager.pathMapSize() shouldBe originalSize + cnt
         manager.unregisterPath(path)
@@ -72,13 +79,14 @@ internal object BasicHarnessTests {
 
   suspend fun invalidAgentUrlTest(
     pathManager: AgentPathManager,
+    proxyPort: Int,
     caller: String,
     badPath: String = "badPath",
   ) {
     logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
-    blockingGet("${HarnessConstants.PROXY_PORT}/$badPath".withPrefix()) { response ->
+    blockingGet("$proxyPort/$badPath".withPrefix()) { response ->
       // Invalid agent URL causes IOException, which should return ServiceUnavailable (503)
       response.status shouldBe HttpStatusCode.ServiceUnavailable
     }
@@ -87,6 +95,7 @@ internal object BasicHarnessTests {
 
   suspend fun threadedAddRemovePathsTest(
     pathManager: AgentPathManager,
+    proxyPort: Int,
     caller: String,
   ) {
     logger.debug { "Calling threadedAddRemovePathsTest() from $caller" }
@@ -101,7 +110,7 @@ internal object BasicHarnessTests {
         List(HarnessConstants.REPS) { i ->
           launch(Dispatchers.IO + exceptionHandler(logger)) {
             val path = "test-$i}"
-            val url = "${HarnessConstants.PROXY_PORT}/$path".withPrefix()
+            val url = "$proxyPort/$path".withPrefix()
             mutex.withLock { paths += path }
             pathManager.registerPath(path, url)
           }

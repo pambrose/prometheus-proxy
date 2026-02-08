@@ -44,7 +44,7 @@ class ProxyOptions(
   constructor(args: List<String>) : this(args.toTypedArray())
 
   @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
-  var proxyHttpPort = -1
+  var proxyPort = -1
     private set
 
   @Parameter(names = ["-a", "--agent_port"], description = "gRPC listen port for Agents")
@@ -99,9 +99,9 @@ class ProxyOptions(
   override fun assignConfigVals() {
     configVals.proxy
       .also { proxyConfigVals ->
-        if (proxyHttpPort == -1)
-          proxyHttpPort = PROXY_PORT.getEnv(proxyConfigVals.http.port)
-        logger.info { "proxyHttpPort: $proxyHttpPort" }
+        if (proxyPort == -1)
+          proxyPort = PROXY_PORT.getEnv(proxyConfigVals.http.port)
+        logger.info { "proxyPort: $proxyPort" }
 
         if (proxyAgentPort == -1)
           proxyAgentPort = AGENT_PORT.getEnv(proxyConfigVals.agent.port)

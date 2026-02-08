@@ -77,7 +77,7 @@ class OptionsTest {
   fun verifyProxyDefaults() {
     ProxyOptions(listOf())
       .apply {
-        proxyHttpPort shouldBe 8080
+        proxyPort shouldBe 8080
         proxyAgentPort shouldBe 50051
       }
   }
@@ -178,7 +178,7 @@ class OptionsTest {
   @Test
   fun `verifyProxyPortOverride should override default port`() {
     val options = ProxyOptions(listOf("-p", "9090"))
-    options.proxyHttpPort shouldBe 9090
+    options.proxyPort shouldBe 9090
   }
 
   @Test

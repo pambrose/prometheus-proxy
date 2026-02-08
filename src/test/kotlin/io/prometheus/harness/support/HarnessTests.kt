@@ -48,7 +48,6 @@ import io.prometheus.harness.support.HarnessConstants.MAX_DELAY_MILLIS
 import io.prometheus.harness.support.HarnessConstants.MIN_DELAY_MILLIS
 import io.prometheus.harness.support.HarnessConstants.PARALLEL_QUERY_COUNT
 import io.prometheus.harness.support.HarnessConstants.PATH_COUNT
-import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessConstants.SEQUENTIAL_QUERY_COUNT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -65,6 +64,7 @@ import kotlin.time.Duration.Companion.seconds
 
 class ProxyCallTestArgs(
   val agent: Agent,
+  val proxyPort: Int,
   val httpServerCount: Int = HTTP_SERVER_COUNT,
   val pathCount: Int = PATH_COUNT,
   val sequentialQueryCount: Int = SEQUENTIAL_QUERY_COUNT,
@@ -80,6 +80,7 @@ internal object HarnessTests {
   suspend fun timeoutTest(
     pathManager: AgentPathManager,
     caller: String,
+    proxyPort: Int,
     agentPort: Int = 9900,
     agentPath: String = "agent-timeout",
     proxyPath: String = "proxy-timeout",
@@ -110,7 +111,7 @@ internal object HarnessTests {
     try {
       pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
 
-      blockingGet("$PROXY_PORT/$proxyPath".withPrefix()) { response ->
+      blockingGet("$proxyPort/$proxyPath".withPrefix()) { response ->
         response.status shouldBe HttpStatusCode.RequestTimeout
       }
 
@@ -202,7 +203,7 @@ internal object HarnessTests {
             repeat(args.sequentialQueryCount) { cnt ->
               val job =
                 launch(dispatcher + exceptionHandler(logger)) {
-                  callRandomProxyPath(client, pathMap, "Sequential $cnt")
+                  callRandomProxyPath(client, args.proxyPort, pathMap, "Sequential $cnt")
                   counter += 1
                 }
 
@@ -226,7 +227,7 @@ internal object HarnessTests {
               List(args.parallelQueryCount) { cnt ->
                 launch(dispatcher + exceptionHandler(logger)) {
                   delay((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random().milliseconds)
-                  callRandomProxyPath(client, pathMap, "Parallel $cnt")
+                  callRandomProxyPath(client, args.proxyPort, pathMap, "Parallel $cnt")
                   counter += 1
                 }
               }
@@ -273,6 +274,7 @@ internal object HarnessTests {
 
   private suspend fun callRandomProxyPath(
     httpClient: HttpClient,
+    proxyPort: Int,
     pathMap: Map<Int, Int>,
     msg: String,
   ) {
@@ -284,7 +286,7 @@ internal object HarnessTests {
     httpIndex.shouldNotBeNull()
 
     withHttpClient(httpClient) {
-      get("$PROXY_PORT/proxy-$index".withPrefix()) { response ->
+      get("$proxyPort/proxy-$index".withPrefix()) { response ->
         val body = response.bodyAsText()
         body shouldBe contentMap[httpIndex]
         response.status shouldBe HttpStatusCode.OK

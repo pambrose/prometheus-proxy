@@ -31,6 +31,7 @@ import io.prometheus.harness.support.AbstractHarnessTests
 import io.prometheus.harness.support.HarnessConstants.CONCURRENT_CLIENTS
 import io.prometheus.harness.support.HarnessConstants.DEFAULT_CHUNK_SIZE
 import io.prometheus.harness.support.HarnessConstants.DEFAULT_TIMEOUT
+import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -46,6 +47,7 @@ class NettyTestWithAdminMetricsTest :
   AbstractHarnessTests(
     args = ProxyCallTestArgs(
       agent = agent,
+      proxyPort = PROXY_PORT,
       startPort = 10300,
       caller = simpleClassName,
     ),
@@ -76,6 +78,7 @@ class NettyTestWithAdminMetricsTest :
     @BeforeAll
     fun setUp() =
       setupProxyAndAgent(
+        proxyPort = PROXY_PORT,
         proxySetup = lambda {
           startProxy(
             adminEnabled = true,

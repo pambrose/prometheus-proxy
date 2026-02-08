@@ -134,7 +134,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * - Load balancers can distribute Prometheus requests across proxies
  *
  * @param options Configuration options for the proxy, typically loaded from command line or config files
- * @param proxyHttpPort Port for the HTTP service that Prometheus scrapes. Defaults to value in options.
+ * @param proxyPort Port for the HTTP service that Prometheus scrapes. Defaults to value in options.
  * @param inProcessServerName Optional in-process server name for testing scenarios. When specified,
  *                           the proxy will create an in-process gRPC server instead of a network server.
  * @param testMode Whether to run in test mode. Test mode may disable certain features or use
@@ -153,7 +153,7 @@ import kotlin.time.Duration.Companion.milliseconds
 )
 class Proxy(
   val options: ProxyOptions,
-  proxyHttpPort: Int = options.proxyHttpPort,
+  proxyPort: Int = options.proxyPort,
   inProcessServerName: String = "",
   testMode: Boolean = false,
   initBlock: (Proxy.() -> Unit)? = null,
@@ -165,7 +165,7 @@ class Proxy(
   versionBlock = lambda { getVersionDesc(true) },
   isTestMode = testMode,
 ) {
-  private val httpService = ProxyHttpService(this, proxyHttpPort, isTestMode)
+  private val httpService = ProxyHttpService(this, proxyPort, isTestMode)
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
   private val grpcService =
     if (inProcessServerName.isEmpty())
