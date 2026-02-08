@@ -18,11 +18,23 @@
 
 package io.prometheus.agent
 
+import io.grpc.Metadata
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldNotBeEmpty
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import io.prometheus.Agent
+import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
+import io.prometheus.grpc.ProxyServiceGrpcKt
+import io.prometheus.grpc.agentInfo
+import io.prometheus.grpc.heartBeatResponse
+import io.prometheus.grpc.registerAgentResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
@@ -30,6 +42,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -58,10 +72,9 @@ class AgentGrpcServiceTest {
     every { mockAgent.isRunning } returns true
     every { mockAgent.isZipkinEnabled } returns false
     every { mockAgent.proxyHost } returns proxyHostname
-    every { mockAgent.metrics(any<AgentMetrics.() -> Unit>()) } answers {
-      val block = firstArg<AgentMetrics.() -> Unit>()
-      block(mockMetrics)
-    }
+    // metrics() is a no-op in tests; invoking the block with a relaxed mock
+    // would cause ClassCastException because relaxed Counter mocks don't return Counter.Child
+    every { mockAgent.metrics(any<AgentMetrics.() -> Unit>()) } answers {}
 
     return mockAgent
   }
@@ -277,5 +290,174 @@ class AgentGrpcServiceTest {
 
       minObserved.get() shouldBeGreaterThanOrEqual 0
       backlogSize.get() shouldBe 0
+    }
+
+  // ==================== ShutDown Tests ====================
+
+  @Test
+  fun `shutDown should be safe to call when service has started`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // shutDown should not throw
+      service.shutDown()
+    }
+
+  @Test
+  fun `shutDown should be safe to call multiple times`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // Calling shutDown multiple times should not throw
+      service.shutDown()
+      service.shutDown()
+    }
+
+  // ==================== gRPC Stub Tests ====================
+
+  @Test
+  fun `grpcStub should be initialized after construction`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // grpcStub should be accessible (no UninitializedPropertyAccessException)
+      service.grpcStub.toString().shouldNotBeEmpty()
+
+      service.shutDown()
+    }
+
+  // ==================== connectAgent Tests ====================
+
+  @Test
+  fun `connectAgent should return true on successful connection`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
+      service.grpcStub = mockStub
+
+      val result = service.connectAgent(transportFilterDisabled = false)
+
+      result.shouldBeTrue()
+      service.shutDown()
+    }
+
+  @Test
+  fun `connectAgent should return false on connection failure`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws RuntimeException("Connection refused")
+      service.grpcStub = mockStub
+
+      val result = service.connectAgent(transportFilterDisabled = false)
+
+      result.shouldBeFalse()
+      service.shutDown()
+    }
+
+  @Test
+  fun `connectAgent with transportFilterDisabled should assign agentId`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      coEvery { mockStub.connectAgentWithTransportFilterDisabled(any(), any<Metadata>()) } returns agentInfo {
+        agentId = "assigned-agent-id"
+      }
+      service.grpcStub = mockStub
+
+      val result = service.connectAgent(transportFilterDisabled = true)
+
+      result.shouldBeTrue()
+      verify { agent.agentId = "assigned-agent-id" }
+      service.shutDown()
+    }
+
+  // ==================== registerAgent Tests ====================
+
+  @Test
+  fun `registerAgent should send request with correct agent details`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse { valid = true }
+      service.grpcStub = mockStub
+
+      val latch = CountDownLatch(1)
+      service.registerAgent(latch)
+
+      coVerify {
+        mockStub.registerAgent(
+          match { it.agentId == "test-agent-123" && it.launchId == "launch-123" },
+          any<Metadata>(),
+        )
+      }
+      latch.count shouldBe 0L
+      service.shutDown()
+    }
+
+  @Test
+  fun `registerAgent should throw RequestFailureException on invalid response`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse {
+        valid = false
+        reason = "Agent already registered"
+      }
+      service.grpcStub = mockStub
+
+      val latch = CountDownLatch(1)
+      assertThrows<RequestFailureException> {
+        service.registerAgent(latch)
+      }
+      service.shutDown()
+    }
+
+  // ==================== sendHeartBeat Tests ====================
+
+  @Test
+  fun `sendHeartBeat should skip when agentId is empty`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      every { agent.agentId } returns ""
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      service.grpcStub = mockStub
+
+      service.sendHeartBeat()
+
+      coVerify(exactly = 0) { mockStub.sendHeartBeat(any(), any<Metadata>()) }
+      service.shutDown()
+    }
+
+  @Test
+  fun `sendHeartBeat should send request when agentId is set`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse { valid = true }
+      service.grpcStub = mockStub
+
+      service.sendHeartBeat()
+
+      coVerify { mockStub.sendHeartBeat(match { it.agentId == "test-agent-123" }, any<Metadata>()) }
+      service.shutDown()
     }
 }

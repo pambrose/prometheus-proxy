@@ -378,4 +378,88 @@ class AgentPathManagerTest {
       text shouldContain "app"
       text.shouldNotBeEmpty()
     }
+
+  @Test
+  fun `toPlainText should include URL column for configured paths`(): Unit =
+    runBlocking {
+      val config = ConfigFactory.parseString(
+        """
+        agent {
+          pathConfigs = [
+            {
+              name = "node_exporter"
+              path = "metrics"
+              url = "http://localhost:9100/metrics"
+              labels = "{}"
+            }
+          ]
+        }
+        proxy {}
+        """.trimIndent(),
+      )
+      val configVals = ConfigVals(config)
+
+      val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+
+      val mockAgent = mockk<Agent>(relaxed = true)
+      every { mockAgent.grpcService } returns mockGrpcService
+      every { mockAgent.configVals } returns configVals
+      every { mockAgent.isTestMode } returns true
+
+      val manager = AgentPathManager(mockAgent)
+
+      val text = manager.toPlainText()
+
+      text shouldContain "URL"
+      text shouldContain "http://localhost:9100/metrics"
+    }
+
+  @Test
+  fun `registerPaths should register all configured paths`(): Unit =
+    runBlocking {
+      val config = ConfigFactory.parseString(
+        """
+        agent {
+          pathConfigs = [
+            {
+              name = "exporter1"
+              path = "metrics1"
+              url = "http://localhost:9100/metrics"
+              labels = "{}"
+            },
+            {
+              name = "exporter2"
+              path = "metrics2"
+              url = "http://localhost:9200/metrics"
+              labels = "{}"
+            }
+          ]
+        }
+        proxy {}
+        """.trimIndent(),
+      )
+      val configVals = ConfigVals(config)
+
+      val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+
+      val mockAgent = mockk<Agent>(relaxed = true)
+      every { mockAgent.grpcService } returns mockGrpcService
+      every { mockAgent.configVals } returns configVals
+      every { mockAgent.isTestMode } returns true
+      every { mockAgent.agentId } returns "test-agent"
+
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+
+      val manager = AgentPathManager(mockAgent)
+      manager.registerPaths()
+
+      coVerify { mockGrpcService.registerPathOnProxy("metrics1", "{}") }
+      coVerify { mockGrpcService.registerPathOnProxy("metrics2", "{}") }
+
+      manager["metrics1"].shouldNotBeNull()
+      manager["metrics2"].shouldNotBeNull()
+    }
 }

@@ -8,9 +8,8 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.cio.CIO as ServerCIO
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -21,8 +20,10 @@ import io.prometheus.Agent
 import io.prometheus.common.ConfigVals
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import io.ktor.server.cio.CIO as ServerCIO
 
 class AgentHttpServiceTest {
   private fun createMockAgent(): Agent {
@@ -357,6 +358,271 @@ class AgentHttpServiceTest {
 
         results.srValidResponse.shouldBeTrue()
         receivedUrl shouldContain "foo"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  // ==================== Gzip Compression Tests ====================
+
+  @Test
+  fun `fetchScrapeUrl should gzip content larger than minGzipSizeBytes`(): Unit =
+    runBlocking {
+      val largeContent = "a".repeat(2000)
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText(largeContent)
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+
+        val mockAgent = createMockAgentWithPaths()
+        // Set low gzip threshold so content gets zipped
+        val options = mockAgent.options
+        every { options.minGzipSizeBytes } returns 100
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 60L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srValidResponse.shouldBeTrue()
+        results.srZipped.shouldBeTrue()
+        results.srContentAsZipped.isNotEmpty().shouldBeTrue()
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `fetchScrapeUrl should not gzip content smaller than minGzipSizeBytes`(): Unit =
+    runBlocking {
+      val smallContent = "small"
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText(smallContent)
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+
+        val mockAgent = createMockAgentWithPaths()
+        // minGzipSizeBytes is already 1_000_000 from createMockAgentWithPaths
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 61L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srValidResponse.shouldBeTrue()
+        results.srZipped.shouldBeFalse()
+        results.srContentAsText shouldBe smallContent
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  // ==================== Header Forwarding Tests ====================
+
+  @Test
+  fun `fetchScrapeUrl should forward accept header to target`(): Unit =
+    runBlocking {
+      var receivedAccept = ""
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            receivedAccept = call.request.header("Accept").orEmpty()
+            call.respondText("ok")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+
+        val mockAgent = createMockAgentWithPaths()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 62L
+          path = "metrics"
+          accept = "application/openmetrics-text"
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srValidResponse.shouldBeTrue()
+        receivedAccept shouldBe "application/openmetrics-text"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `fetchScrapeUrl should forward authorization header to target`(): Unit =
+    runBlocking {
+      var receivedAuth = ""
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            receivedAuth = call.request.header("Authorization").orEmpty()
+            call.respondText("ok")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+
+        val mockAgent = createMockAgentWithPaths()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 63L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = "Bearer test-token-123"
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srValidResponse.shouldBeTrue()
+        receivedAuth shouldBe "Bearer test-token-123"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  // ==================== Timeout Tests ====================
+
+  @Test
+  fun `fetchScrapeUrl should handle timeout gracefully`(): Unit =
+    runBlocking {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            delay(5000) // Delay longer than timeout
+            call.respondText("too late")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+
+        val mockAgent = createMockAgentWithPaths()
+        // Set a very short timeout
+        val options = mockAgent.options
+        every { options.scrapeTimeoutSecs } returns 1
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 64L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        // Should have a failure status code (timeout)
+        results.srValidResponse.shouldBeFalse()
+        results.srStatusCode shouldBeGreaterThan 399
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  // ==================== Counter Message Tests ====================
+
+  @Test
+  fun `fetchScrapeUrl should set success counter message on successful fetch`(): Unit =
+    runBlocking {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText("metric_value 1.0\n")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+
+        val mockAgent = createMockAgentWithPaths()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 65L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srValidResponse.shouldBeTrue()
+        results.scrapeCounterMsg.load() shouldBe "success"
 
         service.close()
       } finally {
