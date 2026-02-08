@@ -18,13 +18,11 @@
 
 package io.prometheus.harness.support
 
-import com.github.pambrose.common.util.getBanner
 import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
-import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.proxy.ProxyOptions
@@ -79,10 +77,10 @@ object TestUtils {
     metricsEnabled: Boolean = false,
     args: List<String> = emptyList(),
   ): Proxy {
-    logger.apply {
-      info { getBanner("banners/proxy.txt", logger) }
-      info { getVersionDesc(false) }
-    }
+//    logger.apply {
+//      info { getBanner("banners/proxy.txt", logger) }
+//      info { getVersionDesc(false) }
+//    }
 
     val proxyOptions = ProxyOptions(
       mutableListOf<String>()
@@ -112,10 +110,10 @@ object TestUtils {
     maxConcurrentClients: Int = -1,
     args: List<String> = emptyList(),
   ): Agent {
-    logger.apply {
-      info { getBanner("banners/agent.txt", logger) }
-      info { getVersionDesc(false) }
-    }
+//    logger.apply {
+//      info { getBanner("banners/agent.txt", logger) }
+//      info { getVersionDesc(false) }
+//    }
 
     val agentOptions = AgentOptions(
       args = mutableListOf<String>()
