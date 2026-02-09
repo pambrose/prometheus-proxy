@@ -30,7 +30,6 @@ import io.ktor.http.withCharset
 import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.header
 import io.ktor.server.request.path
-import io.ktor.server.response.ApplicationResponse
 import io.ktor.server.response.header
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.RoutingContext
@@ -163,7 +162,7 @@ object ProxyHttpRoutes {
     coroutineScope {
       agentContextInfo.agentContexts
         .map { agentContext ->
-          async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request, call.response) }
+          async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request) }
         }
         .awaitAll()
         .onEach { response -> logActivityForResponse(path, response, proxy) }
@@ -187,7 +186,6 @@ object ProxyHttpRoutes {
     path: String,
     encodedQueryParams: String,
     request: ApplicationRequest,
-    response: ApplicationResponse,
   ): ScrapeRequestResponse {
     val scrapeRequest = createScrapeRequest(agentContext, proxy, path, encodedQueryParams, request)
 
@@ -210,6 +208,7 @@ object ProxyHttpRoutes {
           )
       }
     } finally {
+      scrapeRequest.closeChannel()
       val scrapeId = scrapeRequest.scrapeId
       proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeId)
         ?: logger.error { "Scrape request $scrapeId missing in map" }
