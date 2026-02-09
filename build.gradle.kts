@@ -90,6 +90,7 @@ configurePublishing()
 configureTesting()
 configureKotlinter()
 configureDetekt()
+configureVersions()
 
 fun Project.configureKotlin() {
   tasks.withType<JavaCompile> {
@@ -266,5 +267,20 @@ fun Project.configureDetekt() {
     allRules = false
     config.setFrom("$projectDir/config/detekt/detekt.yml")
     baseline = file("$projectDir/config/detekt/baseline.xml")
+  }
+}
+
+fun Project.configureVersions() {
+  fun isNonStable(version: String): Boolean {
+    val stableKeyword = listOf("RELEASE", "FINAL", "GA", "-BETA").any { version.uppercase().contains(it) }
+    val regex = "^[0-9,.v-]+(-r)?$".toRegex()
+    val isStable = stableKeyword || regex.matches(version)
+    return !isStable
+  }
+
+  tasks.withType<com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask> {
+    rejectVersionIf {
+      isNonStable(candidate.version)
+    }
   }
 }
