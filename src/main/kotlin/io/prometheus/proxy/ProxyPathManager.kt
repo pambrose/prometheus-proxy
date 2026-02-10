@@ -26,7 +26,6 @@ import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.grpc.unregisterPathResponse
-import java.util.concurrent.ConcurrentHashMap
 
 internal class ProxyPathManager(
   private val proxy: Proxy,
@@ -40,7 +39,7 @@ internal class ProxyPathManager(
     fun isNotValid() = agentContexts.all { it.isNotValid() }
   }
 
-  private val pathMap = ConcurrentHashMap<String, AgentContextInfo>()
+  private val pathMap = HashMap<String, AgentContextInfo>()
 
   fun getAgentContextInfo(path: String): AgentContextInfo? =
     synchronized(pathMap) {
@@ -50,7 +49,7 @@ internal class ProxyPathManager(
     }
 
   val pathMapSize: Int
-    get() = pathMap.size
+    get() = synchronized(pathMap) { pathMap.size }
 
   val allPaths: List<String>
     get() = synchronized(pathMap) { pathMap.keys.toList() }

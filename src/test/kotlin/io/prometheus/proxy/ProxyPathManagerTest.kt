@@ -600,7 +600,7 @@ class ProxyPathManagerTest {
 
       val str = info.toString()
       str shouldContain "AgentContextInfo"
-      str shouldContain "consolidated"
+      str shouldContain "isConsolidated"
       str shouldContain "labels"
     }
 }

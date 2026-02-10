@@ -187,19 +187,19 @@ internal class ProxyServiceImpl(
     runCatchingCancellable {
       requests.collect { response ->
         val ooc = response.chunkOneOfCase
-        val chunkedContextMap = proxy.agentContextManager.chunkedContextMap
+        val contextManager = proxy.agentContextManager
         when (ooc.name.lowercase()) {
           "header" -> {
             val scrapeId = response.header.headerScrapeId
             logger.debug { "Reading header for scrapeId: $scrapeId" }
-            chunkedContextMap[scrapeId] = ChunkedContext(response)
+            contextManager.putChunkedContext(scrapeId, ChunkedContext(response))
           }
 
           "chunk" -> {
             response.chunk
               .apply {
                 logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
-                val context = chunkedContextMap[chunkScrapeId]
+                val context = contextManager.getChunkedContext(chunkScrapeId)
                 check(context.isNotNull()) { "Missing chunked context with scrapeId: $chunkScrapeId" }
                 context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
               }
@@ -208,7 +208,7 @@ internal class ProxyServiceImpl(
           "summary" -> {
             response.summary
               .apply {
-                val context = chunkedContextMap.remove(summaryScrapeId)
+                val context = contextManager.removeChunkedContext(summaryScrapeId)
                 check(context.isNotNull()) { "Missing chunked context with scrapeId: $summaryScrapeId" }
                 logger.debug {
                   val ccnt = context.totalChunkCount

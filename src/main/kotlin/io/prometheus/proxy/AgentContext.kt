@@ -54,7 +54,7 @@ internal class AgentContext(
     private set
 
   internal val desc: String
-    get() = synchronized(this) { if (consolidated) "consolidated " else "" }
+    get() = if (consolidated) "consolidated " else ""
 
   private val lastRequestDuration
     get() = lastRequestTimeMark.elapsedNow()
@@ -69,13 +69,12 @@ internal class AgentContext(
     markActivityTime(true)
   }
 
-  fun assignProperties(request: RegisterAgentRequest) =
-    synchronized(this) {
-      launchId = request.launchId
-      agentName = request.agentName
-      hostName = request.hostName
-      consolidated = request.consolidated
-    }
+  fun assignProperties(request: RegisterAgentRequest) {
+    launchId = request.launchId
+    agentName = request.agentName
+    hostName = request.hostName
+    consolidated = request.consolidated
+  }
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
     channelBacklogSize += 1

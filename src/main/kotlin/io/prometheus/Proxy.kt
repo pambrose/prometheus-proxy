@@ -265,21 +265,21 @@ class Proxy(
         register(
           "chunking_map_check",
           newMapHealthCheck(
-            agentContextManager.chunkedContextMap,
+            agentContextManager.chunkedContextMapView,
             proxyConfigVals.internal.chunkContextMapUnhealthySize,
           ),
         )
         register(
           "scrape_response_map_check",
           newMapHealthCheck(
-            scrapeRequestManager.scrapeRequestMap,
+            scrapeRequestManager.scrapeRequestMapView,
             proxyConfigVals.internal.scrapeRequestMapUnhealthySize,
           ),
         )
         register(
           "agent_scrape_request_backlog",
           healthCheck {
-            agentContextManager.agentContextMap.entries
+            agentContextManager.agentContextEntries
               .filter {
                 it.value.scrapeRequestBacklogSize >= proxyConfigVals.internal.scrapeRequestBacklogUnhealthySize
               }

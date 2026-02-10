@@ -20,19 +20,24 @@ package io.prometheus.proxy
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration
 
 internal class AgentContextManager(
   private val isTestMode: Boolean,
 ) {
   // Map agent_id to AgentContext
-  val agentContextMap = ConcurrentHashMap<String, AgentContext>()
+  private val agentContextMap = ConcurrentHashMap<String, AgentContext>()
   val agentContextSize: Int get() = agentContextMap.size
 
   // Map scrape_id to ChunkedContext
-  val chunkedContextMap = ConcurrentHashMap<Long, ChunkedContext>()
+  private val chunkedContextMap = ConcurrentHashMap<Long, ChunkedContext>()
   val chunkedContextSize: Int get() = chunkedContextMap.size
 
   val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.sumOf { it.scrapeRequestBacklogSize }
+
+  val agentContextEntries: Set<Map.Entry<String, AgentContext>> get() = agentContextMap.entries
+
+  val chunkedContextMapView: Map<Long, ChunkedContext> get() = chunkedContextMap
 
   fun addAgentContext(agentContext: AgentContext): AgentContext? {
     logger.info { "Registering agentId: ${agentContext.agentId}" }
@@ -40,6 +45,29 @@ internal class AgentContextManager(
   }
 
   fun getAgentContext(agentId: String) = agentContextMap[agentId]
+
+  internal fun putAgentContext(
+    agentId: String,
+    context: AgentContext,
+  ) {
+    agentContextMap[agentId] = context
+  }
+
+  fun putChunkedContext(
+    scrapeId: Long,
+    context: ChunkedContext,
+  ) {
+    chunkedContextMap[scrapeId] = context
+  }
+
+  fun getChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMap[scrapeId]
+
+  fun removeChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMap.remove(scrapeId)
+
+  fun findStaleAgents(maxInactivity: Duration): List<Pair<String, AgentContext>> =
+    agentContextMap
+      .filter { (_, agentContext) -> agentContext.inactivityDuration > maxInactivity }
+      .map { (agentId, agentContext) -> agentId to agentContext }
 
   fun removeFromContextManager(
     agentId: String,
