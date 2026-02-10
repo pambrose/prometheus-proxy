@@ -668,6 +668,75 @@ class ProxyServiceImplTest {
       emittedRequests.size shouldBe 0
     }
 
+  // ==================== readRequestsFromProxy Cleanup Tests ====================
+
+  @Test
+  fun `readRequestsFromProxy should clean up agent context when transportFilterDisabled`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(transportFilterDisabled = true, isRunning = true)
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "test-agent-cleanup"
+
+      every { mockAgentContext.agentId } returns testAgentId
+      every { mockAgentContext.isValid() } returns false
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+
+      val request = agentInfo { agentId = testAgentId }
+      val service = ProxyServiceImpl(proxy)
+      val flow = service.readRequestsFromProxy(request)
+
+      flow.collect {}
+
+      // Agent context should be cleaned up since transportFilterDisabled is true
+      verify { proxy.removeAgentContext(testAgentId, any()) }
+    }
+
+  @Test
+  fun `readRequestsFromProxy should not clean up agent context when transportFilter enabled`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(transportFilterDisabled = false, isRunning = true)
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "test-agent-no-cleanup"
+
+      every { mockAgentContext.agentId } returns testAgentId
+      every { mockAgentContext.isValid() } returns false
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+
+      val request = agentInfo { agentId = testAgentId }
+      val service = ProxyServiceImpl(proxy)
+      val flow = service.readRequestsFromProxy(request)
+
+      flow.collect {}
+
+      // Agent context should NOT be cleaned up — ProxyServerTransportFilter handles it
+      verify(exactly = 0) { proxy.removeAgentContext(any(), any()) }
+    }
+
+  @Test
+  fun `readRequestsFromProxy should clean up on stream cancellation when transportFilterDisabled`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(transportFilterDisabled = true, isRunning = true)
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val mockScrapeRequestWrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
+      val mockScrapeRequest = mockk<io.prometheus.grpc.ScrapeRequest>(relaxed = true)
+      val testAgentId = "test-agent-cancel-cleanup"
+
+      every { mockAgentContext.agentId } returns testAgentId
+      // Valid for one iteration, then stream will be cancelled by the test
+      every { mockAgentContext.isValid() } returnsMany listOf(true, false)
+      coEvery { mockAgentContext.readScrapeRequest() } returns mockScrapeRequestWrapper andThen null
+      every { mockScrapeRequestWrapper.scrapeRequest } returns mockScrapeRequest
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+
+      val request = agentInfo { agentId = testAgentId }
+      val service = ProxyServiceImpl(proxy)
+      val flow = service.readRequestsFromProxy(request)
+
+      flow.collect {}
+
+      verify { proxy.removeAgentContext(testAgentId, any()) }
+    }
+
   // ==================== writeResponsesToProxy Error Handling Tests ====================
 
   @Test

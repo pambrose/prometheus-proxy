@@ -155,12 +155,21 @@ internal class ProxyServiceImpl(
 
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> =
     flow {
-      proxy.agentContextManager.getAgentContext(request.agentId)
-        ?.also { agentContext ->
-          while (proxy.isRunning && agentContext.isValid()) {
-            agentContext.readScrapeRequest()?.apply { emit(scrapeRequest) }
+      val agentId = request.agentId
+      try {
+        proxy.agentContextManager.getAgentContext(agentId)
+          ?.also { agentContext ->
+            while (proxy.isRunning && agentContext.isValid()) {
+              agentContext.readScrapeRequest()?.apply { emit(scrapeRequest) }
+            }
           }
+      } finally {
+        // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to
+        // detect agent disconnect and clean up. Handle cleanup here on stream termination.
+        if (proxy.options.transportFilterDisabled) {
+          proxy.removeAgentContext(agentId, "Stream terminated (transport filter disabled)")
         }
+      }
     }
 
   @Suppress("TooGenericExceptionCaught")
