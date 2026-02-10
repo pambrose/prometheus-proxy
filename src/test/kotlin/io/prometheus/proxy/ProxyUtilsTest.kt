@@ -27,7 +27,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.withCharset
-import io.ktor.server.cio.CIO as ServerCIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -37,6 +36,7 @@ import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyUtils.respondWith
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import io.ktor.server.cio.CIO as ServerCIO
 
 class ProxyUtilsTest {
   @Test
@@ -149,8 +149,9 @@ class ProxyUtilsTest {
     result3.updateMsg shouldBe "missing_path"
     result4.updateMsg shouldBe "proxy_stopped"
 
-    // Mutating one result does not affect others
-    result1.contentText = "modified"
+    // Copying one result does not affect others
+    val modified = result1.copy(contentText = "modified")
+    modified.contentText shouldBe "modified"
     result2.contentText shouldBe ""
     result3.contentText shouldBe ""
     result4.contentText shouldBe ""

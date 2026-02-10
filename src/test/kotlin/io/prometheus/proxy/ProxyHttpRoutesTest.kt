@@ -26,7 +26,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.withCharset
-import io.ktor.server.cio.CIO as ServerCIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -35,6 +34,7 @@ import io.prometheus.proxy.ProxyHttpRoutes.ensureLeadingSlash
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.milliseconds
+import io.ktor.server.cio.CIO as ServerCIO
 
 // Bug #12: The service discovery endpoint was registered using the raw sdPath config value,
 // which defaults to "discovery" (no leading slash). The fix normalizes the path with
@@ -200,15 +200,17 @@ class ProxyHttpRoutesTest {
   }
 
   @Test
-  fun `ResponseResults properties should be mutable`() {
+  fun `ResponseResults copy should produce modified instance`() {
     val results = ResponseResults()
 
-    results.statusCode = HttpStatusCode.NotFound
-    results.contentText = "modified content"
-    results.updateMsg = "modified_msg"
+    val modified = results.copy(
+      statusCode = HttpStatusCode.NotFound,
+      contentText = "modified content",
+      updateMsg = "modified_msg",
+    )
 
-    results.statusCode shouldBe HttpStatusCode.NotFound
-    results.contentText shouldBe "modified content"
-    results.updateMsg shouldBe "modified_msg"
+    modified.statusCode shouldBe HttpStatusCode.NotFound
+    modified.contentText shouldBe "modified content"
+    modified.updateMsg shouldBe "modified_msg"
   }
 }
