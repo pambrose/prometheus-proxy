@@ -64,7 +64,7 @@ class ChunkedContextTest {
   }
 
   @Test
-  fun `constructor should create scrapeResults from header`() {
+  fun `applySummary should propagate header fields to scrapeResults`() {
     val response = createHeaderResponse(
       validResponse = true,
       scrapeId = 999L,
@@ -75,14 +75,20 @@ class ChunkedContextTest {
     )
     val context = ChunkedContext(response)
 
-    context.scrapeResults.apply {
+    val crc = CRC32()
+    val data = "test".toByteArray()
+    crc.update(data)
+    context.applyChunk(data, data.size, 1, crc.value)
+
+    val scrapeResults = context.applySummary(1, data.size, crc.value)
+    scrapeResults.apply {
       srValidResponse.shouldBeTrue()
       srScrapeId shouldBe 999L
       srAgentId shouldBe "my-agent"
       srStatusCode shouldBe 200
       srUrl shouldBe "http://test/metrics"
       srContentType shouldBe "text/plain; charset=utf-8"
-      srZipped.shouldBeTrue() // ChunkedContext always sets zipped to true
+      srZipped.shouldBeTrue()
     }
   }
 
@@ -175,10 +181,10 @@ class ChunkedContextTest {
     context.applyChunk(data, data.size, 1, crc.value)
 
     // Apply summary with correct counts
-    context.applySummary(1, data.size, crc.value)
+    val scrapeResults = context.applySummary(1, data.size, crc.value)
 
     // Should complete without exception
-    context.scrapeResults.srContentAsZipped.shouldNotBeNull()
+    scrapeResults.srContentAsZipped.shouldNotBeNull()
   }
 
   @Test
@@ -239,9 +245,9 @@ class ChunkedContextTest {
     crc.update(data)
     context.applyChunk(data, data.size, 1, crc.value)
 
-    context.applySummary(1, data.size, crc.value)
+    val scrapeResults = context.applySummary(1, data.size, crc.value)
 
-    val content = context.scrapeResults.srContentAsZipped
+    val content = scrapeResults.srContentAsZipped
     content.shouldNotBeNull()
     content.size shouldBe data.size
     content.contentEquals(data).shouldBeTrue()
@@ -271,32 +277,44 @@ class ChunkedContextTest {
     context.applyChunk(chunk3, chunk3.size, 3, crc.value)
 
     val totalSize = chunk1.size + chunk2.size + chunk3.size
-    context.applySummary(3, totalSize, crc.value)
+    val scrapeResults = context.applySummary(3, totalSize, crc.value)
 
     context.totalChunkCount shouldBe 3
     context.totalByteCount shouldBe totalSize
-    context.scrapeResults.srContentAsZipped.shouldNotBeNull()
+    scrapeResults.srContentAsZipped.shouldNotBeNull()
   }
 
   // ==================== Header Field Propagation Tests ====================
 
   @Test
-  fun `scrapeResults should propagate failure reason from header`() {
+  fun `applySummary should propagate failure reason from header`() {
     val response = createHeaderResponse(
       validResponse = false,
       failureReason = "Connection timeout",
     )
     val context = ChunkedContext(response)
 
-    context.scrapeResults.srFailureReason shouldBe "Connection timeout"
+    val crc = CRC32()
+    val data = "test".toByteArray()
+    crc.update(data)
+    context.applyChunk(data, data.size, 1, crc.value)
+
+    val scrapeResults = context.applySummary(1, data.size, crc.value)
+    scrapeResults.srFailureReason shouldBe "Connection timeout"
   }
 
   @Test
-  fun `scrapeResults should handle empty content type`() {
+  fun `applySummary should handle empty content type from header`() {
     val response = createHeaderResponse(contentType = "")
     val context = ChunkedContext(response)
 
-    context.scrapeResults.srContentType shouldBe ""
+    val crc = CRC32()
+    val data = "test".toByteArray()
+    crc.update(data)
+    context.applyChunk(data, data.size, 1, crc.value)
+
+    val scrapeResults = context.applySummary(1, data.size, crc.value)
+    scrapeResults.srContentType shouldBe ""
   }
 
   // ==================== Partial Last Chunk Tests (Bug #2) ====================
@@ -377,11 +395,11 @@ class ChunkedContextTest {
     context.totalChunkCount shouldBe 3
     context.totalByteCount shouldBe 40
 
-    context.applySummary(3, 40, crc.value)
+    val scrapeResults = context.applySummary(3, 40, crc.value)
 
     // Verify the reassembled content matches the original
-    context.scrapeResults.srContentAsZipped.shouldNotBeNull()
-    context.scrapeResults.srContentAsZipped.size shouldBe 40
-    context.scrapeResults.srContentAsZipped.contentEquals(fullData).shouldBeTrue()
+    scrapeResults.srContentAsZipped.shouldNotBeNull()
+    scrapeResults.srContentAsZipped.size shouldBe 40
+    scrapeResults.srContentAsZipped.contentEquals(fullData).shouldBeTrue()
   }
 }

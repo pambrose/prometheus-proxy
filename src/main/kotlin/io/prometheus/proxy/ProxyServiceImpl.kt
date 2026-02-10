@@ -18,8 +18,6 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.runCatchingCancellable
 import com.google.protobuf.Empty
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -127,7 +125,7 @@ internal class ProxyServiceImpl(
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {
     val agentId = request.agentId
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-    return if (agentContext.isNull()) {
+    return if (agentContext == null) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
       unregisterPathResponse {
         valid = false
@@ -150,7 +148,7 @@ internal class ProxyServiceImpl(
         agentContext?.markActivityTime(false)
           ?: logger.error { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
         heartBeatResponse {
-          valid = agentContext.isNotNull()
+          valid = agentContext != null
           if (!valid)
             reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
         }
@@ -187,20 +185,20 @@ internal class ProxyServiceImpl(
     runCatchingCancellable {
       requests.collect { response ->
         val ooc = response.chunkOneOfCase
-        val chunkedContextMap = proxy.agentContextManager.chunkedContextMap
+        val contextManager = proxy.agentContextManager
         when (ooc.name.lowercase()) {
           "header" -> {
             val scrapeId = response.header.headerScrapeId
             logger.debug { "Reading header for scrapeId: $scrapeId" }
-            chunkedContextMap[scrapeId] = ChunkedContext(response)
+            contextManager.putChunkedContext(scrapeId, ChunkedContext(response))
           }
 
           "chunk" -> {
             response.chunk
               .apply {
                 logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
-                val context = chunkedContextMap[chunkScrapeId]
-                check(context.isNotNull()) { "Missing chunked context with scrapeId: $chunkScrapeId" }
+                val context = contextManager.getChunkedContext(chunkScrapeId)
+                checkNotNull(context) { "Missing chunked context with scrapeId: $chunkScrapeId" }
                 context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
               }
           }
@@ -208,15 +206,15 @@ internal class ProxyServiceImpl(
           "summary" -> {
             response.summary
               .apply {
-                val context = chunkedContextMap.remove(summaryScrapeId)
-                check(context.isNotNull()) { "Missing chunked context with scrapeId: $summaryScrapeId" }
+                val context = contextManager.removeChunkedContext(summaryScrapeId)
+                checkNotNull(context) { "Missing chunked context with scrapeId: $summaryScrapeId" }
                 logger.debug {
                   val ccnt = context.totalChunkCount
                   val bcnt = context.totalByteCount
                   "Reading summary chunkCount: $ccnt byteCount: $bcnt for scrapeId: $summaryScrapeId"
                 }
-                context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
-                proxy.scrapeRequestManager.assignScrapeResults(context.scrapeResults)
+                val scrapeResults = context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
+                proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
               }
           }
 

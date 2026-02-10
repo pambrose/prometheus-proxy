@@ -23,8 +23,12 @@ import io.prometheus.common.ScrapeResults
 import java.util.concurrent.ConcurrentHashMap
 
 internal class ScrapeRequestManager {
-  // Map scrape_id to agent_id
-  val scrapeRequestMap = ConcurrentHashMap<Long, ScrapeRequestWrapper>()
+  // Map scrape_id to ScrapeRequestWrapper
+  private val scrapeRequestMap = ConcurrentHashMap<Long, ScrapeRequestWrapper>()
+
+  val scrapeRequestMapView: Map<Long, ScrapeRequestWrapper> get() = scrapeRequestMap
+
+  fun containsScrapeRequest(scrapeId: Long): Boolean = scrapeRequestMap.containsKey(scrapeId)
 
   val scrapeMapSize: Int
     get() = scrapeRequestMap.size

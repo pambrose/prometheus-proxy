@@ -19,7 +19,6 @@
 package io.prometheus.harness
 
 import com.github.pambrose.common.util.simpleClassName
-import io.prometheus.common.Utils.lambda
 import io.prometheus.harness.HarnessConstants.CONCURRENT_CLIENTS
 import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
 import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
@@ -47,14 +46,14 @@ class InProcessTestWithAdminMetricsTest :
     fun setUp() =
       setupProxyAndAgent(
         proxyPort = PROXY_PORT,
-        proxySetup = lambda {
+        proxySetup = {
           startProxy(
             serverName = "withmetrics",
             adminEnabled = true,
             metricsEnabled = true,
           )
         },
-        agentSetup = lambda {
+        agentSetup = {
           startAgent(
             serverName = "withmetrics",
             adminEnabled = true,

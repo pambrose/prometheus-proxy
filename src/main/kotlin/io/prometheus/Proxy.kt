@@ -25,7 +25,6 @@ import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
-import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.collect.EvictingQueue
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -265,21 +264,21 @@ class Proxy(
         register(
           "chunking_map_check",
           newMapHealthCheck(
-            agentContextManager.chunkedContextMap,
+            agentContextManager.chunkedContextMapView,
             proxyConfigVals.internal.chunkContextMapUnhealthySize,
           ),
         )
         register(
           "scrape_response_map_check",
           newMapHealthCheck(
-            scrapeRequestManager.scrapeRequestMap,
+            scrapeRequestManager.scrapeRequestMapView,
             proxyConfigVals.internal.scrapeRequestMapUnhealthySize,
           ),
         )
         register(
           "agent_scrape_request_backlog",
           healthCheck {
-            agentContextManager.agentContextMap.entries
+            agentContextManager.agentContextEntries
               .filter {
                 it.value.scrapeRequestBacklogSize >= proxyConfigVals.internal.scrapeRequestBacklogUnhealthySize
               }
@@ -410,7 +409,7 @@ class Proxy(
 
             val agentContextInfo = pathManager.getAgentContextInfo(path)
 
-            if (agentContextInfo.isNotNull()) {
+            if (agentContextInfo != null) {
               val agentContexts = agentContextInfo.agentContexts
               put("agentName", JsonPrimitive(agentContexts.joinToString { it.agentName }))
               put("hostName", JsonPrimitive(agentContexts.joinToString { it.hostName }))

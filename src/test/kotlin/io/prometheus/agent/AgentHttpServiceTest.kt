@@ -624,7 +624,7 @@ class AgentHttpServiceTest {
         val results = service.fetchScrapeUrl(request)
 
         results.srValidResponse.shouldBeTrue()
-        results.scrapeCounterMsg.load() shouldBe "success"
+        results.scrapeCounterMsg shouldBe "success"
 
         service.close()
       } finally {

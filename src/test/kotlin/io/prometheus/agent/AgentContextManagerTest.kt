@@ -55,11 +55,10 @@ class AgentContextManagerTest {
       val context2 = AgentContext("192.168.1.2")
 
       manager.addAgentContext(context1)
-      // Manually override the agentId to simulate replacement
+      // Use putAgentContext to simulate replacement
       val agentId = context1.agentId
-      val result = manager.agentContextMap.put(agentId, context2)
+      manager.putAgentContext(agentId, context2)
 
-      result shouldBe context1
       manager.agentContextSize shouldBe 1
       manager.getAgentContext(agentId) shouldBe context2
     }
@@ -145,14 +144,14 @@ class AgentContextManagerTest {
       val mockResponse = mockk<ChunkedScrapeResponse>(relaxed = true)
       val chunkedContext = ChunkedContext(mockResponse)
 
-      manager.chunkedContextMap[scrapeId] = chunkedContext
+      manager.putChunkedContext(scrapeId, chunkedContext)
       manager.chunkedContextSize shouldBe 1
 
-      val retrieved = manager.chunkedContextMap[scrapeId]
+      val retrieved = manager.getChunkedContext(scrapeId)
       retrieved.shouldNotBeNull()
       retrieved shouldBe chunkedContext
 
-      manager.chunkedContextMap.remove(scrapeId)
+      manager.removeChunkedContext(scrapeId)
       manager.chunkedContextSize shouldBe 0
     }
 

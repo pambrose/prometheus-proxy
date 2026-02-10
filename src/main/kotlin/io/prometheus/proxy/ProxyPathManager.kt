@@ -18,15 +18,12 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.grpc.unregisterPathResponse
-import java.util.concurrent.ConcurrentHashMap
 
 internal class ProxyPathManager(
   private val proxy: Proxy,
@@ -40,7 +37,7 @@ internal class ProxyPathManager(
     fun isNotValid() = agentContexts.all { it.isNotValid() }
   }
 
-  private val pathMap = ConcurrentHashMap<String, AgentContextInfo>()
+  private val pathMap = HashMap<String, AgentContextInfo>()
 
   fun getAgentContextInfo(path: String): AgentContextInfo? =
     synchronized(pathMap) {
@@ -50,7 +47,7 @@ internal class ProxyPathManager(
     }
 
   val pathMapSize: Int
-    get() = pathMap.size
+    get() = synchronized(pathMap) { pathMap.size }
 
   val allPaths: List<String>
     get() = synchronized(pathMap) { pathMap.keys.toList() }
@@ -65,7 +62,7 @@ internal class ProxyPathManager(
     synchronized(pathMap) {
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
-        if (agentInfo.isNull()) {
+        if (agentInfo == null) {
           pathMap[path] = AgentContextInfo(true, labels, mutableListOf(agentContext))
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated)
@@ -76,7 +73,7 @@ internal class ProxyPathManager(
             agentInfo.agentContexts += agentContext
         }
       } else {
-        if (agentInfo.isNotNull()) {
+        if (agentInfo != null) {
           if (agentInfo.isConsolidated) {
             logger.warn { "Non-consolidated agent overwriting consolidated path /$path" }
           }
@@ -142,7 +139,7 @@ internal class ProxyPathManager(
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-    if (agentContext.isNull()) {
+    if (agentContext == null) {
       logger.warn { "Missing agent context for agentId: $agentId ($reason)" }
     } else {
       logger.info { "Removing paths for agentId: $agentId ($reason)" }

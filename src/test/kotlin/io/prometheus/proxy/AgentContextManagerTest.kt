@@ -53,13 +53,15 @@ class AgentContextManagerTest {
 
     manager.addAgentContext(context1)
 
-    // Manually add a second context with the same agentId
+    // Use putAgentContext to replace with a second context using the same agentId
     val context2 = AgentContext("remote-addr-2")
-    manager.agentContextMap[context1.agentId] = context1
-    val result = manager.agentContextMap.put(context1.agentId, context2)
+    manager.putAgentContext(context1.agentId, context2)
 
-    result.shouldNotBeNull()
-    result shouldBe context1
+    // Verify replacement occurred
+    val retrieved = manager.getAgentContext(context1.agentId)
+    retrieved.shouldNotBeNull()
+    retrieved shouldBe context2
+    manager.agentContextSize shouldBe 1
   }
 
   @Test
@@ -194,13 +196,13 @@ class AgentContextManagerTest {
     val manager = AgentContextManager(isTestMode = true)
     val mockChunkedContext = mockk<ChunkedContext>(relaxed = true)
 
-    manager.chunkedContextMap[1L] = mockChunkedContext
+    manager.putChunkedContext(1L, mockChunkedContext)
     manager.chunkedContextSize shouldBe 1
 
-    manager.chunkedContextMap[2L] = mockChunkedContext
+    manager.putChunkedContext(2L, mockChunkedContext)
     manager.chunkedContextSize shouldBe 2
 
-    manager.chunkedContextMap.remove(1L)
+    manager.removeChunkedContext(1L)
     manager.chunkedContextSize shouldBe 1
   }
 

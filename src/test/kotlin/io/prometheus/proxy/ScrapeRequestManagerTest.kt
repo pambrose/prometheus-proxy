@@ -145,9 +145,9 @@ class ScrapeRequestManagerTest {
         removeFromScrapeRequestMap(456L)
 
         scrapeMapSize shouldBe 2
-        scrapeRequestMap[123L].shouldNotBeNull()
-        scrapeRequestMap[456L].shouldBeNull()
-        scrapeRequestMap[789L].shouldNotBeNull()
+        containsScrapeRequest(123L) shouldBe true
+        containsScrapeRequest(456L) shouldBe false
+        containsScrapeRequest(789L) shouldBe true
       }
     }
 

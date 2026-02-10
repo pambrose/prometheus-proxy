@@ -47,9 +47,6 @@ object Utils {
     }
   }
 
-  // This eliminates an extra set of paren in when blocks and if/else stmts
-  fun <T> lambda(block: T) = block
-
   fun decodeParams(encodedQueryParams: String): String =
     if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8.name())}" else ""
 

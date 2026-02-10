@@ -106,7 +106,7 @@ class AgentContextCleanupServiceTest {
       every { staleAgentContext.inactivityDuration } returns 5.seconds
 
       // Add stale context directly to the map
-      agentContextManager.agentContextMap["stale-agent-123"] = staleAgentContext
+      agentContextManager.putAgentContext("stale-agent-123", staleAgentContext)
 
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
       val mockProxy = mockk<Proxy>(relaxed = true)
@@ -116,7 +116,7 @@ class AgentContextCleanupServiceTest {
         block(mockMetrics)
       }
       every { mockProxy.removeAgentContext(any(), any()) } answers {
-        agentContextManager.agentContextMap.remove(firstArg<String>())
+        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<String>())
       }
 
       val service = AgentContextCleanupService(mockProxy, configVals)
@@ -145,7 +145,7 @@ class AgentContextCleanupServiceTest {
       every { activeAgentContext.agentId } returns "active-agent-123"
       every { activeAgentContext.inactivityDuration } returns 5.seconds
 
-      agentContextManager.agentContextMap["active-agent-123"] = activeAgentContext
+      agentContextManager.putAgentContext("active-agent-123", activeAgentContext)
 
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.agentContextManager } returns agentContextManager
@@ -246,9 +246,9 @@ class AgentContextCleanupServiceTest {
       every { staleAgent3.agentId } returns "stale-3"
       every { staleAgent3.inactivityDuration } returns 15.seconds
 
-      agentContextManager.agentContextMap["stale-1"] = staleAgent1
-      agentContextManager.agentContextMap["stale-2"] = staleAgent2
-      agentContextManager.agentContextMap["stale-3"] = staleAgent3
+      agentContextManager.putAgentContext("stale-1", staleAgent1)
+      agentContextManager.putAgentContext("stale-2", staleAgent2)
+      agentContextManager.putAgentContext("stale-3", staleAgent3)
 
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
       val mockProxy = mockk<Proxy>(relaxed = true)
@@ -258,7 +258,7 @@ class AgentContextCleanupServiceTest {
         block(mockMetrics)
       }
       every { mockProxy.removeAgentContext(any(), any()) } answers {
-        agentContextManager.agentContextMap.remove(firstArg<String>())
+        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<String>())
       }
 
       val service = AgentContextCleanupService(mockProxy, configVals)

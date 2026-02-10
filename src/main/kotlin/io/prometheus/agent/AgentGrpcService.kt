@@ -66,14 +66,17 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
+import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.CRC32
 import kotlin.concurrent.atomics.plusAssign
+import kotlin.concurrent.withLock
 
 internal class AgentGrpcService(
   internal val agent: Agent,
   private val options: AgentOptions,
   private val inProcessServerName: String,
 ) {
+  private val grpcLock = ReentrantLock()
   private var grpcStarted by atomicBoolean(false)
   private val tracing by lazy { agent.zipkinReporterService.newTracing("grpc_client") }
   private val grpcTracing by lazy { GrpcTracing.create(tracing) }
@@ -121,51 +124,51 @@ internal class AgentGrpcService(
   }
 
   fun shutDown() =
-    synchronized(this) {
-    if (agent.isZipkinEnabled)
-      tracing.close()
-    if (grpcStarted)
-      channel.shutdownNow()
-  }
+    grpcLock.withLock {
+      if (agent.isZipkinEnabled)
+        tracing.close()
+      if (grpcStarted)
+        channel.shutdownNow()
+    }
 
   fun resetGrpcStubs() =
-    synchronized(this) {
-    logger.info { "Creating gRPC stubs" }
+    grpcLock.withLock {
+      logger.info { "Creating gRPC stubs" }
 
-    if (grpcStarted)
-      shutDown()
-    else
-      grpcStarted = true
+      if (grpcStarted)
+        shutDown()
+      else
+        grpcStarted = true
 
-    channel =
-      channel(
-        hostName = agentHostName,
-        port = agentPort,
-        enableRetry = true,
-        tlsContext = tlsContext,
-        overrideAuthority = agent.options.overrideAuthority,
-        inProcessServerName = inProcessServerName,
-      ) {
-        if (agent.isZipkinEnabled)
-          intercept(grpcTracing.newClientInterceptor())
+      channel =
+        channel(
+          hostName = agentHostName,
+          port = agentPort,
+          enableRetry = true,
+          tlsContext = tlsContext,
+          overrideAuthority = agent.options.overrideAuthority,
+          inProcessServerName = inProcessServerName,
+        ) {
+          if (agent.isZipkinEnabled)
+            intercept(grpcTracing.newClientInterceptor())
 
-        if (options.keepAliveTimeSecs > -1L)
-          keepAliveTime(options.keepAliveTimeSecs, SECONDS)
+          if (options.keepAliveTimeSecs > -1L)
+            keepAliveTime(options.keepAliveTimeSecs, SECONDS)
 
-        if (options.keepAliveTimeoutSecs > -1L)
-          keepAliveTimeout(options.keepAliveTimeoutSecs, SECONDS)
+          if (options.keepAliveTimeoutSecs > -1L)
+            keepAliveTimeout(options.keepAliveTimeoutSecs, SECONDS)
 
-        if (options.keepAliveWithoutCalls)
-          keepAliveWithoutCalls(options.keepAliveWithoutCalls)
-      }
+          if (options.keepAliveWithoutCalls)
+            keepAliveWithoutCalls(options.keepAliveWithoutCalls)
+        }
 
-    val interceptors =
-      buildList<ClientInterceptor> {
-        if (!options.transportFilterDisabled)
-          add(AgentClientInterceptor(agent))
-      }
-    grpcStub = ProxyServiceGrpcKt.ProxyServiceCoroutineStub(ClientInterceptors.intercept(channel, interceptors))
-  }
+      val interceptors =
+        buildList<ClientInterceptor> {
+          if (!options.transportFilterDisabled)
+            add(AgentClientInterceptor(agent))
+        }
+      grpcStub = ProxyServiceGrpcKt.ProxyServiceCoroutineStub(ClientInterceptors.intercept(channel, interceptors))
+    }
 
   // If successful, will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
   suspend fun connectAgent(transportFilterDisabled: Boolean) =

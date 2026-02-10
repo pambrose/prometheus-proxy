@@ -16,7 +16,6 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.unzip
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -110,7 +109,7 @@ object ProxyHttpRoutes {
   ): ResponseResults {
     val agentContextInfo = proxy.pathManager.getAgentContextInfo(path)
     return when {
-      agentContextInfo.isNull() -> ProxyUtils.invalidPathResponse(path, proxy)
+      agentContextInfo == null -> ProxyUtils.invalidPathResponse(path, proxy)
       agentContextInfo.isNotValid() -> ProxyUtils.invalidAgentContextResponse(path, proxy)
       else -> processRequests(agentContextInfo, proxy, path, queryParams)
     }
@@ -135,8 +134,8 @@ object ProxyHttpRoutes {
       )
     }
 
-    val statusCodes: List<HttpStatusCode> = results.map { it.statusCode }.toSet().toList()
-    val contentTypes: List<ContentType> = results.map { it.contentType }.toSet().toList()
+    val statusCodes = results.map { it.statusCode }.distinct()
+    val contentTypes = results.map { it.contentType }.distinct()
     val updateMsgs: String = results.joinToString("\n") { it.updateMsg }
     // Grab the contentType of the first OK in the list
     val okContentType: ContentType? = results.firstOrNull { it.statusCode == HttpStatusCode.OK }?.contentType
@@ -173,10 +172,13 @@ object ProxyHttpRoutes {
     response: ScrapeRequestResponse,
     proxy: Proxy,
   ) {
-    var status = "/$path - ${response.updateMsg} - ${response.statusCode}"
-    if (!response.statusCode.isSuccess())
-      status += " reason: [${response.failureReason}]"
-    status += " time: ${response.fetchDuration} url: ${response.url}"
+    val status =
+      buildString {
+        append("/$path - ${response.updateMsg} - ${response.statusCode}")
+        if (!response.statusCode.isSuccess())
+          append(" reason: [${response.failureReason}]")
+        append(" time: ${response.fetchDuration} url: ${response.url}")
+      }
     proxy.logActivity(status)
   }
 

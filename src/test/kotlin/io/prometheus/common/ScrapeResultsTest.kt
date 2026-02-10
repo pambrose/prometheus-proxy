@@ -34,9 +34,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Test
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
-@OptIn(ExperimentalAtomicApi::class)
 class ScrapeResultsTest {
   // ==================== Constructor Tests ====================
 
@@ -92,25 +90,26 @@ class ScrapeResultsTest {
     results.srUrl shouldBe "http://localhost:8080/metrics"
   }
 
-  // ==================== setDebugInfo Tests ====================
+  // ==================== Debug Info Constructor Tests ====================
 
   @Test
-  fun `setDebugInfo should set url and failure reason`() {
-    val results = ScrapeResults("agent", 123L)
-
-    results.setDebugInfo("http://test.com/metrics", "Connection refused")
+  fun `constructor should accept url and failure reason`() {
+    val results = ScrapeResults(
+      srAgentId = "agent",
+      srScrapeId = 123L,
+      srUrl = "http://test.com/metrics",
+      srFailureReason = "Connection refused",
+    )
 
     results.srUrl shouldBe "http://test.com/metrics"
     results.srFailureReason shouldBe "Connection refused"
   }
 
   @Test
-  fun `setDebugInfo should use empty failure reason by default`() {
+  fun `constructor should default to empty url and failure reason`() {
     val results = ScrapeResults("agent", 123L)
 
-    results.setDebugInfo("http://test.com/metrics")
-
-    results.srUrl shouldBe "http://test.com/metrics"
+    results.srUrl.shouldBeEmpty()
     results.srFailureReason.shouldBeEmpty()
   }
 
@@ -377,18 +376,16 @@ class ScrapeResultsTest {
   // ==================== scrapeCounterMsg Tests ====================
 
   @Test
-  fun `scrapeCounterMsg should be mutable`() {
-    val results = ScrapeResults("agent", 123L)
+  fun `scrapeCounterMsg should accept value via constructor`() {
+    val results = ScrapeResults("agent", 123L, scrapeCounterMsg = "new message")
 
-    results.scrapeCounterMsg.store("new message")
-
-    results.scrapeCounterMsg.load() shouldBe "new message"
+    results.scrapeCounterMsg shouldBe "new message"
   }
 
   @Test
   fun `scrapeCounterMsg should default to empty string`() {
     val results = ScrapeResults("agent", 123L)
 
-    results.scrapeCounterMsg.load().shouldBeEmpty()
+    results.scrapeCounterMsg.shouldBeEmpty()
   }
 }
