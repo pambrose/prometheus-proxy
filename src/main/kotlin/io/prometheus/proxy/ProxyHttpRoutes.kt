@@ -201,7 +201,7 @@ object ProxyHttpRoutes {
 
       // Returns false if timed out
       while (!scrapeRequest.suspendUntilComplete(checkTime)) {
-        // Check if agent is disconnected or agent is hung
+        // Check if the agent is disconnected or agent is hung
         if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
           return ScrapeRequestResponse(
             statusCode = HttpStatusCode.ServiceUnavailable,

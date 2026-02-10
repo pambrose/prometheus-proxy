@@ -69,8 +69,7 @@ internal class ProxyPathManager(
             logger.warn {
               "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.isConsolidated}"
             }
-          else
-            agentInfo.agentContexts += agentContext
+          agentInfo.agentContexts += agentContext
         }
       } else {
         if (agentInfo != null) {
@@ -154,7 +153,7 @@ internal class ProxyPathManager(
           } else {
             val removed = v.agentContexts.removeIf { it.agentId == agentId }
             if (removed)
-              logger.info { "Removed path /$k for $agentContext" }
+              logger.info { "Removed agentId $agentId from consolidated path /$k" }
           }
         }
 

@@ -46,18 +46,26 @@ internal class ChunkedContext(
     checksum.update(data, 0, chunkByteCount)
     baos.write(data, 0, chunkByteCount)
 
-    check(totalChunkCount == chunkCount)
-    check(checksum.value == chunkChecksum)
+    if (totalChunkCount != chunkCount)
+      throw ChunkValidationException("Chunk count mismatch: expected $chunkCount, got $totalChunkCount")
+    if (checksum.value != chunkChecksum)
+      throw ChunkValidationException(
+        "Chunk checksum mismatch for chunk $chunkCount: expected $chunkChecksum, got ${checksum.value}",
+      )
   }
 
+  @Suppress("ThrowsCount")
   fun applySummary(
     summaryChunkCount: Int,
     summaryByteCount: Int,
     summaryChecksum: Long,
   ): ScrapeResults {
-    check(totalChunkCount == summaryChunkCount)
-    check(totalByteCount == summaryByteCount)
-    check(checksum.value == summaryChecksum)
+    if (totalChunkCount != summaryChunkCount)
+      throw ChunkValidationException("Summary chunk count mismatch: expected $summaryChunkCount, got $totalChunkCount")
+    if (totalByteCount != summaryByteCount)
+      throw ChunkValidationException("Summary byte count mismatch: expected $summaryByteCount, got $totalByteCount")
+    if (checksum.value != summaryChecksum)
+      throw ChunkValidationException("Summary checksum mismatch: expected $summaryChecksum, got ${checksum.value}")
 
     baos.flush()
     return header.run {
@@ -75,3 +83,7 @@ internal class ChunkedContext(
     }
   }
 }
+
+internal class ChunkValidationException(
+  message: String,
+) : Exception(message)

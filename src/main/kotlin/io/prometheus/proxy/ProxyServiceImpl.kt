@@ -198,8 +198,16 @@ internal class ProxyServiceImpl(
               .apply {
                 logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
                 val context = contextManager.getChunkedContext(chunkScrapeId)
-                checkNotNull(context) { "Missing chunked context with scrapeId: $chunkScrapeId" }
-                context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
+                if (context == null) {
+                  logger.warn { "Missing chunked context for chunk with scrapeId: $chunkScrapeId, skipping" }
+                } else {
+                  try {
+                    context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
+                  } catch (e: ChunkValidationException) {
+                    logger.error(e) { "Chunk validation failed for scrapeId: $chunkScrapeId, discarding context" }
+                    contextManager.removeChunkedContext(chunkScrapeId)
+                  }
+                }
               }
           }
 
@@ -207,14 +215,21 @@ internal class ProxyServiceImpl(
             response.summary
               .apply {
                 val context = contextManager.removeChunkedContext(summaryScrapeId)
-                checkNotNull(context) { "Missing chunked context with scrapeId: $summaryScrapeId" }
-                logger.debug {
-                  val ccnt = context.totalChunkCount
-                  val bcnt = context.totalByteCount
-                  "Reading summary chunkCount: $ccnt byteCount: $bcnt for scrapeId: $summaryScrapeId"
+                if (context == null) {
+                  logger.warn { "Missing chunked context for summary with scrapeId: $summaryScrapeId, skipping" }
+                } else {
+                  logger.debug {
+                    val ccnt = context.totalChunkCount
+                    val bcnt = context.totalByteCount
+                    "Reading summary chunkCount: $ccnt byteCount: $bcnt for scrapeId: $summaryScrapeId"
+                  }
+                  try {
+                    val scrapeResults = context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
+                    proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
+                  } catch (e: ChunkValidationException) {
+                    logger.error(e) { "Summary validation failed for scrapeId: $summaryScrapeId" }
+                  }
                 }
-                val scrapeResults = context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
-                proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
               }
           }
 

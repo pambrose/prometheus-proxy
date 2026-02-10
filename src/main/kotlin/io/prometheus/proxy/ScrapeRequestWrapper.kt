@@ -19,7 +19,6 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.github.pambrose.common.util.runCatchingCancellable
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults
@@ -75,15 +74,10 @@ internal class ScrapeRequestWrapper(
     completeChannel.close()
   }
 
-  suspend fun suspendUntilComplete(waitMillis: Duration) =
+  suspend fun suspendUntilComplete(waitMillis: Duration): Boolean =
     withTimeoutOrNull(waitMillis.inWholeMilliseconds) {
-      // completeChannel will eventually close and never get a value, or timeout
-      runCatchingCancellable {
-        completeChannel.receive()
-        true
-      }.getOrElse {
-        true
-      }
+      // Suspends until completeChannel is closed by markComplete(), or times out
+      completeChannel.receiveCatching()
     } != null
 
   override fun toString() =

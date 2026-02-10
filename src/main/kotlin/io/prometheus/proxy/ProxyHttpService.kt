@@ -44,7 +44,8 @@ internal class ProxyHttpService(
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
-  private fun getConfig(httpPort: Int): Configuration.() -> Unit = {
+  private fun getConfig(httpPort: Int): Configuration.() -> Unit =
+    {
       connector {
         host = "0.0.0.0"
         port = httpPort

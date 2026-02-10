@@ -493,6 +493,32 @@ class ProxyPathManagerTest {
       manager.pathMapSize shouldBe 1
     }
 
+  // Bug #5: When a consolidated agent registered on a path with a different consolidation type,
+  // the agent was silently dropped — the warning was logged but the agent was never added to the
+  // path's agent list. The fix ensures the agent is always added regardless of mismatch.
+  @Test
+  fun `addPath should still register consolidated agent on type mismatch`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val nonConsolidatedContext = createMockAgentContext(consolidated = false)
+      val consolidatedContext = createMockAgentContext(consolidated = true)
+
+      // First register as non-consolidated
+      manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext)
+
+      // Then add consolidated — agent should still be registered despite mismatch
+      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
+
+      manager.pathMapSize shouldBe 1
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      // Both agents should be present — the consolidated agent must not be silently dropped
+      info.agentContexts.shouldHaveSize(2)
+      info.agentContexts.map { it.agentId } shouldContain nonConsolidatedContext.agentId
+      info.agentContexts.map { it.agentId } shouldContain consolidatedContext.agentId
+    }
+
   @Test
   fun `addPath should warn when non-consolidated agent overwrites consolidated path`(): Unit =
     runBlocking {

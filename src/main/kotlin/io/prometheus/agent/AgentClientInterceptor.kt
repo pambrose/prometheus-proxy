@@ -50,13 +50,15 @@ internal class AgentClientInterceptor(
           object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
             override fun onHeaders(headers: Metadata) {
               // Grab agent_id from headers if not already assigned
-              if (agent.agentId.isEmpty()) {
-                headers.get(META_AGENT_ID_KEY)
-                  ?.also { agentId ->
-                    agent.agentId = agentId
-                    check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
-                    logger.info { "Assigned agentId: $agentId to $agent" }
-                  } ?: logger.error { "Headers missing AGENT_ID key" }
+              synchronized(agent) {
+                if (agent.agentId.isEmpty()) {
+                  headers.get(META_AGENT_ID_KEY)
+                    ?.also { agentId ->
+                      agent.agentId = agentId
+                      check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+                      logger.info { "Assigned agentId: $agentId to $agent" }
+                    } ?: logger.error { "Headers missing AGENT_ID key" }
+                }
               }
 
               super.onHeaders(headers)

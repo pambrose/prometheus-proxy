@@ -129,7 +129,8 @@ internal class AgentHttpService(
     }
   }
 
-  private fun prepareRequestHeaders(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
+  private fun prepareRequestHeaders(request: ScrapeRequest): HttpRequestBuilder.() -> Unit =
+    {
       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
