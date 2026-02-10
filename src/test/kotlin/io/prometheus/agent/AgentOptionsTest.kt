@@ -5,6 +5,7 @@ package io.prometheus.agent
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -133,6 +134,21 @@ class AgentOptionsTest {
     options.keepAliveWithoutCalls.shouldBeTrue()
   }
 
+  @Test
+  fun `unaryDeadlineSecs should have positive default`() {
+    val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+    options.unaryDeadlineSecs shouldBeGreaterThan 0
+  }
+
+  @Test
+  fun `unaryDeadlineSecs should be settable via command line`() {
+    val options = AgentOptions(
+      listOf("--name", "test", "--proxy", "host", "--unary_deadline_secs", "60"),
+      false,
+    )
+    options.unaryDeadlineSecs shouldBe 60
+  }
+
   // ==================== Constructor Variants ====================
 
   @Test
@@ -144,7 +160,7 @@ class AgentOptionsTest {
   @Test
   fun `configVals should be populated after construction`() {
     val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
-    options.configVals.agent.name shouldBe options.configVals.agent.name // non-null access
+    options.configVals.agent.name.shouldNotBeNull()
   }
 
   // ==================== Override Authority Tests ====================

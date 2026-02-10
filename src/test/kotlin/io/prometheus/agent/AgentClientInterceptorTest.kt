@@ -8,8 +8,11 @@ import io.grpc.ClientCall
 import io.grpc.ManagedChannel
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor
+import io.grpc.Status
+import io.grpc.StatusRuntimeException
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -163,7 +166,7 @@ class AgentClientInterceptorTest {
   }
 
   @Test
-  fun `onHeaders should throw when agent ID key is missing from headers`() {
+  fun `onHeaders should throw StatusRuntimeException when agent ID key is missing from headers`() {
     val mockAgent = mockk<Agent>(relaxed = true)
     every { mockAgent.agentId } returns ""
 
@@ -181,11 +184,37 @@ class AgentClientInterceptorTest {
     val call = interceptor.interceptCall(mockMethod, CallOptions.DEFAULT, mockNextChannel)
     call.start(mockk(relaxed = true), Metadata())
 
-    // Trigger onHeaders with empty headers (no AGENT_ID key) — should throw
-    assertThrows<IllegalStateException> {
+    // Trigger onHeaders with empty headers (no AGENT_ID key) — should throw StatusRuntimeException
+    assertThrows<StatusRuntimeException> {
       listenerSlot.captured.onHeaders(Metadata())
     }
 
     verify(exactly = 0) { mockAgent.agentId = any() }
+  }
+
+  @Test
+  fun `onHeaders missing agent ID should throw INTERNAL status with descriptive message`() {
+    val mockAgent = mockk<Agent>(relaxed = true)
+    every { mockAgent.agentId } returns ""
+
+    val interceptor = AgentClientInterceptor(mockAgent)
+    val mockMethod = mockk<MethodDescriptor<Any, Any>>(relaxed = true)
+
+    val listenerSlot = slot<ClientCall.Listener<Any>>()
+    val mockUnderlyingCall = mockk<ClientCall<Any, Any>>(relaxed = true)
+    every { mockUnderlyingCall.start(capture(listenerSlot), any()) } answers {}
+
+    val mockNextChannel = mockk<Channel>(relaxed = true)
+    every { mockNextChannel.newCall(any<MethodDescriptor<Any, Any>>(), any()) } returns mockUnderlyingCall
+
+    val call = interceptor.interceptCall(mockMethod, CallOptions.DEFAULT, mockNextChannel)
+    call.start(mockk(relaxed = true), Metadata())
+
+    val exception = assertThrows<StatusRuntimeException> {
+      listenerSlot.captured.onHeaders(Metadata())
+    }
+
+    exception.status.code shouldBe Status.Code.INTERNAL
+    exception.status.description.shouldContain("AGENT_ID")
   }
 }

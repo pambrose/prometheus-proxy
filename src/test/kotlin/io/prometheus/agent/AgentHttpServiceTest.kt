@@ -6,6 +6,7 @@ import com.typesafe.config.ConfigFactory
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.server.engine.embeddedServer
@@ -138,7 +139,7 @@ class AgentHttpServiceTest {
       val mockAgent = createMockAgent()
       val service = AgentHttpService(mockAgent)
 
-      service.httpClientCache shouldBe service.httpClientCache // exists and is stable
+      service.httpClientCache.shouldNotBeNull()
       service.close()
     }
 

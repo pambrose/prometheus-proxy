@@ -82,6 +82,12 @@ internal class AgentGrpcService(
 
   internal lateinit var grpcStub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub
 
+  // Deadline applied to all unary RPCs. Set to 0 to disable (e.g., in tests).
+  internal var unaryDeadlineSecs = options.unaryDeadlineSecs.toLong()
+
+  private fun unaryStub() =
+    if (unaryDeadlineSecs > 0) grpcStub.withDeadlineAfter(unaryDeadlineSecs, SECONDS) else grpcStub
+
   lateinit var channel: ManagedChannel
 
   val agentHostName: String
@@ -126,8 +132,10 @@ internal class AgentGrpcService(
     grpcLock.withLock {
       if (agent.isZipkinEnabled)
         tracing.close()
-      if (grpcStarted)
+      if (grpcStarted) {
         channel.shutdownNow()
+        channel.awaitTermination(5, SECONDS)
+      }
     }
 
   fun resetGrpcStubs() =
@@ -174,9 +182,9 @@ internal class AgentGrpcService(
     runCatchingCancellable {
       logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
       if (transportFilterDisabled)
-        grpcStub.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE).also { agent.agentId = it.agentId }
+        unaryStub().connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE).also { agent.agentId = it.agentId }
       else
-        grpcStub.connectAgent(EMPTY_INSTANCE)
+        unaryStub().connectAgent(EMPTY_INSTANCE)
 
       logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
       agent.metrics { connectCount.labels(agent.launchId, "success").inc() }
@@ -199,7 +207,7 @@ internal class AgentGrpcService(
         hostName = agentHostName
         consolidated = agent.options.consolidated
       }
-    grpcStub.registerAgent(request)
+    unaryStub().registerAgent(request)
       .also { response ->
         agent.markMsgSent()
         if (!response.valid)
@@ -209,7 +217,7 @@ internal class AgentGrpcService(
   }
 
   suspend fun pathMapSize(): Int =
-    grpcStub.pathMapSize(
+    unaryStub().pathMapSize(
       pathMapSizeRequest {
         require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         agentId = agent.agentId
@@ -223,7 +231,7 @@ internal class AgentGrpcService(
     pathVal: String,
     labelsJson: String,
   ): RegisterPathResponse =
-    grpcStub.registerPath(
+    unaryStub().registerPath(
       registerPathRequest {
         require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
@@ -238,7 +246,7 @@ internal class AgentGrpcService(
     }
 
   suspend fun unregisterPathOnProxy(pathVal: String): UnregisterPathResponse =
-    grpcStub.unregisterPath(
+    unaryStub().unregisterPath(
       unregisterPathRequest {
         require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
         require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
@@ -260,7 +268,7 @@ internal class AgentGrpcService(
               heartBeatRequest {
                 agentId = anAgentId
               }
-            grpcStub.sendHeartBeat(request)
+            unaryStub().sendHeartBeat(request)
               .apply {
                 agent.markMsgSent()
                 if (!valid) {

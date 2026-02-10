@@ -4,6 +4,7 @@ package io.prometheus.proxy
 
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -11,9 +12,13 @@ import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import io.prometheus.Proxy
 import io.prometheus.grpc.RegisterAgentRequest
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import kotlin.time.Duration.Companion.seconds
 
 class AgentContextTest {
   // ==================== Creation Tests ====================
@@ -78,6 +83,71 @@ class AgentContextTest {
 
     context.isValid().shouldBeFalse()
     context.isNotValid().shouldBeTrue()
+  }
+
+  // M3: invalidate() now drains buffered scrape requests and calls closeChannel() on each
+  // so HTTP handlers waiting on awaitCompleted() are notified immediately instead of
+  // waiting for the full scrape timeout to expire.
+  @Test
+  fun `invalidate should close pending scrape request wrappers`(): Unit =
+    runBlocking {
+      val context = AgentContext("remote-addr")
+      val wrapper1 = mockk<ScrapeRequestWrapper>(relaxed = true)
+      val wrapper2 = mockk<ScrapeRequestWrapper>(relaxed = true)
+      val wrapper3 = mockk<ScrapeRequestWrapper>(relaxed = true)
+
+      context.writeScrapeRequest(wrapper1)
+      context.writeScrapeRequest(wrapper2)
+      context.writeScrapeRequest(wrapper3)
+      context.scrapeRequestBacklogSize shouldBe 3
+
+      context.invalidate()
+
+      context.isValid().shouldBeFalse()
+      // All buffered wrappers should have had closeChannel() called
+      verify(exactly = 1) { wrapper1.closeChannel() }
+      verify(exactly = 1) { wrapper2.closeChannel() }
+      verify(exactly = 1) { wrapper3.closeChannel() }
+    }
+
+  @Test
+  fun `invalidate should unblock awaitCompleted on buffered wrappers`(): Unit =
+    runBlocking {
+      val context = AgentContext("remote-addr")
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.isMetricsEnabled } returns false
+
+      // Create a real ScrapeRequestWrapper so awaitCompleted() works end-to-end
+      val wrapper = ScrapeRequestWrapper(context, mockProxy, "/metrics", "", "", null, false)
+
+      context.writeScrapeRequest(wrapper)
+
+      // Start awaiting completion in a separate coroutine with a long timeout
+      val startTime = System.currentTimeMillis()
+      val deferred = async {
+        wrapper.awaitCompleted(30.seconds)
+      }
+
+      // Invalidate should drain the channel and close the wrapper's completion channel
+      context.invalidate()
+
+      // awaitCompleted should return true (channel closed) almost immediately
+      val completed = deferred.await()
+      val elapsed = System.currentTimeMillis() - startTime
+
+      completed.shouldBeTrue()
+      // Should complete in well under the 30-second timeout
+      elapsed shouldBeLessThan 5000L
+    }
+
+  @Test
+  fun `invalidate with no buffered requests should not fail`() {
+    val context = AgentContext("remote-addr")
+
+    // Should not throw when channel is empty
+    context.invalidate()
+
+    context.isValid().shouldBeFalse()
   }
 
   // ==================== Channel Tests ====================

@@ -664,6 +664,85 @@ class ProxyPathManagerTest {
       info2.agentContexts.shouldHaveSize(2)
     }
 
+  // ==================== M1: agentContexts typed as MutableList ====================
+
+  // M1: The agentContexts field in AgentContextInfo was typed as List<AgentContext> but
+  // was unsafely cast to MutableList at three call sites (addPath, removePath,
+  // removeFromPathManager). This relied on the implementation detail that the list was
+  // created with mutableListOf(). The fix changed the type to MutableList<AgentContext>
+  // to make the mutable usage explicit and eliminate the unsafe casts.
+  @Test
+  fun `consolidated addPath should not require unsafe cast to MutableList`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val contexts = (1..5).map { createMockAgentContext(consolidated = true) }
+
+      // First agent creates the path
+      manager.addPath("/metrics", """{"job":"test"}""", contexts[0])
+
+      // Subsequent agents append to the consolidated list — previously required
+      // (agentInfo.agentContexts as MutableList) += agentContext
+      for (i in 1 until contexts.size) {
+        manager.addPath("/metrics", """{"job":"test"}""", contexts[i])
+      }
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.agentContexts.shouldHaveSize(5)
+      contexts.forEach { ctx ->
+        info.agentContexts.map { it.agentId } shouldContain ctx.agentId
+      }
+    }
+
+  @Test
+  fun `removePath from consolidated group should not require unsafe cast to MutableList`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
+      val context3 = createMockAgentContext(consolidated = true)
+
+      manager.addPath("/metrics", """{"job":"test"}""", context1)
+      manager.addPath("/metrics", """{"job":"test"}""", context2)
+      manager.addPath("/metrics", """{"job":"test"}""", context3)
+
+      // Remove middle agent — previously required
+      // (agentInfo.agentContexts as MutableList).remove(agentContext)
+      val response = manager.removePath("/metrics", context2.agentId)
+      response.valid.shouldBeTrue()
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.agentContexts.shouldHaveSize(2)
+      info.agentContexts.map { it.agentId } shouldContain context1.agentId
+      info.agentContexts.map { it.agentId } shouldContain context3.agentId
+    }
+
+  @Test
+  fun `removeFromPathManager on consolidated paths should not require unsafe cast to MutableList`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val agent1 = createMockAgentContext(consolidated = true)
+      val agent2 = createMockAgentContext(consolidated = true)
+
+      every { proxy.agentContextManager.getAgentContext(agent1.agentId) } returns agent1
+
+      manager.addPath("/metrics", """{"job":"test"}""", agent1)
+      manager.addPath("/metrics", """{"job":"test"}""", agent2)
+
+      // Remove agent1 via disconnect path — previously required
+      // (v.agentContexts as MutableList).removeIf { it.agentId == agentId }
+      manager.removeFromPathManager(agent1.agentId, "disconnect")
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.agentContexts.shouldHaveSize(1)
+      info.agentContexts[0].agentId shouldBe agent2.agentId
+    }
+
   // ==================== toPlainText with Multiple Paths ====================
 
   @Test

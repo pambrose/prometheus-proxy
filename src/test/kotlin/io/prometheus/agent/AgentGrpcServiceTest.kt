@@ -61,6 +61,7 @@ class AgentGrpcServiceTest {
     every { mockOptions.keepAliveTimeSecs } returns -1L
     every { mockOptions.keepAliveTimeoutSecs } returns -1L
     every { mockOptions.keepAliveWithoutCalls } returns false
+    every { mockOptions.unaryDeadlineSecs } returns 30
     every { mockOptions.overrideAuthority } returns ""
 
     val mockAgent = mockk<Agent>(relaxed = true)
@@ -334,6 +335,19 @@ class AgentGrpcServiceTest {
       service.shutDown()
     }
 
+  // ==================== Unary Deadline Tests ====================
+
+  @Test
+  fun `unaryDeadlineSecs should default to 30`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      service.unaryDeadlineSecs shouldBe 30L
+
+      service.shutDown()
+    }
+
   // ==================== connectAgent Tests ====================
 
   @Test
@@ -345,6 +359,7 @@ class AgentGrpcServiceTest {
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
       coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
       service.grpcStub = mockStub
+      service.unaryDeadlineSecs = 0
 
       val result = service.connectAgent(transportFilterDisabled = false)
 
@@ -361,6 +376,7 @@ class AgentGrpcServiceTest {
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
       coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws RuntimeException("Connection refused")
       service.grpcStub = mockStub
+      service.unaryDeadlineSecs = 0
 
       val result = service.connectAgent(transportFilterDisabled = false)
 
@@ -379,6 +395,7 @@ class AgentGrpcServiceTest {
         agentId = "assigned-agent-id"
       }
       service.grpcStub = mockStub
+      service.unaryDeadlineSecs = 0
 
       val result = service.connectAgent(transportFilterDisabled = true)
 
@@ -398,6 +415,7 @@ class AgentGrpcServiceTest {
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
       coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse { valid = true }
       service.grpcStub = mockStub
+      service.unaryDeadlineSecs = 0
 
       val latch = CountDownLatch(1)
       service.registerAgent(latch)
@@ -424,11 +442,52 @@ class AgentGrpcServiceTest {
         reason = "Agent already registered"
       }
       service.grpcStub = mockStub
+      service.unaryDeadlineSecs = 0
 
       val latch = CountDownLatch(1)
       assertThrows<RequestFailureException> {
         service.registerAgent(latch)
       }
+      service.shutDown()
+    }
+
+  // ==================== Channel Termination Tests (M9) ====================
+
+  @Test
+  fun `shutDown should fully terminate the channel`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // Before shutdown, channel should not be terminated
+      service.channel.isTerminated.shouldBeFalse()
+
+      service.shutDown()
+
+      // After shutdown with awaitTermination, channel should be fully terminated
+      service.channel.isTerminated.shouldBeTrue()
+    }
+
+  @Test
+  fun `resetGrpcStubs should terminate old channel before creating new one`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val oldChannel = service.channel
+      oldChannel.isTerminated.shouldBeFalse()
+
+      // resetGrpcStubs should shut down the old channel and create a new one
+      service.resetGrpcStubs()
+
+      // Old channel should be fully terminated
+      oldChannel.isTerminated.shouldBeTrue()
+
+      // New channel should be a different instance and not terminated
+      val newChannel = service.channel
+      (newChannel !== oldChannel).shouldBeTrue()
+      newChannel.isTerminated.shouldBeFalse()
+
       service.shutDown()
     }
 
@@ -443,6 +502,7 @@ class AgentGrpcServiceTest {
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
       service.grpcStub = mockStub
+      service.unaryDeadlineSecs = 0
 
       service.sendHeartBeat()
 
@@ -459,6 +519,7 @@ class AgentGrpcServiceTest {
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
       coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse { valid = true }
       service.grpcStub = mockStub
+      service.unaryDeadlineSecs = 0
 
       service.sendHeartBeat()
 

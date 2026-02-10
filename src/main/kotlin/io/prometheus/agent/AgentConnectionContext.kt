@@ -48,7 +48,10 @@ internal class AgentConnectionContext {
       if (!disconnected) {
         disconnected = true
         scrapeRequestActionsChannel.cancel()
-        scrapeResultsChannel.cancel()
+        // Use close() instead of cancel() so buffered results can still be drained
+        // by the consumer. cancel() discards all buffered items, causing the proxy
+        // to time out waiting for results that were already computed.
+        scrapeResultsChannel.close()
         logger.info { "AgentConnectionContext closed" }
       }
     }

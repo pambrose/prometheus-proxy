@@ -41,6 +41,7 @@ import io.prometheus.common.EnvVars.PROXY_HOSTNAME
 import io.prometheus.common.EnvVars.SCRAPE_MAX_RETRIES
 import io.prometheus.common.EnvVars.SCRAPE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.TRUST_ALL_X509_CERTIFICATES
+import io.prometheus.common.EnvVars.UNARY_DEADLINE_SECS
 import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.setLogLevel
 import kotlin.time.Duration.Companion.seconds
@@ -125,6 +126,10 @@ class AgentOptions(
   var keepAliveWithoutCalls = false
     private set
 
+  @Parameter(names = ["--unary_deadline_secs"], description = "gRPC Unary deadline (seconds)")
+  var unaryDeadlineSecs = -1
+    private set
+
   init {
     parseOptions()
   }
@@ -176,6 +181,10 @@ class AgentOptions(
     if (!keepAliveWithoutCalls)
       keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
     logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
+
+    if (unaryDeadlineSecs == -1)
+      unaryDeadlineSecs = UNARY_DEADLINE_SECS.getEnv(agentConfigVals.grpc.unaryDeadlineSecs)
+    logger.info { "grpc.unaryDeadlineSecs: $unaryDeadlineSecs" }
 
     agentConfigVals.apply {
       assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)

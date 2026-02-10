@@ -129,6 +129,7 @@ class EnvVarsTest {
     EnvVars.KEEPALIVE_TIME_SECS.name shouldBe "KEEPALIVE_TIME_SECS"
     EnvVars.KEEPALIVE_TIMEOUT_SECS.name shouldBe "KEEPALIVE_TIMEOUT_SECS"
     EnvVars.KEEPALIVE_WITHOUT_CALLS.name shouldBe "KEEPALIVE_WITHOUT_CALLS"
+    EnvVars.UNARY_DEADLINE_SECS.name shouldBe "UNARY_DEADLINE_SECS"
   }
 
   @Test
@@ -198,8 +199,8 @@ class EnvVarsTest {
   }
 
   @Test
-  fun `EnvVars enum should have exactly 38 entries`() {
-    EnvVars.entries.size shouldBe 43
+  fun `EnvVars enum should have exactly 44 entries`() {
+    EnvVars.entries.size shouldBe 44
   }
 
   @Test
@@ -250,7 +251,64 @@ class EnvVarsTest {
       "OVERRIDE_AUTHORITY",
       "KEEPALIVE_TIME_SECS",
       "KEEPALIVE_TIMEOUT_SECS",
+      "UNARY_DEADLINE_SECS",
     )
+  }
+
+  @Test
+  fun `entry count should match completeness list size to prevent drift`() {
+    // Guard against M11-style bugs: if someone adds an enum entry but forgets to
+    // update the count test or the completeness list, this test will catch it.
+    val allExpected = listOf(
+      "PROXY_CONFIG",
+      "PROXY_PORT",
+      "AGENT_PORT",
+      "SD_ENABLED",
+      "SD_PATH",
+      "SD_TARGET_PREFIX",
+      "REFLECTION_DISABLED",
+      "HANDSHAKE_TIMEOUT_SECS",
+      "PERMIT_KEEPALIVE_WITHOUT_CALLS",
+      "PERMIT_KEEPALIVE_TIME_SECS",
+      "MAX_CONNECTION_IDLE_SECS",
+      "MAX_CONNECTION_AGE_SECS",
+      "MAX_CONNECTION_AGE_GRACE_SECS",
+      "PROXY_LOG_LEVEL",
+      "AGENT_CONFIG",
+      "PROXY_HOSTNAME",
+      "AGENT_NAME",
+      "CONSOLIDATED",
+      "SCRAPE_TIMEOUT_SECS",
+      "SCRAPE_MAX_RETRIES",
+      "CHUNK_CONTENT_SIZE_KBS",
+      "MIN_GZIP_SIZE_BYTES",
+      "TRUST_ALL_X509_CERTIFICATES",
+      "MAX_CONCURRENT_CLIENTS",
+      "CLIENT_TIMEOUT_SECS",
+      "MAX_CLIENT_CACHE_SIZE",
+      "MAX_CLIENT_CACHE_AGE_MINS",
+      "MAX_CLIENT_CACHE_IDLE_MINS",
+      "CLIENT_CACHE_CLEANUP_INTERVAL_MINS",
+      "KEEPALIVE_WITHOUT_CALLS",
+      "UNARY_DEADLINE_SECS",
+      "AGENT_LOG_LEVEL",
+      "DEBUG_ENABLED",
+      "METRICS_ENABLED",
+      "METRICS_PORT",
+      "ADMIN_ENABLED",
+      "ADMIN_PORT",
+      "TRANSPORT_FILTER_DISABLED",
+      "CERT_CHAIN_FILE_PATH",
+      "PRIVATE_KEY_FILE_PATH",
+      "TRUST_CERT_COLLECTION_FILE_PATH",
+      "OVERRIDE_AUTHORITY",
+      "KEEPALIVE_TIME_SECS",
+      "KEEPALIVE_TIMEOUT_SECS",
+    )
+    val actualNames = EnvVars.entries.map { it.name }.sorted()
+    val expectedNames = allExpected.sorted()
+
+    actualNames shouldBe expectedNames
   }
 
   @Test
@@ -286,6 +344,7 @@ class EnvVarsTest {
       EnvVars.TRUST_ALL_X509_CERTIFICATES,
       EnvVars.MAX_CONCURRENT_CLIENTS,
       EnvVars.CLIENT_TIMEOUT_SECS,
+      EnvVars.UNARY_DEADLINE_SECS,
       EnvVars.AGENT_LOG_LEVEL,
     )
 
