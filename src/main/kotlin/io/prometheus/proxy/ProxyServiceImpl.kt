@@ -28,6 +28,7 @@ import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.ChunkedScrapeResponse.ChunkOneOfCase
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.PathMapSizeRequest
 import io.prometheus.grpc.ProxyServiceGrpcKt
@@ -200,17 +201,16 @@ internal class ProxyServiceImpl(
     val activeScrapeIds = mutableSetOf<Long>()
     runCatchingCancellable {
       requests.collect { response ->
-        val ooc = response.chunkOneOfCase
         val contextManager = proxy.agentContextManager
-        when (ooc.name.lowercase()) {
-          "header" -> {
+        when (response.chunkOneOfCase) {
+          ChunkOneOfCase.HEADER -> {
             val scrapeId = response.header.headerScrapeId
             logger.debug { "Reading header for scrapeId: $scrapeId" }
             contextManager.putChunkedContext(scrapeId, ChunkedContext(response))
             activeScrapeIds += scrapeId
           }
 
-          "chunk" -> {
+          ChunkOneOfCase.CHUNK -> {
             response.chunk
               .apply {
                 logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
@@ -229,7 +229,7 @@ internal class ProxyServiceImpl(
               }
           }
 
-          "summary" -> {
+          ChunkOneOfCase.SUMMARY -> {
             response.summary
               .apply {
                 val context = contextManager.removeChunkedContext(summaryScrapeId)
@@ -252,9 +252,8 @@ internal class ProxyServiceImpl(
               }
           }
 
-          else -> {
-            error("Invalid field name in writeChunkedResponsesToProxy()")
-          }
+          ChunkOneOfCase.CHUNKONEOF_NOT_SET, null ->
+            logger.warn { "Received chunked response with no field set, skipping" }
         }
       }
     }.onFailure { throwable ->

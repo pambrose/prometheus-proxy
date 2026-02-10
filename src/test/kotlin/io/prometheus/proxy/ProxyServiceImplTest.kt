@@ -802,6 +802,87 @@ class ProxyServiceImplTest {
       verify(exactly = 2) { scrapeRequestManager.assignScrapeResults(any()) }
     }
 
+  // M2: Previously, writeChunkedResponsesToProxy used string-based dispatch on
+  // ooc.name.lowercase() which would throw IllegalStateException on CHUNKONEOF_NOT_SET,
+  // crashing the entire chunked stream. Now it uses enum constants and handles NOT_SET gracefully.
+  @Test
+  fun `writeChunkedResponsesToProxy should skip message with no oneOf field set`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      val service = ProxyServiceImpl(proxy)
+
+      // A default ChunkedScrapeResponse has CHUNKONEOF_NOT_SET
+      val emptyResponse = chunkedScrapeResponse {}
+
+      val result = service.writeChunkedResponsesToProxy(flowOf(emptyResponse))
+
+      result shouldBe EMPTY_INSTANCE
+      // No chunked context should have been created
+      verify(exactly = 0) { contextManager.putChunkedContext(any(), any()) }
+    }
+
+  @Test
+  fun `writeChunkedResponsesToProxy should continue processing after NOT_SET message`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      val service = ProxyServiceImpl(proxy)
+
+      val scrapeId = 300L
+      val data = "test data".toByteArray()
+      val crc = CRC32()
+      crc.update(data)
+      val checksum = crc.value
+
+      val emptyResponse = chunkedScrapeResponse {}
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerScrapeId = scrapeId
+          headerValidResponse = true
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+      val chunk = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = scrapeId
+          chunkBytes = ByteString.copyFrom(data)
+          chunkByteCount = data.size
+          chunkCount = 1
+          chunkChecksum = checksum
+        }
+      }
+
+      crc.reset()
+      crc.update(data)
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = scrapeId
+          summaryChunkCount = 1
+          summaryByteCount = data.size
+          summaryChecksum = checksum
+        }
+      }
+
+      every { contextManager.putChunkedContext(scrapeId, any()) } returns Unit
+      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header)
+      every { contextManager.removeChunkedContext(scrapeId) } returns ChunkedContext(header).apply {
+        applyChunk(data, data.size, 1, checksum)
+      }
+      every { scrapeRequestManager.assignScrapeResults(any()) } returns Unit
+
+      // NOT_SET message first, then a valid header-chunk-summary sequence
+      val result = service.writeChunkedResponsesToProxy(flowOf(emptyResponse, header, chunk, summary))
+
+      result shouldBe EMPTY_INSTANCE
+      // The valid sequence should still be processed despite the NOT_SET message
+      verify(exactly = 1) { contextManager.putChunkedContext(scrapeId, any()) }
+      verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(any()) }
+    }
+
   // ==================== writeChunkedResponsesToProxy Error Handling Tests ====================
 
   @Test
