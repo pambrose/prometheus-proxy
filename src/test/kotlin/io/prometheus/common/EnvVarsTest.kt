@@ -129,6 +129,7 @@ class EnvVarsTest {
     EnvVars.KEEPALIVE_TIME_SECS.name shouldBe "KEEPALIVE_TIME_SECS"
     EnvVars.KEEPALIVE_TIMEOUT_SECS.name shouldBe "KEEPALIVE_TIMEOUT_SECS"
     EnvVars.KEEPALIVE_WITHOUT_CALLS.name shouldBe "KEEPALIVE_WITHOUT_CALLS"
+    EnvVars.UNARY_DEADLINE_SECS.name shouldBe "UNARY_DEADLINE_SECS"
   }
 
   @Test
@@ -198,8 +199,8 @@ class EnvVarsTest {
   }
 
   @Test
-  fun `EnvVars enum should have exactly 38 entries`() {
-    EnvVars.entries.size shouldBe 43
+  fun `EnvVars enum should have exactly 44 entries`() {
+    EnvVars.entries.size shouldBe 44
   }
 
   @Test
@@ -250,6 +251,7 @@ class EnvVarsTest {
       "OVERRIDE_AUTHORITY",
       "KEEPALIVE_TIME_SECS",
       "KEEPALIVE_TIMEOUT_SECS",
+      "UNARY_DEADLINE_SECS",
     )
   }
 
@@ -286,6 +288,7 @@ class EnvVarsTest {
       EnvVars.TRUST_ALL_X509_CERTIFICATES,
       EnvVars.MAX_CONCURRENT_CLIENTS,
       EnvVars.CLIENT_TIMEOUT_SECS,
+      EnvVars.UNARY_DEADLINE_SECS,
       EnvVars.AGENT_LOG_LEVEL,
     )
 

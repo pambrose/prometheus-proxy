@@ -61,6 +61,7 @@ class AgentGrpcServiceTest {
     every { mockOptions.keepAliveTimeSecs } returns -1L
     every { mockOptions.keepAliveTimeoutSecs } returns -1L
     every { mockOptions.keepAliveWithoutCalls } returns false
+    every { mockOptions.unaryDeadlineSecs } returns 30
     every { mockOptions.overrideAuthority } returns ""
 
     val mockAgent = mockk<Agent>(relaxed = true)

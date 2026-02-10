@@ -133,6 +133,21 @@ class AgentOptionsTest {
     options.keepAliveWithoutCalls.shouldBeTrue()
   }
 
+  @Test
+  fun `unaryDeadlineSecs should have positive default`() {
+    val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+    options.unaryDeadlineSecs shouldBeGreaterThan 0
+  }
+
+  @Test
+  fun `unaryDeadlineSecs should be settable via command line`() {
+    val options = AgentOptions(
+      listOf("--name", "test", "--proxy", "host", "--unary_deadline_secs", "60"),
+      false,
+    )
+    options.unaryDeadlineSecs shouldBe 60
+  }
+
   // ==================== Constructor Variants ====================
 
   @Test
