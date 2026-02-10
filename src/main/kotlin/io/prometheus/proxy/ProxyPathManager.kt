@@ -153,7 +153,7 @@ internal class ProxyPathManager(
           } else {
             val removed = v.agentContexts.removeIf { it.agentId == agentId }
             if (removed)
-              logger.info { "Removed path /$k for $agentContext" }
+              logger.info { "Removed agentId $agentId from consolidated path /$k" }
           }
         }
 
