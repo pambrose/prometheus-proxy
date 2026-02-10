@@ -32,7 +32,7 @@ internal class ProxyPathManager(
   data class AgentContextInfo(
     val isConsolidated: Boolean,
     val labels: String,
-    val agentContexts: MutableList<AgentContext>,
+    val agentContexts: List<AgentContext>,
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
   }
@@ -42,7 +42,7 @@ internal class ProxyPathManager(
   fun getAgentContextInfo(path: String): AgentContextInfo? =
     synchronized(pathMap) {
       pathMap[path]?.let { info ->
-        AgentContextInfo(info.isConsolidated, info.labels, info.agentContexts.toMutableList())
+        AgentContextInfo(info.isConsolidated, info.labels, info.agentContexts.toList())
       }
     }
 
@@ -69,7 +69,7 @@ internal class ProxyPathManager(
             logger.warn {
               "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.isConsolidated}"
             }
-          agentInfo.agentContexts += agentContext
+          (agentInfo.agentContexts as MutableList) += agentContext
         }
       } else {
         if (agentInfo != null) {
@@ -115,7 +115,7 @@ internal class ProxyPathManager(
       }
 
       if (agentInfo.isConsolidated && agentInfo.agentContexts.size > 1) {
-        agentInfo.agentContexts.remove(agentContext)
+        (agentInfo.agentContexts as MutableList).remove(agentContext)
         if (!isTestMode)
           logger.info { "Removed element of path /$path for $agentInfo" }
       } else {
@@ -151,7 +151,7 @@ internal class ProxyPathManager(
             if (v.agentContexts[0].agentId == agentId)
               keysToRemove += k
           } else {
-            val removed = v.agentContexts.removeIf { it.agentId == agentId }
+            val removed = (v.agentContexts as MutableList).removeIf { it.agentId == agentId }
             if (removed)
               logger.info { "Removed agentId $agentId from consolidated path /$k" }
           }
