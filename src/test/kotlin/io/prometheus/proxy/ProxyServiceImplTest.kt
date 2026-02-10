@@ -54,6 +54,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.util.zip.CRC32
 
+@Suppress("LargeClass")
 class ProxyServiceImplTest {
   private fun createMockProxy(
     transportFilterDisabled: Boolean = false,
@@ -721,7 +722,7 @@ class ProxyServiceImplTest {
       var callCount = 0
       every { scrapeRequestManager.assignScrapeResults(any()) } answers {
         callCount++
-        if (callCount == 1) throw RuntimeException("Simulated processing failure")
+        if (callCount == 1) error("Simulated processing failure")
       }
 
       val service = ProxyServiceImpl(proxy)
@@ -786,7 +787,7 @@ class ProxyServiceImplTest {
       // Flow emits a header then fails before sending a summary
       val failingFlow: Flow<ChunkedScrapeResponse> = flow {
         emit(header)
-        throw IllegalStateException("Simulated agent disconnect")
+        error("Simulated agent disconnect")
       }
 
       val service = ProxyServiceImpl(proxy)
@@ -835,7 +836,7 @@ class ProxyServiceImplTest {
       val failingFlow: Flow<ChunkedScrapeResponse> = flow {
         emit(header1)
         emit(header2)
-        throw IllegalStateException("Simulated agent disconnect")
+        error("Simulated agent disconnect")
       }
 
       val service = ProxyServiceImpl(proxy)
@@ -926,7 +927,7 @@ class ProxyServiceImplTest {
         emit(summary1)
         // Second transfer starts but fails before summary
         emit(header2)
-        throw IllegalStateException("Simulated agent disconnect")
+        error("Simulated agent disconnect")
       }
 
       val service = ProxyServiceImpl(proxy)

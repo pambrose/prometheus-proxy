@@ -163,6 +163,7 @@ internal class ProxyServiceImpl(
         }
     }
 
+  @Suppress("TooGenericExceptionCaught")
   override suspend fun writeResponsesToProxy(requests: Flow<ScrapeResponse>): Empty {
     runCatchingCancellable {
       requests.collect { response ->
