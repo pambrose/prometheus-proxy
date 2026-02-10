@@ -28,7 +28,6 @@ import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.exceptionDetails
-import io.prometheus.common.Utils.lambda
 import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.setLogLevel
 import io.prometheus.common.Utils.toJsonElement
@@ -131,26 +130,6 @@ class UtilsTest {
     shouldThrow<Exception> {
       "not valid json".toJsonElement()
     }
-  }
-
-  // ==================== lambda Tests ====================
-
-  @Test
-  fun `lambda should return the same block`() {
-    val block: () -> Int = { 42 }
-    val result = lambda(block)
-
-    result shouldBe block
-    result() shouldBe 42
-  }
-
-  @Test
-  fun `lambda should work with different types`() {
-    val stringBlock: () -> String = { "hello" }
-    val intBlock: () -> Int = { 123 }
-
-    lambda(stringBlock)() shouldBe "hello"
-    lambda(intBlock)() shouldBe 123
   }
 
   // ==================== setLogLevel Tests ====================

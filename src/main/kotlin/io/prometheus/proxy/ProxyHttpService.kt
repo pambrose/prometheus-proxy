@@ -29,7 +29,6 @@ import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.routing.routing
 import io.prometheus.Proxy
-import io.prometheus.common.Utils.lambda
 import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
 import io.prometheus.proxy.ProxyHttpRoutes.handleRequests
 import kotlin.time.Duration.Companion.seconds
@@ -45,8 +44,7 @@ internal class ProxyHttpService(
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
-  private fun getConfig(httpPort: Int): Configuration.() -> Unit =
-    lambda {
+  private fun getConfig(httpPort: Int): Configuration.() -> Unit = {
       connector {
         host = "0.0.0.0"
         port = httpPort
