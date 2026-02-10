@@ -399,7 +399,7 @@ class Proxy(
    */
   fun buildServiceDiscoveryJson(): JsonArray =
     buildJsonArray {
-      pathManager.allPaths.forEach { path ->
+      pathManager.allPathContextInfos().forEach { (path, agentContextInfo) ->
         addJsonObject {
           putJsonArray("targets") {
             add(JsonPrimitive(options.sdTargetPrefix))
@@ -407,22 +407,16 @@ class Proxy(
           putJsonObject("labels") {
             put("__metrics_path__", JsonPrimitive(path))
 
-            val agentContextInfo = pathManager.getAgentContextInfo(path)
+            val agentContexts = agentContextInfo.agentContexts
+            put("agentName", JsonPrimitive(agentContexts.joinToString { it.agentName }))
+            put("hostName", JsonPrimitive(agentContexts.joinToString { it.hostName }))
 
-            if (agentContextInfo != null) {
-              val agentContexts = agentContextInfo.agentContexts
-              put("agentName", JsonPrimitive(agentContexts.joinToString { it.agentName }))
-              put("hostName", JsonPrimitive(agentContexts.joinToString { it.hostName }))
-
-              val labels = agentContextInfo.labels
-              runCatching {
-                val json = labels.toJsonElement()
-                json.jsonObject.forEach { (k, v) -> put(k, v) }
-              }.onFailure { e ->
-                logger.warn { "Invalid JSON in labels value: $labels - ${e.simpleClassName}: ${e.message}" }
-              }
-            } else {
-              logger.warn { "No agent context info for path: $path" }
+            val labels = agentContextInfo.labels
+            runCatching {
+              val json = labels.toJsonElement()
+              json.jsonObject.forEach { (k, v) -> put(k, v) }
+            }.onFailure { e ->
+              logger.warn { "Invalid JSON in labels value: $labels - ${e.simpleClassName}: ${e.message}" }
             }
           }
         }

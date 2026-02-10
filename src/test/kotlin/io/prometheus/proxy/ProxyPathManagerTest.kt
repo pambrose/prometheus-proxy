@@ -32,6 +32,7 @@ import io.prometheus.Proxy
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 
 class ProxyPathManagerTest {
   private fun createMockProxy(): Proxy {
@@ -264,6 +265,47 @@ class ProxyPathManagerTest {
       paths shouldContain "/metrics1"
       paths shouldContain "/metrics2"
       paths shouldContain "/metrics3"
+    }
+
+  @Test
+  fun `allPathContextInfos should atomically snapshot paths and their info`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
+
+      manager.addPath("/metrics1", """{"job":"test1"}""", context1)
+      manager.addPath("/metrics2", """{"job":"test2"}""", context2)
+
+      val snapshot = manager.allPathContextInfos()
+
+      // Should contain all paths with their info
+      snapshot.mapShouldHaveSize(2)
+      snapshot.keys shouldContain "/metrics1"
+      snapshot.keys shouldContain "/metrics2"
+
+      // Info should match what was registered
+      val info1 = snapshot["/metrics1"]
+      info1.shouldNotBeNull()
+      info1.agentContexts.shouldHaveSize(1)
+      info1.agentContexts[0].agentId shouldBe context1.agentId
+
+      val info2 = snapshot["/metrics2"]
+      info2.shouldNotBeNull()
+      info2.agentContexts.shouldHaveSize(1)
+      info2.agentContexts[0].agentId shouldBe context2.agentId
+
+      // Removing a path after snapshot should not affect the snapshot
+      manager.removePath("/metrics1", context1.agentId)
+      snapshot.mapShouldHaveSize(2)
+      snapshot["/metrics1"].shouldNotBeNull()
+
+      // New snapshot should reflect the removal
+      val snapshot2 = manager.allPathContextInfos()
+      snapshot2.mapShouldHaveSize(1)
+      snapshot2["/metrics1"].shouldBeNull()
+      snapshot2["/metrics2"].shouldNotBeNull()
     }
 
   @Test

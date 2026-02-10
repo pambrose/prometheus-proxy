@@ -52,6 +52,13 @@ internal class ProxyPathManager(
   val allPaths: List<String>
     get() = synchronized(pathMap) { pathMap.keys.toList() }
 
+  fun allPathContextInfos(): Map<String, AgentContextInfo> =
+    synchronized(pathMap) {
+      pathMap.map { (k, v) ->
+        k to AgentContextInfo(v.isConsolidated, v.labels, v.agentContexts.toList())
+      }.toMap()
+    }
+
   fun addPath(
     path: String,
     labels: String,
