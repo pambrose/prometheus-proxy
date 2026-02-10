@@ -114,7 +114,7 @@ class ConfigWrappersTest {
 
     zipkinConfig.enabled.shouldBeFalse()
     zipkinConfig.hostname.shouldNotBeEmpty()
-    zipkinConfig.port shouldBe zipkinConfig.port // non-negative
+    zipkinConfig.port shouldBeGreaterThan 0
   }
 
   // ==================== Agent ZipkinConfig Tests ====================
