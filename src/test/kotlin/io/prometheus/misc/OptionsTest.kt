@@ -253,48 +253,58 @@ class OptionsTest {
     configVals.proxy.internal.zipkin.enabled.shouldBeTrue()
   }
 
-  // ==================== Dynamic Parameter Tests (Bug #3) ====================
+  // ==================== Dynamic Parameter Tests ====================
 
+  // M5: Dynamic params no longer call System.setProperty() — they only apply to
+  // the Config object via ConfigFactory.parseString(). This avoids leaking global
+  // JVM state that was never cleaned up.
   @Test
-  fun `dynamic param should set system property to value only, not key=value`() {
+  fun `dynamic param should not set system property`() {
     val propKey = "proxy.http.port"
-    val propValue = "6161"
+    val original = System.getProperty(propKey)
     try {
-      readProxyOptions(listOf("-D$propKey=$propValue"))
+      readProxyOptions(listOf("-D$propKey=6161"))
 
-      // Before the fix, System.getProperty returned "proxy.http.port=6161" instead of "6161"
-      System.getProperty(propKey) shouldBe propValue
+      // System property should NOT have been set
+      System.getProperty(propKey) shouldBe original
     } finally {
-      System.clearProperty(propKey)
+      // Defensive cleanup in case the test fails and property was set
+      if (original == null) System.clearProperty(propKey) else System.setProperty(propKey, original)
     }
   }
 
   @Test
-  fun `dynamic param with quoted value should set system property correctly`() {
-    val propKey = "proxy.http.port"
-    val propValue = "\"7272\""
-    try {
-      readProxyOptions(listOf("-D$propKey=$propValue"))
+  fun `dynamic param with quoted value should apply to config correctly`() {
+    val configVals = readProxyOptions(listOf("-Dproxy.http.port=\"7272\""))
 
-      // Quotes are stripped, so the system property should be the bare value
-      System.getProperty(propKey) shouldBe "7272"
-    } finally {
-      System.clearProperty(propKey)
-    }
+    // Quotes are stripped and config reflects the bare value
+    configVals.proxy.http.port shouldBe 7272
   }
 
   @Test
-  fun `dynamic param should still apply to config correctly`() {
-    val propKey = "proxy.http.port"
-    try {
-      val configVals = readProxyOptions(listOf("-D$propKey=8282"))
+  fun `dynamic param should apply to config correctly`() {
+    val configVals = readProxyOptions(listOf("-Dproxy.http.port=8282"))
 
-      // Config should reflect the value
-      configVals.proxy.http.port shouldBe 8282
-      // System property should be the bare value
-      System.getProperty(propKey) shouldBe "8282"
+    // Config should reflect the value
+    configVals.proxy.http.port shouldBe 8282
+  }
+
+  @Test
+  fun `multiple dynamic params should not leak any system properties`() {
+    val keys = listOf("proxy.http.port", "proxy.internal.zipkin.enabled")
+    val originals = keys.associateWith { System.getProperty(it) }
+    try {
+      readProxyOptions(listOf("-Dproxy.http.port=5555", "-Dproxy.internal.zipkin.enabled=true"))
+
+      // No system properties should have been set
+      keys.forEach { key ->
+        System.getProperty(key) shouldBe originals[key]
+      }
     } finally {
-      System.clearProperty(propKey)
+      keys.forEach { key ->
+        val orig = originals[key]
+        if (orig == null) System.clearProperty(key) else System.setProperty(key, orig)
+      }
     }
   }
 
@@ -348,28 +358,18 @@ class OptionsTest {
 
   @Test
   fun `dynamic param should override config file value`() {
-    val propKey = "proxy.http.port"
-    try {
-      val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG, "-D$propKey=4444"))
-      // Dynamic param (4444) should override junit-test.conf (8181)
-      configVals.proxy.http.port shouldBe 4444
-    } finally {
-      System.clearProperty(propKey)
-    }
+    val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG, "-Dproxy.http.port=4444"))
+    // Dynamic param (4444) should override junit-test.conf (8181)
+    configVals.proxy.http.port shouldBe 4444
   }
 
   @Test
   fun `multiple dynamic params should all be applied`() {
-    val portKey = "proxy.http.port"
-    val zipkinKey = "proxy.internal.zipkin.enabled"
-    try {
-      val configVals = readProxyOptions(listOf("-D$portKey=3333", "-D$zipkinKey=true"))
-      configVals.proxy.http.port shouldBe 3333
-      configVals.proxy.internal.zipkin.enabled.shouldBeTrue()
-    } finally {
-      System.clearProperty(portKey)
-      System.clearProperty(zipkinKey)
-    }
+    val configVals = readProxyOptions(
+      listOf("-Dproxy.http.port=3333", "-Dproxy.internal.zipkin.enabled=true"),
+    )
+    configVals.proxy.http.port shouldBe 3333
+    configVals.proxy.internal.zipkin.enabled.shouldBeTrue()
   }
 
   // ==================== Proxy Request Logging and Path Config Labels ====================

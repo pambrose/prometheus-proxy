@@ -242,7 +242,6 @@ abstract class BaseOptions protected constructor(
         // Strip quotes
         val qval = v.removeSurrounding("\"")
         val prop = "$k=$qval"
-        System.setProperty(k, qval)
         val newConfig = ConfigFactory.parseString(prop, PROPS)
         config = newConfig.withFallback(config).resolve()
       }
