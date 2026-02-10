@@ -40,7 +40,7 @@ internal class AgentClientInterceptor(
     next: Channel,
   ): ClientCall<ReqT, RespT> =
     object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-      agent.grpcService.channel.newCall(method, callOptions),
+      next.newCall(method, callOptions),
     ) {
       override fun start(
         responseListener: Listener<RespT>,

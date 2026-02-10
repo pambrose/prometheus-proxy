@@ -44,7 +44,7 @@ class AgentClientInterceptorTest {
   }
 
   @Test
-  fun `interceptCall should access grpcService channel`() {
+  fun `interceptCall should use next channel parameter`() {
     val mockAgent = createMockAgent()
     val interceptor = AgentClientInterceptor(mockAgent)
 
@@ -53,8 +53,9 @@ class AgentClientInterceptorTest {
 
     interceptor.interceptCall(mockMethod, CallOptions.DEFAULT, mockChannel)
 
-    // The interceptor should access the agent's grpc service channel
-    verify { mockAgent.grpcService }
+    // The interceptor should delegate to the next channel, not agent.grpcService.channel
+    verify { mockChannel.newCall(mockMethod, CallOptions.DEFAULT) }
+    verify(exactly = 0) { mockAgent.grpcService }
   }
 
   @Test
@@ -89,14 +90,9 @@ class AgentClientInterceptorTest {
   // ==================== onHeaders Tests ====================
 
   @Test
-  fun `interceptCall with empty agentId should use agent grpcService channel`() {
-    val mockChannel = mockk<ManagedChannel>(relaxed = true)
-    val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
-    every { mockGrpcService.channel } returns mockChannel
-
+  fun `interceptCall with empty agentId should use next channel parameter`() {
     val mockAgent = mockk<Agent>(relaxed = true)
     every { mockAgent.agentId } returns ""
-    every { mockAgent.grpcService } returns mockGrpcService
 
     val interceptor = AgentClientInterceptor(mockAgent)
     val mockMethod = mockk<MethodDescriptor<Any, Any>>(relaxed = true)
@@ -105,20 +101,15 @@ class AgentClientInterceptorTest {
     val call = interceptor.interceptCall(mockMethod, CallOptions.DEFAULT, mockNextChannel)
 
     call.shouldNotBeNull()
-    // The interceptor should use agent.grpcService.channel, not the 'next' channel parameter
-    val grpcService = mockAgent.grpcService
-    verify { grpcService.channel }
+    // The interceptor should delegate to the next channel in the chain
+    verify { mockNextChannel.newCall(mockMethod, CallOptions.DEFAULT) }
+    verify(exactly = 0) { mockAgent.grpcService }
   }
 
   @Test
   fun `onHeaders should not overwrite agentId when already set`() {
-    val mockChannel = mockk<ManagedChannel>(relaxed = true)
-    val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
-    every { mockGrpcService.channel } returns mockChannel
-
     val mockAgent = mockk<Agent>(relaxed = true)
     every { mockAgent.agentId } returns "existing-id"
-    every { mockAgent.grpcService } returns mockGrpcService
 
     val interceptor = AgentClientInterceptor(mockAgent)
     val mockMethod = mockk<MethodDescriptor<Any, Any>>(relaxed = true)
@@ -136,13 +127,8 @@ class AgentClientInterceptorTest {
 
   @Test
   fun `onHeaders should handle missing agent ID key in headers`() {
-    val mockChannel = mockk<ManagedChannel>(relaxed = true)
-    val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
-    every { mockGrpcService.channel } returns mockChannel
-
     val mockAgent = mockk<Agent>(relaxed = true)
     every { mockAgent.agentId } returns ""
-    every { mockAgent.grpcService } returns mockGrpcService
 
     val interceptor = AgentClientInterceptor(mockAgent)
     val mockMethod = mockk<MethodDescriptor<Any, Any>>(relaxed = true)
