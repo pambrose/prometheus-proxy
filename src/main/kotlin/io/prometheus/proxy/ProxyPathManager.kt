@@ -69,8 +69,7 @@ internal class ProxyPathManager(
             logger.warn {
               "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.isConsolidated}"
             }
-          else
-            agentInfo.agentContexts += agentContext
+          agentInfo.agentContexts += agentContext
         }
       } else {
         if (agentInfo != null) {
