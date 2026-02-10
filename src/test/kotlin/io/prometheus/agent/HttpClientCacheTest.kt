@@ -26,6 +26,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.mockk.coEvery
 import io.mockk.mockk
+import io.mockk.verify
 import io.prometheus.agent.HttpClientCache.CacheEntry
 import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.agent.HttpClientCache.ClientKey.Companion.NO_AUTH
@@ -552,6 +553,94 @@ class HttpClientCacheTest {
       } finally {
         slowCache.close()
       }
+    }
+
+  // M7: close() now marks in-use entries for close instead of forcibly closing them.
+  // The client is closed when the last user calls onFinishedWithClient().
+  @Test
+  fun `close should not close in-use clients immediately`(): Unit =
+    runBlocking {
+      val testCache = HttpClientCache(
+        maxCacheSize = 10,
+        maxAge = 30.seconds,
+        maxIdleTime = 30.seconds,
+        cleanupInterval = 30.seconds,
+      )
+
+      val mockClient = mockk<HttpClient>(relaxed = true)
+      val key = ClientKey("user1", "pass1")
+
+      // Get entry (marks it in-use)
+      val entry = testCache.getOrCreateClient(key) { mockClient }
+
+      // close() should NOT close the in-use client
+      testCache.close()
+
+      verify(exactly = 0) { mockClient.close() }
+
+      // When the user finishes, the client should be closed
+      testCache.onFinishedWithClient(entry)
+
+      verify(exactly = 1) { mockClient.close() }
+    }
+
+  @Test
+  fun `close should immediately close clients that are not in use`(): Unit =
+    runBlocking {
+      val testCache = HttpClientCache(
+        maxCacheSize = 10,
+        maxAge = 30.seconds,
+        maxIdleTime = 30.seconds,
+        cleanupInterval = 30.seconds,
+      )
+
+      val mockClient = mockk<HttpClient>(relaxed = true)
+      val key = ClientKey("user1", "pass1")
+
+      // Get entry and release it (not in use)
+      val entry = testCache.getOrCreateClient(key) { mockClient }
+      testCache.onFinishedWithClient(entry)
+
+      verify(exactly = 0) { mockClient.close() }
+
+      // close() should close the idle client immediately
+      testCache.close()
+
+      verify(exactly = 1) { mockClient.close() }
+    }
+
+  @Test
+  fun `close should handle mix of in-use and idle clients`(): Unit =
+    runBlocking {
+      val testCache = HttpClientCache(
+        maxCacheSize = 10,
+        maxAge = 30.seconds,
+        maxIdleTime = 30.seconds,
+        cleanupInterval = 30.seconds,
+      )
+
+      val idleClient = mockk<HttpClient>(relaxed = true)
+      val inUseClient = mockk<HttpClient>(relaxed = true)
+
+      // Create an idle entry
+      val idleKey = ClientKey("idle", "client")
+      val idleEntry = testCache.getOrCreateClient(idleKey) { idleClient }
+      testCache.onFinishedWithClient(idleEntry)
+
+      // Create an in-use entry
+      val inUseKey = ClientKey("inuse", "client")
+      val inUseEntry = testCache.getOrCreateClient(inUseKey) { inUseClient }
+
+      // close() should close idle client but not in-use client
+      testCache.close()
+
+      verify(exactly = 1) { idleClient.close() }
+      verify(exactly = 0) { inUseClient.close() }
+
+      // When the in-use client is released, it should be closed
+      testCache.onFinishedWithClient(inUseEntry)
+
+      verify(exactly = 1) { inUseClient.close() }
     }
 
   @Test

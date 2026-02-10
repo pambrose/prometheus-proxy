@@ -74,7 +74,7 @@ internal class HttpClientCache(
 
     private fun markNotInUse() = inUseCount.decrementAndFetch()
 
-    private fun isInUse() = inUseCount.load() > 0
+    fun isInUse() = inUseCount.load() > 0
 
     private fun isNotInUse() = !isInUse()
 
@@ -227,11 +227,22 @@ internal class HttpClientCache(
     // The old code called scope.cancel() inside accessMutex.withLock, which could deadlock
     // if the cleanup coroutine held the mutex when close() tried to acquire it via runBlocking.
     scope.cancel()
+
+    val clientsToClose = mutableListOf<HttpClient>()
     accessMutex.withLock {
-      cache.values.forEach { it.client.close() }
+      cache.values.forEach { entry ->
+        entry.markForClose()
+        if (!entry.isInUse()) {
+          // Entry is not in use — safe to close immediately
+          clientsToClose += entry.client
+        }
+        // In-use entries will be closed when the last user calls onFinishedWithClient()
+      }
       cache.clear()
       accessOrder.clear()
     }
+    // Close clients outside the lock to avoid blocking
+    clientsToClose.forEach { it.close() }
   }
 
   suspend fun getCacheStats(): CacheStats =
