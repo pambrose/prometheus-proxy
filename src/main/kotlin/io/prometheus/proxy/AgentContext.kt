@@ -94,6 +94,13 @@ internal class AgentContext(
   fun invalidate() {
     valid = false
     scrapeRequestChannel.close()
+    // Drain any buffered scrape requests and close their completion channels
+    // so HTTP handlers waiting on awaitCompleted() are notified immediately
+    // instead of waiting for the full scrape timeout to expire.
+    while (true) {
+      val wrapper = scrapeRequestChannel.tryReceive().getOrNull() ?: break
+      wrapper.closeChannel()
+    }
   }
 
   fun markActivityTime(isRequest: Boolean) {
