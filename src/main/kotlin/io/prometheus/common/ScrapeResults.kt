@@ -33,30 +33,20 @@ import io.prometheus.grpc.scrapeResponse
 import kotlinx.coroutines.TimeoutCancellationException
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
-import kotlin.concurrent.atomics.AtomicReference
 
 internal class ScrapeResults(
   val srAgentId: String,
   val srScrapeId: Long,
-  var srValidResponse: Boolean = false,
-  var srStatusCode: Int = ServiceUnavailable.value,
-  var srContentType: String = "",
-  var srZipped: Boolean = false,
-  var srContentAsText: String = "",
-  var srContentAsZipped: ByteArray = EMPTY_BYTE_ARRAY,
-  var srFailureReason: String = "",
-  var srUrl: String = "",
+  val srValidResponse: Boolean = false,
+  val srStatusCode: Int = ServiceUnavailable.value,
+  val srContentType: String = "",
+  val srZipped: Boolean = false,
+  val srContentAsText: String = "",
+  val srContentAsZipped: ByteArray = EMPTY_BYTE_ARRAY,
+  val srFailureReason: String = "",
+  val srUrl: String = "",
+  val scrapeCounterMsg: String = "",
 ) {
-  val scrapeCounterMsg = AtomicReference("")
-
-  fun setDebugInfo(
-    url: String,
-    failureReason: String = "",
-  ) {
-    srUrl = url
-    srFailureReason = failureReason
-  }
-
   fun toScrapeResponse() =
     scrapeResponse {
       agentId = srAgentId
@@ -97,14 +87,11 @@ internal class ScrapeResults(
         srStatusCode = statusCode,
         srContentType = contentType,
         srZipped = zipped,
+        srContentAsText = if (!zipped) contentAsText else "",
+        srContentAsZipped = if (zipped) contentAsZipped.toByteArray() else EMPTY_BYTE_ARRAY,
         srFailureReason = failureReason,
         srUrl = url,
-      ).also { results ->
-        if (zipped)
-          results.srContentAsZipped = contentAsZipped.toByteArray()
-        else
-          results.srContentAsText = contentAsText
-      }
+      )
 
     fun errorCode(
       e: Throwable,

@@ -28,25 +28,12 @@ internal class ChunkedContext(
 ) {
   private val checksum = CRC32()
   private val baos = ByteArrayOutputStream()
+  private val header = response.header
 
   var totalChunkCount = 0
     private set
   var totalByteCount = 0
     private set
-
-  val scrapeResults =
-    response.header.run {
-      ScrapeResults(
-        srValidResponse = headerValidResponse,
-        srScrapeId = headerScrapeId,
-        srAgentId = headerAgentId,
-        srStatusCode = headerStatusCode,
-        srZipped = true,
-        srFailureReason = headerFailureReason,
-        srUrl = headerUrl,
-        srContentType = headerContentType,
-      )
-    }
 
   fun applyChunk(
     data: ByteArray,
@@ -67,12 +54,24 @@ internal class ChunkedContext(
     summaryChunkCount: Int,
     summaryByteCount: Int,
     summaryChecksum: Long,
-  ) {
+  ): ScrapeResults {
     check(totalChunkCount == summaryChunkCount)
     check(totalByteCount == summaryByteCount)
     check(checksum.value == summaryChecksum)
 
     baos.flush()
-    scrapeResults.srContentAsZipped = baos.toByteArray()
+    return header.run {
+      ScrapeResults(
+        srValidResponse = headerValidResponse,
+        srScrapeId = headerScrapeId,
+        srAgentId = headerAgentId,
+        srStatusCode = headerStatusCode,
+        srZipped = true,
+        srContentAsZipped = baos.toByteArray(),
+        srFailureReason = headerFailureReason,
+        srUrl = headerUrl,
+        srContentType = headerContentType,
+      )
+    }
   }
 }

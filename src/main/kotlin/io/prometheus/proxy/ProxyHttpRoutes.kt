@@ -173,12 +173,13 @@ object ProxyHttpRoutes {
     response: ScrapeRequestResponse,
     proxy: Proxy,
   ) {
-    val status = buildString {
-      append("/$path - ${response.updateMsg} - ${response.statusCode}")
-      if (!response.statusCode.isSuccess())
-        append(" reason: [${response.failureReason}]")
-      append(" time: ${response.fetchDuration} url: ${response.url}")
-    }
+    val status =
+      buildString {
+        append("/$path - ${response.updateMsg} - ${response.statusCode}")
+        if (!response.statusCode.isSuccess())
+          append(" reason: [${response.failureReason}]")
+        append(" time: ${response.fetchDuration} url: ${response.url}")
+      }
     proxy.logActivity(status)
   }
 

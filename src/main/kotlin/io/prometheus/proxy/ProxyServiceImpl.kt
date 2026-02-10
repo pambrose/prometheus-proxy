@@ -215,8 +215,8 @@ internal class ProxyServiceImpl(
                   val bcnt = context.totalByteCount
                   "Reading summary chunkCount: $ccnt byteCount: $bcnt for scrapeId: $summaryScrapeId"
                 }
-                context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
-                proxy.scrapeRequestManager.assignScrapeResults(context.scrapeResults)
+                val scrapeResults = context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
+                proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
               }
           }
 
