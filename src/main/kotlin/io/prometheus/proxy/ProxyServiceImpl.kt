@@ -252,8 +252,9 @@ internal class ProxyServiceImpl(
               }
           }
 
-          ChunkOneOfCase.CHUNKONEOF_NOT_SET, null ->
+          ChunkOneOfCase.CHUNKONEOF_NOT_SET, null -> {
             logger.warn { "Received chunked response with no field set, skipping" }
+          }
         }
       }
     }.onFailure { throwable ->
