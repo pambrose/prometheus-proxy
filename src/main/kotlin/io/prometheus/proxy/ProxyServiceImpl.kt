@@ -181,6 +181,7 @@ internal class ProxyServiceImpl(
   }
 
   override suspend fun writeChunkedResponsesToProxy(requests: Flow<ChunkedScrapeResponse>): Empty {
+    val activeScrapeIds = mutableSetOf<Long>()
     runCatchingCancellable {
       requests.collect { response ->
         val ooc = response.chunkOneOfCase
@@ -190,6 +191,7 @@ internal class ProxyServiceImpl(
             val scrapeId = response.header.headerScrapeId
             logger.debug { "Reading header for scrapeId: $scrapeId" }
             contextManager.putChunkedContext(scrapeId, ChunkedContext(response))
+            activeScrapeIds += scrapeId
           }
 
           "chunk" -> {
@@ -205,6 +207,7 @@ internal class ProxyServiceImpl(
                   } catch (e: ChunkValidationException) {
                     logger.error(e) { "Chunk validation failed for scrapeId: $chunkScrapeId, discarding context" }
                     contextManager.removeChunkedContext(chunkScrapeId)
+                    activeScrapeIds -= chunkScrapeId
                   }
                 }
               }
@@ -214,6 +217,7 @@ internal class ProxyServiceImpl(
             response.summary
               .apply {
                 val context = contextManager.removeChunkedContext(summaryScrapeId)
+                activeScrapeIds -= summaryScrapeId
                 if (context == null) {
                   logger.warn { "Missing chunked context for summary with scrapeId: $summaryScrapeId, skipping" }
                 } else {
@@ -245,6 +249,17 @@ internal class ProxyServiceImpl(
               logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
           }
     }
+
+    // Clean up any in-progress chunked contexts that were not completed with a summary
+    // (e.g., due to stream cancellation or agent disconnect mid-transfer)
+    if (activeScrapeIds.isNotEmpty()) {
+      val contextManager = proxy.agentContextManager
+      activeScrapeIds.forEach { scrapeId ->
+        contextManager.removeChunkedContext(scrapeId)
+          ?.also { logger.warn { "Cleaned up orphaned ChunkedContext for scrapeId: $scrapeId" } }
+      }
+    }
+
     return EMPTY_INSTANCE
   }
 

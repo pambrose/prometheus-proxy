@@ -729,6 +729,184 @@ class ProxyServiceImplTest {
     }
 
   @Test
+  fun `writeChunkedResponsesToProxy should clean up orphaned contexts on stream failure`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(isRunning = true)
+      val contextManager = proxy.agentContextManager
+      val scrapeId = 400L
+
+      val chunkedContext = mockk<ChunkedContext>(relaxed = true)
+      every { contextManager.removeChunkedContext(scrapeId) } returns chunkedContext
+
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrapeId
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+          headerUrl = "http://test/metrics"
+        }
+      }
+
+      // Flow emits a header then fails before sending a summary
+      val failingFlow: Flow<ChunkedScrapeResponse> = flow {
+        emit(header)
+        throw IllegalStateException("Simulated agent disconnect")
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(failingFlow)
+
+      result shouldBe EMPTY_INSTANCE
+
+      // Verify the header was stored
+      verify { contextManager.putChunkedContext(scrapeId, any()) }
+      // Verify the orphaned context was cleaned up
+      verify { contextManager.removeChunkedContext(scrapeId) }
+    }
+
+  @Test
+  fun `writeChunkedResponsesToProxy should clean up multiple orphaned contexts on stream failure`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(isRunning = true)
+      val contextManager = proxy.agentContextManager
+      val scrapeId1 = 401L
+      val scrapeId2 = 402L
+
+      every { contextManager.removeChunkedContext(scrapeId1) } returns mockk(relaxed = true)
+      every { contextManager.removeChunkedContext(scrapeId2) } returns mockk(relaxed = true)
+
+      val header1 = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrapeId1
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+          headerUrl = "http://test/metrics1"
+        }
+      }
+      val header2 = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrapeId2
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+          headerUrl = "http://test/metrics2"
+        }
+      }
+
+      val failingFlow: Flow<ChunkedScrapeResponse> = flow {
+        emit(header1)
+        emit(header2)
+        throw IllegalStateException("Simulated agent disconnect")
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(failingFlow)
+
+      result shouldBe EMPTY_INSTANCE
+
+      verify { contextManager.putChunkedContext(scrapeId1, any()) }
+      verify { contextManager.putChunkedContext(scrapeId2, any()) }
+      // Both orphaned contexts should be cleaned up
+      verify { contextManager.removeChunkedContext(scrapeId1) }
+      verify { contextManager.removeChunkedContext(scrapeId2) }
+    }
+
+  @Test
+  fun `writeChunkedResponsesToProxy should not clean up completed contexts on stream failure`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy(isRunning = true)
+      val contextManager = proxy.agentContextManager
+      val completedScrapeId = 403L
+      val orphanedScrapeId = 404L
+
+      val data = "test data".toByteArray()
+      val crc = CRC32()
+      crc.update(data)
+
+      // Set up the completed context's chunked context for the summary removal
+      val completedChunkedContext = ChunkedContext(
+        chunkedScrapeResponse {
+          header = headerData {
+            headerValidResponse = true
+            headerScrapeId = completedScrapeId
+            headerAgentId = "agent-1"
+            headerStatusCode = 200
+            headerContentType = "text/plain"
+            headerUrl = "http://test/metrics"
+          }
+        },
+      )
+      completedChunkedContext.applyChunk(data, data.size, 1, crc.value)
+
+      // Return the real chunked context when summary removes it
+      every { contextManager.removeChunkedContext(completedScrapeId) } returns completedChunkedContext
+      every { contextManager.removeChunkedContext(orphanedScrapeId) } returns mockk(relaxed = true)
+
+      val header1 = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = completedScrapeId
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+          headerUrl = "http://test/metrics"
+        }
+      }
+      val chunk1 = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = completedScrapeId
+          chunkCount = 1
+          chunkByteCount = data.size
+          chunkChecksum = crc.value
+          chunkBytes = ByteString.copyFrom(data)
+        }
+      }
+      val summary1 = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = completedScrapeId
+          summaryChunkCount = 1
+          summaryByteCount = data.size
+          summaryChecksum = crc.value
+        }
+      }
+      val header2 = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = orphanedScrapeId
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+          headerUrl = "http://test/metrics2"
+        }
+      }
+
+      val failingFlow: Flow<ChunkedScrapeResponse> = flow {
+        // First transfer completes normally
+        emit(header1)
+        emit(chunk1)
+        emit(summary1)
+        // Second transfer starts but fails before summary
+        emit(header2)
+        throw IllegalStateException("Simulated agent disconnect")
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(failingFlow)
+
+      result shouldBe EMPTY_INSTANCE
+
+      // Completed context was removed by summary processing
+      verify(exactly = 1) { contextManager.removeChunkedContext(completedScrapeId) }
+      // Orphaned context should be cleaned up during cleanup phase
+      verify { contextManager.removeChunkedContext(orphanedScrapeId) }
+    }
+
+  @Test
   fun `writeResponsesToProxy should call assignScrapeResults for each response`(): Unit =
     runBlocking {
       val proxy = createMockProxy()
