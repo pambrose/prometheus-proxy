@@ -30,8 +30,7 @@ slf4j = "2.0.17"
 # Keep in sync with grpc
 tcnative = "2.0.74.Final"
 typesafe = "1.4.5"
-# Use commit hash for 2.5.2 here because jitpack is screwed up.
-utils = "46ef36794a"
+utils = "2.5.3"
 zipkin = "6.3.0"
 
 [libraries]
