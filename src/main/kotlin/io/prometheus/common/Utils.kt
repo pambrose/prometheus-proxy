@@ -79,6 +79,17 @@ object Utils {
     val port: Int,
   )
 
+  private fun parsePort(
+    portStr: String,
+    hostPort: String,
+  ): Int {
+    val port =
+      portStr.toIntOrNull()
+        ?: throw IllegalArgumentException("Invalid port in '$hostPort': '$portStr' is not a valid integer")
+    require(port in 0..65535) { "Port out of range in '$hostPort': $port (must be 0-65535)" }
+    return port
+  }
+
   fun parseHostPort(
     hostPort: String,
     defaultPort: Int,
@@ -95,7 +106,7 @@ object Utils {
           closeBracket + 1 < hostPort.length && hostPort[closeBracket + 1] == ':' -> {
             HostPort(
               hostPort.substring(0, closeBracket + 1),
-              hostPort.substring(closeBracket + 2).toInt(),
+              parsePort(hostPort.substring(closeBracket + 2), hostPort),
             )
           }
 
@@ -118,7 +129,7 @@ object Utils {
       // Single colon: host:port
       else -> {
         val colonIndex = hostPort.indexOf(':')
-        HostPort(hostPort.substring(0, colonIndex), hostPort.substring(colonIndex + 1).toInt())
+        HostPort(hostPort.substring(0, colonIndex), parsePort(hostPort.substring(colonIndex + 1), hostPort))
       }
     }
 }

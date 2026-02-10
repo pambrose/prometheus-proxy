@@ -262,11 +262,47 @@ class UtilsTest {
     result shouldBe HostPort("[2001:db8::1]", 8443)
   }
 
+  // M4: parseHostPort now validates port values with descriptive error messages
+  // instead of throwing raw NumberFormatException.
   @Test
-  fun `parseHostPort should throw for non-numeric port`() {
-    shouldThrow<NumberFormatException> {
+  fun `parseHostPort should throw IllegalArgumentException for non-numeric port`() {
+    val exception = shouldThrow<IllegalArgumentException> {
       parseHostPort("host:abc", 50051)
     }
+    exception.message shouldContain "host:abc"
+    exception.message shouldContain "abc"
+  }
+
+  @Test
+  fun `parseHostPort should throw IllegalArgumentException for port above 65535`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      parseHostPort("host:99999", 50051)
+    }
+    exception.message shouldContain "host:99999"
+  }
+
+  @Test
+  fun `parseHostPort should throw IllegalArgumentException for negative port`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      parseHostPort("host:-1", 50051)
+    }
+    exception.message shouldContain "host:-1"
+  }
+
+  @Test
+  fun `parseHostPort should throw IllegalArgumentException for non-numeric port in bracketed IPv6`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      parseHostPort("[::1]:abc", 50051)
+    }
+    exception.message shouldContain "abc"
+  }
+
+  @Test
+  fun `parseHostPort should throw IllegalArgumentException for out-of-range port in bracketed IPv6`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      parseHostPort("[::1]:70000", 50051)
+    }
+    exception.message shouldContain "70000"
   }
 
   @Test
