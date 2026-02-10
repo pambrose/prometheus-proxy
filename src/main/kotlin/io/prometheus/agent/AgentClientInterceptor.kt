@@ -27,6 +27,8 @@ import io.grpc.ForwardingClientCall
 import io.grpc.ForwardingClientCallListener
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor
+import io.grpc.Status
+import io.grpc.StatusRuntimeException
 import io.prometheus.Agent
 import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
@@ -57,7 +59,9 @@ internal class AgentClientInterceptor(
                       agent.agentId = agentId
                       check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
                       logger.info { "Assigned agentId: $agentId to $agent" }
-                    } ?: error("Headers missing AGENT_ID key")
+                    } ?: throw StatusRuntimeException(
+                    Status.INTERNAL.withDescription("Headers missing AGENT_ID key"),
+                  )
                 }
               }
 
