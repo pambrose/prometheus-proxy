@@ -24,6 +24,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
+import io.prometheus.common.GrpcConstants.AGENT_ID
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 
 internal class ProxyServerTransportFilter(
@@ -53,7 +54,6 @@ internal class ProxyServerTransportFilter(
 
   companion object {
     private val logger = logger {}
-    internal const val AGENT_ID = "agent-id"
     private const val REMOTE_ADDR = "remote-addr"
     internal val AGENT_ID_KEY: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
     private val REMOTE_ADDR_KEY: Attributes.Key<String> = Attributes.Key.create(REMOTE_ADDR)

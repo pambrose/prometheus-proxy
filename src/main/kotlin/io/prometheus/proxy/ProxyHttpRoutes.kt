@@ -282,19 +282,19 @@ object ProxyHttpRoutes {
     )
 }
 
-class ScrapeRequestResponse(
+data class ScrapeRequestResponse(
   val statusCode: HttpStatusCode,
   val updateMsg: String,
-  var contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
-  var contentText: String = "",
+  val contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
+  val contentText: String = "",
   val failureReason: String = "",
   val url: String = "",
   val fetchDuration: Duration,
 )
 
-class ResponseResults(
-  var statusCode: HttpStatusCode = HttpStatusCode.OK,
-  var contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
-  var contentText: String = "",
-  var updateMsg: String = "",
+data class ResponseResults(
+  val statusCode: HttpStatusCode = HttpStatusCode.OK,
+  val contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
+  val contentText: String = "",
+  val updateMsg: String = "",
 )

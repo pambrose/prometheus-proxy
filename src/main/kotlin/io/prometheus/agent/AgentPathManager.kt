@@ -19,11 +19,11 @@
 package io.prometheus.agent
 
 import com.github.pambrose.common.util.isNotNull
-import java.util.concurrent.ConcurrentHashMap
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
+import java.util.concurrent.ConcurrentHashMap
 
 internal class AgentPathManager(
   private val agent: Agent,
@@ -70,7 +70,7 @@ internal class AgentPathManager(
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
     require(url.isNotEmpty()) { "Empty URL" }
 
-    val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
+    val path = pathVal.removePrefix("/")
     val labelsJson = labels.defaultEmptyJsonObject()
     val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
     if (!agent.isTestMode)
@@ -81,7 +81,7 @@ internal class AgentPathManager(
   suspend fun unregisterPath(pathVal: String) {
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
 
-    val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
+    val path = pathVal.removePrefix("/")
     agent.grpcService.unregisterPathOnProxy(path)
     val pathContext = pathContextMap.remove(path)
     if (pathContext == null) {
