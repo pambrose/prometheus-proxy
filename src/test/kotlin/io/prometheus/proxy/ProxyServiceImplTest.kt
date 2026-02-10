@@ -698,6 +698,40 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
+  @Test
+  fun `writeResponsesToProxy should continue processing after single message failure`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val scrapeRequestManager = proxy.scrapeRequestManager
+
+      val goodResponse1 = scrapeResponse {
+        agentId = "agent-1"
+        scrapeId = 601L
+        validResponse = true
+        statusCode = 200
+      }
+      val goodResponse2 = scrapeResponse {
+        agentId = "agent-1"
+        scrapeId = 602L
+        validResponse = true
+        statusCode = 200
+      }
+
+      // Make assignScrapeResults throw on the first call, succeed on the second
+      var callCount = 0
+      every { scrapeRequestManager.assignScrapeResults(any()) } answers {
+        callCount++
+        if (callCount == 1) throw RuntimeException("Simulated processing failure")
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeResponsesToProxy(flowOf(goodResponse1, goodResponse2))
+
+      result shouldBe EMPTY_INSTANCE
+      // Both messages should have been attempted (stream not killed by first failure)
+      verify(exactly = 2) { scrapeRequestManager.assignScrapeResults(any()) }
+    }
+
   // ==================== writeChunkedResponsesToProxy Error Handling Tests ====================
 
   @Test

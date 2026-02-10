@@ -166,8 +166,14 @@ internal class ProxyServiceImpl(
   override suspend fun writeResponsesToProxy(requests: Flow<ScrapeResponse>): Empty {
     runCatchingCancellable {
       requests.collect { response ->
-        val scrapeResults = response.toScrapeResults()
-        proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
+        try {
+          val scrapeResults = response.toScrapeResults()
+          proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
+        } catch (e: CancellationException) {
+          throw e
+        } catch (e: Exception) {
+          logger.error(e) { "Error processing scrape response for scrapeId: ${response.scrapeId}" }
+        }
       }
     }.onFailure { throwable ->
       if (proxy.isRunning)
