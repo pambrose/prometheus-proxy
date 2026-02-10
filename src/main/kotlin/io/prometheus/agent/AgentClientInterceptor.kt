@@ -28,8 +28,8 @@ import io.grpc.ForwardingClientCallListener
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor
 import io.prometheus.Agent
+import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
-import io.prometheus.proxy.ProxyServerInterceptor.Companion.META_AGENT_ID_KEY
 
 internal class AgentClientInterceptor(
   private val agent: Agent,

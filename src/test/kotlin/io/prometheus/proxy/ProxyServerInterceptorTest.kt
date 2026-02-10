@@ -11,7 +11,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import io.prometheus.proxy.ProxyServerInterceptor.Companion.META_AGENT_ID_KEY
+import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 import org.junit.jupiter.api.Test
 

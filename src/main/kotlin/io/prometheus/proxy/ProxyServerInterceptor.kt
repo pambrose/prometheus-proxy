@@ -20,11 +20,10 @@ package io.prometheus.proxy
 
 import io.grpc.ForwardingServerCall
 import io.grpc.Metadata
-import io.grpc.Metadata.ASCII_STRING_MARSHALLER
 import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
 import io.grpc.ServerInterceptor
-import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID
+import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 
 internal class ProxyServerInterceptor : ServerInterceptor {
@@ -43,8 +42,4 @@ internal class ProxyServerInterceptor : ServerInterceptor {
       },
       requestHeaders,
     )
-
-  companion object {
-    internal val META_AGENT_ID_KEY = Metadata.Key.of(AGENT_ID, ASCII_STRING_MARSHALLER)
-  }
 }
