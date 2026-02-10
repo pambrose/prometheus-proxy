@@ -130,7 +130,7 @@ class ScrapeRequestWrapperTest {
   // ==================== Completion Tests ====================
 
   @Test
-  fun `suspendUntilComplete should return true when markComplete is called`(): Unit =
+  fun `awaitCompleted should return true when markComplete is called`(): Unit =
     runBlocking {
       val wrapper = createWrapper()
 
@@ -139,17 +139,17 @@ class ScrapeRequestWrapperTest {
         wrapper.markComplete()
       }
 
-      val result = wrapper.suspendUntilComplete(5.seconds)
+      val result = wrapper.awaitCompleted(5.seconds)
       result.shouldBeTrue()
     }
 
   @Test
-  fun `suspendUntilComplete should return false on timeout`(): Unit =
+  fun `awaitCompleted should return false on timeout`(): Unit =
     runBlocking {
       val wrapper = createWrapper()
 
       // Do not call markComplete — should timeout
-      val result = wrapper.suspendUntilComplete(100.milliseconds)
+      val result = wrapper.awaitCompleted(100.milliseconds)
       result.shouldBeFalse()
     }
 
@@ -189,17 +189,17 @@ class ScrapeRequestWrapperTest {
       wrapper.markComplete()
     }
 
-  // ==================== suspendUntilComplete Edge Cases ====================
+  // ==================== awaitCompleted Edge Cases ====================
 
   @Test
-  fun `suspendUntilComplete should return true immediately when already completed`(): Unit =
+  fun `awaitCompleted should return true immediately when already completed`(): Unit =
     runBlocking {
       val wrapper = createWrapper()
 
       wrapper.markComplete()
 
-      // After markComplete, suspendUntilComplete should return true quickly
-      val result = wrapper.suspendUntilComplete(5.seconds)
+      // After markComplete, awaitCompleted should return true quickly
+      val result = wrapper.awaitCompleted(5.seconds)
       result.shouldBeTrue()
     }
 }
