@@ -21,26 +21,23 @@ package io.prometheus.proxy
 import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.isNull
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
-import java.util.concurrent.ConcurrentHashMap
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.grpc.unregisterPathResponse
+import java.util.concurrent.ConcurrentHashMap
 
 internal class ProxyPathManager(
   private val proxy: Proxy,
   private val isTestMode: Boolean,
 ) {
-  class AgentContextInfo(
+  data class AgentContextInfo(
     val isConsolidated: Boolean,
     val labels: String,
     val agentContexts: MutableList<AgentContext>,
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
-
-    override fun toString(): String =
-      "AgentContextInfo(consolidated=$isConsolidated, labels=$labels,agentContexts=$agentContexts)"
   }
 
   private val pathMap = ConcurrentHashMap<String, AgentContextInfo>()
