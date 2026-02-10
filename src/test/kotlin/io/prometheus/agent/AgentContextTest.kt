@@ -339,10 +339,10 @@ class AgentContextTest {
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
 
+      // The hashCode contract only guarantees: equal objects => same hashCode.
+      // Unequal objects may have the same hashCode (collisions are legal).
       if (context1 == context2) {
         context1.hashCode() shouldBe context2.hashCode()
-      } else {
-        context1.hashCode() shouldNotBe context2.hashCode()
       }
     }
 
