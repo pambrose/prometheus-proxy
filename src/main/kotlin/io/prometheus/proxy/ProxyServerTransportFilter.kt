@@ -19,7 +19,6 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GrpcDsl.attributes
-import com.github.pambrose.common.util.isNotNull
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
@@ -44,7 +43,7 @@ internal class ProxyServerTransportFilter(
   override fun transportTerminated(attributes: Attributes) {
     attributes.get(AGENT_ID_KEY)?.also { agentId ->
       val context = proxy.removeAgentContext(agentId, "Termination")
-      if (context.isNotNull())
+      if (context != null)
         logger.info { "Disconnected from $context" }
       else
         logger.error { "Disconnected with invalid agentId: $agentId" }

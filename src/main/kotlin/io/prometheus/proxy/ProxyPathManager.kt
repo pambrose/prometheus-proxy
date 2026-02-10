@@ -18,8 +18,6 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
@@ -64,7 +62,7 @@ internal class ProxyPathManager(
     synchronized(pathMap) {
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
-        if (agentInfo.isNull()) {
+        if (agentInfo == null) {
           pathMap[path] = AgentContextInfo(true, labels, mutableListOf(agentContext))
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated)
@@ -75,7 +73,7 @@ internal class ProxyPathManager(
             agentInfo.agentContexts += agentContext
         }
       } else {
-        if (agentInfo.isNotNull()) {
+        if (agentInfo != null) {
           if (agentInfo.isConsolidated) {
             logger.warn { "Non-consolidated agent overwriting consolidated path /$path" }
           }
@@ -141,7 +139,7 @@ internal class ProxyPathManager(
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-    if (agentContext.isNull()) {
+    if (agentContext == null) {
       logger.warn { "Missing agent context for agentId: $agentId ($reason)" }
     } else {
       logger.info { "Removing paths for agentId: $agentId ($reason)" }

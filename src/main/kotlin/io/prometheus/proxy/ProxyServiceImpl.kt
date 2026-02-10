@@ -18,8 +18,6 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.runCatchingCancellable
 import com.google.protobuf.Empty
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -127,7 +125,7 @@ internal class ProxyServiceImpl(
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {
     val agentId = request.agentId
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-    return if (agentContext.isNull()) {
+    return if (agentContext == null) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
       unregisterPathResponse {
         valid = false
@@ -150,7 +148,7 @@ internal class ProxyServiceImpl(
         agentContext?.markActivityTime(false)
           ?: logger.error { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
         heartBeatResponse {
-          valid = agentContext.isNotNull()
+          valid = agentContext != null
           if (!valid)
             reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
         }
@@ -200,7 +198,7 @@ internal class ProxyServiceImpl(
               .apply {
                 logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
                 val context = contextManager.getChunkedContext(chunkScrapeId)
-                check(context.isNotNull()) { "Missing chunked context with scrapeId: $chunkScrapeId" }
+                checkNotNull(context) { "Missing chunked context with scrapeId: $chunkScrapeId" }
                 context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
               }
           }
@@ -209,7 +207,7 @@ internal class ProxyServiceImpl(
             response.summary
               .apply {
                 val context = contextManager.removeChunkedContext(summaryScrapeId)
-                check(context.isNotNull()) { "Missing chunked context with scrapeId: $summaryScrapeId" }
+                checkNotNull(context) { "Missing chunked context with scrapeId: $summaryScrapeId" }
                 logger.debug {
                   val ccnt = context.totalChunkCount
                   val bcnt = context.totalByteCount

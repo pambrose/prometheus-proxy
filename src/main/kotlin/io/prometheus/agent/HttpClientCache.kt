@@ -18,7 +18,6 @@
 
 package io.prometheus.agent
 
-import com.github.pambrose.common.util.isNotNull
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -97,7 +96,7 @@ internal class HttpClientCache(
     val username: String?,
     val password: String?,
   ) {
-    fun hasAuth() = username.isNotNull() && password.isNotNull()
+    fun hasAuth() = username != null && password != null
 
     override fun toString() = maskedKey()
 

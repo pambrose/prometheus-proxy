@@ -18,7 +18,6 @@
 
 package io.prometheus.agent
 
-import com.github.pambrose.common.util.isNotNull
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
@@ -56,7 +55,7 @@ internal class AgentPathManager(
       val path = it[PATH]
       val url = it[URL]
       val labels = it[LABELS]
-      if (path.isNotNull() && url.isNotNull() && labels.isNotNull())
+      if (path != null && url != null && labels != null)
         registerPath(path, url, labels)
       else
         logger.error { "Null path/url/labels value: $path/$url/$labels" }

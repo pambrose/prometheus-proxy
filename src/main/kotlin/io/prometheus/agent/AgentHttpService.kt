@@ -20,7 +20,6 @@ package io.prometheus.agent
 
 import com.github.pambrose.common.dsl.KtorDsl.get
 import com.github.pambrose.common.util.EMPTY_BYTE_ARRAY
-import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders.ACCEPT
@@ -47,7 +46,6 @@ import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.decodeParams
-import io.prometheus.common.Utils.lambda
 import io.prometheus.grpc.ScrapeRequest
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -67,7 +65,7 @@ internal class AgentHttpService(
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
-    return if (pathContext.isNotNull())
+    return if (pathContext != null)
       fetchContentFromUrl(scrapeRequest, pathContext)
     else
       handleInvalidPath(scrapeRequest)
@@ -131,8 +129,7 @@ internal class AgentHttpService(
     }
   }
 
-  private fun prepareRequestHeaders(request: ScrapeRequest): HttpRequestBuilder.() -> Unit =
-    lambda {
+  private fun prepareRequestHeaders(request: ScrapeRequest): HttpRequestBuilder.() -> Unit = {
       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }

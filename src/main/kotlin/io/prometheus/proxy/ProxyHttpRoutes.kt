@@ -16,7 +16,6 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.isNull
 import com.github.pambrose.common.util.simpleClassName
 import com.github.pambrose.common.util.unzip
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -110,7 +109,7 @@ object ProxyHttpRoutes {
   ): ResponseResults {
     val agentContextInfo = proxy.pathManager.getAgentContextInfo(path)
     return when {
-      agentContextInfo.isNull() -> ProxyUtils.invalidPathResponse(path, proxy)
+      agentContextInfo == null -> ProxyUtils.invalidPathResponse(path, proxy)
       agentContextInfo.isNotValid() -> ProxyUtils.invalidAgentContextResponse(path, proxy)
       else -> processRequests(agentContextInfo, proxy, path, queryParams)
     }

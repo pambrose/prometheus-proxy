@@ -19,7 +19,6 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.runCatchingCancellable
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
@@ -85,7 +84,7 @@ internal class ScrapeRequestWrapper(
       }.getOrElse {
         true
       }
-    }.isNotNull()
+    } != null
 
   override fun toString() =
     toStringElements {
