@@ -49,9 +49,12 @@ internal class ChunkedContext(
     if (totalChunkCount != chunkCount)
       throw ChunkValidationException("Chunk count mismatch: expected $chunkCount, got $totalChunkCount")
     if (checksum.value != chunkChecksum)
-      throw ChunkValidationException("Chunk checksum mismatch for chunk $chunkCount: expected $chunkChecksum, got ${checksum.value}")
+      throw ChunkValidationException(
+        "Chunk checksum mismatch for chunk $chunkCount: expected $chunkChecksum, got ${checksum.value}",
+      )
   }
 
+  @Suppress("ThrowsCount")
   fun applySummary(
     summaryChunkCount: Int,
     summaryByteCount: Int,
@@ -81,4 +84,6 @@ internal class ChunkedContext(
   }
 }
 
-internal class ChunkValidationException(message: String) : Exception(message)
+internal class ChunkValidationException(
+  message: String,
+) : Exception(message)
