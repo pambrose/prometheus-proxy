@@ -20,6 +20,8 @@ package io.prometheus.agent
 
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.shouldBe
+import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -107,5 +109,58 @@ class AgentConnectionContextTest {
 
       completed.shouldBeTrue()
       context.connected.shouldBeFalse()
+    }
+
+  // M8: scrapeResultsChannel uses close() instead of cancel(), so buffered results
+  // can still be drained by the consumer after the context is closed.
+  @Test
+  fun `buffered scrape results should be drainable after close`(): Unit =
+    runBlocking {
+      val context = AgentConnectionContext()
+
+      // Buffer some results before closing
+      val result1 = ScrapeResults(srAgentId = "agent-1", srScrapeId = 1L, srValidResponse = true)
+      val result2 = ScrapeResults(srAgentId = "agent-1", srScrapeId = 2L, srValidResponse = true)
+      val result3 = ScrapeResults(srAgentId = "agent-1", srScrapeId = 3L, srValidResponse = true)
+
+      context.sendScrapeResults(result1)
+      context.sendScrapeResults(result2)
+      context.sendScrapeResults(result3)
+
+      // Close the context — with close() (not cancel()), buffered items remain
+      context.close()
+      context.connected.shouldBeFalse()
+
+      // Consumer should still be able to drain all 3 buffered results
+      val channel = context.scrapeResults()
+      val received1 = channel.receiveCatching()
+      received1.isSuccess.shouldBeTrue()
+      received1.getOrNull()!!.srScrapeId shouldBe 1L
+
+      val received2 = channel.receiveCatching()
+      received2.isSuccess.shouldBeTrue()
+      received2.getOrNull()!!.srScrapeId shouldBe 2L
+
+      val received3 = channel.receiveCatching()
+      received3.isSuccess.shouldBeTrue()
+      received3.getOrNull()!!.srScrapeId shouldBe 3L
+
+      // After draining, the next receive should indicate the channel is closed
+      val received4 = channel.receiveCatching()
+      received4.isClosed.shouldBeTrue()
+    }
+
+  @Test
+  fun `empty scrape results channel should close cleanly`(): Unit =
+    runBlocking {
+      val context = AgentConnectionContext()
+
+      // Close with no buffered results
+      context.close()
+
+      // Channel should be closed immediately with no items
+      val channel = context.scrapeResults()
+      val result = channel.receiveCatching()
+      result.isClosed.shouldBeTrue()
     }
 }
