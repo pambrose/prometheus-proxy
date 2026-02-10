@@ -279,6 +279,8 @@ class Agent(
                 Status.fromThrowable(e)
                   .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): ${exceptionDetails(e)}" } }
             }
+          }.apply {
+            invokeOnCompletion { connectionContext.close() }
           }
 
           // Ends on disconnect from server
@@ -315,6 +317,8 @@ class Agent(
                 Status.fromThrowable(e)
                   .apply { logger.error(e) { "scrapeResultsChannel.send(): ${exceptionDetails(e)}" } }
             }
+          }.apply {
+            invokeOnCompletion { connectionContext.close() }
           }
         }
         logger.info { "connectToProxy() completed" }
