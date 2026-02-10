@@ -150,7 +150,7 @@ class ChunkedContextTest {
     val checksum = CRC32().apply { update(data) }.value
 
     // Expect chunk count 1, but provide 2
-    shouldThrow<IllegalStateException> {
+    shouldThrow<ChunkValidationException> {
       context.applyChunk(data, data.size, 2, checksum)
     }
   }
@@ -163,7 +163,7 @@ class ChunkedContextTest {
     val data = "test data".toByteArray()
     val wrongChecksum = 12345L // Wrong checksum
 
-    shouldThrow<IllegalStateException> {
+    shouldThrow<ChunkValidationException> {
       context.applyChunk(data, data.size, 1, wrongChecksum)
     }
   }
@@ -198,7 +198,7 @@ class ChunkedContextTest {
     context.applyChunk(data, data.size, 1, crc.value)
 
     // Apply summary with wrong chunk count
-    shouldThrow<IllegalStateException> {
+    shouldThrow<ChunkValidationException> {
       context.applySummary(5, data.size, crc.value) // Wrong chunk count
     }
   }
@@ -214,7 +214,7 @@ class ChunkedContextTest {
     context.applyChunk(data, data.size, 1, crc.value)
 
     // Apply summary with wrong byte count
-    shouldThrow<IllegalStateException> {
+    shouldThrow<ChunkValidationException> {
       context.applySummary(1, 9999, crc.value) // Wrong byte count
     }
   }
@@ -230,7 +230,7 @@ class ChunkedContextTest {
     context.applyChunk(data, data.size, 1, crc.value)
 
     // Apply summary with wrong checksum
-    shouldThrow<IllegalStateException> {
+    shouldThrow<ChunkValidationException> {
       context.applySummary(1, data.size, 12345L) // Wrong checksum
     }
   }
@@ -362,7 +362,7 @@ class ChunkedContextTest {
     val wrongChecksum = CRC32().apply { update(buffer, 0, bufferSize) }.value
 
     // This should fail because the receiver now checksums only chunkByteCount bytes
-    shouldThrow<IllegalStateException> {
+    shouldThrow<ChunkValidationException> {
       context.applyChunk(buffer, actualBytes, 1, wrongChecksum)
     }
   }
