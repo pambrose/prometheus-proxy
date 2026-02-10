@@ -379,12 +379,18 @@ internal class AgentGrpcService(
       coroutineScope {
         // Ends by connectionContext.close()
         launch(Dispatchers.IO) {
-          runCatchingCancellable {
-            processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
-          }.onFailure { e ->
-            if (agent.isRunning)
-              Status.fromThrowable(e)
-                .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
+          try {
+            runCatchingCancellable {
+              processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
+            }.onFailure { e ->
+              if (agent.isRunning)
+                Status.fromThrowable(e)
+                  .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
+            }
+          } finally {
+            // Close channels when the producer finishes so consumers' consumeAsFlow() will complete
+            nonChunkedChannel.close()
+            chunkedChannel.close()
           }
         }
 
