@@ -451,6 +451,46 @@ class AgentGrpcServiceTest {
       service.shutDown()
     }
 
+  // ==================== Channel Termination Tests (M9) ====================
+
+  @Test
+  fun `shutDown should fully terminate the channel`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // Before shutdown, channel should not be terminated
+      service.channel.isTerminated.shouldBeFalse()
+
+      service.shutDown()
+
+      // After shutdown with awaitTermination, channel should be fully terminated
+      service.channel.isTerminated.shouldBeTrue()
+    }
+
+  @Test
+  fun `resetGrpcStubs should terminate old channel before creating new one`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val oldChannel = service.channel
+      oldChannel.isTerminated.shouldBeFalse()
+
+      // resetGrpcStubs should shut down the old channel and create a new one
+      service.resetGrpcStubs()
+
+      // Old channel should be fully terminated
+      oldChannel.isTerminated.shouldBeTrue()
+
+      // New channel should be a different instance and not terminated
+      val newChannel = service.channel
+      (newChannel !== oldChannel).shouldBeTrue()
+      newChannel.isTerminated.shouldBeFalse()
+
+      service.shutDown()
+    }
+
   // ==================== sendHeartBeat Tests ====================
 
   @Test

@@ -132,8 +132,10 @@ internal class AgentGrpcService(
     grpcLock.withLock {
       if (agent.isZipkinEnabled)
         tracing.close()
-      if (grpcStarted)
+      if (grpcStarted) {
         channel.shutdownNow()
+        channel.awaitTermination(5, SECONDS)
+      }
     }
 
   fun resetGrpcStubs() =
