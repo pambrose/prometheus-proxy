@@ -4,15 +4,20 @@ package io.prometheus.agent
 
 import io.grpc.CallOptions
 import io.grpc.Channel
+import io.grpc.ClientCall
 import io.grpc.ManagedChannel
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor
 import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.Agent
+import io.prometheus.common.GrpcConstants
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class AgentClientInterceptorTest {
   private fun createMockAgent(agentId: String = ""): Agent {
@@ -126,21 +131,61 @@ class AgentClientInterceptorTest {
   }
 
   @Test
-  fun `onHeaders should handle missing agent ID key in headers`() {
+  fun `onHeaders should assign agentId when header is present`() {
+    // Use a backing variable so the mock tracks agentId state across get/set
+    var currentAgentId = ""
+    val mockAgent = mockk<Agent>(relaxed = true)
+    every { mockAgent.agentId } answers { currentAgentId }
+    every { mockAgent.agentId = any() } answers { currentAgentId = firstArg() }
+
+    val interceptor = AgentClientInterceptor(mockAgent)
+    val mockMethod = mockk<MethodDescriptor<Any, Any>>(relaxed = true)
+
+    // Capture the wrapped listener when start is called on the underlying call
+    val listenerSlot = slot<ClientCall.Listener<Any>>()
+    val mockUnderlyingCall = mockk<ClientCall<Any, Any>>(relaxed = true)
+    every { mockUnderlyingCall.start(capture(listenerSlot), any()) } answers {}
+
+    val mockNextChannel = mockk<Channel>(relaxed = true)
+    every { mockNextChannel.newCall(any<MethodDescriptor<Any, Any>>(), any()) } returns mockUnderlyingCall
+
+    val call = interceptor.interceptCall(mockMethod, CallOptions.DEFAULT, mockNextChannel)
+    call.start(mockk(relaxed = true), Metadata())
+
+    // Trigger onHeaders with a valid AGENT_ID header
+    val headers = Metadata()
+    headers.put(GrpcConstants.META_AGENT_ID_KEY, "test-agent-42")
+    listenerSlot.captured.onHeaders(headers)
+
+    // The agentId should have been assigned
+    currentAgentId shouldBe "test-agent-42"
+    verify { mockAgent.agentId = "test-agent-42" }
+  }
+
+  @Test
+  fun `onHeaders should throw when agent ID key is missing from headers`() {
     val mockAgent = mockk<Agent>(relaxed = true)
     every { mockAgent.agentId } returns ""
 
     val interceptor = AgentClientInterceptor(mockAgent)
     val mockMethod = mockk<MethodDescriptor<Any, Any>>(relaxed = true)
+
+    // Capture the wrapped listener when start is called on the underlying call
+    val listenerSlot = slot<ClientCall.Listener<Any>>()
+    val mockUnderlyingCall = mockk<ClientCall<Any, Any>>(relaxed = true)
+    every { mockUnderlyingCall.start(capture(listenerSlot), any()) } answers {}
+
     val mockNextChannel = mockk<Channel>(relaxed = true)
+    every { mockNextChannel.newCall(any<MethodDescriptor<Any, Any>>(), any()) } returns mockUnderlyingCall
 
     val call = interceptor.interceptCall(mockMethod, CallOptions.DEFAULT, mockNextChannel)
-
-    // Start the call with empty headers (no agent ID key)
     call.start(mockk(relaxed = true), Metadata())
 
-    // With empty headers and empty agentId, no assignment should occur
-    // because headers.get(META_AGENT_ID_KEY) returns null
+    // Trigger onHeaders with empty headers (no AGENT_ID key) — should throw
+    assertThrows<IllegalStateException> {
+      listenerSlot.captured.onHeaders(Metadata())
+    }
+
     verify(exactly = 0) { mockAgent.agentId = any() }
   }
 }

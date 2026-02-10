@@ -57,7 +57,7 @@ internal class AgentClientInterceptor(
                       agent.agentId = agentId
                       check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
                       logger.info { "Assigned agentId: $agentId to $agent" }
-                    } ?: logger.error { "Headers missing AGENT_ID key" }
+                    } ?: error("Headers missing AGENT_ID key")
                 }
               }
 
