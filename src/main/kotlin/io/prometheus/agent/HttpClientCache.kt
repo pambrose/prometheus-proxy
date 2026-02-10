@@ -84,11 +84,10 @@ internal class HttpClientCache(
     // Called with mutex
     fun onStartWithClient() = markInUse()
 
-    // Called with mutex
-    fun onDoneWithClient() {
+    // Called with mutex. Returns true if the client should be closed outside the lock.
+    fun onDoneWithClient(): Boolean {
       markNotInUse()
-      if (isNotInUse() && isMarkedForClose())
-        client.close()
+      return isNotInUse() && isMarkedForClose()
     }
   }
 
@@ -145,12 +144,15 @@ internal class HttpClientCache(
     }
   }
 
-  // Called with mutex
   // When an agent is done with client for a given scrape, the entry is marked as not in use.
-  // It is then closed if it is not in use and marked for close.
+  // If the entry is no longer in use and marked for close, the client is closed outside the
+  // mutex to avoid blocking other cache operations during a potentially slow I/O close.
   suspend fun onFinishedWithClient(entry: CacheEntry) {
-    accessMutex.withLock {
+    val shouldClose = accessMutex.withLock {
       entry.onDoneWithClient()
+    }
+    if (shouldClose) {
+      entry.client.close()
     }
   }
 
