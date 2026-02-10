@@ -68,7 +68,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.CRC32
-import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
 
 internal class AgentGrpcService(
@@ -291,7 +290,6 @@ internal class AgentGrpcService(
       .collect { grpcRequest: ScrapeRequest ->
         // The actual fetch happens at the other end of the channel, not here.
         logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
-        agent.scrapeRequestBacklogSize += 1
         connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
       }
   }
@@ -381,12 +379,18 @@ internal class AgentGrpcService(
       coroutineScope {
         // Ends by connectionContext.close()
         launch(Dispatchers.IO) {
-          runCatchingCancellable {
-            processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
-          }.onFailure { e ->
-            if (agent.isRunning)
-              Status.fromThrowable(e)
-                .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
+          try {
+            runCatchingCancellable {
+              processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
+            }.onFailure { e ->
+              if (agent.isRunning)
+                Status.fromThrowable(e)
+                  .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
+            }
+          } finally {
+            // Close channels when the producer finishes so consumers' consumeAsFlow() will complete
+            nonChunkedChannel.close()
+            chunkedChannel.close()
           }
         }
 

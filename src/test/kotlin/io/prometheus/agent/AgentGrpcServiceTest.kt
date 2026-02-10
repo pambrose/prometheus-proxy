@@ -221,14 +221,12 @@ class AgentGrpcServiceTest {
       service.shutDown()
     }
 
-  // Bug #9: The old code incremented scrapeRequestBacklogSize AFTER sending the action to the
-  // channel. Because processScrapeResults runs in a separate coroutine, it could consume the
-  // action and decrement the counter before the producer incremented it, causing the counter
-  // to go negative. The fix moves the increment to BEFORE the channel send.
-  // This test simulates the same producer-consumer channel pattern and verifies the counter
-  // never goes negative.
+  // The backlog counter is now incremented on the consumer side (inside the launched coroutine
+  // in Agent.kt) rather than the producer side (readRequestsFromProxy). This eliminates leaks
+  // when items are discarded from a cancelled channel — items that were never consumed are
+  // never counted. The increment and decrement are always paired in the same try-finally scope.
   @Test
-  fun `backlog counter should never go negative with increment-before-send pattern`(): Unit =
+  fun `backlog counter should never go negative with consumer-side increment pattern`(): Unit =
     runBlocking {
       val channel = Channel<Int>(UNLIMITED)
       val backlogSize = AtomicInteger(0)
@@ -236,21 +234,25 @@ class AgentGrpcServiceTest {
       val itemCount = 10_000
 
       coroutineScope {
-        // Producer: mirrors readRequestsFromProxy — increment BEFORE send (the fix)
+        // Producer: mirrors readRequestsFromProxy — no increment, just send
         launch(Dispatchers.IO) {
           repeat(itemCount) { i ->
-            backlogSize.incrementAndGet()
             channel.send(i)
           }
           channel.close()
         }
 
-        // Consumer: mirrors processScrapeResults — decrement after receive
+        // Consumer: mirrors Agent.kt consumer loop — increment then try/finally decrement
         launch(Dispatchers.IO) {
           for (@Suppress("UnusedPrivateProperty") item in channel) {
-            val current = backlogSize.decrementAndGet()
-            if (current < 0) {
-              wentNegative.set(true)
+            backlogSize.incrementAndGet()
+            try {
+              // Simulate processing
+            } finally {
+              val current = backlogSize.decrementAndGet()
+              if (current < 0) {
+                wentNegative.set(true)
+              }
             }
           }
         }
@@ -269,20 +271,24 @@ class AgentGrpcServiceTest {
       val itemCount = 10_000
 
       coroutineScope {
-        // Producer: increment before send
+        // Producer: no increment, just send
         launch(Dispatchers.IO) {
           repeat(itemCount) { i ->
-            backlogSize.incrementAndGet()
             channel.send(i)
           }
           channel.close()
         }
 
-        // Consumer: decrement and track minimum value observed
+        // Consumer: increment then try/finally decrement, track minimum
         launch(Dispatchers.IO) {
           for (@Suppress("UnusedPrivateProperty") item in channel) {
-            val current = backlogSize.decrementAndGet()
-            minObserved.updateAndGet { min -> minOf(min, current) }
+            backlogSize.incrementAndGet()
+            try {
+              // Simulate processing
+            } finally {
+              val current = backlogSize.decrementAndGet()
+              minObserved.updateAndGet { min -> minOf(min, current) }
+            }
           }
         }
       }

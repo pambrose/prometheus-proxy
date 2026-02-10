@@ -40,7 +40,7 @@ internal class AgentClientInterceptor(
     next: Channel,
   ): ClientCall<ReqT, RespT> =
     object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-      agent.grpcService.channel.newCall(method, callOptions),
+      next.newCall(method, callOptions),
     ) {
       override fun start(
         responseListener: Listener<RespT>,
@@ -57,7 +57,7 @@ internal class AgentClientInterceptor(
                       agent.agentId = agentId
                       check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
                       logger.info { "Assigned agentId: $agentId to $agent" }
-                    } ?: logger.error { "Headers missing AGENT_ID key" }
+                    } ?: error("Headers missing AGENT_ID key")
                 }
               }
 

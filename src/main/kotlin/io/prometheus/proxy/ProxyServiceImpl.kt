@@ -25,7 +25,6 @@ import io.grpc.Status
 import io.prometheus.Proxy
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
-import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -75,10 +74,10 @@ internal class ProxyServiceImpl(
 
     proxy.metrics { connectCount.inc() }
     val agentContext = AgentContext(UNKNOWN_ADDRESS)
-    proxy.agentContextManager.addAgentContext(agentContext)
     return agentInfo {
-      require(agentContext.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
       agentId = agentContext.agentId
+    }.also {
+      proxy.agentContextManager.addAgentContext(agentContext)
     }
   }
 

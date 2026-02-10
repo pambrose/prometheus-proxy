@@ -61,6 +61,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
+import kotlin.concurrent.atomics.plusAssign
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -278,6 +279,8 @@ class Agent(
                 Status.fromThrowable(e)
                   .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): ${exceptionDetails(e)}" } }
             }
+          }.apply {
+            invokeOnCompletion { connectionContext.close() }
           }
 
           // Ends on disconnect from server
@@ -297,6 +300,7 @@ class Agent(
               // actually limiting how many execute concurrently.
               for (scrapeRequestAction in connectionContext.scrapeRequestActions()) {
                 launch {
+                  scrapeRequestBacklogSize += 1
                   try {
                     semaphore.withPermit {
                       // The url fetch occurs here during scrapeRequestAction.invoke()
@@ -313,6 +317,8 @@ class Agent(
                 Status.fromThrowable(e)
                   .apply { logger.error(e) { "scrapeResultsChannel.send(): ${exceptionDetails(e)}" } }
             }
+          }.apply {
+            invokeOnCompletion { connectionContext.close() }
           }
         }
         logger.info { "connectToProxy() completed" }

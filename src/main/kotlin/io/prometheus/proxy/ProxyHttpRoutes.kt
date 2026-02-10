@@ -199,8 +199,8 @@ object ProxyHttpRoutes {
       proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
       agentContext.writeScrapeRequest(scrapeRequest)
 
-      // Returns false if timed out
-      while (!scrapeRequest.suspendUntilComplete(checkTime)) {
+      // Loops while not yet completed (awaitCompleted returns false on timeout)
+      while (!scrapeRequest.awaitCompleted(checkTime)) {
         // Check if the agent is disconnected or agent is hung
         if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
           return ScrapeRequestResponse(

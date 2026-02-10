@@ -32,6 +32,7 @@ import io.prometheus.Proxy
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 
 class ProxyPathManagerTest {
   private fun createMockProxy(): Proxy {
@@ -264,6 +265,47 @@ class ProxyPathManagerTest {
       paths shouldContain "/metrics1"
       paths shouldContain "/metrics2"
       paths shouldContain "/metrics3"
+    }
+
+  @Test
+  fun `allPathContextInfos should atomically snapshot paths and their info`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
+
+      manager.addPath("/metrics1", """{"job":"test1"}""", context1)
+      manager.addPath("/metrics2", """{"job":"test2"}""", context2)
+
+      val snapshot = manager.allPathContextInfos()
+
+      // Should contain all paths with their info
+      snapshot.mapShouldHaveSize(2)
+      snapshot.keys shouldContain "/metrics1"
+      snapshot.keys shouldContain "/metrics2"
+
+      // Info should match what was registered
+      val info1 = snapshot["/metrics1"]
+      info1.shouldNotBeNull()
+      info1.agentContexts.shouldHaveSize(1)
+      info1.agentContexts[0].agentId shouldBe context1.agentId
+
+      val info2 = snapshot["/metrics2"]
+      info2.shouldNotBeNull()
+      info2.agentContexts.shouldHaveSize(1)
+      info2.agentContexts[0].agentId shouldBe context2.agentId
+
+      // Removing a path after snapshot should not affect the snapshot
+      manager.removePath("/metrics1", context1.agentId)
+      snapshot.mapShouldHaveSize(2)
+      snapshot["/metrics1"].shouldNotBeNull()
+
+      // New snapshot should reflect the removal
+      val snapshot2 = manager.allPathContextInfos()
+      snapshot2.mapShouldHaveSize(1)
+      snapshot2["/metrics1"].shouldBeNull()
+      snapshot2["/metrics2"].shouldNotBeNull()
     }
 
   @Test
@@ -570,24 +612,56 @@ class ProxyPathManagerTest {
   // ==================== getAgentContextInfo Defensive Copy ====================
 
   @Test
-  fun `getAgentContextInfo should return a defensive copy`(): Unit =
+  fun `getAgentContextInfo should return a snapshot copy`(): Unit =
     runBlocking {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
-      val context = createMockAgentContext()
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
 
-      manager.addPath("/metrics", """{"job":"test"}""", context)
+      manager.addPath("/metrics", """{"job":"test"}""", context1)
 
+      // Take a snapshot
       val info1 = manager.getAgentContextInfo("/metrics")
       info1.shouldNotBeNull()
+      info1.agentContexts.shouldHaveSize(1)
 
-      // Modify the returned list
-      info1.agentContexts.clear()
+      // Mutate the path map by adding another agent
+      manager.addPath("/metrics", """{"job":"test"}""", context2)
 
-      // Original should be unaffected
+      // Original snapshot should be unaffected
+      info1.agentContexts.shouldHaveSize(1)
+
+      // New retrieval should reflect the update
       val info2 = manager.getAgentContextInfo("/metrics")
       info2.shouldNotBeNull()
-      info2.agentContexts.shouldHaveSize(1)
+      info2.agentContexts.shouldHaveSize(2)
+    }
+
+  @Test
+  fun `getAgentContextInfo returned list mutation should not affect internal state`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
+
+      manager.addPath("/metrics", """{"job":"test"}""", context1)
+      manager.addPath("/metrics", """{"job":"test"}""", context2)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.agentContexts.shouldHaveSize(2)
+
+      // Force-cast and mutate the returned list (simulates a caller bypassing compile-time safety)
+      @Suppress("UNCHECKED_CAST")
+      (info.agentContexts as MutableList<AgentContext>).clear()
+      info.agentContexts.shouldHaveSize(0)
+
+      // Internal state should be unaffected
+      val info2 = manager.getAgentContextInfo("/metrics")
+      info2.shouldNotBeNull()
+      info2.agentContexts.shouldHaveSize(2)
     }
 
   // ==================== toPlainText with Multiple Paths ====================
