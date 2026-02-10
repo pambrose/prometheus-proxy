@@ -32,7 +32,7 @@ internal class ProxyPathManager(
   data class AgentContextInfo(
     val isConsolidated: Boolean,
     val labels: String,
-    val agentContexts: List<AgentContext>,
+    val agentContexts: MutableList<AgentContext>,
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
   }
@@ -42,7 +42,7 @@ internal class ProxyPathManager(
   fun getAgentContextInfo(path: String): AgentContextInfo? =
     synchronized(pathMap) {
       pathMap[path]?.let { info ->
-        AgentContextInfo(info.isConsolidated, info.labels, info.agentContexts.toList())
+        AgentContextInfo(info.isConsolidated, info.labels, info.agentContexts.toMutableList())
       }
     }
 
@@ -55,7 +55,7 @@ internal class ProxyPathManager(
   fun allPathContextInfos(): Map<String, AgentContextInfo> =
     synchronized(pathMap) {
       pathMap.map { (k, v) ->
-        k to AgentContextInfo(v.isConsolidated, v.labels, v.agentContexts.toList())
+        k to AgentContextInfo(v.isConsolidated, v.labels, v.agentContexts.toMutableList())
       }.toMap()
     }
 
@@ -76,7 +76,7 @@ internal class ProxyPathManager(
             logger.warn {
               "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.isConsolidated}"
             }
-          (agentInfo.agentContexts as MutableList) += agentContext
+          agentInfo.agentContexts += agentContext
         }
       } else {
         if (agentInfo != null) {
@@ -122,7 +122,7 @@ internal class ProxyPathManager(
       }
 
       if (agentInfo.isConsolidated && agentInfo.agentContexts.size > 1) {
-        (agentInfo.agentContexts as MutableList).remove(agentContext)
+        agentInfo.agentContexts.remove(agentContext)
         if (!isTestMode)
           logger.info { "Removed element of path /$path for $agentInfo" }
       } else {
@@ -158,7 +158,7 @@ internal class ProxyPathManager(
             if (v.agentContexts[0].agentId == agentId)
               keysToRemove += k
           } else {
-            val removed = (v.agentContexts as MutableList).removeIf { it.agentId == agentId }
+            val removed = v.agentContexts.removeIf { it.agentId == agentId }
             if (removed)
               logger.info { "Removed agentId $agentId from consolidated path /$k" }
           }
