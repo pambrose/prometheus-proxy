@@ -22,17 +22,16 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
-import java.util.concurrent.ConcurrentHashMap
 
 internal class AgentPathManager(
   private val agent: Agent,
 ) {
   private val agentConfigVals = agent.configVals.agent
-  private val pathContextMap = ConcurrentHashMap<String, PathContext>()
+  private val pathContextMap = HashMap<String, PathContext>()
 
-  operator fun get(path: String): PathContext? = pathContextMap[path]
+  operator fun get(path: String): PathContext? = synchronized(pathContextMap) { pathContextMap[path] }
 
-  fun clear() = pathContextMap.clear()
+  fun clear() = synchronized(pathContextMap) { pathContextMap.clear() }
 
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
@@ -74,7 +73,9 @@ internal class AgentPathManager(
     val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
     if (!agent.isTestMode)
       logger.info { "Registered $url as /$path with labels $labelsJson" }
-    pathContextMap[path] = PathContext(pathId, path, url, labelsJson)
+    synchronized(pathContextMap) {
+      pathContextMap[path] = PathContext(pathId, path, url, labelsJson)
+    }
   }
 
   suspend fun unregisterPath(pathVal: String) {
@@ -82,7 +83,7 @@ internal class AgentPathManager(
 
     val path = pathVal.removePrefix("/")
     agent.grpcService.unregisterPathOnProxy(path)
-    val pathContext = pathContextMap.remove(path)
+    val pathContext = synchronized(pathContextMap) { pathContextMap.remove(path) }
     if (pathContext == null) {
       logger.info { "No path value /$path found in pathContextMap when unregistering" }
     } else if (!agent.isTestMode) {
