@@ -29,6 +29,7 @@ import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -781,5 +782,129 @@ class ProxyPathManagerTest {
       str shouldContain "AgentContextInfo"
       str shouldContain "isConsolidated"
       str shouldContain "labels"
+    }
+
+  // ==================== Bug #6: Displaced Agent Invalidation Tests ====================
+
+  // Bug #6: When a non-consolidated agent overwrites a path, the old agent context(s)
+  // were left orphaned — still in the agentContextManager but with no paths in the
+  // pathMap. The fix invalidates displaced agents that have no other registered paths.
+
+  @Test
+  fun `overwriting non-consolidated path should invalidate displaced agent with no other paths`() {
+    val proxy = createMockProxy()
+    val manager = ProxyPathManager(proxy, isTestMode = true)
+
+    // Use real AgentContexts so invalidate() actually works
+    val oldAgent = AgentContext("remote-old")
+    val newAgent = AgentContext("remote-new")
+
+    oldAgent.isValid().shouldBeTrue()
+
+    manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
+    manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+
+    // Old agent should be invalidated since it has no other paths
+    oldAgent.isValid().shouldBeFalse()
+    // New agent remains valid
+    newAgent.isValid().shouldBeTrue()
+
+    val info = manager.getAgentContextInfo("/metrics")
+    info.shouldNotBeNull()
+    info.agentContexts.shouldHaveSize(1)
+    info.agentContexts[0].agentId shouldBe newAgent.agentId
+  }
+
+  @Test
+  fun `overwriting path should not invalidate displaced agent that has other paths`() {
+    val proxy = createMockProxy()
+    val manager = ProxyPathManager(proxy, isTestMode = true)
+
+    val oldAgent = AgentContext("remote-old")
+    val newAgent = AgentContext("remote-new")
+
+    // Old agent has two paths
+    manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
+    manager.addPath("/health", """{"job":"test"}""", oldAgent)
+
+    oldAgent.isValid().shouldBeTrue()
+
+    // Overwrite only /metrics
+    manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+
+    // Old agent should still be valid because it still has /health
+    oldAgent.isValid().shouldBeTrue()
+    newAgent.isValid().shouldBeTrue()
+
+    // /metrics now points to newAgent
+    val metricsInfo = manager.getAgentContextInfo("/metrics")
+    metricsInfo.shouldNotBeNull()
+    metricsInfo.agentContexts[0].agentId shouldBe newAgent.agentId
+
+    // /health still points to oldAgent
+    val healthInfo = manager.getAgentContextInfo("/health")
+    healthInfo.shouldNotBeNull()
+    healthInfo.agentContexts[0].agentId shouldBe oldAgent.agentId
+  }
+
+  @Test
+  fun `overwriting consolidated path should invalidate all displaced agents with no other paths`() {
+    val proxy = createMockProxy()
+    val manager = ProxyPathManager(proxy, isTestMode = true)
+
+    val consolidated1 = AgentContext("remote-c1")
+    consolidated1.assignProperties(mockk<RegisterAgentRequest> {
+      every { launchId } returns "l1"
+      every { agentName } returns "c1"
+      every { hostName } returns "h1"
+      every { consolidated } returns true
+    })
+    val consolidated2 = AgentContext("remote-c2")
+    consolidated2.assignProperties(mockk<RegisterAgentRequest> {
+      every { launchId } returns "l2"
+      every { agentName } returns "c2"
+      every { hostName } returns "h2"
+      every { consolidated } returns true
+    })
+    val newAgent = AgentContext("remote-new")
+
+    // Two consolidated agents share a path
+    manager.addPath("/metrics", """{"job":"test"}""", consolidated1)
+    manager.addPath("/metrics", """{"job":"test"}""", consolidated2)
+
+    consolidated1.isValid().shouldBeTrue()
+    consolidated2.isValid().shouldBeTrue()
+
+    // Non-consolidated agent overwrites the path
+    manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+
+    // Both displaced consolidated agents should be invalidated
+    consolidated1.isValid().shouldBeFalse()
+    consolidated2.isValid().shouldBeFalse()
+    newAgent.isValid().shouldBeTrue()
+  }
+
+  @Test
+  fun `overwriting should invalidate displaced agents with backlog and drain it`(): Unit =
+    runBlocking {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+
+      val oldAgent = AgentContext("remote-old")
+      val newAgent = AgentContext("remote-new")
+
+      manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
+
+      // Build up backlog on old agent
+      oldAgent.writeScrapeRequest(mockk(relaxed = true))
+      oldAgent.writeScrapeRequest(mockk(relaxed = true))
+      oldAgent.scrapeRequestBacklogSize shouldBe 2
+
+      // Overwrite the path
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+
+      // Old agent should be invalidated and backlog drained
+      oldAgent.isValid().shouldBeFalse()
+      oldAgent.scrapeRequestBacklogSize shouldBe 0
     }
 }
