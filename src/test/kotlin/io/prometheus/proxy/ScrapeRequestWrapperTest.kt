@@ -15,6 +15,7 @@ import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -249,5 +250,38 @@ class ScrapeRequestWrapperTest {
       // Using named parameter `timeout` with a short duration — should time out
       val result = wrapper.awaitCompleted(timeout = 50.milliseconds)
       result.shouldBeFalse()
+    }
+
+  // ==================== Constructor Validation Tests ====================
+
+  @Test
+  fun `constructor should throw on empty agentId`() {
+    val mockContext = mockk<AgentContext>(relaxed = true)
+    every { mockContext.agentId } returns ""
+
+    assertThrows<IllegalArgumentException> {
+      ScrapeRequestWrapper(
+        agentContext = mockContext,
+        proxy = createMockProxy(),
+        pathVal = "/metrics",
+        encodedQueryParamsVal = "",
+        authHeaderVal = "",
+        acceptVal = null,
+        debugEnabledVal = false,
+      )
+    }
+  }
+
+  // ==================== markComplete Idempotency Tests ====================
+
+  @Test
+  fun `markComplete should not throw when called multiple times`(): Unit =
+    runBlocking {
+      val wrapper = createWrapper()
+      wrapper.scrapeResults = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
+
+      wrapper.markComplete()
+      // Second call should not throw — channel is already closed
+      wrapper.markComplete()
     }
 }

@@ -25,6 +25,7 @@ import io.kotest.matchers.shouldBe
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.util.zip.CRC32
 
 // Tests for ChunkedContext which manages the state of a chunked scrape response.
@@ -401,5 +402,57 @@ class ChunkedContextTest {
     scrapeResults.srContentAsZipped.shouldNotBeNull()
     scrapeResults.srContentAsZipped.size shouldBe 40
     scrapeResults.srContentAsZipped.contentEquals(fullData).shouldBeTrue()
+  }
+
+  // ==================== Edge Case Tests ====================
+
+  @Test
+  fun `applySummary should throw when called before any chunks`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    // No chunks applied — totalChunkCount is 0, summaryChunkCount is 1
+    shouldThrow<ChunkValidationException> {
+      context.applySummary(1, 10, 12345L)
+    }
+  }
+
+  @Test
+  fun `applySummary should succeed with zero chunks when summary expects zero`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    // Both sides agree: 0 chunks, 0 bytes, initial CRC32 value
+    val emptyCrc = CRC32().value
+    val scrapeResults = context.applySummary(0, 0, emptyCrc)
+
+    scrapeResults.srContentAsZipped.size shouldBe 0
+    context.totalChunkCount shouldBe 0
+    context.totalByteCount shouldBe 0
+  }
+
+  @Test
+  fun `applyChunk should handle zero-length data`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val emptyData = ByteArray(0)
+    val crc = CRC32().apply { update(emptyData, 0, 0) }
+    context.applyChunk(emptyData, 0, 1, crc.value)
+
+    context.totalChunkCount shouldBe 1
+    context.totalByteCount shouldBe 0
+  }
+
+  @Test
+  fun `applyChunk should throw when chunkByteCount exceeds data size`() {
+    val response = createHeaderResponse()
+    val context = ChunkedContext(response)
+
+    val data = "short".toByteArray()
+    // chunkByteCount (1000) > data.size (5) triggers ArrayIndexOutOfBoundsException
+    assertThrows<Exception> {
+      context.applyChunk(data, 1000, 1, 0)
+    }
   }
 }
