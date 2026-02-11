@@ -491,6 +491,118 @@ class AgentGrpcServiceTest {
       service.shutDown()
     }
 
+  // ==================== Concurrent shutDown / resetGrpcStubs Tests ====================
+
+  @Test
+  fun `concurrent shutDown and resetGrpcStubs should not deadlock`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // Run resetGrpcStubs and shutDown concurrently on separate threads.
+      // Before the fix, resetGrpcStubs held grpcLock and called shutDown(),
+      // which also acquired grpcLock. With ReentrantLock the self-call was fine,
+      // but a concurrent external shutDown() call would block for the entire
+      // duration of channel creation + awaitTermination (up to 5s).
+      // After the fix, resetGrpcStubs calls shutDownLocked() directly
+      // (no nested lock acquisition), so the lock is held for the minimum
+      // necessary time and concurrent callers are not blocked excessively.
+
+      val completedWithinTimeout = AtomicBoolean(false)
+      val iterations = 10
+      val latch = CountDownLatch(2)
+
+      val thread1 = Thread {
+        repeat(iterations) {
+          service.resetGrpcStubs()
+        }
+        latch.countDown()
+      }
+
+      val thread2 = Thread {
+        repeat(iterations) {
+          service.shutDown()
+        }
+        latch.countDown()
+      }
+
+      thread1.start()
+      thread2.start()
+
+      // Both threads should complete well within 10 seconds.
+      // Before the fix, each resetGrpcStubs iteration could block shutDown
+      // for up to 5s (awaitTermination) with the redundant nested lock.
+      completedWithinTimeout.set(latch.await(10, java.util.concurrent.TimeUnit.SECONDS))
+
+      completedWithinTimeout.get().shouldBeTrue()
+
+      // Service should still be in a usable state -- either shut down or with a valid channel
+      // Final cleanup
+      service.shutDown()
+    }
+
+  @Test
+  fun `resetGrpcStubs called multiple times should not deadlock`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // Before the fix, each resetGrpcStubs call internally called shutDown(),
+      // which redundantly re-acquired grpcLock. While ReentrantLock allowed this,
+      // it was unnecessary overhead. After the fix, shutDownLocked() is called
+      // directly without the extra lock acquisition.
+
+      val completedWithinTimeout = AtomicBoolean(false)
+      val iterations = 20
+      val latch = CountDownLatch(1)
+
+      val thread = Thread {
+        repeat(iterations) {
+          service.resetGrpcStubs()
+        }
+        latch.countDown()
+      }
+
+      thread.start()
+      completedWithinTimeout.set(latch.await(10, java.util.concurrent.TimeUnit.SECONDS))
+
+      completedWithinTimeout.get().shouldBeTrue()
+      service.channel.isTerminated.shouldBeFalse()
+
+      service.shutDown()
+    }
+
+  @Test
+  fun `concurrent resetGrpcStubs from multiple threads should not deadlock`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val threadCount = 4
+      val iterationsPerThread = 5
+      val latch = CountDownLatch(threadCount)
+
+      val threads = (1..threadCount).map {
+        Thread {
+          repeat(iterationsPerThread) {
+            service.resetGrpcStubs()
+          }
+          latch.countDown()
+        }
+      }
+
+      threads.forEach { it.start() }
+
+      val completed = latch.await(15, java.util.concurrent.TimeUnit.SECONDS)
+      completed.shouldBeTrue()
+
+      // After all concurrent resets, channel should still be usable
+      service.channel.isTerminated.shouldBeFalse()
+      service.grpcStub.toString().shouldNotBeEmpty()
+
+      service.shutDown()
+    }
+
   // ==================== sendHeartBeat Tests ====================
 
   @Test
