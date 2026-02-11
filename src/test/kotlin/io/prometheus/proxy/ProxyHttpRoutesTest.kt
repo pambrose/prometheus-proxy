@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.util.zip
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -30,15 +31,20 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.withCharset
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.spyk
 import io.prometheus.Proxy
+import io.prometheus.common.ScrapeResults
 import io.prometheus.proxy.ProxyHttpRoutes.ensureLeadingSlash
 import kotlinx.coroutines.channels.ClosedSendChannelException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -374,4 +380,251 @@ class ProxyHttpRoutesTest {
     // Reset for other tests
     atomicBoolean.store(false)
   }
+
+  // ==================== submitScrapeRequest Tests ====================
+  // submitScrapeRequest is internal, so accessible from same-package tests.
+  // These tests exercise the error and success branches in the core scrape request handler.
+
+  private fun createSpyProxyForSubmit(
+    timeoutSecs: Int = 1,
+    checkMillis: Int = 50,
+  ): Proxy {
+    val proxy = spyk(
+      Proxy(
+        options = ProxyOptions(
+          listOf(
+            "-Dproxy.internal.scrapeRequestTimeoutSecs=$timeoutSecs",
+            "-Dproxy.internal.scrapeRequestCheckMillis=$checkMillis",
+          ),
+        ),
+        inProcessServerName = "proxy-submit-test-${System.nanoTime()}",
+        testMode = true,
+      ),
+    )
+    every { proxy.isRunning } returns true
+    return proxy
+  }
+
+  @Test
+  fun `submitScrapeRequest should return agent_disconnected on ClosedSendChannelException`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForSubmit()
+      val agentContext = AgentContext("test-remote")
+      agentContext.invalidate()
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      response.updateMsg shouldBe "agent_disconnected"
+    }
+
+  @Test
+  fun `submitScrapeRequest should return timed_out when scrape request times out`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 1, checkMillis = 50)
+      val agentContext = AgentContext("test-remote")
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      response.updateMsg shouldBe "timed_out"
+    }
+
+  @Test
+  fun `submitScrapeRequest should return timed_out when agent disconnects during scrape`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val agentContext = AgentContext("test-remote")
+
+      launch {
+        delay(200.milliseconds)
+        agentContext.invalidate()
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      response.updateMsg shouldBe "timed_out"
+    }
+
+  @Test
+  fun `submitScrapeRequest should return timed_out when proxy stops during scrape`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val agentContext = AgentContext("test-remote")
+
+      // Start with proxy running, then stop after a brief delay
+      var proxyRunning = true
+      every { proxy.isRunning } answers { proxyRunning }
+
+      launch {
+        delay(200.milliseconds)
+        proxyRunning = false
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      response.updateMsg shouldBe "timed_out"
+    }
+
+  @Test
+  fun `submitScrapeRequest should return success for valid non-zipped response`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val agentContext = AgentContext("test-remote")
+
+      launch {
+        val wrapper = agentContext.readScrapeRequest()!!
+        val results = ScrapeResults(
+          srAgentId = agentContext.agentId,
+          srScrapeId = wrapper.scrapeId,
+          srValidResponse = true,
+          srStatusCode = 200,
+          srContentType = "text/plain; charset=utf-8",
+          srContentAsText = "metric_value 1.0",
+          srUrl = "http://localhost:8080/metrics",
+        )
+        proxy.scrapeRequestManager.assignScrapeResults(results)
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.OK
+      response.updateMsg shouldBe "success"
+      response.contentText shouldBe "metric_value 1.0"
+      response.url shouldBe "http://localhost:8080/metrics"
+    }
+
+  @Test
+  fun `submitScrapeRequest should unzip zipped response content`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val agentContext = AgentContext("test-remote")
+      val originalContent = "metric_value 1.0\nmetric_value2 2.0"
+
+      launch {
+        val wrapper = agentContext.readScrapeRequest()!!
+        val results = ScrapeResults(
+          srAgentId = agentContext.agentId,
+          srScrapeId = wrapper.scrapeId,
+          srValidResponse = true,
+          srStatusCode = 200,
+          srContentType = "text/plain; charset=utf-8",
+          srZipped = true,
+          srContentAsZipped = originalContent.zip(),
+          srUrl = "http://localhost:8080/metrics",
+        )
+        proxy.scrapeRequestManager.assignScrapeResults(results)
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.OK
+      response.updateMsg shouldBe "success"
+      response.contentText shouldBe originalContent
+    }
+
+  @Test
+  fun `submitScrapeRequest should fallback to plain text on content type parse error`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val agentContext = AgentContext("test-remote")
+
+      launch {
+        val wrapper = agentContext.readScrapeRequest()!!
+        val results = ScrapeResults(
+          srAgentId = agentContext.agentId,
+          srScrapeId = wrapper.scrapeId,
+          srValidResponse = true,
+          srStatusCode = 200,
+          srContentType = "this-is-not-a-valid-content-type!!!",
+          srContentAsText = "metric_value 1.0",
+          srUrl = "http://localhost:8080/metrics",
+        )
+        proxy.scrapeRequestManager.assignScrapeResults(results)
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.OK
+      response.updateMsg shouldBe "success"
+      response.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
+    }
+
+  @Test
+  fun `submitScrapeRequest should return path_not_found for non-success status`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val agentContext = AgentContext("test-remote")
+
+      launch {
+        val wrapper = agentContext.readScrapeRequest()!!
+        val results = ScrapeResults(
+          srAgentId = agentContext.agentId,
+          srScrapeId = wrapper.scrapeId,
+          srValidResponse = false,
+          srStatusCode = 404,
+          srContentType = "text/plain; charset=utf-8",
+          srFailureReason = "Endpoint not found",
+          srUrl = "http://localhost:8080/missing",
+        )
+        proxy.scrapeRequestManager.assignScrapeResults(results)
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.NotFound
+      response.updateMsg shouldBe "path_not_found"
+      response.failureReason shouldBe "Endpoint not found"
+      response.contentText shouldBe ""
+    }
 }
