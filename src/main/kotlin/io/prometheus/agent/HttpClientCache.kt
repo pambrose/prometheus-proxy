@@ -44,8 +44,7 @@ internal class HttpClientCache(
 ) {
   private val cache = ConcurrentHashMap<String, CacheEntry>()
 
-  // Use a LinkedHashMap to maintain access order
-  private val accessOrder = LinkedHashMap<String, Long>()
+  private val accessOrder = HashMap<String, Long>()
   private val accessMutex = Mutex()
   private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -53,14 +52,18 @@ internal class HttpClientCache(
     scope.launch {
       while (true) {
         delay(cleanupInterval)
-        accessMutex.withLock {
-          cleanupExpiredEntries()
+        runCatching {
+          accessMutex.withLock {
+            cleanupExpiredEntries()
+          }
+        }.onFailure { e ->
+          logger.error(e) { "Error during HTTP client cache cleanup" }
         }
       }
     }
   }
 
-  data class CacheEntry(
+  class CacheEntry(
     val client: HttpClient,
     val createdAt: Long = System.currentTimeMillis(),
     var lastAccessedAt: Long = System.currentTimeMillis(),
