@@ -113,7 +113,7 @@ internal class AgentHttpService(
         ) { response ->
           result = buildScrapeResults(response, url, scrapeRequest)
         }
-        result!!
+        requireNotNull(result) { "Response handler was not called for $url" }
       } finally {
         httpClientCache.onFinishedWithClient(entry)
       }
