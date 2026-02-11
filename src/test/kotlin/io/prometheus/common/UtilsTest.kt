@@ -249,10 +249,19 @@ class UtilsTest {
   }
 
   @Test
-  fun `parseHostPort should handle bracketed IPv6 with missing close bracket`() {
-    val result = parseHostPort("[::1", 50051)
+  fun `parseHostPort should throw for malformed IPv6 with missing close bracket`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      parseHostPort("[::1", 50051)
+    }
+    exception.message shouldContain "missing closing bracket"
+  }
 
-    result shouldBe HostPort("[::1", 50051)
+  @Test
+  fun `parseHostPort should throw for malformed IPv6 with content after unclosed bracket`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      parseHostPort("[2001:db8::1", 50051)
+    }
+    exception.message shouldContain "missing closing bracket"
   }
 
   @Test
