@@ -23,7 +23,7 @@ plugins {
 }
 
 group = "io.prometheus"
-version = "2.4.1"
+version = "3.0.0"
 
 buildConfig {
   packageName("io.prometheus")
@@ -273,9 +273,9 @@ fun Project.configureDetekt() {
 fun Project.configureVersions() {
   fun isNonStable(version: String): Boolean {
     val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.uppercase().contains(it) }
-    val betaKeyword = listOf("-RC", "-BETA", "-M").any { version.uppercase().contains(it) }
+    val betaKeyword = listOf("-RC", "-BETA", "-ALPHA", "-M").any { version.uppercase().contains(it) }
     val regex = "^[0-9,.v-]+(-r)?$".toRegex()
-    val isStable = !betaKeyword //(stableKeyword || regex.matches(version)) && !betaKeyword
+    val isStable = !betaKeyword // (stableKeyword || regex.matches(version)) && !betaKeyword
     return !isStable
   }
 

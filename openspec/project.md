@@ -90,7 +90,7 @@ This project uses OpenSpec for managing changes and specifications:
 ### Git Workflow
 
 - **Main Branch**: `master` (use this for PRs)
-- **Feature Branches**: Named after version or feature (e.g., `2.4.1`)
+- **Feature Branches**: Named after version or feature (e.g., `3.0.0`)
 - **Commit Style**: Descriptive commit messages focusing on "why" not "what"
 - **Build Requirements**: Code must build and pass tests before committing
 - **Version Management**: Semantic versioning, versions tracked in build files
@@ -149,7 +149,7 @@ This project uses OpenSpec for managing changes and specifications:
 
 ## Current Project Status
 
-- **Version**: 2.4.1 (released MM/DD/YYYY via build config)
+- **Version**: 3.0.0 (released MM/DD/YYYY via build config)
 - **Stability**: Production-ready with active maintenance
 - **Community**: Open source under Apache License 2.0
 - **Documentation**: Comprehensive README with examples and troubleshooting
