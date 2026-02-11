@@ -120,6 +120,9 @@ abstract class BaseOptions protected constructor(
   lateinit var configVals: ConfigVals
     private set
 
+  val isTlsEnabled: Boolean
+    get() = certChainFilePath.isNotEmpty() || privateKeyFilePath.isNotEmpty()
+
   protected abstract fun assignConfigVals()
 
   protected fun parseOptions() {

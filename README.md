@@ -610,6 +610,28 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
 target for `--mount` options.
 
+### Auth Header Forwarding
+
+When Prometheus scrape configurations include `basic_auth` or `bearer_token`, the proxy forwards the
+`Authorization` header to the agent over the gRPC channel. If TLS is not configured, these credentials
+are transmitted in plaintext and could be intercepted on the network between the proxy and agent.
+
+**Enable TLS when forwarding auth headers:**
+
+```bash
+# Proxy with TLS to protect forwarded credentials
+java -jar prometheus-proxy.jar \
+  --cert /path/to/server.crt \
+  --key /path/to/server.key
+
+# Agent with TLS
+java -jar prometheus-agent.jar \
+  --config myconfig.conf \
+  --trust /path/to/ca.crt
+```
+
+The proxy logs a warning on the first request that includes an `Authorization` header when TLS is not enabled.
+
 ### Scraping HTTPS Endpoints
 
 Disable SSL verification for agent https endpoints with the `TRUST_ALL_X509_CERTIFICATES` environment var,
