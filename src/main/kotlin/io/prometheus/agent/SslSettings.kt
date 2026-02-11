@@ -60,5 +60,7 @@ object SslSettings {
     fileName: String,
     password: String,
   ): X509TrustManager =
-    getTrustManagerFactory(fileName, password).trustManagers.first { it is X509TrustManager } as X509TrustManager
+    getTrustManagerFactory(fileName, password).trustManagers
+      .firstOrNull { it is X509TrustManager } as? X509TrustManager
+      ?: error("No X509TrustManager found in trust store: $fileName")
 }
