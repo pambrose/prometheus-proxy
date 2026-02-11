@@ -183,6 +183,7 @@ object ProxyHttpRoutes {
     proxy.logActivity(status)
   }
 
+  @Suppress("ReturnCount")
   internal suspend fun submitScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,

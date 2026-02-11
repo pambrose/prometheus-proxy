@@ -69,6 +69,12 @@ internal class AgentContextManager(
       .filter { (_, agentContext) -> agentContext.inactivityDuration > maxInactivity }
       .map { (agentId, agentContext) -> agentId to agentContext }
 
+  fun invalidateAllAgentContexts() {
+    agentContextMap.values.forEach { agentContext ->
+      agentContext.invalidate()
+    }
+  }
+
   fun removeFromContextManager(
     agentId: String,
     reason: String,

@@ -241,6 +241,7 @@ class Proxy(
   }
 
   override fun shutDown() {
+    agentContextManager.invalidateAllAgentContexts()
     grpcService.stopSync()
     httpService.stopSync()
     if (proxyConfigVals.internal.staleAgentCheckEnabled)
