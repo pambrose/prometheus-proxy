@@ -40,6 +40,7 @@ import io.prometheus.proxy.ProxyUtils.incrementScrapeRequestCount
 import io.prometheus.proxy.ProxyUtils.respondWith
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration
@@ -182,7 +183,7 @@ object ProxyHttpRoutes {
     proxy.logActivity(status)
   }
 
-  private suspend fun submitScrapeRequest(
+  internal suspend fun submitScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,
     path: String,
@@ -197,7 +198,15 @@ object ProxyHttpRoutes {
       val checkTime = proxyConfigVals.internal.scrapeRequestCheckMillis.milliseconds
 
       proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
-      agentContext.writeScrapeRequest(scrapeRequest)
+      try {
+        agentContext.writeScrapeRequest(scrapeRequest)
+      } catch (_: ClosedSendChannelException) {
+        return ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "agent_disconnected",
+          fetchDuration = scrapeRequest.ageDuration(),
+        )
+      }
 
       // Loops while not yet completed (awaitCompleted returns false on timeout)
       while (!scrapeRequest.awaitCompleted(checkTime)) {

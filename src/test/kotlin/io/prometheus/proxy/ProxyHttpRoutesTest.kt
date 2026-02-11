@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
@@ -30,9 +31,12 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.mockk.mockk
 import io.prometheus.proxy.ProxyHttpRoutes.ensureLeadingSlash
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import kotlin.time.Duration.Companion.milliseconds
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -213,4 +217,49 @@ class ProxyHttpRoutesTest {
     modified.contentText shouldBe "modified content"
     modified.updateMsg shouldBe "modified_msg"
   }
+
+  // ==================== ClosedSendChannelException Handling Tests ====================
+
+  @Test
+  fun `writeScrapeRequest on invalidated context should throw ClosedSendChannelException`(): Unit =
+    runBlocking {
+      val context = AgentContext("remote-addr")
+      val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
+
+      context.invalidate()
+
+      // Verify the exact exception type that submitScrapeRequest needs to catch
+      val exception = assertThrows<Exception> {
+        context.writeScrapeRequest(wrapper)
+      }
+      exception.shouldBeInstanceOf<ClosedSendChannelException>()
+    }
+
+  // Verifies that writeScrapeRequest on an invalidated AgentContext produces a
+  // ClosedSendChannelException, and that backlog stays at zero (Bug #2 fix ensures
+  // the counter is decremented on failure). This is the exact exception type that
+  // submitScrapeRequest catches (Bug #3 fix) to return 503 ServiceUnavailable
+  // instead of propagating as an HTTP 500.
+  @Test
+  fun `writeScrapeRequest after concurrent invalidation should not corrupt backlog counter`(): Unit =
+    runBlocking {
+      val context = AgentContext("remote-addr")
+      val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
+
+      // Write some items, then invalidate, then try to write again
+      context.writeScrapeRequest(mockk(relaxed = true))
+      context.writeScrapeRequest(mockk(relaxed = true))
+      context.scrapeRequestBacklogSize shouldBe 2
+
+      context.invalidate()
+      context.scrapeRequestBacklogSize shouldBe 0
+
+      // Attempting to write after invalidation should throw ClosedSendChannelException
+      // and the backlog counter should remain at 0 (not go to 1 then fail)
+      val exception = assertThrows<Exception> {
+        context.writeScrapeRequest(wrapper)
+      }
+      exception.shouldBeInstanceOf<ClosedSendChannelException>()
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
 }
