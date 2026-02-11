@@ -157,14 +157,16 @@ abstract class BaseOptions protected constructor(
   protected fun assignKeepAliveTimeSecs(defaultVal: Long) {
     if (keepAliveTimeSecs == -1L)
       keepAliveTimeSecs = KEEPALIVE_TIME_SECS.getEnv(defaultVal)
-    logger.info { "grpc.keepAliveTimeSecs: ${if (keepAliveTimeSecs == -1L) "default (7200)" else keepAliveTimeSecs}" }
+    logger.info {
+      "grpc.keepAliveTimeSecs: ${if (keepAliveTimeSecs == -1L) "unset (gRPC default)" else keepAliveTimeSecs}"
+    }
   }
 
   protected fun assignKeepAliveTimeoutSecs(defaultVal: Long) {
     if (keepAliveTimeoutSecs == -1L)
       keepAliveTimeoutSecs = KEEPALIVE_TIMEOUT_SECS.getEnv(defaultVal)
     logger.info {
-      "grpc.keepAliveTimeoutSecs: ${if (keepAliveTimeoutSecs == -1L) "default (20)" else keepAliveTimeoutSecs}"
+      "grpc.keepAliveTimeoutSecs: ${if (keepAliveTimeoutSecs == -1L) "unset (gRPC default)" else keepAliveTimeoutSecs}"
     }
   }
 
