@@ -834,19 +834,23 @@ class ProxyPathManagerTest {
     val manager = ProxyPathManager(proxy, isTestMode = true)
 
     val consolidated1 = AgentContext("remote-c1")
-    consolidated1.assignProperties(mockk<RegisterAgentRequest> {
-      every { launchId } returns "l1"
-      every { agentName } returns "c1"
-      every { hostName } returns "h1"
-      every { consolidated } returns true
-    })
+    consolidated1.assignProperties(
+      mockk<RegisterAgentRequest> {
+        every { launchId } returns "l1"
+        every { agentName } returns "c1"
+        every { hostName } returns "h1"
+        every { consolidated } returns true
+      },
+    )
     val consolidated2 = AgentContext("remote-c2")
-    consolidated2.assignProperties(mockk<RegisterAgentRequest> {
-      every { launchId } returns "l2"
-      every { agentName } returns "c2"
-      every { hostName } returns "h2"
-      every { consolidated } returns true
-    })
+    consolidated2.assignProperties(
+      mockk<RegisterAgentRequest> {
+        every { launchId } returns "l2"
+        every { agentName } returns "c2"
+        every { hostName } returns "h2"
+        every { consolidated } returns true
+      },
+    )
     val newAgent = AgentContext("remote-new")
 
     // Two consolidated agents share a path
