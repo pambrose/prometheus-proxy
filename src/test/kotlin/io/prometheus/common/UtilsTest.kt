@@ -408,6 +408,24 @@ class UtilsTest {
     "\"hello\"".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
   }
 
+  // ==================== Bug #12: parseHostPort blank input validation ====================
+
+  @Test
+  fun `parseHostPort should throw for empty string`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      parseHostPort("", 50051)
+    }
+    exception.message shouldContain "must not be blank"
+  }
+
+  @Test
+  fun `parseHostPort should throw for blank string`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      parseHostPort("   ", 50051)
+    }
+    exception.message shouldContain "must not be blank"
+  }
+
   // ==================== Type Check Helper ====================
 
   private inline fun <reified T> Any.shouldBeInstanceOf() {
