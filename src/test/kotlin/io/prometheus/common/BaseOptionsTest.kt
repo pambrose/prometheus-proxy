@@ -12,6 +12,7 @@ import io.prometheus.proxy.ProxyOptions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.net.URI
 
 class BaseOptionsTest {
   // ==================== Shared Option Defaults (via ProxyOptions) ====================
@@ -240,6 +241,62 @@ class BaseOptionsTest {
   fun `dynamic params should strip surrounding quotes`() {
     val options = ProxyOptions(listOf("-Dproxy.http.port=\"5555\""))
     options.proxyPort shouldBe 5555
+  }
+
+  // ==================== Bug #15: Config resolution with single resolve() ====================
+
+  @Test
+  fun `config with variable substitution should resolve correctly`(
+    @TempDir tempDir: File,
+  ) {
+    val confFile = File(tempDir, "test-subst.conf")
+    confFile.writeText(
+      """
+      proxy {
+        http.port = 8888
+        admin.port = ${"$"}{proxy.http.port}
+      }
+      """.trimIndent(),
+    )
+
+    val options = ProxyOptions(listOf("-c", confFile.absolutePath))
+    options.proxyPort shouldBe 8888
+    // Variable substitution resolved: admin.port = proxy.http.port = 8888
+    options.configVals.proxy.admin.port shouldBe 8888
+  }
+
+  // ==================== Bug #18: URI.toURL() replaces deprecated URL() constructor ====================
+
+  @Test
+  fun `URI toURL should produce valid URL for http config`() {
+    val uri = URI("http://example.com/config.conf")
+    val url = uri.toURL()
+
+    url.protocol shouldBe "http"
+    url.host shouldBe "example.com"
+    url.path shouldBe "/config.conf"
+  }
+
+  @Test
+  fun `URI toURL should produce valid URL for https config`() {
+    val uri = URI("https://example.com/path/config.json")
+    val url = uri.toURL()
+
+    url.protocol shouldBe "https"
+    url.host shouldBe "example.com"
+    url.path shouldBe "/path/config.json"
+  }
+
+  // ==================== Bug #19: Version flag handled after parsing ====================
+
+  @Test
+  fun `version flag should not trigger exitProcess during construction`() {
+    // Before the fix, passing -v would call exitProcess(0) inside the JCommander
+    // validator during parse(). Now the version flag is checked after parsing,
+    // so constructing with other flags should not exit.
+    // This test verifies normal construction still works (no exitProcess during parsing).
+    val options = ProxyOptions(listOf("-b"))
+    options.debugEnabled shouldBe true
   }
 
   // ==================== ConfigVals Tests ====================

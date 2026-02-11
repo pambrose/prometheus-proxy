@@ -201,6 +201,7 @@ class ProxyServiceImplTest {
 
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+      every { proxy.pathManager.addPath(testPath, testLabels, mockAgentContext) } returns true
       every { proxy.pathManager.pathMapSize } returns 5
 
       val request = registerPathRequest {

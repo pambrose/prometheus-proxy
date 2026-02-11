@@ -18,10 +18,12 @@
 
 package io.prometheus.common
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import org.junit.jupiter.api.Test
 
@@ -329,6 +331,61 @@ class EnvVarsTest {
       longResult shouldBe 120L
     }
   }
+
+  // ==================== Bug #16: parseBooleanStrict validation ====================
+
+  @Test
+  fun `parseBooleanStrict should return true for true (case insensitive)`() {
+    EnvVars.parseBooleanStrict("TEST", "true").shouldBeTrue()
+    EnvVars.parseBooleanStrict("TEST", "TRUE").shouldBeTrue()
+    EnvVars.parseBooleanStrict("TEST", "True").shouldBeTrue()
+    EnvVars.parseBooleanStrict("TEST", "tRuE").shouldBeTrue()
+  }
+
+  @Test
+  fun `parseBooleanStrict should return false for false (case insensitive)`() {
+    EnvVars.parseBooleanStrict("TEST", "false").shouldBeFalse()
+    EnvVars.parseBooleanStrict("TEST", "FALSE").shouldBeFalse()
+    EnvVars.parseBooleanStrict("TEST", "False").shouldBeFalse()
+    EnvVars.parseBooleanStrict("TEST", "fAlSe").shouldBeFalse()
+  }
+
+  @Test
+  fun `parseBooleanStrict should throw for yes`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      EnvVars.parseBooleanStrict("ADMIN_ENABLED", "yes")
+    }
+    exception.message shouldContain "ADMIN_ENABLED"
+    exception.message shouldContain "yes"
+    exception.message shouldContain "expected 'true' or 'false'"
+  }
+
+  @Test
+  fun `parseBooleanStrict should throw for numeric 1`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      EnvVars.parseBooleanStrict("METRICS_ENABLED", "1")
+    }
+    exception.message shouldContain "METRICS_ENABLED"
+    exception.message shouldContain "'1'"
+  }
+
+  @Test
+  fun `parseBooleanStrict should throw for typo ture`() {
+    val exception = shouldThrow<IllegalArgumentException> {
+      EnvVars.parseBooleanStrict("DEBUG_ENABLED", "ture")
+    }
+    exception.message shouldContain "DEBUG_ENABLED"
+    exception.message shouldContain "ture"
+  }
+
+  @Test
+  fun `parseBooleanStrict should throw for empty string`() {
+    shouldThrow<IllegalArgumentException> {
+      EnvVars.parseBooleanStrict("TEST", "")
+    }
+  }
+
+  // ==================== Agent Variables ====================
 
   @Test
   fun `EnvVars enum should contain all expected agent variables`() {

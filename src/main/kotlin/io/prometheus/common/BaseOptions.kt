@@ -41,10 +41,9 @@ import io.prometheus.common.EnvVars.METRICS_PORT
 import io.prometheus.common.EnvVars.PRIVATE_KEY_FILE_PATH
 import io.prometheus.common.EnvVars.TRANSPORT_FILTER_DISABLED
 import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
-import io.prometheus.common.Utils.VersionValidator
 import java.io.File
 import java.io.FileNotFoundException
-import java.net.URL
+import java.net.URI
 import kotlin.system.exitProcess
 
 // @Parameters(separators = "=")
@@ -106,11 +105,7 @@ abstract class BaseOptions protected constructor(
   var logLevel = ""
     protected set
 
-  @Parameter(
-    names = ["-v", "--version"],
-    description = "Print version info and exit",
-    validateWith = [VersionValidator::class],
-  )
+  @Parameter(names = ["-v", "--version"], description = "Print version info and exit")
   private var version = false
 
   @Parameter(names = ["-u", "--usage"], help = true)
@@ -140,6 +135,11 @@ abstract class BaseOptions protected constructor(
 
         if (usage) {
           jcom.usage()
+          exitProcess(0)
+        }
+
+        if (version) {
+          jcom.console.println(Utils.getVersionDesc(false))
           exitProcess(0)
         }
       } catch (e: ParameterException) {
@@ -237,7 +237,7 @@ abstract class BaseOptions protected constructor(
         exitOnMissingConfig,
       )
         .resolve(ConfigResolveOptions.defaults())
-        .resolve()
+    // .resolve() Unnecessary
 
     dynamicParams
       .forEach { (k, v) ->
@@ -282,7 +282,7 @@ abstract class BaseOptions protected constructor(
         runCatchingCancellable {
           val configSyntax = getConfigSyntax(configName)
           return ConfigFactory
-            .parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
+            .parseURL(URI(configName).toURL(), configParseOptions.setSyntax(configSyntax))
             .withFallback(fallback)
         }.onFailure { e ->
           if (e.cause is FileNotFoundException)

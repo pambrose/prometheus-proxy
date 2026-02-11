@@ -88,7 +88,6 @@ object ProxyUtils {
     status: HttpStatusCode = HttpStatusCode.OK,
   ) {
     response.header(HttpHeaders.CacheControl, CACHE_CONTROL_VALUE)
-    response.status(status)
     respondText(text, contentType, status)
   }
 }

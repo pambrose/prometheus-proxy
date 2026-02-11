@@ -80,7 +80,10 @@ enum class EnvVars {
 
   fun getEnv(defaultVal: String) = getenv(name) ?: defaultVal
 
-  fun getEnv(defaultVal: Boolean) = getenv(name)?.toBoolean() ?: defaultVal
+  fun getEnv(defaultVal: Boolean): Boolean {
+    val value = getenv(name) ?: return defaultVal
+    return parseBooleanStrict(name, value)
+  }
 
   fun getEnv(defaultVal: Int): Int {
     val value = getenv(name) ?: return defaultVal
@@ -92,5 +95,21 @@ enum class EnvVars {
     val value = getenv(name) ?: return defaultVal
     return value.toLongOrNull()
       ?: throw IllegalArgumentException("Environment variable $name has invalid long value: '$value'")
+  }
+
+  companion object {
+    internal fun parseBooleanStrict(
+      envName: String,
+      value: String,
+    ): Boolean =
+      when (value.lowercase()) {
+        "true" -> true
+
+        "false" -> false
+
+        else -> throw IllegalArgumentException(
+          "Environment variable $envName has invalid boolean value: '$value' (expected 'true' or 'false')",
+        )
+      }
   }
 }
