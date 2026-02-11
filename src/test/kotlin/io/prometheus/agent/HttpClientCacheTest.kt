@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.shouldBe
@@ -124,7 +125,7 @@ class HttpClientCacheTest {
 
       cache.currentCacheSize() shouldBe 1
 
-      // All should be different clients
+      // All should be the same client (all map to NO_AUTH cache key)
       entry1.client shouldBe entry2.client
       entry2.client shouldBe entry3.client
       entry1.client shouldBe entry3.client
@@ -150,34 +151,34 @@ class HttpClientCacheTest {
       )
 
       try {
-        // Fill cache to capacity
+        // Fill cache to capacity with distinct timestamps so LRU order is deterministic
         val entries = mutableListOf<CacheEntry>()
         for (i in 1..5) {
           val key = ClientKey("user$i", "pass$i")
           val entry = lruCache.getOrCreateClient(key) { createMockHttpClient() }
           entries.add(entry)
+          delay(2) // Ensure each entry gets a distinct timestamp
         }
 
         lruCache.currentCacheSize() shouldBe 5
 
-        // Ensure the re-access gets a strictly later timestamp.
-        // Without this, all entries can share the same System.currentTimeMillis()
-        // value, and minByOrNull picks user1 (first in insertion order) as the
-        // LRU victim instead of user2.
+        // Access user1 to make it most recently used (now has newest timestamp)
         delay(2)
-
-        // Access the first entry to make it most recently used
         val firstKey = ClientKey("user1", "pass1")
         val firstEntry = lruCache.getOrCreateClient(firstKey) { createMockHttpClient() }
         firstEntry.client shouldBe entries[0].client
 
-        // Add a new entry, which should evict the least recently used (user2)
+        // Add user6, which should evict user2 (oldest timestamp after user1 was refreshed)
         val newKey = ClientKey("user6", "pass6")
         val newEntry = lruCache.getOrCreateClient(newKey) { createMockHttpClient() }
 
         lruCache.currentCacheSize() shouldBe 5
 
-        // Try to get user2 again - should create a new client since it was evicted
+        // user1 should still be cached (it was re-accessed)
+        val user1Entry = lruCache.getOrCreateClient(firstKey) { createMockHttpClient() }
+        user1Entry.client shouldBe entries[0].client
+
+        // user2 should have been evicted (oldest entry after user1 refresh)
         val evictedKey = ClientKey("user2", "pass2")
         val evictedEntry = lruCache.getOrCreateClient(evictedKey) { createMockHttpClient() }
         evictedEntry.client shouldNotBe entries[1].client
@@ -185,6 +186,7 @@ class HttpClientCacheTest {
         // Clean up
         entries.forEach { lruCache.onFinishedWithClient(it) }
         lruCache.onFinishedWithClient(firstEntry)
+        lruCache.onFinishedWithClient(user1Entry)
         lruCache.onFinishedWithClient(newEntry)
         lruCache.onFinishedWithClient(evictedEntry)
       } finally {
@@ -641,6 +643,23 @@ class HttpClientCacheTest {
       testCache.onFinishedWithClient(inUseEntry)
 
       verify(exactly = 1) { inUseClient.close() }
+    }
+
+  // L11: CacheEntry is now a regular class (not data class), so equality
+  // is identity-based. Mutable lastAccessedAt no longer affects equals/hashCode.
+  @Test
+  fun `CacheEntry equality should be identity-based`(): Unit =
+    runBlocking {
+      val client = createMockHttpClient()
+      val now = System.currentTimeMillis()
+      val entry1 = CacheEntry(client, now, now)
+      val entry2 = CacheEntry(client, now, now)
+
+      // Same instance should be equal
+      (entry1 == entry1).shouldBeTrue()
+
+      // Different instances with same values should NOT be equal (identity-based)
+      (entry1 == entry2).shouldBeFalse()
     }
 
   @Test
