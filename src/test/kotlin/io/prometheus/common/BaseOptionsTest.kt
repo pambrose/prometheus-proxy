@@ -242,6 +242,28 @@ class BaseOptionsTest {
     options.proxyPort shouldBe 5555
   }
 
+  // ==================== Bug #15: Config resolution with single resolve() ====================
+
+  @Test
+  fun `config with variable substitution should resolve correctly`(
+    @TempDir tempDir: File,
+  ) {
+    val confFile = File(tempDir, "test-subst.conf")
+    confFile.writeText(
+      """
+      proxy {
+        http.port = 8888
+        admin.port = ${"$"}{proxy.http.port}
+      }
+      """.trimIndent(),
+    )
+
+    val options = ProxyOptions(listOf("-c", confFile.absolutePath))
+    options.proxyPort shouldBe 8888
+    // Variable substitution resolved: admin.port = proxy.http.port = 8888
+    options.configVals.proxy.admin.port shouldBe 8888
+  }
+
   // ==================== ConfigVals Tests ====================
 
   @Test

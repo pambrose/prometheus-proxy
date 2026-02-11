@@ -237,7 +237,7 @@ abstract class BaseOptions protected constructor(
         exitOnMissingConfig,
       )
         .resolve(ConfigResolveOptions.defaults())
-        .resolve()
+    // .resolve() Unnecessary
 
     dynamicParams
       .forEach { (k, v) ->
