@@ -43,6 +43,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -50,6 +51,7 @@ import kotlin.time.Duration.Companion.seconds
 object ProxyHttpRoutes {
   private val logger = logger {}
   private val format = Json { prettyPrint = true }
+  private val authHeaderWithoutTlsWarned = AtomicBoolean(false)
 
   fun Routing.handleRequests(proxy: Proxy) {
     //      get("/__test__") {
@@ -282,16 +284,25 @@ object ProxyHttpRoutes {
     path: String,
     encodedQueryParams: String,
     request: ApplicationRequest,
-  ): ScrapeRequestWrapper =
-    ScrapeRequestWrapper(
+  ): ScrapeRequestWrapper {
+    val authHeader = request.header(HttpHeaders.Authorization).orEmpty()
+
+    if (authHeader.isNotEmpty() && !proxy.options.isTlsEnabled && authHeaderWithoutTlsWarned.compareAndSet(false, true))
+      logger.warn {
+        "Authorization header is being forwarded to agent over a non-TLS gRPC connection. " +
+          "Credentials may be exposed in transit. Configure TLS (--cert, --key) to secure the proxy-agent channel."
+      }
+
+    return ScrapeRequestWrapper(
       agentContext = agentContext,
       proxy = proxy,
       pathVal = path,
       encodedQueryParamsVal = encodedQueryParams,
-      authHeaderVal = request.header(HttpHeaders.Authorization).orEmpty(),
+      authHeaderVal = authHeader,
       acceptVal = request.header(HttpHeaders.Accept),
       debugEnabledVal = proxy.options.debugEnabled,
     )
+  }
 }
 
 data class ScrapeRequestResponse(

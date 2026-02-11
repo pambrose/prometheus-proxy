@@ -99,6 +99,25 @@ class BaseOptionsTest {
 
   // ==================== Transport Filter and TLS ====================
 
+  // Bug #10: isTlsEnabled property for detecting plaintext auth header forwarding
+  @Test
+  fun `isTlsEnabled should be false when no TLS options set`() {
+    val options = ProxyOptions(listOf())
+    options.isTlsEnabled shouldBe false
+  }
+
+  @Test
+  fun `isTlsEnabled should be true when cert chain file path is set`() {
+    val options = ProxyOptions(listOf("-t", "/path/to/cert.pem"))
+    options.isTlsEnabled shouldBe true
+  }
+
+  @Test
+  fun `isTlsEnabled should be true when private key file path is set`() {
+    val options = ProxyOptions(listOf("-k", "/path/to/key.pem"))
+    options.isTlsEnabled shouldBe true
+  }
+
   @Test
   fun `transportFilterDisabled should be settable via --tf_disabled`() {
     val options = ProxyOptions(listOf("--tf_disabled"))
