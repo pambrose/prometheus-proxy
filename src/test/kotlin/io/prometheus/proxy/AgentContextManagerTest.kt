@@ -2,12 +2,19 @@
 
 package io.prometheus.proxy
 
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.mockk.every
 import io.mockk.mockk
+import io.prometheus.Proxy
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import kotlin.time.Duration.Companion.seconds
 
 class AgentContextManagerTest {
   // ==================== Initial State Tests ====================
@@ -225,4 +232,112 @@ class AgentContextManagerTest {
 
       manager.totalAgentScrapeRequestBacklogSize shouldBe 3
     }
+
+  // ==================== invalidateAllAgentContexts Tests ====================
+
+  // Bug #4: Proxy shutdown did not invalidate remaining agent contexts, causing
+  // coroutines in readRequestsFromProxy to hang and HTTP handlers waiting in
+  // awaitCompleted to experience unnecessary delays until the timeout expired.
+  @Test
+  fun `invalidateAllAgentContexts should invalidate all agent contexts`() {
+    val manager = AgentContextManager(isTestMode = true)
+    val context1 = AgentContext("remote-1")
+    val context2 = AgentContext("remote-2")
+    val context3 = AgentContext("remote-3")
+
+    manager.addAgentContext(context1)
+    manager.addAgentContext(context2)
+    manager.addAgentContext(context3)
+
+    context1.isValid().shouldBeTrue()
+    context2.isValid().shouldBeTrue()
+    context3.isValid().shouldBeTrue()
+
+    manager.invalidateAllAgentContexts()
+
+    context1.isValid().shouldBeFalse()
+    context2.isValid().shouldBeFalse()
+    context3.isValid().shouldBeFalse()
+  }
+
+  @Test
+  fun `invalidateAllAgentContexts should drain backlog for all contexts`(): Unit =
+    runBlocking {
+      val manager = AgentContextManager(isTestMode = true)
+      val context1 = AgentContext("remote-1")
+      val context2 = AgentContext("remote-2")
+
+      manager.addAgentContext(context1)
+      manager.addAgentContext(context2)
+
+      // Build up backlog
+      context1.writeScrapeRequest(mockk(relaxed = true))
+      context1.writeScrapeRequest(mockk(relaxed = true))
+      context2.writeScrapeRequest(mockk(relaxed = true))
+      manager.totalAgentScrapeRequestBacklogSize shouldBe 3
+
+      manager.invalidateAllAgentContexts()
+
+      // All backlogs should be drained to 0
+      context1.scrapeRequestBacklogSize shouldBe 0
+      context2.scrapeRequestBacklogSize shouldBe 0
+      manager.totalAgentScrapeRequestBacklogSize shouldBe 0
+    }
+
+  @Test
+  fun `invalidateAllAgentContexts should unblock awaitCompleted on buffered wrappers`(): Unit =
+    runBlocking {
+      val manager = AgentContextManager(isTestMode = true)
+      val context = AgentContext("remote-addr")
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.isMetricsEnabled } returns false
+
+      manager.addAgentContext(context)
+
+      // Create a real ScrapeRequestWrapper so awaitCompleted() works end-to-end
+      val wrapper = ScrapeRequestWrapper(context, mockProxy, "/metrics", "", "", null, false)
+      context.writeScrapeRequest(wrapper)
+
+      val startTime = System.currentTimeMillis()
+      val deferred = async {
+        wrapper.awaitCompleted(30.seconds)
+      }
+
+      // invalidateAllAgentContexts should drain and close the wrapper's channel
+      manager.invalidateAllAgentContexts()
+
+      val completed = deferred.await()
+      val elapsed = System.currentTimeMillis() - startTime
+
+      completed.shouldBeFalse()
+      // Should unblock well under the 30-second timeout
+      elapsed shouldBeLessThan 5000L
+    }
+
+  @Test
+  fun `invalidateAllAgentContexts with no agents should not fail`() {
+    val manager = AgentContextManager(isTestMode = true)
+
+    // Should not throw when there are no agent contexts
+    manager.invalidateAllAgentContexts()
+
+    manager.agentContextSize shouldBe 0
+  }
+
+  @Test
+  fun `invalidateAllAgentContexts should not remove contexts from map`() {
+    val manager = AgentContextManager(isTestMode = true)
+    val context1 = AgentContext("remote-1")
+    val context2 = AgentContext("remote-2")
+
+    manager.addAgentContext(context1)
+    manager.addAgentContext(context2)
+
+    manager.invalidateAllAgentContexts()
+
+    // Contexts are invalidated but still in the map (removed by service shutdown)
+    manager.agentContextSize shouldBe 2
+    manager.getAgentContext(context1.agentId).shouldNotBeNull()
+    manager.getAgentContext(context2.agentId).shouldNotBeNull()
+  }
 }

@@ -25,12 +25,13 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
-import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.agent.HttpClientCache.CacheEntry
 import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.agent.HttpClientCache.ClientKey.Companion.NO_AUTH
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
@@ -519,9 +520,9 @@ class HttpClientCacheTest {
         // Create a slow-closing mock client
         val slowClient = mockk<HttpClient>(relaxed = true)
         val closeStarted = AtomicBoolean(false)
-        coEvery { slowClient.close() } coAnswers {
+        every { slowClient.close() } answers {
           closeStarted.set(true)
-          delay(2.seconds) // Simulate slow I/O close
+          Thread.sleep(2000) // Simulate slow I/O close (not suspend, so use Thread.sleep)
         }
 
         // Get the entry with the slow client, then mark it for eviction
@@ -535,8 +536,10 @@ class HttpClientCacheTest {
           slowCache.onFinishedWithClient(e)
         }
 
-        // onFinishedWithClient triggers close outside the mutex
-        val closeJob = async { slowCache.onFinishedWithClient(slowEntry) }
+        // onFinishedWithClient triggers close outside the mutex.
+        // Must run on Dispatchers.IO so the blocking Thread.sleep doesn't
+        // starve the single-threaded runBlocking dispatcher.
+        val closeJob = async(Dispatchers.IO) { slowCache.onFinishedWithClient(slowEntry) }
 
         // Wait for close to start
         while (!closeStarted.get()) delay(10.milliseconds)

@@ -128,14 +128,19 @@ internal class AgentGrpcService(
     resetGrpcStubs()
   }
 
+  // Must be called while holding grpcLock
+  private fun shutDownLocked() {
+    if (agent.isZipkinEnabled)
+      tracing.close()
+    if (grpcStarted) {
+      channel.shutdownNow()
+      channel.awaitTermination(5, SECONDS)
+    }
+  }
+
   fun shutDown() =
     grpcLock.withLock {
-      if (agent.isZipkinEnabled)
-        tracing.close()
-      if (grpcStarted) {
-        channel.shutdownNow()
-        channel.awaitTermination(5, SECONDS)
-      }
+      shutDownLocked()
     }
 
   fun resetGrpcStubs() =
@@ -143,7 +148,7 @@ internal class AgentGrpcService(
       logger.info { "Creating gRPC stubs" }
 
       if (grpcStarted)
-        shutDown()
+        shutDownLocked()
       else
         grpcStarted = true
 

@@ -205,6 +205,65 @@ class AgentContextTest {
       context.scrapeRequestBacklogSize shouldBe 1
     }
 
+  // ==================== Backlog Counter Consistency Tests ====================
+
+  @Test
+  fun `invalidate should decrement backlog size for drained items`(): Unit =
+    runBlocking {
+      val context = AgentContext("remote-addr")
+
+      context.writeScrapeRequest(mockk(relaxed = true))
+      context.writeScrapeRequest(mockk(relaxed = true))
+      context.writeScrapeRequest(mockk(relaxed = true))
+      context.scrapeRequestBacklogSize shouldBe 3
+
+      context.invalidate()
+
+      // After invalidation, backlog should be 0 because drained items are decremented
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
+
+  @Test
+  fun `writeScrapeRequest to closed channel should not leak backlog count`(): Unit =
+    runBlocking {
+      val context = AgentContext("remote-addr")
+
+      // Invalidate first so channel is closed
+      context.invalidate()
+      context.scrapeRequestBacklogSize shouldBe 0
+
+      // Attempting to write to a closed channel should throw,
+      // but the backlog counter should remain at 0 (not increment without a matching decrement)
+      val threw = try {
+        context.writeScrapeRequest(mockk(relaxed = true))
+        false
+      } catch (_: Exception) {
+        true
+      }
+
+      threw.shouldBeTrue()
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
+
+  @Test
+  fun `invalidate with mixed read and unread items should have correct backlog`(): Unit =
+    runBlocking {
+      val context = AgentContext("remote-addr")
+
+      // Write 5 items
+      repeat(5) { context.writeScrapeRequest(mockk(relaxed = true)) }
+      context.scrapeRequestBacklogSize shouldBe 5
+
+      // Read 2 items (each decrements backlog)
+      context.readScrapeRequest()
+      context.readScrapeRequest()
+      context.scrapeRequestBacklogSize shouldBe 3
+
+      // Invalidate should drain remaining 3 and decrement for each
+      context.invalidate()
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
+
   // ==================== Activity Time Tests ====================
 
   @Test

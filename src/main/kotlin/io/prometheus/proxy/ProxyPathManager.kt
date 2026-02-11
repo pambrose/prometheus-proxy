@@ -63,7 +63,7 @@ internal class ProxyPathManager(
     path: String,
     labels: String,
     agentContext: AgentContext,
-  ) {
+  ): Boolean {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
 
     synchronized(pathMap) {
@@ -72,24 +72,41 @@ internal class ProxyPathManager(
         if (agentInfo == null) {
           pathMap[path] = AgentContextInfo(true, labels, mutableListOf(agentContext))
         } else {
-          if (agentContext.consolidated != agentInfo.isConsolidated)
-            logger.warn {
-              "Mismatch of agent context types: ${agentContext.consolidated} and ${agentInfo.isConsolidated}"
+          if (agentContext.consolidated != agentInfo.isConsolidated) {
+            logger.error {
+              "Rejecting consolidated agent for non-consolidated path /$path"
             }
+            return false
+          }
           agentInfo.agentContexts += agentContext
         }
       } else {
+        if (agentInfo != null && agentInfo.isConsolidated) {
+          logger.error { "Rejecting non-consolidated agent for consolidated path /$path" }
+          return false
+        }
+        val displacedContexts = agentInfo?.agentContexts?.toList() ?: emptyList()
         if (agentInfo != null) {
-          if (agentInfo.isConsolidated) {
-            logger.warn { "Non-consolidated agent overwriting consolidated path /$path" }
-          }
           logger.info { "Overwriting path /$path for ${agentInfo.agentContexts[0]}" }
         }
         pathMap[path] = AgentContextInfo(false, labels, mutableListOf(agentContext))
+
+        // Invalidate displaced agent contexts that have no other registered paths,
+        // so they don't remain orphaned consuming resources until stale agent eviction.
+        displacedContexts.forEach { displacedContext ->
+          val hasOtherPaths = pathMap.any { (_, v) ->
+            v.agentContexts.any { it.agentId == displacedContext.agentId }
+          }
+          if (!hasOtherPaths) {
+            logger.info { "Invalidating orphaned $displacedContext after path /$path was overwritten" }
+            displacedContext.invalidate()
+          }
+        }
       }
 
       if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
     }
+    return true
   }
 
   fun removePath(
