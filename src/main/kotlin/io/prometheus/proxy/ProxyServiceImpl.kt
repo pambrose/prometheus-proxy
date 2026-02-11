@@ -164,6 +164,7 @@ internal class ProxyServiceImpl(
               agentContext.readScrapeRequest()?.apply { emit(scrapeRequest) }
             }
           }
+          ?: logger.warn { "readRequestsFromProxy(): No AgentContext found for agentId: $agentId" }
       } finally {
         // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to
         // detect agent disconnect and clean up. Handle cleanup here on stream termination.
