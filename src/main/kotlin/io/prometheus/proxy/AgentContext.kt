@@ -78,7 +78,12 @@ internal class AgentContext(
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
     channelBacklogSize += 1
-    scrapeRequestChannel.send(scrapeRequest)
+    try {
+      scrapeRequestChannel.send(scrapeRequest)
+    } catch (e: Exception) {
+      channelBacklogSize -= 1
+      throw e
+    }
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
@@ -99,6 +104,7 @@ internal class AgentContext(
     // instead of waiting for the full scrape timeout to expire.
     while (true) {
       val wrapper = scrapeRequestChannel.tryReceive().getOrNull() ?: break
+      channelBacklogSize -= 1
       wrapper.closeChannel()
     }
   }
