@@ -29,6 +29,7 @@ import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.ScrapeRequestWrapper
@@ -227,12 +228,11 @@ class AgentContextTest {
     }
 
   // Tests the graceful shutdown behavior of an agent context.
-  // When invalidate() is called, the context is marked invalid but existing queued
-  // requests can still be read (allowing in-flight operations to complete).
-  // This prevents data loss during agent disconnection while ensuring no new
-  // requests are accepted after invalidation.
+  // When invalidate() is called, the context is marked invalid and buffered
+  // requests are drained (with closeChannel() called on each). After invalidation,
+  // readScrapeRequest() returns null because the channel was drained and closed.
   @Test
-  fun `invalidate should close scrape request channel`(): Unit =
+  fun `invalidate should drain scrape request channel`(): Unit =
     runBlocking {
       val context = AgentContext("192.168.1.1")
       val mockRequest = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -240,12 +240,15 @@ class AgentContextTest {
       context.writeScrapeRequest(mockRequest)
       context.invalidate()
 
-      // After invalidation, reading should still work for existing items
+      // After invalidation, buffered items were drained by invalidate()
       val result = context.readScrapeRequest()
-      result.shouldNotBeNull()
+      result.shouldBeNull()
 
-      // But isValid should be false
+      // isValid should be false
       context.isValid().shouldBeFalse()
+
+      // closeChannel was called on the drained wrapper
+      verify(exactly = 1) { mockRequest.closeChannel() }
     }
 
   @Test

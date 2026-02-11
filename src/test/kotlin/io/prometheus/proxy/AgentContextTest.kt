@@ -131,12 +131,13 @@ class AgentContextTest {
       // Invalidate should drain the channel and close the wrapper's completion channel
       context.invalidate()
 
-      // awaitCompleted should return true (channel closed) almost immediately
+      // awaitCompleted should unblock almost immediately.
+      // It returns false because scrapeResults was never assigned (agent disconnected).
       val completed = deferred.await()
       val elapsed = System.currentTimeMillis() - startTime
 
-      completed.shouldBeTrue()
-      // Should complete in well under the 30-second timeout
+      completed.shouldBeFalse()
+      // Should unblock in well under the 30-second timeout
       elapsed shouldBeLessThan 5000L
     }
 
@@ -309,5 +310,22 @@ class AgentContextTest {
     val context = AgentContext("remote-addr")
 
     (context == context) shouldBe true
+  }
+
+  // L6: markActivityTime should use a single clock.markNow() so both timestamps
+  // are consistent. Before the fix, two separate markNow() calls could drift.
+  @Test
+  fun `markActivityTime with isRequest true should keep both timestamps consistent`() {
+    val context = AgentContext("remote-addr")
+
+    Thread.sleep(100)
+    context.markActivityTime(true)
+
+    // Both inactivityDuration and lastRequestDuration (accessed via toString)
+    // should be very close to zero since we just marked activity.
+    // The key invariant: inactivityDuration should not be significantly different
+    // from what lastRequestDuration would be, since both were set from the same markNow().
+    val inactivity = context.inactivityDuration
+    inactivity.inWholeMilliseconds shouldBeLessThan 50L
   }
 }

@@ -11,6 +11,7 @@ import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -130,12 +131,13 @@ class ScrapeRequestWrapperTest {
   // ==================== Completion Tests ====================
 
   @Test
-  fun `awaitCompleted should return true when markComplete is called`(): Unit =
+  fun `awaitCompleted should return true when markComplete is called with results`(): Unit =
     runBlocking {
       val wrapper = createWrapper()
 
       launch {
         Thread.sleep(50)
+        wrapper.scrapeResults = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
         wrapper.markComplete()
       }
 
@@ -150,6 +152,21 @@ class ScrapeRequestWrapperTest {
 
       // Do not call markComplete — should timeout
       val result = wrapper.awaitCompleted(100.milliseconds)
+      result.shouldBeFalse()
+    }
+
+  @Test
+  fun `awaitCompleted should return false when channel closed without results`(): Unit =
+    runBlocking {
+      val wrapper = createWrapper()
+
+      launch {
+        Thread.sleep(50)
+        // Close channel directly without setting scrapeResults
+        wrapper.closeChannel()
+      }
+
+      val result = wrapper.awaitCompleted(5.seconds)
       result.shouldBeFalse()
     }
 
@@ -192,13 +209,14 @@ class ScrapeRequestWrapperTest {
   // ==================== awaitCompleted Edge Cases ====================
 
   @Test
-  fun `awaitCompleted should return true immediately when already completed`(): Unit =
+  fun `awaitCompleted should return true immediately when already completed with results`(): Unit =
     runBlocking {
       val wrapper = createWrapper()
 
+      wrapper.scrapeResults = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
       wrapper.markComplete()
 
-      // After markComplete, awaitCompleted should return true quickly
+      // After markComplete with results, awaitCompleted should return true quickly
       val result = wrapper.awaitCompleted(5.seconds)
       result.shouldBeTrue()
     }

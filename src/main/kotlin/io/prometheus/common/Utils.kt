@@ -48,7 +48,7 @@ object Utils {
   }
 
   fun decodeParams(encodedQueryParams: String): String =
-    if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8.name())}" else ""
+    if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8)}" else ""
 
   internal fun String.defaultEmptyJsonObject() = ifEmpty { "{}" }
 
@@ -68,7 +68,12 @@ object Utils {
         "off" -> Level.OFF
         else -> throw IllegalArgumentException("Invalid $context log level: $logLevel")
       }
-    val rootLogger = LoggerFactory.getLogger(ROOT_LOGGER_NAME) as Logger
+    val rootLogger = LoggerFactory.getLogger(ROOT_LOGGER_NAME) as? Logger
+      ?: run {
+        LoggerFactory.getLogger(ROOT_LOGGER_NAME)
+          .warn("Cannot set log level: SLF4J binding is not Logback")
+        return
+      }
     rootLogger.level = level
   }
 
@@ -100,7 +105,7 @@ object Utils {
         val closeBracket = hostPort.indexOf(']')
         when {
           closeBracket == -1 -> {
-            HostPort(hostPort, defaultPort)
+            throw IllegalArgumentException("Malformed IPv6 address in '$hostPort': missing closing bracket")
           }
 
           closeBracket + 1 < hostPort.length && hostPort[closeBracket + 1] == ':' -> {

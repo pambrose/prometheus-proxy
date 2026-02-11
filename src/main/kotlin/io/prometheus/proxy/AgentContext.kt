@@ -104,10 +104,11 @@ internal class AgentContext(
   }
 
   fun markActivityTime(isRequest: Boolean) {
-    lastActivityTimeMark = clock.markNow()
+    val now = clock.markNow()
+    lastActivityTimeMark = now
 
     if (isRequest)
-      lastRequestTimeMark = clock.markNow()
+      lastRequestTimeMark = now
   }
 
   override fun toString() =
