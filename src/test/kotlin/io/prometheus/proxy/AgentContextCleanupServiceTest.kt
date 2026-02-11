@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.typesafe.config.ConfigFactory
+import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
@@ -219,6 +220,34 @@ class AgentContextCleanupServiceTest {
 
       // Verify no removal was attempted
       verify(exactly = 0) { mockProxy.removeAgentContext(any(), any()) }
+    }
+
+  // ==================== Bug #20: Prompt shutdown (no blocking sleep) ====================
+
+  @Test
+  fun `service should stop promptly without waiting for full pause duration`(): Unit =
+    runBlocking {
+      // Use a very long pause time so that blocking sleep would be obvious
+      val configVals = createConfigVals(staleAgentCheckPauseSecs = 60)
+      val agentContextManager = AgentContextManager(isTestMode = true)
+
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.agentContextManager } returns agentContextManager
+
+      val service = AgentContextCleanupService(mockProxy, configVals)
+
+      service.startAsync().awaitRunning()
+
+      // Give the service thread time to enter the wait
+      Thread.sleep(200)
+
+      val stopStart = System.currentTimeMillis()
+      service.stopAsync().awaitTerminated()
+      val stopDuration = System.currentTimeMillis() - stopStart
+
+      // Before the fix, this would block for up to 60 seconds.
+      // With the CountDownLatch fix, it should stop within a few seconds.
+      stopDuration shouldBeLessThan 5000L
     }
 
   // ==================== Multiple Stale Agents Test ====================
