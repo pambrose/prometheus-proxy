@@ -183,6 +183,19 @@ class UtilsTest {
     // JSON output should contain braces or JSON structure
   }
 
+  // Bug #19: VersionValidator was removed — version printing now happens after parsing
+  // in BaseOptions, not inside a JCommander validator that calls exitProcess.
+  @Test
+  fun `getVersionDesc should be callable without triggering exitProcess`() {
+    // Before the fix, calling VersionValidator.validate() would call exitProcess(0).
+    // Now getVersionDesc is a standalone utility — calling it must not exit the JVM.
+    val plainDesc = Utils.getVersionDesc(false)
+    val jsonDesc = Utils.getVersionDesc(true)
+
+    plainDesc.shouldNotBeEmpty()
+    jsonDesc.shouldNotBeEmpty()
+  }
+
   // ==================== parseHostPort Tests ====================
 
   @Test

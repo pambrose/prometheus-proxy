@@ -20,8 +20,6 @@ package io.prometheus.common
 
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
-import com.beust.jcommander.IParameterValidator
-import com.beust.jcommander.JCommander
 import com.github.pambrose.common.util.Version.Companion.versionDesc
 import com.github.pambrose.common.util.simpleClassName
 import io.grpc.Status
@@ -30,22 +28,10 @@ import kotlinx.serialization.json.Json
 import org.slf4j.Logger.ROOT_LOGGER_NAME
 import org.slf4j.LoggerFactory
 import java.net.URLDecoder
-import kotlin.system.exitProcess
 import kotlin.text.Charsets.UTF_8
 
 object Utils {
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
-
-  internal class VersionValidator : IParameterValidator {
-    override fun validate(
-      name: String,
-      value: String,
-    ) {
-      val console = JCommander().console
-      console.println(getVersionDesc(false))
-      exitProcess(0)
-    }
-  }
 
   fun decodeParams(encodedQueryParams: String): String =
     if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8)}" else ""
