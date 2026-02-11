@@ -10,6 +10,7 @@ message RegisterAgentRequest {
   string launch_id = 2;
   string agent_name = 3;
   string host_name = 4;
+  reserved 5;
   bool consolidated = 6;
 }
 

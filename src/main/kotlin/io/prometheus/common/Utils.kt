@@ -98,8 +98,9 @@ object Utils {
   fun parseHostPort(
     hostPort: String,
     defaultPort: Int,
-  ): HostPort =
-    when {
+  ): HostPort {
+    require(hostPort.isNotBlank()) { "Host/port string must not be blank" }
+    return when {
       // Bracketed IPv6: [::1]:50051 or [::1]
       hostPort.startsWith("[") -> {
         val closeBracket = hostPort.indexOf(']')
@@ -137,4 +138,5 @@ object Utils {
         HostPort(hostPort.substring(0, colonIndex), parsePort(hostPort.substring(colonIndex + 1), hostPort))
       }
     }
+  }
 }

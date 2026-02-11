@@ -220,4 +220,34 @@ class ScrapeRequestWrapperTest {
       val result = wrapper.awaitCompleted(5.seconds)
       result.shouldBeTrue()
     }
+
+  // ==================== Bug #13: awaitCompleted parameter name ====================
+  // The parameter was renamed from `waitMillis` to `timeout` since its type is Duration,
+  // not milliseconds. These tests verify the named parameter works correctly.
+
+  @Test
+  fun `awaitCompleted timeout parameter should accept Duration values`(): Unit =
+    runBlocking {
+      val wrapper = createWrapper()
+
+      launch {
+        Thread.sleep(50)
+        wrapper.scrapeResults = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
+        wrapper.markComplete()
+      }
+
+      // Using named parameter `timeout`
+      val result = wrapper.awaitCompleted(timeout = 5.seconds)
+      result.shouldBeTrue()
+    }
+
+  @Test
+  fun `awaitCompleted timeout should respect short durations`(): Unit =
+    runBlocking {
+      val wrapper = createWrapper()
+
+      // Using named parameter `timeout` with a short duration — should time out
+      val result = wrapper.awaitCompleted(timeout = 50.milliseconds)
+      result.shouldBeFalse()
+    }
 }

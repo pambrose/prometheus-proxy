@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 
+@Suppress("LargeClass")
 class ProxyPathManagerTest {
   private fun createMockProxy(): Proxy {
     val mockManager = mockk<AgentContextManager>(relaxed = true)
@@ -519,51 +520,30 @@ class ProxyPathManagerTest {
 
   // ==================== Consolidated/Non-Consolidated Mismatch Tests ====================
 
+  // Bug #8: addPath now rejects consolidated/non-consolidated mismatch instead of
+  // silently allowing mixed types, which could cause unexpected fan-out behavior.
   @Test
-  fun `addPath should warn when consolidated agent adds to non-consolidated path`(): Unit =
+  fun `addPath should reject consolidated agent on non-consolidated path`(): Unit =
     runBlocking {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val nonConsolidatedContext = createMockAgentContext(consolidated = false)
       val consolidatedContext = createMockAgentContext(consolidated = true)
 
-      // First register as non-consolidated
-      manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext)
-      // Then try to add consolidated — should not throw, mismatch is logged
-      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
-
-      // Path still exists (overwritten or warned)
-      manager.pathMapSize shouldBe 1
-    }
-
-  // Bug #5: When a consolidated agent registered on a path with a different consolidation type,
-  // the agent was silently dropped — the warning was logged but the agent was never added to the
-  // path's agent list. The fix ensures the agent is always added regardless of mismatch.
-  @Test
-  fun `addPath should still register consolidated agent on type mismatch`(): Unit =
-    runBlocking {
-      val proxy = createMockProxy()
-      val manager = ProxyPathManager(proxy, isTestMode = true)
-      val nonConsolidatedContext = createMockAgentContext(consolidated = false)
-      val consolidatedContext = createMockAgentContext(consolidated = true)
-
-      // First register as non-consolidated
-      manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext)
-
-      // Then add consolidated — agent should still be registered despite mismatch
-      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
+      manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext).shouldBeTrue()
+      // Consolidated agent should be rejected on a non-consolidated path
+      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext).shouldBeFalse()
 
       manager.pathMapSize shouldBe 1
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
-      // Both agents should be present — the consolidated agent must not be silently dropped
-      info.agentContexts.shouldHaveSize(2)
-      info.agentContexts.map { it.agentId } shouldContain nonConsolidatedContext.agentId
-      info.agentContexts.map { it.agentId } shouldContain consolidatedContext.agentId
+      // Only the original non-consolidated agent should be present
+      info.agentContexts.shouldHaveSize(1)
+      info.agentContexts[0].agentId shouldBe nonConsolidatedContext.agentId
     }
 
   @Test
-  fun `addPath should warn when non-consolidated agent overwrites consolidated path`(): Unit =
+  fun `addPath should reject non-consolidated agent on consolidated path`(): Unit =
     runBlocking {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
@@ -571,16 +551,17 @@ class ProxyPathManagerTest {
       val nonConsolidatedContext = createMockAgentContext(consolidated = false)
 
       // First register as consolidated
-      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
-      // Then overwrite with non-consolidated
-      manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext)
+      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext).shouldBeTrue()
+      // Non-consolidated should be rejected on a consolidated path
+      manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext).shouldBeFalse()
 
       manager.pathMapSize shouldBe 1
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
-      info.isConsolidated.shouldBeFalse()
+      // Original consolidated path should be unchanged
+      info.isConsolidated.shouldBeTrue()
       info.agentContexts.shouldHaveSize(1)
-      info.agentContexts[0].agentId shouldBe nonConsolidatedContext.agentId
+      info.agentContexts[0].agentId shouldBe consolidatedContext.agentId
     }
 
   // ==================== removeFromPathManager Edge Cases ====================
@@ -848,24 +829,28 @@ class ProxyPathManagerTest {
   }
 
   @Test
-  fun `overwriting consolidated path should invalidate all displaced agents with no other paths`() {
+  fun `non-consolidated overwrite of consolidated path should be rejected`() {
     val proxy = createMockProxy()
     val manager = ProxyPathManager(proxy, isTestMode = true)
 
     val consolidated1 = AgentContext("remote-c1")
-    consolidated1.assignProperties(mockk<RegisterAgentRequest> {
-      every { launchId } returns "l1"
-      every { agentName } returns "c1"
-      every { hostName } returns "h1"
-      every { consolidated } returns true
-    })
+    consolidated1.assignProperties(
+      mockk<RegisterAgentRequest> {
+        every { launchId } returns "l1"
+        every { agentName } returns "c1"
+        every { hostName } returns "h1"
+        every { consolidated } returns true
+      },
+    )
     val consolidated2 = AgentContext("remote-c2")
-    consolidated2.assignProperties(mockk<RegisterAgentRequest> {
-      every { launchId } returns "l2"
-      every { agentName } returns "c2"
-      every { hostName } returns "h2"
-      every { consolidated } returns true
-    })
+    consolidated2.assignProperties(
+      mockk<RegisterAgentRequest> {
+        every { launchId } returns "l2"
+        every { agentName } returns "c2"
+        every { hostName } returns "h2"
+        every { consolidated } returns true
+      },
+    )
     val newAgent = AgentContext("remote-new")
 
     // Two consolidated agents share a path
@@ -875,13 +860,17 @@ class ProxyPathManagerTest {
     consolidated1.isValid().shouldBeTrue()
     consolidated2.isValid().shouldBeTrue()
 
-    // Non-consolidated agent overwrites the path
-    manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+    // Non-consolidated agent should be rejected (Bug #8 fix)
+    manager.addPath("/metrics", """{"job":"test"}""", newAgent).shouldBeFalse()
 
-    // Both displaced consolidated agents should be invalidated
-    consolidated1.isValid().shouldBeFalse()
-    consolidated2.isValid().shouldBeFalse()
-    newAgent.isValid().shouldBeTrue()
+    // Consolidated agents should remain valid and unchanged
+    consolidated1.isValid().shouldBeTrue()
+    consolidated2.isValid().shouldBeTrue()
+
+    val info = manager.getAgentContextInfo("/metrics")
+    info.shouldNotBeNull()
+    info.isConsolidated.shouldBeTrue()
+    info.agentContexts.shouldHaveSize(2)
   }
 
   @Test
