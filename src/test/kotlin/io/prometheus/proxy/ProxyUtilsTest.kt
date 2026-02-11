@@ -157,7 +157,7 @@ class ProxyUtilsTest {
     result4.contentText shouldBe ""
   }
 
-  // ==================== respondWith Integration Tests ====================
+  // ==================== Bug #14: respondWith no longer sets status redundantly ====================
 
   @Test
   fun `respondWith should set CacheControl header and respond with text`(): Unit =
@@ -230,6 +230,32 @@ class ProxyUtilsTest {
         val response = client.get("http://localhost:$port/test-error")
         response.status shouldBe HttpStatusCode.ServiceUnavailable
         response.bodyAsText() shouldBe "error"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `respondWith should set CacheControl header and correct status without redundant status call`(): Unit =
+    runBlocking {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/test-bug14") {
+            call.respondWith("content", status = HttpStatusCode.NotFound)
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/test-bug14")
+        response.status shouldBe HttpStatusCode.NotFound
+        response.bodyAsText() shouldBe "content"
+        response.headers["Cache-Control"] shouldBe "must-revalidate,no-store"
 
         client.close()
       } finally {
