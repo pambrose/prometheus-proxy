@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import com.github.pambrose.common.util.zip
 import io.grpc.Metadata
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -31,14 +32,19 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
+import io.prometheus.common.ScrapeResults
+import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
+import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.agentInfo
 import io.prometheus.grpc.heartBeatResponse
 import io.prometheus.grpc.registerAgentResponse
+import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -46,6 +52,9 @@ import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.reflect.full.callSuspend
+import kotlin.reflect.full.declaredMemberFunctions
+import kotlin.reflect.jvm.isAccessible
 
 class AgentGrpcServiceTest {
   private fun createMockAgent(proxyHostname: String): Agent {
@@ -636,6 +645,330 @@ class AgentGrpcServiceTest {
       service.sendHeartBeat()
 
       coVerify { mockStub.sendHeartBeat(match { it.agentId == "test-agent-123" }, any<Metadata>()) }
+      service.shutDown()
+    }
+
+  // ==================== readRequestsFromProxy Tests ====================
+
+  @Test
+  fun `readRequestsFromProxy should forward scrape requests to connectionContext`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      val request1 = scrapeRequest {
+        agentId = "test-agent-123"
+        scrapeId = 1L
+        path = "/metrics"
+      }
+      val request2 = scrapeRequest {
+        agentId = "test-agent-123"
+        scrapeId = 2L
+        path = "/health"
+      }
+      // readRequestsFromProxy is not a suspend function, so use every (not coEvery)
+      every { mockStub.readRequestsFromProxy(any(), any()) } returns flowOf(request1, request2)
+      service.grpcStub = mockStub
+
+      val connectionContext = AgentConnectionContext()
+      val mockHttpService = mockk<AgentHttpService>(relaxed = true)
+
+      service.readRequestsFromProxy(mockHttpService, connectionContext)
+
+      // After readRequestsFromProxy completes, items are buffered in the UNLIMITED channel.
+      // Use tryReceive to read them without cancelling the channel.
+      val channel = connectionContext.scrapeRequestActions()
+      channel.tryReceive().isSuccess.shouldBeTrue()
+      channel.tryReceive().isSuccess.shouldBeTrue()
+      channel.tryReceive().isSuccess.shouldBeFalse()
+
+      service.shutDown()
+    }
+
+  @Test
+  fun `readRequestsFromProxy should handle empty flow from proxy`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      every { mockStub.readRequestsFromProxy(any(), any()) } returns flowOf()
+      service.grpcStub = mockStub
+
+      val connectionContext = AgentConnectionContext()
+      val mockHttpService = mockk<AgentHttpService>(relaxed = true)
+
+      // Should complete without error
+      service.readRequestsFromProxy(mockHttpService, connectionContext)
+
+      // No items should be in the channel
+      connectionContext.scrapeRequestActions().tryReceive().isSuccess.shouldBeFalse()
+
+      service.shutDown()
+    }
+
+  // ==================== processScrapeResults Tests ====================
+  // processScrapeResults is private, so we test it via Kotlin reflection.
+  // It routes ScrapeResults to either nonChunkedChannel or chunkedChannel based on
+  // whether the content is zipped and whether the zipped size exceeds chunkContentSizeBytes.
+
+  private suspend fun callProcessScrapeResults(
+    service: AgentGrpcService,
+    agent: Agent,
+    connectionContext: AgentConnectionContext,
+    nonChunkedChannel: Channel<ScrapeResponse>,
+    chunkedChannel: Channel<ChunkedScrapeResponse>,
+  ) {
+    val method = AgentGrpcService::class.declaredMemberFunctions.first { it.name == "processScrapeResults" }
+    method.isAccessible = true
+    method.callSuspend(service, agent, connectionContext, nonChunkedChannel, chunkedChannel)
+  }
+
+  @Test
+  fun `processScrapeResults should route non-zipped result to nonChunkedChannel`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val connectionContext = AgentConnectionContext()
+      val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
+      val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
+
+      connectionContext.sendScrapeResults(
+        ScrapeResults(
+          srAgentId = "test-agent-123",
+          srScrapeId = 42L,
+          srValidResponse = true,
+          srStatusCode = 200,
+          srContentType = "text/plain",
+          srZipped = false,
+          srContentAsText = "metric_name 1.0",
+        ),
+      )
+      connectionContext.close()
+
+      callProcessScrapeResults(service, agent, connectionContext, nonChunkedChannel, chunkedChannel)
+
+      val result = nonChunkedChannel.tryReceive()
+      result.isSuccess.shouldBeTrue()
+      result.getOrThrow().scrapeId shouldBe 42L
+      result.getOrThrow().contentAsText shouldBe "metric_name 1.0"
+      result.getOrThrow().zipped shouldBe false
+
+      // Chunked channel should be empty
+      chunkedChannel.tryReceive().isSuccess.shouldBeFalse()
+
+      service.shutDown()
+    }
+
+  @Test
+  fun `processScrapeResults should route zipped small result to nonChunkedChannel`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      // chunkContentSizeBytes defaults to 32768 in mock
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val connectionContext = AgentConnectionContext()
+      val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
+      val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
+
+      val smallContent = "small metric data"
+      val zippedContent = smallContent.zip()
+
+      connectionContext.sendScrapeResults(
+        ScrapeResults(
+          srAgentId = "test-agent-123",
+          srScrapeId = 99L,
+          srValidResponse = true,
+          srStatusCode = 200,
+          srContentType = "text/plain",
+          srZipped = true,
+          srContentAsZipped = zippedContent,
+        ),
+      )
+      connectionContext.close()
+
+      callProcessScrapeResults(service, agent, connectionContext, nonChunkedChannel, chunkedChannel)
+
+      val result = nonChunkedChannel.tryReceive()
+      result.isSuccess.shouldBeTrue()
+      result.getOrThrow().scrapeId shouldBe 99L
+      result.getOrThrow().zipped shouldBe true
+
+      // Chunked channel should be empty
+      chunkedChannel.tryReceive().isSuccess.shouldBeFalse()
+
+      service.shutDown()
+    }
+
+  @Test
+  fun `processScrapeResults should route zipped large result to chunkedChannel with CRC32`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      // Set a very small chunk size so our test data gets chunked
+      // Access the mock options directly to avoid MockK chain-mock issues
+      val mockOptions = agent.options
+      every { mockOptions.chunkContentSizeBytes } returns 10
+      val service = AgentGrpcService(agent, mockOptions, "test-server")
+
+      val connectionContext = AgentConnectionContext()
+      val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
+      val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
+
+      val largeContent = "a]".repeat(500)
+      val zippedContent = largeContent.zip()
+      (zippedContent.size >= 10).shouldBeTrue()
+
+      connectionContext.sendScrapeResults(
+        ScrapeResults(
+          srAgentId = "test-agent-123",
+          srScrapeId = 200L,
+          srValidResponse = true,
+          srStatusCode = 200,
+          srContentType = "text/plain",
+          srZipped = true,
+          srContentAsZipped = zippedContent,
+        ),
+      )
+      connectionContext.close()
+
+      callProcessScrapeResults(service, agent, connectionContext, nonChunkedChannel, chunkedChannel)
+
+      // Non-chunked channel should be empty
+      nonChunkedChannel.tryReceive().isSuccess.shouldBeFalse()
+
+      // Drain chunked channel
+      val capturedChunked = mutableListOf<ChunkedScrapeResponse>()
+      while (true) {
+        val item = chunkedChannel.tryReceive()
+        if (item.isSuccess) capturedChunked.add(item.getOrThrow()) else break
+      }
+
+      // Should have: 1 header + N chunks + 1 summary
+      (capturedChunked.size >= 3).shouldBeTrue()
+
+      // First item should be a header
+      capturedChunked[0].hasHeader().shouldBeTrue()
+      capturedChunked[0].header.headerScrapeId shouldBe 200L
+      capturedChunked[0].header.headerStatusCode shouldBe 200
+
+      // Last item should be a summary
+      val summary = capturedChunked.last()
+      summary.hasSummary().shouldBeTrue()
+      summary.summary.summaryScrapeId shouldBe 200L
+      summary.summary.summaryByteCount shouldBe zippedContent.size
+
+      // Middle items should be chunks
+      val chunks = capturedChunked.drop(1).dropLast(1)
+      chunks.forEach { it.hasChunk().shouldBeTrue() }
+
+      // Verify total bytes from chunks equals zipped content size
+      val totalBytes = chunks.sumOf { it.chunk.chunkByteCount }
+      totalBytes shouldBe zippedContent.size
+
+      // Verify CRC32 checksum in summary matches computed checksum
+      val crc = java.util.zip.CRC32()
+      chunks.forEach { chunk ->
+        crc.update(chunk.chunk.chunkBytes.toByteArray())
+      }
+      summary.summary.summaryChecksum shouldBe crc.value
+
+      service.shutDown()
+    }
+
+  @Test
+  fun `processScrapeResults should handle multiple results in sequence`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val connectionContext = AgentConnectionContext()
+      val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
+      val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
+
+      repeat(3) { i ->
+        connectionContext.sendScrapeResults(
+          ScrapeResults(
+            srAgentId = "test-agent-123",
+            srScrapeId = i.toLong(),
+            srValidResponse = true,
+            srStatusCode = 200,
+            srContentType = "text/plain",
+            srZipped = false,
+            srContentAsText = "metric_$i 1.0",
+          ),
+        )
+      }
+      connectionContext.close()
+
+      callProcessScrapeResults(service, agent, connectionContext, nonChunkedChannel, chunkedChannel)
+
+      val scrapeIds = mutableSetOf<Long>()
+      repeat(3) {
+        val item = nonChunkedChannel.tryReceive()
+        item.isSuccess.shouldBeTrue()
+        scrapeIds.add(item.getOrThrow().scrapeId)
+      }
+      scrapeIds shouldBe setOf(0L, 1L, 2L)
+
+      // No more items
+      nonChunkedChannel.tryReceive().isSuccess.shouldBeFalse()
+      chunkedChannel.tryReceive().isSuccess.shouldBeFalse()
+
+      service.shutDown()
+    }
+
+  // ==================== sendHeartBeat Error Handling Tests ====================
+
+  @Test
+  fun `sendHeartBeat should handle NOT_FOUND status from proxy`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse {
+        valid = false
+        reason = "Agent not found"
+      }
+      service.grpcStub = mockStub
+      service.unaryDeadlineSecs = 0
+
+      // Should not throw - error is caught internally and logged
+      service.sendHeartBeat()
+
+      service.shutDown()
+    }
+
+  @Test
+  fun `sendHeartBeat should handle generic exception without throwing`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } throws RuntimeException("Network error")
+      service.grpcStub = mockStub
+      service.unaryDeadlineSecs = 0
+
+      // Should not throw - error is caught internally and logged
+      service.sendHeartBeat()
+
+      service.shutDown()
+    }
+
+  @Test
+  fun `registerAgent should throw on empty agentId`(): Unit =
+    runBlocking {
+      val agent = createMockAgent("localhost:50051")
+      every { agent.agentId } returns ""
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val latch = CountDownLatch(1)
+      assertThrows<IllegalArgumentException> {
+        service.registerAgent(latch)
+      }
       service.shutDown()
     }
 }

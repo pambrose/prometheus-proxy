@@ -19,6 +19,8 @@
 package io.prometheus.proxy
 
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -31,12 +33,16 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
+import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyHttpRoutes.ensureLeadingSlash
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -262,4 +268,110 @@ class ProxyHttpRoutesTest {
       exception.shouldBeInstanceOf<ClosedSendChannelException>()
       context.scrapeRequestBacklogSize shouldBe 0
     }
+
+  // ==================== logActivityForResponse Tests ====================
+  // logActivityForResponse is private, so we test it via reflection.
+  // It formats: "/$path - $updateMsg - $statusCode [reason: [$failureReason]] time: $fetchDuration url: $url"
+
+  private fun callLogActivityForResponse(
+    path: String,
+    response: ScrapeRequestResponse,
+    proxy: Proxy,
+  ) {
+    val method = ProxyHttpRoutes::class.java.getDeclaredMethod(
+      "logActivityForResponse",
+      String::class.java,
+      ScrapeRequestResponse::class.java,
+      Proxy::class.java,
+    )
+    method.isAccessible = true
+    method.invoke(ProxyHttpRoutes, path, response, proxy)
+  }
+
+  @Test
+  fun `logActivityForResponse should format success status without failure reason`() {
+    val capturedActivity = slot<String>()
+    val mockProxy = mockk<Proxy>(relaxed = true)
+    every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
+
+    val response = ScrapeRequestResponse(
+      statusCode = HttpStatusCode.OK,
+      updateMsg = "success",
+      contentText = "metric 1.0",
+      url = "http://localhost:8080/metrics",
+      fetchDuration = 150.milliseconds,
+    )
+
+    callLogActivityForResponse("metrics", response, mockProxy)
+
+    capturedActivity.captured shouldContain "/metrics - success - 200 OK"
+    capturedActivity.captured shouldContain "time: 150ms"
+    capturedActivity.captured shouldContain "url: http://localhost:8080/metrics"
+    // Success should NOT include "reason:" text
+    capturedActivity.captured shouldNotContain "reason:"
+  }
+
+  @Test
+  fun `logActivityForResponse should include failure reason for non-success status`() {
+    val capturedActivity = slot<String>()
+    val mockProxy = mockk<Proxy>(relaxed = true)
+    every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
+
+    val response = ScrapeRequestResponse(
+      statusCode = HttpStatusCode.NotFound,
+      updateMsg = "path_not_found",
+      failureReason = "Agent not found for path",
+      url = "http://localhost:8080/missing",
+      fetchDuration = 50.milliseconds,
+    )
+
+    callLogActivityForResponse("missing", response, mockProxy)
+
+    capturedActivity.captured shouldContain "/missing - path_not_found - 404 Not Found"
+    capturedActivity.captured shouldContain "reason: [Agent not found for path]"
+    capturedActivity.captured shouldContain "url: http://localhost:8080/missing"
+  }
+
+  @Test
+  fun `logActivityForResponse should include failure reason for ServiceUnavailable`() {
+    val capturedActivity = slot<String>()
+    val mockProxy = mockk<Proxy>(relaxed = true)
+    every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
+
+    val response = ScrapeRequestResponse(
+      statusCode = HttpStatusCode.ServiceUnavailable,
+      updateMsg = "timed_out",
+      failureReason = "",
+      url = "",
+      fetchDuration = 5000.milliseconds,
+    )
+
+    callLogActivityForResponse("slow-endpoint", response, mockProxy)
+
+    capturedActivity.captured shouldContain "/slow-endpoint - timed_out - 503 Service Unavailable"
+    capturedActivity.captured shouldContain "reason:"
+  }
+
+  // ==================== authHeaderWithoutTlsWarned Tests ====================
+  // The AtomicBoolean ensures the auth-without-TLS warning fires only once.
+
+  @Test
+  fun `authHeaderWithoutTlsWarned should be a single-fire AtomicBoolean`() {
+    // Access the private field on the ProxyHttpRoutes object
+    val field = ProxyHttpRoutes::class.java.getDeclaredField("authHeaderWithoutTlsWarned")
+    field.isAccessible = true
+    val atomicBoolean = field.get(ProxyHttpRoutes) as AtomicBoolean
+
+    // Reset it for testing
+    atomicBoolean.store(false)
+
+    // First compareAndSet should succeed (false -> true)
+    atomicBoolean.compareAndSet(false, true) shouldBe true
+
+    // Second compareAndSet should fail (already true)
+    atomicBoolean.compareAndSet(false, true) shouldBe false
+
+    // Reset for other tests
+    atomicBoolean.store(false)
+  }
 }
