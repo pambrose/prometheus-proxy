@@ -42,7 +42,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -517,12 +516,13 @@ class HttpClientCacheTest {
       )
 
       try {
-        // Create a slow-closing mock client
+        // Create a mock client whose close() blocks until we release it
         val slowClient = mockk<HttpClient>(relaxed = true)
-        val closeStarted = AtomicBoolean(false)
+        val closeStarted = CountDownLatch(1)
+        val closeCanProceed = CountDownLatch(1)
         every { slowClient.close() } answers {
-          closeStarted.set(true)
-          Thread.sleep(2000) // Simulate slow I/O close (not suspend, so use Thread.sleep)
+          closeStarted.countDown()
+          closeCanProceed.await(5, TimeUnit.SECONDS)
         }
 
         // Get the entry with the slow client, then mark it for eviction
@@ -537,23 +537,25 @@ class HttpClientCacheTest {
         }
 
         // onFinishedWithClient triggers close outside the mutex.
-        // Must run on Dispatchers.IO so the blocking Thread.sleep doesn't
+        // Must run on Dispatchers.IO so the blocking close doesn't
         // starve the single-threaded runBlocking dispatcher.
         val closeJob = async(Dispatchers.IO) { slowCache.onFinishedWithClient(slowEntry) }
 
-        // Wait for close to start
-        while (!closeStarted.get()) delay(10.milliseconds)
+        // Wait for close to start (with timeout to prevent hanging)
+        closeStarted.await(5, TimeUnit.SECONDS).shouldBeTrue()
 
-        // While the slow close is running, other cache operations should NOT be blocked
+        // While the slow close is blocked, other cache operations should NOT be blocked
         val start = System.currentTimeMillis()
         val otherKey = ClientKey("concurrent", "access")
         val otherEntry = slowCache.getOrCreateClient(otherKey) { createMockHttpClient() }
         val elapsed = System.currentTimeMillis() - start
 
-        // Should complete quickly (well under the 2-second close delay)
+        // Should complete quickly (well under 1 second)
         elapsed shouldBeLessThan 500L
         slowCache.onFinishedWithClient(otherEntry)
 
+        // Release the slow close and wait for completion
+        closeCanProceed.countDown()
         closeJob.await()
       } finally {
         slowCache.close()
