@@ -74,8 +74,8 @@ internal class ScrapeRequestWrapper(
     completeChannel.close()
   }
 
-  suspend fun awaitCompleted(waitMillis: Duration): Boolean {
-    withTimeoutOrNull(waitMillis.inWholeMilliseconds) {
+  suspend fun awaitCompleted(timeout: Duration): Boolean {
+    withTimeoutOrNull(timeout.inWholeMilliseconds) {
       // Suspends until the completeChannel is closed by markComplete() or closeChannel(), or times out
       completeChannel.receiveCatching()
     }
