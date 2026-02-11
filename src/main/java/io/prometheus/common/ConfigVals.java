@@ -324,7 +324,7 @@ public class ConfigVals {
       public final java.lang.String certChainFilePath;
 
       /**
-       * Overide authority
+       * Override authority
        */
       public final java.lang.String overrideAuthority;
 
