@@ -31,12 +31,14 @@ import io.mockk.verify
 import io.prometheus.agent.HttpClientCache.CacheEntry
 import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.agent.HttpClientCache.ClientKey.Companion.NO_AUTH
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -518,11 +520,11 @@ class HttpClientCacheTest {
       try {
         // Create a mock client whose close() blocks until we release it
         val slowClient = mockk<HttpClient>(relaxed = true)
-        val closeStarted = CountDownLatch(1)
+        val closeStarted = CompletableDeferred<Unit>()
         val closeCanProceed = CountDownLatch(1)
         every { slowClient.close() } answers {
-          closeStarted.countDown()
-          closeCanProceed.await(5, TimeUnit.SECONDS)
+          closeStarted.complete(Unit)
+          closeCanProceed.await(10, TimeUnit.SECONDS)
         }
 
         // Get the entry with the slow client, then mark it for eviction
@@ -541,8 +543,9 @@ class HttpClientCacheTest {
         // starve the single-threaded runBlocking dispatcher.
         val closeJob = async(Dispatchers.IO) { slowCache.onFinishedWithClient(slowEntry) }
 
-        // Wait for close to start (with timeout to prevent hanging)
-        closeStarted.await(5, TimeUnit.SECONDS).shouldBeTrue()
+        // Suspending wait for close to start (doesn't block the event loop thread,
+        // which allows the async coroutine to be properly dispatched)
+        withTimeout(5.seconds) { closeStarted.await() }
 
         // While the slow close is blocked, other cache operations should NOT be blocked
         val start = System.currentTimeMillis()
