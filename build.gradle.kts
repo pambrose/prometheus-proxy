@@ -91,6 +91,7 @@ configureTesting()
 configureKotlinter()
 configureDetekt()
 configureVersions()
+configureCoverage()
 
 fun Project.configureKotlin() {
   tasks.withType<JavaCompile> {
@@ -272,9 +273,9 @@ fun Project.configureDetekt() {
 
 fun Project.configureVersions() {
   fun isNonStable(version: String): Boolean {
-    val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.uppercase().contains(it) }
+    // val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.uppercase().contains(it) }
     val betaKeyword = listOf("-RC", "-BETA", "-ALPHA", "-M").any { version.uppercase().contains(it) }
-    val regex = "^[0-9,.v-]+(-r)?$".toRegex()
+    // val regex = "^[0-9,.v-]+(-r)?$".toRegex()
     val isStable = !betaKeyword // (stableKeyword || regex.matches(version)) && !betaKeyword
     return !isStable
   }
@@ -282,6 +283,22 @@ fun Project.configureVersions() {
   tasks.withType<com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask> {
     rejectVersionIf {
       isNonStable(candidate.version)
+    }
+  }
+}
+
+fun Project.configureCoverage() {
+  kover {
+    reports {
+      filters {
+        excludes {
+          // Exclude the whole package from report statistics
+          classes(
+            "io.prometheus.grpc.*",
+            "io.prometheus.grpc.**",
+          )
+        }
+      }
     }
   }
 }
