@@ -627,4 +627,216 @@ class ProxyHttpRoutesTest {
       response.failureReason shouldBe "Endpoint not found"
       response.contentText shouldBe ""
     }
+
+  // ==================== handleClientRequests Integration Tests ====================
+  // These tests exercise the full request dispatch logic through embedded HTTP servers
+  // with ProxyHttpRoutes.handleRequests() installed as the routing handler.
+
+  private fun createSpyProxyForRoutes(vararg extraArgs: String): Proxy {
+    val proxy = spyk(
+      Proxy(
+        options = ProxyOptions(
+          listOf(*extraArgs),
+        ),
+        inProcessServerName = "proxy-routes-test-${System.nanoTime()}",
+        testMode = true,
+      ),
+    )
+    every { proxy.isRunning } returns true
+    return proxy
+  }
+
+  @Test
+  fun `handleClientRequests should return ServiceUnavailable when proxy is not running`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForRoutes()
+      every { proxy.isRunning } returns false
+
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          val r = this
+          with(ProxyHttpRoutes) { r.handleRequests(proxy) }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/metrics")
+        response.status shouldBe HttpStatusCode.ServiceUnavailable
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `handleClientRequests should return NotFound for favicon request`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForRoutes()
+
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          val r = this
+          with(ProxyHttpRoutes) { r.handleRequests(proxy) }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/favicon.ico")
+        response.status shouldBe HttpStatusCode.NotFound
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `handleClientRequests should return NotFound for unregistered path`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForRoutes()
+
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          val r = this
+          with(ProxyHttpRoutes) { r.handleRequests(proxy) }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/unknown-metrics")
+        response.status shouldBe HttpStatusCode.NotFound
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `handleClientRequests should return 42 for blitz request`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForRoutes(
+        "-Dproxy.internal.blitz.enabled=true",
+        "-Dproxy.internal.blitz.path=blitz-test",
+      )
+
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          val r = this
+          with(ProxyHttpRoutes) { r.handleRequests(proxy) }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/blitz-test")
+        response.status shouldBe HttpStatusCode.OK
+        response.bodyAsText() shouldBe "42"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `handleClientRequests should return NotFound for invalidated agent context`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForRoutes()
+      val agentContext = AgentContext("test-remote")
+      proxy.pathManager.addPath("test-metrics", "", agentContext)
+      agentContext.invalidate()
+
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          val r = this
+          with(ProxyHttpRoutes) { r.handleRequests(proxy) }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/test-metrics")
+        response.status shouldBe HttpStatusCode.NotFound
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `handleServiceDiscoveryEndpoint should return JSON when enabled`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForRoutes(
+        "--sd_enabled",
+        "--sd_path",
+        "/test-sd",
+        "--sd_target_prefix",
+        "http://localhost:8080",
+      )
+
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          val r = this
+          with(ProxyHttpRoutes) { r.handleRequests(proxy) }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/test-sd")
+        response.status shouldBe HttpStatusCode.OK
+        val body = response.bodyAsText()
+        body shouldContain "["
+        body shouldContain "]"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `handleServiceDiscoveryEndpoint should not register when sdEnabled is false`(): Unit =
+    runBlocking {
+      val proxy = createSpyProxyForRoutes()
+      // SD is disabled by default
+
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          val r = this
+          with(ProxyHttpRoutes) { r.handleRequests(proxy) }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        // With SD disabled, /discovery is handled by get("/*") as an unknown path
+        val response = client.get("http://localhost:$port/discovery")
+        response.status shouldBe HttpStatusCode.NotFound
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
 }

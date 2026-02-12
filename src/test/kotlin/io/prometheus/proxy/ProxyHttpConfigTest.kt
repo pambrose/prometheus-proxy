@@ -42,10 +42,12 @@ import io.ktor.server.plugins.origin
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.plugins.statuspages.StatusPagesConfig
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.mockk.every
 import io.mockk.mockk
+import io.prometheus.Proxy
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import io.ktor.server.cio.CIO as ServerCIO
@@ -331,4 +333,94 @@ class ProxyHttpConfigTest {
     val path = "metrics"
     path.startsWith("/") shouldBe false
   }
+
+  // ==================== configureKtorServer Integration Tests ====================
+  // These tests verify the full configureKtorServer() function by running an embedded server
+  // with all plugins installed, then making HTTP requests to verify behavior.
+
+  private fun createTestProxy(): Proxy =
+    Proxy(
+      options = ProxyOptions(listOf()),
+      inProcessServerName = "config-test-${System.nanoTime()}",
+      testMode = true,
+    )
+
+  @Test
+  fun `configureKtorServer should add X-Engine default header to responses`(): Unit =
+    runBlocking {
+      val proxy = createTestProxy()
+      val server = embeddedServer(ServerCIO, port = 0) {
+        val app = this
+        with(ProxyHttpConfig) { app.configureKtorServer(proxy, isTestMode = true) }
+        routing {
+          get("/test") { call.respondText("hello") }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/test")
+        response.status shouldBe HttpStatusCode.OK
+        response.headers["X-Engine"] shouldBe "Ktor"
+        response.bodyAsText() shouldBe "hello"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `configureKtorServer should handle NotFound via StatusPages`(): Unit =
+    runBlocking {
+      val proxy = createTestProxy()
+      val server = embeddedServer(ServerCIO, port = 0) {
+        val app = this
+        with(ProxyHttpConfig) { app.configureKtorServer(proxy, isTestMode = true) }
+        routing { }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/nonexistent")
+        response.status shouldBe HttpStatusCode.NotFound
+        response.bodyAsText() shouldContain "404"
+        response.bodyAsText() shouldContain "Not Found"
+        response.headers["X-Engine"] shouldBe "Ktor"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+  @Test
+  fun `configureKtorServer should handle exceptions via StatusPages`(): Unit =
+    runBlocking {
+      val proxy = createTestProxy()
+      val server = embeddedServer(ServerCIO, port = 0) {
+        val app = this
+        with(ProxyHttpConfig) { app.configureKtorServer(proxy, isTestMode = true) }
+        routing {
+          get("/throw") { throw IllegalStateException("Test error") }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/throw")
+        response.status shouldBe HttpStatusCode.InternalServerError
+        response.headers["X-Engine"] shouldBe "Ktor"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
 }
