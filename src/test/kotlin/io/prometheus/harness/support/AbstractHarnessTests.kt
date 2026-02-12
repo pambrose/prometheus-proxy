@@ -23,13 +23,25 @@ abstract class AbstractHarnessTests(
   private val argsProvider: () -> ProxyCallTestArgs,
 ) : FunSpec() {
   init {
-    test("proxyCallTest") { HarnessTests.proxyCallTest(argsProvider()) }
+    test("should scrape metrics through proxy") {
+      HarnessTests.proxyCallTest(argsProvider())
+    }
 
-    test("missingPathTest") { BasicHarnessTests.missingPathTest(argsProvider().proxyPort, simpleClassName) }
+    test("should return not found for missing path") {
+      BasicHarnessTests.missingPathTest(
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
 
-    test("invalidPathTest") { BasicHarnessTests.invalidPathTest(argsProvider().proxyPort, simpleClassName) }
+    test("should return not found for invalid path") {
+      BasicHarnessTests.invalidPathTest(
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
 
-    test("addRemovePathsTest") {
+    test("should add and remove paths correctly") {
       BasicHarnessTests.addRemovePathsTest(
         argsProvider().agent.pathManager,
         argsProvider().proxyPort,
@@ -37,7 +49,7 @@ abstract class AbstractHarnessTests(
       )
     }
 
-    test("threadedAddRemovePathsTest") {
+    test("should add and remove paths correctly under concurrent access") {
       BasicHarnessTests.threadedAddRemovePathsTest(
         argsProvider().agent.pathManager,
         argsProvider().proxyPort,
@@ -45,7 +57,7 @@ abstract class AbstractHarnessTests(
       )
     }
 
-    test("invalidAgentUrlTest") {
+    test("should handle invalid agent URL gracefully") {
       BasicHarnessTests.invalidAgentUrlTest(
         argsProvider().agent.pathManager,
         argsProvider().proxyPort,
@@ -53,8 +65,12 @@ abstract class AbstractHarnessTests(
       )
     }
 
-    test("timeoutTest") {
-      HarnessTests.timeoutTest(argsProvider().agent.pathManager, simpleClassName, argsProvider().proxyPort)
+    test("should timeout when scrape exceeds deadline") {
+      HarnessTests.timeoutTest(
+        argsProvider().agent.pathManager,
+        simpleClassName,
+        argsProvider().proxyPort,
+      )
     }
   }
 }

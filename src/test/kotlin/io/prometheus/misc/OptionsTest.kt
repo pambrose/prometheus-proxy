@@ -36,7 +36,7 @@ class OptionsTest : FunSpec() {
   init {
     // ==================== Proxy Default Values Tests ====================
 
-    test("verifyDefaultValues") {
+    test("should use default values when no config is provided") {
       val configVals = readProxyOptions(listOf())
       configVals.proxy
         .apply {
@@ -45,7 +45,7 @@ class OptionsTest : FunSpec() {
         }
     }
 
-    test("verifyConfValues") {
+    test("should override defaults with config file values") {
       val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG))
       configVals.proxy
         .apply {
@@ -54,7 +54,7 @@ class OptionsTest : FunSpec() {
         }
     }
 
-    test("verifyUnquotedPropValue") {
+    test("should override defaults with unquoted system property values") {
       val configVals = readProxyOptions(listOf("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"))
       configVals.proxy
         .apply {
@@ -63,17 +63,17 @@ class OptionsTest : FunSpec() {
         }
     }
 
-    test("verifyQuotedPropValue") {
+    test("should override defaults with quoted system property values") {
       val configVals = readProxyOptions(listOf("-Dproxy.http.port=9394"))
       configVals.proxy.http.port shouldBe 9394
     }
 
-    test("verifyPathConfigs") {
+    test("should parse path configs from config file") {
       val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
       configVals.agent.pathConfigs.size shouldBe 3
     }
 
-    test("verifyProxyDefaults") {
+    test("should have correct proxy default port values") {
       ProxyOptions(listOf())
         .apply {
           proxyPort shouldBe 8080
@@ -81,7 +81,7 @@ class OptionsTest : FunSpec() {
         }
     }
 
-    test("verifyAgentDefaults") {
+    test("should have correct agent default values") {
       val options = AgentOptions(listOf("--name", "test-name", "--proxy", "host5"), false)
       options
         .apply {

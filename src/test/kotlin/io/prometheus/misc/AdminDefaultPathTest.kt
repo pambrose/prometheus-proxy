@@ -51,7 +51,7 @@ class AdminDefaultPathTest : FunSpec() {
       takeDownProxyAndAgent()
     }
 
-    test("proxyPingPathTest") {
+    test("proxy ping path should respond with pong") {
       proxyConfigVals.admin.apply {
         blockingGet("$port/$pingPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -60,7 +60,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("agentPingPathTest") {
+    test("agent ping path should respond with pong") {
       agentConfigVals.admin.apply {
         blockingGet("$port/$pingPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -69,7 +69,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxyVersionPathTest") {
+    test("proxy version path should return version info") {
       agentConfigVals.admin.apply {
         blockingGet("$port/$versionPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -78,7 +78,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("agentVersionPathTest") {
+    test("agent version path should return version info") {
       agentConfigVals.admin.apply {
         blockingGet("$port/$versionPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -87,7 +87,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxyHealthCheckPathTest") {
+    test("proxy health check path should return health status") {
       proxyConfigVals.admin.apply {
         blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -96,7 +96,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("agentHealthCheckPathTest") {
+    test("agent health check path should return health status") {
       agentConfigVals.admin.apply {
         blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -105,7 +105,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxyThreadDumpPathTest") {
+    test("proxy thread dump path should return thread dump") {
       proxyConfigVals.admin.apply {
         blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -114,7 +114,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("agentThreadDumpPathTest") {
+    test("agent thread dump path should return thread dump") {
       agentConfigVals.admin.apply {
         blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK

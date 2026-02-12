@@ -62,7 +62,7 @@ class AdminNonDefaultPathTest : FunSpec() {
       takeDownProxyAndAgent()
     }
 
-    test("proxyPingPathTest") {
+    test("proxy ping path should respond with pong") {
       proxyConfigVals.admin.apply {
         port shouldBe 8099
         pingPath shouldBe "pingPath2"
@@ -74,7 +74,7 @@ class AdminNonDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxyVersionPathTest") {
+    test("proxy version path should return version info") {
       proxyConfigVals.admin.apply {
         port shouldBe 8099
         versionPath shouldBe "versionPath2"
@@ -86,7 +86,7 @@ class AdminNonDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxyHealthCheckPathTest") {
+    test("proxy health check path should return health status") {
       proxyConfigVals.admin.apply {
         healthCheckPath shouldBe "healthCheckPath2"
 
@@ -97,7 +97,7 @@ class AdminNonDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxyThreadDumpPathTest") {
+    test("proxy thread dump path should return thread dump") {
       proxyConfigVals.admin.apply {
         threadDumpPath shouldBe "threadDumpPath2"
 

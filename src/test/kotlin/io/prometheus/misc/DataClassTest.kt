@@ -37,7 +37,7 @@ class DataClassTest : FunSpec() {
   }
 
   init {
-    test("adminConfigTest") {
+    test("agent admin config should parse all fields correctly") {
       var vals = configVals("agent.admin.enabled=true")
       newAdminConfig(vals.agent.admin.enabled, -1, vals.agent.admin)
         .also {
@@ -72,7 +72,7 @@ class DataClassTest : FunSpec() {
         }
     }
 
-    test("metricsConfigTest") {
+    test("agent metrics config should parse all fields correctly") {
       newMetricsConfig(true, 555, configVals("agent.metrics.enabled=true").agent.metrics)
         .also {
           it.enabled.shouldBeTrue()
@@ -119,7 +119,7 @@ class DataClassTest : FunSpec() {
         }
     }
 
-    test("zipkinConfigTest") {
+    test("zipkin config should parse all fields correctly") {
       newZipkinConfig(configVals("agent.internal.zipkin.enabled=true").agent.internal.zipkin)
         .also {
           it.enabled.shouldBeTrue()
@@ -148,7 +148,7 @@ class DataClassTest : FunSpec() {
 
     // ==================== Proxy Admin Config Tests ====================
 
-    test("proxyAdminConfigTest") {
+    test("proxy admin config should parse all fields correctly") {
       var vals = configVals("proxy.admin.enabled=true")
       newAdminConfig(vals.proxy.admin.enabled, -1, vals.proxy.admin)
         .also {
@@ -185,7 +185,7 @@ class DataClassTest : FunSpec() {
 
     // ==================== Proxy Metrics Config Tests ====================
 
-    test("proxyMetricsConfigTest") {
+    test("proxy metrics config should parse all fields correctly") {
       newMetricsConfig(true, 666, configVals("proxy.metrics.enabled=true").proxy.metrics)
         .also {
           it.enabled.shouldBeTrue()
@@ -229,7 +229,7 @@ class DataClassTest : FunSpec() {
 
     // ==================== gRPC Metrics Config Tests ====================
 
-    test("grpcMetricsConfigTest") {
+    test("gRPC metrics config should parse all fields correctly") {
       // Agent gRPC metrics
       configVals("agent.metrics.grpc.metricsEnabled=true").agent.metrics.grpc
         .also {

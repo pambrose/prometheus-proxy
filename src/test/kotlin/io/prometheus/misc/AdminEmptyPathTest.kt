@@ -58,7 +58,7 @@ class AdminEmptyPathTest : FunSpec() {
       takeDownProxyAndAgent()
     }
 
-    test("proxyPingPathTest") {
+    test("proxy ping path should return not found when empty") {
       proxyConfigVals.admin.apply {
         port shouldBe 8098
         pingPath shouldBe ""
@@ -69,7 +69,7 @@ class AdminEmptyPathTest : FunSpec() {
       }
     }
 
-    test("proxyVersionPathTest") {
+    test("proxy version path should return not found when empty") {
       proxyConfigVals.admin.apply {
         port shouldBe 8098
         versionPath shouldBe ""
@@ -80,7 +80,7 @@ class AdminEmptyPathTest : FunSpec() {
       }
     }
 
-    test("proxyHealthCheckPathTest") {
+    test("proxy health check path should return not found when empty") {
       proxyConfigVals.admin.apply {
         healthCheckPath shouldBe ""
 
@@ -90,7 +90,7 @@ class AdminEmptyPathTest : FunSpec() {
       }
     }
 
-    test("proxyThreadDumpPathTest") {
+    test("proxy thread dump path should return not found when empty") {
       proxyConfigVals.admin.apply {
         threadDumpPath shouldBe ""
 
