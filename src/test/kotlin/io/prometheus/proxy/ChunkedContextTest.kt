@@ -19,7 +19,7 @@
 package io.prometheus.proxy
 
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -30,7 +30,7 @@ import java.util.zip.CRC32
 // Tests for ChunkedContext which manages the state of a chunked scrape response.
 // Large scrape responses are split into chunks to avoid gRPC message size limits.
 // ChunkedContext accumulates chunks and verifies checksums for data integrity.
-class ChunkedContextTest : FunSpec() {
+class ChunkedContextTest : StringSpec() {
   private fun createHeaderResponse(
     validResponse: Boolean = true,
     scrapeId: Long = 12345L,
@@ -54,7 +54,7 @@ class ChunkedContextTest : FunSpec() {
   init {
     // ==================== Constructor Tests ====================
 
-    test("constructor should initialize with header data") {
+    "constructor should initialize with header data" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -63,7 +63,7 @@ class ChunkedContextTest : FunSpec() {
       context.totalByteCount shouldBe 0
     }
 
-    test("applySummary should propagate header fields to scrapeResults") {
+    "applySummary should propagate header fields to scrapeResults" {
       val response = createHeaderResponse(
         validResponse = true,
         scrapeId = 999L,
@@ -93,7 +93,7 @@ class ChunkedContextTest : FunSpec() {
 
     // ==================== applyChunk Tests ====================
 
-    test("applyChunk should increment chunk count") {
+    "applyChunk should increment chunk count" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -105,7 +105,7 @@ class ChunkedContextTest : FunSpec() {
       context.totalChunkCount shouldBe 1
     }
 
-    test("applyChunk should accumulate byte count") {
+    "applyChunk should accumulate byte count" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -117,7 +117,7 @@ class ChunkedContextTest : FunSpec() {
       context.totalByteCount shouldBe data.size
     }
 
-    test("applyChunk should accumulate multiple chunks") {
+    "applyChunk should accumulate multiple chunks" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -137,7 +137,7 @@ class ChunkedContextTest : FunSpec() {
       context.totalByteCount shouldBe data1.size + data2.size
     }
 
-    test("applyChunk should throw on chunk count mismatch") {
+    "applyChunk should throw on chunk count mismatch" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -150,7 +150,7 @@ class ChunkedContextTest : FunSpec() {
       }
     }
 
-    test("applyChunk should throw on checksum mismatch") {
+    "applyChunk should throw on checksum mismatch" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -164,7 +164,7 @@ class ChunkedContextTest : FunSpec() {
 
     // ==================== applySummary Tests ====================
 
-    test("applySummary should verify chunk count") {
+    "applySummary should verify chunk count" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -180,7 +180,7 @@ class ChunkedContextTest : FunSpec() {
       scrapeResults.srContentAsZipped.shouldNotBeNull()
     }
 
-    test("applySummary should throw on chunk count mismatch") {
+    "applySummary should throw on chunk count mismatch" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -195,7 +195,7 @@ class ChunkedContextTest : FunSpec() {
       }
     }
 
-    test("applySummary should throw on byte count mismatch") {
+    "applySummary should throw on byte count mismatch" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -210,7 +210,7 @@ class ChunkedContextTest : FunSpec() {
       }
     }
 
-    test("applySummary should throw on checksum mismatch") {
+    "applySummary should throw on checksum mismatch" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -225,7 +225,7 @@ class ChunkedContextTest : FunSpec() {
       }
     }
 
-    test("applySummary should set content in scrapeResults") {
+    "applySummary should set content in scrapeResults" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -244,7 +244,7 @@ class ChunkedContextTest : FunSpec() {
 
     // ==================== Multi-Chunk Integration Tests ====================
 
-    test("should handle multiple chunks and verify final summary") {
+    "should handle multiple chunks and verify final summary" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -274,7 +274,7 @@ class ChunkedContextTest : FunSpec() {
 
     // ==================== Header Field Propagation Tests ====================
 
-    test("applySummary should propagate failure reason from header") {
+    "applySummary should propagate failure reason from header" {
       val response = createHeaderResponse(
         validResponse = false,
         failureReason = "Connection timeout",
@@ -290,7 +290,7 @@ class ChunkedContextTest : FunSpec() {
       scrapeResults.srFailureReason shouldBe "Connection timeout"
     }
 
-    test("applySummary should handle empty content type from header") {
+    "applySummary should handle empty content type from header" {
       val response = createHeaderResponse(contentType = "")
       val context = ChunkedContext(response)
 
@@ -305,7 +305,7 @@ class ChunkedContextTest : FunSpec() {
 
     // ==================== Partial Last Chunk Tests (Bug #2) ====================
 
-    test("applyChunk should checksum only chunkByteCount bytes when data array is larger") {
+    "applyChunk should checksum only chunkByteCount bytes when data array is larger" {
       // This simulates the last chunk of a chunked transfer where the buffer is
       // larger than the actual bytes read (e.g., 1024-byte buffer with only 100 bytes read).
       // Before the fix, checksum was computed on data.size instead of chunkByteCount,
@@ -332,7 +332,7 @@ class ChunkedContextTest : FunSpec() {
       context.totalByteCount shouldBe actualBytes
     }
 
-    test("applyChunk should reject checksum computed on full buffer when chunkByteCount is smaller") {
+    "applyChunk should reject checksum computed on full buffer when chunkByteCount is smaller" {
       // This verifies that the old buggy behavior (checksumming full data.size) would fail.
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
@@ -351,7 +351,7 @@ class ChunkedContextTest : FunSpec() {
       }
     }
 
-    test("full chunked transfer should work when last chunk is partial") {
+    "full chunked transfer should work when last chunk is partial" {
       // Simulates a realistic chunked transfer: two full chunks and one partial last chunk.
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
@@ -388,7 +388,7 @@ class ChunkedContextTest : FunSpec() {
 
     // ==================== Edge Case Tests ====================
 
-    test("applySummary should throw when called before any chunks") {
+    "applySummary should throw when called before any chunks" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -398,7 +398,7 @@ class ChunkedContextTest : FunSpec() {
       }
     }
 
-    test("applySummary should succeed with zero chunks when summary expects zero") {
+    "applySummary should succeed with zero chunks when summary expects zero" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -411,7 +411,7 @@ class ChunkedContextTest : FunSpec() {
       context.totalByteCount shouldBe 0
     }
 
-    test("applyChunk should handle zero-length data") {
+    "applyChunk should handle zero-length data" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 
@@ -423,7 +423,7 @@ class ChunkedContextTest : FunSpec() {
       context.totalByteCount shouldBe 0
     }
 
-    test("applyChunk should throw when chunkByteCount exceeds data size") {
+    "applyChunk should throw when chunkByteCount exceeds data size" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response)
 

@@ -18,7 +18,7 @@
 
 package io.prometheus.proxy
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
@@ -37,9 +37,9 @@ import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyUtils.respondWith
 import io.ktor.server.cio.CIO as ServerCIO
 
-class ProxyUtilsTest : FunSpec() {
+class ProxyUtilsTest : StringSpec() {
   init {
-    test("invalidAgentContextResponse should return correct status and message") {
+    "invalidAgentContextResponse should return correct status and message" {
       val mockProxy = mockk<Proxy>(relaxed = true)
 
       val result = ProxyUtils.invalidAgentContextResponse("test-path", mockProxy)
@@ -49,7 +49,7 @@ class ProxyUtilsTest : FunSpec() {
       verify { mockProxy.logActivity("Invalid AgentContext for /test-path") }
     }
 
-    test("invalidPathResponse should return correct status and message") {
+    "invalidPathResponse should return correct status and message" {
       val mockProxy = mockk<Proxy>(relaxed = true)
 
       val result = ProxyUtils.invalidPathResponse("invalid-path", mockProxy)
@@ -59,7 +59,7 @@ class ProxyUtilsTest : FunSpec() {
       verify { mockProxy.logActivity("Invalid path request /invalid-path") }
     }
 
-    test("emptyPathResponse should return correct status and message") {
+    "emptyPathResponse should return correct status and message" {
       val mockProxy = mockk<Proxy>(relaxed = true)
 
       val result = ProxyUtils.emptyPathResponse(mockProxy)
@@ -69,14 +69,14 @@ class ProxyUtilsTest : FunSpec() {
       verify { mockProxy.logActivity(any()) }
     }
 
-    test("proxyNotRunningResponse should return ServiceUnavailable status") {
+    "proxyNotRunningResponse should return ServiceUnavailable status" {
       val result = ProxyUtils.proxyNotRunningResponse()
 
       result.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       result.updateMsg shouldBe "proxy_stopped"
     }
 
-    test("incrementScrapeRequestCount should call metrics for non-empty type") {
+    "incrementScrapeRequestCount should call metrics for non-empty type" {
       val mockProxy = mockk<Proxy>(relaxed = true)
 
       ProxyUtils.incrementScrapeRequestCount(mockProxy, "test-type")
@@ -84,7 +84,7 @@ class ProxyUtilsTest : FunSpec() {
       verify { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) }
     }
 
-    test("incrementScrapeRequestCount should not call metrics for empty type") {
+    "incrementScrapeRequestCount should not call metrics for empty type" {
       val mockProxy = mockk<Proxy>(relaxed = true)
 
       ProxyUtils.incrementScrapeRequestCount(mockProxy, "")
@@ -92,7 +92,7 @@ class ProxyUtilsTest : FunSpec() {
       verify(exactly = 0) { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) }
     }
 
-    test("ResponseResults should have correct default values") {
+    "ResponseResults should have correct default values" {
       val responseResults = ResponseResults()
 
       responseResults.statusCode shouldBe HttpStatusCode.OK
@@ -100,7 +100,7 @@ class ProxyUtilsTest : FunSpec() {
       responseResults.contentText shouldBe ""
     }
 
-    test("invalidPathResponse should handle various path formats") {
+    "invalidPathResponse should handle various path formats" {
       val mockProxy = mockk<Proxy>(relaxed = true)
 
       // Test with empty path
@@ -114,7 +114,7 @@ class ProxyUtilsTest : FunSpec() {
       verify { mockProxy.logActivity("Invalid path request /metrics/test") }
     }
 
-    test("emptyPathResponse should use correct status") {
+    "emptyPathResponse should use correct status" {
       val mockProxy = mockk<Proxy>(relaxed = true)
 
       val result = ProxyUtils.emptyPathResponse(mockProxy)
@@ -125,7 +125,7 @@ class ProxyUtilsTest : FunSpec() {
 
     // DESIGN-1: Verify that helper functions return independent ResponseResults instances
     // rather than mutating a shared object (the old output-parameter anti-pattern).
-    test("helper functions should return independent ResponseResults instances") {
+    "helper functions should return independent ResponseResults instances" {
       val mockProxy = mockk<Proxy>(relaxed = true)
 
       val result1 = ProxyUtils.invalidPathResponse("path1", mockProxy)
@@ -149,7 +149,7 @@ class ProxyUtilsTest : FunSpec() {
 
     // ==================== Bug #14: respondWith no longer sets status redundantly ====================
 
-    test("respondWith should set CacheControl header and respond with text") {
+    "respondWith should set CacheControl header and respond with text" {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/test-respond") {
@@ -172,7 +172,7 @@ class ProxyUtilsTest : FunSpec() {
       }
     }
 
-    test("respondWith should use custom content type") {
+    "respondWith should use custom content type" {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/test-json") {
@@ -198,7 +198,7 @@ class ProxyUtilsTest : FunSpec() {
       }
     }
 
-    test("respondWith should use custom status code") {
+    "respondWith should use custom status code" {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/test-error") {
@@ -221,7 +221,7 @@ class ProxyUtilsTest : FunSpec() {
       }
     }
 
-    test("respondWith should set CacheControl header and correct status without redundant status call") {
+    "respondWith should set CacheControl header and correct status without redundant status call" {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/test-bug14") {

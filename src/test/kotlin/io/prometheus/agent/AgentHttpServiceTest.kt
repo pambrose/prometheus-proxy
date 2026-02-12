@@ -3,7 +3,7 @@
 package io.prometheus.agent
 
 import com.typesafe.config.ConfigFactory
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
@@ -25,7 +25,7 @@ import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.delay
 import io.ktor.server.cio.CIO as ServerCIO
 
-class AgentHttpServiceTest : FunSpec() {
+class AgentHttpServiceTest : StringSpec() {
   private fun createMockAgent(): Agent {
     val mockOptions = mockk<AgentOptions>(relaxed = true)
     every { mockOptions.maxCacheSize } returns 100
@@ -94,7 +94,7 @@ class AgentHttpServiceTest : FunSpec() {
   init {
     // ==================== Invalid Path Tests ====================
 
-    test("fetchScrapeUrl should return error results for invalid path") {
+    "fetchScrapeUrl should return error results for invalid path" {
       val mockAgent = createMockAgent()
       // Return null for unknown path
       every { mockAgent.pathManager[any()] } returns null
@@ -117,7 +117,7 @@ class AgentHttpServiceTest : FunSpec() {
       results.srValidResponse.shouldBeFalse()
     }
 
-    test("fetchScrapeUrl should set debug info for invalid path when debug enabled") {
+    "fetchScrapeUrl should set debug info for invalid path when debug enabled" {
       val mockAgent = createMockAgent()
       every { mockAgent.pathManager[any()] } returns null
 
@@ -138,7 +138,7 @@ class AgentHttpServiceTest : FunSpec() {
       results.srFailureReason shouldContain "Invalid path"
     }
 
-    test("fetchScrapeUrl should not set debug info for invalid path when debug disabled") {
+    "fetchScrapeUrl should not set debug info for invalid path when debug disabled" {
       val mockAgent = createMockAgent()
       every { mockAgent.pathManager[any()] } returns null
 
@@ -161,7 +161,7 @@ class AgentHttpServiceTest : FunSpec() {
 
     // ==================== Close Tests ====================
 
-    test("close should close httpClientCache") {
+    "close should close httpClientCache" {
       val mockAgent = createMockAgent()
       val service = AgentHttpService(mockAgent)
 
@@ -171,7 +171,7 @@ class AgentHttpServiceTest : FunSpec() {
 
     // ==================== HttpClientCache Tests ====================
 
-    test("httpClientCache should be initialized from agent options") {
+    "httpClientCache should be initialized from agent options" {
       val mockAgent = createMockAgent()
       val service = AgentHttpService(mockAgent)
 
@@ -181,7 +181,7 @@ class AgentHttpServiceTest : FunSpec() {
 
     // ==================== Valid Path Fetching Tests ====================
 
-    test("fetchScrapeUrl should fetch content from valid path") {
+    "fetchScrapeUrl should fetch content from valid path" {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
@@ -222,7 +222,7 @@ class AgentHttpServiceTest : FunSpec() {
       }
     }
 
-    test("fetchScrapeUrl should handle connection refused") {
+    "fetchScrapeUrl should handle connection refused" {
       val mockAgent = createMockAgentWithPaths()
       val service = AgentHttpService(mockAgent)
 
@@ -247,7 +247,7 @@ class AgentHttpServiceTest : FunSpec() {
       service.close()
     }
 
-    test("fetchScrapeUrl should handle 404 response") {
+    "fetchScrapeUrl should handle 404 response" {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           // No route for /metrics, Ktor will return 404
@@ -282,7 +282,7 @@ class AgentHttpServiceTest : FunSpec() {
       }
     }
 
-    test("fetchScrapeUrl should set debug info when debug enabled and request fails") {
+    "fetchScrapeUrl should set debug info when debug enabled and request fails" {
       val mockAgent = createMockAgentWithPaths()
       val service = AgentHttpService(mockAgent)
 
@@ -308,7 +308,7 @@ class AgentHttpServiceTest : FunSpec() {
       service.close()
     }
 
-    test("fetchScrapeUrl should include query params in URL") {
+    "fetchScrapeUrl should include query params in URL" {
       var receivedUrl = ""
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -350,7 +350,7 @@ class AgentHttpServiceTest : FunSpec() {
 
     // ==================== Gzip Compression Tests ====================
 
-    test("fetchScrapeUrl should gzip content larger than minGzipSizeBytes") {
+    "fetchScrapeUrl should gzip content larger than minGzipSizeBytes" {
       val largeContent = "a".repeat(2000)
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -393,7 +393,7 @@ class AgentHttpServiceTest : FunSpec() {
       }
     }
 
-    test("fetchScrapeUrl should not gzip content smaller than minGzipSizeBytes") {
+    "fetchScrapeUrl should not gzip content smaller than minGzipSizeBytes" {
       val smallContent = "small"
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -436,7 +436,7 @@ class AgentHttpServiceTest : FunSpec() {
 
     // ==================== Header Forwarding Tests ====================
 
-    test("fetchScrapeUrl should forward accept header to target") {
+    "fetchScrapeUrl should forward accept header to target" {
       var receivedAccept = ""
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -476,7 +476,7 @@ class AgentHttpServiceTest : FunSpec() {
       }
     }
 
-    test("fetchScrapeUrl should forward authorization header to target") {
+    "fetchScrapeUrl should forward authorization header to target" {
       var receivedAuth = ""
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -518,7 +518,7 @@ class AgentHttpServiceTest : FunSpec() {
 
     // ==================== Timeout Tests ====================
 
-    test("fetchScrapeUrl should handle timeout gracefully") {
+    "fetchScrapeUrl should handle timeout gracefully" {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
@@ -563,7 +563,7 @@ class AgentHttpServiceTest : FunSpec() {
 
     // ==================== Counter Message Tests ====================
 
-    test("fetchScrapeUrl should set success counter message on successful fetch") {
+    "fetchScrapeUrl should set success counter message on successful fetch" {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {

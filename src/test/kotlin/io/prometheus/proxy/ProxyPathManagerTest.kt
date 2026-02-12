@@ -19,7 +19,7 @@
 package io.prometheus.proxy
 
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
@@ -35,7 +35,7 @@ import io.prometheus.grpc.RegisterAgentRequest
 import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 
 @Suppress("LargeClass")
-class ProxyPathManagerTest : FunSpec() {
+class ProxyPathManagerTest : StringSpec() {
   private fun createMockProxy(): Proxy {
     val mockManager = mockk<AgentContextManager>(relaxed = true)
     val proxy = mockk<Proxy>(relaxed = true)
@@ -54,7 +54,7 @@ class ProxyPathManagerTest : FunSpec() {
   }
 
   init {
-    test("addPath should add new path successfully") {
+    "addPath should add new path successfully" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -68,7 +68,7 @@ class ProxyPathManagerTest : FunSpec() {
       info.agentContexts.shouldHaveSize(1)
     }
 
-    test("addPath should throw when path is empty") {
+    "addPath should throw when path is empty" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -80,7 +80,7 @@ class ProxyPathManagerTest : FunSpec() {
       exception.message shouldContain "Empty path"
     }
 
-    test("addPath should overwrite non-consolidated path") {
+    "addPath should overwrite non-consolidated path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext()
@@ -101,7 +101,7 @@ class ProxyPathManagerTest : FunSpec() {
     // consolidated=true, they are grouped together. Prometheus scrapes are load-balanced
     // across all agents in the consolidated group. This differs from non-consolidated
     // paths where a new registration overwrites the previous one.
-    test("addPath should append to consolidated path") {
+    "addPath should append to consolidated path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -117,7 +117,7 @@ class ProxyPathManagerTest : FunSpec() {
       info.agentContexts.shouldHaveSize(2)
     }
 
-    test("removePath should remove path successfully") {
+    "removePath should remove path successfully" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -131,7 +131,7 @@ class ProxyPathManagerTest : FunSpec() {
       manager.pathMapSize shouldBe 0
     }
 
-    test("removePath should fail when path not found") {
+    "removePath should fail when path not found" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -141,7 +141,7 @@ class ProxyPathManagerTest : FunSpec() {
       response.reason shouldContain "path not found"
     }
 
-    test("removePath should fail when agent ID mismatch") {
+    "removePath should fail when agent ID mismatch" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -154,7 +154,7 @@ class ProxyPathManagerTest : FunSpec() {
       response.reason shouldContain "invalid agentId"
     }
 
-    test("removePath should throw when path is empty") {
+    "removePath should throw when path is empty" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -165,7 +165,7 @@ class ProxyPathManagerTest : FunSpec() {
       exception.message shouldContain "Empty path"
     }
 
-    test("removePath should throw when agentId is empty") {
+    "removePath should throw when agentId is empty" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -180,7 +180,7 @@ class ProxyPathManagerTest : FunSpec() {
     // only that agent is removed from the group - the path remains registered with the
     // remaining agents. The path is only fully removed when the last agent disconnects.
     // This ensures continuous availability during rolling deployments or agent restarts.
-    test("removePath should remove one element from consolidated path") {
+    "removePath should remove one element from consolidated path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -199,7 +199,7 @@ class ProxyPathManagerTest : FunSpec() {
       info.agentContexts[0].agentId shouldBe context2.agentId
     }
 
-    test("getAgentContextInfo should return null for non-existent path") {
+    "getAgentContextInfo should return null for non-existent path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -208,7 +208,7 @@ class ProxyPathManagerTest : FunSpec() {
       info.shouldBeNull()
     }
 
-    test("pathMapSize should return correct count") {
+    "pathMapSize should return correct count" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext()
@@ -226,7 +226,7 @@ class ProxyPathManagerTest : FunSpec() {
       manager.pathMapSize shouldBe 1
     }
 
-    test("allPaths should return all registered paths") {
+    "allPaths should return all registered paths" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -243,7 +243,7 @@ class ProxyPathManagerTest : FunSpec() {
       paths shouldContain "/metrics3"
     }
 
-    test("allPathContextInfos should atomically snapshot paths and their info") {
+    "allPathContextInfos should atomically snapshot paths and their info" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -282,7 +282,7 @@ class ProxyPathManagerTest : FunSpec() {
       snapshot2["/metrics2"].shouldNotBeNull()
     }
 
-    test("removeFromPathManager should remove all paths for agent") {
+    "removeFromPathManager should remove all paths for agent" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -300,7 +300,7 @@ class ProxyPathManagerTest : FunSpec() {
 
     // ==================== removeFromPathManager Iteration Safety (Bug #4) ====================
 
-    test("removeFromPathManager should remove all paths when many paths registered for one agent") {
+    "removeFromPathManager should remove all paths when many paths registered for one agent" {
       // This test verifies that removeFromPathManager correctly removes ALL paths for a
       // disconnecting agent. The old code modified the map during forEach iteration, which
       // could cause ConcurrentHashMap's weakly consistent iterator to skip entries.
@@ -321,7 +321,7 @@ class ProxyPathManagerTest : FunSpec() {
       manager.pathMapSize shouldBe 0
     }
 
-    test("removeFromPathManager should only remove paths for the specified agent") {
+    "removeFromPathManager should only remove paths for the specified agent" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val agent1 = createMockAgentContext()
@@ -352,7 +352,7 @@ class ProxyPathManagerTest : FunSpec() {
       }
     }
 
-    test("removeFromPathManager should remove agent from consolidated paths without removing the path") {
+    "removeFromPathManager should remove agent from consolidated paths without removing the path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val agent1 = createMockAgentContext(consolidated = true)
@@ -381,7 +381,7 @@ class ProxyPathManagerTest : FunSpec() {
 
     // ==================== AgentContextInfo.isNotValid() (Bug #8) ====================
 
-    test("non-consolidated path should be invalid when single agent is invalid") {
+    "non-consolidated path should be invalid when single agent is invalid" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -394,7 +394,7 @@ class ProxyPathManagerTest : FunSpec() {
       info.isNotValid().shouldBeTrue()
     }
 
-    test("non-consolidated path should be valid when single agent is valid") {
+    "non-consolidated path should be valid when single agent is valid" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -411,7 +411,7 @@ class ProxyPathManagerTest : FunSpec() {
     // which always returned false for consolidated paths. This meant consolidated paths with all
     // invalid agents were still considered valid, causing requests to time out instead of getting
     // an immediate error response.
-    test("consolidated path should be invalid when all agents are invalid") {
+    "consolidated path should be invalid when all agents are invalid" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -429,7 +429,7 @@ class ProxyPathManagerTest : FunSpec() {
       info.isNotValid().shouldBeTrue()
     }
 
-    test("consolidated path should be valid when at least one agent is valid") {
+    "consolidated path should be valid when at least one agent is valid" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -448,7 +448,7 @@ class ProxyPathManagerTest : FunSpec() {
 
     // ==================== toPlainText ====================
 
-    test("toPlainText should return message when no agents connected") {
+    "toPlainText should return message when no agents connected" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -457,7 +457,7 @@ class ProxyPathManagerTest : FunSpec() {
       text shouldBe "No agents connected."
     }
 
-    test("toPlainText should return formatted path map") {
+    "toPlainText should return formatted path map" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -474,7 +474,7 @@ class ProxyPathManagerTest : FunSpec() {
 
     // Bug #8: addPath now rejects consolidated/non-consolidated mismatch instead of
     // silently allowing mixed types, which could cause unexpected fan-out behavior.
-    test("addPath should reject consolidated agent on non-consolidated path") {
+    "addPath should reject consolidated agent on non-consolidated path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val nonConsolidatedContext = createMockAgentContext(consolidated = false)
@@ -492,7 +492,7 @@ class ProxyPathManagerTest : FunSpec() {
       info.agentContexts[0].agentId shouldBe nonConsolidatedContext.agentId
     }
 
-    test("addPath should reject non-consolidated agent on consolidated path") {
+    "addPath should reject non-consolidated agent on consolidated path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val consolidatedContext = createMockAgentContext(consolidated = true)
@@ -514,7 +514,7 @@ class ProxyPathManagerTest : FunSpec() {
 
     // ==================== removeFromPathManager Edge Cases ====================
 
-    test("removeFromPathManager should throw when agentId is empty") {
+    "removeFromPathManager should throw when agentId is empty" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -525,7 +525,7 @@ class ProxyPathManagerTest : FunSpec() {
       exception.message shouldContain "Empty agentId"
     }
 
-    test("removeFromPathManager should handle missing agent context gracefully") {
+    "removeFromPathManager should handle missing agent context gracefully" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -537,7 +537,7 @@ class ProxyPathManagerTest : FunSpec() {
 
     // ==================== getAgentContextInfo Defensive Copy ====================
 
-    test("getAgentContextInfo should return a snapshot copy") {
+    "getAgentContextInfo should return a snapshot copy" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -562,7 +562,7 @@ class ProxyPathManagerTest : FunSpec() {
       info2.agentContexts.shouldHaveSize(2)
     }
 
-    test("getAgentContextInfo returned list mutation should not affect internal state") {
+    "getAgentContextInfo returned list mutation should not affect internal state" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -593,7 +593,7 @@ class ProxyPathManagerTest : FunSpec() {
     // removeFromPathManager). This relied on the implementation detail that the list was
     // created with mutableListOf(). The fix changed the type to MutableList<AgentContext>
     // to make the mutable usage explicit and eliminate the unsafe casts.
-    test("consolidated addPath should not require unsafe cast to MutableList") {
+    "consolidated addPath should not require unsafe cast to MutableList" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val contexts = (1..5).map { createMockAgentContext(consolidated = true) }
@@ -615,7 +615,7 @@ class ProxyPathManagerTest : FunSpec() {
       }
     }
 
-    test("removePath from consolidated group should not require unsafe cast to MutableList") {
+    "removePath from consolidated group should not require unsafe cast to MutableList" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -638,7 +638,7 @@ class ProxyPathManagerTest : FunSpec() {
       info.agentContexts.map { it.agentId } shouldContain context3.agentId
     }
 
-    test("removeFromPathManager on consolidated paths should not require unsafe cast to MutableList") {
+    "removeFromPathManager on consolidated paths should not require unsafe cast to MutableList" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val agent1 = createMockAgentContext(consolidated = true)
@@ -661,7 +661,7 @@ class ProxyPathManagerTest : FunSpec() {
 
     // ==================== toPlainText with Multiple Paths ====================
 
-    test("toPlainText should format paths with different lengths correctly") {
+    "toPlainText should format paths with different lengths correctly" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -679,7 +679,7 @@ class ProxyPathManagerTest : FunSpec() {
 
     // ==================== AgentContextInfo Tests ====================
 
-    test("AgentContextInfo toString should include key fields") {
+    "AgentContextInfo toString should include key fields" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -701,7 +701,7 @@ class ProxyPathManagerTest : FunSpec() {
     // were left orphaned — still in the agentContextManager but with no paths in the
     // pathMap. The fix invalidates displaced agents that have no other registered paths.
 
-    test("overwriting non-consolidated path should invalidate displaced agent with no other paths") {
+    "overwriting non-consolidated path should invalidate displaced agent with no other paths" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -725,7 +725,7 @@ class ProxyPathManagerTest : FunSpec() {
       info.agentContexts[0].agentId shouldBe newAgent.agentId
     }
 
-    test("overwriting path should not invalidate displaced agent that has other paths") {
+    "overwriting path should not invalidate displaced agent that has other paths" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -756,7 +756,7 @@ class ProxyPathManagerTest : FunSpec() {
       healthInfo.agentContexts[0].agentId shouldBe oldAgent.agentId
     }
 
-    test("non-consolidated overwrite of consolidated path should be rejected") {
+    "non-consolidated overwrite of consolidated path should be rejected" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -800,7 +800,7 @@ class ProxyPathManagerTest : FunSpec() {
       info.agentContexts.shouldHaveSize(2)
     }
 
-    test("overwriting should invalidate displaced agents with backlog and drain it") {
+    "overwriting should invalidate displaced agents with backlog and drain it" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 

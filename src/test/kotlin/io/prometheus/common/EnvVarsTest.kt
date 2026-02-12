@@ -19,7 +19,7 @@
 package io.prometheus.common
 
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainAll
@@ -27,11 +27,11 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 
-class EnvVarsTest : FunSpec() {
+class EnvVarsTest : StringSpec() {
   init {
     // ==================== Default Value Fallback Tests ====================
 
-    test("getEnv should return default string when env var not set") {
+    "getEnv should return default string when env var not set" {
       // Use an env var that is very unlikely to be set
       val defaultVal = "default-value"
       val result = EnvVars.PROXY_CONFIG.getEnv(defaultVal)
@@ -45,7 +45,7 @@ class EnvVarsTest : FunSpec() {
       }
     }
 
-    test("getEnv should return default boolean when env var not set") {
+    "getEnv should return default boolean when env var not set" {
       val defaultVal = false
       val result = EnvVars.SD_ENABLED.getEnv(defaultVal)
 
@@ -55,7 +55,7 @@ class EnvVarsTest : FunSpec() {
       }
     }
 
-    test("getEnv should return default true boolean when specified") {
+    "getEnv should return default true boolean when specified" {
       val defaultVal = true
       val result = EnvVars.DEBUG_ENABLED.getEnv(defaultVal)
 
@@ -65,7 +65,7 @@ class EnvVarsTest : FunSpec() {
       }
     }
 
-    test("getEnv should return default int when env var not set") {
+    "getEnv should return default int when env var not set" {
       val defaultVal = 8080
       val result = EnvVars.PROXY_PORT.getEnv(defaultVal)
 
@@ -75,7 +75,7 @@ class EnvVarsTest : FunSpec() {
       }
     }
 
-    test("getEnv should return default long when env var not set") {
+    "getEnv should return default long when env var not set" {
       val defaultVal = 120L
       val result = EnvVars.HANDSHAKE_TIMEOUT_SECS.getEnv(defaultVal)
 
@@ -87,7 +87,7 @@ class EnvVarsTest : FunSpec() {
 
     // ==================== Enum Name Tests ====================
 
-    test("EnvVars enum should have correct names for proxy variables") {
+    "EnvVars enum should have correct names for proxy variables" {
       EnvVars.PROXY_CONFIG.name shouldBe "PROXY_CONFIG"
       EnvVars.PROXY_PORT.name shouldBe "PROXY_PORT"
       EnvVars.AGENT_PORT.name shouldBe "AGENT_PORT"
@@ -96,7 +96,7 @@ class EnvVarsTest : FunSpec() {
       EnvVars.SD_TARGET_PREFIX.name shouldBe "SD_TARGET_PREFIX"
     }
 
-    test("EnvVars enum should have correct names for agent variables") {
+    "EnvVars enum should have correct names for agent variables" {
       EnvVars.AGENT_CONFIG.name shouldBe "AGENT_CONFIG"
       EnvVars.PROXY_HOSTNAME.name shouldBe "PROXY_HOSTNAME"
       EnvVars.AGENT_NAME.name shouldBe "AGENT_NAME"
@@ -104,7 +104,7 @@ class EnvVarsTest : FunSpec() {
       EnvVars.SCRAPE_TIMEOUT_SECS.name shouldBe "SCRAPE_TIMEOUT_SECS"
     }
 
-    test("EnvVars enum should have correct names for common variables") {
+    "EnvVars enum should have correct names for common variables" {
       EnvVars.DEBUG_ENABLED.name shouldBe "DEBUG_ENABLED"
       EnvVars.METRICS_ENABLED.name shouldBe "METRICS_ENABLED"
       EnvVars.METRICS_PORT.name shouldBe "METRICS_PORT"
@@ -112,20 +112,20 @@ class EnvVarsTest : FunSpec() {
       EnvVars.ADMIN_PORT.name shouldBe "ADMIN_PORT"
     }
 
-    test("EnvVars enum should have correct names for TLS variables") {
+    "EnvVars enum should have correct names for TLS variables" {
       EnvVars.CERT_CHAIN_FILE_PATH.name shouldBe "CERT_CHAIN_FILE_PATH"
       EnvVars.PRIVATE_KEY_FILE_PATH.name shouldBe "PRIVATE_KEY_FILE_PATH"
       EnvVars.TRUST_CERT_COLLECTION_FILE_PATH.name shouldBe "TRUST_CERT_COLLECTION_FILE_PATH"
     }
 
-    test("EnvVars enum should have correct names for gRPC keepalive variables") {
+    "EnvVars enum should have correct names for gRPC keepalive variables" {
       EnvVars.KEEPALIVE_TIME_SECS.name shouldBe "KEEPALIVE_TIME_SECS"
       EnvVars.KEEPALIVE_TIMEOUT_SECS.name shouldBe "KEEPALIVE_TIMEOUT_SECS"
       EnvVars.KEEPALIVE_WITHOUT_CALLS.name shouldBe "KEEPALIVE_WITHOUT_CALLS"
       EnvVars.UNARY_DEADLINE_SECS.name shouldBe "UNARY_DEADLINE_SECS"
     }
 
-    test("EnvVars enum should have correct names for HTTP client cache variables") {
+    "EnvVars enum should have correct names for HTTP client cache variables" {
       EnvVars.MAX_CLIENT_CACHE_SIZE.name shouldBe "MAX_CLIENT_CACHE_SIZE"
       EnvVars.MAX_CLIENT_CACHE_AGE_MINS.name shouldBe "MAX_CLIENT_CACHE_AGE_MINS"
       EnvVars.MAX_CLIENT_CACHE_IDLE_MINS.name shouldBe "MAX_CLIENT_CACHE_IDLE_MINS"
@@ -134,7 +134,7 @@ class EnvVarsTest : FunSpec() {
 
     // ==================== Type Conversion Tests ====================
 
-    test("getEnv with different default types should work correctly") {
+    "getEnv with different default types should work correctly" {
       // Test that different overloads work without confusion
       val stringDefault = "test"
       val boolDefault = true
@@ -164,7 +164,7 @@ class EnvVarsTest : FunSpec() {
 
     // ==================== Enum Completeness Tests ====================
 
-    test("EnvVars enum should contain all expected proxy variables") {
+    "EnvVars enum should contain all expected proxy variables" {
       val proxyVars = listOf(
         EnvVars.PROXY_CONFIG,
         EnvVars.PROXY_PORT,
@@ -188,11 +188,11 @@ class EnvVarsTest : FunSpec() {
       }
     }
 
-    test("EnvVars enum should have exactly 44 entries") {
+    "EnvVars enum should have exactly 44 entries" {
       EnvVars.entries.size shouldBe 44
     }
 
-    test("EnvVars entries should contain all defined constants") {
+    "EnvVars entries should contain all defined constants" {
       val allNames = EnvVars.entries.map { it.name }
 
       allNames shouldContainAll listOf(
@@ -243,7 +243,7 @@ class EnvVarsTest : FunSpec() {
       )
     }
 
-    test("entry count should match completeness list size to prevent drift") {
+    "entry count should match completeness list size to prevent drift" {
       // Guard against M11-style bugs: if someone adds an enum entry but forgets to
       // update the count test or the completeness list, this test will catch it.
       val allExpected = listOf(
@@ -298,7 +298,7 @@ class EnvVarsTest : FunSpec() {
       actualNames shouldBe expectedNames
     }
 
-    test("getEnv Int and Long error messages should reference the env var name") {
+    "getEnv Int and Long error messages should reference the env var name" {
       // We can't easily set env vars in tests, but we can verify the error message format
       // by checking that the getEnv methods exist and work with defaults
       // The actual error path (invalid int/long) is tested by verifying the exception message format
@@ -318,21 +318,21 @@ class EnvVarsTest : FunSpec() {
 
     // ==================== Bug #16: parseBooleanStrict validation ====================
 
-    test("parseBooleanStrict should return true for true (case insensitive)") {
+    "parseBooleanStrict should return true for true (case insensitive)" {
       EnvVars.parseBooleanStrict("TEST", "true").shouldBeTrue()
       EnvVars.parseBooleanStrict("TEST", "TRUE").shouldBeTrue()
       EnvVars.parseBooleanStrict("TEST", "True").shouldBeTrue()
       EnvVars.parseBooleanStrict("TEST", "tRuE").shouldBeTrue()
     }
 
-    test("parseBooleanStrict should return false for false (case insensitive)") {
+    "parseBooleanStrict should return false for false (case insensitive)" {
       EnvVars.parseBooleanStrict("TEST", "false").shouldBeFalse()
       EnvVars.parseBooleanStrict("TEST", "FALSE").shouldBeFalse()
       EnvVars.parseBooleanStrict("TEST", "False").shouldBeFalse()
       EnvVars.parseBooleanStrict("TEST", "fAlSe").shouldBeFalse()
     }
 
-    test("parseBooleanStrict should throw for yes") {
+    "parseBooleanStrict should throw for yes" {
       val exception = shouldThrow<IllegalArgumentException> {
         EnvVars.parseBooleanStrict("ADMIN_ENABLED", "yes")
       }
@@ -341,7 +341,7 @@ class EnvVarsTest : FunSpec() {
       exception.message shouldContain "expected 'true' or 'false'"
     }
 
-    test("parseBooleanStrict should throw for numeric 1") {
+    "parseBooleanStrict should throw for numeric 1" {
       val exception = shouldThrow<IllegalArgumentException> {
         EnvVars.parseBooleanStrict("METRICS_ENABLED", "1")
       }
@@ -349,7 +349,7 @@ class EnvVarsTest : FunSpec() {
       exception.message shouldContain "'1'"
     }
 
-    test("parseBooleanStrict should throw for typo ture") {
+    "parseBooleanStrict should throw for typo ture" {
       val exception = shouldThrow<IllegalArgumentException> {
         EnvVars.parseBooleanStrict("DEBUG_ENABLED", "ture")
       }
@@ -357,7 +357,7 @@ class EnvVarsTest : FunSpec() {
       exception.message shouldContain "ture"
     }
 
-    test("parseBooleanStrict should throw for empty string") {
+    "parseBooleanStrict should throw for empty string" {
       shouldThrow<IllegalArgumentException> {
         EnvVars.parseBooleanStrict("TEST", "")
       }
@@ -365,7 +365,7 @@ class EnvVarsTest : FunSpec() {
 
     // ==================== Agent Variables ====================
 
-    test("EnvVars enum should contain all expected agent variables") {
+    "EnvVars enum should contain all expected agent variables" {
       val agentVars = listOf(
         EnvVars.AGENT_CONFIG,
         EnvVars.PROXY_HOSTNAME,

@@ -19,7 +19,7 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.EvictingQueue
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.atomic.AtomicBoolean
@@ -29,11 +29,11 @@ import kotlin.concurrent.thread
 // without synchronization while logActivity() writes to it under synchronized(recentReqs).
 // This test validates that the synchronized read pattern used in the fix prevents
 // ConcurrentModificationException.
-class RecentReqsSynchronizationTest : FunSpec() {
+class RecentReqsSynchronizationTest : StringSpec() {
   init {
     // Simulates the FIXED pattern: both reads and writes are synchronized on the same lock.
     // This should complete without ConcurrentModificationException.
-    test("synchronized reads and writes on EvictingQueue should not throw") {
+    "synchronized reads and writes on EvictingQueue should not throw" {
       val queue: EvictingQueue<String> = EvictingQueue.create(50)
       val failed = AtomicBoolean(false)
       val iterations = 5_000

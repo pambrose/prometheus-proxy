@@ -2,7 +2,7 @@
 
 package io.prometheus.common
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
@@ -14,73 +14,73 @@ import java.io.File
 import java.net.URI
 import kotlin.io.path.createTempDirectory
 
-class BaseOptionsTest : FunSpec() {
+class BaseOptionsTest : StringSpec() {
   init {
     // ==================== Shared Option Defaults (via ProxyOptions) ====================
 
-    test("adminEnabled should default to false") {
+    "adminEnabled should default to false" {
       val options = ProxyOptions(listOf())
       options.adminEnabled.shouldBeFalse()
     }
 
-    test("metricsEnabled should default to false") {
+    "metricsEnabled should default to false" {
       val options = ProxyOptions(listOf())
       options.metricsEnabled.shouldBeFalse()
     }
 
-    test("debugEnabled should default to false") {
+    "debugEnabled should default to false" {
       val options = ProxyOptions(listOf())
       options.debugEnabled.shouldBeFalse()
     }
 
-    test("transportFilterDisabled should default to false") {
+    "transportFilterDisabled should default to false" {
       val options = ProxyOptions(listOf())
       options.transportFilterDisabled.shouldBeFalse()
     }
 
-    test("certChainFilePath should default to empty") {
+    "certChainFilePath should default to empty" {
       val options = ProxyOptions(listOf())
       options.certChainFilePath.shouldBeEmpty()
     }
 
-    test("privateKeyFilePath should default to empty") {
+    "privateKeyFilePath should default to empty" {
       val options = ProxyOptions(listOf())
       options.privateKeyFilePath.shouldBeEmpty()
     }
 
-    test("trustCertCollectionFilePath should default to empty") {
+    "trustCertCollectionFilePath should default to empty" {
       val options = ProxyOptions(listOf())
       options.trustCertCollectionFilePath.shouldBeEmpty()
     }
 
-    test("logLevel should default to empty") {
+    "logLevel should default to empty" {
       val options = ProxyOptions(listOf())
       options.logLevel.shouldBeEmpty()
     }
 
     // ==================== Admin Option Overrides ====================
 
-    test("adminEnabled should be settable via -r flag") {
+    "adminEnabled should be settable via -r flag" {
       val options = ProxyOptions(listOf("-r"))
       options.adminEnabled shouldBe true
     }
 
-    test("adminPort should be settable via -i flag") {
+    "adminPort should be settable via -i flag" {
       val options = ProxyOptions(listOf("-i", "9000"))
       options.adminPort shouldBe 9000
     }
 
-    test("metricsEnabled should be settable via -e flag") {
+    "metricsEnabled should be settable via -e flag" {
       val options = ProxyOptions(listOf("-e"))
       options.metricsEnabled shouldBe true
     }
 
-    test("metricsPort should be settable via -m flag") {
+    "metricsPort should be settable via -m flag" {
       val options = ProxyOptions(listOf("-m", "9100"))
       options.metricsPort shouldBe 9100
     }
 
-    test("debugEnabled should be settable via -b flag") {
+    "debugEnabled should be settable via -b flag" {
       val options = ProxyOptions(listOf("-b"))
       options.debugEnabled shouldBe true
     }
@@ -88,88 +88,88 @@ class BaseOptionsTest : FunSpec() {
     // ==================== Transport Filter and TLS ====================
 
     // Bug #10: isTlsEnabled property for detecting plaintext auth header forwarding
-    test("isTlsEnabled should be false when no TLS options set") {
+    "isTlsEnabled should be false when no TLS options set" {
       val options = ProxyOptions(listOf())
       options.isTlsEnabled shouldBe false
     }
 
-    test("isTlsEnabled should be true when cert chain file path is set") {
+    "isTlsEnabled should be true when cert chain file path is set" {
       val options = ProxyOptions(listOf("-t", "/path/to/cert.pem"))
       options.isTlsEnabled shouldBe true
     }
 
-    test("isTlsEnabled should be true when private key file path is set") {
+    "isTlsEnabled should be true when private key file path is set" {
       val options = ProxyOptions(listOf("-k", "/path/to/key.pem"))
       options.isTlsEnabled shouldBe true
     }
 
-    test("transportFilterDisabled should be settable via --tf_disabled") {
+    "transportFilterDisabled should be settable via --tf_disabled" {
       val options = ProxyOptions(listOf("--tf_disabled"))
       options.transportFilterDisabled shouldBe true
     }
 
-    test("transportFilterDisabled should accept hyphenated variant --tf-disabled") {
+    "transportFilterDisabled should accept hyphenated variant --tf-disabled" {
       val options = ProxyOptions(listOf("--tf-disabled"))
       options.transportFilterDisabled shouldBe true
     }
 
-    test("certChainFilePath should be settable via -t flag") {
+    "certChainFilePath should be settable via -t flag" {
       val options = ProxyOptions(listOf("-t", "/path/to/cert.pem"))
       options.certChainFilePath shouldBe "/path/to/cert.pem"
     }
 
-    test("privateKeyFilePath should be settable via -k flag") {
+    "privateKeyFilePath should be settable via -k flag" {
       val options = ProxyOptions(listOf("-k", "/path/to/key.pem"))
       options.privateKeyFilePath shouldBe "/path/to/key.pem"
     }
 
-    test("trustCertCollectionFilePath should be settable via -s flag") {
+    "trustCertCollectionFilePath should be settable via -s flag" {
       val options = ProxyOptions(listOf("-s", "/path/to/trust.pem"))
       options.trustCertCollectionFilePath shouldBe "/path/to/trust.pem"
     }
 
     // ==================== KeepAlive Settings ====================
 
-    test("keepAliveTimeSecs should be settable via --keepalive_time_secs") {
+    "keepAliveTimeSecs should be settable via --keepalive_time_secs" {
       val options = ProxyOptions(listOf("--keepalive_time_secs", "600"))
       options.keepAliveTimeSecs shouldBe 600L
     }
 
-    test("keepAliveTimeoutSecs should be settable via --keepalive_timeout_secs") {
+    "keepAliveTimeoutSecs should be settable via --keepalive_timeout_secs" {
       val options = ProxyOptions(listOf("--keepalive_timeout_secs", "30"))
       options.keepAliveTimeoutSecs shouldBe 30L
     }
 
     // ==================== Dynamic Parameters ====================
 
-    test("dynamic params should be empty by default") {
+    "dynamic params should be empty by default" {
       val options = ProxyOptions(listOf())
       options.dynamicParams.size shouldBe 0
     }
 
-    test("dynamic params should capture -D values") {
+    "dynamic params should capture -D values" {
       val options = ProxyOptions(listOf("-Dproxy.http.port=9999"))
       options.dynamicParams.size shouldBe 1
     }
 
     // ==================== Shared Defaults via AgentOptions ====================
 
-    test("agent adminEnabled should default to false") {
+    "agent adminEnabled should default to false" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
       options.adminEnabled.shouldBeFalse()
     }
 
-    test("agent metricsEnabled should default to false") {
+    "agent metricsEnabled should default to false" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
       options.metricsEnabled.shouldBeFalse()
     }
 
-    test("agent debugEnabled should default to false") {
+    "agent debugEnabled should default to false" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
       options.debugEnabled.shouldBeFalse()
     }
 
-    test("agent logLevel should be settable via --log_level") {
+    "agent logLevel should be settable via --log_level" {
       val options = AgentOptions(
         listOf("--name", "test", "--proxy", "host", "--log_level", "DEBUG"),
         false,
@@ -179,7 +179,7 @@ class BaseOptionsTest : FunSpec() {
 
     // ==================== Config File Loading Tests ====================
 
-    test("should load config from conf file") {
+    "should load config from conf file" {
       val tempDir = createTempDirectory("base-options-test").toFile()
       try {
         val confFile = File(tempDir, "test.conf")
@@ -198,7 +198,7 @@ class BaseOptionsTest : FunSpec() {
       }
     }
 
-    test("should load config from json file") {
+    "should load config from json file" {
       val tempDir = createTempDirectory("base-options-test").toFile()
       try {
         val jsonFile = File(tempDir, "test.json")
@@ -221,7 +221,7 @@ class BaseOptionsTest : FunSpec() {
       }
     }
 
-    test("should load config from properties file") {
+    "should load config from properties file" {
       val tempDir = createTempDirectory("base-options-test").toFile()
       try {
         val propsFile = File(tempDir, "test.properties")
@@ -234,14 +234,14 @@ class BaseOptionsTest : FunSpec() {
       }
     }
 
-    test("dynamic params should strip surrounding quotes") {
+    "dynamic params should strip surrounding quotes" {
       val options = ProxyOptions(listOf("-Dproxy.http.port=\"5555\""))
       options.proxyPort shouldBe 5555
     }
 
     // ==================== Bug #15: Config resolution with single resolve() ====================
 
-    test("config with variable substitution should resolve correctly") {
+    "config with variable substitution should resolve correctly" {
       val tempDir = createTempDirectory("base-options-test").toFile()
       try {
         val confFile = File(tempDir, "test-subst.conf")
@@ -265,7 +265,7 @@ class BaseOptionsTest : FunSpec() {
 
     // ==================== Bug #18: URI.toURL() replaces deprecated URL() constructor ====================
 
-    test("URI toURL should produce valid URL for http config") {
+    "URI toURL should produce valid URL for http config" {
       val uri = URI("http://example.com/config.conf")
       val url = uri.toURL()
 
@@ -274,7 +274,7 @@ class BaseOptionsTest : FunSpec() {
       url.path shouldBe "/config.conf"
     }
 
-    test("URI toURL should produce valid URL for https config") {
+    "URI toURL should produce valid URL for https config" {
       val uri = URI("https://example.com/path/config.json")
       val url = uri.toURL()
 
@@ -285,7 +285,7 @@ class BaseOptionsTest : FunSpec() {
 
     // ==================== Bug #19: Version flag handled after parsing ====================
 
-    test("version flag should not trigger exitProcess during construction") {
+    "version flag should not trigger exitProcess during construction" {
       // Before the fix, passing -v would call exitProcess(0) inside the JCommander
       // validator during parse(). Now the version flag is checked after parsing,
       // so constructing with other flags should not exit.
@@ -296,7 +296,7 @@ class BaseOptionsTest : FunSpec() {
 
     // ==================== ConfigVals Tests ====================
 
-    test("configVals should be initialized after construction") {
+    "configVals should be initialized after construction" {
       val options = ProxyOptions(listOf())
       options.configVals.proxy.http.port shouldBeGreaterThan 0
       options.configVals.proxy.admin.pingPath.shouldNotBeEmpty()

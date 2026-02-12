@@ -3,7 +3,7 @@
 package io.prometheus.misc
 
 import com.typesafe.config.ConfigFactory
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -11,7 +11,7 @@ import io.kotest.matchers.string.shouldBeEmpty
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.common.ConfigVals
 
-class ConfigValsTest : FunSpec() {
+class ConfigValsTest : StringSpec() {
   private fun loadDefaultConfigVals(): ConfigVals {
     val config = ConfigFactory.load()
     return ConfigVals(config)
@@ -20,7 +20,7 @@ class ConfigValsTest : FunSpec() {
   init {
     // ==================== Agent Internal Defaults ====================
 
-    test("agent internal config should have correct defaults") {
+    "agent internal config should have correct defaults" {
       val configVals = loadDefaultConfigVals()
       configVals.agent.internal.apply {
         cioTimeoutSecs shouldBe 90
@@ -34,7 +34,7 @@ class ConfigValsTest : FunSpec() {
 
     // ==================== Agent HTTP Client Cache Defaults ====================
 
-    test("agent HTTP client cache config should have correct defaults") {
+    "agent HTTP client cache config should have correct defaults" {
       val configVals = loadDefaultConfigVals()
       configVals.agent.http.clientCache.apply {
         maxSize shouldBe 100
@@ -46,7 +46,7 @@ class ConfigValsTest : FunSpec() {
 
     // ==================== Agent TLS Defaults ====================
 
-    test("agent TLS config should have empty defaults") {
+    "agent TLS config should have empty defaults" {
       val configVals = loadDefaultConfigVals()
       configVals.agent.tls.apply {
         certChainFilePath.shouldBeEmpty()
@@ -58,7 +58,7 @@ class ConfigValsTest : FunSpec() {
 
     // ==================== Agent gRPC Defaults ====================
 
-    test("agent gRPC config should have correct defaults") {
+    "agent gRPC config should have correct defaults" {
       val configVals = loadDefaultConfigVals()
       configVals.agent.grpc.apply {
         keepAliveTimeSecs shouldBe -1L
@@ -69,7 +69,7 @@ class ConfigValsTest : FunSpec() {
 
     // ==================== Proxy HTTP Defaults ====================
 
-    test("proxy HTTP config should have correct defaults") {
+    "proxy HTTP config should have correct defaults" {
       val configVals = loadDefaultConfigVals()
       configVals.proxy.http.apply {
         port shouldBe 8080
@@ -82,7 +82,7 @@ class ConfigValsTest : FunSpec() {
 
     // ==================== Proxy Internal Defaults ====================
 
-    test("proxy internal config should have correct defaults") {
+    "proxy internal config should have correct defaults" {
       val configVals = loadDefaultConfigVals()
       configVals.proxy.internal.apply {
         scrapeRequestTimeoutSecs shouldBe 90
@@ -100,7 +100,7 @@ class ConfigValsTest : FunSpec() {
 
     // ==================== Proxy Service Discovery Defaults ====================
 
-    test("proxy service discovery config should have correct defaults") {
+    "proxy service discovery config should have correct defaults" {
       val configVals = loadDefaultConfigVals()
       configVals.proxy.service.discovery.apply {
         enabled.shouldBeFalse()
@@ -111,7 +111,7 @@ class ConfigValsTest : FunSpec() {
 
     // ==================== Proxy gRPC Defaults ====================
 
-    test("proxy gRPC config should have correct defaults") {
+    "proxy gRPC config should have correct defaults" {
       val configVals = loadDefaultConfigVals()
       configVals.proxy.grpc.apply {
         handshakeTimeoutSecs shouldBe -1L

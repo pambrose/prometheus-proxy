@@ -18,7 +18,7 @@
 
 package io.prometheus.agent
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -28,23 +28,23 @@ import javax.net.ssl.X509TrustManager
 
 // Tests for TrustAllX509TrustManager which is used for development/testing environments
 // to bypass SSL certificate validation. This should NEVER be used in production.
-class TrustAllX509TrustManagerTest : FunSpec() {
+class TrustAllX509TrustManagerTest : StringSpec() {
   init {
     // ==================== Interface Implementation Tests ====================
 
-    test("TrustAllX509TrustManager should implement X509TrustManager interface") {
+    "TrustAllX509TrustManager should implement X509TrustManager interface" {
       TrustAllX509TrustManager.shouldBeInstanceOf<X509TrustManager>()
     }
 
     // ==================== getAcceptedIssuers Tests ====================
 
-    test("getAcceptedIssuers should return empty array") {
+    "getAcceptedIssuers should return empty array" {
       val issuers = TrustAllX509TrustManager.getAcceptedIssuers()
 
       issuers.shouldBeEmpty()
     }
 
-    test("getAcceptedIssuers should return same instance on multiple calls") {
+    "getAcceptedIssuers should return same instance on multiple calls" {
       // The implementation returns a static empty array
       val issuers1 = TrustAllX509TrustManager.getAcceptedIssuers()
       val issuers2 = TrustAllX509TrustManager.getAcceptedIssuers()
@@ -52,7 +52,7 @@ class TrustAllX509TrustManagerTest : FunSpec() {
       issuers1 shouldBe issuers2
     }
 
-    test("getAcceptedIssuers should return array of size 0") {
+    "getAcceptedIssuers should return array of size 0" {
       val issuers = TrustAllX509TrustManager.getAcceptedIssuers()
 
       issuers.size shouldBe 0
@@ -60,19 +60,19 @@ class TrustAllX509TrustManagerTest : FunSpec() {
 
     // ==================== checkClientTrusted Tests ====================
 
-    test("checkClientTrusted should accept null certificates") {
+    "checkClientTrusted should accept null certificates" {
       // Should not throw any exception
       TrustAllX509TrustManager.checkClientTrusted(null, null)
     }
 
-    test("checkClientTrusted should accept empty certificate array") {
+    "checkClientTrusted should accept empty certificate array" {
       val emptyCerts = arrayOfNulls<X509Certificate>(0)
 
       // Should not throw any exception
       TrustAllX509TrustManager.checkClientTrusted(emptyCerts, "RSA")
     }
 
-    test("checkClientTrusted should accept any certificate array") {
+    "checkClientTrusted should accept any certificate array" {
       val mockCert = mockk<X509Certificate>(relaxed = true)
       val certs = arrayOf<X509Certificate?>(mockCert)
 
@@ -80,7 +80,7 @@ class TrustAllX509TrustManagerTest : FunSpec() {
       TrustAllX509TrustManager.checkClientTrusted(certs, "RSA")
     }
 
-    test("checkClientTrusted should accept null authType") {
+    "checkClientTrusted should accept null authType" {
       val mockCert = mockk<X509Certificate>(relaxed = true)
       val certs = arrayOf<X509Certificate?>(mockCert)
 
@@ -88,7 +88,7 @@ class TrustAllX509TrustManagerTest : FunSpec() {
       TrustAllX509TrustManager.checkClientTrusted(certs, null)
     }
 
-    test("checkClientTrusted should accept any authType string") {
+    "checkClientTrusted should accept any authType string" {
       val mockCert = mockk<X509Certificate>(relaxed = true)
       val certs = arrayOf<X509Certificate?>(mockCert)
 
@@ -101,19 +101,19 @@ class TrustAllX509TrustManagerTest : FunSpec() {
 
     // ==================== checkServerTrusted Tests ====================
 
-    test("checkServerTrusted should accept null certificates") {
+    "checkServerTrusted should accept null certificates" {
       // Should not throw any exception
       TrustAllX509TrustManager.checkServerTrusted(null, null)
     }
 
-    test("checkServerTrusted should accept empty certificate array") {
+    "checkServerTrusted should accept empty certificate array" {
       val emptyCerts = arrayOfNulls<X509Certificate>(0)
 
       // Should not throw any exception
       TrustAllX509TrustManager.checkServerTrusted(emptyCerts, "RSA")
     }
 
-    test("checkServerTrusted should accept any certificate array") {
+    "checkServerTrusted should accept any certificate array" {
       val mockCert = mockk<X509Certificate>(relaxed = true)
       val certs = arrayOf<X509Certificate?>(mockCert)
 
@@ -121,7 +121,7 @@ class TrustAllX509TrustManagerTest : FunSpec() {
       TrustAllX509TrustManager.checkServerTrusted(certs, "RSA")
     }
 
-    test("checkServerTrusted should accept null authType") {
+    "checkServerTrusted should accept null authType" {
       val mockCert = mockk<X509Certificate>(relaxed = true)
       val certs = arrayOf<X509Certificate?>(mockCert)
 
@@ -129,7 +129,7 @@ class TrustAllX509TrustManagerTest : FunSpec() {
       TrustAllX509TrustManager.checkServerTrusted(certs, null)
     }
 
-    test("checkServerTrusted should accept multiple certificates in chain") {
+    "checkServerTrusted should accept multiple certificates in chain" {
       val mockCert1 = mockk<X509Certificate>(relaxed = true)
       val mockCert2 = mockk<X509Certificate>(relaxed = true)
       val mockCert3 = mockk<X509Certificate>(relaxed = true)
@@ -141,7 +141,7 @@ class TrustAllX509TrustManagerTest : FunSpec() {
 
     // ==================== Object Singleton Tests ====================
 
-    test("TrustAllX509TrustManager should be a singleton object") {
+    "TrustAllX509TrustManager should be a singleton object" {
       // The object keyword in Kotlin creates a singleton
       val instance1 = TrustAllX509TrustManager
       val instance2 = TrustAllX509TrustManager

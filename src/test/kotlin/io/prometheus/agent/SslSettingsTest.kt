@@ -19,7 +19,7 @@
 package io.prometheus.agent
 
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -29,17 +29,17 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 
-class SslSettingsTest : FunSpec() {
+class SslSettingsTest : StringSpec() {
   init {
     // ==================== getKeyStore Tests ====================
 
-    test("getKeyStore should throw FileNotFoundException for non-existent file") {
+    "getKeyStore should throw FileNotFoundException for non-existent file" {
       shouldThrow<FileNotFoundException> {
         SslSettings.getKeyStore("non-existent-keystore.jks", "password")
       }
     }
 
-    test("getKeyStore should throw for invalid file path") {
+    "getKeyStore should throw for invalid file path" {
       shouldThrow<FileNotFoundException> {
         SslSettings.getKeyStore("/path/that/does/not/exist/keystore.jks", "test")
       }
@@ -51,7 +51,7 @@ class SslSettingsTest : FunSpec() {
 
     // ==================== getTrustManagerFactory Tests ====================
 
-    test("getTrustManagerFactory should throw for non-existent keystore") {
+    "getTrustManagerFactory should throw for non-existent keystore" {
       shouldThrow<FileNotFoundException> {
         SslSettings.getTrustManagerFactory("non-existent-keystore.jks", "password")
       }
@@ -59,7 +59,7 @@ class SslSettingsTest : FunSpec() {
 
     // ==================== getSslContext Tests ====================
 
-    test("getSslContext should throw for non-existent keystore") {
+    "getSslContext should throw for non-existent keystore" {
       shouldThrow<FileNotFoundException> {
         SslSettings.getSslContext("non-existent-keystore.jks", "password")
       }
@@ -67,7 +67,7 @@ class SslSettingsTest : FunSpec() {
 
     // ==================== getTrustManager Tests ====================
 
-    test("getTrustManager should throw for non-existent keystore") {
+    "getTrustManager should throw for non-existent keystore" {
       shouldThrow<FileNotFoundException> {
         SslSettings.getTrustManager("non-existent-keystore.jks", "password")
       }
@@ -76,26 +76,26 @@ class SslSettingsTest : FunSpec() {
     // ==================== Type Verification Tests ====================
     // These tests verify the return types of the methods when they succeed
 
-    test("TrustManagerFactory getDefaultAlgorithm should return valid algorithm") {
+    "TrustManagerFactory getDefaultAlgorithm should return valid algorithm" {
       // Verify that the default algorithm is available
       val algorithm = TrustManagerFactory.getDefaultAlgorithm()
       algorithm.shouldNotBeNull()
     }
 
-    test("KeyStore getDefaultType should return valid type") {
+    "KeyStore getDefaultType should return valid type" {
       // Verify that the default keystore type is available
       val type = KeyStore.getDefaultType()
       type.shouldNotBeNull()
     }
 
-    test("SSLContext TLS instance should be obtainable") {
+    "SSLContext TLS instance should be obtainable" {
       // Verify that TLS SSLContext can be created
       val sslContext = SSLContext.getInstance("TLS")
       sslContext.shouldNotBeNull()
       sslContext.protocol shouldBe "TLS"
     }
 
-    test("TrustManagerFactory can be initialized with null") {
+    "TrustManagerFactory can be initialized with null" {
       // Verify default trust manager factory behavior
       val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
       tmf.init(null as KeyStore?)

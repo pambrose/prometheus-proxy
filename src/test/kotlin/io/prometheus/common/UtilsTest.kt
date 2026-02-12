@@ -20,7 +20,7 @@ package io.prometheus.common
 
 import io.grpc.Status
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -36,7 +36,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-class UtilsTest : FunSpec() {
+class UtilsTest : StringSpec() {
   // ==================== Type Check Helper ====================
 
   private inline fun <reified T> Any.shouldBeInstanceOf() {
@@ -46,32 +46,32 @@ class UtilsTest : FunSpec() {
   init {
     // ==================== decodeParams Tests ====================
 
-    test("decodeParams should return empty string for blank input") {
+    "decodeParams should return empty string for blank input" {
       decodeParams("") shouldBe ""
       decodeParams("   ") shouldBe ""
     }
 
-    test("decodeParams should decode URL-encoded parameters") {
+    "decodeParams should decode URL-encoded parameters" {
       val encoded = "foo%3Dbar%26baz%3Dqux"
       val result = decodeParams(encoded)
 
       result shouldBe "?foo=bar&baz=qux"
     }
 
-    test("decodeParams should add question mark prefix") {
+    "decodeParams should add question mark prefix" {
       val result = decodeParams("simple")
 
       result shouldBe "?simple"
     }
 
-    test("decodeParams should handle special characters") {
+    "decodeParams should handle special characters" {
       val encoded = "name%3DJohn%20Doe%26city%3DNew%20York"
       val result = decodeParams(encoded)
 
       result shouldBe "?name=John Doe&city=New York"
     }
 
-    test("decodeParams should handle already decoded strings") {
+    "decodeParams should handle already decoded strings" {
       val result = decodeParams("key=value")
 
       result shouldBe "?key=value"
@@ -79,48 +79,48 @@ class UtilsTest : FunSpec() {
 
     // ==================== lowercase Tests ====================
 
-    test("lowercase should convert string to lowercase") {
+    "lowercase should convert string to lowercase" {
       "HELLO".lowercase() shouldBe "hello"
       "Hello World".lowercase() shouldBe "hello world"
       "MixedCase123".lowercase() shouldBe "mixedcase123"
     }
 
-    test("lowercase should handle empty string") {
+    "lowercase should handle empty string" {
       "".lowercase() shouldBe ""
     }
 
-    test("lowercase should handle already lowercase string") {
+    "lowercase should handle already lowercase string" {
       "already lowercase".lowercase() shouldBe "already lowercase"
     }
 
     // ==================== defaultEmptyJsonObject Tests ====================
 
-    test("defaultEmptyJsonObject should return original string if not empty") {
+    "defaultEmptyJsonObject should return original string if not empty" {
       """{"key":"value"}""".defaultEmptyJsonObject() shouldBe """{"key":"value"}"""
       "some content".defaultEmptyJsonObject() shouldBe "some content"
     }
 
-    test("defaultEmptyJsonObject should return empty JSON object for empty string") {
+    "defaultEmptyJsonObject should return empty JSON object for empty string" {
       "".defaultEmptyJsonObject() shouldBe "{}"
     }
 
     // ==================== toJsonElement Tests ====================
 
-    test("toJsonElement should parse valid JSON object") {
+    "toJsonElement should parse valid JSON object" {
       val json = """{"key":"value"}"""
       val element = json.toJsonElement()
 
       element.shouldBeInstanceOf<JsonObject>()
     }
 
-    test("toJsonElement should parse empty JSON object") {
+    "toJsonElement should parse empty JSON object" {
       val json = "{}"
       val element = json.toJsonElement()
 
       element.shouldBeInstanceOf<JsonObject>()
     }
 
-    test("toJsonElement should throw for invalid JSON") {
+    "toJsonElement should throw for invalid JSON" {
       shouldThrow<Exception> {
         "not valid json".toJsonElement()
       }
@@ -128,7 +128,7 @@ class UtilsTest : FunSpec() {
 
     // ==================== setLogLevel Tests ====================
 
-    test("setLogLevel should accept valid log levels") {
+    "setLogLevel should accept valid log levels" {
       // These should not throw
       setLogLevel("test", "trace")
       setLogLevel("test", "debug")
@@ -138,7 +138,7 @@ class UtilsTest : FunSpec() {
       setLogLevel("test", "off")
     }
 
-    test("setLogLevel should be case insensitive") {
+    "setLogLevel should be case insensitive" {
       // These should not throw
       setLogLevel("test", "TRACE")
       setLogLevel("test", "DEBUG")
@@ -148,7 +148,7 @@ class UtilsTest : FunSpec() {
       setLogLevel("test", "OFF")
     }
 
-    test("setLogLevel should throw for invalid log level") {
+    "setLogLevel should throw for invalid log level" {
       val exception = shouldThrow<IllegalArgumentException> {
         setLogLevel("test", "invalid")
       }
@@ -159,13 +159,13 @@ class UtilsTest : FunSpec() {
 
     // ==================== getVersionDesc Tests ====================
 
-    test("getVersionDesc should return non-empty string") {
+    "getVersionDesc should return non-empty string" {
       val versionDesc = Utils.getVersionDesc(false)
 
       versionDesc.shouldNotBeEmpty()
     }
 
-    test("getVersionDesc should return JSON when requested") {
+    "getVersionDesc should return JSON when requested" {
       val versionDesc = Utils.getVersionDesc(true)
 
       versionDesc.shouldNotBeEmpty()
@@ -174,7 +174,7 @@ class UtilsTest : FunSpec() {
 
     // Bug #19: VersionValidator was removed — version printing now happens after parsing
     // in BaseOptions, not inside a JCommander validator that calls exitProcess.
-    test("getVersionDesc should be callable without triggering exitProcess") {
+    "getVersionDesc should be callable without triggering exitProcess" {
       // Before the fix, calling VersionValidator.validate() would call exitProcess(0).
       // Now getVersionDesc is a standalone utility — calling it must not exit the JVM.
       val plainDesc = Utils.getVersionDesc(false)
@@ -186,75 +186,75 @@ class UtilsTest : FunSpec() {
 
     // ==================== parseHostPort Tests ====================
 
-    test("parseHostPort should parse simple host and port") {
+    "parseHostPort should parse simple host and port" {
       val result = parseHostPort("localhost:8080", 50051)
 
       result shouldBe HostPort("localhost", 8080)
     }
 
-    test("parseHostPort should use default port when no port specified") {
+    "parseHostPort should use default port when no port specified" {
       val result = parseHostPort("example.com", 50051)
 
       result shouldBe HostPort("example.com", 50051)
     }
 
-    test("parseHostPort should handle bracketed IPv6 with port") {
+    "parseHostPort should handle bracketed IPv6 with port" {
       val result = parseHostPort("[::1]:50051", 9090)
 
       result shouldBe HostPort("[::1]", 50051)
     }
 
-    test("parseHostPort should handle bracketed IPv6 without port") {
+    "parseHostPort should handle bracketed IPv6 without port" {
       val result = parseHostPort("[::1]", 50051)
 
       result shouldBe HostPort("[::1]", 50051)
     }
 
-    test("parseHostPort should handle unbracketed IPv6 without port") {
+    "parseHostPort should handle unbracketed IPv6 without port" {
       val result = parseHostPort("::1", 50051)
 
       result shouldBe HostPort("::1", 50051)
     }
 
-    test("parseHostPort should handle full IPv6 address without brackets") {
+    "parseHostPort should handle full IPv6 address without brackets" {
       val result = parseHostPort("2001:db8::1", 50051)
 
       result shouldBe HostPort("2001:db8::1", 50051)
     }
 
-    test("parseHostPort should handle IPv4 address with port") {
+    "parseHostPort should handle IPv4 address with port" {
       val result = parseHostPort("192.168.1.100:5000", 50051)
 
       result shouldBe HostPort("192.168.1.100", 5000)
     }
 
-    test("parseHostPort should handle IPv4 address without port") {
+    "parseHostPort should handle IPv4 address without port" {
       val result = parseHostPort("192.168.1.100", 50051)
 
       result shouldBe HostPort("192.168.1.100", 50051)
     }
 
-    test("parseHostPort should handle hostname with custom port") {
+    "parseHostPort should handle hostname with custom port" {
       val result = parseHostPort("proxy.example.org:9090", 50051)
 
       result shouldBe HostPort("proxy.example.org", 9090)
     }
 
-    test("parseHostPort should throw for malformed IPv6 with missing close bracket") {
+    "parseHostPort should throw for malformed IPv6 with missing close bracket" {
       val exception = shouldThrow<IllegalArgumentException> {
         parseHostPort("[::1", 50051)
       }
       exception.message shouldContain "missing closing bracket"
     }
 
-    test("parseHostPort should throw for malformed IPv6 with content after unclosed bracket") {
+    "parseHostPort should throw for malformed IPv6 with content after unclosed bracket" {
       val exception = shouldThrow<IllegalArgumentException> {
         parseHostPort("[2001:db8::1", 50051)
       }
       exception.message shouldContain "missing closing bracket"
     }
 
-    test("parseHostPort should handle bracketed full IPv6 with port") {
+    "parseHostPort should handle bracketed full IPv6 with port" {
       val result = parseHostPort("[2001:db8::1]:8443", 50051)
 
       result shouldBe HostPort("[2001:db8::1]", 8443)
@@ -262,7 +262,7 @@ class UtilsTest : FunSpec() {
 
     // M4: parseHostPort now validates port values with descriptive error messages
     // instead of throwing raw NumberFormatException.
-    test("parseHostPort should throw IllegalArgumentException for non-numeric port") {
+    "parseHostPort should throw IllegalArgumentException for non-numeric port" {
       val exception = shouldThrow<IllegalArgumentException> {
         parseHostPort("host:abc", 50051)
       }
@@ -270,41 +270,41 @@ class UtilsTest : FunSpec() {
       exception.message shouldContain "abc"
     }
 
-    test("parseHostPort should throw IllegalArgumentException for port above 65535") {
+    "parseHostPort should throw IllegalArgumentException for port above 65535" {
       val exception = shouldThrow<IllegalArgumentException> {
         parseHostPort("host:99999", 50051)
       }
       exception.message shouldContain "host:99999"
     }
 
-    test("parseHostPort should throw IllegalArgumentException for negative port") {
+    "parseHostPort should throw IllegalArgumentException for negative port" {
       val exception = shouldThrow<IllegalArgumentException> {
         parseHostPort("host:-1", 50051)
       }
       exception.message shouldContain "host:-1"
     }
 
-    test("parseHostPort should throw IllegalArgumentException for non-numeric port in bracketed IPv6") {
+    "parseHostPort should throw IllegalArgumentException for non-numeric port in bracketed IPv6" {
       val exception = shouldThrow<IllegalArgumentException> {
         parseHostPort("[::1]:abc", 50051)
       }
       exception.message shouldContain "abc"
     }
 
-    test("parseHostPort should throw IllegalArgumentException for out-of-range port in bracketed IPv6") {
+    "parseHostPort should throw IllegalArgumentException for out-of-range port in bracketed IPv6" {
       val exception = shouldThrow<IllegalArgumentException> {
         parseHostPort("[::1]:70000", 50051)
       }
       exception.message shouldContain "70000"
     }
 
-    test("parseHostPort should handle port 0") {
+    "parseHostPort should handle port 0" {
       val result = parseHostPort("host:0", 50051)
 
       result shouldBe HostPort("host", 0)
     }
 
-    test("parseHostPort should handle maximum port number") {
+    "parseHostPort should handle maximum port number" {
       val result = parseHostPort("host:65535", 50051)
 
       result shouldBe HostPort("host", 65535)
@@ -312,7 +312,7 @@ class UtilsTest : FunSpec() {
 
     // ==================== HostPort Data Class Tests ====================
 
-    test("HostPort should support equality") {
+    "HostPort should support equality" {
       val hp1 = HostPort("localhost", 8080)
       val hp2 = HostPort("localhost", 8080)
       val hp3 = HostPort("localhost", 9090)
@@ -321,7 +321,7 @@ class UtilsTest : FunSpec() {
       (hp1 == hp3) shouldBe false
     }
 
-    test("HostPort should support copy") {
+    "HostPort should support copy" {
       val hp = HostPort("localhost", 8080)
       val copied = hp.copy(port = 9090)
 
@@ -331,7 +331,7 @@ class UtilsTest : FunSpec() {
 
     // ==================== exceptionDetails Tests ====================
 
-    test("exceptionDetails should include status code") {
+    "exceptionDetails should include status code" {
       val status = Status.UNAVAILABLE.withDescription("service down")
       val exception = RuntimeException("connection lost")
 
@@ -340,7 +340,7 @@ class UtilsTest : FunSpec() {
       details shouldContain "UNAVAILABLE"
     }
 
-    test("exceptionDetails should include description") {
+    "exceptionDetails should include description" {
       val status = Status.NOT_FOUND.withDescription("agent not found")
       val exception = RuntimeException("missing")
 
@@ -349,7 +349,7 @@ class UtilsTest : FunSpec() {
       details shouldContain "agent not found"
     }
 
-    test("exceptionDetails should include exception message") {
+    "exceptionDetails should include exception message" {
       val status = Status.INTERNAL
       val exception = IllegalStateException("something broke")
 
@@ -358,7 +358,7 @@ class UtilsTest : FunSpec() {
       details shouldContain "something broke"
     }
 
-    test("exceptionDetails should include exception class name") {
+    "exceptionDetails should include exception class name" {
       val status = Status.CANCELLED
       val exception = java.io.IOException("timeout")
 
@@ -369,14 +369,14 @@ class UtilsTest : FunSpec() {
 
     // ==================== toJsonElement Edge Case Tests ====================
 
-    test("toJsonElement should parse JSON array") {
+    "toJsonElement should parse JSON array" {
       val json = "[1, 2, 3]"
       val element = json.toJsonElement()
 
       (element is JsonArray).shouldBeTrue()
     }
 
-    test("toJsonElement should parse JSON primitives") {
+    "toJsonElement should parse JSON primitives" {
       "42".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
       "true".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
       "\"hello\"".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
@@ -384,14 +384,14 @@ class UtilsTest : FunSpec() {
 
     // ==================== Bug #12: parseHostPort blank input validation ====================
 
-    test("parseHostPort should throw for empty string") {
+    "parseHostPort should throw for empty string" {
       val exception = shouldThrow<IllegalArgumentException> {
         parseHostPort("", 50051)
       }
       exception.message shouldContain "must not be blank"
     }
 
-    test("parseHostPort should throw for blank string") {
+    "parseHostPort should throw for blank string" {
       val exception = shouldThrow<IllegalArgumentException> {
         parseHostPort("   ", 50051)
       }

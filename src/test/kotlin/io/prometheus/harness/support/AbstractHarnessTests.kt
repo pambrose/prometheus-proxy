@@ -17,31 +17,31 @@
 package io.prometheus.harness.support
 
 import com.github.pambrose.common.util.simpleClassName
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 
 abstract class AbstractHarnessTests(
   private val argsProvider: () -> ProxyCallTestArgs,
-) : FunSpec() {
+) : StringSpec() {
   init {
-    test("should scrape metrics through proxy") {
+    "should scrape metrics through proxy" {
       HarnessTests.proxyCallTest(argsProvider())
     }
 
-    test("should return not found for missing path") {
+    "should return not found for missing path" {
       BasicHarnessTests.missingPathTest(
         argsProvider().proxyPort,
         simpleClassName,
       )
     }
 
-    test("should return not found for invalid path") {
+    "should return not found for invalid path" {
       BasicHarnessTests.invalidPathTest(
         argsProvider().proxyPort,
         simpleClassName,
       )
     }
 
-    test("should add and remove paths correctly") {
+    "should add and remove paths correctly" {
       BasicHarnessTests.addRemovePathsTest(
         argsProvider().agent.pathManager,
         argsProvider().proxyPort,
@@ -49,7 +49,7 @@ abstract class AbstractHarnessTests(
       )
     }
 
-    test("should add and remove paths correctly under concurrent access") {
+    "should add and remove paths correctly under concurrent access" {
       BasicHarnessTests.threadedAddRemovePathsTest(
         argsProvider().agent.pathManager,
         argsProvider().proxyPort,
@@ -57,7 +57,7 @@ abstract class AbstractHarnessTests(
       )
     }
 
-    test("should handle invalid agent URL gracefully") {
+    "should handle invalid agent URL gracefully" {
       BasicHarnessTests.invalidAgentUrlTest(
         argsProvider().agent.pathManager,
         argsProvider().proxyPort,
@@ -65,7 +65,7 @@ abstract class AbstractHarnessTests(
       )
     }
 
-    test("should timeout when scrape exceeds deadline") {
+    "should timeout when scrape exceeds deadline" {
       HarnessTests.timeoutTest(
         argsProvider().agent.pathManager,
         simpleClassName,

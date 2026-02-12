@@ -18,7 +18,7 @@
 
 package io.prometheus.common
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -34,11 +34,11 @@ import kotlinx.coroutines.withTimeout
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
 
-class ScrapeResultsTest : FunSpec() {
+class ScrapeResultsTest : StringSpec() {
   init {
     // ==================== Constructor Tests ====================
 
-    test("constructor should set required fields") {
+    "constructor should set required fields" {
       val results = ScrapeResults(
         srAgentId = "test-agent",
         srScrapeId = 12345L,
@@ -48,7 +48,7 @@ class ScrapeResultsTest : FunSpec() {
       results.srScrapeId shouldBe 12345L
     }
 
-    test("constructor should use default values") {
+    "constructor should use default values" {
       val results = ScrapeResults(
         srAgentId = "test-agent",
         srScrapeId = 12345L,
@@ -64,7 +64,7 @@ class ScrapeResultsTest : FunSpec() {
       results.srUrl.shouldBeEmpty()
     }
 
-    test("constructor should accept all parameters") {
+    "constructor should accept all parameters" {
       val zippedContent = "compressed data".toByteArray()
       val results = ScrapeResults(
         srAgentId = "agent-123",
@@ -89,7 +89,7 @@ class ScrapeResultsTest : FunSpec() {
 
     // ==================== Debug Info Constructor Tests ====================
 
-    test("constructor should accept url and failure reason") {
+    "constructor should accept url and failure reason" {
       val results = ScrapeResults(
         srAgentId = "agent",
         srScrapeId = 123L,
@@ -101,7 +101,7 @@ class ScrapeResultsTest : FunSpec() {
       results.srFailureReason shouldBe "Connection refused"
     }
 
-    test("constructor should default to empty url and failure reason") {
+    "constructor should default to empty url and failure reason" {
       val results = ScrapeResults("agent", 123L)
 
       results.srUrl.shouldBeEmpty()
@@ -110,7 +110,7 @@ class ScrapeResultsTest : FunSpec() {
 
     // ==================== toScrapeResponse Tests ====================
 
-    test("toScrapeResponse should create response with text content") {
+    "toScrapeResponse should create response with text content" {
       val results = ScrapeResults(
         srAgentId = "agent-1",
         srScrapeId = 100L,
@@ -132,7 +132,7 @@ class ScrapeResultsTest : FunSpec() {
       response.contentAsText shouldBe "metrics content here"
     }
 
-    test("toScrapeResponse should create response with zipped content") {
+    "toScrapeResponse should create response with zipped content" {
       val zippedContent = byteArrayOf(1, 2, 3, 4, 5)
       val results = ScrapeResults(
         srAgentId = "agent-2",
@@ -149,7 +149,7 @@ class ScrapeResultsTest : FunSpec() {
       response.contentAsZipped.toByteArray() shouldBe zippedContent
     }
 
-    test("toScrapeResponse should include failure reason") {
+    "toScrapeResponse should include failure reason" {
       val results = ScrapeResults(
         srAgentId = "agent-3",
         srScrapeId = 300L,
@@ -165,7 +165,7 @@ class ScrapeResultsTest : FunSpec() {
 
     // ==================== toScrapeResponseHeader Tests ====================
 
-    test("toScrapeResponseHeader should create chunked response header") {
+    "toScrapeResponseHeader should create chunked response header" {
       val results = ScrapeResults(
         srAgentId = "agent-chunk",
         srScrapeId = 400L,
@@ -185,7 +185,7 @@ class ScrapeResultsTest : FunSpec() {
       response.header.headerUrl shouldBe "http://localhost/metrics"
     }
 
-    test("toScrapeResponseHeader should include failure reason") {
+    "toScrapeResponseHeader should include failure reason" {
       val results = ScrapeResults(
         srAgentId = "agent-fail",
         srScrapeId = 500L,
@@ -201,7 +201,7 @@ class ScrapeResultsTest : FunSpec() {
 
     // ==================== toScrapeResults Extension Tests ====================
 
-    test("toScrapeResults should convert ScrapeResponse to ScrapeResults") {
+    "toScrapeResults should convert ScrapeResponse to ScrapeResults" {
       val response = scrapeResponse {
         agentId = "converted-agent"
         scrapeId = 600L
@@ -226,7 +226,7 @@ class ScrapeResultsTest : FunSpec() {
       results.srUrl shouldBe "http://test/api"
     }
 
-    test("toScrapeResults should handle zipped content") {
+    "toScrapeResults should handle zipped content" {
       val zippedData = byteArrayOf(10, 20, 30)
       val response = scrapeResponse {
         agentId = "zipped-agent"
@@ -243,7 +243,7 @@ class ScrapeResultsTest : FunSpec() {
 
     // ==================== errorCode Tests ====================
 
-    test("errorCode should return RequestTimeout for TimeoutCancellationException") {
+    "errorCode should return RequestTimeout for TimeoutCancellationException" {
       // TimeoutCancellationException constructor is internal, so we generate it via withTimeout
       val exception = try {
         withTimeout(1) {
@@ -259,21 +259,21 @@ class ScrapeResultsTest : FunSpec() {
       code shouldBe HttpStatusCode.RequestTimeout.value
     }
 
-    test("errorCode should return RequestTimeout for SocketTimeoutException") {
+    "errorCode should return RequestTimeout for SocketTimeoutException" {
       val exception = SocketTimeoutException("socket timeout")
       val code = errorCode(exception, "http://test.com")
 
       code shouldBe HttpStatusCode.RequestTimeout.value
     }
 
-    test("errorCode should return ServiceUnavailable for IOException") {
+    "errorCode should return ServiceUnavailable for IOException" {
       val exception = IOException("connection refused")
       val code = errorCode(exception, "http://test.com")
 
       code shouldBe HttpStatusCode.ServiceUnavailable.value
     }
 
-    test("errorCode should return ServiceUnavailable for IOException subclasses") {
+    "errorCode should return ServiceUnavailable for IOException subclasses" {
       val connectException = java.net.ConnectException("Connection refused")
       errorCode(connectException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
 
@@ -284,21 +284,21 @@ class ScrapeResultsTest : FunSpec() {
       errorCode(noRouteException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
     }
 
-    test("errorCode should return RequestTimeout for HttpConnectTimeoutException") {
+    "errorCode should return RequestTimeout for HttpConnectTimeoutException" {
       val exception = HttpConnectTimeoutException("connect timeout")
       val code = errorCode(exception, "http://test.com")
 
       code shouldBe HttpStatusCode.RequestTimeout.value
     }
 
-    test("errorCode should return RequestTimeout for HttpRequestTimeoutException") {
+    "errorCode should return RequestTimeout for HttpRequestTimeoutException" {
       val exception = HttpRequestTimeoutException("http://test.com", 5000L)
       val code = errorCode(exception, "http://test.com")
 
       code shouldBe HttpStatusCode.RequestTimeout.value
     }
 
-    test("errorCode should return ServiceUnavailable for other exceptions") {
+    "errorCode should return ServiceUnavailable for other exceptions" {
       val exception = RuntimeException("unexpected error")
       val code = errorCode(exception, "http://test.com")
 
@@ -307,7 +307,7 @@ class ScrapeResultsTest : FunSpec() {
 
     // ==================== Round-Trip Tests ====================
 
-    test("toScrapeResponse and toScrapeResults should round-trip text content") {
+    "toScrapeResponse and toScrapeResults should round-trip text content" {
       val original = ScrapeResults(
         srAgentId = "round-trip-agent",
         srScrapeId = 800L,
@@ -333,7 +333,7 @@ class ScrapeResultsTest : FunSpec() {
       roundTripped.srUrl shouldBe original.srUrl
     }
 
-    test("toScrapeResponse should propagate default failure values") {
+    "toScrapeResponse should propagate default failure values" {
       val results = ScrapeResults(
         srAgentId = "default-agent",
         srScrapeId = 900L,
@@ -352,13 +352,13 @@ class ScrapeResultsTest : FunSpec() {
 
     // ==================== scrapeCounterMsg Tests ====================
 
-    test("scrapeCounterMsg should accept value via constructor") {
+    "scrapeCounterMsg should accept value via constructor" {
       val results = ScrapeResults("agent", 123L, scrapeCounterMsg = "new message")
 
       results.scrapeCounterMsg shouldBe "new message"
     }
 
-    test("scrapeCounterMsg should default to empty string") {
+    "scrapeCounterMsg should default to empty string" {
       val results = ScrapeResults("agent", 123L)
 
       results.scrapeCounterMsg.shouldBeEmpty()

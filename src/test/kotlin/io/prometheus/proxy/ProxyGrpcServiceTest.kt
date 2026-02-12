@@ -2,7 +2,7 @@
 
 package io.prometheus.proxy
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -11,7 +11,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
 
-class ProxyGrpcServiceTest : FunSpec() {
+class ProxyGrpcServiceTest : StringSpec() {
   private fun createMockProxy(
     transportFilterDisabled: Boolean = true,
     reflectionDisabled: Boolean = false,
@@ -48,7 +48,7 @@ class ProxyGrpcServiceTest : FunSpec() {
   init {
     // ==================== toString Tests ====================
 
-    test("toString for InProcess server should indicate InProcess type") {
+    "toString for InProcess server should indicate InProcess type" {
       val mockProxy = createMockProxy()
       val service = ProxyGrpcService(mockProxy, inProcessName = "test-server")
 
@@ -57,7 +57,7 @@ class ProxyGrpcServiceTest : FunSpec() {
       str shouldContain "test-server"
     }
 
-    test("toString for Netty server should indicate Netty type and port") {
+    "toString for Netty server should indicate Netty type and port" {
       val mockProxy = createMockProxy()
       val service = ProxyGrpcService(mockProxy, port = 50051)
 
@@ -69,7 +69,7 @@ class ProxyGrpcServiceTest : FunSpec() {
 
     // ==================== HealthCheck Tests ====================
 
-    test("healthCheck should not be null") {
+    "healthCheck should not be null" {
       val mockProxy = createMockProxy()
       val service = ProxyGrpcService(mockProxy, inProcessName = "health-test")
 
@@ -78,7 +78,7 @@ class ProxyGrpcServiceTest : FunSpec() {
 
     // ==================== Server Configuration Tests ====================
 
-    test("should create InProcess server without throwing") {
+    "should create InProcess server without throwing" {
       val mockProxy = createMockProxy()
 
       // Should not throw
@@ -86,7 +86,7 @@ class ProxyGrpcServiceTest : FunSpec() {
       service.shouldNotBeNull()
     }
 
-    test("should create Netty server without throwing") {
+    "should create Netty server without throwing" {
       val mockProxy = createMockProxy()
 
       // Should not throw
@@ -96,7 +96,7 @@ class ProxyGrpcServiceTest : FunSpec() {
 
     // ==================== HealthCheck Result Tests ====================
 
-    test("healthCheck should be healthy before shutdown") {
+    "healthCheck should be healthy before shutdown" {
       val mockProxy = createMockProxy()
       val service = ProxyGrpcService(mockProxy, inProcessName = "health-check-test")
 
@@ -108,7 +108,7 @@ class ProxyGrpcServiceTest : FunSpec() {
       service.stopAsync().awaitTerminated()
     }
 
-    test("healthCheck should be unhealthy after shutdown") {
+    "healthCheck should be unhealthy after shutdown" {
       val mockProxy = createMockProxy()
       val service = ProxyGrpcService(mockProxy, inProcessName = "health-shutdown-test")
 
@@ -122,7 +122,7 @@ class ProxyGrpcServiceTest : FunSpec() {
 
     // ==================== Server Lifecycle Tests ====================
 
-    test("InProcess server should start and stop gracefully") {
+    "InProcess server should start and stop gracefully" {
       val mockProxy = createMockProxy()
       val service = ProxyGrpcService(mockProxy, inProcessName = "lifecycle-test")
 
@@ -132,7 +132,7 @@ class ProxyGrpcServiceTest : FunSpec() {
       service.stopAsync().awaitTerminated()
     }
 
-    test("Netty server should start and stop gracefully on ephemeral port") {
+    "Netty server should start and stop gracefully on ephemeral port" {
       val mockProxy = createMockProxy()
       val service = ProxyGrpcService(mockProxy, port = 0)
 
@@ -144,14 +144,14 @@ class ProxyGrpcServiceTest : FunSpec() {
 
     // ==================== Server Configuration Branch Tests ====================
 
-    test("should create server with transport filter enabled") {
+    "should create server with transport filter enabled" {
       val mockProxy = createMockProxy(transportFilterDisabled = false)
 
       val service = ProxyGrpcService(mockProxy, inProcessName = "transport-filter-test")
       service.shouldNotBeNull()
     }
 
-    test("should create server with keepalive settings") {
+    "should create server with keepalive settings" {
       // Must use Netty (port) rather than InProcess — InProcess does not support keepAlive
       val mockProxy = createMockProxy(
         handshakeTimeoutSecs = 60L,
@@ -168,7 +168,7 @@ class ProxyGrpcServiceTest : FunSpec() {
       service.shouldNotBeNull()
     }
 
-    test("should create server with reflection disabled") {
+    "should create server with reflection disabled" {
       val mockProxy = createMockProxy(reflectionDisabled = true)
 
       val service = ProxyGrpcService(mockProxy, inProcessName = "no-reflection-test")

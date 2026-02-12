@@ -18,7 +18,7 @@
 
 package io.prometheus.proxy
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -54,7 +54,7 @@ import io.ktor.server.cio.CIO as ServerCIO
 // Tests for ProxyHttpConfig which configures Ktor server plugins for the proxy HTTP service.
 // Note: Full integration tests with testApplication would require ktor-server-test-host dependency.
 // These tests verify the configuration logic without running a full HTTP server.
-class ProxyHttpConfigTest : FunSpec() {
+class ProxyHttpConfigTest : StringSpec() {
   // ==================== Helper Methods ====================
 
   private fun callGetFormattedLog(call: ApplicationCall): String {
@@ -73,14 +73,14 @@ class ProxyHttpConfigTest : FunSpec() {
   init {
     // ==================== Configuration Object Tests ====================
 
-    test("ProxyHttpConfig object should exist") {
+    "ProxyHttpConfig object should exist" {
       // Verify the ProxyHttpConfig object is accessible
       ProxyHttpConfig.shouldNotBeNull()
     }
 
     // ==================== Compression Configuration Tests ====================
 
-    test("CompressionConfig should support gzip configuration") {
+    "CompressionConfig should support gzip configuration" {
       val config = CompressionConfig()
 
       // Apply gzip configuration similar to ProxyHttpConfig
@@ -92,7 +92,7 @@ class ProxyHttpConfigTest : FunSpec() {
       config.shouldNotBeNull()
     }
 
-    test("CompressionConfig should support deflate configuration") {
+    "CompressionConfig should support deflate configuration" {
       val config = CompressionConfig()
 
       // Apply deflate configuration similar to ProxyHttpConfig
@@ -105,7 +105,7 @@ class ProxyHttpConfigTest : FunSpec() {
       config.shouldNotBeNull()
     }
 
-    test("CompressionConfig should support multiple encoders") {
+    "CompressionConfig should support multiple encoders" {
       val config = CompressionConfig()
 
       // Apply both gzip and deflate like ProxyHttpConfig does
@@ -122,16 +122,16 @@ class ProxyHttpConfigTest : FunSpec() {
 
     // ==================== HTTP Status Code Tests ====================
 
-    test("NotFound status code should have correct value") {
+    "NotFound status code should have correct value" {
       HttpStatusCode.NotFound.value shouldBe 404
       HttpStatusCode.NotFound.description shouldBe "Not Found"
     }
 
-    test("Found status code should have correct value") {
+    "Found status code should have correct value" {
       HttpStatusCode.Found.value shouldBe 302
     }
 
-    test("status codes should be comparable") {
+    "status codes should be comparable" {
       val status = HttpStatusCode.OK
 
       (status == HttpStatusCode.OK) shouldBe true
@@ -140,7 +140,7 @@ class ProxyHttpConfigTest : FunSpec() {
 
     // ==================== Compression Priority Tests ====================
 
-    test("gzip should have higher priority than deflate in config") {
+    "gzip should have higher priority than deflate in config" {
       // In ProxyHttpConfig, gzip has priority 1.0 and deflate has 10.0
       // Lower numbers = higher priority in Ktor
       val gzipPriority = 1.0
@@ -149,7 +149,7 @@ class ProxyHttpConfigTest : FunSpec() {
       (gzipPriority < deflatePriority) shouldBe true
     }
 
-    test("deflate minimum size should be 1024 bytes") {
+    "deflate minimum size should be 1024 bytes" {
       val minimumSize = 1024L
 
       minimumSize shouldBe 1024L
@@ -157,7 +157,7 @@ class ProxyHttpConfigTest : FunSpec() {
 
     // ==================== StatusPages Integration Tests ====================
 
-    test("StatusPages NotFound handler should return correct text") {
+    "StatusPages NotFound handler should return correct text" {
       val server = embeddedServer(ServerCIO, port = 0) {
         install(StatusPages) {
           status(HttpStatusCode.NotFound) { call, cause ->
@@ -190,7 +190,7 @@ class ProxyHttpConfigTest : FunSpec() {
       }
     }
 
-    test("StatusPages exception handler should return InternalServerError") {
+    "StatusPages exception handler should return InternalServerError" {
       val server = embeddedServer(ServerCIO, port = 0) {
         install(StatusPages) {
           exception<Throwable> { call, _ ->
@@ -219,18 +219,18 @@ class ProxyHttpConfigTest : FunSpec() {
 
     // ==================== getFormattedLog Tests ====================
 
-    test("Found status should have value 302") {
+    "Found status should have value 302" {
       HttpStatusCode.Found.value shouldBe 302
       HttpStatusCode.Found.description shouldBe "Found"
     }
 
-    test("InternalServerError status should have value 500") {
+    "InternalServerError status should have value 500" {
       HttpStatusCode.InternalServerError.value shouldBe 500
     }
 
     // ==================== StatusPagesConfig Tests ====================
 
-    test("StatusPagesConfig should support exception handler configuration") {
+    "StatusPagesConfig should support exception handler configuration" {
       val config = StatusPagesConfig()
 
       // Apply exception handler similar to ProxyHttpConfig
@@ -241,7 +241,7 @@ class ProxyHttpConfigTest : FunSpec() {
       config.shouldNotBeNull()
     }
 
-    test("StatusPagesConfig should support status handler configuration") {
+    "StatusPagesConfig should support status handler configuration" {
       val config = StatusPagesConfig()
 
       config.status(HttpStatusCode.NotFound) { call, cause ->
@@ -258,7 +258,7 @@ class ProxyHttpConfigTest : FunSpec() {
     // - Found (302): includes Location header in the log
     // - All other statuses: standard log format without Location
 
-    test("getFormattedLog should include Location header for Found status") {
+    "getFormattedLog should include Location header for Found status" {
       val mockCall = mockk<ApplicationCall>(relaxed = true)
 
       every { mockCall.response.status() } returns HttpStatusCode.Found
@@ -273,7 +273,7 @@ class ProxyHttpConfigTest : FunSpec() {
       result shouldContain "->"
     }
 
-    test("getFormattedLog should not include Location for non-Found status") {
+    "getFormattedLog should not include Location for non-Found status" {
       val mockCall = mockk<ApplicationCall>(relaxed = true)
 
       every { mockCall.response.status() } returns HttpStatusCode.OK
@@ -286,7 +286,7 @@ class ProxyHttpConfigTest : FunSpec() {
       result shouldNotContain "->"
     }
 
-    test("getFormattedLog should handle null status gracefully") {
+    "getFormattedLog should handle null status gracefully" {
       val mockCall = mockk<ApplicationCall>(relaxed = true)
 
       every { mockCall.response.status() } returns null
@@ -302,18 +302,18 @@ class ProxyHttpConfigTest : FunSpec() {
     // ==================== configureCallLogging Filter Tests ====================
     // The filter checks call.request.path().startsWith("/")
 
-    test("callLogging filter should accept paths starting with slash") {
+    "callLogging filter should accept paths starting with slash" {
       // The filter logic: call.request.path().startsWith("/")
       val path = "/metrics"
       path.startsWith("/") shouldBe true
     }
 
-    test("callLogging filter should accept root path") {
+    "callLogging filter should accept root path" {
       val path = "/"
       path.startsWith("/") shouldBe true
     }
 
-    test("callLogging filter should reject paths not starting with slash") {
+    "callLogging filter should reject paths not starting with slash" {
       // This case would only happen if request.path() returns a path without leading slash,
       // which is unusual in HTTP but the filter handles it defensively
       val path = "metrics"
@@ -324,7 +324,7 @@ class ProxyHttpConfigTest : FunSpec() {
     // These tests verify the full configureKtorServer() function by running an embedded server
     // with all plugins installed, then making HTTP requests to verify behavior.
 
-    test("configureKtorServer should add X-Engine default header to responses") {
+    "configureKtorServer should add X-Engine default header to responses" {
       val proxy = createTestProxy()
       val server = embeddedServer(ServerCIO, port = 0) {
         val app = this
@@ -349,7 +349,7 @@ class ProxyHttpConfigTest : FunSpec() {
       }
     }
 
-    test("configureKtorServer should handle NotFound via StatusPages") {
+    "configureKtorServer should handle NotFound via StatusPages" {
       val proxy = createTestProxy()
       val server = embeddedServer(ServerCIO, port = 0) {
         val app = this
@@ -373,7 +373,7 @@ class ProxyHttpConfigTest : FunSpec() {
       }
     }
 
-    test("configureKtorServer should handle exceptions via StatusPages") {
+    "configureKtorServer should handle exceptions via StatusPages" {
       val proxy = createTestProxy()
       val server = embeddedServer(ServerCIO, port = 0) {
         val app = this

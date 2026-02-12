@@ -20,7 +20,7 @@ package io.prometheus.agent
 
 import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -35,7 +35,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 
-class AgentPathManagerTest : FunSpec() {
+class AgentPathManagerTest : StringSpec() {
   private fun createMockAgent(): Agent {
     val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 
@@ -59,7 +59,7 @@ class AgentPathManagerTest : FunSpec() {
   }
 
   init {
-    test("registerPath should register path with proxy") {
+    "registerPath should register path with proxy" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -79,7 +79,7 @@ class AgentPathManagerTest : FunSpec() {
       context.url shouldBe "http://localhost:8080/metrics"
     }
 
-    test("registerPath should strip leading slash from path") {
+    "registerPath should strip leading slash from path" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -97,7 +97,7 @@ class AgentPathManagerTest : FunSpec() {
       context.path shouldBe "metrics"
     }
 
-    test("registerPath should use default empty labels when not provided") {
+    "registerPath should use default empty labels when not provided" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -111,7 +111,7 @@ class AgentPathManagerTest : FunSpec() {
       coVerify { agent.grpcService.registerPathOnProxy("health", "{}") }
     }
 
-    test("registerPath should throw when path is empty") {
+    "registerPath should throw when path is empty" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -122,7 +122,7 @@ class AgentPathManagerTest : FunSpec() {
       exception.message shouldContain "Empty path"
     }
 
-    test("registerPath should throw when url is empty") {
+    "registerPath should throw when url is empty" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -133,7 +133,7 @@ class AgentPathManagerTest : FunSpec() {
       exception.message shouldContain "Empty URL"
     }
 
-    test("unregisterPath should remove path from map") {
+    "unregisterPath should remove path from map" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -154,7 +154,7 @@ class AgentPathManagerTest : FunSpec() {
       manager["metrics"].shouldBeNull()
     }
 
-    test("unregisterPath should strip leading slash from path") {
+    "unregisterPath should strip leading slash from path" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -174,7 +174,7 @@ class AgentPathManagerTest : FunSpec() {
       manager["metrics"].shouldBeNull()
     }
 
-    test("unregisterPath should throw when path is empty") {
+    "unregisterPath should throw when path is empty" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -185,7 +185,7 @@ class AgentPathManagerTest : FunSpec() {
       exception.message shouldContain "Empty path"
     }
 
-    test("unregisterPath should not throw when path not in map") {
+    "unregisterPath should not throw when path not in map" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -199,14 +199,14 @@ class AgentPathManagerTest : FunSpec() {
       coVerify { agent.grpcService.unregisterPathOnProxy("nonexistent") }
     }
 
-    test("get operator should return null for non-existent path") {
+    "get operator should return null for non-existent path" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
       manager["nonexistent"].shouldBeNull()
     }
 
-    test("get operator should return PathContext for registered path") {
+    "get operator should return PathContext for registered path" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -225,7 +225,7 @@ class AgentPathManagerTest : FunSpec() {
       context.labels shouldBe """{"env":"prod"}"""
     }
 
-    test("clear should remove all paths") {
+    "clear should remove all paths" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -249,7 +249,7 @@ class AgentPathManagerTest : FunSpec() {
       manager["path3"].shouldBeNull()
     }
 
-    test("pathMapSize should return size from grpc service") {
+    "pathMapSize should return size from grpc service" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -261,7 +261,7 @@ class AgentPathManagerTest : FunSpec() {
       coVerify { agent.grpcService.pathMapSize() }
     }
 
-    test("PathContext data class should have correct properties") {
+    "PathContext data class should have correct properties" {
       val context = AgentPathManager.PathContext(
         pathId = 123L,
         path = "metrics",
@@ -275,7 +275,7 @@ class AgentPathManagerTest : FunSpec() {
       context.labels shouldBe """{"job":"test"}"""
     }
 
-    test("multiple paths can be registered") {
+    "multiple paths can be registered" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -295,7 +295,7 @@ class AgentPathManagerTest : FunSpec() {
 
     // ==================== toPlainText Tests ====================
 
-    test("toPlainText should return header when no paths configured") {
+    "toPlainText should return header when no paths configured" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -304,7 +304,7 @@ class AgentPathManagerTest : FunSpec() {
       text shouldContain "Agent Path Configs"
     }
 
-    test("toPlainText with configured paths should include path details") {
+    "toPlainText with configured paths should include path details" {
       val config = ConfigFactory.parseString(
         """
         agent {
@@ -345,7 +345,7 @@ class AgentPathManagerTest : FunSpec() {
       text.shouldNotBeEmpty()
     }
 
-    test("toPlainText should include URL column for configured paths") {
+    "toPlainText should include URL column for configured paths" {
       val config = ConfigFactory.parseString(
         """
         agent {
@@ -378,7 +378,7 @@ class AgentPathManagerTest : FunSpec() {
       text shouldContain "http://localhost:9100/metrics"
     }
 
-    test("registerPaths should register all configured paths") {
+    "registerPaths should register all configured paths" {
       val config = ConfigFactory.parseString(
         """
         agent {

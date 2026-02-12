@@ -19,7 +19,7 @@
 package io.prometheus.misc
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ConfigVals
@@ -29,7 +29,7 @@ import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
 
-class AdminEmptyPathTest : FunSpec() {
+class AdminEmptyPathTest : StringSpec() {
   private val proxyConfigVals: ConfigVals.Proxy2 by lazy { proxy.configVals.proxy }
 
   companion object : HarnessSetup()
@@ -58,7 +58,7 @@ class AdminEmptyPathTest : FunSpec() {
       takeDownProxyAndAgent()
     }
 
-    test("proxy ping path should return not found when empty") {
+    "proxy ping path should return not found when empty" {
       proxyConfigVals.admin.apply {
         port shouldBe 8098
         pingPath shouldBe ""
@@ -69,7 +69,7 @@ class AdminEmptyPathTest : FunSpec() {
       }
     }
 
-    test("proxy version path should return not found when empty") {
+    "proxy version path should return not found when empty" {
       proxyConfigVals.admin.apply {
         port shouldBe 8098
         versionPath shouldBe ""
@@ -80,7 +80,7 @@ class AdminEmptyPathTest : FunSpec() {
       }
     }
 
-    test("proxy health check path should return not found when empty") {
+    "proxy health check path should return not found when empty" {
       proxyConfigVals.admin.apply {
         healthCheckPath shouldBe ""
 
@@ -90,7 +90,7 @@ class AdminEmptyPathTest : FunSpec() {
       }
     }
 
-    test("proxy thread dump path should return not found when empty") {
+    "proxy thread dump path should return not found when empty" {
       proxyConfigVals.admin.apply {
         threadDumpPath shouldBe ""
 

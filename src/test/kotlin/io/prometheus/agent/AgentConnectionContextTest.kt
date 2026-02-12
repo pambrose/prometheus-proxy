@@ -18,7 +18,7 @@
 
 package io.prometheus.agent
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -29,9 +29,9 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class AgentConnectionContextTest : FunSpec() {
+class AgentConnectionContextTest : StringSpec() {
   init {
-    test("close should disconnect context") {
+    "close should disconnect context" {
       val context = AgentConnectionContext()
       context.connected.shouldBeTrue()
 
@@ -40,7 +40,7 @@ class AgentConnectionContextTest : FunSpec() {
       context.connected.shouldBeFalse()
     }
 
-    test("close should be idempotent") {
+    "close should be idempotent" {
       val context = AgentConnectionContext()
 
       context.close()
@@ -57,7 +57,7 @@ class AgentConnectionContextTest : FunSpec() {
     // on the same Dispatchers.IO thread, deadlock could occur.
     // The fix replaces the coroutine Mutex + runBlocking with a plain synchronized block.
     // This test verifies close() completes promptly when called from invokeOnCompletion.
-    test("close should not deadlock when called from invokeOnCompletion") {
+    "close should not deadlock when called from invokeOnCompletion" {
       val context = AgentConnectionContext()
       val completedLatch = CountDownLatch(1)
 
@@ -80,7 +80,7 @@ class AgentConnectionContextTest : FunSpec() {
 
     // Verifies that concurrent close() calls from multiple threads don't cause issues.
     // This exercises the synchronized block under contention.
-    test("concurrent close calls should not throw or deadlock") {
+    "concurrent close calls should not throw or deadlock" {
       val context = AgentConnectionContext()
       val threadCount = 10
       val startLatch = CountDownLatch(1)
@@ -105,7 +105,7 @@ class AgentConnectionContextTest : FunSpec() {
 
     // M8: scrapeResultsChannel uses close() instead of cancel(), so buffered results
     // can still be drained by the consumer after the context is closed.
-    test("buffered scrape results should be drainable after close") {
+    "buffered scrape results should be drainable after close" {
       val context = AgentConnectionContext()
 
       // Buffer some results before closing
@@ -140,7 +140,7 @@ class AgentConnectionContextTest : FunSpec() {
       received4.isClosed.shouldBeTrue()
     }
 
-    test("empty scrape results channel should close cleanly") {
+    "empty scrape results channel should close cleanly" {
       val context = AgentConnectionContext()
 
       // Close with no buffered results
