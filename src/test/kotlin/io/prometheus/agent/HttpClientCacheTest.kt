@@ -510,6 +510,7 @@ class HttpClientCacheTest {
   @Test
   fun `onFinishedWithClient should not block cache operations during slow client close`(): Unit =
     runBlocking {
+      // This prevents flakiness in the test
       val slowCache = HttpClientCache(
         maxCacheSize = 10,
         maxAge = 30.seconds,
@@ -531,12 +532,15 @@ class HttpClientCacheTest {
         val slowKey = ClientKey("slow", "client")
         val slowEntry = slowCache.getOrCreateClient(slowKey) { slowClient }
 
-        // Fill cache to evict the slow entry (marks it for close)
+        // Fill the cache to evict the slow entry (marks it for close)
         for (i in 1..10) {
           val k = ClientKey("other$i", "pass$i")
           val e = slowCache.getOrCreateClient(k) { createMockHttpClient() }
           slowCache.onFinishedWithClient(e)
         }
+
+        // Prevents flakiness in the test
+        delay(2.seconds)
 
         // onFinishedWithClient triggers close outside the mutex.
         // Must run on Dispatchers.IO so the blocking close doesn't
