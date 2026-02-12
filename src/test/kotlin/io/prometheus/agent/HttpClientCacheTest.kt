@@ -493,31 +493,34 @@ class HttpClientCacheTest : FunSpec() {
         val slowKey = ClientKey("slow", "client")
         val slowEntry = slowCache.getOrCreateClient(slowKey) { slowClient }
 
-        // Fill the cache to evict the slow entry (marks it for close)
+        // Ensure the slow entry has an older timestamp than the filler entries.
+        // Without this, entries created in the same millisecond have equal access
+        // times, and HashMap iteration order makes LRU eviction non-deterministic —
+        // a filler entry could be evicted instead of the slow entry, causing the
+        // slow entry to never be marked for close.
+        delay(50.milliseconds)
+
+        // Fill the cache to evict the slow entry (marks it for close).
+        // Use mock clients (not real CIO clients) to avoid IO thread pool pressure
+        // which can cause flakiness when the full test suite runs concurrently.
         for (i in 1..10) {
           val k = ClientKey("other$i", "pass$i")
-          val e = slowCache.getOrCreateClient(k) { createMockHttpClient() }
+          val e = slowCache.getOrCreateClient(k) { mockk<HttpClient>(relaxed = true) }
           slowCache.onFinishedWithClient(e)
         }
-
-        // Prevents flakiness in the test
-        delay(2.seconds)
 
         // onFinishedWithClient triggers close outside the mutex.
         // Must run on Dispatchers.IO so the blocking close doesn't
         // starve the single-threaded runBlocking dispatcher.
         val closeJob = async(Dispatchers.IO) { slowCache.onFinishedWithClient(slowEntry) }
 
-        delay(2.seconds)
-
-        // Suspending wait for close to start (doesn't block the event loop thread,
-        // which allows the async coroutine to be properly dispatched)
-        withTimeout(5.seconds) { closeStarted.await() }
+        // Suspending wait for close to start
+        withTimeout(10.seconds) { closeStarted.await() }
 
         // While the slow close is blocked, other cache operations should NOT be blocked
         val start = System.currentTimeMillis()
         val otherKey = ClientKey("concurrent", "access")
-        val otherEntry = slowCache.getOrCreateClient(otherKey) { createMockHttpClient() }
+        val otherEntry = slowCache.getOrCreateClient(otherKey) { mockk<HttpClient>(relaxed = true) }
         val elapsed = System.currentTimeMillis() - start
 
         // Should complete quickly (well under 1 second)
