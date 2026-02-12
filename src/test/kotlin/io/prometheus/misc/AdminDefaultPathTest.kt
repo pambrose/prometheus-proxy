@@ -19,6 +19,7 @@
 package io.prometheus.misc
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -30,106 +31,96 @@ import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Test
 
-class AdminDefaultPathTest {
-  private val agentConfigVals = agent.agentConfigVals
-  private val proxyConfigVals = proxy.proxyConfigVals
+class AdminDefaultPathTest : FunSpec() {
+  private val agentConfigVals by lazy { agent.agentConfigVals }
+  private val proxyConfigVals by lazy { proxy.proxyConfigVals }
 
-  @Test
-  fun proxyPingPathTest() {
-    proxyConfigVals.admin.apply {
-      blockingGet("$port/$pingPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText() shouldStartWith "pong"
-      }
-    }
-  }
+  companion object : HarnessSetup()
 
-  @Test
-  fun agentPingPathTest() {
-    agentConfigVals.admin.apply {
-      blockingGet("$port/$pingPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText() shouldStartWith "pong"
-      }
-    }
-  }
-
-  @Test
-  fun proxyVersionPathTest() {
-    agentConfigVals.admin.apply {
-      blockingGet("$port/$versionPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText() shouldContain "version"
-      }
-    }
-  }
-
-  @Test
-  fun agentVersionPathTest() {
-    agentConfigVals.admin.apply {
-      blockingGet("$port/$versionPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText() shouldContain "version"
-      }
-    }
-  }
-
-  @Test
-  fun proxyHealthCheckPathTest() {
-    proxyConfigVals.admin.apply {
-      blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText().length shouldBeGreaterThan 10
-      }
-    }
-  }
-
-  @Test
-  fun agentHealthCheckPathTest() {
-    agentConfigVals.admin.apply {
-      blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText().length shouldBeGreaterThan 10
-      }
-    }
-  }
-
-  @Test
-  fun proxyThreadDumpPathTest() {
-    proxyConfigVals.admin.apply {
-      blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText().length shouldBeGreaterThan 10
-      }
-    }
-  }
-
-  @Test
-  fun agentThreadDumpPathTest() {
-    agentConfigVals.admin.apply {
-      blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText().length shouldBeGreaterThan 10
-      }
-    }
-  }
-
-  companion object : HarnessSetup() {
-    @JvmStatic
-    @BeforeAll
-    fun setUp() =
+  init {
+    beforeSpec {
       setupProxyAndAgent(
         proxyPort = PROXY_PORT,
         proxySetup = { startProxy(adminEnabled = true) },
         agentSetup = { startAgent(adminEnabled = true) },
       )
+    }
 
-    @JvmStatic
-    @AfterAll
-    fun takeDown() = takeDownProxyAndAgent()
+    afterSpec {
+      takeDownProxyAndAgent()
+    }
+
+    test("proxy ping path should respond with pong") {
+      proxyConfigVals.admin.apply {
+        blockingGet("$port/$pingPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldStartWith "pong"
+        }
+      }
+    }
+
+    test("agent ping path should respond with pong") {
+      agentConfigVals.admin.apply {
+        blockingGet("$port/$pingPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldStartWith "pong"
+        }
+      }
+    }
+
+    test("proxy version path should return version info") {
+      agentConfigVals.admin.apply {
+        blockingGet("$port/$versionPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldContain "version"
+        }
+      }
+    }
+
+    test("agent version path should return version info") {
+      agentConfigVals.admin.apply {
+        blockingGet("$port/$versionPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldContain "version"
+        }
+      }
+    }
+
+    test("proxy health check path should return health status") {
+      proxyConfigVals.admin.apply {
+        blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText().length shouldBeGreaterThan 10
+        }
+      }
+    }
+
+    test("agent health check path should return health status") {
+      agentConfigVals.admin.apply {
+        blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText().length shouldBeGreaterThan 10
+        }
+      }
+    }
+
+    test("proxy thread dump path should return thread dump") {
+      proxyConfigVals.admin.apply {
+        blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText().length shouldBeGreaterThan 10
+        }
+      }
+    }
+
+    test("agent thread dump path should return thread dump") {
+      agentConfigVals.admin.apply {
+        blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText().length shouldBeGreaterThan 10
+        }
+      }
+    }
   }
 }

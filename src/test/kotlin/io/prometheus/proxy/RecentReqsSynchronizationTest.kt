@@ -19,8 +19,8 @@
 package io.prometheus.proxy
 
 import com.google.common.collect.EvictingQueue
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
-import org.junit.jupiter.api.Test
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -29,51 +29,50 @@ import kotlin.concurrent.thread
 // without synchronization while logActivity() writes to it under synchronized(recentReqs).
 // This test validates that the synchronized read pattern used in the fix prevents
 // ConcurrentModificationException.
-class RecentReqsSynchronizationTest {
-  /**
-   * Simulates the FIXED pattern: both reads and writes are synchronized on the same lock.
-   * This should complete without ConcurrentModificationException.
-   */
-  @Test
-  fun `synchronized reads and writes on EvictingQueue should not throw`() {
-    val queue: EvictingQueue<String> = EvictingQueue.create(50)
-    val failed = AtomicBoolean(false)
-    val iterations = 5_000
-    val barrier = CyclicBarrier(2)
+class RecentReqsSynchronizationTest : FunSpec() {
+  init {
+    // Simulates the FIXED pattern: both reads and writes are synchronized on the same lock.
+    // This should complete without ConcurrentModificationException.
+    test("synchronized reads and writes on EvictingQueue should not throw") {
+      val queue: EvictingQueue<String> = EvictingQueue.create(50)
+      val failed = AtomicBoolean(false)
+      val iterations = 5_000
+      val barrier = CyclicBarrier(2)
 
-    // Writer thread (simulates logActivity)
-    val writer = thread {
-      barrier.await()
-      repeat(iterations) { i ->
-        synchronized(queue) {
-          queue.add("entry-$i")
-        }
-      }
-    }
-
-    // Reader thread (simulates debug servlet)
-    val reader = thread {
-      barrier.await()
-      repeat(iterations) {
-        try {
+      // Writer thread (simulates logActivity)
+      val writer = thread {
+        barrier.await()
+        repeat(iterations) { i ->
           synchronized(queue) {
-            if (queue.isNotEmpty()) {
-              // This is the exact pattern from the fix:
-              // read size + reversed() + joinToString() inside synchronized
-              @Suppress("UNUSED_VARIABLE")
-              val text = "${queue.size} most recent requests:\n" +
-                queue.reversed().joinToString("\n")
-            }
+            queue.add("entry-$i")
           }
-        } catch (e: ConcurrentModificationException) {
-          failed.set(true)
         }
       }
+
+      // Reader thread (simulates debug servlet)
+      val reader = thread {
+        barrier.await()
+        repeat(iterations) {
+          try {
+            synchronized(queue) {
+              if (queue.isNotEmpty()) {
+                // This is the exact pattern from the fix:
+                // read size + reversed() + joinToString() inside synchronized
+                @Suppress("UNUSED_VARIABLE")
+                val text = "${queue.size} most recent requests:\n" +
+                  queue.reversed().joinToString("\n")
+              }
+            }
+          } catch (e: ConcurrentModificationException) {
+            failed.set(true)
+          }
+        }
+      }
+
+      writer.join()
+      reader.join()
+
+      failed.get().shouldBeFalse()
     }
-
-    writer.join()
-    reader.join()
-
-    failed.get().shouldBeFalse()
   }
 }

@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -25,10 +26,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.common.ScrapeResults
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
 
-class ScrapeRequestManagerTest {
+class ScrapeRequestManagerTest : FunSpec() {
   private fun createMockWrapper(scrapeId: Long): ScrapeRequestWrapper {
     val mockAgentContext = mockk<AgentContext>(relaxed = true)
     val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -38,17 +37,14 @@ class ScrapeRequestManagerTest {
     return wrapper
   }
 
-  @Test
-  fun `scrapeMapSize should return zero for empty manager`(): Unit =
-    runBlocking {
+  init {
+    test("scrapeMapSize should return zero for empty manager") {
       val manager = ScrapeRequestManager()
 
       manager.scrapeMapSize shouldBe 0
     }
 
-  @Test
-  fun `addToScrapeRequestMap should add request and return null for new scrapeId`(): Unit =
-    runBlocking {
+    test("addToScrapeRequestMap should add request and return null for new scrapeId") {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(123L)
 
@@ -58,9 +54,7 @@ class ScrapeRequestManagerTest {
       manager.scrapeMapSize shouldBe 1
     }
 
-  @Test
-  fun `addToScrapeRequestMap should return old wrapper when replacing`(): Unit =
-    runBlocking {
+    test("addToScrapeRequestMap should return old wrapper when replacing") {
       val manager = ScrapeRequestManager()
       val wrapper1 = createMockWrapper(123L)
       val wrapper2 = createMockWrapper(123L)
@@ -73,9 +67,7 @@ class ScrapeRequestManagerTest {
       manager.scrapeMapSize shouldBe 1
     }
 
-  @Test
-  fun `addToScrapeRequestMap should handle multiple different scrapeIds`(): Unit =
-    runBlocking {
+    test("addToScrapeRequestMap should handle multiple different scrapeIds") {
       ScrapeRequestManager().apply {
         val wrapper1 = createMockWrapper(123L)
         val wrapper2 = createMockWrapper(456L)
@@ -89,9 +81,7 @@ class ScrapeRequestManagerTest {
       }
     }
 
-  @Test
-  fun `assignScrapeResults should handle missing scrapeId gracefully`(): Unit =
-    runBlocking {
+    test("assignScrapeResults should handle missing scrapeId gracefully") {
       val manager = ScrapeRequestManager()
       val mockResults = mockk<ScrapeResults>(relaxed = true)
 
@@ -103,9 +93,7 @@ class ScrapeRequestManagerTest {
       manager.scrapeMapSize shouldBe 0
     }
 
-  @Test
-  fun `removeFromScrapeRequestMap should remove and return wrapper`(): Unit =
-    runBlocking {
+    test("removeFromScrapeRequestMap should remove and return wrapper") {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(123L)
 
@@ -119,9 +107,7 @@ class ScrapeRequestManagerTest {
       manager.scrapeMapSize shouldBe 0
     }
 
-  @Test
-  fun `removeFromScrapeRequestMap should return null for non-existent scrapeId`(): Unit =
-    runBlocking {
+    test("removeFromScrapeRequestMap should return null for non-existent scrapeId") {
       val manager = ScrapeRequestManager()
 
       val result = manager.removeFromScrapeRequestMap(999L)
@@ -130,9 +116,7 @@ class ScrapeRequestManagerTest {
       manager.scrapeMapSize shouldBe 0
     }
 
-  @Test
-  fun `removeFromScrapeRequestMap should only remove specified scrapeId`(): Unit =
-    runBlocking {
+    test("removeFromScrapeRequestMap should only remove specified scrapeId") {
       ScrapeRequestManager().apply {
         val wrapper1 = createMockWrapper(123L)
         val wrapper2 = createMockWrapper(456L)
@@ -151,9 +135,7 @@ class ScrapeRequestManagerTest {
       }
     }
 
-  @Test
-  fun `scrapeMapSize should reflect add and remove operations`(): Unit =
-    runBlocking {
+    test("scrapeMapSize should reflect add and remove operations") {
       ScrapeRequestManager().apply {
         scrapeMapSize shouldBe 0
 
@@ -177,14 +159,12 @@ class ScrapeRequestManagerTest {
       }
     }
 
-  // Tests the scrape request/response correlation mechanism. When Prometheus sends a
-  // scrape request, the proxy tracks it by scrapeId. When the agent returns results,
-  // assignScrapeResults matches the response to the original request and calls
-  // markComplete() to signal the waiting HTTP handler. This test verifies that
-  // multiple concurrent scrapes are correctly tracked and completed independently.
-  @Test
-  fun `multiple assignScrapeResults should call markComplete for each`(): Unit =
-    runBlocking {
+    // Tests the scrape request/response correlation mechanism. When Prometheus sends a
+    // scrape request, the proxy tracks it by scrapeId. When the agent returns results,
+    // assignScrapeResults matches the response to the original request and calls
+    // markComplete() to signal the waiting HTTP handler. This test verifies that
+    // multiple concurrent scrapes are correctly tracked and completed independently.
+    test("multiple assignScrapeResults should call markComplete for each") {
       val manager = ScrapeRequestManager()
       val wrapper1 = createMockWrapper(123L)
       val wrapper2 = createMockWrapper(456L)
@@ -204,11 +184,9 @@ class ScrapeRequestManagerTest {
       verify { wrapper2.markComplete() }
     }
 
-  // ==================== assignScrapeResults Verification Tests ====================
+    // ==================== assignScrapeResults Verification Tests ====================
 
-  @Test
-  fun `assignScrapeResults should set scrapeResults on wrapper`(): Unit =
-    runBlocking {
+    test("assignScrapeResults should set scrapeResults on wrapper") {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(100L)
       val results = mockk<ScrapeResults>(relaxed = true)
@@ -221,9 +199,7 @@ class ScrapeRequestManagerTest {
       verify { wrapper.scrapeResults = results }
     }
 
-  @Test
-  fun `assignScrapeResults should call markActivityTime on agent context`(): Unit =
-    runBlocking {
+    test("assignScrapeResults should call markActivityTime on agent context") {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(200L)
       val agentContext = wrapper.agentContext
@@ -236,4 +212,5 @@ class ScrapeRequestManagerTest {
 
       verify { agentContext.markActivityTime(true) }
     }
+  }
 }

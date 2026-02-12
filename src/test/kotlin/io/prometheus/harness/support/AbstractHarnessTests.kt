@@ -17,39 +17,60 @@
 package io.prometheus.harness.support
 
 import com.github.pambrose.common.util.simpleClassName
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
+import io.kotest.core.spec.style.FunSpec
 
 abstract class AbstractHarnessTests(
-  private val args: ProxyCallTestArgs,
-) {
-  @Test
-  fun proxyCallTest() = runBlocking { HarnessTests.proxyCallTest(args) }
+  private val argsProvider: () -> ProxyCallTestArgs,
+) : FunSpec() {
+  init {
+    test("should scrape metrics through proxy") {
+      HarnessTests.proxyCallTest(argsProvider())
+    }
 
-  @Test
-  fun missingPathTest() = BasicHarnessTests.missingPathTest(args.proxyPort, simpleClassName)
-
-  @Test
-  fun invalidPathTest() = BasicHarnessTests.invalidPathTest(args.proxyPort, simpleClassName)
-
-  @Test
-  fun addRemovePathsTest() =
-    runBlocking { BasicHarnessTests.addRemovePathsTest(args.agent.pathManager, args.proxyPort, simpleClassName) }
-
-  @Test
-  fun threadedAddRemovePathsTest() =
-    runBlocking {
-      BasicHarnessTests.threadedAddRemovePathsTest(
-        args.agent.pathManager,
-        args.proxyPort,
+    test("should return not found for missing path") {
+      BasicHarnessTests.missingPathTest(
+        argsProvider().proxyPort,
         simpleClassName,
       )
     }
 
-  @Test
-  fun invalidAgentUrlTest() =
-    runBlocking { BasicHarnessTests.invalidAgentUrlTest(args.agent.pathManager, args.proxyPort, simpleClassName) }
+    test("should return not found for invalid path") {
+      BasicHarnessTests.invalidPathTest(
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
 
-  @Test
-  fun timeoutTest() = runBlocking { HarnessTests.timeoutTest(args.agent.pathManager, simpleClassName, args.proxyPort) }
+    test("should add and remove paths correctly") {
+      BasicHarnessTests.addRemovePathsTest(
+        argsProvider().agent.pathManager,
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
+
+    test("should add and remove paths correctly under concurrent access") {
+      BasicHarnessTests.threadedAddRemovePathsTest(
+        argsProvider().agent.pathManager,
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
+
+    test("should handle invalid agent URL gracefully") {
+      BasicHarnessTests.invalidAgentUrlTest(
+        argsProvider().agent.pathManager,
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
+
+    test("should timeout when scrape exceeds deadline") {
+      HarnessTests.timeoutTest(
+        argsProvider().agent.pathManager,
+        simpleClassName,
+        argsProvider().proxyPort,
+      )
+    }
+  }
 }

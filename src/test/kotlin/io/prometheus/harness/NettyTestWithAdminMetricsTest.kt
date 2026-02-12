@@ -36,46 +36,23 @@ import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 class NettyTestWithAdminMetricsTest :
   AbstractHarnessTests(
-    args = ProxyCallTestArgs(
-      agent = agent,
-      proxyPort = PROXY_PORT,
-      startPort = 10300,
-      caller = simpleClassName,
-    ),
+    argsProvider = {
+      ProxyCallTestArgs(
+        agent = agent,
+        proxyPort = PROXY_PORT,
+        startPort = 10300,
+        caller = simpleClassName,
+      )
+    },
   ) {
-  @Test
-  fun adminDebugCallsTest() {
-    runBlocking {
-      withHttpClient {
-        get("8093/debug".withPrefix()) { response ->
-          val body = response.bodyAsText()
-          body.length shouldBeGreaterThan 100
-          response.status shouldBe HttpStatusCode.OK
-        }
-      }
+  companion object : HarnessSetup()
 
-      withHttpClient {
-        get("8092/debug".withPrefix()) { response ->
-          val body = response.bodyAsText()
-          body.length shouldBeGreaterThan 100
-          response.status shouldBe HttpStatusCode.OK
-        }
-      }
-    }
-  }
-
-  companion object : HarnessSetup() {
-    @JvmStatic
-    @BeforeAll
-    fun setUp() =
+  init {
+    beforeSpec {
       setupProxyAndAgent(
         proxyPort = PROXY_PORT,
         proxySetup = {
@@ -100,9 +77,28 @@ class NettyTestWithAdminMetricsTest :
           sleep(15.seconds)
         },
       )
+    }
 
-    @JvmStatic
-    @AfterAll
-    fun takeDown() = takeDownProxyAndAgent()
+    afterSpec {
+      takeDownProxyAndAgent()
+    }
+
+    test("should return debug info from admin endpoints") {
+      withHttpClient {
+        get("8093/debug".withPrefix()) { response ->
+          val body = response.bodyAsText()
+          body.length shouldBeGreaterThan 100
+          response.status shouldBe HttpStatusCode.OK
+        }
+      }
+
+      withHttpClient {
+        get("8092/debug".withPrefix()) { response ->
+          val body = response.bodyAsText()
+          body.length shouldBeGreaterThan 100
+          response.status shouldBe HttpStatusCode.OK
+        }
+      }
+    }
   }
 }

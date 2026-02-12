@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.comparables.shouldBeGreaterThan
@@ -34,14 +35,11 @@ import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.ScrapeRequestWrapper
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.milliseconds
 
-class AgentContextTest {
-  @Test
-  fun `constructor should generate unique agent IDs`(): Unit =
-    runBlocking {
+class AgentContextTest : FunSpec() {
+  init {
+    test("constructor should generate unique agent IDs") {
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
       val context3 = AgentContext("192.168.1.3")
@@ -51,26 +49,20 @@ class AgentContextTest {
       context1.agentId shouldNotBe context3.agentId
     }
 
-  @Test
-  fun `agentId should be numeric string`(): Unit =
-    runBlocking {
+    test("agentId should be numeric string") {
       val context = AgentContext("192.168.1.1")
 
       context.agentId.toLongOrNull().shouldNotBeNull()
     }
 
-  @Test
-  fun `new context should be valid by default`(): Unit =
-    runBlocking {
+    test("new context should be valid by default") {
       val context = AgentContext("192.168.1.1")
 
       context.isValid().shouldBeTrue()
       context.isNotValid().shouldBeFalse()
     }
 
-  @Test
-  fun `assignProperties should set all properties from request`(): Unit =
-    runBlocking {
+    test("assignProperties should set all properties from request") {
       val context = AgentContext("192.168.1.1")
 
       val request = registerAgentRequest {
@@ -88,9 +80,7 @@ class AgentContextTest {
       context.consolidated shouldBe true
     }
 
-  @Test
-  fun `desc should return empty string for non-consolidated context`(): Unit =
-    runBlocking {
+    test("desc should return empty string for non-consolidated context") {
       val context = AgentContext("192.168.1.1")
 
       val request = registerAgentRequest {
@@ -102,9 +92,7 @@ class AgentContextTest {
       context.desc shouldBe ""
     }
 
-  @Test
-  fun `desc should return 'consolidated ' for consolidated context`(): Unit =
-    runBlocking {
+    test("desc should return 'consolidated ' for consolidated context") {
       val context = AgentContext("192.168.1.1")
 
       val request = registerAgentRequest {
@@ -116,17 +104,13 @@ class AgentContextTest {
       context.desc shouldBe "consolidated "
     }
 
-  @Test
-  fun `scrapeRequestBacklogSize should start at zero`(): Unit =
-    runBlocking {
+    test("scrapeRequestBacklogSize should start at zero") {
       val context = AgentContext("192.168.1.1")
 
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-  @Test
-  fun `writeScrapeRequest should increment backlog size`(): Unit =
-    runBlocking {
+    test("writeScrapeRequest should increment backlog size") {
       val context = AgentContext("192.168.1.1")
       val mockRequest = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -135,9 +119,7 @@ class AgentContextTest {
       context.scrapeRequestBacklogSize shouldBe 1
     }
 
-  @Test
-  fun `writeScrapeRequest multiple times should increment backlog`(): Unit =
-    runBlocking {
+    test("writeScrapeRequest multiple times should increment backlog") {
       AgentContext("192.168.1.1").apply {
         val mockRequest1 = mockk<ScrapeRequestWrapper>(relaxed = true)
         val mockRequest2 = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -151,9 +133,7 @@ class AgentContextTest {
       }
     }
 
-  @Test
-  fun `readScrapeRequest should return written request`(): Unit =
-    runBlocking {
+    test("readScrapeRequest should return written request") {
       val context = AgentContext("192.168.1.1")
       val mockRequest = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -164,9 +144,7 @@ class AgentContextTest {
       result shouldBe mockRequest
     }
 
-  @Test
-  fun `readScrapeRequest should decrement backlog size`(): Unit =
-    runBlocking {
+    test("readScrapeRequest should decrement backlog size") {
       val context = AgentContext("192.168.1.1")
       val mockRequest = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -177,9 +155,7 @@ class AgentContextTest {
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-  @Test
-  fun `readScrapeRequest should return null when no requests queued`(): Unit =
-    runBlocking {
+    test("readScrapeRequest should return null when no requests queued") {
       val context = AgentContext("192.168.1.1")
 
       context.invalidate()
@@ -188,13 +164,11 @@ class AgentContextTest {
       result.shouldBeNull()
     }
 
-  // Verifies that the scrape request channel maintains FIFO (First-In-First-Out) ordering.
-  // This is critical for correct scrape behavior: Prometheus expects responses in the same
-  // order as requests. The underlying Channel implementation guarantees this ordering,
-  // but this test ensures the AgentContext wrapper doesn't break that guarantee.
-  @Test
-  fun `readScrapeRequest should return requests in FIFO order`(): Unit =
-    runBlocking {
+    // Verifies that the scrape request channel maintains FIFO (First-In-First-Out) ordering.
+    // This is critical for correct scrape behavior: Prometheus expects responses in the same
+    // order as requests. The underlying Channel implementation guarantees this ordering,
+    // but this test ensures the AgentContext wrapper doesn't break that guarantee.
+    test("readScrapeRequest should return requests in FIFO order") {
       AgentContext("192.168.1.1").apply {
         val mockRequest1 = mockk<ScrapeRequestWrapper>(relaxed = true)
         val mockRequest2 = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -214,9 +188,7 @@ class AgentContextTest {
       }
     }
 
-  @Test
-  fun `invalidate should set valid to false`(): Unit =
-    runBlocking {
+    test("invalidate should set valid to false") {
       AgentContext("192.168.1.1").apply {
         isValid().shouldBeTrue()
 
@@ -227,13 +199,11 @@ class AgentContextTest {
       }
     }
 
-  // Tests the graceful shutdown behavior of an agent context.
-  // When invalidate() is called, the context is marked invalid and buffered
-  // requests are drained (with closeChannel() called on each). After invalidation,
-  // readScrapeRequest() returns null because the channel was drained and closed.
-  @Test
-  fun `invalidate should drain scrape request channel`(): Unit =
-    runBlocking {
+    // Tests the graceful shutdown behavior of an agent context.
+    // When invalidate() is called, the context is marked invalid and buffered
+    // requests are drained (with closeChannel() called on each). After invalidation,
+    // readScrapeRequest() returns null because the channel was drained and closed.
+    test("invalidate should drain scrape request channel") {
       val context = AgentContext("192.168.1.1")
       val mockRequest = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -251,9 +221,7 @@ class AgentContextTest {
       verify(exactly = 1) { mockRequest.closeChannel() }
     }
 
-  @Test
-  fun `markActivityTime should reset inactivity duration`(): Unit =
-    runBlocking {
+    test("markActivityTime should reset inactivity duration") {
       val context = AgentContext("192.168.1.1")
 
       delay(50.milliseconds)
@@ -266,9 +234,7 @@ class AgentContextTest {
       duration2.shouldBeLessThan(duration1)
     }
 
-  @Test
-  fun `markActivityTime with isRequest true should reset inactivity duration`(): Unit =
-    runBlocking {
+    test("markActivityTime with isRequest true should reset inactivity duration") {
       val context = AgentContext("192.168.1.1")
 
       delay(50.milliseconds)
@@ -281,9 +247,7 @@ class AgentContextTest {
       duration2.shouldBeLessThan(duration1)
     }
 
-  @Test
-  fun `inactivityDuration should increase over time`(): Unit =
-    runBlocking {
+    test("inactivityDuration should increase over time") {
       val context = AgentContext("192.168.1.1")
 
       delay(50.milliseconds)
@@ -295,9 +259,7 @@ class AgentContextTest {
       duration2 shouldBeGreaterThan duration1
     }
 
-  @Test
-  fun `toString should contain key properties`(): Unit =
-    runBlocking {
+    test("toString should contain key properties") {
       val context = AgentContext("192.168.1.1")
 
       val request = registerAgentRequest {
@@ -319,26 +281,20 @@ class AgentContextTest {
       str shouldContain "test-host"
     }
 
-  @Test
-  fun `equals should return true for same instance`(): Unit =
-    runBlocking {
+    test("equals should return true for same instance") {
       val context = AgentContext("192.168.1.1")
 
       (context == context).shouldBeTrue()
     }
 
-  @Test
-  fun `equals should return false for different agent IDs`(): Unit =
-    runBlocking {
+    test("equals should return false for different agent IDs") {
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
 
       (context1 == context2).shouldBeFalse()
     }
 
-  @Test
-  fun `hashCode should be consistent with equals`(): Unit =
-    runBlocking {
+    test("hashCode should be consistent with equals") {
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
 
@@ -349,11 +305,10 @@ class AgentContextTest {
       }
     }
 
-  @Test
-  fun `hashCode should be based on agentId`(): Unit =
-    runBlocking {
+    test("hashCode should be based on agentId") {
       val context = AgentContext("192.168.1.1")
 
       context.hashCode() shouldBe context.agentId.hashCode()
     }
+  }
 }

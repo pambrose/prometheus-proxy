@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -25,19 +26,11 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 
 // Tests for ProxyMetrics which manages Prometheus metrics for the proxy component.
 // Metrics include counters for scrape requests, connects, evictions, heartbeats,
 // and gauges for various map sizes.
-class ProxyMetricsTest {
-  @BeforeEach
-  fun clearRegistry() {
-    // Clear the default Prometheus registry to avoid "already registered" errors
-    CollectorRegistry.defaultRegistry.clear()
-  }
-
+class ProxyMetricsTest : FunSpec() {
   private fun createMockProxy(): Proxy {
     val mockAgentContextManager = AgentContextManager(isTestMode = true)
     val mockPathManager = mockk<ProxyPathManager>(relaxed = true)
@@ -53,125 +46,121 @@ class ProxyMetricsTest {
     return mockProxy
   }
 
-  // ==================== Counter Initialization Tests ====================
+  init {
+    beforeEach {
+      // Clear the default Prometheus registry to avoid "already registered" errors
+      CollectorRegistry.defaultRegistry.clear()
+    }
 
-  @Test
-  fun `scrapeRequestCount counter should be initialized`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+    // ==================== Counter Initialization Tests ====================
 
-    metrics.scrapeRequestCount.shouldNotBeNull()
-  }
+    test("scrapeRequestCount counter should be initialized") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-  @Test
-  fun `connectCount counter should be initialized`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+      metrics.scrapeRequestCount.shouldNotBeNull()
+    }
 
-    metrics.connectCount.shouldNotBeNull()
-  }
+    test("connectCount counter should be initialized") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-  @Test
-  fun `agentEvictionCount counter should be initialized`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+      metrics.connectCount.shouldNotBeNull()
+    }
 
-    metrics.agentEvictionCount.shouldNotBeNull()
-  }
+    test("agentEvictionCount counter should be initialized") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-  @Test
-  fun `heartbeatCount counter should be initialized`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+      metrics.agentEvictionCount.shouldNotBeNull()
+    }
 
-    metrics.heartbeatCount.shouldNotBeNull()
-  }
+    test("heartbeatCount counter should be initialized") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-  // ==================== Summary Initialization Tests ====================
+      metrics.heartbeatCount.shouldNotBeNull()
+    }
 
-  @Test
-  fun `scrapeRequestLatency summary should be initialized`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+    // ==================== Summary Initialization Tests ====================
 
-    metrics.scrapeRequestLatency.shouldNotBeNull()
-  }
+    test("scrapeRequestLatency summary should be initialized") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-  // ==================== Counter Operations Tests ====================
+      metrics.scrapeRequestLatency.shouldNotBeNull()
+    }
 
-  @Test
-  fun `scrapeRequestCount should increment with labels`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+    // ==================== Counter Operations Tests ====================
 
-    val initialValue = metrics.scrapeRequestCount.labels("test-type").get()
-    metrics.scrapeRequestCount.labels("test-type").inc()
+    test("scrapeRequestCount should increment with labels") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-    metrics.scrapeRequestCount.labels("test-type").get() shouldBe initialValue + 1
-  }
+      val initialValue = metrics.scrapeRequestCount.labels("test-type").get()
+      metrics.scrapeRequestCount.labels("test-type").inc()
 
-  @Test
-  fun `connectCount should increment`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+      metrics.scrapeRequestCount.labels("test-type").get() shouldBe initialValue + 1
+    }
 
-    val initialValue = metrics.connectCount.get()
-    metrics.connectCount.inc()
+    test("connectCount should increment") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-    metrics.connectCount.get() shouldBe initialValue + 1
-  }
+      val initialValue = metrics.connectCount.get()
+      metrics.connectCount.inc()
 
-  @Test
-  fun `agentEvictionCount should increment`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+      metrics.connectCount.get() shouldBe initialValue + 1
+    }
 
-    val initialValue = metrics.agentEvictionCount.get()
-    metrics.agentEvictionCount.inc()
+    test("agentEvictionCount should increment") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-    metrics.agentEvictionCount.get() shouldBe initialValue + 1
-  }
+      val initialValue = metrics.agentEvictionCount.get()
+      metrics.agentEvictionCount.inc()
 
-  @Test
-  fun `heartbeatCount should increment`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+      metrics.agentEvictionCount.get() shouldBe initialValue + 1
+    }
 
-    val initialValue = metrics.heartbeatCount.get()
-    metrics.heartbeatCount.inc()
+    test("heartbeatCount should increment") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-    metrics.heartbeatCount.get() shouldBe initialValue + 1
-  }
+      val initialValue = metrics.heartbeatCount.get()
+      metrics.heartbeatCount.inc()
 
-  // ==================== Summary Operations Tests ====================
+      metrics.heartbeatCount.get() shouldBe initialValue + 1
+    }
 
-  @Test
-  fun `scrapeRequestLatency should record observations`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+    // ==================== Summary Operations Tests ====================
 
-    // Record some latency observations
-    metrics.scrapeRequestLatency.observe(0.1)
-    metrics.scrapeRequestLatency.observe(0.2)
-    metrics.scrapeRequestLatency.observe(0.3)
+    test("scrapeRequestLatency should record observations") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-    // Summary should have recorded the observations
-    metrics.scrapeRequestLatency.get().count shouldBe 3
-  }
+      // Record some latency observations
+      metrics.scrapeRequestLatency.observe(0.1)
+      metrics.scrapeRequestLatency.observe(0.2)
+      metrics.scrapeRequestLatency.observe(0.3)
 
-  // ==================== Label Tests ====================
+      // Summary should have recorded the observations
+      metrics.scrapeRequestLatency.get().count shouldBe 3
+    }
 
-  @Test
-  fun `scrapeRequestCount should support different label values`() {
-    val proxy = createMockProxy()
-    val metrics = ProxyMetrics(proxy)
+    // ==================== Label Tests ====================
 
-    metrics.scrapeRequestCount.labels("type-a").inc()
-    metrics.scrapeRequestCount.labels("type-a").inc()
-    metrics.scrapeRequestCount.labels("type-b").inc()
+    test("scrapeRequestCount should support different label values") {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
 
-    // Different labels should be tracked separately
-    metrics.scrapeRequestCount.labels("type-a").get() shouldBeGreaterThanOrEqual 2.0
-    metrics.scrapeRequestCount.labels("type-b").get() shouldBeGreaterThanOrEqual 1.0
+      metrics.scrapeRequestCount.labels("type-a").inc()
+      metrics.scrapeRequestCount.labels("type-a").inc()
+      metrics.scrapeRequestCount.labels("type-b").inc()
+
+      // Different labels should be tracked separately
+      metrics.scrapeRequestCount.labels("type-a").get() shouldBeGreaterThanOrEqual 2.0
+      metrics.scrapeRequestCount.labels("type-b").get() shouldBeGreaterThanOrEqual 1.0
+    }
   }
 }

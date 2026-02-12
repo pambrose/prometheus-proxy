@@ -18,6 +18,7 @@
 
 package io.prometheus.common
 
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -29,237 +30,222 @@ import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.grpc.scrapeResponse
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import org.junit.jupiter.api.Test
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
 
-class ScrapeResultsTest {
-  // ==================== Constructor Tests ====================
+class ScrapeResultsTest : FunSpec() {
+  init {
+    // ==================== Constructor Tests ====================
 
-  @Test
-  fun `constructor should set required fields`() {
-    val results = ScrapeResults(
-      srAgentId = "test-agent",
-      srScrapeId = 12345L,
-    )
+    test("constructor should set required fields") {
+      val results = ScrapeResults(
+        srAgentId = "test-agent",
+        srScrapeId = 12345L,
+      )
 
-    results.srAgentId shouldBe "test-agent"
-    results.srScrapeId shouldBe 12345L
-  }
-
-  @Test
-  fun `constructor should use default values`() {
-    val results = ScrapeResults(
-      srAgentId = "test-agent",
-      srScrapeId = 12345L,
-    )
-
-    results.srValidResponse.shouldBeFalse()
-    results.srStatusCode shouldBe HttpStatusCode.ServiceUnavailable.value
-    results.srContentType.shouldBeEmpty()
-    results.srZipped.shouldBeFalse()
-    results.srContentAsText.shouldBeEmpty()
-    results.srContentAsZipped.isEmpty().shouldBeTrue()
-    results.srFailureReason.shouldBeEmpty()
-    results.srUrl.shouldBeEmpty()
-  }
-
-  @Test
-  fun `constructor should accept all parameters`() {
-    val zippedContent = "compressed data".toByteArray()
-    val results = ScrapeResults(
-      srAgentId = "agent-123",
-      srScrapeId = 999L,
-      srValidResponse = true,
-      srStatusCode = 200,
-      srContentType = "text/plain",
-      srZipped = true,
-      srContentAsText = "",
-      srContentAsZipped = zippedContent,
-      srFailureReason = "",
-      srUrl = "http://localhost:8080/metrics",
-    )
-
-    results.srValidResponse.shouldBeTrue()
-    results.srStatusCode shouldBe 200
-    results.srContentType shouldBe "text/plain"
-    results.srZipped.shouldBeTrue()
-    results.srContentAsZipped shouldBe zippedContent
-    results.srUrl shouldBe "http://localhost:8080/metrics"
-  }
-
-  // ==================== Debug Info Constructor Tests ====================
-
-  @Test
-  fun `constructor should accept url and failure reason`() {
-    val results = ScrapeResults(
-      srAgentId = "agent",
-      srScrapeId = 123L,
-      srUrl = "http://test.com/metrics",
-      srFailureReason = "Connection refused",
-    )
-
-    results.srUrl shouldBe "http://test.com/metrics"
-    results.srFailureReason shouldBe "Connection refused"
-  }
-
-  @Test
-  fun `constructor should default to empty url and failure reason`() {
-    val results = ScrapeResults("agent", 123L)
-
-    results.srUrl.shouldBeEmpty()
-    results.srFailureReason.shouldBeEmpty()
-  }
-
-  // ==================== toScrapeResponse Tests ====================
-
-  @Test
-  fun `toScrapeResponse should create response with text content`() {
-    val results = ScrapeResults(
-      srAgentId = "agent-1",
-      srScrapeId = 100L,
-      srValidResponse = true,
-      srStatusCode = 200,
-      srContentType = "text/plain",
-      srZipped = false,
-      srContentAsText = "metrics content here",
-    )
-
-    val response = results.toScrapeResponse()
-
-    response.agentId shouldBe "agent-1"
-    response.scrapeId shouldBe 100L
-    response.validResponse.shouldBeTrue()
-    response.statusCode shouldBe 200
-    response.contentType shouldBe "text/plain"
-    response.zipped.shouldBeFalse()
-    response.contentAsText shouldBe "metrics content here"
-  }
-
-  @Test
-  fun `toScrapeResponse should create response with zipped content`() {
-    val zippedContent = byteArrayOf(1, 2, 3, 4, 5)
-    val results = ScrapeResults(
-      srAgentId = "agent-2",
-      srScrapeId = 200L,
-      srValidResponse = true,
-      srStatusCode = 200,
-      srZipped = true,
-      srContentAsZipped = zippedContent,
-    )
-
-    val response = results.toScrapeResponse()
-
-    response.zipped.shouldBeTrue()
-    response.contentAsZipped.toByteArray() shouldBe zippedContent
-  }
-
-  @Test
-  fun `toScrapeResponse should include failure reason`() {
-    val results = ScrapeResults(
-      srAgentId = "agent-3",
-      srScrapeId = 300L,
-      srValidResponse = false,
-      srFailureReason = "Connection timeout",
-    )
-
-    val response = results.toScrapeResponse()
-
-    response.validResponse.shouldBeFalse()
-    response.failureReason shouldBe "Connection timeout"
-  }
-
-  // ==================== toScrapeResponseHeader Tests ====================
-
-  @Test
-  fun `toScrapeResponseHeader should create chunked response header`() {
-    val results = ScrapeResults(
-      srAgentId = "agent-chunk",
-      srScrapeId = 400L,
-      srValidResponse = true,
-      srStatusCode = 200,
-      srContentType = "text/plain",
-      srUrl = "http://localhost/metrics",
-    )
-
-    val response = results.toScrapeResponseHeader()
-
-    response.header.headerAgentId shouldBe "agent-chunk"
-    response.header.headerScrapeId shouldBe 400L
-    response.header.headerValidResponse.shouldBeTrue()
-    response.header.headerStatusCode shouldBe 200
-    response.header.headerContentType shouldBe "text/plain"
-    response.header.headerUrl shouldBe "http://localhost/metrics"
-  }
-
-  @Test
-  fun `toScrapeResponseHeader should include failure reason`() {
-    val results = ScrapeResults(
-      srAgentId = "agent-fail",
-      srScrapeId = 500L,
-      srValidResponse = false,
-      srFailureReason = "Service unavailable",
-    )
-
-    val response = results.toScrapeResponseHeader()
-
-    response.header.headerValidResponse.shouldBeFalse()
-    response.header.headerFailureReason shouldBe "Service unavailable"
-  }
-
-  // ==================== toScrapeResults Extension Tests ====================
-
-  @Test
-  fun `toScrapeResults should convert ScrapeResponse to ScrapeResults`() {
-    val response = scrapeResponse {
-      agentId = "converted-agent"
-      scrapeId = 600L
-      validResponse = true
-      statusCode = 200
-      contentType = "application/json"
-      zipped = false
-      contentAsText = """{"metrics": "data"}"""
-      failureReason = ""
-      url = "http://test/api"
+      results.srAgentId shouldBe "test-agent"
+      results.srScrapeId shouldBe 12345L
     }
 
-    val results = response.toScrapeResults()
+    test("constructor should use default values") {
+      val results = ScrapeResults(
+        srAgentId = "test-agent",
+        srScrapeId = 12345L,
+      )
 
-    results.srAgentId shouldBe "converted-agent"
-    results.srScrapeId shouldBe 600L
-    results.srValidResponse.shouldBeTrue()
-    results.srStatusCode shouldBe 200
-    results.srContentType shouldBe "application/json"
-    results.srZipped.shouldBeFalse()
-    results.srContentAsText shouldBe """{"metrics": "data"}"""
-    results.srUrl shouldBe "http://test/api"
-  }
-
-  @Test
-  fun `toScrapeResults should handle zipped content`() {
-    val zippedData = byteArrayOf(10, 20, 30)
-    val response = scrapeResponse {
-      agentId = "zipped-agent"
-      scrapeId = 700L
-      zipped = true
-      contentAsZipped = com.google.protobuf.ByteString.copyFrom(zippedData)
+      results.srValidResponse.shouldBeFalse()
+      results.srStatusCode shouldBe HttpStatusCode.ServiceUnavailable.value
+      results.srContentType.shouldBeEmpty()
+      results.srZipped.shouldBeFalse()
+      results.srContentAsText.shouldBeEmpty()
+      results.srContentAsZipped.isEmpty().shouldBeTrue()
+      results.srFailureReason.shouldBeEmpty()
+      results.srUrl.shouldBeEmpty()
     }
 
-    val results = response.toScrapeResults()
+    test("constructor should accept all parameters") {
+      val zippedContent = "compressed data".toByteArray()
+      val results = ScrapeResults(
+        srAgentId = "agent-123",
+        srScrapeId = 999L,
+        srValidResponse = true,
+        srStatusCode = 200,
+        srContentType = "text/plain",
+        srZipped = true,
+        srContentAsText = "",
+        srContentAsZipped = zippedContent,
+        srFailureReason = "",
+        srUrl = "http://localhost:8080/metrics",
+      )
 
-    results.srZipped.shouldBeTrue()
-    results.srContentAsZipped shouldBe zippedData
-  }
+      results.srValidResponse.shouldBeTrue()
+      results.srStatusCode shouldBe 200
+      results.srContentType shouldBe "text/plain"
+      results.srZipped.shouldBeTrue()
+      results.srContentAsZipped shouldBe zippedContent
+      results.srUrl shouldBe "http://localhost:8080/metrics"
+    }
 
-  // ==================== errorCode Tests ====================
+    // ==================== Debug Info Constructor Tests ====================
 
-  @Test
-  fun `errorCode should return RequestTimeout for TimeoutCancellationException`() {
-    // TimeoutCancellationException constructor is internal, so we generate it via withTimeout
-    val exception = runBlocking {
-      try {
+    test("constructor should accept url and failure reason") {
+      val results = ScrapeResults(
+        srAgentId = "agent",
+        srScrapeId = 123L,
+        srUrl = "http://test.com/metrics",
+        srFailureReason = "Connection refused",
+      )
+
+      results.srUrl shouldBe "http://test.com/metrics"
+      results.srFailureReason shouldBe "Connection refused"
+    }
+
+    test("constructor should default to empty url and failure reason") {
+      val results = ScrapeResults("agent", 123L)
+
+      results.srUrl.shouldBeEmpty()
+      results.srFailureReason.shouldBeEmpty()
+    }
+
+    // ==================== toScrapeResponse Tests ====================
+
+    test("toScrapeResponse should create response with text content") {
+      val results = ScrapeResults(
+        srAgentId = "agent-1",
+        srScrapeId = 100L,
+        srValidResponse = true,
+        srStatusCode = 200,
+        srContentType = "text/plain",
+        srZipped = false,
+        srContentAsText = "metrics content here",
+      )
+
+      val response = results.toScrapeResponse()
+
+      response.agentId shouldBe "agent-1"
+      response.scrapeId shouldBe 100L
+      response.validResponse.shouldBeTrue()
+      response.statusCode shouldBe 200
+      response.contentType shouldBe "text/plain"
+      response.zipped.shouldBeFalse()
+      response.contentAsText shouldBe "metrics content here"
+    }
+
+    test("toScrapeResponse should create response with zipped content") {
+      val zippedContent = byteArrayOf(1, 2, 3, 4, 5)
+      val results = ScrapeResults(
+        srAgentId = "agent-2",
+        srScrapeId = 200L,
+        srValidResponse = true,
+        srStatusCode = 200,
+        srZipped = true,
+        srContentAsZipped = zippedContent,
+      )
+
+      val response = results.toScrapeResponse()
+
+      response.zipped.shouldBeTrue()
+      response.contentAsZipped.toByteArray() shouldBe zippedContent
+    }
+
+    test("toScrapeResponse should include failure reason") {
+      val results = ScrapeResults(
+        srAgentId = "agent-3",
+        srScrapeId = 300L,
+        srValidResponse = false,
+        srFailureReason = "Connection timeout",
+      )
+
+      val response = results.toScrapeResponse()
+
+      response.validResponse.shouldBeFalse()
+      response.failureReason shouldBe "Connection timeout"
+    }
+
+    // ==================== toScrapeResponseHeader Tests ====================
+
+    test("toScrapeResponseHeader should create chunked response header") {
+      val results = ScrapeResults(
+        srAgentId = "agent-chunk",
+        srScrapeId = 400L,
+        srValidResponse = true,
+        srStatusCode = 200,
+        srContentType = "text/plain",
+        srUrl = "http://localhost/metrics",
+      )
+
+      val response = results.toScrapeResponseHeader()
+
+      response.header.headerAgentId shouldBe "agent-chunk"
+      response.header.headerScrapeId shouldBe 400L
+      response.header.headerValidResponse.shouldBeTrue()
+      response.header.headerStatusCode shouldBe 200
+      response.header.headerContentType shouldBe "text/plain"
+      response.header.headerUrl shouldBe "http://localhost/metrics"
+    }
+
+    test("toScrapeResponseHeader should include failure reason") {
+      val results = ScrapeResults(
+        srAgentId = "agent-fail",
+        srScrapeId = 500L,
+        srValidResponse = false,
+        srFailureReason = "Service unavailable",
+      )
+
+      val response = results.toScrapeResponseHeader()
+
+      response.header.headerValidResponse.shouldBeFalse()
+      response.header.headerFailureReason shouldBe "Service unavailable"
+    }
+
+    // ==================== toScrapeResults Extension Tests ====================
+
+    test("toScrapeResults should convert ScrapeResponse to ScrapeResults") {
+      val response = scrapeResponse {
+        agentId = "converted-agent"
+        scrapeId = 600L
+        validResponse = true
+        statusCode = 200
+        contentType = "application/json"
+        zipped = false
+        contentAsText = """{"metrics": "data"}"""
+        failureReason = ""
+        url = "http://test/api"
+      }
+
+      val results = response.toScrapeResults()
+
+      results.srAgentId shouldBe "converted-agent"
+      results.srScrapeId shouldBe 600L
+      results.srValidResponse.shouldBeTrue()
+      results.srStatusCode shouldBe 200
+      results.srContentType shouldBe "application/json"
+      results.srZipped.shouldBeFalse()
+      results.srContentAsText shouldBe """{"metrics": "data"}"""
+      results.srUrl shouldBe "http://test/api"
+    }
+
+    test("toScrapeResults should handle zipped content") {
+      val zippedData = byteArrayOf(10, 20, 30)
+      val response = scrapeResponse {
+        agentId = "zipped-agent"
+        scrapeId = 700L
+        zipped = true
+        contentAsZipped = com.google.protobuf.ByteString.copyFrom(zippedData)
+      }
+
+      val results = response.toScrapeResults()
+
+      results.srZipped.shouldBeTrue()
+      results.srContentAsZipped shouldBe zippedData
+    }
+
+    // ==================== errorCode Tests ====================
+
+    test("errorCode should return RequestTimeout for TimeoutCancellationException") {
+      // TimeoutCancellationException constructor is internal, so we generate it via withTimeout
+      val exception = try {
         withTimeout(1) {
           // Use delay instead of Thread.sleep to properly suspend and timeout
           delay(1000)
@@ -267,125 +253,115 @@ class ScrapeResultsTest {
         null
       } catch (e: Exception) {
         e
-      }
-    }!!
-    val code = errorCode(exception, "http://test.com")
+      }!!
+      val code = errorCode(exception, "http://test.com")
 
-    code shouldBe HttpStatusCode.RequestTimeout.value
-  }
+      code shouldBe HttpStatusCode.RequestTimeout.value
+    }
 
-  @Test
-  fun `errorCode should return RequestTimeout for SocketTimeoutException`() {
-    val exception = SocketTimeoutException("socket timeout")
-    val code = errorCode(exception, "http://test.com")
+    test("errorCode should return RequestTimeout for SocketTimeoutException") {
+      val exception = SocketTimeoutException("socket timeout")
+      val code = errorCode(exception, "http://test.com")
 
-    code shouldBe HttpStatusCode.RequestTimeout.value
-  }
+      code shouldBe HttpStatusCode.RequestTimeout.value
+    }
 
-  @Test
-  fun `errorCode should return ServiceUnavailable for IOException`() {
-    val exception = IOException("connection refused")
-    val code = errorCode(exception, "http://test.com")
+    test("errorCode should return ServiceUnavailable for IOException") {
+      val exception = IOException("connection refused")
+      val code = errorCode(exception, "http://test.com")
 
-    code shouldBe HttpStatusCode.ServiceUnavailable.value
-  }
+      code shouldBe HttpStatusCode.ServiceUnavailable.value
+    }
 
-  @Test
-  fun `errorCode should return ServiceUnavailable for IOException subclasses`() {
-    val connectException = java.net.ConnectException("Connection refused")
-    errorCode(connectException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
+    test("errorCode should return ServiceUnavailable for IOException subclasses") {
+      val connectException = java.net.ConnectException("Connection refused")
+      errorCode(connectException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
 
-    val unknownHostException = java.net.UnknownHostException("unknown-host.local")
-    errorCode(unknownHostException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
+      val unknownHostException = java.net.UnknownHostException("unknown-host.local")
+      errorCode(unknownHostException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
 
-    val noRouteException = java.net.NoRouteToHostException("No route to host")
-    errorCode(noRouteException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
-  }
+      val noRouteException = java.net.NoRouteToHostException("No route to host")
+      errorCode(noRouteException, "http://test.com") shouldBe HttpStatusCode.ServiceUnavailable.value
+    }
 
-  @Test
-  fun `errorCode should return RequestTimeout for HttpConnectTimeoutException`() {
-    val exception = HttpConnectTimeoutException("connect timeout")
-    val code = errorCode(exception, "http://test.com")
+    test("errorCode should return RequestTimeout for HttpConnectTimeoutException") {
+      val exception = HttpConnectTimeoutException("connect timeout")
+      val code = errorCode(exception, "http://test.com")
 
-    code shouldBe HttpStatusCode.RequestTimeout.value
-  }
+      code shouldBe HttpStatusCode.RequestTimeout.value
+    }
 
-  @Test
-  fun `errorCode should return RequestTimeout for HttpRequestTimeoutException`() {
-    val exception = HttpRequestTimeoutException("http://test.com", 5000L)
-    val code = errorCode(exception, "http://test.com")
+    test("errorCode should return RequestTimeout for HttpRequestTimeoutException") {
+      val exception = HttpRequestTimeoutException("http://test.com", 5000L)
+      val code = errorCode(exception, "http://test.com")
 
-    code shouldBe HttpStatusCode.RequestTimeout.value
-  }
+      code shouldBe HttpStatusCode.RequestTimeout.value
+    }
 
-  @Test
-  fun `errorCode should return ServiceUnavailable for other exceptions`() {
-    val exception = RuntimeException("unexpected error")
-    val code = errorCode(exception, "http://test.com")
+    test("errorCode should return ServiceUnavailable for other exceptions") {
+      val exception = RuntimeException("unexpected error")
+      val code = errorCode(exception, "http://test.com")
 
-    code shouldBe HttpStatusCode.ServiceUnavailable.value
-  }
+      code shouldBe HttpStatusCode.ServiceUnavailable.value
+    }
 
-  // ==================== Round-Trip Tests ====================
+    // ==================== Round-Trip Tests ====================
 
-  @Test
-  fun `toScrapeResponse and toScrapeResults should round-trip text content`() {
-    val original = ScrapeResults(
-      srAgentId = "round-trip-agent",
-      srScrapeId = 800L,
-      srValidResponse = true,
-      srStatusCode = 200,
-      srContentType = "text/plain",
-      srZipped = false,
-      srContentAsText = "metric_name 42.0",
-      srFailureReason = "",
-      srUrl = "http://localhost:9090/metrics",
-    )
+    test("toScrapeResponse and toScrapeResults should round-trip text content") {
+      val original = ScrapeResults(
+        srAgentId = "round-trip-agent",
+        srScrapeId = 800L,
+        srValidResponse = true,
+        srStatusCode = 200,
+        srContentType = "text/plain",
+        srZipped = false,
+        srContentAsText = "metric_name 42.0",
+        srFailureReason = "",
+        srUrl = "http://localhost:9090/metrics",
+      )
 
-    val roundTripped = original.toScrapeResponse().toScrapeResults()
+      val roundTripped = original.toScrapeResponse().toScrapeResults()
 
-    roundTripped.srAgentId shouldBe original.srAgentId
-    roundTripped.srScrapeId shouldBe original.srScrapeId
-    roundTripped.srValidResponse shouldBe original.srValidResponse
-    roundTripped.srStatusCode shouldBe original.srStatusCode
-    roundTripped.srContentType shouldBe original.srContentType
-    roundTripped.srZipped shouldBe original.srZipped
-    roundTripped.srContentAsText shouldBe original.srContentAsText
-    roundTripped.srFailureReason shouldBe original.srFailureReason
-    roundTripped.srUrl shouldBe original.srUrl
-  }
+      roundTripped.srAgentId shouldBe original.srAgentId
+      roundTripped.srScrapeId shouldBe original.srScrapeId
+      roundTripped.srValidResponse shouldBe original.srValidResponse
+      roundTripped.srStatusCode shouldBe original.srStatusCode
+      roundTripped.srContentType shouldBe original.srContentType
+      roundTripped.srZipped shouldBe original.srZipped
+      roundTripped.srContentAsText shouldBe original.srContentAsText
+      roundTripped.srFailureReason shouldBe original.srFailureReason
+      roundTripped.srUrl shouldBe original.srUrl
+    }
 
-  @Test
-  fun `toScrapeResponse should propagate default failure values`() {
-    val results = ScrapeResults(
-      srAgentId = "default-agent",
-      srScrapeId = 900L,
-    )
+    test("toScrapeResponse should propagate default failure values") {
+      val results = ScrapeResults(
+        srAgentId = "default-agent",
+        srScrapeId = 900L,
+      )
 
-    val response = results.toScrapeResponse()
+      val response = results.toScrapeResponse()
 
-    response.validResponse.shouldBeFalse()
-    response.statusCode shouldBe HttpStatusCode.ServiceUnavailable.value
-    response.contentType.shouldBeEmpty()
-    response.zipped.shouldBeFalse()
-    response.contentAsText.shouldBeEmpty()
-    response.failureReason.shouldBeEmpty()
-    response.url.shouldBeEmpty()
-  }
+      response.validResponse.shouldBeFalse()
+      response.statusCode shouldBe HttpStatusCode.ServiceUnavailable.value
+      response.contentType.shouldBeEmpty()
+      response.zipped.shouldBeFalse()
+      response.contentAsText.shouldBeEmpty()
+      response.failureReason.shouldBeEmpty()
+      response.url.shouldBeEmpty()
+    }
 
-  // ==================== scrapeCounterMsg Tests ====================
+    // ==================== scrapeCounterMsg Tests ====================
 
-  @Test
-  fun `scrapeCounterMsg should accept value via constructor`() {
-    val results = ScrapeResults("agent", 123L, scrapeCounterMsg = "new message")
+    test("scrapeCounterMsg should accept value via constructor") {
+      val results = ScrapeResults("agent", 123L, scrapeCounterMsg = "new message")
 
-    results.scrapeCounterMsg shouldBe "new message"
-  }
+      results.scrapeCounterMsg shouldBe "new message"
+    }
 
-  @Test
-  fun `scrapeCounterMsg should default to empty string`() {
-    val results = ScrapeResults("agent", 123L)
+    test("scrapeCounterMsg should default to empty string") {
+      val results = ScrapeResults("agent", 123L)
 
-    results.scrapeCounterMsg.shouldBeEmpty()
+      results.scrapeCounterMsg.shouldBeEmpty()
+    }
   }
 }

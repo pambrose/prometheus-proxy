@@ -18,6 +18,8 @@
 
 package io.prometheus.proxy
 
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
@@ -30,13 +32,10 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
 import io.prometheus.grpc.RegisterAgentRequest
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 
 @Suppress("LargeClass")
-class ProxyPathManagerTest {
+class ProxyPathManagerTest : FunSpec() {
   private fun createMockProxy(): Proxy {
     val mockManager = mockk<AgentContextManager>(relaxed = true)
     val proxy = mockk<Proxy>(relaxed = true)
@@ -54,9 +53,8 @@ class ProxyPathManagerTest {
     return context
   }
 
-  @Test
-  fun `addPath should add new path successfully`(): Unit =
-    runBlocking {
+  init {
+    test("addPath should add new path successfully") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -70,23 +68,19 @@ class ProxyPathManagerTest {
       info.agentContexts.shouldHaveSize(1)
     }
 
-  @Test
-  fun `addPath should throw when path is empty`(): Unit =
-    runBlocking {
+    test("addPath should throw when path is empty") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
 
-      val exception = assertThrows<IllegalArgumentException> {
+      val exception = shouldThrow<IllegalArgumentException> {
         manager.addPath("", """{"job":"test"}""", context)
       }
 
       exception.message shouldContain "Empty path"
     }
 
-  @Test
-  fun `addPath should overwrite non-consolidated path`(): Unit =
-    runBlocking {
+    test("addPath should overwrite non-consolidated path") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext()
@@ -103,13 +97,11 @@ class ProxyPathManagerTest {
       info.agentContexts[0].agentId shouldBe context2.agentId
     }
 
-  // Tests consolidated path behavior: when multiple agents register the same path with
-  // consolidated=true, they are grouped together. Prometheus scrapes are load-balanced
-  // across all agents in the consolidated group. This differs from non-consolidated
-  // paths where a new registration overwrites the previous one.
-  @Test
-  fun `addPath should append to consolidated path`(): Unit =
-    runBlocking {
+    // Tests consolidated path behavior: when multiple agents register the same path with
+    // consolidated=true, they are grouped together. Prometheus scrapes are load-balanced
+    // across all agents in the consolidated group. This differs from non-consolidated
+    // paths where a new registration overwrites the previous one.
+    test("addPath should append to consolidated path") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -125,9 +117,7 @@ class ProxyPathManagerTest {
       info.agentContexts.shouldHaveSize(2)
     }
 
-  @Test
-  fun `removePath should remove path successfully`(): Unit =
-    runBlocking {
+    test("removePath should remove path successfully") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -141,9 +131,7 @@ class ProxyPathManagerTest {
       manager.pathMapSize shouldBe 0
     }
 
-  @Test
-  fun `removePath should fail when path not found`(): Unit =
-    runBlocking {
+    test("removePath should fail when path not found") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -153,9 +141,7 @@ class ProxyPathManagerTest {
       response.reason shouldContain "path not found"
     }
 
-  @Test
-  fun `removePath should fail when agent ID mismatch`(): Unit =
-    runBlocking {
+    test("removePath should fail when agent ID mismatch") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -168,39 +154,33 @@ class ProxyPathManagerTest {
       response.reason shouldContain "invalid agentId"
     }
 
-  @Test
-  fun `removePath should throw when path is empty`(): Unit =
-    runBlocking {
+    test("removePath should throw when path is empty") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
-      val exception = assertThrows<IllegalArgumentException> {
+      val exception = shouldThrow<IllegalArgumentException> {
         manager.removePath("", "agent-123")
       }
 
       exception.message shouldContain "Empty path"
     }
 
-  @Test
-  fun `removePath should throw when agentId is empty`(): Unit =
-    runBlocking {
+    test("removePath should throw when agentId is empty") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
-      val exception = assertThrows<IllegalArgumentException> {
+      val exception = shouldThrow<IllegalArgumentException> {
         manager.removePath("/metrics", "")
       }
 
       exception.message shouldContain "Empty agentId"
     }
 
-  // Tests partial removal from a consolidated path group. When one agent disconnects,
-  // only that agent is removed from the group - the path remains registered with the
-  // remaining agents. The path is only fully removed when the last agent disconnects.
-  // This ensures continuous availability during rolling deployments or agent restarts.
-  @Test
-  fun `removePath should remove one element from consolidated path`(): Unit =
-    runBlocking {
+    // Tests partial removal from a consolidated path group. When one agent disconnects,
+    // only that agent is removed from the group - the path remains registered with the
+    // remaining agents. The path is only fully removed when the last agent disconnects.
+    // This ensures continuous availability during rolling deployments or agent restarts.
+    test("removePath should remove one element from consolidated path") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -219,9 +199,7 @@ class ProxyPathManagerTest {
       info.agentContexts[0].agentId shouldBe context2.agentId
     }
 
-  @Test
-  fun `getAgentContextInfo should return null for non-existent path`(): Unit =
-    runBlocking {
+    test("getAgentContextInfo should return null for non-existent path") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -230,9 +208,7 @@ class ProxyPathManagerTest {
       info.shouldBeNull()
     }
 
-  @Test
-  fun `pathMapSize should return correct count`(): Unit =
-    runBlocking {
+    test("pathMapSize should return correct count") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext()
@@ -250,9 +226,7 @@ class ProxyPathManagerTest {
       manager.pathMapSize shouldBe 1
     }
 
-  @Test
-  fun `allPaths should return all registered paths`(): Unit =
-    runBlocking {
+    test("allPaths should return all registered paths") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -269,9 +243,7 @@ class ProxyPathManagerTest {
       paths shouldContain "/metrics3"
     }
 
-  @Test
-  fun `allPathContextInfos should atomically snapshot paths and their info`(): Unit =
-    runBlocking {
+    test("allPathContextInfos should atomically snapshot paths and their info") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -310,9 +282,7 @@ class ProxyPathManagerTest {
       snapshot2["/metrics2"].shouldNotBeNull()
     }
 
-  @Test
-  fun `removeFromPathManager should remove all paths for agent`(): Unit =
-    runBlocking {
+    test("removeFromPathManager should remove all paths for agent") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -328,11 +298,9 @@ class ProxyPathManagerTest {
       manager.pathMapSize shouldBe 0
     }
 
-  // ==================== removeFromPathManager Iteration Safety (Bug #4) ====================
+    // ==================== removeFromPathManager Iteration Safety (Bug #4) ====================
 
-  @Test
-  fun `removeFromPathManager should remove all paths when many paths registered for one agent`(): Unit =
-    runBlocking {
+    test("removeFromPathManager should remove all paths when many paths registered for one agent") {
       // This test verifies that removeFromPathManager correctly removes ALL paths for a
       // disconnecting agent. The old code modified the map during forEach iteration, which
       // could cause ConcurrentHashMap's weakly consistent iterator to skip entries.
@@ -353,9 +321,7 @@ class ProxyPathManagerTest {
       manager.pathMapSize shouldBe 0
     }
 
-  @Test
-  fun `removeFromPathManager should only remove paths for the specified agent`(): Unit =
-    runBlocking {
+    test("removeFromPathManager should only remove paths for the specified agent") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val agent1 = createMockAgentContext()
@@ -386,9 +352,7 @@ class ProxyPathManagerTest {
       }
     }
 
-  @Test
-  fun `removeFromPathManager should remove agent from consolidated paths without removing the path`(): Unit =
-    runBlocking {
+    test("removeFromPathManager should remove agent from consolidated paths without removing the path") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val agent1 = createMockAgentContext(consolidated = true)
@@ -415,11 +379,9 @@ class ProxyPathManagerTest {
       }
     }
 
-  // ==================== AgentContextInfo.isNotValid() (Bug #8) ====================
+    // ==================== AgentContextInfo.isNotValid() (Bug #8) ====================
 
-  @Test
-  fun `non-consolidated path should be invalid when single agent is invalid`(): Unit =
-    runBlocking {
+    test("non-consolidated path should be invalid when single agent is invalid") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -432,9 +394,7 @@ class ProxyPathManagerTest {
       info.isNotValid().shouldBeTrue()
     }
 
-  @Test
-  fun `non-consolidated path should be valid when single agent is valid`(): Unit =
-    runBlocking {
+    test("non-consolidated path should be valid when single agent is valid") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -447,13 +407,11 @@ class ProxyPathManagerTest {
       info.isNotValid().shouldBeFalse()
     }
 
-  // Bug #8: The old code had `fun isNotValid() = !isConsolidated && agentContexts[0].isNotValid()`
-  // which always returned false for consolidated paths. This meant consolidated paths with all
-  // invalid agents were still considered valid, causing requests to time out instead of getting
-  // an immediate error response.
-  @Test
-  fun `consolidated path should be invalid when all agents are invalid`(): Unit =
-    runBlocking {
+    // Bug #8: The old code had `fun isNotValid() = !isConsolidated && agentContexts[0].isNotValid()`
+    // which always returned false for consolidated paths. This meant consolidated paths with all
+    // invalid agents were still considered valid, causing requests to time out instead of getting
+    // an immediate error response.
+    test("consolidated path should be invalid when all agents are invalid") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -471,9 +429,7 @@ class ProxyPathManagerTest {
       info.isNotValid().shouldBeTrue()
     }
 
-  @Test
-  fun `consolidated path should be valid when at least one agent is valid`(): Unit =
-    runBlocking {
+    test("consolidated path should be valid when at least one agent is valid") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -490,11 +446,9 @@ class ProxyPathManagerTest {
       info.isNotValid().shouldBeFalse()
     }
 
-  // ==================== toPlainText ====================
+    // ==================== toPlainText ====================
 
-  @Test
-  fun `toPlainText should return message when no agents connected`(): Unit =
-    runBlocking {
+    test("toPlainText should return message when no agents connected") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -503,9 +457,7 @@ class ProxyPathManagerTest {
       text shouldBe "No agents connected."
     }
 
-  @Test
-  fun `toPlainText should return formatted path map`(): Unit =
-    runBlocking {
+    test("toPlainText should return formatted path map") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -518,13 +470,11 @@ class ProxyPathManagerTest {
       text shouldContain "/metrics"
     }
 
-  // ==================== Consolidated/Non-Consolidated Mismatch Tests ====================
+    // ==================== Consolidated/Non-Consolidated Mismatch Tests ====================
 
-  // Bug #8: addPath now rejects consolidated/non-consolidated mismatch instead of
-  // silently allowing mixed types, which could cause unexpected fan-out behavior.
-  @Test
-  fun `addPath should reject consolidated agent on non-consolidated path`(): Unit =
-    runBlocking {
+    // Bug #8: addPath now rejects consolidated/non-consolidated mismatch instead of
+    // silently allowing mixed types, which could cause unexpected fan-out behavior.
+    test("addPath should reject consolidated agent on non-consolidated path") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val nonConsolidatedContext = createMockAgentContext(consolidated = false)
@@ -542,9 +492,7 @@ class ProxyPathManagerTest {
       info.agentContexts[0].agentId shouldBe nonConsolidatedContext.agentId
     }
 
-  @Test
-  fun `addPath should reject non-consolidated agent on consolidated path`(): Unit =
-    runBlocking {
+    test("addPath should reject non-consolidated agent on consolidated path") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val consolidatedContext = createMockAgentContext(consolidated = true)
@@ -564,24 +512,20 @@ class ProxyPathManagerTest {
       info.agentContexts[0].agentId shouldBe consolidatedContext.agentId
     }
 
-  // ==================== removeFromPathManager Edge Cases ====================
+    // ==================== removeFromPathManager Edge Cases ====================
 
-  @Test
-  fun `removeFromPathManager should throw when agentId is empty`(): Unit =
-    runBlocking {
+    test("removeFromPathManager should throw when agentId is empty") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
-      val exception = assertThrows<IllegalArgumentException> {
+      val exception = shouldThrow<IllegalArgumentException> {
         manager.removeFromPathManager("", "test")
       }
 
       exception.message shouldContain "Empty agentId"
     }
 
-  @Test
-  fun `removeFromPathManager should handle missing agent context gracefully`(): Unit =
-    runBlocking {
+    test("removeFromPathManager should handle missing agent context gracefully") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -591,11 +535,9 @@ class ProxyPathManagerTest {
       manager.removeFromPathManager("missing-agent", "disconnect")
     }
 
-  // ==================== getAgentContextInfo Defensive Copy ====================
+    // ==================== getAgentContextInfo Defensive Copy ====================
 
-  @Test
-  fun `getAgentContextInfo should return a snapshot copy`(): Unit =
-    runBlocking {
+    test("getAgentContextInfo should return a snapshot copy") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -620,9 +562,7 @@ class ProxyPathManagerTest {
       info2.agentContexts.shouldHaveSize(2)
     }
 
-  @Test
-  fun `getAgentContextInfo returned list mutation should not affect internal state`(): Unit =
-    runBlocking {
+    test("getAgentContextInfo returned list mutation should not affect internal state") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -646,16 +586,14 @@ class ProxyPathManagerTest {
       info2.agentContexts.shouldHaveSize(2)
     }
 
-  // ==================== M1: agentContexts typed as MutableList ====================
+    // ==================== M1: agentContexts typed as MutableList ====================
 
-  // M1: The agentContexts field in AgentContextInfo was typed as List<AgentContext> but
-  // was unsafely cast to MutableList at three call sites (addPath, removePath,
-  // removeFromPathManager). This relied on the implementation detail that the list was
-  // created with mutableListOf(). The fix changed the type to MutableList<AgentContext>
-  // to make the mutable usage explicit and eliminate the unsafe casts.
-  @Test
-  fun `consolidated addPath should not require unsafe cast to MutableList`(): Unit =
-    runBlocking {
+    // M1: The agentContexts field in AgentContextInfo was typed as List<AgentContext> but
+    // was unsafely cast to MutableList at three call sites (addPath, removePath,
+    // removeFromPathManager). This relied on the implementation detail that the list was
+    // created with mutableListOf(). The fix changed the type to MutableList<AgentContext>
+    // to make the mutable usage explicit and eliminate the unsafe casts.
+    test("consolidated addPath should not require unsafe cast to MutableList") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val contexts = (1..5).map { createMockAgentContext(consolidated = true) }
@@ -677,9 +615,7 @@ class ProxyPathManagerTest {
       }
     }
 
-  @Test
-  fun `removePath from consolidated group should not require unsafe cast to MutableList`(): Unit =
-    runBlocking {
+    test("removePath from consolidated group should not require unsafe cast to MutableList") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -702,9 +638,7 @@ class ProxyPathManagerTest {
       info.agentContexts.map { it.agentId } shouldContain context3.agentId
     }
 
-  @Test
-  fun `removeFromPathManager on consolidated paths should not require unsafe cast to MutableList`(): Unit =
-    runBlocking {
+    test("removeFromPathManager on consolidated paths should not require unsafe cast to MutableList") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val agent1 = createMockAgentContext(consolidated = true)
@@ -725,11 +659,9 @@ class ProxyPathManagerTest {
       info.agentContexts[0].agentId shouldBe agent2.agentId
     }
 
-  // ==================== toPlainText with Multiple Paths ====================
+    // ==================== toPlainText with Multiple Paths ====================
 
-  @Test
-  fun `toPlainText should format paths with different lengths correctly`(): Unit =
-    runBlocking {
+    test("toPlainText should format paths with different lengths correctly") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -745,11 +677,9 @@ class ProxyPathManagerTest {
       text shouldContain "/medium"
     }
 
-  // ==================== AgentContextInfo Tests ====================
+    // ==================== AgentContextInfo Tests ====================
 
-  @Test
-  fun `AgentContextInfo toString should include key fields`(): Unit =
-    runBlocking {
+    test("AgentContextInfo toString should include key fields") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -765,117 +695,112 @@ class ProxyPathManagerTest {
       str shouldContain "labels"
     }
 
-  // ==================== Bug #6: Displaced Agent Invalidation Tests ====================
+    // ==================== Bug #6: Displaced Agent Invalidation Tests ====================
 
-  // Bug #6: When a non-consolidated agent overwrites a path, the old agent context(s)
-  // were left orphaned — still in the agentContextManager but with no paths in the
-  // pathMap. The fix invalidates displaced agents that have no other registered paths.
+    // Bug #6: When a non-consolidated agent overwrites a path, the old agent context(s)
+    // were left orphaned — still in the agentContextManager but with no paths in the
+    // pathMap. The fix invalidates displaced agents that have no other registered paths.
 
-  @Test
-  fun `overwriting non-consolidated path should invalidate displaced agent with no other paths`() {
-    val proxy = createMockProxy()
-    val manager = ProxyPathManager(proxy, isTestMode = true)
+    test("overwriting non-consolidated path should invalidate displaced agent with no other paths") {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
 
-    // Use real AgentContexts so invalidate() actually works
-    val oldAgent = AgentContext("remote-old")
-    val newAgent = AgentContext("remote-new")
+      // Use real AgentContexts so invalidate() actually works
+      val oldAgent = AgentContext("remote-old")
+      val newAgent = AgentContext("remote-new")
 
-    oldAgent.isValid().shouldBeTrue()
+      oldAgent.isValid().shouldBeTrue()
 
-    manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
-    manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+      manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent)
 
-    // Old agent should be invalidated since it has no other paths
-    oldAgent.isValid().shouldBeFalse()
-    // New agent remains valid
-    newAgent.isValid().shouldBeTrue()
+      // Old agent should be invalidated since it has no other paths
+      oldAgent.isValid().shouldBeFalse()
+      // New agent remains valid
+      newAgent.isValid().shouldBeTrue()
 
-    val info = manager.getAgentContextInfo("/metrics")
-    info.shouldNotBeNull()
-    info.agentContexts.shouldHaveSize(1)
-    info.agentContexts[0].agentId shouldBe newAgent.agentId
-  }
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.agentContexts.shouldHaveSize(1)
+      info.agentContexts[0].agentId shouldBe newAgent.agentId
+    }
 
-  @Test
-  fun `overwriting path should not invalidate displaced agent that has other paths`() {
-    val proxy = createMockProxy()
-    val manager = ProxyPathManager(proxy, isTestMode = true)
+    test("overwriting path should not invalidate displaced agent that has other paths") {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
 
-    val oldAgent = AgentContext("remote-old")
-    val newAgent = AgentContext("remote-new")
+      val oldAgent = AgentContext("remote-old")
+      val newAgent = AgentContext("remote-new")
 
-    // Old agent has two paths
-    manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
-    manager.addPath("/health", """{"job":"test"}""", oldAgent)
+      // Old agent has two paths
+      manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
+      manager.addPath("/health", """{"job":"test"}""", oldAgent)
 
-    oldAgent.isValid().shouldBeTrue()
+      oldAgent.isValid().shouldBeTrue()
 
-    // Overwrite only /metrics
-    manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+      // Overwrite only /metrics
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent)
 
-    // Old agent should still be valid because it still has /health
-    oldAgent.isValid().shouldBeTrue()
-    newAgent.isValid().shouldBeTrue()
+      // Old agent should still be valid because it still has /health
+      oldAgent.isValid().shouldBeTrue()
+      newAgent.isValid().shouldBeTrue()
 
-    // /metrics now points to newAgent
-    val metricsInfo = manager.getAgentContextInfo("/metrics")
-    metricsInfo.shouldNotBeNull()
-    metricsInfo.agentContexts[0].agentId shouldBe newAgent.agentId
+      // /metrics now points to newAgent
+      val metricsInfo = manager.getAgentContextInfo("/metrics")
+      metricsInfo.shouldNotBeNull()
+      metricsInfo.agentContexts[0].agentId shouldBe newAgent.agentId
 
-    // /health still points to oldAgent
-    val healthInfo = manager.getAgentContextInfo("/health")
-    healthInfo.shouldNotBeNull()
-    healthInfo.agentContexts[0].agentId shouldBe oldAgent.agentId
-  }
+      // /health still points to oldAgent
+      val healthInfo = manager.getAgentContextInfo("/health")
+      healthInfo.shouldNotBeNull()
+      healthInfo.agentContexts[0].agentId shouldBe oldAgent.agentId
+    }
 
-  @Test
-  fun `non-consolidated overwrite of consolidated path should be rejected`() {
-    val proxy = createMockProxy()
-    val manager = ProxyPathManager(proxy, isTestMode = true)
+    test("non-consolidated overwrite of consolidated path should be rejected") {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
 
-    val consolidated1 = AgentContext("remote-c1")
-    consolidated1.assignProperties(
-      mockk<RegisterAgentRequest> {
-        every { launchId } returns "l1"
-        every { agentName } returns "c1"
-        every { hostName } returns "h1"
-        every { consolidated } returns true
-      },
-    )
-    val consolidated2 = AgentContext("remote-c2")
-    consolidated2.assignProperties(
-      mockk<RegisterAgentRequest> {
-        every { launchId } returns "l2"
-        every { agentName } returns "c2"
-        every { hostName } returns "h2"
-        every { consolidated } returns true
-      },
-    )
-    val newAgent = AgentContext("remote-new")
+      val consolidated1 = AgentContext("remote-c1")
+      consolidated1.assignProperties(
+        mockk<RegisterAgentRequest> {
+          every { launchId } returns "l1"
+          every { agentName } returns "c1"
+          every { hostName } returns "h1"
+          every { consolidated } returns true
+        },
+      )
+      val consolidated2 = AgentContext("remote-c2")
+      consolidated2.assignProperties(
+        mockk<RegisterAgentRequest> {
+          every { launchId } returns "l2"
+          every { agentName } returns "c2"
+          every { hostName } returns "h2"
+          every { consolidated } returns true
+        },
+      )
+      val newAgent = AgentContext("remote-new")
 
-    // Two consolidated agents share a path
-    manager.addPath("/metrics", """{"job":"test"}""", consolidated1)
-    manager.addPath("/metrics", """{"job":"test"}""", consolidated2)
+      // Two consolidated agents share a path
+      manager.addPath("/metrics", """{"job":"test"}""", consolidated1)
+      manager.addPath("/metrics", """{"job":"test"}""", consolidated2)
 
-    consolidated1.isValid().shouldBeTrue()
-    consolidated2.isValid().shouldBeTrue()
+      consolidated1.isValid().shouldBeTrue()
+      consolidated2.isValid().shouldBeTrue()
 
-    // Non-consolidated agent should be rejected (Bug #8 fix)
-    manager.addPath("/metrics", """{"job":"test"}""", newAgent).shouldBeFalse()
+      // Non-consolidated agent should be rejected (Bug #8 fix)
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent).shouldBeFalse()
 
-    // Consolidated agents should remain valid and unchanged
-    consolidated1.isValid().shouldBeTrue()
-    consolidated2.isValid().shouldBeTrue()
+      // Consolidated agents should remain valid and unchanged
+      consolidated1.isValid().shouldBeTrue()
+      consolidated2.isValid().shouldBeTrue()
 
-    val info = manager.getAgentContextInfo("/metrics")
-    info.shouldNotBeNull()
-    info.isConsolidated.shouldBeTrue()
-    info.agentContexts.shouldHaveSize(2)
-  }
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.isConsolidated.shouldBeTrue()
+      info.agentContexts.shouldHaveSize(2)
+    }
 
-  @Test
-  fun `overwriting should invalidate displaced agents with backlog and drain it`(): Unit =
-    runBlocking {
+    test("overwriting should invalidate displaced agents with backlog and drain it") {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -896,4 +821,5 @@ class ProxyPathManagerTest {
       oldAgent.isValid().shouldBeFalse()
       oldAgent.scrapeRequestBacklogSize shouldBe 0
     }
+  }
 }

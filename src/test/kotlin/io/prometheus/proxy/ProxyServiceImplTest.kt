@@ -19,6 +19,8 @@
 package io.prometheus.proxy
 
 import com.google.protobuf.ByteString
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -49,13 +51,10 @@ import io.prometheus.grpc.unregisterPathRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import java.util.zip.CRC32
 
 @Suppress("LargeClass")
-class ProxyServiceImplTest {
+class ProxyServiceImplTest : FunSpec() {
   private fun createMockProxy(
     transportFilterDisabled: Boolean = false,
     isRunning: Boolean = true,
@@ -82,9 +81,8 @@ class ProxyServiceImplTest {
     return mockProxy
   }
 
-  @Test
-  fun `connectAgent should succeed when transportFilterDisabled matches`() =
-    runBlocking {
+  init {
+    test("connectAgent should succeed when transportFilterDisabled matches") {
       val proxy = createMockProxy(transportFilterDisabled = false)
       val service = ProxyServiceImpl(proxy)
 
@@ -94,25 +92,21 @@ class ProxyServiceImplTest {
       verify { proxy.metrics(any<ProxyMetrics.() -> Unit>()) }
     }
 
-  @Test
-  fun `connectAgent should throw when transportFilterDisabled mismatch`(): Unit =
-    runBlocking {
+    test("connectAgent should throw when transportFilterDisabled mismatch") {
       val proxy = createMockProxy(transportFilterDisabled = true)
       val service = ProxyServiceImpl(proxy)
 
-      val exception = assertThrows<RequestFailureException> {
+      val exception = shouldThrow<RequestFailureException> {
         service.connectAgent(EMPTY_INSTANCE)
       }
 
       exception.message shouldContain "do not have matching transportFilterDisabled config values"
     }
 
-  // Tests the transport filter security mechanism: when transportFilterDisabled=true on both
-  // proxy and agent, a direct gRPC connection is established without the transport filter.
-  // This creates an AgentContext that tracks the agent's state throughout its connection lifetime.
-  @Test
-  fun `connectAgentWithTransportFilterDisabled should create agent context`() =
-    runBlocking {
+    // Tests the transport filter security mechanism: when transportFilterDisabled=true on both
+    // proxy and agent, a direct gRPC connection is established without the transport filter.
+    // This creates an AgentContext that tracks the agent's state throughout its connection lifetime.
+    test("connectAgentWithTransportFilterDisabled should create agent context") {
       val proxy = createMockProxy(transportFilterDisabled = true)
       val agentContextSlot = slot<AgentContext>()
 
@@ -129,22 +123,18 @@ class ProxyServiceImplTest {
       verify { proxy.metrics(any<ProxyMetrics.() -> Unit>()) }
     }
 
-  @Test
-  fun `connectAgentWithTransportFilterDisabled should throw when transportFilterDisabled is false`(): Unit =
-    runBlocking {
+    test("connectAgentWithTransportFilterDisabled should throw when transportFilterDisabled is false") {
       val proxy = createMockProxy(transportFilterDisabled = false)
       val service = ProxyServiceImpl(proxy)
 
-      val exception = assertThrows<RequestFailureException> {
+      val exception = shouldThrow<RequestFailureException> {
         service.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE)
       }
 
       exception.message shouldContain "do not have matching transportFilterDisabled config values"
     }
 
-  @Test
-  fun `registerAgent should succeed with valid agent context`() =
-    runBlocking {
+    test("registerAgent should succeed with valid agent context") {
       val proxy = createMockProxy()
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val testAgentId = "test-agent-123"
@@ -170,9 +160,7 @@ class ProxyServiceImplTest {
       verify { mockAgentContext.markActivityTime(false) }
     }
 
-  @Test
-  fun `registerAgent should fail with missing agent context`(): Unit =
-    runBlocking {
+    test("registerAgent should fail with missing agent context") {
       val proxy = createMockProxy()
       val testAgentId = "missing-agent-123"
 
@@ -190,9 +178,7 @@ class ProxyServiceImplTest {
       response.reason shouldContain "Invalid agentId"
     }
 
-  @Test
-  fun `registerPath should succeed with valid agent context`() =
-    runBlocking {
+    test("registerPath should succeed with valid agent context") {
       val proxy = createMockProxy()
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val testAgentId = "test-agent-123"
@@ -221,9 +207,7 @@ class ProxyServiceImplTest {
       verify { mockAgentContext.markActivityTime(false) }
     }
 
-  @Test
-  fun `registerPath should fail with missing agent context`(): Unit =
-    runBlocking {
+    test("registerPath should fail with missing agent context") {
       val proxy = createMockProxy()
       val testAgentId = "missing-agent-123"
 
@@ -243,9 +227,7 @@ class ProxyServiceImplTest {
       response.reason shouldContain "Invalid agentId"
     }
 
-  @Test
-  fun `unregisterPath should succeed with valid agent context`() =
-    runBlocking {
+    test("unregisterPath should succeed with valid agent context") {
       val proxy = createMockProxy()
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val testAgentId = "test-agent-123"
@@ -270,9 +252,7 @@ class ProxyServiceImplTest {
       verify { mockAgentContext.markActivityTime(false) }
     }
 
-  @Test
-  fun `unregisterPath should fail with missing agent context`(): Unit =
-    runBlocking {
+    test("unregisterPath should fail with missing agent context") {
       val proxy = createMockProxy()
       val testAgentId = "missing-agent-123"
 
@@ -290,9 +270,7 @@ class ProxyServiceImplTest {
       response.reason shouldContain "Invalid agentId"
     }
 
-  @Test
-  fun `pathMapSize should return path count`(): Unit =
-    runBlocking {
+    test("pathMapSize should return path count") {
       val proxy = createMockProxy()
       every { proxy.pathManager.pathMapSize } returns 42
 
@@ -304,9 +282,7 @@ class ProxyServiceImplTest {
       response.pathCount shouldBe 42
     }
 
-  @Test
-  fun `sendHeartBeat should succeed with valid agent context`() =
-    runBlocking {
+    test("sendHeartBeat should succeed with valid agent context") {
       val proxy = createMockProxy()
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val testAgentId = "test-agent-123"
@@ -326,10 +302,8 @@ class ProxyServiceImplTest {
       verify { mockAgentContext.markActivityTime(false) }
     }
 
-  // Bug #5: reason was unconditionally set to the error message even on valid heartbeats
-  @Test
-  fun `sendHeartBeat should not set reason when valid`(): Unit =
-    runBlocking {
+    // Bug #5: reason was unconditionally set to the error message even on valid heartbeats
+    test("sendHeartBeat should not set reason when valid") {
       val proxy = createMockProxy()
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val testAgentId = "test-agent-456"
@@ -348,9 +322,7 @@ class ProxyServiceImplTest {
       response.reason shouldBe ""
     }
 
-  @Test
-  fun `sendHeartBeat should fail with missing agent context`(): Unit =
-    runBlocking {
+    test("sendHeartBeat should fail with missing agent context") {
       val proxy = createMockProxy()
       val testAgentId = "missing-agent-123"
 
@@ -367,9 +339,7 @@ class ProxyServiceImplTest {
       response.reason shouldContain "Invalid agentId"
     }
 
-  @Test
-  fun `sendHeartBeat should set reason only when invalid`(): Unit =
-    runBlocking {
+    test("sendHeartBeat should set reason only when invalid") {
       val proxy = createMockProxy()
       val testAgentId = "missing-agent-789"
 
@@ -387,16 +357,14 @@ class ProxyServiceImplTest {
       response.reason shouldContain "sendHeartBeat"
     }
 
-  // Tests the gRPC streaming flow for scrape requests from proxy to agent.
-  // The proxy continuously streams scrape requests to the agent while:
-  // 1. The proxy is running
-  // 2. The agent context is valid
-  // This test simulates the agent becoming invalid after processing one request,
-  // which terminates the stream. The isValid() mock returns [true, false] to
-  // simulate one iteration of the loop before the agent disconnects.
-  @Test
-  fun `readRequestsFromProxy should emit scrape requests when agent is valid`(): Unit =
-    runBlocking {
+    // Tests the gRPC streaming flow for scrape requests from proxy to agent.
+    // The proxy continuously streams scrape requests to the agent while:
+    // 1. The proxy is running
+    // 2. The agent context is valid
+    // This test simulates the agent becoming invalid after processing one request,
+    // which terminates the stream. The isValid() mock returns [true, false] to
+    // simulate one iteration of the loop before the agent disconnects.
+    test("readRequestsFromProxy should emit scrape requests when agent is valid") {
       val proxy = createMockProxy(isRunning = true)
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val mockScrapeRequestWrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -423,9 +391,7 @@ class ProxyServiceImplTest {
       emittedRequests[0] shouldBe mockScrapeRequest
     }
 
-  @Test
-  fun `readRequestsFromProxy should emit nothing when agent context is missing`(): Unit =
-    runBlocking {
+    test("readRequestsFromProxy should emit nothing when agent context is missing") {
       val proxy = createMockProxy()
       val testAgentId = "missing-agent-123"
 
@@ -444,11 +410,9 @@ class ProxyServiceImplTest {
       emittedRequests.size shouldBe 0
     }
 
-  // ==================== writeResponsesToProxy Tests ====================
+    // ==================== writeResponsesToProxy Tests ====================
 
-  @Test
-  fun `writeResponsesToProxy should process non-chunked scrape responses`(): Unit =
-    runBlocking {
+    test("writeResponsesToProxy should process non-chunked scrape responses") {
       val proxy = createMockProxy()
 
       val response = scrapeResponse {
@@ -467,9 +431,7 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
-  @Test
-  fun `writeResponsesToProxy should handle empty flow`(): Unit =
-    runBlocking {
+    test("writeResponsesToProxy should handle empty flow") {
       val proxy = createMockProxy()
 
       val service = ProxyServiceImpl(proxy)
@@ -478,9 +440,7 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
-  @Test
-  fun `writeResponsesToProxy should process multiple responses`(): Unit =
-    runBlocking {
+    test("writeResponsesToProxy should process multiple responses") {
       val proxy = createMockProxy()
 
       val response1 = scrapeResponse {
@@ -502,11 +462,9 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
-  // ==================== writeChunkedResponsesToProxy Tests ====================
+    // ==================== writeChunkedResponsesToProxy Tests ====================
 
-  @Test
-  fun `writeChunkedResponsesToProxy should handle empty flow`(): Unit =
-    runBlocking {
+    test("writeChunkedResponsesToProxy should handle empty flow") {
       val proxy = createMockProxy()
 
       val service = ProxyServiceImpl(proxy)
@@ -515,9 +473,7 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
-  @Test
-  fun `writeChunkedResponsesToProxy should process header-chunk-summary sequence`(): Unit =
-    runBlocking {
+    test("writeChunkedResponsesToProxy should process header-chunk-summary sequence") {
       val proxy = createMockProxy()
       val scrapeId = 200L
       val data = "test chunk data".toByteArray()
@@ -560,9 +516,7 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
-  @Test
-  fun `writeChunkedResponsesToProxy should process multi-chunk sequence`(): Unit =
-    runBlocking {
+    test("writeChunkedResponsesToProxy should process multi-chunk sequence") {
       val proxy = createMockProxy()
       val scrapeId = 300L
       val data1 = "chunk-one-data".toByteArray()
@@ -618,11 +572,9 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
-  // ==================== readRequestsFromProxy Edge Case Tests ====================
+    // ==================== readRequestsFromProxy Edge Case Tests ====================
 
-  @Test
-  fun `readRequestsFromProxy should stop when proxy stops running`(): Unit =
-    runBlocking {
+    test("readRequestsFromProxy should stop when proxy stops running") {
       val proxy = createMockProxy(isRunning = true)
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val testAgentId = "test-agent-proxy-stop"
@@ -644,9 +596,7 @@ class ProxyServiceImplTest {
       emittedRequests.size shouldBe 0
     }
 
-  @Test
-  fun `readRequestsFromProxy should skip null readScrapeRequest results`(): Unit =
-    runBlocking {
+    test("readRequestsFromProxy should skip null readScrapeRequest results") {
       val proxy = createMockProxy(isRunning = true)
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val testAgentId = "test-agent-null-read"
@@ -669,11 +619,9 @@ class ProxyServiceImplTest {
       emittedRequests.size shouldBe 0
     }
 
-  // ==================== readRequestsFromProxy Cleanup Tests ====================
+    // ==================== readRequestsFromProxy Cleanup Tests ====================
 
-  @Test
-  fun `readRequestsFromProxy should clean up agent context when transportFilterDisabled`(): Unit =
-    runBlocking {
+    test("readRequestsFromProxy should clean up agent context when transportFilterDisabled") {
       val proxy = createMockProxy(transportFilterDisabled = true, isRunning = true)
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val testAgentId = "test-agent-cleanup"
@@ -692,9 +640,7 @@ class ProxyServiceImplTest {
       verify { proxy.removeAgentContext(testAgentId, any()) }
     }
 
-  @Test
-  fun `readRequestsFromProxy should not clean up agent context when transportFilter enabled`(): Unit =
-    runBlocking {
+    test("readRequestsFromProxy should not clean up agent context when transportFilter enabled") {
       val proxy = createMockProxy(transportFilterDisabled = false, isRunning = true)
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val testAgentId = "test-agent-no-cleanup"
@@ -713,9 +659,7 @@ class ProxyServiceImplTest {
       verify(exactly = 0) { proxy.removeAgentContext(any(), any()) }
     }
 
-  @Test
-  fun `readRequestsFromProxy should clean up on stream cancellation when transportFilterDisabled`(): Unit =
-    runBlocking {
+    test("readRequestsFromProxy should clean up on stream cancellation when transportFilterDisabled") {
       val proxy = createMockProxy(transportFilterDisabled = true, isRunning = true)
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val mockScrapeRequestWrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -738,11 +682,9 @@ class ProxyServiceImplTest {
       verify { proxy.removeAgentContext(testAgentId, any()) }
     }
 
-  // ==================== writeResponsesToProxy Error Handling Tests ====================
+    // ==================== writeResponsesToProxy Error Handling Tests ====================
 
-  @Test
-  fun `writeResponsesToProxy should handle flow error gracefully when proxy running`(): Unit =
-    runBlocking {
+    test("writeResponsesToProxy should handle flow error gracefully when proxy running") {
       val proxy = createMockProxy(isRunning = true)
       val service = ProxyServiceImpl(proxy)
 
@@ -755,9 +697,7 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
-  @Test
-  fun `writeResponsesToProxy should suppress error when proxy not running`(): Unit =
-    runBlocking {
+    test("writeResponsesToProxy should suppress error when proxy not running") {
       val proxy = createMockProxy(isRunning = false)
       val service = ProxyServiceImpl(proxy)
 
@@ -769,9 +709,7 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
-  @Test
-  fun `writeResponsesToProxy should continue processing after single message failure`(): Unit =
-    runBlocking {
+    test("writeResponsesToProxy should continue processing after single message failure") {
       val proxy = createMockProxy()
       val scrapeRequestManager = proxy.scrapeRequestManager
 
@@ -803,12 +741,10 @@ class ProxyServiceImplTest {
       verify(exactly = 2) { scrapeRequestManager.assignScrapeResults(any()) }
     }
 
-  // M2: Previously, writeChunkedResponsesToProxy used string-based dispatch on
-  // ooc.name.lowercase() which would throw IllegalStateException on CHUNKONEOF_NOT_SET,
-  // crashing the entire chunked stream. Now it uses enum constants and handles NOT_SET gracefully.
-  @Test
-  fun `writeChunkedResponsesToProxy should skip message with no oneOf field set`(): Unit =
-    runBlocking {
+    // M2: Previously, writeChunkedResponsesToProxy used string-based dispatch on
+    // ooc.name.lowercase() which would throw IllegalStateException on CHUNKONEOF_NOT_SET,
+    // crashing the entire chunked stream. Now it uses enum constants and handles NOT_SET gracefully.
+    test("writeChunkedResponsesToProxy should skip message with no oneOf field set") {
       val proxy = createMockProxy()
       val contextManager = proxy.agentContextManager
       val service = ProxyServiceImpl(proxy)
@@ -823,9 +759,7 @@ class ProxyServiceImplTest {
       verify(exactly = 0) { contextManager.putChunkedContext(any(), any()) }
     }
 
-  @Test
-  fun `writeChunkedResponsesToProxy should continue processing after NOT_SET message`(): Unit =
-    runBlocking {
+    test("writeChunkedResponsesToProxy should continue processing after NOT_SET message") {
       val proxy = createMockProxy()
       val contextManager = proxy.agentContextManager
       val scrapeRequestManager = proxy.scrapeRequestManager
@@ -884,11 +818,9 @@ class ProxyServiceImplTest {
       verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(any()) }
     }
 
-  // ==================== writeChunkedResponsesToProxy Error Handling Tests ====================
+    // ==================== writeChunkedResponsesToProxy Error Handling Tests ====================
 
-  @Test
-  fun `writeChunkedResponsesToProxy should handle flow error gracefully`(): Unit =
-    runBlocking {
+    test("writeChunkedResponsesToProxy should handle flow error gracefully") {
       val proxy = createMockProxy(isRunning = true)
       val service = ProxyServiceImpl(proxy)
 
@@ -900,9 +832,7 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
-  @Test
-  fun `writeChunkedResponsesToProxy should suppress error when proxy not running`(): Unit =
-    runBlocking {
+    test("writeChunkedResponsesToProxy should suppress error when proxy not running") {
       val proxy = createMockProxy(isRunning = false)
       val service = ProxyServiceImpl(proxy)
 
@@ -914,9 +844,7 @@ class ProxyServiceImplTest {
       result shouldBe EMPTY_INSTANCE
     }
 
-  @Test
-  fun `writeChunkedResponsesToProxy should clean up orphaned contexts on stream failure`(): Unit =
-    runBlocking {
+    test("writeChunkedResponsesToProxy should clean up orphaned contexts on stream failure") {
       val proxy = createMockProxy(isRunning = true)
       val contextManager = proxy.agentContextManager
       val scrapeId = 400L
@@ -952,9 +880,7 @@ class ProxyServiceImplTest {
       verify { contextManager.removeChunkedContext(scrapeId) }
     }
 
-  @Test
-  fun `writeChunkedResponsesToProxy should clean up multiple orphaned contexts on stream failure`(): Unit =
-    runBlocking {
+    test("writeChunkedResponsesToProxy should clean up multiple orphaned contexts on stream failure") {
       val proxy = createMockProxy(isRunning = true)
       val contextManager = proxy.agentContextManager
       val scrapeId1 = 401L
@@ -1002,9 +928,7 @@ class ProxyServiceImplTest {
       verify { contextManager.removeChunkedContext(scrapeId2) }
     }
 
-  @Test
-  fun `writeChunkedResponsesToProxy should not clean up completed contexts on stream failure`(): Unit =
-    runBlocking {
+    test("writeChunkedResponsesToProxy should not clean up completed contexts on stream failure") {
       val proxy = createMockProxy(isRunning = true)
       val contextManager = proxy.agentContextManager
       val completedScrapeId = 403L
@@ -1092,9 +1016,7 @@ class ProxyServiceImplTest {
       verify { contextManager.removeChunkedContext(orphanedScrapeId) }
     }
 
-  @Test
-  fun `writeResponsesToProxy should call assignScrapeResults for each response`(): Unit =
-    runBlocking {
+    test("writeResponsesToProxy should call assignScrapeResults for each response") {
       val proxy = createMockProxy()
       val scrapeRequestManager = proxy.scrapeRequestManager
       val service = ProxyServiceImpl(proxy)
@@ -1116,4 +1038,5 @@ class ProxyServiceImplTest {
 
       verify(exactly = 2) { scrapeRequestManager.assignScrapeResults(any()) }
     }
+  }
 }

@@ -19,6 +19,7 @@
 package io.prometheus.misc
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -31,66 +32,14 @@ import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Test
 
-class AdminNonDefaultPathTest {
-  private val proxyConfigVals: ConfigVals.Proxy2 = proxy.configVals.proxy
+class AdminNonDefaultPathTest : FunSpec() {
+  private val proxyConfigVals: ConfigVals.Proxy2 by lazy { proxy.configVals.proxy }
 
-  @Test
-  fun proxyPingPathTest() {
-    proxyConfigVals.admin.apply {
-      port shouldBe 8099
-      pingPath shouldBe "pingPath2"
+  companion object : HarnessSetup()
 
-      blockingGet("$port/$pingPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText() shouldStartWith "pong"
-      }
-    }
-  }
-
-  @Test
-  fun proxyVersionPathTest() {
-    proxyConfigVals.admin.apply {
-      port shouldBe 8099
-      versionPath shouldBe "versionPath2"
-
-      blockingGet("$port/$versionPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText() shouldContain "version"
-      }
-    }
-  }
-
-  @Test
-  fun proxyHealthCheckPathTest() {
-    proxyConfigVals.admin.apply {
-      healthCheckPath shouldBe "healthCheckPath2"
-
-      blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
-        response.status shouldBe HttpStatusCode.OK
-        response.bodyAsText().length shouldBeGreaterThan 10
-      }
-    }
-  }
-
-  @Test
-  fun proxyThreadDumpPathTest() {
-    proxyConfigVals.admin.apply {
-      threadDumpPath shouldBe "threadDumpPath2"
-
-      blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
-        response.bodyAsText().length shouldBeGreaterThan 10
-      }
-    }
-  }
-
-  companion object : HarnessSetup() {
-    @JvmStatic
-    @BeforeAll
-    fun setUp() =
+  init {
+    beforeSpec {
       setupProxyAndAgent(
         proxyPort = PROXY_PORT,
         proxySetup = {
@@ -107,9 +56,55 @@ class AdminNonDefaultPathTest {
         },
         agentSetup = { startAgent(adminEnabled = true) },
       )
+    }
 
-    @JvmStatic
-    @AfterAll
-    fun takeDown() = takeDownProxyAndAgent()
+    afterSpec {
+      takeDownProxyAndAgent()
+    }
+
+    test("proxy ping path should respond with pong") {
+      proxyConfigVals.admin.apply {
+        port shouldBe 8099
+        pingPath shouldBe "pingPath2"
+
+        blockingGet("$port/$pingPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldStartWith "pong"
+        }
+      }
+    }
+
+    test("proxy version path should return version info") {
+      proxyConfigVals.admin.apply {
+        port shouldBe 8099
+        versionPath shouldBe "versionPath2"
+
+        blockingGet("$port/$versionPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldContain "version"
+        }
+      }
+    }
+
+    test("proxy health check path should return health status") {
+      proxyConfigVals.admin.apply {
+        healthCheckPath shouldBe "healthCheckPath2"
+
+        blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText().length shouldBeGreaterThan 10
+        }
+      }
+    }
+
+    test("proxy thread dump path should return thread dump") {
+      proxyConfigVals.admin.apply {
+        threadDumpPath shouldBe "threadDumpPath2"
+
+        blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+          response.bodyAsText().length shouldBeGreaterThan 10
+        }
+      }
+    }
   }
 }

@@ -2,6 +2,7 @@
 
 package io.prometheus.proxy
 
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.longs.shouldBeLessThan
@@ -12,212 +13,194 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
 import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
-class AgentContextManagerTest {
-  // ==================== Initial State Tests ====================
+class AgentContextManagerTest : FunSpec() {
+  init {
+    // ==================== Initial State Tests ====================
 
-  @Test
-  fun `should start with empty agent context map`() {
-    val manager = AgentContextManager(isTestMode = true)
+    test("should start with empty agent context map") {
+      val manager = AgentContextManager(isTestMode = true)
 
-    manager.agentContextSize shouldBe 0
-  }
+      manager.agentContextSize shouldBe 0
+    }
 
-  @Test
-  fun `should start with empty chunked context map`() {
-    val manager = AgentContextManager(isTestMode = true)
+    test("should start with empty chunked context map") {
+      val manager = AgentContextManager(isTestMode = true)
 
-    manager.chunkedContextSize shouldBe 0
-  }
+      manager.chunkedContextSize shouldBe 0
+    }
 
-  @Test
-  fun `totalAgentScrapeRequestBacklogSize should be zero when empty`() {
-    val manager = AgentContextManager(isTestMode = true)
+    test("totalAgentScrapeRequestBacklogSize should be zero when empty") {
+      val manager = AgentContextManager(isTestMode = true)
 
-    manager.totalAgentScrapeRequestBacklogSize shouldBe 0
-  }
+      manager.totalAgentScrapeRequestBacklogSize shouldBe 0
+    }
 
-  // ==================== Add Context Tests ====================
+    // ==================== Add Context Tests ====================
 
-  @Test
-  fun `addAgentContext should add context and return null for new agent`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val context = AgentContext("remote-addr-1")
+    test("addAgentContext should add context and return null for new agent") {
+      val manager = AgentContextManager(isTestMode = true)
+      val context = AgentContext("remote-addr-1")
 
-    val result = manager.addAgentContext(context)
+      val result = manager.addAgentContext(context)
 
-    result.shouldBeNull()
-    manager.agentContextSize shouldBe 1
-  }
+      result.shouldBeNull()
+      manager.agentContextSize shouldBe 1
+    }
 
-  @Test
-  fun `addAgentContext should return old context when replacing`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val context1 = AgentContext("remote-addr-1")
+    test("addAgentContext should return old context when replacing") {
+      val manager = AgentContextManager(isTestMode = true)
+      val context1 = AgentContext("remote-addr-1")
 
-    manager.addAgentContext(context1)
+      manager.addAgentContext(context1)
 
-    // Use putAgentContext to replace with a second context using the same agentId
-    val context2 = AgentContext("remote-addr-2")
-    manager.putAgentContext(context1.agentId, context2)
+      // Use putAgentContext to replace with a second context using the same agentId
+      val context2 = AgentContext("remote-addr-2")
+      manager.putAgentContext(context1.agentId, context2)
 
-    // Verify replacement occurred
-    val retrieved = manager.getAgentContext(context1.agentId)
-    retrieved.shouldNotBeNull()
-    retrieved shouldBe context2
-    manager.agentContextSize shouldBe 1
-  }
+      // Verify replacement occurred
+      val retrieved = manager.getAgentContext(context1.agentId)
+      retrieved.shouldNotBeNull()
+      retrieved shouldBe context2
+      manager.agentContextSize shouldBe 1
+    }
 
-  @Test
-  fun `addAgentContext should handle multiple agents`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val context1 = AgentContext("remote-1")
-    val context2 = AgentContext("remote-2")
-    val context3 = AgentContext("remote-3")
+    test("addAgentContext should handle multiple agents") {
+      val manager = AgentContextManager(isTestMode = true)
+      val context1 = AgentContext("remote-1")
+      val context2 = AgentContext("remote-2")
+      val context3 = AgentContext("remote-3")
 
-    manager.addAgentContext(context1)
-    manager.addAgentContext(context2)
-    manager.addAgentContext(context3)
+      manager.addAgentContext(context1)
+      manager.addAgentContext(context2)
+      manager.addAgentContext(context3)
 
-    manager.agentContextSize shouldBe 3
-  }
+      manager.agentContextSize shouldBe 3
+    }
 
-  // ==================== Get Context Tests ====================
+    // ==================== Get Context Tests ====================
 
-  @Test
-  fun `getAgentContext should return context for existing agentId`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val context = AgentContext("remote-addr")
+    test("getAgentContext should return context for existing agentId") {
+      val manager = AgentContextManager(isTestMode = true)
+      val context = AgentContext("remote-addr")
 
-    manager.addAgentContext(context)
+      manager.addAgentContext(context)
 
-    val result = manager.getAgentContext(context.agentId)
-    result.shouldNotBeNull()
-    result shouldBe context
-  }
+      val result = manager.getAgentContext(context.agentId)
+      result.shouldNotBeNull()
+      result shouldBe context
+    }
 
-  @Test
-  fun `getAgentContext should return null for non-existent agentId`() {
-    val manager = AgentContextManager(isTestMode = true)
+    test("getAgentContext should return null for non-existent agentId") {
+      val manager = AgentContextManager(isTestMode = true)
 
-    val result = manager.getAgentContext("non-existent-id")
-    result.shouldBeNull()
-  }
+      val result = manager.getAgentContext("non-existent-id")
+      result.shouldBeNull()
+    }
 
-  // ==================== Remove Context Tests ====================
+    // ==================== Remove Context Tests ====================
 
-  @Test
-  fun `removeFromContextManager should remove and invalidate context`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val context = AgentContext("remote-addr")
+    test("removeFromContextManager should remove and invalidate context") {
+      val manager = AgentContextManager(isTestMode = true)
+      val context = AgentContext("remote-addr")
 
-    manager.addAgentContext(context)
-    manager.agentContextSize shouldBe 1
+      manager.addAgentContext(context)
+      manager.agentContextSize shouldBe 1
 
-    val removed = manager.removeFromContextManager(context.agentId, "test removal")
+      val removed = manager.removeFromContextManager(context.agentId, "test removal")
 
-    removed.shouldNotBeNull()
-    removed shouldBe context
-    removed.isNotValid() shouldBe true
-    manager.agentContextSize shouldBe 0
-  }
+      removed.shouldNotBeNull()
+      removed shouldBe context
+      removed.isNotValid() shouldBe true
+      manager.agentContextSize shouldBe 0
+    }
 
-  @Test
-  fun `removeFromContextManager should return null for non-existent agentId`() {
-    val manager = AgentContextManager(isTestMode = true)
+    test("removeFromContextManager should return null for non-existent agentId") {
+      val manager = AgentContextManager(isTestMode = true)
 
-    val removed = manager.removeFromContextManager("non-existent", "test")
+      val removed = manager.removeFromContextManager("non-existent", "test")
 
-    removed.shouldBeNull()
-  }
+      removed.shouldBeNull()
+    }
 
-  @Test
-  fun `removeFromContextManager should only remove specified agent`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val context1 = AgentContext("remote-1")
-    val context2 = AgentContext("remote-2")
+    test("removeFromContextManager should only remove specified agent") {
+      val manager = AgentContextManager(isTestMode = true)
+      val context1 = AgentContext("remote-1")
+      val context2 = AgentContext("remote-2")
 
-    manager.addAgentContext(context1)
-    manager.addAgentContext(context2)
+      manager.addAgentContext(context1)
+      manager.addAgentContext(context2)
 
-    manager.removeFromContextManager(context1.agentId, "test")
+      manager.removeFromContextManager(context1.agentId, "test")
 
-    manager.agentContextSize shouldBe 1
-    manager.getAgentContext(context2.agentId).shouldNotBeNull()
-    manager.getAgentContext(context1.agentId).shouldBeNull()
-  }
+      manager.agentContextSize shouldBe 1
+      manager.getAgentContext(context2.agentId).shouldNotBeNull()
+      manager.getAgentContext(context1.agentId).shouldBeNull()
+    }
 
-  // ==================== Backlog Aggregation Tests ====================
+    // ==================== Backlog Aggregation Tests ====================
 
-  @Test
-  fun `totalAgentScrapeRequestBacklogSize should sum across agents`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val context1 = AgentContext("remote-1")
-    val context2 = AgentContext("remote-2")
+    test("totalAgentScrapeRequestBacklogSize should sum across agents") {
+      val manager = AgentContextManager(isTestMode = true)
+      val context1 = AgentContext("remote-1")
+      val context2 = AgentContext("remote-2")
 
-    manager.addAgentContext(context1)
-    manager.addAgentContext(context2)
+      manager.addAgentContext(context1)
+      manager.addAgentContext(context2)
 
-    // Both start at 0
-    manager.totalAgentScrapeRequestBacklogSize shouldBe 0
-  }
+      // Both start at 0
+      manager.totalAgentScrapeRequestBacklogSize shouldBe 0
+    }
 
-  // ==================== Concurrent Access Tests ====================
+    // ==================== Concurrent Access Tests ====================
 
-  @Test
-  fun `concurrent add and remove should not lose agents`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val contexts = (1..100).map { AgentContext("remote-$it") }
+    test("concurrent add and remove should not lose agents") {
+      val manager = AgentContextManager(isTestMode = true)
+      val contexts = (1..100).map { AgentContext("remote-$it") }
 
-    // Add all
-    contexts.forEach { manager.addAgentContext(it) }
-    manager.agentContextSize shouldBe 100
+      // Add all
+      contexts.forEach { manager.addAgentContext(it) }
+      manager.agentContextSize shouldBe 100
 
-    // Remove half
-    contexts.take(50).forEach { manager.removeFromContextManager(it.agentId, "test") }
-    manager.agentContextSize shouldBe 50
-  }
+      // Remove half
+      contexts.take(50).forEach { manager.removeFromContextManager(it.agentId, "test") }
+      manager.agentContextSize shouldBe 50
+    }
 
-  // ==================== removeFromContextManager Non-Test Mode ====================
+    // ==================== removeFromContextManager Non-Test Mode ====================
 
-  @Test
-  fun `removeFromContextManager should still invalidate context in non-test mode`() {
-    val manager = AgentContextManager(isTestMode = false)
-    val context = AgentContext("remote-addr")
+    test("removeFromContextManager should still invalidate context in non-test mode") {
+      val manager = AgentContextManager(isTestMode = false)
+      val context = AgentContext("remote-addr")
 
-    manager.addAgentContext(context)
-    val removed = manager.removeFromContextManager(context.agentId, "test")
+      manager.addAgentContext(context)
+      val removed = manager.removeFromContextManager(context.agentId, "test")
 
-    removed.shouldNotBeNull()
-    removed.isNotValid() shouldBe true
-    manager.agentContextSize shouldBe 0
-  }
+      removed.shouldNotBeNull()
+      removed.isNotValid() shouldBe true
+      manager.agentContextSize shouldBe 0
+    }
 
-  // ==================== ChunkedContext Map Tests ====================
+    // ==================== ChunkedContext Map Tests ====================
 
-  @Test
-  fun `chunkedContextMap should track entries correctly`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val mockChunkedContext = mockk<ChunkedContext>(relaxed = true)
+    test("chunkedContextMap should track entries correctly") {
+      val manager = AgentContextManager(isTestMode = true)
+      val mockChunkedContext = mockk<ChunkedContext>(relaxed = true)
 
-    manager.putChunkedContext(1L, mockChunkedContext)
-    manager.chunkedContextSize shouldBe 1
+      manager.putChunkedContext(1L, mockChunkedContext)
+      manager.chunkedContextSize shouldBe 1
 
-    manager.putChunkedContext(2L, mockChunkedContext)
-    manager.chunkedContextSize shouldBe 2
+      manager.putChunkedContext(2L, mockChunkedContext)
+      manager.chunkedContextSize shouldBe 2
 
-    manager.removeChunkedContext(1L)
-    manager.chunkedContextSize shouldBe 1
-  }
+      manager.removeChunkedContext(1L)
+      manager.chunkedContextSize shouldBe 1
+    }
 
-  // ==================== Non-Zero Backlog Aggregation ====================
+    // ==================== Non-Zero Backlog Aggregation ====================
 
-  @Test
-  fun `totalAgentScrapeRequestBacklogSize should sum non-zero backlogs`(): Unit =
-    runBlocking {
+    test("totalAgentScrapeRequestBacklogSize should sum non-zero backlogs") {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("remote-1")
       val context2 = AgentContext("remote-2")
@@ -233,36 +216,33 @@ class AgentContextManagerTest {
       manager.totalAgentScrapeRequestBacklogSize shouldBe 3
     }
 
-  // ==================== invalidateAllAgentContexts Tests ====================
+    // ==================== invalidateAllAgentContexts Tests ====================
 
-  // Bug #4: Proxy shutdown did not invalidate remaining agent contexts, causing
-  // coroutines in readRequestsFromProxy to hang and HTTP handlers waiting in
-  // awaitCompleted to experience unnecessary delays until the timeout expired.
-  @Test
-  fun `invalidateAllAgentContexts should invalidate all agent contexts`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val context1 = AgentContext("remote-1")
-    val context2 = AgentContext("remote-2")
-    val context3 = AgentContext("remote-3")
+    // Bug #4: Proxy shutdown did not invalidate remaining agent contexts, causing
+    // coroutines in readRequestsFromProxy to hang and HTTP handlers waiting in
+    // awaitCompleted to experience unnecessary delays until the timeout expired.
+    test("invalidateAllAgentContexts should invalidate all agent contexts") {
+      val manager = AgentContextManager(isTestMode = true)
+      val context1 = AgentContext("remote-1")
+      val context2 = AgentContext("remote-2")
+      val context3 = AgentContext("remote-3")
 
-    manager.addAgentContext(context1)
-    manager.addAgentContext(context2)
-    manager.addAgentContext(context3)
+      manager.addAgentContext(context1)
+      manager.addAgentContext(context2)
+      manager.addAgentContext(context3)
 
-    context1.isValid().shouldBeTrue()
-    context2.isValid().shouldBeTrue()
-    context3.isValid().shouldBeTrue()
+      context1.isValid().shouldBeTrue()
+      context2.isValid().shouldBeTrue()
+      context3.isValid().shouldBeTrue()
 
-    manager.invalidateAllAgentContexts()
+      manager.invalidateAllAgentContexts()
 
-    context1.isValid().shouldBeFalse()
-    context2.isValid().shouldBeFalse()
-    context3.isValid().shouldBeFalse()
-  }
+      context1.isValid().shouldBeFalse()
+      context2.isValid().shouldBeFalse()
+      context3.isValid().shouldBeFalse()
+    }
 
-  @Test
-  fun `invalidateAllAgentContexts should drain backlog for all contexts`(): Unit =
-    runBlocking {
+    test("invalidateAllAgentContexts should drain backlog for all contexts") {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("remote-1")
       val context2 = AgentContext("remote-2")
@@ -284,9 +264,7 @@ class AgentContextManagerTest {
       manager.totalAgentScrapeRequestBacklogSize shouldBe 0
     }
 
-  @Test
-  fun `invalidateAllAgentContexts should unblock awaitCompleted on buffered wrappers`(): Unit =
-    runBlocking {
+    test("invalidateAllAgentContexts should unblock awaitCompleted on buffered wrappers") {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("remote-addr")
       val mockProxy = mockk<Proxy>(relaxed = true)
@@ -314,30 +292,29 @@ class AgentContextManagerTest {
       elapsed shouldBeLessThan 5000L
     }
 
-  @Test
-  fun `invalidateAllAgentContexts with no agents should not fail`() {
-    val manager = AgentContextManager(isTestMode = true)
+    test("invalidateAllAgentContexts with no agents should not fail") {
+      val manager = AgentContextManager(isTestMode = true)
 
-    // Should not throw when there are no agent contexts
-    manager.invalidateAllAgentContexts()
+      // Should not throw when there are no agent contexts
+      manager.invalidateAllAgentContexts()
 
-    manager.agentContextSize shouldBe 0
-  }
+      manager.agentContextSize shouldBe 0
+    }
 
-  @Test
-  fun `invalidateAllAgentContexts should not remove contexts from map`() {
-    val manager = AgentContextManager(isTestMode = true)
-    val context1 = AgentContext("remote-1")
-    val context2 = AgentContext("remote-2")
+    test("invalidateAllAgentContexts should not remove contexts from map") {
+      val manager = AgentContextManager(isTestMode = true)
+      val context1 = AgentContext("remote-1")
+      val context2 = AgentContext("remote-2")
 
-    manager.addAgentContext(context1)
-    manager.addAgentContext(context2)
+      manager.addAgentContext(context1)
+      manager.addAgentContext(context2)
 
-    manager.invalidateAllAgentContexts()
+      manager.invalidateAllAgentContexts()
 
-    // Contexts are invalidated but still in the map (removed by service shutdown)
-    manager.agentContextSize shouldBe 2
-    manager.getAgentContext(context1.agentId).shouldNotBeNull()
-    manager.getAgentContext(context2.agentId).shouldNotBeNull()
+      // Contexts are invalidated but still in the map (removed by service shutdown)
+      manager.agentContextSize shouldBe 2
+      manager.getAgentContext(context1.agentId).shouldNotBeNull()
+      manager.getAgentContext(context2.agentId).shouldNotBeNull()
+    }
   }
 }

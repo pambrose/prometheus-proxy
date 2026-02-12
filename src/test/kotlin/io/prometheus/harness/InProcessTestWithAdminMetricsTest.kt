@@ -28,22 +28,22 @@ import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
 
 class InProcessTestWithAdminMetricsTest :
   AbstractHarnessTests(
-    args = ProxyCallTestArgs(
-      agent = agent,
-      proxyPort = PROXY_PORT,
-      startPort = 10700,
-      caller = simpleClassName,
-    ),
+    argsProvider = {
+      ProxyCallTestArgs(
+        agent = agent,
+        proxyPort = PROXY_PORT,
+        startPort = 10700,
+        caller = simpleClassName,
+      )
+    },
   ) {
-  companion object : HarnessSetup() {
-    @JvmStatic
-    @BeforeAll
-    fun setUp() =
+  companion object : HarnessSetup()
+
+  init {
+    beforeSpec {
       setupProxyAndAgent(
         proxyPort = PROXY_PORT,
         proxySetup = {
@@ -64,9 +64,10 @@ class InProcessTestWithAdminMetricsTest :
           )
         },
       )
+    }
 
-    @JvmStatic
-    @AfterAll
-    fun takeDown() = takeDownProxyAndAgent()
+    afterSpec {
+      takeDownProxyAndAgent()
+    }
   }
 }

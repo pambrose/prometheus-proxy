@@ -18,6 +18,8 @@
 
 package io.prometheus.proxy
 
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
@@ -31,10 +33,8 @@ import io.prometheus.grpc.registerAgentRequest
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 
-class ProxyTest {
+class ProxyTest : FunSpec() {
   private fun createTestProxy(vararg extraArgs: String): Proxy {
     val args = mutableListOf<String>().apply { addAll(extraArgs) }
     return Proxy(
@@ -60,202 +60,189 @@ class ProxyTest {
       )
     }
 
-  // ==================== buildServiceDiscoveryJson Tests ====================
+  init {
+    // ==================== buildServiceDiscoveryJson Tests ====================
 
-  @Test
-  fun `buildServiceDiscoveryJson should return empty array when no paths registered`() {
-    val proxy = createTestProxy()
+    test("buildServiceDiscoveryJson should return empty array when no paths registered") {
+      val proxy = createTestProxy()
 
-    val json = proxy.buildServiceDiscoveryJson()
+      val json = proxy.buildServiceDiscoveryJson()
 
-    json.size shouldBe 0
-  }
-
-  @Test
-  fun `buildServiceDiscoveryJson should return correct structure for single path`() {
-    val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy.example.com:8080")
-    val agentContext = createAgentContext(name = "agent-01", host = "internal.host.com")
-    proxy.agentContextManager.addAgentContext(agentContext)
-    proxy.pathManager.addPath("app1_metrics", "", agentContext)
-
-    val json = proxy.buildServiceDiscoveryJson()
-
-    json.size shouldBe 1
-    val entry = json[0].jsonObject
-    val targets = entry["targets"]!!.jsonArray
-    targets.size shouldBe 1
-    targets[0].jsonPrimitive.content shouldBe "proxy.example.com:8080"
-
-    val labels = entry["labels"]!!.jsonObject
-    labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "app1_metrics"
-    labels["agentName"]!!.jsonPrimitive.content shouldBe "agent-01"
-    labels["hostName"]!!.jsonPrimitive.content shouldBe "internal.host.com"
-  }
-
-  @Test
-  fun `buildServiceDiscoveryJson should produce multiple entries for multiple paths`() {
-    val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
-    val agentContext = createAgentContext()
-    proxy.agentContextManager.addAgentContext(agentContext)
-    proxy.pathManager.addPath("metrics1", "", agentContext)
-    proxy.pathManager.addPath("metrics2", "", agentContext)
-
-    val json = proxy.buildServiceDiscoveryJson()
-
-    json.size shouldBe 2
-    val paths = json.map { it.jsonObject["labels"]!!.jsonObject["__metrics_path__"]!!.jsonPrimitive.content }
-    paths.toSet() shouldBe setOf("metrics1", "metrics2")
-  }
-
-  @Test
-  fun `buildServiceDiscoveryJson should include custom labels from agent`() {
-    val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
-    val agentContext = createAgentContext()
-    proxy.agentContextManager.addAgentContext(agentContext)
-    proxy.pathManager.addPath("metrics", """{"environment":"production","service":"web"}""", agentContext)
-
-    val json = proxy.buildServiceDiscoveryJson()
-
-    json.size shouldBe 1
-    val labels = json[0].jsonObject["labels"]!!.jsonObject
-    labels["environment"]!!.jsonPrimitive.content shouldBe "production"
-    labels["service"]!!.jsonPrimitive.content shouldBe "web"
-  }
-
-  @Test
-  fun `buildServiceDiscoveryJson should skip invalid JSON labels gracefully`() {
-    val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
-    val agentContext = createAgentContext(name = "agent-bad-labels")
-    proxy.agentContextManager.addAgentContext(agentContext)
-    proxy.pathManager.addPath("metrics", "not-valid-json{{{", agentContext)
-
-    val json = proxy.buildServiceDiscoveryJson()
-
-    json.size shouldBe 1
-    val labels = json[0].jsonObject["labels"]!!.jsonObject
-    // Standard labels should still be present
-    labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "metrics"
-    labels["agentName"]!!.jsonPrimitive.content shouldBe "agent-bad-labels"
-    // Invalid JSON labels should not cause custom keys to appear
-    labels.containsKey("environment").shouldBeFalse()
-  }
-
-  // ==================== removeAgentContext Tests ====================
-
-  @Test
-  fun `removeAgentContext should throw on empty agentId`() {
-    val proxy = createTestProxy()
-
-    assertThrows<IllegalArgumentException> {
-      proxy.removeAgentContext("", "test reason")
-    }
-  }
-
-  @Test
-  fun `removeAgentContext should delegate to both managers`() {
-    val proxy = createTestProxy()
-    val agentContext = createAgentContext()
-    proxy.agentContextManager.addAgentContext(agentContext)
-    proxy.pathManager.addPath("metrics", "", agentContext)
-
-    val removed = proxy.removeAgentContext(agentContext.agentId, "disconnect")
-
-    removed.shouldNotBeNull()
-    removed.agentId shouldBe agentContext.agentId
-    // Path should be removed
-    proxy.pathManager.pathMapSize shouldBe 0
-    // Agent context should be removed
-    proxy.agentContextManager.getAgentContext(agentContext.agentId).shouldBeNull()
-  }
-
-  @Test
-  fun `removeAgentContext should return null for unknown agentId`() {
-    val proxy = createTestProxy()
-
-    val removed = proxy.removeAgentContext("nonexistent-id", "test")
-
-    removed.shouldBeNull()
-  }
-
-  // ==================== isBlitzRequest Tests ====================
-
-  @Test
-  fun `isBlitzRequest should return false when blitz is disabled`() {
-    val proxy = createTestProxy()
-
-    proxy.isBlitzRequest("any-path").shouldBeFalse()
-  }
-
-  @Test
-  fun `isBlitzRequest should return true when blitz enabled and path matches`() {
-    val proxy = createTestProxy(
-      "-Dproxy.internal.blitz.enabled=true",
-      "-Dproxy.internal.blitz.path=mu-test-blitz.txt",
-    )
-
-    proxy.isBlitzRequest("mu-test-blitz.txt").shouldBeTrue()
-  }
-
-  @Test
-  fun `isBlitzRequest should return false when blitz enabled but path does not match`() {
-    val proxy = createTestProxy(
-      "-Dproxy.internal.blitz.enabled=true",
-      "-Dproxy.internal.blitz.path=mu-test-blitz.txt",
-    )
-
-    proxy.isBlitzRequest("other-path").shouldBeFalse()
-  }
-
-  // ==================== metrics Tests ====================
-
-  @Test
-  fun `metrics should not invoke lambda when metrics disabled`() {
-    val proxy = createTestProxy()
-
-    var invoked = false
-    proxy.metrics { invoked = true }
-
-    invoked.shouldBeFalse()
-  }
-
-  @Test
-  fun `metrics should invoke lambda when metrics enabled`() {
-    val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
-    val mockProxy = mockk<Proxy>(relaxed = true)
-    every { mockProxy.isMetricsEnabled } returns true
-    every { mockProxy.metrics } returns mockMetrics
-    every { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers {
-      val block = firstArg<ProxyMetrics.() -> Unit>()
-      block.invoke(mockMetrics)
+      json.size shouldBe 0
     }
 
-    var invoked = false
-    mockProxy.metrics { invoked = true }
+    test("buildServiceDiscoveryJson should return correct structure for single path") {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy.example.com:8080")
+      val agentContext = createAgentContext(name = "agent-01", host = "internal.host.com")
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("app1_metrics", "", agentContext)
 
-    invoked.shouldBeTrue()
-  }
+      val json = proxy.buildServiceDiscoveryJson()
 
-  // ==================== logActivity Tests ====================
+      json.size shouldBe 1
+      val entry = json[0].jsonObject
+      val targets = entry["targets"]!!.jsonArray
+      targets.size shouldBe 1
+      targets[0].jsonPrimitive.content shouldBe "proxy.example.com:8080"
 
-  @Test
-  fun `logActivity should add timestamped entry without error`() {
-    val proxy = createTestProxy()
+      val labels = entry["labels"]!!.jsonObject
+      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "app1_metrics"
+      labels["agentName"]!!.jsonPrimitive.content shouldBe "agent-01"
+      labels["hostName"]!!.jsonPrimitive.content shouldBe "internal.host.com"
+    }
 
-    // logActivity adds to a private EvictingQueue; verify it doesn't throw
-    proxy.logActivity("test request to /metrics")
-    proxy.logActivity("another request to /health")
-  }
+    test("buildServiceDiscoveryJson should produce multiple entries for multiple paths") {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("metrics1", "", agentContext)
+      proxy.pathManager.addPath("metrics2", "", agentContext)
 
-  // ==================== toString Tests ====================
+      val json = proxy.buildServiceDiscoveryJson()
 
-  @Test
-  fun `toString should contain proxyPort and service info`() {
-    val proxy = createTestProxy()
+      json.size shouldBe 2
+      val paths = json.map { it.jsonObject["labels"]!!.jsonObject["__metrics_path__"]!!.jsonPrimitive.content }
+      paths.toSet() shouldBe setOf("metrics1", "metrics2")
+    }
 
-    val str = proxy.toString()
+    test("buildServiceDiscoveryJson should include custom labels from agent") {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("metrics", """{"environment":"production","service":"web"}""", agentContext)
 
-    str shouldContain "proxyPort"
-    str shouldContain "adminService"
-    str shouldContain "metricsService"
+      val json = proxy.buildServiceDiscoveryJson()
+
+      json.size shouldBe 1
+      val labels = json[0].jsonObject["labels"]!!.jsonObject
+      labels["environment"]!!.jsonPrimitive.content shouldBe "production"
+      labels["service"]!!.jsonPrimitive.content shouldBe "web"
+    }
+
+    test("buildServiceDiscoveryJson should skip invalid JSON labels gracefully") {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
+      val agentContext = createAgentContext(name = "agent-bad-labels")
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("metrics", "not-valid-json{{{", agentContext)
+
+      val json = proxy.buildServiceDiscoveryJson()
+
+      json.size shouldBe 1
+      val labels = json[0].jsonObject["labels"]!!.jsonObject
+      // Standard labels should still be present
+      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "metrics"
+      labels["agentName"]!!.jsonPrimitive.content shouldBe "agent-bad-labels"
+      // Invalid JSON labels should not cause custom keys to appear
+      labels.containsKey("environment").shouldBeFalse()
+    }
+
+    // ==================== removeAgentContext Tests ====================
+
+    test("removeAgentContext should throw on empty agentId") {
+      val proxy = createTestProxy()
+
+      shouldThrow<IllegalArgumentException> {
+        proxy.removeAgentContext("", "test reason")
+      }
+    }
+
+    test("removeAgentContext should delegate to both managers") {
+      val proxy = createTestProxy()
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("metrics", "", agentContext)
+
+      val removed = proxy.removeAgentContext(agentContext.agentId, "disconnect")
+
+      removed.shouldNotBeNull()
+      removed.agentId shouldBe agentContext.agentId
+      // Path should be removed
+      proxy.pathManager.pathMapSize shouldBe 0
+      // Agent context should be removed
+      proxy.agentContextManager.getAgentContext(agentContext.agentId).shouldBeNull()
+    }
+
+    test("removeAgentContext should return null for unknown agentId") {
+      val proxy = createTestProxy()
+
+      val removed = proxy.removeAgentContext("nonexistent-id", "test")
+
+      removed.shouldBeNull()
+    }
+
+    // ==================== isBlitzRequest Tests ====================
+
+    test("isBlitzRequest should return false when blitz is disabled") {
+      val proxy = createTestProxy()
+
+      proxy.isBlitzRequest("any-path").shouldBeFalse()
+    }
+
+    test("isBlitzRequest should return true when blitz enabled and path matches") {
+      val proxy = createTestProxy(
+        "-Dproxy.internal.blitz.enabled=true",
+        "-Dproxy.internal.blitz.path=mu-test-blitz.txt",
+      )
+
+      proxy.isBlitzRequest("mu-test-blitz.txt").shouldBeTrue()
+    }
+
+    test("isBlitzRequest should return false when blitz enabled but path does not match") {
+      val proxy = createTestProxy(
+        "-Dproxy.internal.blitz.enabled=true",
+        "-Dproxy.internal.blitz.path=mu-test-blitz.txt",
+      )
+
+      proxy.isBlitzRequest("other-path").shouldBeFalse()
+    }
+
+    // ==================== metrics Tests ====================
+
+    test("metrics should not invoke lambda when metrics disabled") {
+      val proxy = createTestProxy()
+
+      var invoked = false
+      proxy.metrics { invoked = true }
+
+      invoked.shouldBeFalse()
+    }
+
+    test("metrics should invoke lambda when metrics enabled") {
+      val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.isMetricsEnabled } returns true
+      every { mockProxy.metrics } returns mockMetrics
+      every { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers {
+        val block = firstArg<ProxyMetrics.() -> Unit>()
+        block.invoke(mockMetrics)
+      }
+
+      var invoked = false
+      mockProxy.metrics { invoked = true }
+
+      invoked.shouldBeTrue()
+    }
+
+    // ==================== logActivity Tests ====================
+
+    test("logActivity should add timestamped entry without error") {
+      val proxy = createTestProxy()
+
+      // logActivity adds to a private EvictingQueue; verify it doesn't throw
+      proxy.logActivity("test request to /metrics")
+      proxy.logActivity("another request to /health")
+    }
+
+    // ==================== toString Tests ====================
+
+    test("toString should contain proxyPort and service info") {
+      val proxy = createTestProxy()
+
+      val str = proxy.toString()
+
+      str shouldContain "proxyPort"
+      str shouldContain "adminService"
+      str shouldContain "metricsService"
+    }
   }
 }

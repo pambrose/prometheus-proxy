@@ -3,6 +3,7 @@
 package io.prometheus.agent
 
 import com.typesafe.config.ConfigFactory
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
@@ -22,11 +23,9 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
 import io.ktor.server.cio.CIO as ServerCIO
 
-class AgentHttpServiceTest {
+class AgentHttpServiceTest : FunSpec() {
   private fun createMockAgent(): Agent {
     val mockOptions = mockk<AgentOptions>(relaxed = true)
     every { mockOptions.maxCacheSize } returns 100
@@ -45,105 +44,6 @@ class AgentHttpServiceTest {
     every { mockAgent.isMetricsEnabled } returns false
     return mockAgent
   }
-
-  // ==================== Invalid Path Tests ====================
-
-  @Test
-  fun `fetchScrapeUrl should return error results for invalid path`(): Unit =
-    runBlocking {
-      val mockAgent = createMockAgent()
-      // Return null for unknown path
-      every { mockAgent.pathManager[any()] } returns null
-
-      val service = AgentHttpService(mockAgent)
-      val request = scrapeRequest {
-        agentId = "agent-1"
-        scrapeId = 1L
-        path = "/nonexistent"
-        accept = ""
-        debugEnabled = false
-        encodedQueryParams = ""
-        authHeader = ""
-      }
-
-      val results = service.fetchScrapeUrl(request)
-
-      results.srAgentId shouldBe "agent-1"
-      results.srScrapeId shouldBe 1L
-      results.srValidResponse.shouldBeFalse()
-    }
-
-  @Test
-  fun `fetchScrapeUrl should set debug info for invalid path when debug enabled`(): Unit =
-    runBlocking {
-      val mockAgent = createMockAgent()
-      every { mockAgent.pathManager[any()] } returns null
-
-      val service = AgentHttpService(mockAgent)
-      val request = scrapeRequest {
-        agentId = "agent-1"
-        scrapeId = 2L
-        path = "/bad/path"
-        accept = ""
-        debugEnabled = true
-        encodedQueryParams = ""
-        authHeader = ""
-      }
-
-      val results = service.fetchScrapeUrl(request)
-
-      results.srUrl shouldBe "None"
-      results.srFailureReason shouldContain "Invalid path"
-    }
-
-  @Test
-  fun `fetchScrapeUrl should not set debug info for invalid path when debug disabled`(): Unit =
-    runBlocking {
-      val mockAgent = createMockAgent()
-      every { mockAgent.pathManager[any()] } returns null
-
-      val service = AgentHttpService(mockAgent)
-      val request = scrapeRequest {
-        agentId = "agent-1"
-        scrapeId = 3L
-        path = "/bad/path"
-        accept = ""
-        debugEnabled = false
-        encodedQueryParams = ""
-        authHeader = ""
-      }
-
-      val results = service.fetchScrapeUrl(request)
-
-      results.srUrl shouldBe ""
-      results.srFailureReason shouldBe ""
-    }
-
-  // ==================== Close Tests ====================
-
-  @Test
-  fun `close should close httpClientCache`() =
-    runBlocking {
-      val mockAgent = createMockAgent()
-      val service = AgentHttpService(mockAgent)
-
-      // Should not throw
-      service.close()
-    }
-
-  // ==================== HttpClientCache Tests ====================
-
-  @Test
-  fun `httpClientCache should be initialized from agent options`() =
-    runBlocking {
-      val mockAgent = createMockAgent()
-      val service = AgentHttpService(mockAgent)
-
-      service.httpClientCache.shouldNotBeNull()
-      service.close()
-    }
-
-  // ==================== Valid Path Fetching Tests ====================
 
   private fun createMockAgentWithPaths(): Agent {
     val mockOptions = mockk<AgentOptions>(relaxed = true)
@@ -191,9 +91,97 @@ class AgentHttpServiceTest {
     return mockAgent
   }
 
-  @Test
-  fun `fetchScrapeUrl should fetch content from valid path`(): Unit =
-    runBlocking {
+  init {
+    // ==================== Invalid Path Tests ====================
+
+    test("fetchScrapeUrl should return error results for invalid path") {
+      val mockAgent = createMockAgent()
+      // Return null for unknown path
+      every { mockAgent.pathManager[any()] } returns null
+
+      val service = AgentHttpService(mockAgent)
+      val request = scrapeRequest {
+        agentId = "agent-1"
+        scrapeId = 1L
+        path = "/nonexistent"
+        accept = ""
+        debugEnabled = false
+        encodedQueryParams = ""
+        authHeader = ""
+      }
+
+      val results = service.fetchScrapeUrl(request)
+
+      results.srAgentId shouldBe "agent-1"
+      results.srScrapeId shouldBe 1L
+      results.srValidResponse.shouldBeFalse()
+    }
+
+    test("fetchScrapeUrl should set debug info for invalid path when debug enabled") {
+      val mockAgent = createMockAgent()
+      every { mockAgent.pathManager[any()] } returns null
+
+      val service = AgentHttpService(mockAgent)
+      val request = scrapeRequest {
+        agentId = "agent-1"
+        scrapeId = 2L
+        path = "/bad/path"
+        accept = ""
+        debugEnabled = true
+        encodedQueryParams = ""
+        authHeader = ""
+      }
+
+      val results = service.fetchScrapeUrl(request)
+
+      results.srUrl shouldBe "None"
+      results.srFailureReason shouldContain "Invalid path"
+    }
+
+    test("fetchScrapeUrl should not set debug info for invalid path when debug disabled") {
+      val mockAgent = createMockAgent()
+      every { mockAgent.pathManager[any()] } returns null
+
+      val service = AgentHttpService(mockAgent)
+      val request = scrapeRequest {
+        agentId = "agent-1"
+        scrapeId = 3L
+        path = "/bad/path"
+        accept = ""
+        debugEnabled = false
+        encodedQueryParams = ""
+        authHeader = ""
+      }
+
+      val results = service.fetchScrapeUrl(request)
+
+      results.srUrl shouldBe ""
+      results.srFailureReason shouldBe ""
+    }
+
+    // ==================== Close Tests ====================
+
+    test("close should close httpClientCache") {
+      val mockAgent = createMockAgent()
+      val service = AgentHttpService(mockAgent)
+
+      // Should not throw
+      service.close()
+    }
+
+    // ==================== HttpClientCache Tests ====================
+
+    test("httpClientCache should be initialized from agent options") {
+      val mockAgent = createMockAgent()
+      val service = AgentHttpService(mockAgent)
+
+      service.httpClientCache.shouldNotBeNull()
+      service.close()
+    }
+
+    // ==================== Valid Path Fetching Tests ====================
+
+    test("fetchScrapeUrl should fetch content from valid path") {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
@@ -234,9 +222,7 @@ class AgentHttpServiceTest {
       }
     }
 
-  @Test
-  fun `fetchScrapeUrl should handle connection refused`(): Unit =
-    runBlocking {
+    test("fetchScrapeUrl should handle connection refused") {
       val mockAgent = createMockAgentWithPaths()
       val service = AgentHttpService(mockAgent)
 
@@ -261,9 +247,7 @@ class AgentHttpServiceTest {
       service.close()
     }
 
-  @Test
-  fun `fetchScrapeUrl should handle 404 response`(): Unit =
-    runBlocking {
+    test("fetchScrapeUrl should handle 404 response") {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           // No route for /metrics, Ktor will return 404
@@ -298,9 +282,7 @@ class AgentHttpServiceTest {
       }
     }
 
-  @Test
-  fun `fetchScrapeUrl should set debug info when debug enabled and request fails`(): Unit =
-    runBlocking {
+    test("fetchScrapeUrl should set debug info when debug enabled and request fails") {
       val mockAgent = createMockAgentWithPaths()
       val service = AgentHttpService(mockAgent)
 
@@ -326,9 +308,7 @@ class AgentHttpServiceTest {
       service.close()
     }
 
-  @Test
-  fun `fetchScrapeUrl should include query params in URL`(): Unit =
-    runBlocking {
+    test("fetchScrapeUrl should include query params in URL") {
       var receivedUrl = ""
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -368,11 +348,9 @@ class AgentHttpServiceTest {
       }
     }
 
-  // ==================== Gzip Compression Tests ====================
+    // ==================== Gzip Compression Tests ====================
 
-  @Test
-  fun `fetchScrapeUrl should gzip content larger than minGzipSizeBytes`(): Unit =
-    runBlocking {
+    test("fetchScrapeUrl should gzip content larger than minGzipSizeBytes") {
       val largeContent = "a".repeat(2000)
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -415,9 +393,7 @@ class AgentHttpServiceTest {
       }
     }
 
-  @Test
-  fun `fetchScrapeUrl should not gzip content smaller than minGzipSizeBytes`(): Unit =
-    runBlocking {
+    test("fetchScrapeUrl should not gzip content smaller than minGzipSizeBytes") {
       val smallContent = "small"
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -458,11 +434,9 @@ class AgentHttpServiceTest {
       }
     }
 
-  // ==================== Header Forwarding Tests ====================
+    // ==================== Header Forwarding Tests ====================
 
-  @Test
-  fun `fetchScrapeUrl should forward accept header to target`(): Unit =
-    runBlocking {
+    test("fetchScrapeUrl should forward accept header to target") {
       var receivedAccept = ""
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -502,9 +476,7 @@ class AgentHttpServiceTest {
       }
     }
 
-  @Test
-  fun `fetchScrapeUrl should forward authorization header to target`(): Unit =
-    runBlocking {
+    test("fetchScrapeUrl should forward authorization header to target") {
       var receivedAuth = ""
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -544,11 +516,9 @@ class AgentHttpServiceTest {
       }
     }
 
-  // ==================== Timeout Tests ====================
+    // ==================== Timeout Tests ====================
 
-  @Test
-  fun `fetchScrapeUrl should handle timeout gracefully`(): Unit =
-    runBlocking {
+    test("fetchScrapeUrl should handle timeout gracefully") {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
@@ -591,11 +561,9 @@ class AgentHttpServiceTest {
       }
     }
 
-  // ==================== Counter Message Tests ====================
+    // ==================== Counter Message Tests ====================
 
-  @Test
-  fun `fetchScrapeUrl should set success counter message on successful fetch`(): Unit =
-    runBlocking {
+    test("fetchScrapeUrl should set success counter message on successful fetch") {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
@@ -632,4 +600,5 @@ class AgentHttpServiceTest {
         server.stop(0, 0)
       }
     }
+  }
 }

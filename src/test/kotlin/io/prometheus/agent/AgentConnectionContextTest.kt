@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -25,15 +26,12 @@ import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class AgentConnectionContextTest {
-  @Test
-  fun `close should disconnect context`(): Unit =
-    runBlocking {
+class AgentConnectionContextTest : FunSpec() {
+  init {
+    test("close should disconnect context") {
       val context = AgentConnectionContext()
       context.connected.shouldBeTrue()
 
@@ -42,9 +40,7 @@ class AgentConnectionContextTest {
       context.connected.shouldBeFalse()
     }
 
-  @Test
-  fun `close should be idempotent`(): Unit =
-    runBlocking {
+    test("close should be idempotent") {
       val context = AgentConnectionContext()
 
       context.close()
@@ -55,15 +51,13 @@ class AgentConnectionContextTest {
       context.connected.shouldBeFalse()
     }
 
-  // Bug #7: The old code used runBlocking { accessMutex.withLock { ... } } in close().
-  // When called from invokeOnCompletion (which runs on the completing coroutine's thread),
-  // runBlocking would block the thread. If the coroutine Mutex was held by another coroutine
-  // on the same Dispatchers.IO thread, deadlock could occur.
-  // The fix replaces the coroutine Mutex + runBlocking with a plain synchronized block.
-  // This test verifies close() completes promptly when called from invokeOnCompletion.
-  @Test
-  fun `close should not deadlock when called from invokeOnCompletion`(): Unit =
-    runBlocking {
+    // Bug #7: The old code used runBlocking { accessMutex.withLock { ... } } in close().
+    // When called from invokeOnCompletion (which runs on the completing coroutine's thread),
+    // runBlocking would block the thread. If the coroutine Mutex was held by another coroutine
+    // on the same Dispatchers.IO thread, deadlock could occur.
+    // The fix replaces the coroutine Mutex + runBlocking with a plain synchronized block.
+    // This test verifies close() completes promptly when called from invokeOnCompletion.
+    test("close should not deadlock when called from invokeOnCompletion") {
       val context = AgentConnectionContext()
       val completedLatch = CountDownLatch(1)
 
@@ -84,11 +78,9 @@ class AgentConnectionContextTest {
       context.connected.shouldBeFalse()
     }
 
-  // Verifies that concurrent close() calls from multiple threads don't cause issues.
-  // This exercises the synchronized block under contention.
-  @Test
-  fun `concurrent close calls should not throw or deadlock`(): Unit =
-    runBlocking {
+    // Verifies that concurrent close() calls from multiple threads don't cause issues.
+    // This exercises the synchronized block under contention.
+    test("concurrent close calls should not throw or deadlock") {
       val context = AgentConnectionContext()
       val threadCount = 10
       val startLatch = CountDownLatch(1)
@@ -111,11 +103,9 @@ class AgentConnectionContextTest {
       context.connected.shouldBeFalse()
     }
 
-  // M8: scrapeResultsChannel uses close() instead of cancel(), so buffered results
-  // can still be drained by the consumer after the context is closed.
-  @Test
-  fun `buffered scrape results should be drainable after close`(): Unit =
-    runBlocking {
+    // M8: scrapeResultsChannel uses close() instead of cancel(), so buffered results
+    // can still be drained by the consumer after the context is closed.
+    test("buffered scrape results should be drainable after close") {
       val context = AgentConnectionContext()
 
       // Buffer some results before closing
@@ -150,9 +140,7 @@ class AgentConnectionContextTest {
       received4.isClosed.shouldBeTrue()
     }
 
-  @Test
-  fun `empty scrape results channel should close cleanly`(): Unit =
-    runBlocking {
+    test("empty scrape results channel should close cleanly") {
       val context = AgentConnectionContext()
 
       // Close with no buffered results
@@ -163,4 +151,5 @@ class AgentConnectionContextTest {
       val result = channel.receiveCatching()
       result.isClosed.shouldBeTrue()
     }
+  }
 }

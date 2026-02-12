@@ -2,6 +2,7 @@
 
 package io.prometheus.proxy
 
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.longs.shouldBeLessThan
@@ -16,81 +17,72 @@ import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
-class AgentContextTest {
-  // ==================== Creation Tests ====================
+class AgentContextTest : FunSpec() {
+  init {
+    // ==================== Creation Tests ====================
 
-  @Test
-  fun `should generate unique agentIds`() {
-    val context1 = AgentContext("remote1")
-    val context2 = AgentContext("remote2")
+    test("should generate unique agentIds") {
+      val context1 = AgentContext("remote1")
+      val context2 = AgentContext("remote2")
 
-    context1.agentId shouldNotBe context2.agentId
-  }
+      context1.agentId shouldNotBe context2.agentId
+    }
 
-  @Test
-  fun `should be valid after creation`() {
-    val context = AgentContext("remote-addr")
+    test("should be valid after creation") {
+      val context = AgentContext("remote-addr")
 
-    context.isValid().shouldBeTrue()
-    context.isNotValid().shouldBeFalse()
-  }
+      context.isValid().shouldBeTrue()
+      context.isNotValid().shouldBeFalse()
+    }
 
-  @Test
-  fun `should have default property values`() {
-    val context = AgentContext("remote-addr")
+    test("should have default property values") {
+      val context = AgentContext("remote-addr")
 
-    context.hostName shouldBe "Unassigned"
-    context.agentName shouldBe "Unassigned"
-    context.consolidated shouldBe false
-  }
+      context.hostName shouldBe "Unassigned"
+      context.agentName shouldBe "Unassigned"
+      context.consolidated shouldBe false
+    }
 
-  @Test
-  fun `should have zero scrapeRequestBacklogSize initially`() {
-    val context = AgentContext("remote-addr")
+    test("should have zero scrapeRequestBacklogSize initially") {
+      val context = AgentContext("remote-addr")
 
-    context.scrapeRequestBacklogSize shouldBe 0
-  }
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
 
-  // ==================== Property Assignment Tests ====================
+    // ==================== Property Assignment Tests ====================
 
-  @Test
-  fun `assignProperties should update agent fields`() {
-    val context = AgentContext("remote-addr")
-    val request = mockk<RegisterAgentRequest>()
-    every { request.launchId } returns "launch-456"
-    every { request.agentName } returns "my-agent"
-    every { request.hostName } returns "agent-host"
-    every { request.consolidated } returns true
+    test("assignProperties should update agent fields") {
+      val context = AgentContext("remote-addr")
+      val request = mockk<RegisterAgentRequest>()
+      every { request.launchId } returns "launch-456"
+      every { request.agentName } returns "my-agent"
+      every { request.hostName } returns "agent-host"
+      every { request.consolidated } returns true
 
-    context.assignProperties(request)
+      context.assignProperties(request)
 
-    context.agentName shouldBe "my-agent"
-    context.hostName shouldBe "agent-host"
-    context.consolidated shouldBe true
-  }
+      context.agentName shouldBe "my-agent"
+      context.hostName shouldBe "agent-host"
+      context.consolidated shouldBe true
+    }
 
-  // ==================== Invalidation Tests ====================
+    // ==================== Invalidation Tests ====================
 
-  @Test
-  fun `invalidate should mark context as not valid`() {
-    val context = AgentContext("remote-addr")
+    test("invalidate should mark context as not valid") {
+      val context = AgentContext("remote-addr")
 
-    context.invalidate()
+      context.invalidate()
 
-    context.isValid().shouldBeFalse()
-    context.isNotValid().shouldBeTrue()
-  }
+      context.isValid().shouldBeFalse()
+      context.isNotValid().shouldBeTrue()
+    }
 
-  // M3: invalidate() now drains buffered scrape requests and calls closeChannel() on each
-  // so HTTP handlers waiting on awaitCompleted() are notified immediately instead of
-  // waiting for the full scrape timeout to expire.
-  @Test
-  fun `invalidate should close pending scrape request wrappers`(): Unit =
-    runBlocking {
+    // M3: invalidate() now drains buffered scrape requests and calls closeChannel() on each
+    // so HTTP handlers waiting on awaitCompleted() are notified immediately instead of
+    // waiting for the full scrape timeout to expire.
+    test("invalidate should close pending scrape request wrappers") {
       val context = AgentContext("remote-addr")
       val wrapper1 = mockk<ScrapeRequestWrapper>(relaxed = true)
       val wrapper2 = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -110,9 +102,7 @@ class AgentContextTest {
       verify(exactly = 1) { wrapper3.closeChannel() }
     }
 
-  @Test
-  fun `invalidate should unblock awaitCompleted on buffered wrappers`(): Unit =
-    runBlocking {
+    test("invalidate should unblock awaitCompleted on buffered wrappers") {
       val context = AgentContext("remote-addr")
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.isMetricsEnabled } returns false
@@ -141,21 +131,18 @@ class AgentContextTest {
       elapsed shouldBeLessThan 5000L
     }
 
-  @Test
-  fun `invalidate with no buffered requests should not fail`() {
-    val context = AgentContext("remote-addr")
+    test("invalidate with no buffered requests should not fail") {
+      val context = AgentContext("remote-addr")
 
-    // Should not throw when channel is empty
-    context.invalidate()
+      // Should not throw when channel is empty
+      context.invalidate()
 
-    context.isValid().shouldBeFalse()
-  }
+      context.isValid().shouldBeFalse()
+    }
 
-  // ==================== Channel Tests ====================
+    // ==================== Channel Tests ====================
 
-  @Test
-  fun `writeScrapeRequest should increment backlog size`(): Unit =
-    runBlocking {
+    test("writeScrapeRequest should increment backlog size") {
       val context = AgentContext("remote-addr")
       val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -164,9 +151,7 @@ class AgentContextTest {
       context.scrapeRequestBacklogSize shouldBe 1
     }
 
-  @Test
-  fun `readScrapeRequest should decrement backlog size`(): Unit =
-    runBlocking {
+    test("readScrapeRequest should decrement backlog size") {
       val context = AgentContext("remote-addr")
       val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -178,9 +163,7 @@ class AgentContextTest {
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-  @Test
-  fun `readScrapeRequest should return null after invalidation`(): Unit =
-    runBlocking {
+    test("readScrapeRequest should return null after invalidation") {
       val context = AgentContext("remote-addr")
       context.invalidate()
 
@@ -188,9 +171,7 @@ class AgentContextTest {
       result.shouldBeNull()
     }
 
-  @Test
-  fun `multiple write and read operations should track backlog correctly`(): Unit =
-    runBlocking {
+    test("multiple write and read operations should track backlog correctly") {
       val context = AgentContext("remote-addr")
 
       repeat(3) {
@@ -205,11 +186,9 @@ class AgentContextTest {
       context.scrapeRequestBacklogSize shouldBe 1
     }
 
-  // ==================== Backlog Counter Consistency Tests ====================
+    // ==================== Backlog Counter Consistency Tests ====================
 
-  @Test
-  fun `invalidate should decrement backlog size for drained items`(): Unit =
-    runBlocking {
+    test("invalidate should decrement backlog size for drained items") {
       val context = AgentContext("remote-addr")
 
       context.writeScrapeRequest(mockk(relaxed = true))
@@ -223,9 +202,7 @@ class AgentContextTest {
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-  @Test
-  fun `writeScrapeRequest to closed channel should not leak backlog count`(): Unit =
-    runBlocking {
+    test("writeScrapeRequest to closed channel should not leak backlog count") {
       val context = AgentContext("remote-addr")
 
       // Invalidate first so channel is closed
@@ -245,9 +222,7 @@ class AgentContextTest {
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-  @Test
-  fun `invalidate with mixed read and unread items should have correct backlog`(): Unit =
-    runBlocking {
+    test("invalidate with mixed read and unread items should have correct backlog") {
       val context = AgentContext("remote-addr")
 
       // Write 5 items
@@ -264,127 +239,117 @@ class AgentContextTest {
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-  // ==================== Activity Time Tests ====================
+    // ==================== Activity Time Tests ====================
 
-  @Test
-  fun `markActivityTime should update inactivity duration`() {
-    val context = AgentContext("remote-addr")
+    test("markActivityTime should update inactivity duration") {
+      val context = AgentContext("remote-addr")
 
-    Thread.sleep(50)
-    val durationBefore = context.inactivityDuration
+      Thread.sleep(50)
+      val durationBefore = context.inactivityDuration
 
-    context.markActivityTime(true)
-    val durationAfter = context.inactivityDuration
+      context.markActivityTime(true)
+      val durationAfter = context.inactivityDuration
 
-    durationAfter shouldNotBe durationBefore
-  }
+      durationAfter shouldNotBe durationBefore
+    }
 
-  // ==================== Equality Tests ====================
+    // ==================== Equality Tests ====================
 
-  @Test
-  fun `equals should be based on agentId`() {
-    val context1 = AgentContext("remote1")
-    val context2 = AgentContext("remote2")
+    test("equals should be based on agentId") {
+      val context1 = AgentContext("remote1")
+      val context2 = AgentContext("remote2")
 
-    context1 shouldNotBe context2
-    context1 shouldBe context1
-  }
+      context1 shouldNotBe context2
+      context1 shouldBe context1
+    }
 
-  @Test
-  fun `hashCode should be based on agentId`() {
-    val context = AgentContext("remote-addr")
+    test("hashCode should be based on agentId") {
+      val context = AgentContext("remote-addr")
 
-    context.hashCode() shouldBe context.agentId.hashCode()
-  }
+      context.hashCode() shouldBe context.agentId.hashCode()
+    }
 
-  // ==================== toString Tests ====================
+    // ==================== toString Tests ====================
 
-  @Test
-  fun `toString should include key fields`() {
-    val context = AgentContext("10.0.0.1")
-    val str = context.toString()
+    test("toString should include key fields") {
+      val context = AgentContext("10.0.0.1")
+      val str = context.toString()
 
-    str shouldContain "agentId"
-    str shouldContain "remoteAddr"
-    str shouldContain "10.0.0.1"
-  }
+      str shouldContain "agentId"
+      str shouldContain "remoteAddr"
+      str shouldContain "10.0.0.1"
+    }
 
-  @Test
-  fun `desc should indicate consolidated mode`() {
-    val context = AgentContext("remote-addr")
-    val request = mockk<RegisterAgentRequest>()
-    every { request.launchId } returns "launch-1"
-    every { request.agentName } returns "agent"
-    every { request.hostName } returns "host"
-    every { request.consolidated } returns true
+    test("desc should indicate consolidated mode") {
+      val context = AgentContext("remote-addr")
+      val request = mockk<RegisterAgentRequest>()
+      every { request.launchId } returns "launch-1"
+      every { request.agentName } returns "agent"
+      every { request.hostName } returns "host"
+      every { request.consolidated } returns true
 
-    context.assignProperties(request)
+      context.assignProperties(request)
 
-    context.desc shouldContain "consolidated"
-  }
+      context.desc shouldContain "consolidated"
+    }
 
-  @Test
-  fun `desc should be empty for non-consolidated agent`() {
-    val context = AgentContext("remote-addr")
+    test("desc should be empty for non-consolidated agent") {
+      val context = AgentContext("remote-addr")
 
-    context.desc shouldBe ""
-  }
+      context.desc shouldBe ""
+    }
 
-  // ==================== markActivityTime Branch Tests ====================
+    // ==================== markActivityTime Branch Tests ====================
 
-  @Test
-  fun `markActivityTime with isRequest false should update inactivity but not request time`() {
-    val context = AgentContext("remote-addr")
+    test("markActivityTime with isRequest false should update inactivity but not request time") {
+      val context = AgentContext("remote-addr")
 
-    Thread.sleep(50)
-    val inactivityBefore = context.inactivityDuration
+      Thread.sleep(50)
+      val inactivityBefore = context.inactivityDuration
 
-    context.markActivityTime(false)
-    val inactivityAfter = context.inactivityDuration
+      context.markActivityTime(false)
+      val inactivityAfter = context.inactivityDuration
 
-    // Inactivity duration should have reset (become shorter)
-    (inactivityAfter < inactivityBefore) shouldBe true
-  }
+      // Inactivity duration should have reset (become shorter)
+      (inactivityAfter < inactivityBefore) shouldBe true
+    }
 
-  // ==================== Equality Edge Case Tests ====================
+    // ==================== Equality Edge Case Tests ====================
 
-  @Test
-  @Suppress("EqualsNullCall")
-  fun `equals with null should return false`() {
-    val context = AgentContext("remote-addr")
+    @Suppress("EqualsNullCall")
+    test("equals with null should return false") {
+      val context = AgentContext("remote-addr")
 
-    (context.equals(null)) shouldBe false
-    (context == null) shouldBe false
-  }
+      (context.equals(null)) shouldBe false
+      (context == null) shouldBe false
+    }
 
-  @Test
-  fun `equals with different type should return false`() {
-    val context = AgentContext("remote-addr")
+    test("equals with different type should return false") {
+      val context = AgentContext("remote-addr")
 
-    (context.equals("a string")) shouldBe false
-  }
+      (context.equals("a string")) shouldBe false
+    }
 
-  @Test
-  fun `equals with same instance should return true`() {
-    val context = AgentContext("remote-addr")
+    test("equals with same instance should return true") {
+      val context = AgentContext("remote-addr")
 
-    (context == context) shouldBe true
-  }
+      (context == context) shouldBe true
+    }
 
-  // L6: markActivityTime should use a single clock.markNow() so both timestamps
-  // are consistent. Before the fix, two separate markNow() calls could drift.
-  @Test
-  fun `markActivityTime with isRequest true should keep both timestamps consistent`() {
-    val context = AgentContext("remote-addr")
+    // L6: markActivityTime should use a single clock.markNow() so both timestamps
+    // are consistent. Before the fix, two separate markNow() calls could drift.
+    test("markActivityTime with isRequest true should keep both timestamps consistent") {
+      val context = AgentContext("remote-addr")
 
-    Thread.sleep(100)
-    context.markActivityTime(true)
+      Thread.sleep(100)
+      context.markActivityTime(true)
 
-    // Both inactivityDuration and lastRequestDuration (accessed via toString)
-    // should be very close to zero since we just marked activity.
-    // The key invariant: inactivityDuration should not be significantly different
-    // from what lastRequestDuration would be, since both were set from the same markNow().
-    val inactivity = context.inactivityDuration
-    inactivity.inWholeMilliseconds shouldBeLessThan 50L
+      // Both inactivityDuration and lastRequestDuration (accessed via toString)
+      // should be very close to zero since we just marked activity.
+      // The key invariant: inactivityDuration should not be significantly different
+      // from what lastRequestDuration would be, since both were set from the same markNow().
+      val inactivity = context.inactivityDuration
+      inactivity.inWholeMilliseconds shouldBeLessThan 50L
+    }
   }
 }
