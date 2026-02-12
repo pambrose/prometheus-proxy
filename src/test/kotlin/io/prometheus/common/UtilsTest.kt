@@ -20,6 +20,7 @@ package io.prometheus.common
 
 import io.grpc.Status
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -34,414 +35,367 @@ import io.prometheus.common.Utils.toJsonElement
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import org.junit.jupiter.api.Test
 
-class UtilsTest {
-  // ==================== decodeParams Tests ====================
-
-  @Test
-  fun `decodeParams should return empty string for blank input`() {
-    decodeParams("") shouldBe ""
-    decodeParams("   ") shouldBe ""
-  }
-
-  @Test
-  fun `decodeParams should decode URL-encoded parameters`() {
-    val encoded = "foo%3Dbar%26baz%3Dqux"
-    val result = decodeParams(encoded)
-
-    result shouldBe "?foo=bar&baz=qux"
-  }
-
-  @Test
-  fun `decodeParams should add question mark prefix`() {
-    val result = decodeParams("simple")
-
-    result shouldBe "?simple"
-  }
-
-  @Test
-  fun `decodeParams should handle special characters`() {
-    val encoded = "name%3DJohn%20Doe%26city%3DNew%20York"
-    val result = decodeParams(encoded)
-
-    result shouldBe "?name=John Doe&city=New York"
-  }
-
-  @Test
-  fun `decodeParams should handle already decoded strings`() {
-    val result = decodeParams("key=value")
-
-    result shouldBe "?key=value"
-  }
-
-  // ==================== lowercase Tests ====================
-
-  @Test
-  fun `lowercase should convert string to lowercase`() {
-    "HELLO".lowercase() shouldBe "hello"
-    "Hello World".lowercase() shouldBe "hello world"
-    "MixedCase123".lowercase() shouldBe "mixedcase123"
-  }
-
-  @Test
-  fun `lowercase should handle empty string`() {
-    "".lowercase() shouldBe ""
-  }
-
-  @Test
-  fun `lowercase should handle already lowercase string`() {
-    "already lowercase".lowercase() shouldBe "already lowercase"
-  }
-
-  // ==================== defaultEmptyJsonObject Tests ====================
-
-  @Test
-  fun `defaultEmptyJsonObject should return original string if not empty`() {
-    """{"key":"value"}""".defaultEmptyJsonObject() shouldBe """{"key":"value"}"""
-    "some content".defaultEmptyJsonObject() shouldBe "some content"
-  }
-
-  @Test
-  fun `defaultEmptyJsonObject should return empty JSON object for empty string`() {
-    "".defaultEmptyJsonObject() shouldBe "{}"
-  }
-
-  // ==================== toJsonElement Tests ====================
-
-  @Test
-  fun `toJsonElement should parse valid JSON object`() {
-    val json = """{"key":"value"}"""
-    val element = json.toJsonElement()
-
-    element.shouldBeInstanceOf<JsonObject>()
-  }
-
-  @Test
-  fun `toJsonElement should parse empty JSON object`() {
-    val json = "{}"
-    val element = json.toJsonElement()
-
-    element.shouldBeInstanceOf<JsonObject>()
-  }
-
-  @Test
-  fun `toJsonElement should throw for invalid JSON`() {
-    shouldThrow<Exception> {
-      "not valid json".toJsonElement()
-    }
-  }
-
-  // ==================== setLogLevel Tests ====================
-
-  @Test
-  fun `setLogLevel should accept valid log levels`() {
-    // These should not throw
-    setLogLevel("test", "trace")
-    setLogLevel("test", "debug")
-    setLogLevel("test", "info")
-    setLogLevel("test", "warn")
-    setLogLevel("test", "error")
-    setLogLevel("test", "off")
-  }
-
-  @Test
-  fun `setLogLevel should be case insensitive`() {
-    // These should not throw
-    setLogLevel("test", "TRACE")
-    setLogLevel("test", "DEBUG")
-    setLogLevel("test", "INFO")
-    setLogLevel("test", "WARN")
-    setLogLevel("test", "ERROR")
-    setLogLevel("test", "OFF")
-  }
-
-  @Test
-  fun `setLogLevel should throw for invalid log level`() {
-    val exception = shouldThrow<IllegalArgumentException> {
-      setLogLevel("test", "invalid")
-    }
-
-    exception.message shouldContain "Invalid"
-    exception.message shouldContain "log level"
-  }
-
-  // ==================== getVersionDesc Tests ====================
-
-  @Test
-  fun `getVersionDesc should return non-empty string`() {
-    val versionDesc = Utils.getVersionDesc(false)
-
-    versionDesc.shouldNotBeEmpty()
-  }
-
-  @Test
-  fun `getVersionDesc should return JSON when requested`() {
-    val versionDesc = Utils.getVersionDesc(true)
-
-    versionDesc.shouldNotBeEmpty()
-    // JSON output should contain braces or JSON structure
-  }
-
-  // Bug #19: VersionValidator was removed — version printing now happens after parsing
-  // in BaseOptions, not inside a JCommander validator that calls exitProcess.
-  @Test
-  fun `getVersionDesc should be callable without triggering exitProcess`() {
-    // Before the fix, calling VersionValidator.validate() would call exitProcess(0).
-    // Now getVersionDesc is a standalone utility — calling it must not exit the JVM.
-    val plainDesc = Utils.getVersionDesc(false)
-    val jsonDesc = Utils.getVersionDesc(true)
-
-    plainDesc.shouldNotBeEmpty()
-    jsonDesc.shouldNotBeEmpty()
-  }
-
-  // ==================== parseHostPort Tests ====================
-
-  @Test
-  fun `parseHostPort should parse simple host and port`() {
-    val result = parseHostPort("localhost:8080", 50051)
-
-    result shouldBe HostPort("localhost", 8080)
-  }
-
-  @Test
-  fun `parseHostPort should use default port when no port specified`() {
-    val result = parseHostPort("example.com", 50051)
-
-    result shouldBe HostPort("example.com", 50051)
-  }
-
-  @Test
-  fun `parseHostPort should handle bracketed IPv6 with port`() {
-    val result = parseHostPort("[::1]:50051", 9090)
-
-    result shouldBe HostPort("[::1]", 50051)
-  }
-
-  @Test
-  fun `parseHostPort should handle bracketed IPv6 without port`() {
-    val result = parseHostPort("[::1]", 50051)
-
-    result shouldBe HostPort("[::1]", 50051)
-  }
-
-  @Test
-  fun `parseHostPort should handle unbracketed IPv6 without port`() {
-    val result = parseHostPort("::1", 50051)
-
-    result shouldBe HostPort("::1", 50051)
-  }
-
-  @Test
-  fun `parseHostPort should handle full IPv6 address without brackets`() {
-    val result = parseHostPort("2001:db8::1", 50051)
-
-    result shouldBe HostPort("2001:db8::1", 50051)
-  }
-
-  @Test
-  fun `parseHostPort should handle IPv4 address with port`() {
-    val result = parseHostPort("192.168.1.100:5000", 50051)
-
-    result shouldBe HostPort("192.168.1.100", 5000)
-  }
-
-  @Test
-  fun `parseHostPort should handle IPv4 address without port`() {
-    val result = parseHostPort("192.168.1.100", 50051)
-
-    result shouldBe HostPort("192.168.1.100", 50051)
-  }
-
-  @Test
-  fun `parseHostPort should handle hostname with custom port`() {
-    val result = parseHostPort("proxy.example.org:9090", 50051)
-
-    result shouldBe HostPort("proxy.example.org", 9090)
-  }
-
-  @Test
-  fun `parseHostPort should throw for malformed IPv6 with missing close bracket`() {
-    val exception = shouldThrow<IllegalArgumentException> {
-      parseHostPort("[::1", 50051)
-    }
-    exception.message shouldContain "missing closing bracket"
-  }
-
-  @Test
-  fun `parseHostPort should throw for malformed IPv6 with content after unclosed bracket`() {
-    val exception = shouldThrow<IllegalArgumentException> {
-      parseHostPort("[2001:db8::1", 50051)
-    }
-    exception.message shouldContain "missing closing bracket"
-  }
-
-  @Test
-  fun `parseHostPort should handle bracketed full IPv6 with port`() {
-    val result = parseHostPort("[2001:db8::1]:8443", 50051)
-
-    result shouldBe HostPort("[2001:db8::1]", 8443)
-  }
-
-  // M4: parseHostPort now validates port values with descriptive error messages
-  // instead of throwing raw NumberFormatException.
-  @Test
-  fun `parseHostPort should throw IllegalArgumentException for non-numeric port`() {
-    val exception = shouldThrow<IllegalArgumentException> {
-      parseHostPort("host:abc", 50051)
-    }
-    exception.message shouldContain "host:abc"
-    exception.message shouldContain "abc"
-  }
-
-  @Test
-  fun `parseHostPort should throw IllegalArgumentException for port above 65535`() {
-    val exception = shouldThrow<IllegalArgumentException> {
-      parseHostPort("host:99999", 50051)
-    }
-    exception.message shouldContain "host:99999"
-  }
-
-  @Test
-  fun `parseHostPort should throw IllegalArgumentException for negative port`() {
-    val exception = shouldThrow<IllegalArgumentException> {
-      parseHostPort("host:-1", 50051)
-    }
-    exception.message shouldContain "host:-1"
-  }
-
-  @Test
-  fun `parseHostPort should throw IllegalArgumentException for non-numeric port in bracketed IPv6`() {
-    val exception = shouldThrow<IllegalArgumentException> {
-      parseHostPort("[::1]:abc", 50051)
-    }
-    exception.message shouldContain "abc"
-  }
-
-  @Test
-  fun `parseHostPort should throw IllegalArgumentException for out-of-range port in bracketed IPv6`() {
-    val exception = shouldThrow<IllegalArgumentException> {
-      parseHostPort("[::1]:70000", 50051)
-    }
-    exception.message shouldContain "70000"
-  }
-
-  @Test
-  fun `parseHostPort should handle port 0`() {
-    val result = parseHostPort("host:0", 50051)
-
-    result shouldBe HostPort("host", 0)
-  }
-
-  @Test
-  fun `parseHostPort should handle maximum port number`() {
-    val result = parseHostPort("host:65535", 50051)
-
-    result shouldBe HostPort("host", 65535)
-  }
-
-  // ==================== HostPort Data Class Tests ====================
-
-  @Test
-  fun `HostPort should support equality`() {
-    val hp1 = HostPort("localhost", 8080)
-    val hp2 = HostPort("localhost", 8080)
-    val hp3 = HostPort("localhost", 9090)
-
-    (hp1 == hp2) shouldBe true
-    (hp1 == hp3) shouldBe false
-  }
-
-  @Test
-  fun `HostPort should support copy`() {
-    val hp = HostPort("localhost", 8080)
-    val copied = hp.copy(port = 9090)
-
-    copied.host shouldBe "localhost"
-    copied.port shouldBe 9090
-  }
-
-  // ==================== exceptionDetails Tests ====================
-
-  @Test
-  fun `exceptionDetails should include status code`() {
-    val status = Status.UNAVAILABLE.withDescription("service down")
-    val exception = RuntimeException("connection lost")
-
-    val details = status.exceptionDetails(exception)
-
-    details shouldContain "UNAVAILABLE"
-  }
-
-  @Test
-  fun `exceptionDetails should include description`() {
-    val status = Status.NOT_FOUND.withDescription("agent not found")
-    val exception = RuntimeException("missing")
-
-    val details = status.exceptionDetails(exception)
-
-    details shouldContain "agent not found"
-  }
-
-  @Test
-  fun `exceptionDetails should include exception message`() {
-    val status = Status.INTERNAL
-    val exception = IllegalStateException("something broke")
-
-    val details = status.exceptionDetails(exception)
-
-    details shouldContain "something broke"
-  }
-
-  @Test
-  fun `exceptionDetails should include exception class name`() {
-    val status = Status.CANCELLED
-    val exception = java.io.IOException("timeout")
-
-    val details = status.exceptionDetails(exception)
-
-    details shouldContain "IOException"
-  }
-
-  // ==================== toJsonElement Edge Case Tests ====================
-
-  @Test
-  fun `toJsonElement should parse JSON array`() {
-    val json = "[1, 2, 3]"
-    val element = json.toJsonElement()
-
-    (element is JsonArray).shouldBeTrue()
-  }
-
-  @Test
-  fun `toJsonElement should parse JSON primitives`() {
-    "42".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
-    "true".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
-    "\"hello\"".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
-  }
-
-  // ==================== Bug #12: parseHostPort blank input validation ====================
-
-  @Test
-  fun `parseHostPort should throw for empty string`() {
-    val exception = shouldThrow<IllegalArgumentException> {
-      parseHostPort("", 50051)
-    }
-    exception.message shouldContain "must not be blank"
-  }
-
-  @Test
-  fun `parseHostPort should throw for blank string`() {
-    val exception = shouldThrow<IllegalArgumentException> {
-      parseHostPort("   ", 50051)
-    }
-    exception.message shouldContain "must not be blank"
-  }
-
+class UtilsTest : FunSpec() {
   // ==================== Type Check Helper ====================
 
   private inline fun <reified T> Any.shouldBeInstanceOf() {
     (this is T).shouldBeTrue()
+  }
+
+  init {
+    // ==================== decodeParams Tests ====================
+
+    test("decodeParams should return empty string for blank input") {
+      decodeParams("") shouldBe ""
+      decodeParams("   ") shouldBe ""
+    }
+
+    test("decodeParams should decode URL-encoded parameters") {
+      val encoded = "foo%3Dbar%26baz%3Dqux"
+      val result = decodeParams(encoded)
+
+      result shouldBe "?foo=bar&baz=qux"
+    }
+
+    test("decodeParams should add question mark prefix") {
+      val result = decodeParams("simple")
+
+      result shouldBe "?simple"
+    }
+
+    test("decodeParams should handle special characters") {
+      val encoded = "name%3DJohn%20Doe%26city%3DNew%20York"
+      val result = decodeParams(encoded)
+
+      result shouldBe "?name=John Doe&city=New York"
+    }
+
+    test("decodeParams should handle already decoded strings") {
+      val result = decodeParams("key=value")
+
+      result shouldBe "?key=value"
+    }
+
+    // ==================== lowercase Tests ====================
+
+    test("lowercase should convert string to lowercase") {
+      "HELLO".lowercase() shouldBe "hello"
+      "Hello World".lowercase() shouldBe "hello world"
+      "MixedCase123".lowercase() shouldBe "mixedcase123"
+    }
+
+    test("lowercase should handle empty string") {
+      "".lowercase() shouldBe ""
+    }
+
+    test("lowercase should handle already lowercase string") {
+      "already lowercase".lowercase() shouldBe "already lowercase"
+    }
+
+    // ==================== defaultEmptyJsonObject Tests ====================
+
+    test("defaultEmptyJsonObject should return original string if not empty") {
+      """{"key":"value"}""".defaultEmptyJsonObject() shouldBe """{"key":"value"}"""
+      "some content".defaultEmptyJsonObject() shouldBe "some content"
+    }
+
+    test("defaultEmptyJsonObject should return empty JSON object for empty string") {
+      "".defaultEmptyJsonObject() shouldBe "{}"
+    }
+
+    // ==================== toJsonElement Tests ====================
+
+    test("toJsonElement should parse valid JSON object") {
+      val json = """{"key":"value"}"""
+      val element = json.toJsonElement()
+
+      element.shouldBeInstanceOf<JsonObject>()
+    }
+
+    test("toJsonElement should parse empty JSON object") {
+      val json = "{}"
+      val element = json.toJsonElement()
+
+      element.shouldBeInstanceOf<JsonObject>()
+    }
+
+    test("toJsonElement should throw for invalid JSON") {
+      shouldThrow<Exception> {
+        "not valid json".toJsonElement()
+      }
+    }
+
+    // ==================== setLogLevel Tests ====================
+
+    test("setLogLevel should accept valid log levels") {
+      // These should not throw
+      setLogLevel("test", "trace")
+      setLogLevel("test", "debug")
+      setLogLevel("test", "info")
+      setLogLevel("test", "warn")
+      setLogLevel("test", "error")
+      setLogLevel("test", "off")
+    }
+
+    test("setLogLevel should be case insensitive") {
+      // These should not throw
+      setLogLevel("test", "TRACE")
+      setLogLevel("test", "DEBUG")
+      setLogLevel("test", "INFO")
+      setLogLevel("test", "WARN")
+      setLogLevel("test", "ERROR")
+      setLogLevel("test", "OFF")
+    }
+
+    test("setLogLevel should throw for invalid log level") {
+      val exception = shouldThrow<IllegalArgumentException> {
+        setLogLevel("test", "invalid")
+      }
+
+      exception.message shouldContain "Invalid"
+      exception.message shouldContain "log level"
+    }
+
+    // ==================== getVersionDesc Tests ====================
+
+    test("getVersionDesc should return non-empty string") {
+      val versionDesc = Utils.getVersionDesc(false)
+
+      versionDesc.shouldNotBeEmpty()
+    }
+
+    test("getVersionDesc should return JSON when requested") {
+      val versionDesc = Utils.getVersionDesc(true)
+
+      versionDesc.shouldNotBeEmpty()
+      // JSON output should contain braces or JSON structure
+    }
+
+    // Bug #19: VersionValidator was removed — version printing now happens after parsing
+    // in BaseOptions, not inside a JCommander validator that calls exitProcess.
+    test("getVersionDesc should be callable without triggering exitProcess") {
+      // Before the fix, calling VersionValidator.validate() would call exitProcess(0).
+      // Now getVersionDesc is a standalone utility — calling it must not exit the JVM.
+      val plainDesc = Utils.getVersionDesc(false)
+      val jsonDesc = Utils.getVersionDesc(true)
+
+      plainDesc.shouldNotBeEmpty()
+      jsonDesc.shouldNotBeEmpty()
+    }
+
+    // ==================== parseHostPort Tests ====================
+
+    test("parseHostPort should parse simple host and port") {
+      val result = parseHostPort("localhost:8080", 50051)
+
+      result shouldBe HostPort("localhost", 8080)
+    }
+
+    test("parseHostPort should use default port when no port specified") {
+      val result = parseHostPort("example.com", 50051)
+
+      result shouldBe HostPort("example.com", 50051)
+    }
+
+    test("parseHostPort should handle bracketed IPv6 with port") {
+      val result = parseHostPort("[::1]:50051", 9090)
+
+      result shouldBe HostPort("[::1]", 50051)
+    }
+
+    test("parseHostPort should handle bracketed IPv6 without port") {
+      val result = parseHostPort("[::1]", 50051)
+
+      result shouldBe HostPort("[::1]", 50051)
+    }
+
+    test("parseHostPort should handle unbracketed IPv6 without port") {
+      val result = parseHostPort("::1", 50051)
+
+      result shouldBe HostPort("::1", 50051)
+    }
+
+    test("parseHostPort should handle full IPv6 address without brackets") {
+      val result = parseHostPort("2001:db8::1", 50051)
+
+      result shouldBe HostPort("2001:db8::1", 50051)
+    }
+
+    test("parseHostPort should handle IPv4 address with port") {
+      val result = parseHostPort("192.168.1.100:5000", 50051)
+
+      result shouldBe HostPort("192.168.1.100", 5000)
+    }
+
+    test("parseHostPort should handle IPv4 address without port") {
+      val result = parseHostPort("192.168.1.100", 50051)
+
+      result shouldBe HostPort("192.168.1.100", 50051)
+    }
+
+    test("parseHostPort should handle hostname with custom port") {
+      val result = parseHostPort("proxy.example.org:9090", 50051)
+
+      result shouldBe HostPort("proxy.example.org", 9090)
+    }
+
+    test("parseHostPort should throw for malformed IPv6 with missing close bracket") {
+      val exception = shouldThrow<IllegalArgumentException> {
+        parseHostPort("[::1", 50051)
+      }
+      exception.message shouldContain "missing closing bracket"
+    }
+
+    test("parseHostPort should throw for malformed IPv6 with content after unclosed bracket") {
+      val exception = shouldThrow<IllegalArgumentException> {
+        parseHostPort("[2001:db8::1", 50051)
+      }
+      exception.message shouldContain "missing closing bracket"
+    }
+
+    test("parseHostPort should handle bracketed full IPv6 with port") {
+      val result = parseHostPort("[2001:db8::1]:8443", 50051)
+
+      result shouldBe HostPort("[2001:db8::1]", 8443)
+    }
+
+    // M4: parseHostPort now validates port values with descriptive error messages
+    // instead of throwing raw NumberFormatException.
+    test("parseHostPort should throw IllegalArgumentException for non-numeric port") {
+      val exception = shouldThrow<IllegalArgumentException> {
+        parseHostPort("host:abc", 50051)
+      }
+      exception.message shouldContain "host:abc"
+      exception.message shouldContain "abc"
+    }
+
+    test("parseHostPort should throw IllegalArgumentException for port above 65535") {
+      val exception = shouldThrow<IllegalArgumentException> {
+        parseHostPort("host:99999", 50051)
+      }
+      exception.message shouldContain "host:99999"
+    }
+
+    test("parseHostPort should throw IllegalArgumentException for negative port") {
+      val exception = shouldThrow<IllegalArgumentException> {
+        parseHostPort("host:-1", 50051)
+      }
+      exception.message shouldContain "host:-1"
+    }
+
+    test("parseHostPort should throw IllegalArgumentException for non-numeric port in bracketed IPv6") {
+      val exception = shouldThrow<IllegalArgumentException> {
+        parseHostPort("[::1]:abc", 50051)
+      }
+      exception.message shouldContain "abc"
+    }
+
+    test("parseHostPort should throw IllegalArgumentException for out-of-range port in bracketed IPv6") {
+      val exception = shouldThrow<IllegalArgumentException> {
+        parseHostPort("[::1]:70000", 50051)
+      }
+      exception.message shouldContain "70000"
+    }
+
+    test("parseHostPort should handle port 0") {
+      val result = parseHostPort("host:0", 50051)
+
+      result shouldBe HostPort("host", 0)
+    }
+
+    test("parseHostPort should handle maximum port number") {
+      val result = parseHostPort("host:65535", 50051)
+
+      result shouldBe HostPort("host", 65535)
+    }
+
+    // ==================== HostPort Data Class Tests ====================
+
+    test("HostPort should support equality") {
+      val hp1 = HostPort("localhost", 8080)
+      val hp2 = HostPort("localhost", 8080)
+      val hp3 = HostPort("localhost", 9090)
+
+      (hp1 == hp2) shouldBe true
+      (hp1 == hp3) shouldBe false
+    }
+
+    test("HostPort should support copy") {
+      val hp = HostPort("localhost", 8080)
+      val copied = hp.copy(port = 9090)
+
+      copied.host shouldBe "localhost"
+      copied.port shouldBe 9090
+    }
+
+    // ==================== exceptionDetails Tests ====================
+
+    test("exceptionDetails should include status code") {
+      val status = Status.UNAVAILABLE.withDescription("service down")
+      val exception = RuntimeException("connection lost")
+
+      val details = status.exceptionDetails(exception)
+
+      details shouldContain "UNAVAILABLE"
+    }
+
+    test("exceptionDetails should include description") {
+      val status = Status.NOT_FOUND.withDescription("agent not found")
+      val exception = RuntimeException("missing")
+
+      val details = status.exceptionDetails(exception)
+
+      details shouldContain "agent not found"
+    }
+
+    test("exceptionDetails should include exception message") {
+      val status = Status.INTERNAL
+      val exception = IllegalStateException("something broke")
+
+      val details = status.exceptionDetails(exception)
+
+      details shouldContain "something broke"
+    }
+
+    test("exceptionDetails should include exception class name") {
+      val status = Status.CANCELLED
+      val exception = java.io.IOException("timeout")
+
+      val details = status.exceptionDetails(exception)
+
+      details shouldContain "IOException"
+    }
+
+    // ==================== toJsonElement Edge Case Tests ====================
+
+    test("toJsonElement should parse JSON array") {
+      val json = "[1, 2, 3]"
+      val element = json.toJsonElement()
+
+      (element is JsonArray).shouldBeTrue()
+    }
+
+    test("toJsonElement should parse JSON primitives") {
+      "42".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
+      "true".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
+      "\"hello\"".toJsonElement().shouldBeInstanceOf<JsonPrimitive>()
+    }
+
+    // ==================== Bug #12: parseHostPort blank input validation ====================
+
+    test("parseHostPort should throw for empty string") {
+      val exception = shouldThrow<IllegalArgumentException> {
+        parseHostPort("", 50051)
+      }
+      exception.message shouldContain "must not be blank"
+    }
+
+    test("parseHostPort should throw for blank string") {
+      val exception = shouldThrow<IllegalArgumentException> {
+        parseHostPort("   ", 50051)
+      }
+      exception.message shouldContain "must not be blank"
+    }
   }
 }

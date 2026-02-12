@@ -17,39 +17,44 @@
 package io.prometheus.harness.support
 
 import com.github.pambrose.common.util.simpleClassName
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
+import io.kotest.core.spec.style.FunSpec
 
 abstract class AbstractHarnessTests(
-  private val args: ProxyCallTestArgs,
-) {
-  @Test
-  fun proxyCallTest() = runBlocking { HarnessTests.proxyCallTest(args) }
+  private val argsProvider: () -> ProxyCallTestArgs,
+) : FunSpec() {
+  init {
+    test("proxyCallTest") { HarnessTests.proxyCallTest(argsProvider()) }
 
-  @Test
-  fun missingPathTest() = BasicHarnessTests.missingPathTest(args.proxyPort, simpleClassName)
+    test("missingPathTest") { BasicHarnessTests.missingPathTest(argsProvider().proxyPort, simpleClassName) }
 
-  @Test
-  fun invalidPathTest() = BasicHarnessTests.invalidPathTest(args.proxyPort, simpleClassName)
+    test("invalidPathTest") { BasicHarnessTests.invalidPathTest(argsProvider().proxyPort, simpleClassName) }
 
-  @Test
-  fun addRemovePathsTest() =
-    runBlocking { BasicHarnessTests.addRemovePathsTest(args.agent.pathManager, args.proxyPort, simpleClassName) }
-
-  @Test
-  fun threadedAddRemovePathsTest() =
-    runBlocking {
-      BasicHarnessTests.threadedAddRemovePathsTest(
-        args.agent.pathManager,
-        args.proxyPort,
+    test("addRemovePathsTest") {
+      BasicHarnessTests.addRemovePathsTest(
+        argsProvider().agent.pathManager,
+        argsProvider().proxyPort,
         simpleClassName,
       )
     }
 
-  @Test
-  fun invalidAgentUrlTest() =
-    runBlocking { BasicHarnessTests.invalidAgentUrlTest(args.agent.pathManager, args.proxyPort, simpleClassName) }
+    test("threadedAddRemovePathsTest") {
+      BasicHarnessTests.threadedAddRemovePathsTest(
+        argsProvider().agent.pathManager,
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
 
-  @Test
-  fun timeoutTest() = runBlocking { HarnessTests.timeoutTest(args.agent.pathManager, simpleClassName, args.proxyPort) }
+    test("invalidAgentUrlTest") {
+      BasicHarnessTests.invalidAgentUrlTest(
+        argsProvider().agent.pathManager,
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
+
+    test("timeoutTest") {
+      HarnessTests.timeoutTest(argsProvider().agent.pathManager, simpleClassName, argsProvider().proxyPort)
+    }
+  }
 }

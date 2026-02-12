@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -48,112 +49,115 @@ import io.ktor.server.routing.routing
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
 import io.ktor.server.cio.CIO as ServerCIO
 
 // Tests for ProxyHttpConfig which configures Ktor server plugins for the proxy HTTP service.
 // Note: Full integration tests with testApplication would require ktor-server-test-host dependency.
 // These tests verify the configuration logic without running a full HTTP server.
-class ProxyHttpConfigTest {
-  // ==================== Configuration Object Tests ====================
+class ProxyHttpConfigTest : FunSpec() {
+  // ==================== Helper Methods ====================
 
-  @Test
-  fun `ProxyHttpConfig object should exist`() {
-    // Verify the ProxyHttpConfig object is accessible
-    ProxyHttpConfig.shouldNotBeNull()
+  private fun callGetFormattedLog(call: ApplicationCall): String {
+    val method = ProxyHttpConfig::class.java.getDeclaredMethod("getFormattedLog", ApplicationCall::class.java)
+    method.isAccessible = true
+    return method.invoke(ProxyHttpConfig, call) as String
   }
 
-  // ==================== Compression Configuration Tests ====================
+  private fun createTestProxy(): Proxy =
+    Proxy(
+      options = ProxyOptions(listOf()),
+      inProcessServerName = "config-test-${System.nanoTime()}",
+      testMode = true,
+    )
 
-  @Test
-  fun `CompressionConfig should support gzip configuration`() {
-    val config = CompressionConfig()
+  init {
+    // ==================== Configuration Object Tests ====================
 
-    // Apply gzip configuration similar to ProxyHttpConfig
-    config.gzip {
-      priority = 1.0
+    test("ProxyHttpConfig object should exist") {
+      // Verify the ProxyHttpConfig object is accessible
+      ProxyHttpConfig.shouldNotBeNull()
     }
 
-    // Configuration should be applied without throwing
-    config.shouldNotBeNull()
-  }
+    // ==================== Compression Configuration Tests ====================
 
-  @Test
-  fun `CompressionConfig should support deflate configuration`() {
-    val config = CompressionConfig()
+    test("CompressionConfig should support gzip configuration") {
+      val config = CompressionConfig()
 
-    // Apply deflate configuration similar to ProxyHttpConfig
-    config.deflate {
-      priority = 10.0
-      minimumSize(1024)
+      // Apply gzip configuration similar to ProxyHttpConfig
+      config.gzip {
+        priority = 1.0
+      }
+
+      // Configuration should be applied without throwing
+      config.shouldNotBeNull()
     }
 
-    // Configuration should be applied without throwing
-    config.shouldNotBeNull()
-  }
+    test("CompressionConfig should support deflate configuration") {
+      val config = CompressionConfig()
 
-  @Test
-  fun `CompressionConfig should support multiple encoders`() {
-    val config = CompressionConfig()
+      // Apply deflate configuration similar to ProxyHttpConfig
+      config.deflate {
+        priority = 10.0
+        minimumSize(1024)
+      }
 
-    // Apply both gzip and deflate like ProxyHttpConfig does
-    config.gzip {
-      priority = 1.0
-    }
-    config.deflate {
-      priority = 10.0
-      minimumSize(1024)
+      // Configuration should be applied without throwing
+      config.shouldNotBeNull()
     }
 
-    config.shouldNotBeNull()
-  }
+    test("CompressionConfig should support multiple encoders") {
+      val config = CompressionConfig()
 
-  // ==================== HTTP Status Code Tests ====================
+      // Apply both gzip and deflate like ProxyHttpConfig does
+      config.gzip {
+        priority = 1.0
+      }
+      config.deflate {
+        priority = 10.0
+        minimumSize(1024)
+      }
 
-  @Test
-  fun `NotFound status code should have correct value`() {
-    HttpStatusCode.NotFound.value shouldBe 404
-    HttpStatusCode.NotFound.description shouldBe "Not Found"
-  }
+      config.shouldNotBeNull()
+    }
 
-  @Test
-  fun `Found status code should have correct value`() {
-    HttpStatusCode.Found.value shouldBe 302
-  }
+    // ==================== HTTP Status Code Tests ====================
 
-  @Test
-  fun `status codes should be comparable`() {
-    val status = HttpStatusCode.OK
+    test("NotFound status code should have correct value") {
+      HttpStatusCode.NotFound.value shouldBe 404
+      HttpStatusCode.NotFound.description shouldBe "Not Found"
+    }
 
-    (status == HttpStatusCode.OK) shouldBe true
-    (status == HttpStatusCode.NotFound) shouldBe false
-  }
+    test("Found status code should have correct value") {
+      HttpStatusCode.Found.value shouldBe 302
+    }
 
-  // ==================== Compression Priority Tests ====================
+    test("status codes should be comparable") {
+      val status = HttpStatusCode.OK
 
-  @Test
-  fun `gzip should have higher priority than deflate in config`() {
-    // In ProxyHttpConfig, gzip has priority 1.0 and deflate has 10.0
-    // Lower numbers = higher priority in Ktor
-    val gzipPriority = 1.0
-    val deflatePriority = 10.0
+      (status == HttpStatusCode.OK) shouldBe true
+      (status == HttpStatusCode.NotFound) shouldBe false
+    }
 
-    (gzipPriority < deflatePriority) shouldBe true
-  }
+    // ==================== Compression Priority Tests ====================
 
-  @Test
-  fun `deflate minimum size should be 1024 bytes`() {
-    val minimumSize = 1024L
+    test("gzip should have higher priority than deflate in config") {
+      // In ProxyHttpConfig, gzip has priority 1.0 and deflate has 10.0
+      // Lower numbers = higher priority in Ktor
+      val gzipPriority = 1.0
+      val deflatePriority = 10.0
 
-    minimumSize shouldBe 1024L
-  }
+      (gzipPriority < deflatePriority) shouldBe true
+    }
 
-  // ==================== StatusPages Integration Tests ====================
+    test("deflate minimum size should be 1024 bytes") {
+      val minimumSize = 1024L
 
-  @Test
-  fun `StatusPages NotFound handler should return correct text`(): Unit =
-    runBlocking {
+      minimumSize shouldBe 1024L
+    }
+
+    // ==================== StatusPages Integration Tests ====================
+
+    test("StatusPages NotFound handler should return correct text") {
       val server = embeddedServer(ServerCIO, port = 0) {
         install(StatusPages) {
           status(HttpStatusCode.NotFound) { call, cause ->
@@ -186,9 +190,7 @@ class ProxyHttpConfigTest {
       }
     }
 
-  @Test
-  fun `StatusPages exception handler should return InternalServerError`(): Unit =
-    runBlocking {
+    test("StatusPages exception handler should return InternalServerError") {
       val server = embeddedServer(ServerCIO, port = 0) {
         install(StatusPages) {
           exception<Throwable> { call, _ ->
@@ -215,139 +217,114 @@ class ProxyHttpConfigTest {
       }
     }
 
-  // ==================== getFormattedLog Tests ====================
+    // ==================== getFormattedLog Tests ====================
 
-  @Test
-  fun `Found status should have value 302`() {
-    HttpStatusCode.Found.value shouldBe 302
-    HttpStatusCode.Found.description shouldBe "Found"
-  }
-
-  @Test
-  fun `InternalServerError status should have value 500`() {
-    HttpStatusCode.InternalServerError.value shouldBe 500
-  }
-
-  // ==================== StatusPagesConfig Tests ====================
-
-  @Test
-  fun `StatusPagesConfig should support exception handler configuration`() {
-    val config = StatusPagesConfig()
-
-    // Apply exception handler similar to ProxyHttpConfig
-    config.exception<Throwable> { call, _ ->
-      call.respond(HttpStatusCode.InternalServerError)
+    test("Found status should have value 302") {
+      HttpStatusCode.Found.value shouldBe 302
+      HttpStatusCode.Found.description shouldBe "Found"
     }
 
-    config.shouldNotBeNull()
-  }
-
-  @Test
-  fun `StatusPagesConfig should support status handler configuration`() {
-    val config = StatusPagesConfig()
-
-    config.status(HttpStatusCode.NotFound) { call, cause ->
-      call.respond(
-        TextContent("${cause.value} ${cause.description}", Text.Plain.withCharset(Charsets.UTF_8), cause),
-      )
+    test("InternalServerError status should have value 500") {
+      HttpStatusCode.InternalServerError.value shouldBe 500
     }
 
-    config.shouldNotBeNull()
-  }
+    // ==================== StatusPagesConfig Tests ====================
 
-  // ==================== getFormattedLog Tests ====================
-  // getFormattedLog is private in ProxyHttpConfig. It has two branches:
-  // - Found (302): includes Location header in the log
-  // - All other statuses: standard log format without Location
+    test("StatusPagesConfig should support exception handler configuration") {
+      val config = StatusPagesConfig()
 
-  private fun callGetFormattedLog(call: ApplicationCall): String {
-    val method = ProxyHttpConfig::class.java.getDeclaredMethod("getFormattedLog", ApplicationCall::class.java)
-    method.isAccessible = true
-    return method.invoke(ProxyHttpConfig, call) as String
-  }
+      // Apply exception handler similar to ProxyHttpConfig
+      config.exception<Throwable> { call, _ ->
+        call.respond(HttpStatusCode.InternalServerError)
+      }
 
-  @Test
-  fun `getFormattedLog should include Location header for Found status`() {
-    val mockCall = mockk<ApplicationCall>(relaxed = true)
+      config.shouldNotBeNull()
+    }
 
-    every { mockCall.response.status() } returns HttpStatusCode.Found
-    every { mockCall.response.headers[HttpHeaders.Location] } returns "/new-path"
-    every { mockCall.request.origin.remoteHost } returns "192.168.1.1"
+    test("StatusPagesConfig should support status handler configuration") {
+      val config = StatusPagesConfig()
 
-    val result = callGetFormattedLog(mockCall)
+      config.status(HttpStatusCode.NotFound) { call, cause ->
+        call.respond(
+          TextContent("${cause.value} ${cause.description}", Text.Plain.withCharset(Charsets.UTF_8), cause),
+        )
+      }
 
-    result shouldContain "302 Found"
-    result shouldContain "/new-path"
-    result shouldContain "192.168.1.1"
-    result shouldContain "->"
-  }
+      config.shouldNotBeNull()
+    }
 
-  @Test
-  fun `getFormattedLog should not include Location for non-Found status`() {
-    val mockCall = mockk<ApplicationCall>(relaxed = true)
+    // ==================== getFormattedLog Tests ====================
+    // getFormattedLog is private in ProxyHttpConfig. It has two branches:
+    // - Found (302): includes Location header in the log
+    // - All other statuses: standard log format without Location
 
-    every { mockCall.response.status() } returns HttpStatusCode.OK
-    every { mockCall.request.origin.remoteHost } returns "10.0.0.1"
+    test("getFormattedLog should include Location header for Found status") {
+      val mockCall = mockk<ApplicationCall>(relaxed = true)
 
-    val result = callGetFormattedLog(mockCall)
+      every { mockCall.response.status() } returns HttpStatusCode.Found
+      every { mockCall.response.headers[HttpHeaders.Location] } returns "/new-path"
+      every { mockCall.request.origin.remoteHost } returns "192.168.1.1"
 
-    result shouldContain "200 OK"
-    result shouldContain "10.0.0.1"
-    result shouldNotContain "->"
-  }
+      val result = callGetFormattedLog(mockCall)
 
-  @Test
-  fun `getFormattedLog should handle null status gracefully`() {
-    val mockCall = mockk<ApplicationCall>(relaxed = true)
+      result shouldContain "302 Found"
+      result shouldContain "/new-path"
+      result shouldContain "192.168.1.1"
+      result shouldContain "->"
+    }
 
-    every { mockCall.response.status() } returns null
-    every { mockCall.request.origin.remoteHost } returns "127.0.0.1"
+    test("getFormattedLog should not include Location for non-Found status") {
+      val mockCall = mockk<ApplicationCall>(relaxed = true)
 
-    val result = callGetFormattedLog(mockCall)
+      every { mockCall.response.status() } returns HttpStatusCode.OK
+      every { mockCall.request.origin.remoteHost } returns "10.0.0.1"
 
-    // Null status hits the else branch
-    result shouldContain "null"
-    result shouldContain "127.0.0.1"
-  }
+      val result = callGetFormattedLog(mockCall)
 
-  // ==================== configureCallLogging Filter Tests ====================
-  // The filter checks call.request.path().startsWith("/")
+      result shouldContain "200 OK"
+      result shouldContain "10.0.0.1"
+      result shouldNotContain "->"
+    }
 
-  @Test
-  fun `callLogging filter should accept paths starting with slash`() {
-    // The filter logic: call.request.path().startsWith("/")
-    val path = "/metrics"
-    path.startsWith("/") shouldBe true
-  }
+    test("getFormattedLog should handle null status gracefully") {
+      val mockCall = mockk<ApplicationCall>(relaxed = true)
 
-  @Test
-  fun `callLogging filter should accept root path`() {
-    val path = "/"
-    path.startsWith("/") shouldBe true
-  }
+      every { mockCall.response.status() } returns null
+      every { mockCall.request.origin.remoteHost } returns "127.0.0.1"
 
-  @Test
-  fun `callLogging filter should reject paths not starting with slash`() {
-    // This case would only happen if request.path() returns a path without leading slash,
-    // which is unusual in HTTP but the filter handles it defensively
-    val path = "metrics"
-    path.startsWith("/") shouldBe false
-  }
+      val result = callGetFormattedLog(mockCall)
 
-  // ==================== configureKtorServer Integration Tests ====================
-  // These tests verify the full configureKtorServer() function by running an embedded server
-  // with all plugins installed, then making HTTP requests to verify behavior.
+      // Null status hits the else branch
+      result shouldContain "null"
+      result shouldContain "127.0.0.1"
+    }
 
-  private fun createTestProxy(): Proxy =
-    Proxy(
-      options = ProxyOptions(listOf()),
-      inProcessServerName = "config-test-${System.nanoTime()}",
-      testMode = true,
-    )
+    // ==================== configureCallLogging Filter Tests ====================
+    // The filter checks call.request.path().startsWith("/")
 
-  @Test
-  fun `configureKtorServer should add X-Engine default header to responses`(): Unit =
-    runBlocking {
+    test("callLogging filter should accept paths starting with slash") {
+      // The filter logic: call.request.path().startsWith("/")
+      val path = "/metrics"
+      path.startsWith("/") shouldBe true
+    }
+
+    test("callLogging filter should accept root path") {
+      val path = "/"
+      path.startsWith("/") shouldBe true
+    }
+
+    test("callLogging filter should reject paths not starting with slash") {
+      // This case would only happen if request.path() returns a path without leading slash,
+      // which is unusual in HTTP but the filter handles it defensively
+      val path = "metrics"
+      path.startsWith("/") shouldBe false
+    }
+
+    // ==================== configureKtorServer Integration Tests ====================
+    // These tests verify the full configureKtorServer() function by running an embedded server
+    // with all plugins installed, then making HTTP requests to verify behavior.
+
+    test("configureKtorServer should add X-Engine default header to responses") {
       val proxy = createTestProxy()
       val server = embeddedServer(ServerCIO, port = 0) {
         val app = this
@@ -372,9 +349,7 @@ class ProxyHttpConfigTest {
       }
     }
 
-  @Test
-  fun `configureKtorServer should handle NotFound via StatusPages`(): Unit =
-    runBlocking {
+    test("configureKtorServer should handle NotFound via StatusPages") {
       val proxy = createTestProxy()
       val server = embeddedServer(ServerCIO, port = 0) {
         val app = this
@@ -398,9 +373,7 @@ class ProxyHttpConfigTest {
       }
     }
 
-  @Test
-  fun `configureKtorServer should handle exceptions via StatusPages`(): Unit =
-    runBlocking {
+    test("configureKtorServer should handle exceptions via StatusPages") {
       val proxy = createTestProxy()
       val server = embeddedServer(ServerCIO, port = 0) {
         val app = this
@@ -423,4 +396,5 @@ class ProxyHttpConfigTest {
         server.stop(0, 0)
       }
     }
+  }
 }

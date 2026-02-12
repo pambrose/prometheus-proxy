@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.typesafe.config.ConfigFactory
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -27,14 +28,12 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 // Tests for AgentContextCleanupService which evicts inactive agents from the proxy.
 // The service runs periodically and removes agents that haven't had activity
 // within the configured maxAgentInactivitySecs threshold.
-class AgentContextCleanupServiceTest {
+class AgentContextCleanupServiceTest : FunSpec() {
   private fun createConfigVals(
     maxAgentInactivitySecs: Int = 60,
     staleAgentCheckPauseSecs: Int = 10,
@@ -54,11 +53,10 @@ class AgentContextCleanupServiceTest {
     return ConfigVals(config).proxy.internal
   }
 
-  // ==================== Configuration Tests ====================
+  init {
+    // ==================== Configuration Tests ====================
 
-  @Test
-  fun `toString should include max inactivity seconds`(): Unit =
-    runBlocking {
+    test("toString should include max inactivity seconds") {
       val configVals = createConfigVals(maxAgentInactivitySecs = 120)
       val agentContextManager = AgentContextManager(isTestMode = true)
 
@@ -72,9 +70,7 @@ class AgentContextCleanupServiceTest {
       str shouldContain "120"
     }
 
-  @Test
-  fun `toString should include pause seconds`(): Unit =
-    runBlocking {
+    test("toString should include pause seconds") {
       val configVals = createConfigVals(staleAgentCheckPauseSecs = 30)
       val agentContextManager = AgentContextManager(isTestMode = true)
 
@@ -88,11 +84,9 @@ class AgentContextCleanupServiceTest {
       str shouldContain "30"
     }
 
-  // ==================== Eviction Logic Tests ====================
+    // ==================== Eviction Logic Tests ====================
 
-  @Test
-  fun `cleanup should evict agent with inactivity exceeding threshold`(): Unit =
-    runBlocking {
+    test("cleanup should evict agent with inactivity exceeding threshold") {
       val configVals = createConfigVals(
         maxAgentInactivitySecs = 1,
         staleAgentCheckPauseSecs = 1,
@@ -131,9 +125,7 @@ class AgentContextCleanupServiceTest {
       verify(atLeast = 1) { mockProxy.removeAgentContext("stale-agent-123", "Eviction") }
     }
 
-  @Test
-  fun `cleanup should not evict active agent`(): Unit =
-    runBlocking {
+    test("cleanup should not evict active agent") {
       val configVals = createConfigVals(
         maxAgentInactivitySecs = 60,
         staleAgentCheckPauseSecs = 1,
@@ -162,11 +154,9 @@ class AgentContextCleanupServiceTest {
       verify(exactly = 0) { mockProxy.removeAgentContext("active-agent-123", any()) }
     }
 
-  // ==================== Service Lifecycle Tests ====================
+    // ==================== Service Lifecycle Tests ====================
 
-  @Test
-  fun `service should be stoppable`(): Unit =
-    runBlocking {
+    test("service should be stoppable") {
       val configVals = createConfigVals()
       val agentContextManager = AgentContextManager(isTestMode = true)
 
@@ -181,9 +171,7 @@ class AgentContextCleanupServiceTest {
       service.stopAsync().awaitTerminated()
     }
 
-  @Test
-  fun `service init block should be called during construction`(): Unit =
-    runBlocking {
+    test("service init block should be called during construction") {
       val configVals = createConfigVals()
       val agentContextManager = AgentContextManager(isTestMode = true)
 
@@ -199,11 +187,9 @@ class AgentContextCleanupServiceTest {
       initBlockCalled shouldBe true
     }
 
-  // ==================== Empty Agent Map Tests ====================
+    // ==================== Empty Agent Map Tests ====================
 
-  @Test
-  fun `cleanup should handle empty agent context map gracefully`(): Unit =
-    runBlocking {
+    test("cleanup should handle empty agent context map gracefully") {
       val configVals = createConfigVals(staleAgentCheckPauseSecs = 1)
       val agentContextManager = AgentContextManager(isTestMode = true)
       // Leave the map empty
@@ -222,11 +208,9 @@ class AgentContextCleanupServiceTest {
       verify(exactly = 0) { mockProxy.removeAgentContext(any(), any()) }
     }
 
-  // ==================== Bug #20: Prompt shutdown (no blocking sleep) ====================
+    // ==================== Bug #20: Prompt shutdown (no blocking sleep) ====================
 
-  @Test
-  fun `service should stop promptly without waiting for full pause duration`(): Unit =
-    runBlocking {
+    test("service should stop promptly without waiting for full pause duration") {
       // Use a very long pause time so that blocking sleep would be obvious
       val configVals = createConfigVals(staleAgentCheckPauseSecs = 60)
       val agentContextManager = AgentContextManager(isTestMode = true)
@@ -250,11 +234,9 @@ class AgentContextCleanupServiceTest {
       stopDuration shouldBeLessThan 5000L
     }
 
-  // ==================== Multiple Stale Agents Test ====================
+    // ==================== Multiple Stale Agents Test ====================
 
-  @Test
-  fun `cleanup should evict multiple stale agents in single cycle`(): Unit =
-    runBlocking {
+    test("cleanup should evict multiple stale agents in single cycle") {
       val configVals = createConfigVals(
         maxAgentInactivitySecs = 1,
         staleAgentCheckPauseSecs = 1,
@@ -301,4 +283,5 @@ class AgentContextCleanupServiceTest {
       verify(atLeast = 1) { mockProxy.removeAgentContext("stale-2", "Eviction") }
       verify(atLeast = 1) { mockProxy.removeAgentContext("stale-3", "Eviction") }
     }
+  }
 }

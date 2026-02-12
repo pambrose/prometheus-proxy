@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -30,13 +31,10 @@ import io.prometheus.proxy.ChunkedContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
 
-class AgentContextManagerTest {
-  @Test
-  fun `addAgentContext should add context and return null for new agent`(): Unit =
-    runBlocking {
+class AgentContextManagerTest : FunSpec() {
+  init {
+    test("addAgentContext should add context and return null for new agent") {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("192.168.1.1")
 
@@ -47,9 +45,7 @@ class AgentContextManagerTest {
       manager.getAgentContext(context.agentId).shouldNotBeNull()
     }
 
-  @Test
-  fun `addAgentContext should return old context when replacing existing agent`(): Unit =
-    runBlocking {
+    test("addAgentContext should return old context when replacing existing agent") {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
@@ -63,9 +59,7 @@ class AgentContextManagerTest {
       manager.getAgentContext(agentId) shouldBe context2
     }
 
-  @Test
-  fun `getAgentContext should return context for existing agent`(): Unit =
-    runBlocking {
+    test("getAgentContext should return context for existing agent") {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("192.168.1.1")
 
@@ -76,9 +70,7 @@ class AgentContextManagerTest {
       retrieved shouldBe context
     }
 
-  @Test
-  fun `getAgentContext should return null for non-existent agent`(): Unit =
-    runBlocking {
+    test("getAgentContext should return null for non-existent agent") {
       val manager = AgentContextManager(isTestMode = true)
 
       val retrieved = manager.getAgentContext("non-existent-id")
@@ -86,9 +78,7 @@ class AgentContextManagerTest {
       retrieved.shouldBeNull()
     }
 
-  @Test
-  fun `removeFromContextManager should remove and invalidate context`(): Unit =
-    runBlocking {
+    test("removeFromContextManager should remove and invalidate context") {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("192.168.1.1")
 
@@ -103,9 +93,7 @@ class AgentContextManagerTest {
       manager.getAgentContext(context.agentId).shouldBeNull()
     }
 
-  @Test
-  fun `removeFromContextManager should return null for non-existent agent`(): Unit =
-    runBlocking {
+    test("removeFromContextManager should return null for non-existent agent") {
       val manager = AgentContextManager(isTestMode = true)
 
       val removed = manager.removeFromContextManager("non-existent-id", "test removal")
@@ -114,9 +102,7 @@ class AgentContextManagerTest {
       manager.agentContextSize shouldBe 0
     }
 
-  @Test
-  fun `agentContextSize should return correct count`(): Unit =
-    runBlocking {
+    test("agentContextSize should return correct count") {
       val manager = AgentContextManager(isTestMode = true)
 
       manager.agentContextSize shouldBe 0
@@ -136,9 +122,7 @@ class AgentContextManagerTest {
       manager.agentContextSize shouldBe 0
     }
 
-  @Test
-  fun `chunkedContextMap should store and retrieve chunked contexts`(): Unit =
-    runBlocking {
+    test("chunkedContextMap should store and retrieve chunked contexts") {
       val manager = AgentContextManager(isTestMode = true)
       val scrapeId = 123L
       val mockResponse = mockk<ChunkedScrapeResponse>(relaxed = true)
@@ -155,9 +139,7 @@ class AgentContextManagerTest {
       manager.chunkedContextSize shouldBe 0
     }
 
-  @Test
-  fun `totalAgentScrapeRequestBacklogSize should sum all agent backlogs`(): Unit =
-    runBlocking {
+    test("totalAgentScrapeRequestBacklogSize should sum all agent backlogs") {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
@@ -168,14 +150,12 @@ class AgentContextManagerTest {
       manager.totalAgentScrapeRequestBacklogSize shouldBe 0
     }
 
-  // Tests thread-safety of the AgentContextManager under a concurrent load.
-  // In production, multiple gRPC threads may simultaneously add/remove agent contexts
-  // as agents connect and disconnect. This test verifies that the underlying
-  // ConcurrentHashMap correctly handles 20 concurrent additions followed by
-  // 20 concurrent removals without data corruption or race conditions.
-  @Test
-  fun `concurrent access should handle multiple threads safely`(): Unit =
-    runBlocking {
+    // Tests thread-safety of the AgentContextManager under a concurrent load.
+    // In production, multiple gRPC threads may simultaneously add/remove agent contexts
+    // as agents connect and disconnect. This test verifies that the underlying
+    // ConcurrentHashMap correctly handles 20 concurrent additions followed by
+    // 20 concurrent removals without data corruption or race conditions.
+    test("concurrent access should handle multiple threads safely") {
       val manager = AgentContextManager(isTestMode = true)
       val contexts = (1..20).map { AgentContext("192.168.1.$it") }
 
@@ -202,9 +182,7 @@ class AgentContextManagerTest {
       manager.agentContextSize shouldBe 0
     }
 
-  @Test
-  fun `multiple contexts should have unique agent IDs`(): Unit =
-    runBlocking {
+    test("multiple contexts should have unique agent IDs") {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
@@ -221,9 +199,7 @@ class AgentContextManagerTest {
       manager.agentContextSize shouldBe 3
     }
 
-  @Test
-  fun `addAgentContext and removeFromContextManager should work correctly in sequence`(): Unit =
-    runBlocking {
+    test("addAgentContext and removeFromContextManager should work correctly in sequence") {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
@@ -242,4 +218,5 @@ class AgentContextManagerTest {
       manager.removeFromContextManager(context2.agentId, "cleanup")
       manager.agentContextSize shouldBe 0
     }
+  }
 }

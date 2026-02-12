@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import com.google.common.net.HttpHeaders.ACCEPT
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -26,15 +27,13 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.http.HttpHeaders
-import io.ktor.server.cio.CIO as ServerCIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
-import java.util.Collections
+import java.util.*
+import io.ktor.server.cio.CIO as ServerCIO
 
 // Bug #11: The Accept header was set in the HttpClient's defaultRequest block when the client
 // was created. Since HttpClient instances are cached and reused, a stale Accept header from
@@ -42,10 +41,9 @@ import java.util.Collections
 // The fix moves the Accept header to per-request headers (prepareRequestHeaders).
 // These tests verify that per-request headers produce the correct Accept value for each
 // request, and that baking headers into defaultRequest causes staleness.
-class AgentHttpServiceHeaderTest {
-  @Test
-  fun `per-request Accept header should vary independently of cached client`(): Unit =
-    runBlocking {
+class AgentHttpServiceHeaderTest : FunSpec() {
+  init {
+    test("per-request Accept header should vary independently of cached client") {
       val capturedHeaders = Collections.synchronizedList(mutableListOf<String?>())
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -84,9 +82,7 @@ class AgentHttpServiceHeaderTest {
       }
     }
 
-  @Test
-  fun `defaultRequest Accept header should persist across requests demonstrating old bug`(): Unit =
-    runBlocking {
+    test("defaultRequest Accept header should persist across requests demonstrating old bug") {
       val capturedHeaders = Collections.synchronizedList(mutableListOf<String?>())
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -126,4 +122,5 @@ class AgentHttpServiceHeaderTest {
         server.stop(0, 0)
       }
     }
+  }
 }

@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -25,8 +26,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
 import io.prometheus.client.CollectorRegistry
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
@@ -34,13 +33,7 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
 // Metrics include counters for scrape requests and results, connect counts,
 // and gauges for backlog and cache sizes.
 @OptIn(ExperimentalAtomicApi::class)
-class AgentMetricsTest {
-  @BeforeEach
-  fun clearRegistry() {
-    // Clear the default Prometheus registry to avoid "already registered" errors
-    CollectorRegistry.defaultRegistry.clear()
-  }
-
+class AgentMetricsTest : FunSpec() {
   private fun createMockAgent(): Agent {
     val mockHttpClientCache = mockk<HttpClientCache>(relaxed = true)
     every { mockHttpClientCache.currentCacheSize() } returns 0
@@ -56,176 +49,171 @@ class AgentMetricsTest {
     return mockAgent
   }
 
-  // ==================== Counter Initialization Tests ====================
+  init {
+    beforeEach {
+      // Clear the default Prometheus registry to avoid "already registered" errors
+      CollectorRegistry.defaultRegistry.clear()
+    }
 
-  @Test
-  fun `scrapeRequestCount counter should be initialized`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+    // ==================== Counter Initialization Tests ====================
 
-    metrics.scrapeRequestCount.shouldNotBeNull()
-  }
+    test("scrapeRequestCount counter should be initialized") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-  @Test
-  fun `scrapeResultCount counter should be initialized`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+      metrics.scrapeRequestCount.shouldNotBeNull()
+    }
 
-    metrics.scrapeResultCount.shouldNotBeNull()
-  }
+    test("scrapeResultCount counter should be initialized") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-  @Test
-  fun `connectCount counter should be initialized`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+      metrics.scrapeResultCount.shouldNotBeNull()
+    }
 
-    metrics.connectCount.shouldNotBeNull()
-  }
+    test("connectCount counter should be initialized") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-  // ==================== Summary Initialization Tests ====================
+      metrics.connectCount.shouldNotBeNull()
+    }
 
-  @Test
-  fun `scrapeRequestLatency summary should be initialized`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+    // ==================== Summary Initialization Tests ====================
 
-    metrics.scrapeRequestLatency.shouldNotBeNull()
-  }
+    test("scrapeRequestLatency summary should be initialized") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-  // ==================== Counter Operations Tests ====================
+      metrics.scrapeRequestLatency.shouldNotBeNull()
+    }
 
-  @Test
-  fun `scrapeRequestCount should increment with labels`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+    // ==================== Counter Operations Tests ====================
 
-    val launchId = "test-launch-id"
-    val type = "scrape"
+    test("scrapeRequestCount should increment with labels") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-    val initialValue = metrics.scrapeRequestCount.labels(launchId, type).get()
-    metrics.scrapeRequestCount.labels(launchId, type).inc()
+      val launchId = "test-launch-id"
+      val type = "scrape"
 
-    metrics.scrapeRequestCount.labels(launchId, type).get() shouldBe initialValue + 1
-  }
+      val initialValue = metrics.scrapeRequestCount.labels(launchId, type).get()
+      metrics.scrapeRequestCount.labels(launchId, type).inc()
 
-  @Test
-  fun `scrapeResultCount should increment with labels`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+      metrics.scrapeRequestCount.labels(launchId, type).get() shouldBe initialValue + 1
+    }
 
-    val launchId = "test-launch-id"
-    val type = "success"
+    test("scrapeResultCount should increment with labels") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-    val initialValue = metrics.scrapeResultCount.labels(launchId, type).get()
-    metrics.scrapeResultCount.labels(launchId, type).inc()
+      val launchId = "test-launch-id"
+      val type = "success"
 
-    metrics.scrapeResultCount.labels(launchId, type).get() shouldBe initialValue + 1
-  }
+      val initialValue = metrics.scrapeResultCount.labels(launchId, type).get()
+      metrics.scrapeResultCount.labels(launchId, type).inc()
 
-  @Test
-  fun `connectCount should increment with labels`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+      metrics.scrapeResultCount.labels(launchId, type).get() shouldBe initialValue + 1
+    }
 
-    val launchId = "test-launch-id"
-    val type = "grpc"
+    test("connectCount should increment with labels") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-    val initialValue = metrics.connectCount.labels(launchId, type).get()
-    metrics.connectCount.labels(launchId, type).inc()
+      val launchId = "test-launch-id"
+      val type = "grpc"
 
-    metrics.connectCount.labels(launchId, type).get() shouldBe initialValue + 1
-  }
+      val initialValue = metrics.connectCount.labels(launchId, type).get()
+      metrics.connectCount.labels(launchId, type).inc()
 
-  // ==================== Summary Operations Tests ====================
+      metrics.connectCount.labels(launchId, type).get() shouldBe initialValue + 1
+    }
 
-  @Test
-  fun `scrapeRequestLatency should record observations with labels`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+    // ==================== Summary Operations Tests ====================
 
-    val launchId = "test-launch-id"
-    val agentName = "test-agent"
+    test("scrapeRequestLatency should record observations with labels") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-    // Record some latency observations
-    metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.05)
-    metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.10)
-    metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.15)
+      val launchId = "test-launch-id"
+      val agentName = "test-agent"
 
-    // Summary should have recorded the observations
-    metrics.scrapeRequestLatency.labels(launchId, agentName).get().count shouldBe 3
-  }
+      // Record some latency observations
+      metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.05)
+      metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.10)
+      metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.15)
 
-  // ==================== Label Differentiation Tests ====================
+      // Summary should have recorded the observations
+      metrics.scrapeRequestLatency.labels(launchId, agentName).get().count shouldBe 3
+    }
 
-  @Test
-  fun `counters should track different label combinations separately`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+    // ==================== Label Differentiation Tests ====================
 
-    val launchId = "test-launch-id"
+    test("counters should track different label combinations separately") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-    // Increment different type labels
-    metrics.scrapeRequestCount.labels(launchId, "type-a").inc()
-    metrics.scrapeRequestCount.labels(launchId, "type-a").inc()
-    metrics.scrapeRequestCount.labels(launchId, "type-b").inc()
+      val launchId = "test-launch-id"
 
-    // Different labels should be tracked separately
-    metrics.scrapeRequestCount.labels(launchId, "type-a").get() shouldBeGreaterThanOrEqual 2.0
-    metrics.scrapeRequestCount.labels(launchId, "type-b").get() shouldBeGreaterThanOrEqual 1.0
-  }
+      // Increment different type labels
+      metrics.scrapeRequestCount.labels(launchId, "type-a").inc()
+      metrics.scrapeRequestCount.labels(launchId, "type-a").inc()
+      metrics.scrapeRequestCount.labels(launchId, "type-b").inc()
 
-  @Test
-  fun `multiple counters can be incremented independently`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+      // Different labels should be tracked separately
+      metrics.scrapeRequestCount.labels(launchId, "type-a").get() shouldBeGreaterThanOrEqual 2.0
+      metrics.scrapeRequestCount.labels(launchId, "type-b").get() shouldBeGreaterThanOrEqual 1.0
+    }
 
-    val launchId = "test-launch-id"
-    val type = "test"
+    test("multiple counters can be incremented independently") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-    // Increment different counters
-    metrics.scrapeRequestCount.labels(launchId, type).inc()
-    metrics.scrapeResultCount.labels(launchId, type).inc()
-    metrics.scrapeResultCount.labels(launchId, type).inc()
-    metrics.connectCount.labels(launchId, type).inc()
+      val launchId = "test-launch-id"
+      val type = "test"
 
-    // Each counter should track independently
-    metrics.scrapeRequestCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 1.0
-    metrics.scrapeResultCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 2.0
-    metrics.connectCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 1.0
-  }
+      // Increment different counters
+      metrics.scrapeRequestCount.labels(launchId, type).inc()
+      metrics.scrapeResultCount.labels(launchId, type).inc()
+      metrics.scrapeResultCount.labels(launchId, type).inc()
+      metrics.connectCount.labels(launchId, type).inc()
 
-  // ==================== Gauge Tests ====================
+      // Each counter should track independently
+      metrics.scrapeRequestCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 1.0
+      metrics.scrapeResultCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 2.0
+      metrics.connectCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 1.0
+    }
 
-  @Test
-  fun `start time gauge should be registered and set`() {
-    val agent = createMockAgent()
-    val metrics = AgentMetrics(agent)
+    // ==================== Gauge Tests ====================
 
-    // The agent_start_time_seconds gauge is created and set in the init block
-    // Verify it was registered by checking the default registry
-    val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
-    val startTimeMetric = samples.find { it.name == "agent_start_time_seconds" }
-    startTimeMetric.shouldNotBeNull()
+    test("start time gauge should be registered and set") {
+      val agent = createMockAgent()
+      val metrics = AgentMetrics(agent)
 
-    // The gauge value should be a positive timestamp
-    val sample = startTimeMetric.samples.firstOrNull()
-    sample.shouldNotBeNull()
-    sample.value shouldBeGreaterThanOrEqual 0.0
-  }
+      // The agent_start_time_seconds gauge is created and set in the init block
+      // Verify it was registered by checking the default registry
+      val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
+      val startTimeMetric = samples.find { it.name == "agent_start_time_seconds" }
+      startTimeMetric.shouldNotBeNull()
 
-  @Test
-  fun `SamplerGaugeCollector should be constructable with agent metrics`() {
-    val agent = createMockAgent()
+      // The gauge value should be a positive timestamp
+      val sample = startTimeMetric.samples.firstOrNull()
+      sample.shouldNotBeNull()
+      sample.value shouldBeGreaterThanOrEqual 0.0
+    }
 
-    // Creating AgentMetrics should register SamplerGaugeCollectors without exception
-    val metrics = AgentMetrics(agent)
+    test("SamplerGaugeCollector should be constructable with agent metrics") {
+      val agent = createMockAgent()
 
-    // Verify the backlog and cache size gauges are registered
-    val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
-    val backlogMetric = samples.find { it.name == "agent_scrape_backlog_size" }
-    backlogMetric.shouldNotBeNull()
+      // Creating AgentMetrics should register SamplerGaugeCollectors without exception
+      val metrics = AgentMetrics(agent)
 
-    val cacheMetric = samples.find { it.name == "agent_client_cache_size" }
-    cacheMetric.shouldNotBeNull()
+      // Verify the backlog and cache size gauges are registered
+      val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
+      val backlogMetric = samples.find { it.name == "agent_scrape_backlog_size" }
+      backlogMetric.shouldNotBeNull()
+
+      val cacheMetric = samples.find { it.name == "agent_client_cache_size" }
+      cacheMetric.shouldNotBeNull()
+    }
   }
 }

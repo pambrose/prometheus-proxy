@@ -19,6 +19,8 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.util.zip
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -45,9 +47,6 @@ import io.prometheus.proxy.ProxyHttpRoutes.ensureLeadingSlash
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
 import io.ktor.server.cio.CIO as ServerCIO
@@ -55,32 +54,76 @@ import io.ktor.server.cio.CIO as ServerCIO
 // Bug #12: The service discovery endpoint was registered using the raw sdPath config value,
 // which defaults to "discovery" (no leading slash). The fix normalizes the path with
 // ensureLeadingSlash() to ensure consistent route registration regardless of config format.
-class ProxyHttpRoutesTest {
-  @Test
-  fun `ensureLeadingSlash should add slash when missing`() {
-    "discovery".ensureLeadingSlash() shouldBe "/discovery"
+class ProxyHttpRoutesTest : FunSpec() {
+  private fun callLogActivityForResponse(
+    path: String,
+    response: ScrapeRequestResponse,
+    proxy: Proxy,
+  ) {
+    val method = ProxyHttpRoutes::class.java.getDeclaredMethod(
+      "logActivityForResponse",
+      String::class.java,
+      ScrapeRequestResponse::class.java,
+      Proxy::class.java,
+    )
+    method.isAccessible = true
+    method.invoke(ProxyHttpRoutes, path, response, proxy)
   }
 
-  @Test
-  fun `ensureLeadingSlash should not double slash when already present`() {
-    "/discovery".ensureLeadingSlash() shouldBe "/discovery"
+  private fun createSpyProxyForSubmit(
+    timeoutSecs: Int = 1,
+    checkMillis: Int = 50,
+  ): Proxy {
+    val proxy = spyk(
+      Proxy(
+        options = ProxyOptions(
+          listOf(
+            "-Dproxy.internal.scrapeRequestTimeoutSecs=$timeoutSecs",
+            "-Dproxy.internal.scrapeRequestCheckMillis=$checkMillis",
+          ),
+        ),
+        inProcessServerName = "proxy-submit-test-${System.nanoTime()}",
+        testMode = true,
+      ),
+    )
+    every { proxy.isRunning } returns true
+    return proxy
   }
 
-  @Test
-  fun `ensureLeadingSlash should handle nested paths without slash`() {
-    "api/discovery".ensureLeadingSlash() shouldBe "/api/discovery"
+  private fun createSpyProxyForRoutes(vararg extraArgs: String): Proxy {
+    val proxy = spyk(
+      Proxy(
+        options = ProxyOptions(
+          listOf(*extraArgs),
+        ),
+        inProcessServerName = "proxy-routes-test-${System.nanoTime()}",
+        testMode = true,
+      ),
+    )
+    every { proxy.isRunning } returns true
+    return proxy
   }
 
-  @Test
-  fun `ensureLeadingSlash should handle nested paths with slash`() {
-    "/api/discovery".ensureLeadingSlash() shouldBe "/api/discovery"
-  }
+  init {
+    test("ensureLeadingSlash should add slash when missing") {
+      "discovery".ensureLeadingSlash() shouldBe "/discovery"
+    }
 
-  // Verifies that a normalized path (with leading slash) correctly registers
-  // and matches incoming requests via Ktor routing.
-  @Test
-  fun `normalized path should match incoming requests`(): Unit =
-    runBlocking {
+    test("ensureLeadingSlash should not double slash when already present") {
+      "/discovery".ensureLeadingSlash() shouldBe "/discovery"
+    }
+
+    test("ensureLeadingSlash should handle nested paths without slash") {
+      "api/discovery".ensureLeadingSlash() shouldBe "/api/discovery"
+    }
+
+    test("ensureLeadingSlash should handle nested paths with slash") {
+      "/api/discovery".ensureLeadingSlash() shouldBe "/api/discovery"
+    }
+
+    // Verifies that a normalized path (with leading slash) correctly registers
+    // and matches incoming requests via Ktor routing.
+    test("normalized path should match incoming requests") {
       // Simulate the fix: config value "discovery" -> ensureLeadingSlash -> "/discovery"
       val configPath = "discovery"
       val normalizedPath = configPath.ensureLeadingSlash()
@@ -107,11 +150,9 @@ class ProxyHttpRoutesTest {
       }
     }
 
-  // Verifies that a config value already containing a leading slash
-  // is handled correctly without double-slashing.
-  @Test
-  fun `config path with leading slash should still match after normalization`(): Unit =
-    runBlocking {
+    // Verifies that a config value already containing a leading slash
+    // is handled correctly without double-slashing.
+    test("config path with leading slash should still match after normalization") {
       val configPath = "/discovery"
       val normalizedPath = configPath.ensureLeadingSlash()
       normalizedPath shouldBe "/discovery"
@@ -138,123 +179,113 @@ class ProxyHttpRoutesTest {
       }
     }
 
-  // ==================== ScrapeRequestResponse Tests ====================
+    // ==================== ScrapeRequestResponse Tests ====================
 
-  @Test
-  fun `ScrapeRequestResponse should store all properties`() {
-    val response = ScrapeRequestResponse(
-      statusCode = HttpStatusCode.OK,
-      updateMsg = "success",
-      contentType = ContentType.Application.Json.withCharset(Charsets.UTF_8),
-      contentText = """{"metric":"value"}""",
-      failureReason = "",
-      url = "http://localhost:8080/metrics",
-      fetchDuration = 150.milliseconds,
-    )
+    test("ScrapeRequestResponse should store all properties") {
+      val response = ScrapeRequestResponse(
+        statusCode = HttpStatusCode.OK,
+        updateMsg = "success",
+        contentType = ContentType.Application.Json.withCharset(Charsets.UTF_8),
+        contentText = """{"metric":"value"}""",
+        failureReason = "",
+        url = "http://localhost:8080/metrics",
+        fetchDuration = 150.milliseconds,
+      )
 
-    response.statusCode shouldBe HttpStatusCode.OK
-    response.updateMsg shouldBe "success"
-    response.contentText shouldBe """{"metric":"value"}"""
-    response.failureReason shouldBe ""
-    response.url shouldBe "http://localhost:8080/metrics"
-    response.fetchDuration shouldBe 150.milliseconds
-  }
+      response.statusCode shouldBe HttpStatusCode.OK
+      response.updateMsg shouldBe "success"
+      response.contentText shouldBe """{"metric":"value"}"""
+      response.failureReason shouldBe ""
+      response.url shouldBe "http://localhost:8080/metrics"
+      response.fetchDuration shouldBe 150.milliseconds
+    }
 
-  @Test
-  fun `ScrapeRequestResponse should default to plain text content type`() {
-    val response = ScrapeRequestResponse(
-      statusCode = HttpStatusCode.ServiceUnavailable,
-      updateMsg = "timed_out",
-      fetchDuration = 5000.milliseconds,
-    )
+    test("ScrapeRequestResponse should default to plain text content type") {
+      val response = ScrapeRequestResponse(
+        statusCode = HttpStatusCode.ServiceUnavailable,
+        updateMsg = "timed_out",
+        fetchDuration = 5000.milliseconds,
+      )
 
-    response.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
-    response.contentText shouldBe ""
-    response.failureReason shouldBe ""
-    response.url shouldBe ""
-  }
+      response.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
+      response.contentText shouldBe ""
+      response.failureReason shouldBe ""
+      response.url shouldBe ""
+    }
 
-  @Test
-  fun `ScrapeRequestResponse should handle error status codes`() {
-    val response = ScrapeRequestResponse(
-      statusCode = HttpStatusCode.NotFound,
-      updateMsg = "path_not_found",
-      failureReason = "Agent not found for path",
-      url = "http://localhost/metrics",
-      fetchDuration = 50.milliseconds,
-    )
+    test("ScrapeRequestResponse should handle error status codes") {
+      val response = ScrapeRequestResponse(
+        statusCode = HttpStatusCode.NotFound,
+        updateMsg = "path_not_found",
+        failureReason = "Agent not found for path",
+        url = "http://localhost/metrics",
+        fetchDuration = 50.milliseconds,
+      )
 
-    response.statusCode shouldBe HttpStatusCode.NotFound
-    response.updateMsg shouldBe "path_not_found"
-    response.failureReason shouldBe "Agent not found for path"
-  }
+      response.statusCode shouldBe HttpStatusCode.NotFound
+      response.updateMsg shouldBe "path_not_found"
+      response.failureReason shouldBe "Agent not found for path"
+    }
 
-  // ==================== ResponseResults Tests ====================
+    // ==================== ResponseResults Tests ====================
 
-  @Test
-  fun `ResponseResults should have correct defaults`() {
-    val results = ResponseResults()
+    test("ResponseResults should have correct defaults") {
+      val results = ResponseResults()
 
-    results.statusCode shouldBe HttpStatusCode.OK
-    results.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
-    results.contentText shouldBe ""
-    results.updateMsg shouldBe ""
-  }
+      results.statusCode shouldBe HttpStatusCode.OK
+      results.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
+      results.contentText shouldBe ""
+      results.updateMsg shouldBe ""
+    }
 
-  @Test
-  fun `ResponseResults should accept custom values`() {
-    val results = ResponseResults(
-      statusCode = HttpStatusCode.ServiceUnavailable,
-      contentType = ContentType.Application.Json.withCharset(Charsets.UTF_8),
-      contentText = """{"error":"proxy stopped"}""",
-      updateMsg = "proxy_stopped",
-    )
+    test("ResponseResults should accept custom values") {
+      val results = ResponseResults(
+        statusCode = HttpStatusCode.ServiceUnavailable,
+        contentType = ContentType.Application.Json.withCharset(Charsets.UTF_8),
+        contentText = """{"error":"proxy stopped"}""",
+        updateMsg = "proxy_stopped",
+      )
 
-    results.statusCode shouldBe HttpStatusCode.ServiceUnavailable
-    results.contentText shouldBe """{"error":"proxy stopped"}"""
-    results.updateMsg shouldBe "proxy_stopped"
-  }
+      results.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      results.contentText shouldBe """{"error":"proxy stopped"}"""
+      results.updateMsg shouldBe "proxy_stopped"
+    }
 
-  @Test
-  fun `ResponseResults copy should produce modified instance`() {
-    val results = ResponseResults()
+    test("ResponseResults copy should produce modified instance") {
+      val results = ResponseResults()
 
-    val modified = results.copy(
-      statusCode = HttpStatusCode.NotFound,
-      contentText = "modified content",
-      updateMsg = "modified_msg",
-    )
+      val modified = results.copy(
+        statusCode = HttpStatusCode.NotFound,
+        contentText = "modified content",
+        updateMsg = "modified_msg",
+      )
 
-    modified.statusCode shouldBe HttpStatusCode.NotFound
-    modified.contentText shouldBe "modified content"
-    modified.updateMsg shouldBe "modified_msg"
-  }
+      modified.statusCode shouldBe HttpStatusCode.NotFound
+      modified.contentText shouldBe "modified content"
+      modified.updateMsg shouldBe "modified_msg"
+    }
 
-  // ==================== ClosedSendChannelException Handling Tests ====================
+    // ==================== ClosedSendChannelException Handling Tests ====================
 
-  @Test
-  fun `writeScrapeRequest on invalidated context should throw ClosedSendChannelException`(): Unit =
-    runBlocking {
+    test("writeScrapeRequest on invalidated context should throw ClosedSendChannelException") {
       val context = AgentContext("remote-addr")
       val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
 
       context.invalidate()
 
       // Verify the exact exception type that submitScrapeRequest needs to catch
-      val exception = assertThrows<Exception> {
+      val exception = shouldThrow<Exception> {
         context.writeScrapeRequest(wrapper)
       }
       exception.shouldBeInstanceOf<ClosedSendChannelException>()
     }
 
-  // Verifies that writeScrapeRequest on an invalidated AgentContext produces a
-  // ClosedSendChannelException, and that backlog stays at zero (Bug #2 fix ensures
-  // the counter is decremented on failure). This is the exact exception type that
-  // submitScrapeRequest catches (Bug #3 fix) to return 503 ServiceUnavailable
-  // instead of propagating as an HTTP 500.
-  @Test
-  fun `writeScrapeRequest after concurrent invalidation should not corrupt backlog counter`(): Unit =
-    runBlocking {
+    // Verifies that writeScrapeRequest on an invalidated AgentContext produces a
+    // ClosedSendChannelException, and that backlog stays at zero (Bug #2 fix ensures
+    // the counter is decremented on failure). This is the exact exception type that
+    // submitScrapeRequest catches (Bug #3 fix) to return 503 ServiceUnavailable
+    // instead of propagating as an HTTP 500.
+    test("writeScrapeRequest after concurrent invalidation should not corrupt backlog counter") {
       val context = AgentContext("remote-addr")
       val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -268,146 +299,105 @@ class ProxyHttpRoutesTest {
 
       // Attempting to write after invalidation should throw ClosedSendChannelException
       // and the backlog counter should remain at 0 (not go to 1 then fail)
-      val exception = assertThrows<Exception> {
+      val exception = shouldThrow<Exception> {
         context.writeScrapeRequest(wrapper)
       }
       exception.shouldBeInstanceOf<ClosedSendChannelException>()
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-  // ==================== logActivityForResponse Tests ====================
-  // logActivityForResponse is private, so we test it via reflection.
-  // It formats: "/$path - $updateMsg - $statusCode [reason: [$failureReason]] time: $fetchDuration url: $url"
+    // ==================== logActivityForResponse Tests ====================
+    // logActivityForResponse is private, so we test it via reflection.
+    // It formats: "/$path - $updateMsg - $statusCode [reason: [$failureReason]] time: $fetchDuration url: $url"
 
-  private fun callLogActivityForResponse(
-    path: String,
-    response: ScrapeRequestResponse,
-    proxy: Proxy,
-  ) {
-    val method = ProxyHttpRoutes::class.java.getDeclaredMethod(
-      "logActivityForResponse",
-      String::class.java,
-      ScrapeRequestResponse::class.java,
-      Proxy::class.java,
-    )
-    method.isAccessible = true
-    method.invoke(ProxyHttpRoutes, path, response, proxy)
-  }
+    test("logActivityForResponse should format success status without failure reason") {
+      val capturedActivity = slot<String>()
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
 
-  @Test
-  fun `logActivityForResponse should format success status without failure reason`() {
-    val capturedActivity = slot<String>()
-    val mockProxy = mockk<Proxy>(relaxed = true)
-    every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
+      val response = ScrapeRequestResponse(
+        statusCode = HttpStatusCode.OK,
+        updateMsg = "success",
+        contentText = "metric 1.0",
+        url = "http://localhost:8080/metrics",
+        fetchDuration = 150.milliseconds,
+      )
 
-    val response = ScrapeRequestResponse(
-      statusCode = HttpStatusCode.OK,
-      updateMsg = "success",
-      contentText = "metric 1.0",
-      url = "http://localhost:8080/metrics",
-      fetchDuration = 150.milliseconds,
-    )
+      callLogActivityForResponse("metrics", response, mockProxy)
 
-    callLogActivityForResponse("metrics", response, mockProxy)
+      capturedActivity.captured shouldContain "/metrics - success - 200 OK"
+      capturedActivity.captured shouldContain "time: 150ms"
+      capturedActivity.captured shouldContain "url: http://localhost:8080/metrics"
+      // Success should NOT include "reason:" text
+      capturedActivity.captured shouldNotContain "reason:"
+    }
 
-    capturedActivity.captured shouldContain "/metrics - success - 200 OK"
-    capturedActivity.captured shouldContain "time: 150ms"
-    capturedActivity.captured shouldContain "url: http://localhost:8080/metrics"
-    // Success should NOT include "reason:" text
-    capturedActivity.captured shouldNotContain "reason:"
-  }
+    test("logActivityForResponse should include failure reason for non-success status") {
+      val capturedActivity = slot<String>()
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
 
-  @Test
-  fun `logActivityForResponse should include failure reason for non-success status`() {
-    val capturedActivity = slot<String>()
-    val mockProxy = mockk<Proxy>(relaxed = true)
-    every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
+      val response = ScrapeRequestResponse(
+        statusCode = HttpStatusCode.NotFound,
+        updateMsg = "path_not_found",
+        failureReason = "Agent not found for path",
+        url = "http://localhost:8080/missing",
+        fetchDuration = 50.milliseconds,
+      )
 
-    val response = ScrapeRequestResponse(
-      statusCode = HttpStatusCode.NotFound,
-      updateMsg = "path_not_found",
-      failureReason = "Agent not found for path",
-      url = "http://localhost:8080/missing",
-      fetchDuration = 50.milliseconds,
-    )
+      callLogActivityForResponse("missing", response, mockProxy)
 
-    callLogActivityForResponse("missing", response, mockProxy)
+      capturedActivity.captured shouldContain "/missing - path_not_found - 404 Not Found"
+      capturedActivity.captured shouldContain "reason: [Agent not found for path]"
+      capturedActivity.captured shouldContain "url: http://localhost:8080/missing"
+    }
 
-    capturedActivity.captured shouldContain "/missing - path_not_found - 404 Not Found"
-    capturedActivity.captured shouldContain "reason: [Agent not found for path]"
-    capturedActivity.captured shouldContain "url: http://localhost:8080/missing"
-  }
+    test("logActivityForResponse should include failure reason for ServiceUnavailable") {
+      val capturedActivity = slot<String>()
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
 
-  @Test
-  fun `logActivityForResponse should include failure reason for ServiceUnavailable`() {
-    val capturedActivity = slot<String>()
-    val mockProxy = mockk<Proxy>(relaxed = true)
-    every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
+      val response = ScrapeRequestResponse(
+        statusCode = HttpStatusCode.ServiceUnavailable,
+        updateMsg = "timed_out",
+        failureReason = "",
+        url = "",
+        fetchDuration = 5000.milliseconds,
+      )
 
-    val response = ScrapeRequestResponse(
-      statusCode = HttpStatusCode.ServiceUnavailable,
-      updateMsg = "timed_out",
-      failureReason = "",
-      url = "",
-      fetchDuration = 5000.milliseconds,
-    )
+      callLogActivityForResponse("slow-endpoint", response, mockProxy)
 
-    callLogActivityForResponse("slow-endpoint", response, mockProxy)
+      capturedActivity.captured shouldContain "/slow-endpoint - timed_out - 503 Service Unavailable"
+      capturedActivity.captured shouldContain "reason:"
+    }
 
-    capturedActivity.captured shouldContain "/slow-endpoint - timed_out - 503 Service Unavailable"
-    capturedActivity.captured shouldContain "reason:"
-  }
+    // ==================== authHeaderWithoutTlsWarned Tests ====================
+    // The AtomicBoolean ensures the auth-without-TLS warning fires only once.
 
-  // ==================== authHeaderWithoutTlsWarned Tests ====================
-  // The AtomicBoolean ensures the auth-without-TLS warning fires only once.
+    test("authHeaderWithoutTlsWarned should be a single-fire AtomicBoolean") {
+      // Access the private field on the ProxyHttpRoutes object
+      val field = ProxyHttpRoutes::class.java.getDeclaredField("authHeaderWithoutTlsWarned")
+      field.isAccessible = true
+      val atomicBoolean = field.get(ProxyHttpRoutes) as AtomicBoolean
 
-  @Test
-  fun `authHeaderWithoutTlsWarned should be a single-fire AtomicBoolean`() {
-    // Access the private field on the ProxyHttpRoutes object
-    val field = ProxyHttpRoutes::class.java.getDeclaredField("authHeaderWithoutTlsWarned")
-    field.isAccessible = true
-    val atomicBoolean = field.get(ProxyHttpRoutes) as AtomicBoolean
+      // Reset it for testing
+      atomicBoolean.store(false)
 
-    // Reset it for testing
-    atomicBoolean.store(false)
+      // First compareAndSet should succeed (false -> true)
+      atomicBoolean.compareAndSet(false, true) shouldBe true
 
-    // First compareAndSet should succeed (false -> true)
-    atomicBoolean.compareAndSet(false, true) shouldBe true
+      // Second compareAndSet should fail (already true)
+      atomicBoolean.compareAndSet(false, true) shouldBe false
 
-    // Second compareAndSet should fail (already true)
-    atomicBoolean.compareAndSet(false, true) shouldBe false
+      // Reset for other tests
+      atomicBoolean.store(false)
+    }
 
-    // Reset for other tests
-    atomicBoolean.store(false)
-  }
+    // ==================== submitScrapeRequest Tests ====================
+    // submitScrapeRequest is internal, so accessible from same-package tests.
+    // These tests exercise the error and success branches in the core scrape request handler.
 
-  // ==================== submitScrapeRequest Tests ====================
-  // submitScrapeRequest is internal, so accessible from same-package tests.
-  // These tests exercise the error and success branches in the core scrape request handler.
-
-  private fun createSpyProxyForSubmit(
-    timeoutSecs: Int = 1,
-    checkMillis: Int = 50,
-  ): Proxy {
-    val proxy = spyk(
-      Proxy(
-        options = ProxyOptions(
-          listOf(
-            "-Dproxy.internal.scrapeRequestTimeoutSecs=$timeoutSecs",
-            "-Dproxy.internal.scrapeRequestCheckMillis=$checkMillis",
-          ),
-        ),
-        inProcessServerName = "proxy-submit-test-${System.nanoTime()}",
-        testMode = true,
-      ),
-    )
-    every { proxy.isRunning } returns true
-    return proxy
-  }
-
-  @Test
-  fun `submitScrapeRequest should return agent_disconnected on ClosedSendChannelException`(): Unit =
-    runBlocking {
+    test("submitScrapeRequest should return agent_disconnected on ClosedSendChannelException") {
       val proxy = createSpyProxyForSubmit()
       val agentContext = AgentContext("test-remote")
       agentContext.invalidate()
@@ -424,9 +414,7 @@ class ProxyHttpRoutesTest {
       response.updateMsg shouldBe "agent_disconnected"
     }
 
-  @Test
-  fun `submitScrapeRequest should return timed_out when scrape request times out`(): Unit =
-    runBlocking {
+    test("submitScrapeRequest should return timed_out when scrape request times out") {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 1, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -442,9 +430,7 @@ class ProxyHttpRoutesTest {
       response.updateMsg shouldBe "timed_out"
     }
 
-  @Test
-  fun `submitScrapeRequest should return timed_out when agent disconnects during scrape`(): Unit =
-    runBlocking {
+    test("submitScrapeRequest should return timed_out when agent disconnects during scrape") {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -465,9 +451,7 @@ class ProxyHttpRoutesTest {
       response.updateMsg shouldBe "timed_out"
     }
 
-  @Test
-  fun `submitScrapeRequest should return timed_out when proxy stops during scrape`(): Unit =
-    runBlocking {
+    test("submitScrapeRequest should return timed_out when proxy stops during scrape") {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -492,9 +476,7 @@ class ProxyHttpRoutesTest {
       response.updateMsg shouldBe "timed_out"
     }
 
-  @Test
-  fun `submitScrapeRequest should return success for valid non-zipped response`(): Unit =
-    runBlocking {
+    test("submitScrapeRequest should return success for valid non-zipped response") {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -526,9 +508,7 @@ class ProxyHttpRoutesTest {
       response.url shouldBe "http://localhost:8080/metrics"
     }
 
-  @Test
-  fun `submitScrapeRequest should unzip zipped response content`(): Unit =
-    runBlocking {
+    test("submitScrapeRequest should unzip zipped response content") {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
       val originalContent = "metric_value 1.0\nmetric_value2 2.0"
@@ -561,9 +541,7 @@ class ProxyHttpRoutesTest {
       response.contentText shouldBe originalContent
     }
 
-  @Test
-  fun `submitScrapeRequest should fallback to plain text on content type parse error`(): Unit =
-    runBlocking {
+    test("submitScrapeRequest should fallback to plain text on content type parse error") {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -594,9 +572,7 @@ class ProxyHttpRoutesTest {
       response.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
     }
 
-  @Test
-  fun `submitScrapeRequest should return path_not_found for non-success status`(): Unit =
-    runBlocking {
+    test("submitScrapeRequest should return path_not_found for non-success status") {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -628,27 +604,11 @@ class ProxyHttpRoutesTest {
       response.contentText shouldBe ""
     }
 
-  // ==================== handleClientRequests Integration Tests ====================
-  // These tests exercise the full request dispatch logic through embedded HTTP servers
-  // with ProxyHttpRoutes.handleRequests() installed as the routing handler.
+    // ==================== handleClientRequests Integration Tests ====================
+    // These tests exercise the full request dispatch logic through embedded HTTP servers
+    // with ProxyHttpRoutes.handleRequests() installed as the routing handler.
 
-  private fun createSpyProxyForRoutes(vararg extraArgs: String): Proxy {
-    val proxy = spyk(
-      Proxy(
-        options = ProxyOptions(
-          listOf(*extraArgs),
-        ),
-        inProcessServerName = "proxy-routes-test-${System.nanoTime()}",
-        testMode = true,
-      ),
-    )
-    every { proxy.isRunning } returns true
-    return proxy
-  }
-
-  @Test
-  fun `handleClientRequests should return ServiceUnavailable when proxy is not running`(): Unit =
-    runBlocking {
+    test("handleClientRequests should return ServiceUnavailable when proxy is not running") {
       val proxy = createSpyProxyForRoutes()
       every { proxy.isRunning } returns false
 
@@ -672,9 +632,7 @@ class ProxyHttpRoutesTest {
       }
     }
 
-  @Test
-  fun `handleClientRequests should return NotFound for favicon request`(): Unit =
-    runBlocking {
+    test("handleClientRequests should return NotFound for favicon request") {
       val proxy = createSpyProxyForRoutes()
 
       val server = embeddedServer(ServerCIO, port = 0) {
@@ -697,9 +655,7 @@ class ProxyHttpRoutesTest {
       }
     }
 
-  @Test
-  fun `handleClientRequests should return NotFound for unregistered path`(): Unit =
-    runBlocking {
+    test("handleClientRequests should return NotFound for unregistered path") {
       val proxy = createSpyProxyForRoutes()
 
       val server = embeddedServer(ServerCIO, port = 0) {
@@ -722,9 +678,7 @@ class ProxyHttpRoutesTest {
       }
     }
 
-  @Test
-  fun `handleClientRequests should return 42 for blitz request`(): Unit =
-    runBlocking {
+    test("handleClientRequests should return 42 for blitz request") {
       val proxy = createSpyProxyForRoutes(
         "-Dproxy.internal.blitz.enabled=true",
         "-Dproxy.internal.blitz.path=blitz-test",
@@ -751,9 +705,7 @@ class ProxyHttpRoutesTest {
       }
     }
 
-  @Test
-  fun `handleClientRequests should return NotFound for invalidated agent context`(): Unit =
-    runBlocking {
+    test("handleClientRequests should return NotFound for invalidated agent context") {
       val proxy = createSpyProxyForRoutes()
       val agentContext = AgentContext("test-remote")
       proxy.pathManager.addPath("test-metrics", "", agentContext)
@@ -779,9 +731,7 @@ class ProxyHttpRoutesTest {
       }
     }
 
-  @Test
-  fun `handleServiceDiscoveryEndpoint should return JSON when enabled`(): Unit =
-    runBlocking {
+    test("handleServiceDiscoveryEndpoint should return JSON when enabled") {
       val proxy = createSpyProxyForRoutes(
         "--sd_enabled",
         "--sd_path",
@@ -813,9 +763,7 @@ class ProxyHttpRoutesTest {
       }
     }
 
-  @Test
-  fun `handleServiceDiscoveryEndpoint should not register when sdEnabled is false`(): Unit =
-    runBlocking {
+    test("handleServiceDiscoveryEndpoint should not register when sdEnabled is false") {
       val proxy = createSpyProxyForRoutes()
       // SD is disabled by default
 
@@ -839,4 +787,5 @@ class ProxyHttpRoutesTest {
         server.stop(0, 0)
       }
     }
+  }
 }

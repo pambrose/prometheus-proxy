@@ -19,6 +19,8 @@
 package io.prometheus.agent
 
 import com.typesafe.config.ConfigFactory
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -32,11 +34,8 @@ import io.prometheus.Agent
 import io.prometheus.common.ConfigVals
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 
-class AgentPathManagerTest {
+class AgentPathManagerTest : FunSpec() {
   private fun createMockAgent(): Agent {
     val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 
@@ -59,9 +58,8 @@ class AgentPathManagerTest {
     return mockAgent
   }
 
-  @Test
-  fun `registerPath should register path with proxy`(): Unit =
-    runBlocking {
+  init {
+    test("registerPath should register path with proxy") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -81,9 +79,7 @@ class AgentPathManagerTest {
       context.url shouldBe "http://localhost:8080/metrics"
     }
 
-  @Test
-  fun `registerPath should strip leading slash from path`(): Unit =
-    runBlocking {
+    test("registerPath should strip leading slash from path") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -101,9 +97,7 @@ class AgentPathManagerTest {
       context.path shouldBe "metrics"
     }
 
-  @Test
-  fun `registerPath should use default empty labels when not provided`(): Unit =
-    runBlocking {
+    test("registerPath should use default empty labels when not provided") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -117,35 +111,29 @@ class AgentPathManagerTest {
       coVerify { agent.grpcService.registerPathOnProxy("health", "{}") }
     }
 
-  @Test
-  fun `registerPath should throw when path is empty`(): Unit =
-    runBlocking {
+    test("registerPath should throw when path is empty") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      val exception = assertThrows<IllegalArgumentException> {
+      val exception = shouldThrow<IllegalArgumentException> {
         manager.registerPath("", "http://localhost:8080/metrics")
       }
 
       exception.message shouldContain "Empty path"
     }
 
-  @Test
-  fun `registerPath should throw when url is empty`(): Unit =
-    runBlocking {
+    test("registerPath should throw when url is empty") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      val exception = assertThrows<IllegalArgumentException> {
+      val exception = shouldThrow<IllegalArgumentException> {
         manager.registerPath("metrics", "")
       }
 
       exception.message shouldContain "Empty URL"
     }
 
-  @Test
-  fun `unregisterPath should remove path from map`(): Unit =
-    runBlocking {
+    test("unregisterPath should remove path from map") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -166,9 +154,7 @@ class AgentPathManagerTest {
       manager["metrics"].shouldBeNull()
     }
 
-  @Test
-  fun `unregisterPath should strip leading slash from path`(): Unit =
-    runBlocking {
+    test("unregisterPath should strip leading slash from path") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -188,22 +174,18 @@ class AgentPathManagerTest {
       manager["metrics"].shouldBeNull()
     }
 
-  @Test
-  fun `unregisterPath should throw when path is empty`(): Unit =
-    runBlocking {
+    test("unregisterPath should throw when path is empty") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      val exception = assertThrows<IllegalArgumentException> {
+      val exception = shouldThrow<IllegalArgumentException> {
         manager.unregisterPath("")
       }
 
       exception.message shouldContain "Empty path"
     }
 
-  @Test
-  fun `unregisterPath should not throw when path not in map`(): Unit =
-    runBlocking {
+    test("unregisterPath should not throw when path not in map") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -217,18 +199,14 @@ class AgentPathManagerTest {
       coVerify { agent.grpcService.unregisterPathOnProxy("nonexistent") }
     }
 
-  @Test
-  fun `get operator should return null for non-existent path`(): Unit =
-    runBlocking {
+    test("get operator should return null for non-existent path") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
       manager["nonexistent"].shouldBeNull()
     }
 
-  @Test
-  fun `get operator should return PathContext for registered path`(): Unit =
-    runBlocking {
+    test("get operator should return PathContext for registered path") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -247,9 +225,7 @@ class AgentPathManagerTest {
       context.labels shouldBe """{"env":"prod"}"""
     }
 
-  @Test
-  fun `clear should remove all paths`(): Unit =
-    runBlocking {
+    test("clear should remove all paths") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -273,9 +249,7 @@ class AgentPathManagerTest {
       manager["path3"].shouldBeNull()
     }
 
-  @Test
-  fun `pathMapSize should return size from grpc service`(): Unit =
-    runBlocking {
+    test("pathMapSize should return size from grpc service") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -287,9 +261,7 @@ class AgentPathManagerTest {
       coVerify { agent.grpcService.pathMapSize() }
     }
 
-  @Test
-  fun `PathContext data class should have correct properties`(): Unit =
-    runBlocking {
+    test("PathContext data class should have correct properties") {
       val context = AgentPathManager.PathContext(
         pathId = 123L,
         path = "metrics",
@@ -303,9 +275,7 @@ class AgentPathManagerTest {
       context.labels shouldBe """{"job":"test"}"""
     }
 
-  @Test
-  fun `multiple paths can be registered`(): Unit =
-    runBlocking {
+    test("multiple paths can be registered") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -323,11 +293,9 @@ class AgentPathManagerTest {
       manager["info"].shouldNotBeNull()
     }
 
-  // ==================== toPlainText Tests ====================
+    // ==================== toPlainText Tests ====================
 
-  @Test
-  fun `toPlainText should return header when no paths configured`(): Unit =
-    runBlocking {
+    test("toPlainText should return header when no paths configured") {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
@@ -336,9 +304,7 @@ class AgentPathManagerTest {
       text shouldContain "Agent Path Configs"
     }
 
-  @Test
-  fun `toPlainText with configured paths should include path details`(): Unit =
-    runBlocking {
+    test("toPlainText with configured paths should include path details") {
       val config = ConfigFactory.parseString(
         """
         agent {
@@ -379,9 +345,7 @@ class AgentPathManagerTest {
       text.shouldNotBeEmpty()
     }
 
-  @Test
-  fun `toPlainText should include URL column for configured paths`(): Unit =
-    runBlocking {
+    test("toPlainText should include URL column for configured paths") {
       val config = ConfigFactory.parseString(
         """
         agent {
@@ -414,9 +378,7 @@ class AgentPathManagerTest {
       text shouldContain "http://localhost:9100/metrics"
     }
 
-  @Test
-  fun `registerPaths should register all configured paths`(): Unit =
-    runBlocking {
+    test("registerPaths should register all configured paths") {
       val config = ConfigFactory.parseString(
         """
         agent {
@@ -462,4 +424,5 @@ class AgentPathManagerTest {
       manager["metrics1"].shouldNotBeNull()
       manager["metrics2"].shouldNotBeNull()
     }
+  }
 }
