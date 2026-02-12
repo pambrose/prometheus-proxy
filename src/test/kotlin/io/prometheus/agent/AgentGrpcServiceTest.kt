@@ -21,7 +21,7 @@ package io.prometheus.agent
 import com.github.pambrose.common.util.zip
 import io.grpc.Metadata
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
@@ -55,7 +55,7 @@ import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.jvm.isAccessible
 
-class AgentGrpcServiceTest : FunSpec() {
+class AgentGrpcServiceTest : StringSpec() {
   private fun createMockAgent(proxyHostname: String): Agent {
     val mockOptions = mockk<AgentOptions>(relaxed = true)
 
@@ -100,7 +100,7 @@ class AgentGrpcServiceTest : FunSpec() {
   }
 
   init {
-    test("parseProxyHostname should extract hostname and port correctly") {
+    "parseProxyHostname should extract hostname and port correctly" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -111,7 +111,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("parseProxyHostname should use default port when not specified") {
+    "parseProxyHostname should use default port when not specified" {
       val agent = createMockAgent("example.com")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -122,7 +122,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("parseProxyHostname should strip http prefix") {
+    "parseProxyHostname should strip http prefix" {
       val agent = createMockAgent("http://example.com:8080")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -133,7 +133,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("parseProxyHostname should strip https prefix") {
+    "parseProxyHostname should strip https prefix" {
       val agent = createMockAgent("https://example.com:8443")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -144,7 +144,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("parseProxyHostname should handle custom port") {
+    "parseProxyHostname should handle custom port" {
       val agent = createMockAgent("proxy.example.org:9090")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -155,7 +155,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("parseProxyHostname should handle IPv4 address") {
+    "parseProxyHostname should handle IPv4 address" {
       val agent = createMockAgent("192.168.1.100:5000")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -166,7 +166,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("parseProxyHostname should handle hostname without port and default to 50051") {
+    "parseProxyHostname should handle hostname without port and default to 50051" {
       val agent = createMockAgent("my-proxy-server")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -177,7 +177,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("parseProxyHostname should strip http prefix and use custom port") {
+    "parseProxyHostname should strip http prefix and use custom port" {
       val agent = createMockAgent("http://localhost:9999")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -188,7 +188,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("parseProxyHostname should strip https prefix and use custom port") {
+    "parseProxyHostname should strip https prefix and use custom port" {
       val agent = createMockAgent("https://secure.proxy.com:443")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -199,7 +199,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("parseProxyHostname should handle http prefix without port") {
+    "parseProxyHostname should handle http prefix without port" {
       val agent = createMockAgent("http://example.com")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -210,7 +210,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("parseProxyHostname should handle https prefix without port") {
+    "parseProxyHostname should handle https prefix without port" {
       val agent = createMockAgent("https://example.com")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -225,7 +225,7 @@ class AgentGrpcServiceTest : FunSpec() {
     // in Agent.kt) rather than the producer side (readRequestsFromProxy). This eliminates leaks
     // when items are discarded from a cancelled channel — items that were never consumed are
     // never counted. The increment and decrement are always paired in the same try-finally scope.
-    test("backlog counter should never go negative with consumer-side increment pattern") {
+    "backlog counter should never go negative with consumer-side increment pattern" {
       val channel = Channel<Int>(UNLIMITED)
       val backlogSize = AtomicInteger(0)
       val wentNegative = AtomicBoolean(false)
@@ -260,7 +260,7 @@ class AgentGrpcServiceTest : FunSpec() {
       backlogSize.get() shouldBe 0
     }
 
-    test("backlog counter should remain non-negative throughout processing") {
+    "backlog counter should remain non-negative throughout processing" {
       val channel = Channel<Int>(UNLIMITED)
       val backlogSize = AtomicInteger(0)
       val minObserved = AtomicInteger(Int.MAX_VALUE)
@@ -295,7 +295,7 @@ class AgentGrpcServiceTest : FunSpec() {
 
     // ==================== ShutDown Tests ====================
 
-    test("shutDown should be safe to call when service has started") {
+    "shutDown should be safe to call when service has started" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -303,7 +303,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("shutDown should be safe to call multiple times") {
+    "shutDown should be safe to call multiple times" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -314,7 +314,7 @@ class AgentGrpcServiceTest : FunSpec() {
 
     // ==================== gRPC Stub Tests ====================
 
-    test("grpcStub should be initialized after construction") {
+    "grpcStub should be initialized after construction" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -326,7 +326,7 @@ class AgentGrpcServiceTest : FunSpec() {
 
     // ==================== Unary Deadline Tests ====================
 
-    test("unaryDeadlineSecs should default to 30") {
+    "unaryDeadlineSecs should default to 30" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -337,7 +337,7 @@ class AgentGrpcServiceTest : FunSpec() {
 
     // ==================== connectAgent Tests ====================
 
-    test("connectAgent should return true on successful connection") {
+    "connectAgent should return true on successful connection" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -352,7 +352,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("connectAgent should return false on connection failure") {
+    "connectAgent should return false on connection failure" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -367,7 +367,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("connectAgent with transportFilterDisabled should assign agentId") {
+    "connectAgent with transportFilterDisabled should assign agentId" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -387,7 +387,7 @@ class AgentGrpcServiceTest : FunSpec() {
 
     // ==================== registerAgent Tests ====================
 
-    test("registerAgent should send request with correct agent details") {
+    "registerAgent should send request with correct agent details" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -409,7 +409,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("registerAgent should throw RequestFailureException on invalid response") {
+    "registerAgent should throw RequestFailureException on invalid response" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -430,7 +430,7 @@ class AgentGrpcServiceTest : FunSpec() {
 
     // ==================== Channel Termination Tests (M9) ====================
 
-    test("shutDown should fully terminate the channel") {
+    "shutDown should fully terminate the channel" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -443,7 +443,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.channel.isTerminated.shouldBeTrue()
     }
 
-    test("resetGrpcStubs should terminate old channel before creating new one") {
+    "resetGrpcStubs should terminate old channel before creating new one" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -466,7 +466,7 @@ class AgentGrpcServiceTest : FunSpec() {
 
     // ==================== Concurrent shutDown / resetGrpcStubs Tests ====================
 
-    test("concurrent shutDown and resetGrpcStubs should not deadlock") {
+    "concurrent shutDown and resetGrpcStubs should not deadlock" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -512,7 +512,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("resetGrpcStubs called multiple times should not deadlock") {
+    "resetGrpcStubs called multiple times should not deadlock" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -541,7 +541,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("concurrent resetGrpcStubs from multiple threads should not deadlock") {
+    "concurrent resetGrpcStubs from multiple threads should not deadlock" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -572,7 +572,7 @@ class AgentGrpcServiceTest : FunSpec() {
 
     // ==================== sendHeartBeat Tests ====================
 
-    test("sendHeartBeat should skip when agentId is empty") {
+    "sendHeartBeat should skip when agentId is empty" {
       val agent = createMockAgent("localhost:50051")
       every { agent.agentId } returns ""
       val service = AgentGrpcService(agent, agent.options, "test-server")
@@ -587,7 +587,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("sendHeartBeat should send request when agentId is set") {
+    "sendHeartBeat should send request when agentId is set" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -604,7 +604,7 @@ class AgentGrpcServiceTest : FunSpec() {
 
     // ==================== readRequestsFromProxy Tests ====================
 
-    test("readRequestsFromProxy should forward scrape requests to connectionContext") {
+    "readRequestsFromProxy should forward scrape requests to connectionContext" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -638,7 +638,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("readRequestsFromProxy should handle empty flow from proxy") {
+    "readRequestsFromProxy should handle empty flow from proxy" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -663,7 +663,7 @@ class AgentGrpcServiceTest : FunSpec() {
     // It routes ScrapeResults to either nonChunkedChannel or chunkedChannel based on
     // whether the content is zipped and whether the zipped size exceeds chunkContentSizeBytes.
 
-    test("processScrapeResults should route non-zipped result to nonChunkedChannel") {
+    "processScrapeResults should route non-zipped result to nonChunkedChannel" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -698,7 +698,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("processScrapeResults should route zipped small result to nonChunkedChannel") {
+    "processScrapeResults should route zipped small result to nonChunkedChannel" {
       val agent = createMockAgent("localhost:50051")
       // chunkContentSizeBytes defaults to 32768 in mock
       val service = AgentGrpcService(agent, agent.options, "test-server")
@@ -736,7 +736,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("processScrapeResults should route zipped large result to chunkedChannel with CRC32") {
+    "processScrapeResults should route zipped large result to chunkedChannel with CRC32" {
       val agent = createMockAgent("localhost:50051")
       // Set a very small chunk size so our test data gets chunked
       // Access the mock options directly to avoid MockK chain-mock issues
@@ -809,7 +809,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("processScrapeResults should handle multiple results in sequence") {
+    "processScrapeResults should handle multiple results in sequence" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -851,7 +851,7 @@ class AgentGrpcServiceTest : FunSpec() {
 
     // ==================== sendHeartBeat Error Handling Tests ====================
 
-    test("sendHeartBeat should handle NOT_FOUND status from proxy") {
+    "sendHeartBeat should handle NOT_FOUND status from proxy" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -869,7 +869,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("sendHeartBeat should handle generic exception without throwing") {
+    "sendHeartBeat should handle generic exception without throwing" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -884,7 +884,7 @@ class AgentGrpcServiceTest : FunSpec() {
       service.shutDown()
     }
 
-    test("registerAgent should throw on empty agentId") {
+    "registerAgent should throw on empty agentId" {
       val agent = createMockAgent("localhost:50051")
       every { agent.agentId } returns ""
       val service = AgentGrpcService(agent, agent.options, "test-server")

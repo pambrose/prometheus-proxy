@@ -20,7 +20,7 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.util.zip
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -54,7 +54,7 @@ import io.ktor.server.cio.CIO as ServerCIO
 // Bug #12: The service discovery endpoint was registered using the raw sdPath config value,
 // which defaults to "discovery" (no leading slash). The fix normalizes the path with
 // ensureLeadingSlash() to ensure consistent route registration regardless of config format.
-class ProxyHttpRoutesTest : FunSpec() {
+class ProxyHttpRoutesTest : StringSpec() {
   private fun callLogActivityForResponse(
     path: String,
     response: ScrapeRequestResponse,
@@ -105,25 +105,25 @@ class ProxyHttpRoutesTest : FunSpec() {
   }
 
   init {
-    test("ensureLeadingSlash should add slash when missing") {
+    "ensureLeadingSlash should add slash when missing" {
       "discovery".ensureLeadingSlash() shouldBe "/discovery"
     }
 
-    test("ensureLeadingSlash should not double slash when already present") {
+    "ensureLeadingSlash should not double slash when already present" {
       "/discovery".ensureLeadingSlash() shouldBe "/discovery"
     }
 
-    test("ensureLeadingSlash should handle nested paths without slash") {
+    "ensureLeadingSlash should handle nested paths without slash" {
       "api/discovery".ensureLeadingSlash() shouldBe "/api/discovery"
     }
 
-    test("ensureLeadingSlash should handle nested paths with slash") {
+    "ensureLeadingSlash should handle nested paths with slash" {
       "/api/discovery".ensureLeadingSlash() shouldBe "/api/discovery"
     }
 
     // Verifies that a normalized path (with leading slash) correctly registers
     // and matches incoming requests via Ktor routing.
-    test("normalized path should match incoming requests") {
+    "normalized path should match incoming requests" {
       // Simulate the fix: config value "discovery" -> ensureLeadingSlash -> "/discovery"
       val configPath = "discovery"
       val normalizedPath = configPath.ensureLeadingSlash()
@@ -152,7 +152,7 @@ class ProxyHttpRoutesTest : FunSpec() {
 
     // Verifies that a config value already containing a leading slash
     // is handled correctly without double-slashing.
-    test("config path with leading slash should still match after normalization") {
+    "config path with leading slash should still match after normalization" {
       val configPath = "/discovery"
       val normalizedPath = configPath.ensureLeadingSlash()
       normalizedPath shouldBe "/discovery"
@@ -181,7 +181,7 @@ class ProxyHttpRoutesTest : FunSpec() {
 
     // ==================== ScrapeRequestResponse Tests ====================
 
-    test("ScrapeRequestResponse should store all properties") {
+    "ScrapeRequestResponse should store all properties" {
       val response = ScrapeRequestResponse(
         statusCode = HttpStatusCode.OK,
         updateMsg = "success",
@@ -200,7 +200,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       response.fetchDuration shouldBe 150.milliseconds
     }
 
-    test("ScrapeRequestResponse should default to plain text content type") {
+    "ScrapeRequestResponse should default to plain text content type" {
       val response = ScrapeRequestResponse(
         statusCode = HttpStatusCode.ServiceUnavailable,
         updateMsg = "timed_out",
@@ -213,7 +213,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       response.url shouldBe ""
     }
 
-    test("ScrapeRequestResponse should handle error status codes") {
+    "ScrapeRequestResponse should handle error status codes" {
       val response = ScrapeRequestResponse(
         statusCode = HttpStatusCode.NotFound,
         updateMsg = "path_not_found",
@@ -229,7 +229,7 @@ class ProxyHttpRoutesTest : FunSpec() {
 
     // ==================== ResponseResults Tests ====================
 
-    test("ResponseResults should have correct defaults") {
+    "ResponseResults should have correct defaults" {
       val results = ResponseResults()
 
       results.statusCode shouldBe HttpStatusCode.OK
@@ -238,7 +238,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       results.updateMsg shouldBe ""
     }
 
-    test("ResponseResults should accept custom values") {
+    "ResponseResults should accept custom values" {
       val results = ResponseResults(
         statusCode = HttpStatusCode.ServiceUnavailable,
         contentType = ContentType.Application.Json.withCharset(Charsets.UTF_8),
@@ -251,7 +251,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       results.updateMsg shouldBe "proxy_stopped"
     }
 
-    test("ResponseResults copy should produce modified instance") {
+    "ResponseResults copy should produce modified instance" {
       val results = ResponseResults()
 
       val modified = results.copy(
@@ -267,7 +267,7 @@ class ProxyHttpRoutesTest : FunSpec() {
 
     // ==================== ClosedSendChannelException Handling Tests ====================
 
-    test("writeScrapeRequest on invalidated context should throw ClosedSendChannelException") {
+    "writeScrapeRequest on invalidated context should throw ClosedSendChannelException" {
       val context = AgentContext("remote-addr")
       val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -285,7 +285,7 @@ class ProxyHttpRoutesTest : FunSpec() {
     // the counter is decremented on failure). This is the exact exception type that
     // submitScrapeRequest catches (Bug #3 fix) to return 503 ServiceUnavailable
     // instead of propagating as an HTTP 500.
-    test("writeScrapeRequest after concurrent invalidation should not corrupt backlog counter") {
+    "writeScrapeRequest after concurrent invalidation should not corrupt backlog counter" {
       val context = AgentContext("remote-addr")
       val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -310,7 +310,7 @@ class ProxyHttpRoutesTest : FunSpec() {
     // logActivityForResponse is private, so we test it via reflection.
     // It formats: "/$path - $updateMsg - $statusCode [reason: [$failureReason]] time: $fetchDuration url: $url"
 
-    test("logActivityForResponse should format success status without failure reason") {
+    "logActivityForResponse should format success status without failure reason" {
       val capturedActivity = slot<String>()
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
@@ -332,7 +332,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       capturedActivity.captured shouldNotContain "reason:"
     }
 
-    test("logActivityForResponse should include failure reason for non-success status") {
+    "logActivityForResponse should include failure reason for non-success status" {
       val capturedActivity = slot<String>()
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
@@ -352,7 +352,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       capturedActivity.captured shouldContain "url: http://localhost:8080/missing"
     }
 
-    test("logActivityForResponse should include failure reason for ServiceUnavailable") {
+    "logActivityForResponse should include failure reason for ServiceUnavailable" {
       val capturedActivity = slot<String>()
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
@@ -374,7 +374,7 @@ class ProxyHttpRoutesTest : FunSpec() {
     // ==================== authHeaderWithoutTlsWarned Tests ====================
     // The AtomicBoolean ensures the auth-without-TLS warning fires only once.
 
-    test("authHeaderWithoutTlsWarned should be a single-fire AtomicBoolean") {
+    "authHeaderWithoutTlsWarned should be a single-fire AtomicBoolean" {
       // Access the private field on the ProxyHttpRoutes object
       val field = ProxyHttpRoutes::class.java.getDeclaredField("authHeaderWithoutTlsWarned")
       field.isAccessible = true
@@ -397,7 +397,7 @@ class ProxyHttpRoutesTest : FunSpec() {
     // submitScrapeRequest is internal, so accessible from same-package tests.
     // These tests exercise the error and success branches in the core scrape request handler.
 
-    test("submitScrapeRequest should return agent_disconnected on ClosedSendChannelException") {
+    "submitScrapeRequest should return agent_disconnected on ClosedSendChannelException" {
       val proxy = createSpyProxyForSubmit()
       val agentContext = AgentContext("test-remote")
       agentContext.invalidate()
@@ -414,7 +414,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       response.updateMsg shouldBe "agent_disconnected"
     }
 
-    test("submitScrapeRequest should return timed_out when scrape request times out") {
+    "submitScrapeRequest should return timed_out when scrape request times out" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 1, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -430,7 +430,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       response.updateMsg shouldBe "timed_out"
     }
 
-    test("submitScrapeRequest should return timed_out when agent disconnects during scrape") {
+    "submitScrapeRequest should return timed_out when agent disconnects during scrape" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -451,7 +451,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       response.updateMsg shouldBe "timed_out"
     }
 
-    test("submitScrapeRequest should return timed_out when proxy stops during scrape") {
+    "submitScrapeRequest should return timed_out when proxy stops during scrape" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -476,7 +476,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       response.updateMsg shouldBe "timed_out"
     }
 
-    test("submitScrapeRequest should return success for valid non-zipped response") {
+    "submitScrapeRequest should return success for valid non-zipped response" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -508,7 +508,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       response.url shouldBe "http://localhost:8080/metrics"
     }
 
-    test("submitScrapeRequest should unzip zipped response content") {
+    "submitScrapeRequest should unzip zipped response content" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
       val originalContent = "metric_value 1.0\nmetric_value2 2.0"
@@ -541,7 +541,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       response.contentText shouldBe originalContent
     }
 
-    test("submitScrapeRequest should fallback to plain text on content type parse error") {
+    "submitScrapeRequest should fallback to plain text on content type parse error" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -572,7 +572,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       response.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
     }
 
-    test("submitScrapeRequest should return path_not_found for non-success status") {
+    "submitScrapeRequest should return path_not_found for non-success status" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
 
@@ -608,7 +608,7 @@ class ProxyHttpRoutesTest : FunSpec() {
     // These tests exercise the full request dispatch logic through embedded HTTP servers
     // with ProxyHttpRoutes.handleRequests() installed as the routing handler.
 
-    test("handleClientRequests should return ServiceUnavailable when proxy is not running") {
+    "handleClientRequests should return ServiceUnavailable when proxy is not running" {
       val proxy = createSpyProxyForRoutes()
       every { proxy.isRunning } returns false
 
@@ -632,7 +632,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       }
     }
 
-    test("handleClientRequests should return NotFound for favicon request") {
+    "handleClientRequests should return NotFound for favicon request" {
       val proxy = createSpyProxyForRoutes()
 
       val server = embeddedServer(ServerCIO, port = 0) {
@@ -655,7 +655,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       }
     }
 
-    test("handleClientRequests should return NotFound for unregistered path") {
+    "handleClientRequests should return NotFound for unregistered path" {
       val proxy = createSpyProxyForRoutes()
 
       val server = embeddedServer(ServerCIO, port = 0) {
@@ -678,7 +678,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       }
     }
 
-    test("handleClientRequests should return 42 for blitz request") {
+    "handleClientRequests should return 42 for blitz request" {
       val proxy = createSpyProxyForRoutes(
         "-Dproxy.internal.blitz.enabled=true",
         "-Dproxy.internal.blitz.path=blitz-test",
@@ -705,7 +705,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       }
     }
 
-    test("handleClientRequests should return NotFound for invalidated agent context") {
+    "handleClientRequests should return NotFound for invalidated agent context" {
       val proxy = createSpyProxyForRoutes()
       val agentContext = AgentContext("test-remote")
       proxy.pathManager.addPath("test-metrics", "", agentContext)
@@ -731,7 +731,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       }
     }
 
-    test("handleServiceDiscoveryEndpoint should return JSON when enabled") {
+    "handleServiceDiscoveryEndpoint should return JSON when enabled" {
       val proxy = createSpyProxyForRoutes(
         "--sd_enabled",
         "--sd_path",
@@ -763,7 +763,7 @@ class ProxyHttpRoutesTest : FunSpec() {
       }
     }
 
-    test("handleServiceDiscoveryEndpoint should not register when sdEnabled is false") {
+    "handleServiceDiscoveryEndpoint should not register when sdEnabled is false" {
       val proxy = createSpyProxyForRoutes()
       // SD is disabled by default
 

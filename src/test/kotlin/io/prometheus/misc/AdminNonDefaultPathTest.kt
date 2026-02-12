@@ -19,7 +19,7 @@
 package io.prometheus.misc
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -33,7 +33,7 @@ import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
 
-class AdminNonDefaultPathTest : FunSpec() {
+class AdminNonDefaultPathTest : StringSpec() {
   private val proxyConfigVals: ConfigVals.Proxy2 by lazy { proxy.configVals.proxy }
 
   companion object : HarnessSetup()
@@ -62,7 +62,7 @@ class AdminNonDefaultPathTest : FunSpec() {
       takeDownProxyAndAgent()
     }
 
-    test("proxy ping path should respond with pong") {
+    "proxy ping path should respond with pong" {
       proxyConfigVals.admin.apply {
         port shouldBe 8099
         pingPath shouldBe "pingPath2"
@@ -74,7 +74,7 @@ class AdminNonDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxy version path should return version info") {
+    "proxy version path should return version info" {
       proxyConfigVals.admin.apply {
         port shouldBe 8099
         versionPath shouldBe "versionPath2"
@@ -86,7 +86,7 @@ class AdminNonDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxy health check path should return health status") {
+    "proxy health check path should return health status" {
       proxyConfigVals.admin.apply {
         healthCheckPath shouldBe "healthCheckPath2"
 
@@ -97,7 +97,7 @@ class AdminNonDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxy thread dump path should return thread dump") {
+    "proxy thread dump path should return thread dump" {
       proxyConfigVals.admin.apply {
         threadDumpPath shouldBe "threadDumpPath2"
 

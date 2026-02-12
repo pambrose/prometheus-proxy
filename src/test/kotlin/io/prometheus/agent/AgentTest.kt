@@ -18,7 +18,7 @@
 
 package io.prometheus.agent
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -31,7 +31,7 @@ import java.util.concurrent.CountDownLatch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class AgentTest : FunSpec() {
+class AgentTest : StringSpec() {
   private fun createTestAgent(vararg extraArgs: String): Agent {
     val args =
       mutableListOf("--proxy", "localhost:50051").apply {
@@ -47,7 +47,7 @@ class AgentTest : FunSpec() {
   init {
     // ==================== awaitInitialConnection Tests ====================
 
-    test("awaitInitialConnection should return false when timeout expires") {
+    "awaitInitialConnection should return false when timeout expires" {
       val agent = createTestAgent()
 
       val result = agent.awaitInitialConnection(100.milliseconds)
@@ -55,7 +55,7 @@ class AgentTest : FunSpec() {
       result.shouldBeFalse()
     }
 
-    test("awaitInitialConnection should return true after latch countdown") {
+    "awaitInitialConnection should return true after latch countdown" {
       val agent = createTestAgent()
 
       // Access the private latch via reflection and count it down
@@ -69,7 +69,7 @@ class AgentTest : FunSpec() {
       result.shouldBeTrue()
     }
 
-    test("awaitInitialConnection should return false immediately with zero timeout") {
+    "awaitInitialConnection should return false immediately with zero timeout" {
       val agent = createTestAgent()
 
       val result = agent.awaitInitialConnection(0.milliseconds)
@@ -79,14 +79,14 @@ class AgentTest : FunSpec() {
 
     // ==================== updateScrapeCounter Tests ====================
 
-    test("updateScrapeCounter should not fail for empty type") {
+    "updateScrapeCounter should not fail for empty type" {
       val agent = createTestAgent()
 
       // With metrics disabled (default), empty type should be a no-op
       agent.updateScrapeCounter("")
     }
 
-    test("updateScrapeCounter should not fail for non-empty type with metrics disabled") {
+    "updateScrapeCounter should not fail for non-empty type with metrics disabled" {
       val agent = createTestAgent()
 
       // With metrics disabled (default), non-empty type hits the metrics guard and exits
@@ -95,7 +95,7 @@ class AgentTest : FunSpec() {
 
     // ==================== markMsgSent Tests ====================
 
-    test("markMsgSent should complete without error") {
+    "markMsgSent should complete without error" {
       val agent = createTestAgent()
 
       // Should not throw
@@ -104,7 +104,7 @@ class AgentTest : FunSpec() {
 
     // ==================== serviceName Tests ====================
 
-    test("serviceName should return Agent agentName format") {
+    "serviceName should return Agent agentName format" {
       val agent = createTestAgent("--name", "my-test-agent")
 
       // serviceName() is protected, so verify via reflection
@@ -117,13 +117,13 @@ class AgentTest : FunSpec() {
 
     // ==================== agentName Tests ====================
 
-    test("agentName should use provided name from options") {
+    "agentName should use provided name from options" {
       val agent = createTestAgent("--name", "custom-agent")
 
       agent.agentName shouldBe "custom-agent"
     }
 
-    test("agentName should fallback to Unnamed-hostname when name is blank") {
+    "agentName should fallback to Unnamed-hostname when name is blank" {
       val agent = createTestAgent()
 
       agent.agentName shouldContain "Unnamed-"
@@ -131,7 +131,7 @@ class AgentTest : FunSpec() {
 
     // ==================== proxyHost Tests ====================
 
-    test("proxyHost should return hostname colon port format") {
+    "proxyHost should return hostname colon port format" {
       val agent = createTestAgent()
 
       val host = agent.proxyHost
@@ -142,7 +142,7 @@ class AgentTest : FunSpec() {
 
     // ==================== metrics Tests ====================
 
-    test("metrics should not invoke lambda when metrics disabled") {
+    "metrics should not invoke lambda when metrics disabled" {
       val agent = createTestAgent()
 
       var invoked = false
@@ -151,7 +151,7 @@ class AgentTest : FunSpec() {
       invoked.shouldBeFalse()
     }
 
-    test("metrics should invoke lambda when metrics enabled") {
+    "metrics should invoke lambda when metrics enabled" {
       val mockMetrics = mockk<AgentMetrics>(relaxed = true)
       val mockAgent = mockk<Agent>(relaxed = true)
       every { mockAgent.isMetricsEnabled } returns true
@@ -168,14 +168,14 @@ class AgentTest : FunSpec() {
 
     // ==================== Construction / launchId / toString Tests ====================
 
-    test("launchId should be a 15-character string") {
+    "launchId should be a 15-character string" {
       val agent = createTestAgent()
 
       agent.launchId.length shouldBe 15
       agent.launchId.shouldNotBeEmpty()
     }
 
-    test("toString should contain agentName and proxyHost") {
+    "toString should contain agentName and proxyHost" {
       val agent = createTestAgent("--name", "tostring-agent")
 
       val str = agent.toString()

@@ -3,7 +3,7 @@
 package io.prometheus.proxy
 
 import io.grpc.Attributes
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -12,7 +12,7 @@ import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 
-class ProxyServerTransportFilterTest : FunSpec() {
+class ProxyServerTransportFilterTest : StringSpec() {
   private fun createMockProxy(): Pair<Proxy, AgentContextManager> {
     val agentContextManager = AgentContextManager(isTestMode = true)
     val mockProxy = mockk<Proxy>(relaxed = true)
@@ -23,7 +23,7 @@ class ProxyServerTransportFilterTest : FunSpec() {
   init {
     // ==================== transportReady Tests ====================
 
-    test("transportReady should create agent context and add to manager") {
+    "transportReady should create agent context and add to manager" {
       val (mockProxy, agentContextManager) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)
 
@@ -33,7 +33,7 @@ class ProxyServerTransportFilterTest : FunSpec() {
       agentContextManager.agentContextSize shouldBe 1
     }
 
-    test("transportReady should add AGENT_ID_KEY to returned attributes") {
+    "transportReady should add AGENT_ID_KEY to returned attributes" {
       val (mockProxy, _) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)
 
@@ -43,7 +43,7 @@ class ProxyServerTransportFilterTest : FunSpec() {
       resultAttrs.get(AGENT_ID_KEY).shouldNotBeNull()
     }
 
-    test("transportReady should use UNKNOWN_ADDRESS when remote addr is missing") {
+    "transportReady should use UNKNOWN_ADDRESS when remote addr is missing" {
       val (mockProxy, agentContextManager) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)
 
@@ -54,7 +54,7 @@ class ProxyServerTransportFilterTest : FunSpec() {
       agentContextManager.agentContextSize shouldBe 1
     }
 
-    test("transportReady should preserve original attributes") {
+    "transportReady should preserve original attributes" {
       val (mockProxy, _) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)
 
@@ -69,7 +69,7 @@ class ProxyServerTransportFilterTest : FunSpec() {
       resultAttrs.get(AGENT_ID_KEY).shouldNotBeNull()
     }
 
-    test("transportReady should handle multiple connections") {
+    "transportReady should handle multiple connections" {
       val (mockProxy, agentContextManager) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)
 
@@ -82,7 +82,7 @@ class ProxyServerTransportFilterTest : FunSpec() {
 
     // ==================== transportTerminated Tests ====================
 
-    test("transportTerminated should remove agent from context manager") {
+    "transportTerminated should remove agent from context manager" {
       val (mockProxy, agentContextManager) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)
 
@@ -102,7 +102,7 @@ class ProxyServerTransportFilterTest : FunSpec() {
       verify { mockProxy.removeAgentContext(agentId, "Termination") }
     }
 
-    test("transportTerminated should handle missing agent-id gracefully") {
+    "transportTerminated should handle missing agent-id gracefully" {
       val (mockProxy, _) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)
 
@@ -113,7 +113,7 @@ class ProxyServerTransportFilterTest : FunSpec() {
 
     // ==================== Remote Address Tests ====================
 
-    test("transportReady should use remote addr from REMOTE_ADDR_KEY when available") {
+    "transportReady should use remote addr from REMOTE_ADDR_KEY when available" {
       val (mockProxy, agentContextManager) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)
 
@@ -132,7 +132,7 @@ class ProxyServerTransportFilterTest : FunSpec() {
 
     // ==================== Transport Filter Lifecycle ====================
 
-    test("transportTerminated should call removeAgentContext with correct reason") {
+    "transportTerminated should call removeAgentContext with correct reason" {
       val (mockProxy, agentContextManager) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)
 

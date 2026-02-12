@@ -18,7 +18,7 @@
 
 package io.prometheus.agent
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.comparables.shouldBeGreaterThan
@@ -37,9 +37,9 @@ import io.prometheus.proxy.ScrapeRequestWrapper
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
-class AgentContextTest : FunSpec() {
+class AgentContextTest : StringSpec() {
   init {
-    test("constructor should generate unique agent IDs") {
+    "constructor should generate unique agent IDs" {
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
       val context3 = AgentContext("192.168.1.3")
@@ -49,20 +49,20 @@ class AgentContextTest : FunSpec() {
       context1.agentId shouldNotBe context3.agentId
     }
 
-    test("agentId should be numeric string") {
+    "agentId should be numeric string" {
       val context = AgentContext("192.168.1.1")
 
       context.agentId.toLongOrNull().shouldNotBeNull()
     }
 
-    test("new context should be valid by default") {
+    "new context should be valid by default" {
       val context = AgentContext("192.168.1.1")
 
       context.isValid().shouldBeTrue()
       context.isNotValid().shouldBeFalse()
     }
 
-    test("assignProperties should set all properties from request") {
+    "assignProperties should set all properties from request" {
       val context = AgentContext("192.168.1.1")
 
       val request = registerAgentRequest {
@@ -80,7 +80,7 @@ class AgentContextTest : FunSpec() {
       context.consolidated shouldBe true
     }
 
-    test("desc should return empty string for non-consolidated context") {
+    "desc should return empty string for non-consolidated context" {
       val context = AgentContext("192.168.1.1")
 
       val request = registerAgentRequest {
@@ -92,7 +92,7 @@ class AgentContextTest : FunSpec() {
       context.desc shouldBe ""
     }
 
-    test("desc should return 'consolidated ' for consolidated context") {
+    "desc should return 'consolidated ' for consolidated context" {
       val context = AgentContext("192.168.1.1")
 
       val request = registerAgentRequest {
@@ -104,13 +104,13 @@ class AgentContextTest : FunSpec() {
       context.desc shouldBe "consolidated "
     }
 
-    test("scrapeRequestBacklogSize should start at zero") {
+    "scrapeRequestBacklogSize should start at zero" {
       val context = AgentContext("192.168.1.1")
 
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-    test("writeScrapeRequest should increment backlog size") {
+    "writeScrapeRequest should increment backlog size" {
       val context = AgentContext("192.168.1.1")
       val mockRequest = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -119,7 +119,7 @@ class AgentContextTest : FunSpec() {
       context.scrapeRequestBacklogSize shouldBe 1
     }
 
-    test("writeScrapeRequest multiple times should increment backlog") {
+    "writeScrapeRequest multiple times should increment backlog" {
       AgentContext("192.168.1.1").apply {
         val mockRequest1 = mockk<ScrapeRequestWrapper>(relaxed = true)
         val mockRequest2 = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -133,7 +133,7 @@ class AgentContextTest : FunSpec() {
       }
     }
 
-    test("readScrapeRequest should return written request") {
+    "readScrapeRequest should return written request" {
       val context = AgentContext("192.168.1.1")
       val mockRequest = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -144,7 +144,7 @@ class AgentContextTest : FunSpec() {
       result shouldBe mockRequest
     }
 
-    test("readScrapeRequest should decrement backlog size") {
+    "readScrapeRequest should decrement backlog size" {
       val context = AgentContext("192.168.1.1")
       val mockRequest = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -155,7 +155,7 @@ class AgentContextTest : FunSpec() {
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-    test("readScrapeRequest should return null when no requests queued") {
+    "readScrapeRequest should return null when no requests queued" {
       val context = AgentContext("192.168.1.1")
 
       context.invalidate()
@@ -168,7 +168,7 @@ class AgentContextTest : FunSpec() {
     // This is critical for correct scrape behavior: Prometheus expects responses in the same
     // order as requests. The underlying Channel implementation guarantees this ordering,
     // but this test ensures the AgentContext wrapper doesn't break that guarantee.
-    test("readScrapeRequest should return requests in FIFO order") {
+    "readScrapeRequest should return requests in FIFO order" {
       AgentContext("192.168.1.1").apply {
         val mockRequest1 = mockk<ScrapeRequestWrapper>(relaxed = true)
         val mockRequest2 = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -188,7 +188,7 @@ class AgentContextTest : FunSpec() {
       }
     }
 
-    test("invalidate should set valid to false") {
+    "invalidate should set valid to false" {
       AgentContext("192.168.1.1").apply {
         isValid().shouldBeTrue()
 
@@ -203,7 +203,7 @@ class AgentContextTest : FunSpec() {
     // When invalidate() is called, the context is marked invalid and buffered
     // requests are drained (with closeChannel() called on each). After invalidation,
     // readScrapeRequest() returns null because the channel was drained and closed.
-    test("invalidate should drain scrape request channel") {
+    "invalidate should drain scrape request channel" {
       val context = AgentContext("192.168.1.1")
       val mockRequest = mockk<ScrapeRequestWrapper>(relaxed = true)
 
@@ -221,7 +221,7 @@ class AgentContextTest : FunSpec() {
       verify(exactly = 1) { mockRequest.closeChannel() }
     }
 
-    test("markActivityTime should reset inactivity duration") {
+    "markActivityTime should reset inactivity duration" {
       val context = AgentContext("192.168.1.1")
 
       delay(50.milliseconds)
@@ -234,7 +234,7 @@ class AgentContextTest : FunSpec() {
       duration2.shouldBeLessThan(duration1)
     }
 
-    test("markActivityTime with isRequest true should reset inactivity duration") {
+    "markActivityTime with isRequest true should reset inactivity duration" {
       val context = AgentContext("192.168.1.1")
 
       delay(50.milliseconds)
@@ -247,7 +247,7 @@ class AgentContextTest : FunSpec() {
       duration2.shouldBeLessThan(duration1)
     }
 
-    test("inactivityDuration should increase over time") {
+    "inactivityDuration should increase over time" {
       val context = AgentContext("192.168.1.1")
 
       delay(50.milliseconds)
@@ -259,7 +259,7 @@ class AgentContextTest : FunSpec() {
       duration2 shouldBeGreaterThan duration1
     }
 
-    test("toString should contain key properties") {
+    "toString should contain key properties" {
       val context = AgentContext("192.168.1.1")
 
       val request = registerAgentRequest {
@@ -281,20 +281,20 @@ class AgentContextTest : FunSpec() {
       str shouldContain "test-host"
     }
 
-    test("equals should return true for same instance") {
+    "equals should return true for same instance" {
       val context = AgentContext("192.168.1.1")
 
       (context == context).shouldBeTrue()
     }
 
-    test("equals should return false for different agent IDs") {
+    "equals should return false for different agent IDs" {
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
 
       (context1 == context2).shouldBeFalse()
     }
 
-    test("hashCode should be consistent with equals") {
+    "hashCode should be consistent with equals" {
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
 
@@ -305,7 +305,7 @@ class AgentContextTest : FunSpec() {
       }
     }
 
-    test("hashCode should be based on agentId") {
+    "hashCode should be based on agentId" {
       val context = AgentContext("192.168.1.1")
 
       context.hashCode() shouldBe context.agentId.hashCode()

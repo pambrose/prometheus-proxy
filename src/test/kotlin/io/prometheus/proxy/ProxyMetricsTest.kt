@@ -18,7 +18,7 @@
 
 package io.prometheus.proxy
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -30,7 +30,7 @@ import io.prometheus.client.CollectorRegistry
 // Tests for ProxyMetrics which manages Prometheus metrics for the proxy component.
 // Metrics include counters for scrape requests, connects, evictions, heartbeats,
 // and gauges for various map sizes.
-class ProxyMetricsTest : FunSpec() {
+class ProxyMetricsTest : StringSpec() {
   private fun createMockProxy(): Proxy {
     val mockAgentContextManager = AgentContextManager(isTestMode = true)
     val mockPathManager = mockk<ProxyPathManager>(relaxed = true)
@@ -54,28 +54,28 @@ class ProxyMetricsTest : FunSpec() {
 
     // ==================== Counter Initialization Tests ====================
 
-    test("scrapeRequestCount counter should be initialized") {
+    "scrapeRequestCount counter should be initialized" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
       metrics.scrapeRequestCount.shouldNotBeNull()
     }
 
-    test("connectCount counter should be initialized") {
+    "connectCount counter should be initialized" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
       metrics.connectCount.shouldNotBeNull()
     }
 
-    test("agentEvictionCount counter should be initialized") {
+    "agentEvictionCount counter should be initialized" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
       metrics.agentEvictionCount.shouldNotBeNull()
     }
 
-    test("heartbeatCount counter should be initialized") {
+    "heartbeatCount counter should be initialized" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
@@ -84,7 +84,7 @@ class ProxyMetricsTest : FunSpec() {
 
     // ==================== Summary Initialization Tests ====================
 
-    test("scrapeRequestLatency summary should be initialized") {
+    "scrapeRequestLatency summary should be initialized" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
@@ -93,7 +93,7 @@ class ProxyMetricsTest : FunSpec() {
 
     // ==================== Counter Operations Tests ====================
 
-    test("scrapeRequestCount should increment with labels") {
+    "scrapeRequestCount should increment with labels" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
@@ -103,7 +103,7 @@ class ProxyMetricsTest : FunSpec() {
       metrics.scrapeRequestCount.labels("test-type").get() shouldBe initialValue + 1
     }
 
-    test("connectCount should increment") {
+    "connectCount should increment" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
@@ -113,7 +113,7 @@ class ProxyMetricsTest : FunSpec() {
       metrics.connectCount.get() shouldBe initialValue + 1
     }
 
-    test("agentEvictionCount should increment") {
+    "agentEvictionCount should increment" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
@@ -123,7 +123,7 @@ class ProxyMetricsTest : FunSpec() {
       metrics.agentEvictionCount.get() shouldBe initialValue + 1
     }
 
-    test("heartbeatCount should increment") {
+    "heartbeatCount should increment" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
@@ -135,7 +135,7 @@ class ProxyMetricsTest : FunSpec() {
 
     // ==================== Summary Operations Tests ====================
 
-    test("scrapeRequestLatency should record observations") {
+    "scrapeRequestLatency should record observations" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
@@ -150,7 +150,7 @@ class ProxyMetricsTest : FunSpec() {
 
     // ==================== Label Tests ====================
 
-    test("scrapeRequestCount should support different label values") {
+    "scrapeRequestCount should support different label values" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 

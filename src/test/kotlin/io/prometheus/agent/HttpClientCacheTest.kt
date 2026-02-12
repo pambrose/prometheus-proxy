@@ -18,7 +18,7 @@
 
 package io.prometheus.agent
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.longs.shouldBeLessThan
@@ -45,7 +45,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class HttpClientCacheTest : FunSpec() {
+class HttpClientCacheTest : StringSpec() {
   private lateinit var cache: HttpClientCache
   private var clientCount = 0
 
@@ -71,7 +71,7 @@ class HttpClientCacheTest : FunSpec() {
       cache.close()
     }
 
-    test("should cache and reuse clients for same key") {
+    "should cache and reuse clients for same key" {
       val key = ClientKey("user1", "pass1")
 
       // First request should create a new client
@@ -90,7 +90,7 @@ class HttpClientCacheTest : FunSpec() {
       cache.onFinishedWithClient(entry2)
     }
 
-    test("should create different clients for different keys") {
+    "should create different clients for different keys" {
       val key1 = ClientKey("user1", "pass1")
       val key2 = ClientKey("user2", "pass2")
 
@@ -105,7 +105,7 @@ class HttpClientCacheTest : FunSpec() {
       cache.onFinishedWithClient(entry2)
     }
 
-    test("should handle null username and password") {
+    "should handle null username and password" {
       val key1 = ClientKey(null, null)
       val key2 = ClientKey("user1", null)
       val key3 = ClientKey(null, "pass1")
@@ -127,7 +127,7 @@ class HttpClientCacheTest : FunSpec() {
       cache.onFinishedWithClient(entry3)
     }
 
-    test("should evict least recently used client when cache is full") {
+    "should evict least recently used client when cache is full" {
       // Use a dedicated cache with long expiry to prevent the cleanup coroutine
       // from removing idle entries during the test. The shared cache's 500ms idle
       // time can be exceeded under load (e.g. when running the full test suite),
@@ -183,7 +183,7 @@ class HttpClientCacheTest : FunSpec() {
       }
     }
 
-    test("should expire entries based on max age") {
+    "should expire entries based on max age" {
       val key = ClientKey("user1", "pass1")
 
       // Create an entry
@@ -203,7 +203,7 @@ class HttpClientCacheTest : FunSpec() {
       cache.onFinishedWithClient(entry2)
     }
 
-    test("should expire entries based on max idle time") {
+    "should expire entries based on max idle time" {
       val key = ClientKey("user1", "pass1")
 
       // Create an entry
@@ -223,7 +223,7 @@ class HttpClientCacheTest : FunSpec() {
       cache.onFinishedWithClient(entry2)
     }
 
-    test("should reset last accessed time when client is reused") {
+    "should reset last accessed time when client is reused" {
       val key = ClientKey("user1", "pass1")
 
       // Create an entry
@@ -250,7 +250,7 @@ class HttpClientCacheTest : FunSpec() {
       cache.onFinishedWithClient(entry3)
     }
 
-    test("should handle concurrent access safely") {
+    "should handle concurrent access safely" {
       val key = ClientKey("user1", "pass1")
       val entries = mutableListOf<CacheEntry>()
 
@@ -275,7 +275,7 @@ class HttpClientCacheTest : FunSpec() {
       cache.currentCacheSize() shouldBe 1
     }
 
-    test("should provide accurate cache statistics") {
+    "should provide accurate cache statistics" {
       // Create a cache with longer cleanup interval to prevent automatic cleanup
       val testCache = HttpClientCache(
         maxCacheSize = 5,
@@ -318,7 +318,7 @@ class HttpClientCacheTest : FunSpec() {
       }
     }
 
-    test("should handle cache cleanup properly") {
+    "should handle cache cleanup properly" {
       val key = ClientKey("user1", "pass1")
 
       // Create entry and let it expire
@@ -338,7 +338,7 @@ class HttpClientCacheTest : FunSpec() {
       cache.onFinishedWithClient(entry)
     }
 
-    test("should handle client key toString correctly") {
+    "should handle client key toString correctly" {
       // toString() should mask credentials for security
       val key1 = ClientKey("user", "pass")
       key1.toString() shouldBe "***:***"
@@ -358,7 +358,7 @@ class HttpClientCacheTest : FunSpec() {
       key4.cacheKey() shouldBe NO_AUTH
     }
 
-    test("should handle cache entry lifecycle properly") {
+    "should handle cache entry lifecycle properly" {
       val key = ClientKey("user1", "pass1")
 
       // Get a client entry
@@ -387,7 +387,7 @@ class HttpClientCacheTest : FunSpec() {
     // acquiring the mutex, so the cleanup coroutine is stopped first.
     // This test uses a very short cleanup interval to ensure the cleanup coroutine is actively
     // cycling while close() is called, and verifies close() completes promptly.
-    test("close should complete promptly with active cleanup coroutine") {
+    "close should complete promptly with active cleanup coroutine" {
       val fastCleanupCache = HttpClientCache(
         maxCacheSize = 5,
         maxAge = 500.milliseconds,
@@ -421,7 +421,7 @@ class HttpClientCacheTest : FunSpec() {
       fastCleanupCache.currentCacheSize() shouldBe 0
     }
 
-    test("close should clear all entries even when cleanup coroutine is active") {
+    "close should clear all entries even when cleanup coroutine is active" {
       val fastCleanupCache = HttpClientCache(
         maxCacheSize = 10,
         maxAge = 30_000.milliseconds, // Long maxAge so entries don't expire
@@ -443,7 +443,7 @@ class HttpClientCacheTest : FunSpec() {
       fastCleanupCache.currentCacheSize() shouldBe 0
     }
 
-    test("onDoneWithClient should close client when entry is marked for close and not in use") {
+    "onDoneWithClient should close client when entry is marked for close and not in use" {
       val key = ClientKey("user1", "pass1")
 
       // Get a client entry (marks it as in use)
@@ -470,7 +470,7 @@ class HttpClientCacheTest : FunSpec() {
 
     // M6: onFinishedWithClient now closes the HTTP client outside the mutex.
     // This test verifies that a slow client.close() does not block other cache operations.
-    test("onFinishedWithClient should not block cache operations during slow client close") {
+    "onFinishedWithClient should not block cache operations during slow client close" {
       // This prevents flakiness in the test
       val slowCache = HttpClientCache(
         maxCacheSize = 10,
@@ -537,7 +537,7 @@ class HttpClientCacheTest : FunSpec() {
 
     // M7: close() now marks in-use entries for close instead of forcibly closing them.
     // The client is closed when the last user calls onFinishedWithClient().
-    test("close should not close in-use clients immediately") {
+    "close should not close in-use clients immediately" {
       val testCache = HttpClientCache(
         maxCacheSize = 10,
         maxAge = 30.seconds,
@@ -562,7 +562,7 @@ class HttpClientCacheTest : FunSpec() {
       verify(exactly = 1) { mockClient.close() }
     }
 
-    test("close should immediately close clients that are not in use") {
+    "close should immediately close clients that are not in use" {
       val testCache = HttpClientCache(
         maxCacheSize = 10,
         maxAge = 30.seconds,
@@ -585,7 +585,7 @@ class HttpClientCacheTest : FunSpec() {
       verify(exactly = 1) { mockClient.close() }
     }
 
-    test("close should handle mix of in-use and idle clients") {
+    "close should handle mix of in-use and idle clients" {
       val testCache = HttpClientCache(
         maxCacheSize = 10,
         maxAge = 30.seconds,
@@ -619,7 +619,7 @@ class HttpClientCacheTest : FunSpec() {
 
     // L11: CacheEntry is now a regular class (not data class), so equality
     // is identity-based. Mutable lastAccessedAt no longer affects equals/hashCode.
-    test("CacheEntry equality should be identity-based") {
+    "CacheEntry equality should be identity-based" {
       val client = createMockHttpClient()
       val now = System.currentTimeMillis()
       val entry1 = CacheEntry(client, now, now)
@@ -632,7 +632,7 @@ class HttpClientCacheTest : FunSpec() {
       (entry1 == entry2).shouldBeFalse()
     }
 
-    test("cleanupExpiredEntries should remove all expired entries") {
+    "cleanupExpiredEntries should remove all expired entries" {
       // Create a cache with short expiry but long cleanup interval (manual cleanup)
       val testCache = HttpClientCache(
         maxCacheSize = 10,

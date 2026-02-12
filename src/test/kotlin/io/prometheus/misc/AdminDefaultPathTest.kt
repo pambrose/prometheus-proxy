@@ -19,7 +19,7 @@
 package io.prometheus.misc
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -32,7 +32,7 @@ import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
 
-class AdminDefaultPathTest : FunSpec() {
+class AdminDefaultPathTest : StringSpec() {
   private val agentConfigVals by lazy { agent.agentConfigVals }
   private val proxyConfigVals by lazy { proxy.proxyConfigVals }
 
@@ -51,7 +51,7 @@ class AdminDefaultPathTest : FunSpec() {
       takeDownProxyAndAgent()
     }
 
-    test("proxy ping path should respond with pong") {
+    "proxy ping path should respond with pong" {
       proxyConfigVals.admin.apply {
         blockingGet("$port/$pingPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -60,7 +60,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("agent ping path should respond with pong") {
+    "agent ping path should respond with pong" {
       agentConfigVals.admin.apply {
         blockingGet("$port/$pingPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -69,7 +69,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxy version path should return version info") {
+    "proxy version path should return version info" {
       agentConfigVals.admin.apply {
         blockingGet("$port/$versionPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -78,7 +78,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("agent version path should return version info") {
+    "agent version path should return version info" {
       agentConfigVals.admin.apply {
         blockingGet("$port/$versionPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -87,7 +87,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxy health check path should return health status") {
+    "proxy health check path should return health status" {
       proxyConfigVals.admin.apply {
         blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -96,7 +96,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("agent health check path should return health status") {
+    "agent health check path should return health status" {
       agentConfigVals.admin.apply {
         blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -105,7 +105,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("proxy thread dump path should return thread dump") {
+    "proxy thread dump path should return thread dump" {
       proxyConfigVals.admin.apply {
         blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
@@ -114,7 +114,7 @@ class AdminDefaultPathTest : FunSpec() {
       }
     }
 
-    test("agent thread dump path should return thread dump") {
+    "agent thread dump path should return thread dump" {
       agentConfigVals.admin.apply {
         blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK

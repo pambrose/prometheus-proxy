@@ -11,7 +11,7 @@ import io.grpc.MethodDescriptor
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -22,7 +22,7 @@ import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.GrpcConstants
 
-class AgentClientInterceptorTest : FunSpec() {
+class AgentClientInterceptorTest : StringSpec() {
   private fun createMockAgent(agentId: String = ""): Agent {
     val mockChannel = mockk<ManagedChannel>(relaxed = true)
 
@@ -39,7 +39,7 @@ class AgentClientInterceptorTest : FunSpec() {
   init {
     // ==================== Interceptor Call Tests ====================
 
-    test("interceptCall should return a non-null client call") {
+    "interceptCall should return a non-null client call" {
       val mockAgent = createMockAgent()
       val interceptor = AgentClientInterceptor(mockAgent)
 
@@ -51,7 +51,7 @@ class AgentClientInterceptorTest : FunSpec() {
       result.shouldNotBeNull()
     }
 
-    test("interceptCall should use next channel parameter") {
+    "interceptCall should use next channel parameter" {
       val mockAgent = createMockAgent()
       val interceptor = AgentClientInterceptor(mockAgent)
 
@@ -65,7 +65,7 @@ class AgentClientInterceptorTest : FunSpec() {
       verify(exactly = 0) { mockAgent.grpcService }
     }
 
-    test("interceptCall should not modify agent id when already set") {
+    "interceptCall should not modify agent id when already set" {
       val mockAgent = createMockAgent(agentId = "existing-id")
       val interceptor = AgentClientInterceptor(mockAgent)
 
@@ -78,7 +78,7 @@ class AgentClientInterceptorTest : FunSpec() {
       verify(exactly = 0) { mockAgent.agentId = any() }
     }
 
-    test("interceptCall with empty agentId should create forwarding call") {
+    "interceptCall with empty agentId should create forwarding call" {
       val mockAgent = createMockAgent(agentId = "")
       val interceptor = AgentClientInterceptor(mockAgent)
 
@@ -94,7 +94,7 @@ class AgentClientInterceptorTest : FunSpec() {
 
     // ==================== onHeaders Tests ====================
 
-    test("interceptCall with empty agentId should use next channel parameter") {
+    "interceptCall with empty agentId should use next channel parameter" {
       val mockAgent = mockk<Agent>(relaxed = true)
       every { mockAgent.agentId } returns ""
 
@@ -110,7 +110,7 @@ class AgentClientInterceptorTest : FunSpec() {
       verify(exactly = 0) { mockAgent.grpcService }
     }
 
-    test("onHeaders should not overwrite agentId when already set") {
+    "onHeaders should not overwrite agentId when already set" {
       val mockAgent = mockk<Agent>(relaxed = true)
       every { mockAgent.agentId } returns "existing-id"
 
@@ -128,7 +128,7 @@ class AgentClientInterceptorTest : FunSpec() {
       verify(exactly = 0) { mockAgent.agentId = any() }
     }
 
-    test("onHeaders should assign agentId when header is present") {
+    "onHeaders should assign agentId when header is present" {
       // Use a backing variable so the mock tracks agentId state across get/set
       var currentAgentId = ""
       val mockAgent = mockk<Agent>(relaxed = true)
@@ -159,7 +159,7 @@ class AgentClientInterceptorTest : FunSpec() {
       verify { mockAgent.agentId = "test-agent-42" }
     }
 
-    test("onHeaders should throw StatusRuntimeException when agent ID key is missing from headers") {
+    "onHeaders should throw StatusRuntimeException when agent ID key is missing from headers" {
       val mockAgent = mockk<Agent>(relaxed = true)
       every { mockAgent.agentId } returns ""
 
@@ -185,7 +185,7 @@ class AgentClientInterceptorTest : FunSpec() {
       verify(exactly = 0) { mockAgent.agentId = any() }
     }
 
-    test("onHeaders missing agent ID should throw INTERNAL status with descriptive message") {
+    "onHeaders missing agent ID should throw INTERNAL status with descriptive message" {
       val mockAgent = mockk<Agent>(relaxed = true)
       every { mockAgent.agentId } returns ""
 

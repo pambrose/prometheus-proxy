@@ -19,7 +19,7 @@
 package io.prometheus.agent
 
 import com.google.common.net.HttpHeaders.ACCEPT
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -41,9 +41,9 @@ import io.ktor.server.cio.CIO as ServerCIO
 // The fix moves the Accept header to per-request headers (prepareRequestHeaders).
 // These tests verify that per-request headers produce the correct Accept value for each
 // request, and that baking headers into defaultRequest causes staleness.
-class AgentHttpServiceHeaderTest : FunSpec() {
+class AgentHttpServiceHeaderTest : StringSpec() {
   init {
-    test("per-request Accept header should vary independently of cached client") {
+    "per-request Accept header should vary independently of cached client" {
       val capturedHeaders = Collections.synchronizedList(mutableListOf<String?>())
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
@@ -82,7 +82,7 @@ class AgentHttpServiceHeaderTest : FunSpec() {
       }
     }
 
-    test("defaultRequest Accept header should persist across requests demonstrating old bug") {
+    "defaultRequest Accept header should persist across requests demonstrating old bug" {
       val capturedHeaders = Collections.synchronizedList(mutableListOf<String?>())
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {

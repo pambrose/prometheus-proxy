@@ -18,7 +18,7 @@
 
 package io.prometheus.agent
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -33,7 +33,7 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
 // Metrics include counters for scrape requests and results, connect counts,
 // and gauges for backlog and cache sizes.
 @OptIn(ExperimentalAtomicApi::class)
-class AgentMetricsTest : FunSpec() {
+class AgentMetricsTest : StringSpec() {
   private fun createMockAgent(): Agent {
     val mockHttpClientCache = mockk<HttpClientCache>(relaxed = true)
     every { mockHttpClientCache.currentCacheSize() } returns 0
@@ -57,21 +57,21 @@ class AgentMetricsTest : FunSpec() {
 
     // ==================== Counter Initialization Tests ====================
 
-    test("scrapeRequestCount counter should be initialized") {
+    "scrapeRequestCount counter should be initialized" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
       metrics.scrapeRequestCount.shouldNotBeNull()
     }
 
-    test("scrapeResultCount counter should be initialized") {
+    "scrapeResultCount counter should be initialized" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
       metrics.scrapeResultCount.shouldNotBeNull()
     }
 
-    test("connectCount counter should be initialized") {
+    "connectCount counter should be initialized" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
@@ -80,7 +80,7 @@ class AgentMetricsTest : FunSpec() {
 
     // ==================== Summary Initialization Tests ====================
 
-    test("scrapeRequestLatency summary should be initialized") {
+    "scrapeRequestLatency summary should be initialized" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
@@ -89,7 +89,7 @@ class AgentMetricsTest : FunSpec() {
 
     // ==================== Counter Operations Tests ====================
 
-    test("scrapeRequestCount should increment with labels") {
+    "scrapeRequestCount should increment with labels" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
@@ -102,7 +102,7 @@ class AgentMetricsTest : FunSpec() {
       metrics.scrapeRequestCount.labels(launchId, type).get() shouldBe initialValue + 1
     }
 
-    test("scrapeResultCount should increment with labels") {
+    "scrapeResultCount should increment with labels" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
@@ -115,7 +115,7 @@ class AgentMetricsTest : FunSpec() {
       metrics.scrapeResultCount.labels(launchId, type).get() shouldBe initialValue + 1
     }
 
-    test("connectCount should increment with labels") {
+    "connectCount should increment with labels" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
@@ -130,7 +130,7 @@ class AgentMetricsTest : FunSpec() {
 
     // ==================== Summary Operations Tests ====================
 
-    test("scrapeRequestLatency should record observations with labels") {
+    "scrapeRequestLatency should record observations with labels" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
@@ -148,7 +148,7 @@ class AgentMetricsTest : FunSpec() {
 
     // ==================== Label Differentiation Tests ====================
 
-    test("counters should track different label combinations separately") {
+    "counters should track different label combinations separately" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
@@ -164,7 +164,7 @@ class AgentMetricsTest : FunSpec() {
       metrics.scrapeRequestCount.labels(launchId, "type-b").get() shouldBeGreaterThanOrEqual 1.0
     }
 
-    test("multiple counters can be incremented independently") {
+    "multiple counters can be incremented independently" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
@@ -185,7 +185,7 @@ class AgentMetricsTest : FunSpec() {
 
     // ==================== Gauge Tests ====================
 
-    test("start time gauge should be registered and set") {
+    "start time gauge should be registered and set" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
@@ -201,7 +201,7 @@ class AgentMetricsTest : FunSpec() {
       sample.value shouldBeGreaterThanOrEqual 0.0
     }
 
-    test("SamplerGaugeCollector should be constructable with agent metrics") {
+    "SamplerGaugeCollector should be constructable with agent metrics" {
       val agent = createMockAgent()
 
       // Creating AgentMetrics should register SamplerGaugeCollectors without exception

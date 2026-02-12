@@ -3,7 +3,7 @@
 package io.prometheus.proxy
 
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class ScrapeRequestWrapperTest : FunSpec() {
+class ScrapeRequestWrapperTest : StringSpec() {
   private fun createMockProxy(): Proxy {
     val mockProxy = mockk<Proxy>(relaxed = true)
     every { mockProxy.isMetricsEnabled } returns false
@@ -48,20 +48,20 @@ class ScrapeRequestWrapperTest : FunSpec() {
   init {
     // ==================== Creation Tests ====================
 
-    test("should create scrape request with correct path") {
+    "should create scrape request with correct path" {
       val wrapper = createWrapper(path = "/test/metrics")
 
       wrapper.scrapeRequest.path shouldBe "/test/metrics"
     }
 
-    test("should create scrape request with agent id from context") {
+    "should create scrape request with agent id from context" {
       val context = createAgentContext()
       val wrapper = createWrapper(agentContext = context)
 
       wrapper.scrapeRequest.agentId shouldBe context.agentId
     }
 
-    test("should generate unique scrapeIds") {
+    "should generate unique scrapeIds" {
       val wrapper1 = createWrapper()
       val wrapper2 = createWrapper()
 
@@ -69,31 +69,31 @@ class ScrapeRequestWrapperTest : FunSpec() {
       wrapper1.scrapeId shouldNotBe wrapper2.scrapeId
     }
 
-    test("should set debug enabled flag") {
+    "should set debug enabled flag" {
       val wrapper = createWrapper(debugEnabled = true)
 
       wrapper.scrapeRequest.debugEnabled shouldBe true
     }
 
-    test("should set encoded query params") {
+    "should set encoded query params" {
       val wrapper = createWrapper(encodedQueryParams = "foo=bar&baz=qux")
 
       wrapper.scrapeRequest.encodedQueryParams shouldBe "foo=bar&baz=qux"
     }
 
-    test("should set accept header") {
+    "should set accept header" {
       val wrapper = createWrapper(accept = "text/plain")
 
       wrapper.scrapeRequest.accept shouldBe "text/plain"
     }
 
-    test("should handle null accept as empty string") {
+    "should handle null accept as empty string" {
       val wrapper = createWrapper(accept = null)
 
       wrapper.scrapeRequest.accept shouldBe ""
     }
 
-    test("should set auth header") {
+    "should set auth header" {
       val wrapper = createWrapper(authHeader = "Bearer token123")
 
       wrapper.scrapeRequest.authHeader shouldBe "Bearer token123"
@@ -101,7 +101,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
 
     // ==================== ScrapeResults Tests ====================
 
-    test("scrapeResults should be null initially") {
+    "scrapeResults should be null initially" {
       val wrapper = createWrapper()
 
       wrapper.scrapeResults.shouldBeNull()
@@ -109,7 +109,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
 
     // ==================== Age Duration Tests ====================
 
-    test("ageDuration should be non-negative and increase over time") {
+    "ageDuration should be non-negative and increase over time" {
       val wrapper = createWrapper()
       val initialAge = wrapper.ageDuration()
 
@@ -121,7 +121,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
 
     // ==================== Completion Tests ====================
 
-    test("awaitCompleted should return true when markComplete is called with results") {
+    "awaitCompleted should return true when markComplete is called with results" {
       val wrapper = createWrapper()
 
       launch {
@@ -134,7 +134,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
       result.shouldBeTrue()
     }
 
-    test("awaitCompleted should return false on timeout") {
+    "awaitCompleted should return false on timeout" {
       val wrapper = createWrapper()
 
       // Do not call markComplete — should timeout
@@ -142,7 +142,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
       result.shouldBeFalse()
     }
 
-    test("awaitCompleted should return false when channel closed without results") {
+    "awaitCompleted should return false when channel closed without results" {
       val wrapper = createWrapper()
 
       launch {
@@ -157,7 +157,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
 
     // ==================== toString Tests ====================
 
-    test("toString should include scrapeId and path") {
+    "toString should include scrapeId and path" {
       val wrapper = createWrapper(path = "/test/path")
 
       val str = wrapper.toString()
@@ -167,7 +167,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
 
     // ==================== markComplete with Metrics Tests ====================
 
-    test("markComplete with metrics enabled should observe duration") {
+    "markComplete with metrics enabled should observe duration" {
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.isMetricsEnabled } returns true
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
@@ -179,7 +179,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
       wrapper.markComplete()
     }
 
-    test("markComplete without metrics should not throw") {
+    "markComplete without metrics should not throw" {
       val wrapper = createWrapper()
 
       // Should not throw
@@ -188,7 +188,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
 
     // ==================== awaitCompleted Edge Cases ====================
 
-    test("awaitCompleted should return true immediately when already completed with results") {
+    "awaitCompleted should return true immediately when already completed with results" {
       val wrapper = createWrapper()
 
       wrapper.scrapeResults = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
@@ -203,7 +203,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
     // The parameter was renamed from `waitMillis` to `timeout` since its type is Duration,
     // not milliseconds. These tests verify the named parameter works correctly.
 
-    test("awaitCompleted timeout parameter should accept Duration values") {
+    "awaitCompleted timeout parameter should accept Duration values" {
       val wrapper = createWrapper()
 
       launch {
@@ -217,7 +217,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
       result.shouldBeTrue()
     }
 
-    test("awaitCompleted timeout should respect short durations") {
+    "awaitCompleted timeout should respect short durations" {
       val wrapper = createWrapper()
 
       // Using named parameter `timeout` with a short duration — should time out
@@ -227,7 +227,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
 
     // ==================== Constructor Validation Tests ====================
 
-    test("constructor should throw on empty agentId") {
+    "constructor should throw on empty agentId" {
       val mockContext = mockk<AgentContext>(relaxed = true)
       every { mockContext.agentId } returns ""
 
@@ -246,7 +246,7 @@ class ScrapeRequestWrapperTest : FunSpec() {
 
     // ==================== markComplete Idempotency Tests ====================
 
-    test("markComplete should not throw when called multiple times") {
+    "markComplete should not throw when called multiple times" {
       val wrapper = createWrapper()
       wrapper.scrapeResults = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
 

@@ -21,7 +21,7 @@ package io.prometheus.misc
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigSyntax
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -30,14 +30,14 @@ import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 
-class DataClassTest : FunSpec() {
+class DataClassTest : StringSpec() {
   private fun configVals(str: String): ConfigVals {
     val config = ConfigFactory.parseString(str, ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF))
     return ConfigVals(config.withFallback(ConfigFactory.load().resolve()).resolve())
   }
 
   init {
-    test("agent admin config should parse all fields correctly") {
+    "agent admin config should parse all fields correctly" {
       var vals = configVals("agent.admin.enabled=true")
       newAdminConfig(vals.agent.admin.enabled, -1, vals.agent.admin)
         .also {
@@ -72,7 +72,7 @@ class DataClassTest : FunSpec() {
         }
     }
 
-    test("agent metrics config should parse all fields correctly") {
+    "agent metrics config should parse all fields correctly" {
       newMetricsConfig(true, 555, configVals("agent.metrics.enabled=true").agent.metrics)
         .also {
           it.enabled.shouldBeTrue()
@@ -119,7 +119,7 @@ class DataClassTest : FunSpec() {
         }
     }
 
-    test("zipkin config should parse all fields correctly") {
+    "zipkin config should parse all fields correctly" {
       newZipkinConfig(configVals("agent.internal.zipkin.enabled=true").agent.internal.zipkin)
         .also {
           it.enabled.shouldBeTrue()
@@ -148,7 +148,7 @@ class DataClassTest : FunSpec() {
 
     // ==================== Proxy Admin Config Tests ====================
 
-    test("proxy admin config should parse all fields correctly") {
+    "proxy admin config should parse all fields correctly" {
       var vals = configVals("proxy.admin.enabled=true")
       newAdminConfig(vals.proxy.admin.enabled, -1, vals.proxy.admin)
         .also {
@@ -185,7 +185,7 @@ class DataClassTest : FunSpec() {
 
     // ==================== Proxy Metrics Config Tests ====================
 
-    test("proxy metrics config should parse all fields correctly") {
+    "proxy metrics config should parse all fields correctly" {
       newMetricsConfig(true, 666, configVals("proxy.metrics.enabled=true").proxy.metrics)
         .also {
           it.enabled.shouldBeTrue()
@@ -229,7 +229,7 @@ class DataClassTest : FunSpec() {
 
     // ==================== gRPC Metrics Config Tests ====================
 
-    test("gRPC metrics config should parse all fields correctly") {
+    "gRPC metrics config should parse all fields correctly" {
       // Agent gRPC metrics
       configVals("agent.metrics.grpc.metricsEnabled=true").agent.metrics.grpc
         .also {

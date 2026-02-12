@@ -83,7 +83,7 @@ class NettyTestWithAdminMetricsTest :
       takeDownProxyAndAgent()
     }
 
-    test("should return debug info from admin endpoints") {
+    "should return debug info from admin endpoints" {
       withHttpClient {
         get("8093/debug".withPrefix()) { response ->
           val body = response.bodyAsText()

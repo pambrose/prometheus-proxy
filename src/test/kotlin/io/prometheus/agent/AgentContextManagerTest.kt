@@ -18,7 +18,7 @@
 
 package io.prometheus.agent
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -32,9 +32,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 
-class AgentContextManagerTest : FunSpec() {
+class AgentContextManagerTest : StringSpec() {
   init {
-    test("addAgentContext should add context and return null for new agent") {
+    "addAgentContext should add context and return null for new agent" {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("192.168.1.1")
 
@@ -45,7 +45,7 @@ class AgentContextManagerTest : FunSpec() {
       manager.getAgentContext(context.agentId).shouldNotBeNull()
     }
 
-    test("addAgentContext should return old context when replacing existing agent") {
+    "addAgentContext should return old context when replacing existing agent" {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
@@ -59,7 +59,7 @@ class AgentContextManagerTest : FunSpec() {
       manager.getAgentContext(agentId) shouldBe context2
     }
 
-    test("getAgentContext should return context for existing agent") {
+    "getAgentContext should return context for existing agent" {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("192.168.1.1")
 
@@ -70,7 +70,7 @@ class AgentContextManagerTest : FunSpec() {
       retrieved shouldBe context
     }
 
-    test("getAgentContext should return null for non-existent agent") {
+    "getAgentContext should return null for non-existent agent" {
       val manager = AgentContextManager(isTestMode = true)
 
       val retrieved = manager.getAgentContext("non-existent-id")
@@ -78,7 +78,7 @@ class AgentContextManagerTest : FunSpec() {
       retrieved.shouldBeNull()
     }
 
-    test("removeFromContextManager should remove and invalidate context") {
+    "removeFromContextManager should remove and invalidate context" {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("192.168.1.1")
 
@@ -93,7 +93,7 @@ class AgentContextManagerTest : FunSpec() {
       manager.getAgentContext(context.agentId).shouldBeNull()
     }
 
-    test("removeFromContextManager should return null for non-existent agent") {
+    "removeFromContextManager should return null for non-existent agent" {
       val manager = AgentContextManager(isTestMode = true)
 
       val removed = manager.removeFromContextManager("non-existent-id", "test removal")
@@ -102,7 +102,7 @@ class AgentContextManagerTest : FunSpec() {
       manager.agentContextSize shouldBe 0
     }
 
-    test("agentContextSize should return correct count") {
+    "agentContextSize should return correct count" {
       val manager = AgentContextManager(isTestMode = true)
 
       manager.agentContextSize shouldBe 0
@@ -122,7 +122,7 @@ class AgentContextManagerTest : FunSpec() {
       manager.agentContextSize shouldBe 0
     }
 
-    test("chunkedContextMap should store and retrieve chunked contexts") {
+    "chunkedContextMap should store and retrieve chunked contexts" {
       val manager = AgentContextManager(isTestMode = true)
       val scrapeId = 123L
       val mockResponse = mockk<ChunkedScrapeResponse>(relaxed = true)
@@ -139,7 +139,7 @@ class AgentContextManagerTest : FunSpec() {
       manager.chunkedContextSize shouldBe 0
     }
 
-    test("totalAgentScrapeRequestBacklogSize should sum all agent backlogs") {
+    "totalAgentScrapeRequestBacklogSize should sum all agent backlogs" {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
@@ -155,7 +155,7 @@ class AgentContextManagerTest : FunSpec() {
     // as agents connect and disconnect. This test verifies that the underlying
     // ConcurrentHashMap correctly handles 20 concurrent additions followed by
     // 20 concurrent removals without data corruption or race conditions.
-    test("concurrent access should handle multiple threads safely") {
+    "concurrent access should handle multiple threads safely" {
       val manager = AgentContextManager(isTestMode = true)
       val contexts = (1..20).map { AgentContext("192.168.1.$it") }
 
@@ -182,7 +182,7 @@ class AgentContextManagerTest : FunSpec() {
       manager.agentContextSize shouldBe 0
     }
 
-    test("multiple contexts should have unique agent IDs") {
+    "multiple contexts should have unique agent IDs" {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")
@@ -199,7 +199,7 @@ class AgentContextManagerTest : FunSpec() {
       manager.agentContextSize shouldBe 3
     }
 
-    test("addAgentContext and removeFromContextManager should work correctly in sequence") {
+    "addAgentContext and removeFromContextManager should work correctly in sequence" {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("192.168.1.1")
       val context2 = AgentContext("192.168.1.2")

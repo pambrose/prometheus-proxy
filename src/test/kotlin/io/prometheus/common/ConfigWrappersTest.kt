@@ -3,13 +3,13 @@
 package io.prometheus.common
 
 import com.typesafe.config.ConfigFactory
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotBeEmpty
 
-class ConfigWrappersTest : FunSpec() {
+class ConfigWrappersTest : StringSpec() {
   private fun loadDefaultConfigVals(): ConfigVals {
     val config = ConfigFactory.load()
     return ConfigVals(config)
@@ -18,7 +18,7 @@ class ConfigWrappersTest : FunSpec() {
   init {
     // ==================== Proxy AdminConfig Tests ====================
 
-    test("newAdminConfig for proxy should create config with correct values") {
+    "newAdminConfig for proxy should create config with correct values" {
       val configVals = loadDefaultConfigVals()
       val adminConfig = ConfigWrappers.newAdminConfig(
         enabled = true,
@@ -34,7 +34,7 @@ class ConfigWrappersTest : FunSpec() {
       adminConfig.threadDumpPath.shouldNotBeEmpty()
     }
 
-    test("newAdminConfig for proxy should respect disabled flag") {
+    "newAdminConfig for proxy should respect disabled flag" {
       val configVals = loadDefaultConfigVals()
       val adminConfig = ConfigWrappers.newAdminConfig(
         enabled = false,
@@ -47,7 +47,7 @@ class ConfigWrappersTest : FunSpec() {
 
     // ==================== Agent AdminConfig Tests ====================
 
-    test("newAdminConfig for agent should create config with correct values") {
+    "newAdminConfig for agent should create config with correct values" {
       val configVals = loadDefaultConfigVals()
       val adminConfig = ConfigWrappers.newAdminConfig(
         enabled = true,
@@ -62,7 +62,7 @@ class ConfigWrappersTest : FunSpec() {
 
     // ==================== Proxy MetricsConfig Tests ====================
 
-    test("newMetricsConfig for proxy should create config with correct values") {
+    "newMetricsConfig for proxy should create config with correct values" {
       val configVals = loadDefaultConfigVals()
       val metricsConfig = ConfigWrappers.newMetricsConfig(
         enabled = true,
@@ -75,7 +75,7 @@ class ConfigWrappersTest : FunSpec() {
       metricsConfig.path.shouldNotBeEmpty()
     }
 
-    test("newMetricsConfig for proxy should respect disabled flag") {
+    "newMetricsConfig for proxy should respect disabled flag" {
       val configVals = loadDefaultConfigVals()
       val metricsConfig = ConfigWrappers.newMetricsConfig(
         enabled = false,
@@ -88,7 +88,7 @@ class ConfigWrappersTest : FunSpec() {
 
     // ==================== Agent MetricsConfig Tests ====================
 
-    test("newMetricsConfig for agent should create config with correct values") {
+    "newMetricsConfig for agent should create config with correct values" {
       val configVals = loadDefaultConfigVals()
       val metricsConfig = ConfigWrappers.newMetricsConfig(
         enabled = true,
@@ -102,7 +102,7 @@ class ConfigWrappersTest : FunSpec() {
 
     // ==================== Proxy ZipkinConfig Tests ====================
 
-    test("newZipkinConfig for proxy should create config with correct values") {
+    "newZipkinConfig for proxy should create config with correct values" {
       val configVals = loadDefaultConfigVals()
       val zipkinConfig = ConfigWrappers.newZipkinConfig(configVals.proxy.internal.zipkin)
 
@@ -113,7 +113,7 @@ class ConfigWrappersTest : FunSpec() {
 
     // ==================== Agent ZipkinConfig Tests ====================
 
-    test("newZipkinConfig for agent should create config with correct values") {
+    "newZipkinConfig for agent should create config with correct values" {
       val configVals = loadDefaultConfigVals()
       val zipkinConfig = ConfigWrappers.newZipkinConfig(configVals.agent.internal.zipkin)
 
@@ -123,7 +123,7 @@ class ConfigWrappersTest : FunSpec() {
 
     // ==================== Proxy AdminConfig Field Value Tests ====================
 
-    test("proxy AdminConfig should have correct default path values") {
+    "proxy AdminConfig should have correct default path values" {
       val configVals = loadDefaultConfigVals()
       val adminConfig = ConfigWrappers.newAdminConfig(
         enabled = true,
@@ -137,7 +137,7 @@ class ConfigWrappersTest : FunSpec() {
       adminConfig.threadDumpPath shouldBe "threaddump"
     }
 
-    test("agent AdminConfig should have correct default path values") {
+    "agent AdminConfig should have correct default path values" {
       val configVals = loadDefaultConfigVals()
       val adminConfig = ConfigWrappers.newAdminConfig(
         enabled = true,
@@ -153,7 +153,7 @@ class ConfigWrappersTest : FunSpec() {
 
     // ==================== MetricsConfig Export Flag Tests ====================
 
-    test("proxy MetricsConfig should have all export flags accessible") {
+    "proxy MetricsConfig should have all export flags accessible" {
       val configVals = loadDefaultConfigVals()
       val metricsConfig = ConfigWrappers.newMetricsConfig(
         enabled = true,
@@ -171,7 +171,7 @@ class ConfigWrappersTest : FunSpec() {
       metricsConfig.versionInfoExportsEnabled.shouldBeFalse()
     }
 
-    test("agent MetricsConfig should have all export flags accessible") {
+    "agent MetricsConfig should have all export flags accessible" {
       val configVals = loadDefaultConfigVals()
       val metricsConfig = ConfigWrappers.newMetricsConfig(
         enabled = true,
@@ -190,7 +190,7 @@ class ConfigWrappersTest : FunSpec() {
 
     // ==================== ZipkinConfig Field Value Tests ====================
 
-    test("proxy ZipkinConfig should have correct default field values") {
+    "proxy ZipkinConfig should have correct default field values" {
       val configVals = loadDefaultConfigVals()
       val zipkinConfig = ConfigWrappers.newZipkinConfig(configVals.proxy.internal.zipkin)
 
@@ -201,7 +201,7 @@ class ConfigWrappersTest : FunSpec() {
       zipkinConfig.serviceName shouldBe "prometheus-proxy"
     }
 
-    test("agent ZipkinConfig should have correct default field values") {
+    "agent ZipkinConfig should have correct default field values" {
       val configVals = loadDefaultConfigVals()
       val zipkinConfig = ConfigWrappers.newZipkinConfig(configVals.agent.internal.zipkin)
 

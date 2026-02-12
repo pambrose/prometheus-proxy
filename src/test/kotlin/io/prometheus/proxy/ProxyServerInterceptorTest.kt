@@ -6,7 +6,7 @@ import io.grpc.Attributes
 import io.grpc.Metadata
 import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
@@ -15,15 +15,15 @@ import io.mockk.verify
 import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 
-class ProxyServerInterceptorTest : FunSpec() {
+class ProxyServerInterceptorTest : StringSpec() {
   init {
     // ==================== META_AGENT_ID_KEY Tests ====================
 
-    test("META_AGENT_ID_KEY should use agent-id name") {
+    "META_AGENT_ID_KEY should use agent-id name" {
       META_AGENT_ID_KEY.name() shouldBe "agent-id"
     }
 
-    test("META_AGENT_ID_KEY should use ASCII marshaller") {
+    "META_AGENT_ID_KEY should use ASCII marshaller" {
       // Verify we can put and get a value using the key
       val metadata = Metadata()
       metadata.put(META_AGENT_ID_KEY, "test-id-123")
@@ -33,7 +33,7 @@ class ProxyServerInterceptorTest : FunSpec() {
 
     // ==================== Interceptor Behavior Tests ====================
 
-    test("interceptCall should delegate to handler") {
+    "interceptCall should delegate to handler" {
       val interceptor = ProxyServerInterceptor()
 
       val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
@@ -45,7 +45,7 @@ class ProxyServerInterceptorTest : FunSpec() {
       verify { mockHandler.startCall(any(), eq(requestHeaders)) }
     }
 
-    test("sendHeaders should inject agent-id from call attributes") {
+    "sendHeaders should inject agent-id from call attributes" {
       val interceptor = ProxyServerInterceptor()
 
       // Set up attributes with AGENT_ID_KEY
@@ -74,7 +74,7 @@ class ProxyServerInterceptorTest : FunSpec() {
       headerSlot.captured.get(META_AGENT_ID_KEY) shouldBe "agent-42"
     }
 
-    test("sendHeaders should not inject agent-id when attribute is missing") {
+    "sendHeaders should not inject agent-id when attribute is missing" {
       val interceptor = ProxyServerInterceptor()
 
       // Empty attributes — no AGENT_ID_KEY
