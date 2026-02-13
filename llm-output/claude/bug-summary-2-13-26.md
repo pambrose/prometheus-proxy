@@ -62,33 +62,15 @@ one confirming the scrapeId appears in the log message.
 
 ---
 
-### 6. Redundant double channel close in AgentGrpcService
+### 6. ~~Redundant double channel close in AgentGrpcService~~ FIXED
 
-**File:** `agent/AgentGrpcService.kt:404-405, 431-432`
-
-The `nonChunkedChannel` and `chunkedChannel` are closed in the inner `finally` block (lines 404-405)
-and again in the outer `finally` block (lines 431-432). While `Channel.close()` is idempotent, this
-indicates unclear ownership of the channel lifecycle.
-
-```kotlin
-launch(Dispatchers.IO) {
-  try {
-    ...
-  } finally {
-    nonChunkedChannel.close()   // first close (producer — correct owner)
-    chunkedChannel.close()
-  }
-}
-// ...
-} finally {
-nonChunkedChannel.close()       // redundant close
-chunkedChannel.close()
-}
-```
-
-**Impact:** No functional impact, but the redundancy obscures which code path owns channel cleanup.
-
-**Fix:** Remove the outer finally close calls; the inner finally (producer) is the correct owner.
+**File:** `agent/AgentGrpcService.kt`
+**Status:** FIXED — Removed the redundant outer `try/finally` block from
+`writeResponsesToProxyUntilDisconnected`. The inner finally (producer coroutine) is the sole owner
+of channel lifecycle and is sufficient to signal consumers' `consumeAsFlow()` to complete. Added 3
+tests: one verifying producer-side close terminates `consumeAsFlow` consumers, one verifying
+producer-side close on error still terminates consumers, and one verifying the full
+`writeResponsesToProxyUntilDisconnected` function completes correctly with only the inner close.
 
 ---
 

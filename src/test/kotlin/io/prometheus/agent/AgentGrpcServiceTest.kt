@@ -46,6 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import java.util.concurrent.CountDownLatch
@@ -955,6 +956,100 @@ class AgentGrpcServiceTest : StringSpec() {
 
       service.channel.isTerminated.shouldBeFalse()
       service.grpcStub.toString().shouldNotBeEmpty()
+
+      service.shutDown()
+    }
+
+    // ==================== Bug #6 (channel close): Producer-side close is sufficient ====================
+
+    // Bug #6 (channel close): The outer finally block in writeResponsesToProxyUntilDisconnected
+    // redundantly closed both channels after the inner finally (producer) had already closed them.
+    // While Channel.close() is idempotent, the redundancy obscured which code path owned
+    // channel cleanup. The fix removes the outer finally, leaving the inner (producer) as
+    // the sole owner. These tests verify the producer-close pattern is sufficient.
+
+    "Bug #6 (channel close): producer-side close should terminate consumeAsFlow consumers" {
+      // Mirrors the writeResponsesToProxyUntilDisconnected pattern: a producer closes channels
+      // in its finally block, and consumers using consumeAsFlow() should complete normally.
+      val channel = Channel<Int>(UNLIMITED)
+      val consumed = mutableListOf<Int>()
+      val consumerCompleted = AtomicBoolean(false)
+
+      coroutineScope {
+        // Producer: sends items then closes in finally
+        launch(Dispatchers.IO) {
+          try {
+            channel.send(1)
+            channel.send(2)
+            channel.send(3)
+          } finally {
+            channel.close()
+          }
+        }
+
+        // Consumer: consumes via flow (mirrors grpcStub.writeResponsesToProxy)
+        launch(Dispatchers.IO) {
+          channel.consumeAsFlow().collect { consumed.add(it) }
+          consumerCompleted.set(true)
+        }
+      }
+
+      consumed shouldBe listOf(1, 2, 3)
+      consumerCompleted.get().shouldBeTrue()
+    }
+
+    "Bug #6 (channel close): producer-side close on error should still terminate consumers" {
+      // When the producer throws, the finally block still closes the channel,
+      // allowing consumers to drain remaining items and complete.
+      val channel = Channel<Int>(UNLIMITED)
+      val consumed = mutableListOf<Int>()
+      val consumerCompleted = AtomicBoolean(false)
+
+      coroutineScope {
+        launch(Dispatchers.IO) {
+          try {
+            channel.send(10)
+            channel.send(20)
+            // Simulate producer error (e.g., processScrapeResults throws)
+            throw RuntimeException("simulated producer error")
+          } catch (_: RuntimeException) {
+            // Error handled (mirrors runCatchingCancellable + onFailure)
+          } finally {
+            channel.close()
+          }
+        }
+
+        launch(Dispatchers.IO) {
+          channel.consumeAsFlow().collect { consumed.add(it) }
+          consumerCompleted.set(true)
+        }
+      }
+
+      consumed shouldBe listOf(10, 20)
+      consumerCompleted.get().shouldBeTrue()
+    }
+
+    "Bug #6 (channel close): writeResponsesToProxyUntilDisconnected should complete with closed connectionContext" {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      // Mock the streaming calls to just consume the flow
+      coEvery { mockStub.writeResponsesToProxy(any()) } returns EMPTY_INSTANCE
+      coEvery { mockStub.writeChunkedResponsesToProxy(any()) } returns EMPTY_INSTANCE
+      service.grpcStub = mockStub
+
+      val connectionContext = AgentConnectionContext()
+      // Close the connectionContext immediately so processScrapeResults exits,
+      // triggering the inner finally to close both channels.
+      connectionContext.close()
+
+      // Should complete without hanging — the inner finally is sufficient
+      service.writeResponsesToProxyUntilDisconnected(agent, connectionContext)
+
+      // Verify the streaming calls were invoked (consumers received the flows)
+      coVerify { mockStub.writeResponsesToProxy(any(), any()) }
+      coVerify { mockStub.writeChunkedResponsesToProxy(any(), any()) }
 
       service.shutDown()
     }
