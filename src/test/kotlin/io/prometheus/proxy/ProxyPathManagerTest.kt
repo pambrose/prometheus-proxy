@@ -659,6 +659,28 @@ class ProxyPathManagerTest : StringSpec() {
       info.agentContexts[0].agentId shouldBe agent2.agentId
     }
 
+    // Bug #7: addPath logged agentContexts[0] without an empty-list guard when
+    // overwriting a non-consolidated path. The fix uses firstOrNull() to prevent a
+    // potential IndexOutOfBoundsException. This test exercises the overwrite log path
+    // with many rapid overwrites to verify it is safe.
+    "rapid non-consolidated overwrites should not crash" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = false)
+
+      // Register and overwrite the same non-consolidated path many times in
+      // succession. Each overwrite hits the log line that previously used [0].
+      repeat(20) { i ->
+        val context = createMockAgentContext()
+        manager.addPath("/metrics", """{"job":"test-$i"}""", context)
+      }
+
+      // After all overwrites, only the last registration should remain
+      manager.pathMapSize shouldBe 1
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.agentContexts.shouldHaveSize(1)
+    }
+
     // ==================== toPlainText with Multiple Paths ====================
 
     "toPlainText should format paths with different lengths correctly" {

@@ -87,7 +87,7 @@ internal class ProxyPathManager(
         }
         val displacedContexts = agentInfo?.agentContexts?.toList() ?: emptyList()
         if (agentInfo != null) {
-          logger.info { "Overwriting path /$path for ${agentInfo.agentContexts[0]}" }
+          logger.info { "Overwriting path /$path for ${agentInfo.agentContexts.firstOrNull()}" }
         }
         pathMap[path] = AgentContextInfo(false, labels, mutableListOf(agentContext))
 
