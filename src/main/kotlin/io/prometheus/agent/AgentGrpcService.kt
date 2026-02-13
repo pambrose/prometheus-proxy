@@ -146,8 +146,6 @@ internal class AgentGrpcService(
 
       if (grpcStarted)
         shutDownLocked()
-      else
-        grpcStarted = true
 
       channel =
         channel(
@@ -170,6 +168,8 @@ internal class AgentGrpcService(
           if (options.keepAliveWithoutCalls)
             keepAliveWithoutCalls(options.keepAliveWithoutCalls)
         }
+
+      grpcStarted = true
 
       val interceptors =
         buildList<ClientInterceptor> {
