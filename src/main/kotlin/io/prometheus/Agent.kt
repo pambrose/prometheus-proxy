@@ -381,7 +381,7 @@ class Agent(
     healthCheckRegistry.register(
       "http_client_cache_size_check",
       healthCheck {
-        val currentSize = runBlocking { agentHttpService.httpClientCache.getCacheStats().totalEntries }
+        val currentSize = agentHttpService.httpClientCache.currentCacheSize()
         val threshold = options.maxCacheSize + 1
         if (currentSize >= threshold)
           HealthCheck.Result.unhealthy("HTTP client cache size $currentSize >= threshold $threshold")
