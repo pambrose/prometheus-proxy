@@ -286,7 +286,13 @@ internal class ProxyServiceImpl(
       val contextManager = proxy.agentContextManager
       activeScrapeIds.forEach { scrapeId ->
         contextManager.removeChunkedContext(scrapeId)
-          ?.also { logger.warn { "Cleaned up orphaned ChunkedContext for scrapeId: $scrapeId" } }
+          ?.also {
+            logger.warn { "Cleaned up orphaned ChunkedContext for scrapeId: $scrapeId" }
+            proxy.scrapeRequestManager.failScrapeRequest(
+              scrapeId,
+              "Chunked transfer abandoned: stream terminated before summary received",
+            )
+          }
       }
     }
 

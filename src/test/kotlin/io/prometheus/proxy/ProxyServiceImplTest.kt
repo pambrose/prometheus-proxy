@@ -896,6 +896,7 @@ class ProxyServiceImplTest : StringSpec() {
     "writeChunkedResponsesToProxy should clean up orphaned contexts on stream failure" {
       val proxy = createMockProxy(isRunning = true)
       val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId = 400L
 
       val chunkedContext = mockk<ChunkedContext>(relaxed = true)
@@ -927,11 +928,14 @@ class ProxyServiceImplTest : StringSpec() {
       verify { contextManager.putChunkedContext(scrapeId, any()) }
       // Verify the orphaned context was cleaned up
       verify { contextManager.removeChunkedContext(scrapeId) }
+      // Bug #4: Verify the waiting HTTP handler is notified via failScrapeRequest
+      verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("abandoned") }) }
     }
 
     "writeChunkedResponsesToProxy should clean up multiple orphaned contexts on stream failure" {
       val proxy = createMockProxy(isRunning = true)
       val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId1 = 401L
       val scrapeId2 = 402L
 
@@ -975,11 +979,15 @@ class ProxyServiceImplTest : StringSpec() {
       // Both orphaned contexts should be cleaned up
       verify { contextManager.removeChunkedContext(scrapeId1) }
       verify { contextManager.removeChunkedContext(scrapeId2) }
+      // Bug #4: Both orphaned scrape requests should be failed
+      verify { scrapeRequestManager.failScrapeRequest(scrapeId1, match { it.contains("abandoned") }) }
+      verify { scrapeRequestManager.failScrapeRequest(scrapeId2, match { it.contains("abandoned") }) }
     }
 
     "writeChunkedResponsesToProxy should not clean up completed contexts on stream failure" {
       val proxy = createMockProxy(isRunning = true)
       val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
       val completedScrapeId = 403L
       val orphanedScrapeId = 404L
 
@@ -1059,10 +1067,14 @@ class ProxyServiceImplTest : StringSpec() {
 
       result shouldBe EMPTY_INSTANCE
 
-      // Completed context was removed by summary processing
+      // Completed context was removed by summary processing (assignScrapeResults called)
       verify(exactly = 1) { contextManager.removeChunkedContext(completedScrapeId) }
-      // Orphaned context should be cleaned up during cleanup phase
+      verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(any()) }
+      // Orphaned context should be cleaned up and failed during cleanup phase
       verify { contextManager.removeChunkedContext(orphanedScrapeId) }
+      // Bug #4: Only the orphaned scrape should be failed, not the completed one
+      verify { scrapeRequestManager.failScrapeRequest(orphanedScrapeId, match { it.contains("abandoned") }) }
+      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(eq(completedScrapeId), any()) }
     }
 
     // Bug #2: Chunk validation failure left the HTTP handler waiting until timeout.
