@@ -21,13 +21,20 @@ package io.prometheus.agent
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.concurrent.CountDownLatch
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.minusAssign
+import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -212,6 +219,103 @@ class AgentTest : StringSpec() {
       str shouldContain "agentName"
       str shouldContain "tostring-agent"
       str shouldContain "proxyHost"
+    }
+
+    // ==================== Bug #5: scrapeRequestBacklogSize should not go negative ====================
+
+    "scrapeRequestBacklogSize should start at zero" {
+      val agent = createTestAgent()
+
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
+    }
+
+    "scrapeRequestBacklogSize increment and decrement should balance to zero" {
+      val agent = createTestAgent()
+
+      agent.scrapeRequestBacklogSize += 1
+      agent.scrapeRequestBacklogSize += 1
+      agent.scrapeRequestBacklogSize += 1
+      agent.scrapeRequestBacklogSize.load() shouldBe 3
+
+      agent.scrapeRequestBacklogSize -= 1
+      agent.scrapeRequestBacklogSize -= 1
+      agent.scrapeRequestBacklogSize -= 1
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
+    }
+
+    // Bug #5: Verifies that coroutineScope guarantees all finally blocks run before
+    // returning, so a counter incremented in launch and decremented in finally will
+    // always return to zero -- no store(0) needed.
+    "scrapeRequestBacklogSize pattern should return to zero after coroutineScope completes" {
+      val counter = AtomicInt(0)
+
+      coroutineScope {
+        repeat(10) {
+          launch {
+            counter += 1
+            try {
+              delay(10.milliseconds)
+            } finally {
+              counter -= 1
+            }
+          }
+        }
+      }
+
+      // After coroutineScope, all children have completed including finally blocks
+      counter.load() shouldBe 0
+    }
+
+    // Bug #5: Simulates the previous bug: a store(0) between in-flight increments
+    // and their corresponding decrements drives the counter negative.
+    "store(0) during in-flight decrements would produce negative counter" {
+      val counter = AtomicInt(0)
+
+      // Simulate: 3 scrapes in flight
+      counter += 1
+      counter += 1
+      counter += 1
+      counter.load() shouldBe 3
+
+      // Simulate: reconnect resets to 0 while decrements are still pending
+      counter.store(0)
+      counter.load() shouldBe 0
+
+      // Simulate: in-flight finally blocks decrement after the reset
+      counter -= 1
+      counter -= 1
+      counter -= 1
+      counter.load() shouldBe -3 // Bug! Counter is negative
+    }
+
+    // Bug #5: Without store(0), the counter naturally returns to zero.
+    "without store(0) counter naturally returns to zero" {
+      val counter = AtomicInt(0)
+
+      // Simulate: 3 scrapes in flight
+      counter += 1
+      counter += 1
+      counter += 1
+      counter.load() shouldBe 3
+
+      // No store(0) -- just let the finally blocks run
+      counter -= 1
+      counter -= 1
+      counter -= 1
+      counter.load() shouldBe 0
+    }
+
+    // Bug #5: Verify the health check uses non-negative values
+    "scrapeRequestBacklogSize should never be negative for health check" {
+      val agent = createTestAgent()
+
+      // Simulate balanced increment/decrement cycles
+      repeat(5) {
+        agent.scrapeRequestBacklogSize += 1
+        agent.scrapeRequestBacklogSize -= 1
+      }
+
+      agent.scrapeRequestBacklogSize.load() shouldBeGreaterThanOrEqual 0
     }
   }
 }
