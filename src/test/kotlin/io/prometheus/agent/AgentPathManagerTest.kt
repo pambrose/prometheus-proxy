@@ -397,9 +397,12 @@ class AgentPathManagerTest : StringSpec() {
         val num = callCount.incrementAndGet()
         if (num == 1) {
           firstCallStarted.complete(Unit)
-          delay(100) // First gRPC call is slow
+          delay(100) // The first gRPC call is slow
         }
-        registerPathResponse { valid = true; pathId = num.toLong() }
+        registerPathResponse {
+          valid = true
+          pathId = num.toLong()
+        }
       }
 
       coroutineScope {
