@@ -16,32 +16,13 @@ deeply nested, and non-timeout cause chains.
 
 ---
 
-### 2. Overly aggressive HTTP retry policy retries client errors
+### 2. ~~Overly aggressive HTTP retry policy retries client errors~~ FIXED
 
-**File:** `agent/AgentHttpService.kt:220-221`
-
-The retry policy retries on **all** non-success status codes except 404:
-
-```kotlin
-retryIf(maxRetries) { _, response ->
-  !response.status.isSuccess() && response.status != HttpStatusCode.NotFound
-}
-```
-
-This means 400 Bad Request, 401 Unauthorized, 403 Forbidden, 405 Method Not Allowed, etc. are all
-retried. Client errors (4xx) are typically not transient — the request won't change between retries.
-Only server errors (5xx) and connection-level failures should be retried.
-
-**Impact:** Unnecessary load on target services, added latency for non-transient failures, and
-potential rate limiting from repeated 401/403 requests.
-
-**Fix:** Change the condition to only retry server errors:
-
-```kotlin
-retryIf(maxRetries) { _, response ->
-  response.status.value in 500..599
-}
-```
+**File:** `agent/AgentHttpService.kt`
+**Status:** FIXED — Changed `retryIf` condition from `!response.status.isSuccess() && response.status
+!= HttpStatusCode.NotFound` to `response.status.value in 500..599` so only server errors are retried.
+Added 6 tests confirming 4xx errors (400, 401, 403, 404) are not retried and 5xx errors (500, 503)
+are retried.
 
 ---
 
