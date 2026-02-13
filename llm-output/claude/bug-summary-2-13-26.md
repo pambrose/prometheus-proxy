@@ -51,22 +51,14 @@ EOF handling.
 
 ---
 
-### 5. Misleading ERROR log level for normal timeout condition
+### 5. ~~Misleading ERROR log level for normal timeout condition~~ FIXED
 
 **File:** `proxy/ScrapeRequestManager.kt:50`
-
-When a scrape request times out, `submitScrapeRequest`'s finally block removes the wrapper from
-the map. If the agent's late response then arrives, `assignScrapeResults` logs at **ERROR** level:
-
-```kotlin
-scrapeRequestMap[scrapeId]
-  ?.also { wrapper -> ... }
-  ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
-```
-
-This is a normal, expected condition during timeouts and should be logged at WARN or DEBUG.
-
-**Impact:** Log noise in production; may trigger unnecessary alerts.
+**Status:** FIXED — Changed `logger.error` to `logger.warn` and improved the message to include
+"(likely timed out)" for clarity. This is a normal, expected condition when a scrape request times
+out and the agent's late response arrives after the wrapper has been removed from the map. Added 3
+tests: one confirming the log is at WARN level, one confirming no ERROR-level log is emitted, and
+one confirming the scrapeId appears in the log message.
 
 ---
 

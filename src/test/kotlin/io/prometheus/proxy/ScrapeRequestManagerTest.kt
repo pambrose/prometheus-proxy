@@ -18,7 +18,12 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -29,6 +34,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.common.ScrapeResults
+import org.slf4j.LoggerFactory
 
 class ScrapeRequestManagerTest : StringSpec() {
   private fun createMockWrapper(scrapeId: Long): ScrapeRequestWrapper {
@@ -320,6 +326,80 @@ class ScrapeRequestManagerTest : StringSpec() {
       // Both calls should succeed without exceptions; the real markComplete()
       // uses AtomicBoolean to guard observeDuration
       verify(exactly = 2) { wrapper.markComplete() }
+    }
+
+    // ==================== Bug #5: Log level for missing scrape request ====================
+
+    // Bug #5: When a scrape request times out, the proxy removes its ScrapeRequestWrapper
+    // from the map. If the agent's late response then arrives, assignScrapeResults() finds
+    // no wrapper and previously logged at ERROR level. This is a normal, expected condition
+    // during timeouts and should be logged at WARN, not ERROR.
+
+    "Bug #5: assignScrapeResults should log at WARN level for missing scrapeId" {
+      val logbackLogger = LoggerFactory.getLogger(ScrapeRequestManager::class.java) as Logger
+      val listAppender = ListAppender<ILoggingEvent>()
+      listAppender.start()
+      logbackLogger.addAppender(listAppender)
+
+      try {
+        val manager = ScrapeRequestManager()
+        val mockResults = mockk<ScrapeResults>(relaxed = true)
+        every { mockResults.srScrapeId } returns 999L
+
+        manager.assignScrapeResults(mockResults)
+
+        val relevantLogs = listAppender.list.filter { it.message.contains("Missing ScrapeRequestWrapper") }
+        relevantLogs shouldHaveSize 1
+        relevantLogs[0].level shouldBe Level.WARN
+      } finally {
+        logbackLogger.detachAppender(listAppender)
+        listAppender.stop()
+      }
+    }
+
+    "Bug #5: assignScrapeResults should not log at ERROR level for missing scrapeId" {
+      val logbackLogger = LoggerFactory.getLogger(ScrapeRequestManager::class.java) as Logger
+      val listAppender = ListAppender<ILoggingEvent>()
+      listAppender.start()
+      logbackLogger.addAppender(listAppender)
+
+      try {
+        val manager = ScrapeRequestManager()
+        val mockResults = mockk<ScrapeResults>(relaxed = true)
+        every { mockResults.srScrapeId } returns 888L
+
+        manager.assignScrapeResults(mockResults)
+
+        val errorLogs = listAppender.list.filter {
+          it.level == Level.ERROR && it.message.contains("Missing ScrapeRequestWrapper")
+        }
+        errorLogs shouldHaveSize 0
+      } finally {
+        logbackLogger.detachAppender(listAppender)
+        listAppender.stop()
+      }
+    }
+
+    "Bug #5: assignScrapeResults log message should include scrapeId" {
+      val logbackLogger = LoggerFactory.getLogger(ScrapeRequestManager::class.java) as Logger
+      val listAppender = ListAppender<ILoggingEvent>()
+      listAppender.start()
+      logbackLogger.addAppender(listAppender)
+
+      try {
+        val manager = ScrapeRequestManager()
+        val mockResults = mockk<ScrapeResults>(relaxed = true)
+        every { mockResults.srScrapeId } returns 777L
+
+        manager.assignScrapeResults(mockResults)
+
+        val relevantLogs = listAppender.list.filter { it.message.contains("Missing ScrapeRequestWrapper") }
+        relevantLogs shouldHaveSize 1
+        relevantLogs[0].formattedMessage shouldContain "777"
+      } finally {
+        logbackLogger.detachAppender(listAppender)
+        listAppender.stop()
+      }
     }
   }
 }
