@@ -73,6 +73,7 @@ class ProxyHttpRoutesTest : StringSpec() {
   private fun createSpyProxyForSubmit(
     timeoutSecs: Int = 1,
     checkMillis: Int = 50,
+    args: List<String> = emptyList(),
   ): Proxy {
     val proxy = spyk(
       Proxy(
@@ -80,7 +81,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           listOf(
             "-Dproxy.internal.scrapeRequestTimeoutSecs=$timeoutSecs",
             "-Dproxy.internal.scrapeRequestCheckMillis=$checkMillis",
-          ),
+          ) + args,
         ),
         inProcessServerName = "proxy-submit-test-${System.nanoTime()}",
         testMode = true,
@@ -588,6 +589,44 @@ class ProxyHttpRoutesTest : StringSpec() {
       response.statusCode shouldBe HttpStatusCode.OK
       response.updateMsg shouldBe "success"
       response.contentText shouldBe originalContent
+    }
+
+    "submitScrapeRequest should return PayloadTooLarge for zip bombs" {
+      // Set a very small limit for testing via system property
+      val proxy = createSpyProxyForSubmit(
+        timeoutSecs = 30,
+        args = listOf("-Dproxy.internal.maxUnzippedContentSizeMBytes=0"),
+      )
+
+      val agentContext = AgentContext("test-remote")
+      val originalContent = "a".repeat(1024)
+
+      launch {
+        val wrapper = agentContext.readScrapeRequest()!!
+        val results = ScrapeResults(
+          srAgentId = agentContext.agentId,
+          srScrapeId = wrapper.scrapeId,
+          srValidResponse = true,
+          srStatusCode = 200,
+          srContentType = "text/plain; charset=utf-8",
+          srZipped = true,
+          srContentAsZipped = originalContent.zip(),
+          srUrl = "http://localhost:8080/metrics",
+        )
+        proxy.scrapeRequestManager.assignScrapeResults(results)
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.PayloadTooLarge
+      response.updateMsg shouldBe "payload_too_large"
+      response.failureReason shouldContain "exceeds limit"
     }
 
     "submitScrapeRequest should fallback to plain text on content type parse error" {

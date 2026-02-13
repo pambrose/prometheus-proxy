@@ -17,7 +17,6 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.util.simpleClassName
-import com.github.pambrose.common.util.unzip
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
 import io.ktor.http.ContentType.Text
@@ -38,6 +37,7 @@ import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
 import io.prometheus.proxy.ProxyUtils.incrementScrapeRequestCount
 import io.prometheus.proxy.ProxyUtils.respondWith
+import io.prometheus.proxy.ProxyUtils.unzip
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.ClosedSendChannelException
@@ -285,11 +285,25 @@ object ProxyHttpRoutes {
         }
       else
         scrapeResults.run {
-          // Unzip content here
+          val maxSize = proxy.proxyConfigVals.internal.maxUnzippedContentSizeMBytes * 1024L * 1024L
+          val contentText =
+            try {
+              if (srZipped) srContentAsZipped.unzip(maxSize) else srContentAsText
+            } catch (e: ProxyUtils.ZipBombException) {
+              return ScrapeRequestResponse(
+                statusCode = HttpStatusCode.PayloadTooLarge,
+                contentType = Text.Plain.withCharset(Charsets.UTF_8),
+                failureReason = e.message ?: "Unzipped content too large",
+                url = srUrl,
+                updateMsg = "payload_too_large",
+                fetchDuration = scrapeRequest.ageDuration(),
+              )
+            }
+
           ScrapeRequestResponse(
             statusCode = statusCode,
             contentType = contentType,
-            contentText = if (srZipped) srContentAsZipped.unzip() else srContentAsText,
+            contentText = contentText,
             failureReason = srFailureReason,
             url = srUrl,
             updateMsg = "success",
