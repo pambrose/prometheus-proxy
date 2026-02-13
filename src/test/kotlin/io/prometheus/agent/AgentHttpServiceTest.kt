@@ -37,6 +37,7 @@ class AgentHttpServiceTest : StringSpec() {
     every { mockOptions.cacheCleanupIntervalMins } returns 5
     every { mockOptions.scrapeTimeoutSecs } returns 10
     every { mockOptions.minGzipSizeBytes } returns 512
+    every { mockOptions.maxContentLengthMBytes } returns 10
     every { mockOptions.debugEnabled } returns false
 
     val mockPathManager = mockk<AgentPathManager>(relaxed = true)
@@ -57,6 +58,7 @@ class AgentHttpServiceTest : StringSpec() {
     every { mockOptions.scrapeTimeoutSecs } returns 10
     every { mockOptions.scrapeMaxRetries } returns 0
     every { mockOptions.minGzipSizeBytes } returns 1_000_000
+    every { mockOptions.maxContentLengthMBytes } returns 10
     every { mockOptions.debugEnabled } returns false
     every { mockOptions.httpClientTimeoutSecs } returns 90
     every { mockOptions.trustAllX509Certificates } returns false

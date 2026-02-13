@@ -55,6 +55,7 @@ import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.jvm.isAccessible
 
+@Suppress("LargeClass")
 class AgentGrpcServiceTest : StringSpec() {
   private fun createMockAgent(proxyHostname: String): Agent {
     val mockOptions = mockk<AgentOptions>(relaxed = true)

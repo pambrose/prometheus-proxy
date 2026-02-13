@@ -57,7 +57,9 @@ object ProxyUtils {
     }
   }
 
-  class ZipBombException(message: String) : RuntimeException(message)
+  class ZipBombException(
+    message: String,
+  ) : RuntimeException(message)
 
   fun invalidAgentContextResponse(
     path: String,

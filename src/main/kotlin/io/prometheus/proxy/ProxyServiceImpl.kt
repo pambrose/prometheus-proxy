@@ -211,9 +211,14 @@ internal class ProxyServiceImpl(
         when (response.chunkOneOfCase) {
           ChunkOneOfCase.HEADER -> {
             val scrapeId = response.header.headerScrapeId
-            logger.debug { "Reading header for scrapeId: $scrapeId" }
-            contextManager.putChunkedContext(scrapeId, ChunkedContext(response))
-            activeScrapeIds += scrapeId
+            if (proxy.scrapeRequestManager.containsScrapeRequest(scrapeId)) {
+              logger.debug { "Reading header for scrapeId: $scrapeId" }
+              val maxZippedSize = proxy.proxyConfigVals.internal.maxZippedContentSizeMBytes * 1024 * 1024
+              contextManager.putChunkedContext(scrapeId, ChunkedContext(response, maxZippedSize))
+              activeScrapeIds += scrapeId
+            } else {
+              logger.warn { "Received chunked header for unknown scrapeId: $scrapeId" }
+            }
           }
 
           ChunkOneOfCase.CHUNK -> {

@@ -126,7 +126,7 @@ class AgentContextManagerTest : StringSpec() {
       val manager = AgentContextManager(isTestMode = true)
       val scrapeId = 123L
       val mockResponse = mockk<ChunkedScrapeResponse>(relaxed = true)
-      val chunkedContext = ChunkedContext(mockResponse)
+      val chunkedContext = ChunkedContext(mockResponse, 1000000)
 
       manager.putChunkedContext(scrapeId, chunkedContext)
       manager.chunkedContextSize shouldBe 1

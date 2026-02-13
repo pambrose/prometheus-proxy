@@ -25,6 +25,7 @@ import java.util.zip.CRC32
 
 internal class ChunkedContext(
   response: ChunkedScrapeResponse,
+  private val maxZippedContentSize: Int,
 ) {
   private val checksum = CRC32()
   private val baos = ByteArrayOutputStream()
@@ -35,6 +36,7 @@ internal class ChunkedContext(
   var totalByteCount = 0
     private set
 
+  @Suppress("ThrowsCount")
   fun applyChunk(
     data: ByteArray,
     chunkByteCount: Int,
@@ -43,6 +45,12 @@ internal class ChunkedContext(
   ) {
     totalChunkCount++
     totalByteCount += chunkByteCount
+
+    if (totalByteCount > maxZippedContentSize)
+      throw ChunkValidationException(
+        "Zipped content size $totalByteCount exceeds maximum allowed size $maxZippedContentSize",
+      )
+
     checksum.update(data, 0, chunkByteCount)
     baos.write(data, 0, chunkByteCount)
 

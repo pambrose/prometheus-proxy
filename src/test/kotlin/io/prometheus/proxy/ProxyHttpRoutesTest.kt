@@ -54,6 +54,7 @@ import io.ktor.server.cio.CIO as ServerCIO
 // Bug #12: The service discovery endpoint was registered using the raw sdPath config value,
 // which defaults to "discovery" (no leading slash). The fix normalizes the path with
 // ensureLeadingSlash() to ensure consistent route registration regardless of config format.
+@Suppress("LargeClass")
 class ProxyHttpRoutesTest : StringSpec() {
   private fun callLogActivityForResponse(
     path: String,

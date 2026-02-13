@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction", "TooGenericExceptionCaught")
 
 package io.prometheus.agent
 
@@ -68,6 +68,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.CRC32
+import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
 
@@ -302,7 +303,12 @@ internal class AgentGrpcService(
         // The actual fetch happens at the other end of the channel, not here.
         logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
         agent.scrapeRequestBacklogSize += 1
-        connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
+        try {
+          connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
+        } catch (e: Exception) {
+          agent.scrapeRequestBacklogSize -= 1
+          throw e
+        }
       }
   }
 

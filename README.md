@@ -257,7 +257,9 @@ EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
 // The agent runs in the background and does not block your application
 
 // Shutdown the agent when the application terminates
-  agentInfo.close();
+  agentInfo.
+
+close();
   ```
 
 ### Service Discovery
@@ -368,6 +370,7 @@ Configuration values are evaluated in order: CLI options → environment variabl
 | --trust_all_x509              <br> TRUST_ALL_X509_CERTIFICATES        <br> agent.http.enableTrustAllX509Certificates  | false   | Disable SSL verification for agent https endpoints                                             |
 | --max_concurrent_clients      <br> MAX_CONCURRENT_CLIENTS             <br> agent.http.maxConcurrentClients            | 1       | Maximum number of concurrent HTTP clients                                                      |
 | --client_timeout_secs         <br> CLIENT_TIMEOUT_SECS                <br> agent.http.clientTimeoutSecs               | 90      | HTTP client timeout (seconds)                                                                  |
+| --max_content_length_mbytes   <br> AGENT_MAX_CONTENT_LENGTH_MBYTES    <br> agent.http.maxContentLengthMBytes          | 10      | Maximum allowed size of scrape response (megabytes)                                            |
 | --max_cache_size              <br> MAX_CLIENT_CACHE_SIZE              <br> agent.http.clientCache.maxSize             | 100     | Maximum number of HTTP clients to cache                                                        |
 | --max_cache_age_mins          <br> MAX_CLIENT_CACHE_AGE_MINS          <br> agent.http.clientCache.maxAgeMins          | 30      | Maximum age of cached HTTP clients (minutes)                                                   |
 | --max_cache_idle_mins         <br> MAX_CLIENT_CACHE_IDLE_MINS         <br> agent.http.clientCache.maxIdleMins         | 10      | Maximum idle time before HTTP client is evicted (minutes)                                      |
@@ -435,6 +438,11 @@ or the `agent.http.maxConcurrentClients` property. The default value is 1.
 The HTTP client timeout is controlled by the `--client_timeout_secs` CLI option, the `CLIENT_TIMEOUT_SECS` environment
 variable, or the `agent.http.clientTimeoutSecs` property. The default value is 90 seconds. This value replaces the
 `agent.configVals.agent.internal.cioTimeoutSecs` value.
+
+The maximum scrape response size is controlled by the `--max_content_length_mbytes` CLI option,
+the `AGENT_MAX_CONTENT_LENGTH_MBYTES` environment variable, or the `agent.http.maxContentLengthMBytes` property.
+The default value is 10 megabytes. Responses exceeding this size will be rejected with an `HTTP 413 Payload Too Large`
+error to prevent memory exhaustion.
 
 ### Admin Servlets
 
