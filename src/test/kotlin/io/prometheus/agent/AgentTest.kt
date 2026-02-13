@@ -166,6 +166,35 @@ class AgentTest : StringSpec() {
       invoked.shouldBeTrue()
     }
 
+    // ==================== Bug #12: currentCacheSize non-blocking ====================
+
+    // Bug #12: The health check previously used runBlocking { getCacheStats().totalEntries }
+    // which could block the health check thread while waiting for the cache mutex.
+    // The fix uses currentCacheSize() which reads from ConcurrentHashMap.size (non-blocking).
+    "httpClientCache.currentCacheSize should return 0 for empty cache" {
+      val agent = createTestAgent()
+
+      val size = agent.agentHttpService.httpClientCache.currentCacheSize()
+
+      size shouldBe 0
+    }
+
+    "httpClientCache.currentCacheSize should not require coroutine context" {
+      val agent = createTestAgent()
+
+      // currentCacheSize() reads from ConcurrentHashMap.size and must work from any thread
+      // without needing runBlocking or a coroutine context. The old getCacheStats() approach
+      // required a coroutine context (mutex), which would deadlock in health check callbacks.
+      val thread = Thread {
+        val size = agent.agentHttpService.httpClientCache.currentCacheSize()
+        size shouldBe 0
+      }
+      thread.start()
+      thread.join(5000)
+
+      thread.isAlive.shouldBeFalse()
+    }
+
     // ==================== Construction / launchId / toString Tests ====================
 
     "launchId should be a 15-character string" {
