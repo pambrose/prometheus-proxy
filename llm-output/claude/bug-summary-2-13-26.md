@@ -39,24 +39,15 @@ via cancellation propagation, and one confirming non-cancellation errors are sti
 
 ---
 
-### 4. mergeContentTexts includes empty content from failed agents
+### 4. ~~mergeContentTexts includes empty content from failed agents~~ FIXED
 
-**File:** `proxy/ProxyHttpRoutes.kt:162-179`
-
-When consolidated paths have multiple agents and some fail, `processRequests` merges all results
-including those with empty `contentText` from failed agents. This produces extra newlines in the
-merged output:
-
-```kotlin
-// If agent A returns "metric_a 1\n" and agent B fails (contentText=""):
-// Result: "metric_a 1\n\n"  (extra newline from empty string join)
-```
-
-**Impact:** Extra blank lines in scraped metrics output. Usually harmless for Prometheus exposition
-format, but could be more problematic with strict OpenMetrics parsers.
-
-**Fix:** Filter out results with non-success status codes before merging, or skip empty contentText
-entries in the join.
+**File:** `proxy/ProxyHttpRoutes.kt`
+**Status:** FIXED — Added a filter in `mergeContentTexts` to skip results with empty `contentText`
+before merging. When all results are empty the function returns `""`. When only one non-empty result
+remains after filtering, it is returned directly (preserving the single-result fast path). Added 5
+tests covering: single failed agent excluded, multiple failed agents with one success, all agents
+failed, mixed successes with a failed agent in between, and failed agents combined with OpenMetrics
+EOF handling.
 
 ---
 

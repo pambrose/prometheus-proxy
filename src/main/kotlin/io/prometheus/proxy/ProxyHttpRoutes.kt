@@ -162,8 +162,14 @@ object ProxyHttpRoutes {
   internal fun mergeContentTexts(results: List<ScrapeRequestResponse>): String {
     if (results.size == 1) return results[0].contentText
 
+    // Filter out results with empty content (e.g., failed agents) to avoid
+    // extra newlines in the merged output.
+    val nonEmpty = results.filter { it.contentText.isNotEmpty() }
+    if (nonEmpty.isEmpty()) return ""
+    if (nonEmpty.size == 1) return nonEmpty[0].contentText
+
     var hasEof = false
-    val stripped = results.map { result ->
+    val stripped = nonEmpty.map { result ->
       val text = result.contentText
       val trimmed = text.trimEnd()
       if (trimmed.endsWith("# EOF")) {
