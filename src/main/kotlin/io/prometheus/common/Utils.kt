@@ -36,6 +36,21 @@ object Utils {
   fun decodeParams(encodedQueryParams: String): String =
     if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8)}" else ""
 
+  fun appendQueryParams(
+    baseUrl: String,
+    encodedQueryParams: String,
+  ): String {
+    if (encodedQueryParams.isBlank()) return baseUrl
+    val decodedParams = URLDecoder.decode(encodedQueryParams, UTF_8)
+    val separator =
+      when {
+        '?' !in baseUrl -> "?"
+        baseUrl.endsWith("?") || baseUrl.endsWith("&") -> ""
+        else -> "&"
+      }
+    return "$baseUrl$separator$decodedParams"
+  }
+
   internal fun String.defaultEmptyJsonObject() = ifEmpty { "{}" }
 
   fun String.toJsonElement() = Json.parseToJsonElement(this)

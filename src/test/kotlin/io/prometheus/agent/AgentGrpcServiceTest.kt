@@ -20,6 +20,7 @@ package io.prometheus.agent
 
 import com.github.pambrose.common.util.zip
 import io.grpc.Metadata
+import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -46,15 +47,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.jvm.isAccessible
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 @Suppress("LargeClass")
 class AgentGrpcServiceTest : StringSpec() {
@@ -1011,8 +1018,8 @@ class AgentGrpcServiceTest : StringSpec() {
             channel.send(10)
             channel.send(20)
             // Simulate producer error (e.g., processScrapeResults throws)
-            throw RuntimeException("simulated producer error")
-          } catch (_: RuntimeException) {
+            error("simulated producer error")
+          } catch (_: IllegalStateException) {
             // Error handled (mirrors runCatchingCancellable + onFailure)
           } finally {
             channel.close()
@@ -1050,6 +1057,38 @@ class AgentGrpcServiceTest : StringSpec() {
       // Verify the streaming calls were invoked (consumers received the flows)
       coVerify { mockStub.writeResponsesToProxy(any(), any()) }
       coVerify { mockStub.writeChunkedResponsesToProxy(any(), any()) }
+
+      service.shutDown()
+    }
+
+    "writeResponsesToProxyUntilDisconnected should close streams when a writer fails" {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      coEvery { mockStub.writeResponsesToProxy(any(), any()) } throws IllegalStateException("boom")
+      coEvery { mockStub.writeChunkedResponsesToProxy(any(), any()) } answers {
+        runBlocking {
+          arg<kotlinx.coroutines.flow.Flow<ChunkedScrapeResponse>>(0).collect()
+        }
+        EMPTY_INSTANCE
+      }
+      service.grpcStub = mockStub
+
+      val connectionContext = AgentConnectionContext()
+
+      shouldNotThrow<Throwable> {
+        coroutineScope {
+          val job = launch { service.writeResponsesToProxyUntilDisconnected(agent, connectionContext) }
+          withTimeout(5.seconds) {
+            while (connectionContext.connected) {
+              delay(10.milliseconds)
+            }
+          }
+          job.cancel()
+          job.join()
+        }
+      }
 
       service.shutDown()
     }

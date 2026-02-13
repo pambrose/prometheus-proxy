@@ -43,6 +43,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
+import java.io.IOException
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -160,8 +161,6 @@ object ProxyHttpRoutes {
   // This function strips trailing "# EOF" lines from each result and appends a
   // single "# EOF" at the end if any result contained one.
   internal fun mergeContentTexts(results: List<ScrapeRequestResponse>): String {
-    if (results.size == 1) return results[0].contentText
-
     // Filter out results with empty content (e.g., failed agents) to avoid
     // extra newlines in the merged output.
     val nonEmpty = results.filter { it.contentText.isNotEmpty() }
@@ -302,6 +301,15 @@ object ProxyHttpRoutes {
                 failureReason = e.message ?: "Unzipped content too large",
                 url = srUrl,
                 updateMsg = "payload_too_large",
+                fetchDuration = scrapeRequest.ageDuration(),
+              )
+            } catch (e: IOException) {
+              return ScrapeRequestResponse(
+                statusCode = HttpStatusCode.BadGateway,
+                contentType = Text.Plain.withCharset(Charsets.UTF_8),
+                failureReason = e.message ?: "Invalid gzipped content",
+                url = srUrl,
+                updateMsg = "invalid_gzip",
                 fetchDuration = scrapeRequest.ageDuration(),
               )
             }
