@@ -18,6 +18,11 @@
 
 package io.prometheus.agent
 
+import io.grpc.Status
+import io.grpc.StatusException
+import io.grpc.StatusRuntimeException
+import io.kotest.assertions.throwables.shouldNotThrow
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -316,6 +321,89 @@ class AgentTest : StringSpec() {
       }
 
       agent.scrapeRequestBacklogSize.load() shouldBeGreaterThanOrEqual 0
+    }
+
+    // ==================== Bug #8: handleConnectionFailure should rethrow JVM Errors ====================
+
+    // Bug #8: Before the fix, the reconnect loop's onFailure handler caught all Throwable
+    // (via runCatchingCancellable + else branch) including Error subclasses like
+    // OutOfMemoryError and StackOverflowError. These were logged at warn level and
+    // the agent continued running in a potentially corrupted state.
+    //
+    // The fix adds an `is Error` branch that re-throws, causing the agent to terminate
+    // on fatal JVM errors instead of swallowing them.
+
+    "Bug #8: handleConnectionFailure should rethrow StackOverflowError" {
+      val agent = createTestAgent()
+
+      shouldThrow<StackOverflowError> {
+        agent.handleConnectionFailure(StackOverflowError("test stack overflow"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should rethrow OutOfMemoryError" {
+      val agent = createTestAgent()
+
+      shouldThrow<OutOfMemoryError> {
+        agent.handleConnectionFailure(OutOfMemoryError("test OOM"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should rethrow VirtualMachineError subclasses" {
+      val agent = createTestAgent()
+
+      shouldThrow<InternalError> {
+        agent.handleConnectionFailure(InternalError("test internal error"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should rethrow AssertionError" {
+      val agent = createTestAgent()
+
+      // AssertionError is an Error subclass
+      shouldThrow<AssertionError> {
+        agent.handleConnectionFailure(AssertionError("test assertion"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should not throw for RequestFailureException" {
+      val agent = createTestAgent()
+
+      shouldNotThrow<Throwable> {
+        agent.handleConnectionFailure(RequestFailureException("invalid response"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should not throw for StatusRuntimeException" {
+      val agent = createTestAgent()
+
+      shouldNotThrow<Throwable> {
+        agent.handleConnectionFailure(StatusRuntimeException(Status.UNAVAILABLE))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should not throw for StatusException" {
+      val agent = createTestAgent()
+
+      shouldNotThrow<Throwable> {
+        agent.handleConnectionFailure(StatusException(Status.UNAVAILABLE))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should not throw for RuntimeException" {
+      val agent = createTestAgent()
+
+      shouldNotThrow<Throwable> {
+        agent.handleConnectionFailure(RuntimeException("network error"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should not throw for IOException" {
+      val agent = createTestAgent()
+
+      shouldNotThrow<Throwable> {
+        agent.handleConnectionFailure(java.io.IOException("connection reset"))
+      }
     }
   }
 }

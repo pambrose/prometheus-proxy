@@ -335,28 +335,37 @@ class Agent(
             connectToProxy()
             logger.info { "Disconnected from proxy at $proxyHost" }
           }
-        }.onFailure { e ->
-          when (e) {
-            is RequestFailureException -> {
-              logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
-            }
-
-            is StatusRuntimeException -> {
-              logger.info { "Disconnected from proxy at $proxyHost" }
-            }
-
-            is StatusException -> {
-              logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
-            }
-
-            // Catch anything else to avoid exiting the retry loop
-            else -> {
-              logger.warn(e) { "Throwable caught ${e.simpleClassName} ${e.message}" }
-            }
-          }
-        }
+        }.onFailure { e -> handleConnectionFailure(e) }
       } finally {
         logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
+      }
+    }
+  }
+
+  internal fun handleConnectionFailure(e: Throwable) {
+    when (e) {
+      is RequestFailureException -> {
+        logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
+      }
+
+      is StatusRuntimeException -> {
+        logger.info { "Disconnected from proxy at $proxyHost" }
+      }
+
+      is StatusException -> {
+        logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
+      }
+
+      // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.)
+      // so the agent terminates instead of running in a corrupted state.
+      is Error -> {
+        logger.error(e) { "Fatal JVM error ${e.simpleClassName}: ${e.message}" }
+        throw e
+      }
+
+      // Catch anything else to avoid exiting the retry loop
+      else -> {
+        logger.warn(e) { "Throwable caught ${e.simpleClassName} ${e.message}" }
       }
     }
   }
