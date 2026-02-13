@@ -59,11 +59,16 @@ internal class ProxyPathManager(
       }.toMap()
     }
 
+  /**
+   * Adds a path to the path map for the given agent context.
+   *
+   * @return null on success, or a failure reason string on failure.
+   */
   fun addPath(
     path: String,
     labels: String,
     agentContext: AgentContext,
-  ): Boolean {
+  ): String? {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
 
     synchronized(pathMap) {
@@ -73,17 +78,17 @@ internal class ProxyPathManager(
           pathMap[path] = AgentContextInfo(true, labels, mutableListOf(agentContext))
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated) {
-            logger.error {
-              "Rejecting consolidated agent for non-consolidated path /$path"
-            }
-            return false
+            val reason = "Consolidated agent rejected for non-consolidated path /$path"
+            logger.error { reason }
+            return reason
           }
           agentInfo.agentContexts += agentContext
         }
       } else {
         if (agentInfo != null && agentInfo.isConsolidated) {
-          logger.error { "Rejecting non-consolidated agent for consolidated path /$path" }
-          return false
+          val reason = "Non-consolidated agent rejected for consolidated path /$path"
+          logger.error { reason }
+          return reason
         }
         val displacedContexts = agentInfo?.agentContexts?.toList() ?: emptyList()
         if (agentInfo != null) {
@@ -106,7 +111,7 @@ internal class ProxyPathManager(
 
       if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
     }
-    return true
+    return null
   }
 
   fun removePath(

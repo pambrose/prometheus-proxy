@@ -480,9 +480,9 @@ class ProxyPathManagerTest : StringSpec() {
       val nonConsolidatedContext = createMockAgentContext(consolidated = false)
       val consolidatedContext = createMockAgentContext(consolidated = true)
 
-      manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext).shouldBeTrue()
+      manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext).shouldBeNull()
       // Consolidated agent should be rejected on a non-consolidated path
-      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext).shouldBeFalse()
+      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext).shouldNotBeNull()
 
       manager.pathMapSize shouldBe 1
       val info = manager.getAgentContextInfo("/metrics")
@@ -499,9 +499,9 @@ class ProxyPathManagerTest : StringSpec() {
       val nonConsolidatedContext = createMockAgentContext(consolidated = false)
 
       // First register as consolidated
-      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext).shouldBeTrue()
+      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext).shouldBeNull()
       // Non-consolidated should be rejected on a consolidated path
-      manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext).shouldBeFalse()
+      manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext).shouldNotBeNull()
 
       manager.pathMapSize shouldBe 1
       val info = manager.getAgentContextInfo("/metrics")
@@ -510,6 +510,45 @@ class ProxyPathManagerTest : StringSpec() {
       info.isConsolidated.shouldBeTrue()
       info.agentContexts.shouldHaveSize(1)
       info.agentContexts[0].agentId shouldBe consolidatedContext.agentId
+    }
+
+    // Bug #11: addPath returns a descriptive reason string on failure instead of just false
+    "addPath should return reason containing 'Consolidated' when consolidated agent rejected" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val nonConsolidatedContext = createMockAgentContext(consolidated = false)
+      val consolidatedContext = createMockAgentContext(consolidated = true)
+
+      manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext)
+      val reason = manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
+
+      reason.shouldNotBeNull()
+      reason shouldContain "Consolidated"
+      reason shouldContain "/metrics"
+    }
+
+    "addPath should return reason containing 'Non-consolidated' when non-consolidated agent rejected" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val consolidatedContext = createMockAgentContext(consolidated = true)
+      val nonConsolidatedContext = createMockAgentContext(consolidated = false)
+
+      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
+      val reason = manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext)
+
+      reason.shouldNotBeNull()
+      reason shouldContain "Non-consolidated"
+      reason shouldContain "/metrics"
+    }
+
+    "addPath should return null on success" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      val result = manager.addPath("/metrics", """{"job":"test"}""", context)
+
+      result.shouldBeNull()
     }
 
     // ==================== removeFromPathManager Edge Cases ====================
@@ -810,7 +849,7 @@ class ProxyPathManagerTest : StringSpec() {
       consolidated2.isValid().shouldBeTrue()
 
       // Non-consolidated agent should be rejected (Bug #8 fix)
-      manager.addPath("/metrics", """{"job":"test"}""", newAgent).shouldBeFalse()
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent).shouldNotBeNull()
 
       // Consolidated agents should remain valid and unchanged
       consolidated1.isValid().shouldBeTrue()
