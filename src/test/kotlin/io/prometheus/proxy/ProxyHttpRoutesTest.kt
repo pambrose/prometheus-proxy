@@ -138,6 +138,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
+        delay(100.milliseconds) // Allow CIO engine to fully initialize
         val client = HttpClient(CIO) { expectSuccess = false }
 
         val response = client.get("http://localhost:$port/discovery")
@@ -167,6 +168,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
+        delay(100.milliseconds) // Allow CIO engine to fully initialize
         val client = HttpClient(CIO) { expectSuccess = false }
 
         val response = client.get("http://localhost:$port/discovery")
