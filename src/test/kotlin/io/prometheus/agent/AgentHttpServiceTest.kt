@@ -8,9 +8,11 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.header
 import io.ktor.server.response.respondText
@@ -57,6 +59,53 @@ class AgentHttpServiceTest : StringSpec() {
     every { mockOptions.cacheCleanupIntervalMins } returns 5
     every { mockOptions.scrapeTimeoutSecs } returns 10
     every { mockOptions.scrapeMaxRetries } returns 0
+    every { mockOptions.minGzipSizeBytes } returns 1_000_000
+    every { mockOptions.maxContentLengthMBytes } returns 10
+    every { mockOptions.debugEnabled } returns false
+    every { mockOptions.httpClientTimeoutSecs } returns 90
+    every { mockOptions.trustAllX509Certificates } returns false
+
+    val config = ConfigFactory.parseString(
+      """
+      agent {
+        pathConfigs = []
+        internal {
+          cioTimeoutSecs = 90
+        }
+      }
+      proxy {}
+      """.trimIndent(),
+    )
+    val configVals = ConfigVals(config)
+
+    val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+
+    val mockAgent = mockk<Agent>(relaxed = true)
+    every { mockAgent.options } returns mockOptions
+    every { mockAgent.configVals } returns configVals
+    every { mockAgent.isMetricsEnabled } returns false
+    every { mockAgent.isTestMode } returns true
+    every { mockAgent.grpcService } returns mockGrpcService
+
+    coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      valid = true
+      pathId = 1L
+    }
+
+    val pathManager = AgentPathManager(mockAgent)
+    every { mockAgent.pathManager } returns pathManager
+
+    return mockAgent
+  }
+
+  private fun createMockAgentWithRetries(maxRetries: Int): Agent {
+    val mockOptions = mockk<AgentOptions>(relaxed = true)
+    every { mockOptions.maxCacheSize } returns 100
+    every { mockOptions.maxCacheAgeMins } returns 30
+    every { mockOptions.maxCacheIdleMins } returns 10
+    every { mockOptions.cacheCleanupIntervalMins } returns 5
+    every { mockOptions.scrapeTimeoutSecs } returns 10
+    every { mockOptions.scrapeMaxRetries } returns maxRetries
     every { mockOptions.minGzipSizeBytes } returns 1_000_000
     every { mockOptions.maxContentLengthMBytes } returns 10
     every { mockOptions.debugEnabled } returns false
@@ -600,6 +649,209 @@ class AgentHttpServiceTest : StringSpec() {
         results.srValidResponse.shouldBeTrue()
         results.scrapeCounterMsg shouldBe "success"
 
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // ==================== Retry Policy Tests ====================
+
+    "retry policy should not retry 400 Bad Request" {
+      var requestCount = 0
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            requestCount++
+            call.response.status(HttpStatusCode.BadRequest)
+            call.respondText("bad request")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val mockAgent = createMockAgentWithRetries(3)
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 80L
+          path = "metrics"
+        }
+
+        service.fetchScrapeUrl(request)
+
+        requestCount shouldBe 1
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "retry policy should not retry 401 Unauthorized" {
+      var requestCount = 0
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            requestCount++
+            call.response.status(HttpStatusCode.Unauthorized)
+            call.respondText("unauthorized")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val mockAgent = createMockAgentWithRetries(3)
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 81L
+          path = "metrics"
+        }
+
+        service.fetchScrapeUrl(request)
+
+        requestCount shouldBe 1
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "retry policy should not retry 403 Forbidden" {
+      var requestCount = 0
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            requestCount++
+            call.response.status(HttpStatusCode.Forbidden)
+            call.respondText("forbidden")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val mockAgent = createMockAgentWithRetries(3)
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 82L
+          path = "metrics"
+        }
+
+        service.fetchScrapeUrl(request)
+
+        requestCount shouldBe 1
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "retry policy should retry 500 Internal Server Error" {
+      var requestCount = 0
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            requestCount++
+            call.response.status(HttpStatusCode.InternalServerError)
+            call.respondText("server error")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val mockAgent = createMockAgentWithRetries(2)
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 83L
+          path = "metrics"
+        }
+
+        service.fetchScrapeUrl(request)
+
+        // 1 initial + up to 2 retries = up to 3 total
+        requestCount shouldBeGreaterThan 1
+        requestCount shouldBeLessThanOrEqual 3
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "retry policy should retry 503 Service Unavailable" {
+      var requestCount = 0
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            requestCount++
+            call.response.status(HttpStatusCode.ServiceUnavailable)
+            call.respondText("unavailable")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val mockAgent = createMockAgentWithRetries(2)
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 84L
+          path = "metrics"
+        }
+
+        service.fetchScrapeUrl(request)
+
+        requestCount shouldBeGreaterThan 1
+        requestCount shouldBeLessThanOrEqual 3
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "retry policy should not retry 404 Not Found" {
+      var requestCount = 0
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            requestCount++
+            call.response.status(HttpStatusCode.NotFound)
+            call.respondText("not found")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val mockAgent = createMockAgentWithRetries(3)
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 85L
+          path = "metrics"
+        }
+
+        service.fetchScrapeUrl(request)
+
+        requestCount shouldBe 1
         service.close()
       } finally {
         server.stop(0, 0)

@@ -393,49 +393,45 @@ internal class AgentGrpcService(
   ) {
     val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
     val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
-    try {
-      coroutineScope {
-        // Ends by connectionContext.close()
-        launch(Dispatchers.IO) {
-          try {
-            runCatchingCancellable {
-              processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
-            }.onFailure { e ->
-              if (agent.isRunning)
-                Status.fromThrowable(e)
-                  .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
-            }
-          } finally {
-            // Close channels when the producer finishes so consumers' consumeAsFlow() will complete
-            nonChunkedChannel.close()
-            chunkedChannel.close()
-          }
-        }
-
-        // Ends by disconnection from server
-        launch(Dispatchers.IO) {
+    coroutineScope {
+      // Ends by connectionContext.close()
+      launch(Dispatchers.IO) {
+        try {
           runCatchingCancellable {
-            grpcStub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
+            processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
           }.onFailure { e ->
             if (agent.isRunning)
               Status.fromThrowable(e)
-                .apply { logger.error(e) { "writeResponsesToProxy(): ${exceptionDetails(e)}" } }
+                .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
           }
-        }
-
-        launch(Dispatchers.IO) {
-          runCatchingCancellable {
-            grpcStub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
-          }.onFailure { e ->
-            if (agent.isRunning)
-              Status.fromThrowable(e)
-                .apply { logger.error(e) { "writeChunkedResponsesToProxy(): ${exceptionDetails(e)}" } }
-          }
+        } finally {
+          // Close channels when the producer finishes so consumers' consumeAsFlow() will complete.
+          // This is the sole owner of channel lifecycle — no outer finally needed.
+          nonChunkedChannel.close()
+          chunkedChannel.close()
         }
       }
-    } finally {
-      nonChunkedChannel.close()
-      chunkedChannel.close()
+
+      // Ends by disconnection from server
+      launch(Dispatchers.IO) {
+        runCatchingCancellable {
+          grpcStub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
+        }.onFailure { e ->
+          if (agent.isRunning)
+            Status.fromThrowable(e)
+              .apply { logger.error(e) { "writeResponsesToProxy(): ${exceptionDetails(e)}" } }
+        }
+      }
+
+      launch(Dispatchers.IO) {
+        runCatchingCancellable {
+          grpcStub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
+        }.onFailure { e ->
+          if (agent.isRunning)
+            Status.fromThrowable(e)
+              .apply { logger.error(e) { "writeChunkedResponsesToProxy(): ${exceptionDetails(e)}" } }
+        }
+      }
     }
   }
 

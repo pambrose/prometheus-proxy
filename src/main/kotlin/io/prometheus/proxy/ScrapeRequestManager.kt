@@ -47,7 +47,7 @@ internal class ScrapeRequestManager {
         wrapper.scrapeResults = scrapeResults
         wrapper.markComplete()
         wrapper.agentContext.markActivityTime(true)
-      } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
+      } ?: logger.warn { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId (likely timed out)" }
   }
 
   fun failScrapeRequest(

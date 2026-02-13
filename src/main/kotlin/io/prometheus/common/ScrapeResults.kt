@@ -96,17 +96,15 @@ internal class ScrapeResults(
     fun errorCode(
       e: Throwable,
       url: String,
-    ): Int =
-      when (e) {
-        is TimeoutCancellationException,
-        is HttpConnectTimeoutException,
-        is SocketTimeoutException,
-        is HttpRequestTimeoutException,
-          -> {
-          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
-          RequestTimeout.value
-        }
+    ): Int {
+      // Walk the cause chain to detect wrapped timeout exceptions.
+      // Ktor sometimes wraps HttpRequestTimeoutException in other exceptions.
+      if (hasTimeoutCause(e)) {
+        logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+        return RequestTimeout.value
+      }
 
+      return when (e) {
         is IOException -> {
           logger.warn { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
           ServiceUnavailable.value
@@ -117,5 +115,21 @@ internal class ScrapeResults(
           ServiceUnavailable.value
         }
       }
+    }
+
+    private fun hasTimeoutCause(e: Throwable): Boolean {
+      var current: Throwable? = e
+      while (current != null) {
+        when (current) {
+          is TimeoutCancellationException,
+          is HttpConnectTimeoutException,
+          is SocketTimeoutException,
+          is HttpRequestTimeoutException,
+            -> return true
+        }
+        current = current.cause
+      }
+      return false
+    }
   }
 }

@@ -957,6 +957,148 @@ class ProxyHttpRoutesTest : StringSpec() {
       merged.trimEnd().endsWith("# EOF") shouldBe true
     }
 
+    // ==================== Bug #4: Empty Content from Failed Agents ====================
+
+    // Bug #4: mergeContentTexts included empty contentText from failed agents in the
+    // join, producing extra newlines (e.g., "metric_a 1.0\n\n"). The fix filters out
+    // results with empty contentText before merging.
+
+    "Bug #4: mergeContentTexts should exclude empty content from failed agents" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "agent_disconnected",
+          contentText = "",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      merged shouldBe "metric_a 1.0\n"
+      merged shouldNotContain "\n\n"
+    }
+
+    "Bug #4: mergeContentTexts should handle multiple failed agents with one success" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "timed_out",
+          contentText = "",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_b 2.0\n",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "agent_disconnected",
+          contentText = "",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      merged shouldBe "metric_b 2.0\n"
+    }
+
+    "Bug #4: mergeContentTexts should return empty string when all agents fail" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "timed_out",
+          contentText = "",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "agent_disconnected",
+          contentText = "",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      merged shouldBe ""
+    }
+
+    "Bug #4: mergeContentTexts should not add blank lines from empty failed agents" {
+      // Without the fix, the empty string from the failed agent would be joined in,
+      // producing three consecutive newlines between the two metrics.
+      // With the fix, the empty result is filtered out first.
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "agent_disconnected",
+          contentText = "",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_c 3.0\n",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      merged shouldContain "metric_a 1.0"
+      merged shouldContain "metric_c 3.0"
+      // The empty agent should not produce a blank line between the two metrics.
+      // Without the fix this would be "metric_a 1.0\n\n\nmetric_c 3.0\n" (three newlines).
+      // With the fix it's "metric_a 1.0\n\nmetric_c 3.0\n" (two newlines: trailing + separator).
+      merged shouldNotContain "\n\n\n"
+    }
+
+    "Bug #4: mergeContentTexts should handle failed agents with EOF results" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n# EOF",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "agent_disconnected",
+          contentText = "",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_c 3.0\n# EOF",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      merged shouldContain "metric_a 1.0"
+      merged shouldContain "metric_c 3.0"
+      val eofCount = merged.split("# EOF").size - 1
+      eofCount shouldBe 1
+      merged.trimEnd().endsWith("# EOF") shouldBe true
+    }
+
     "Bug #13: mergeContentTexts should handle mixed EOF and non-EOF results" {
       val results = listOf(
         ScrapeRequestResponse(

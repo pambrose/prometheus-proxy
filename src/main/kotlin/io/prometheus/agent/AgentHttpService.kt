@@ -251,7 +251,7 @@ internal class AgentHttpService(
           } else {
             retryOnException(maxRetries)
             retryIf(maxRetries) { _, response ->
-              !response.status.isSuccess() && response.status != HttpStatusCode.NotFound
+              response.status.value in 500..599
             }
             modifyRequest { it.headers.append("x-retry-count", retryCount.toString()) }
             exponentialDelay()
