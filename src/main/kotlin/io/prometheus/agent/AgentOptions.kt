@@ -163,8 +163,13 @@ class AgentOptions(
 
     if (chunkContentSizeBytes == -1)
       chunkContentSizeBytes = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
-    // Multiply the value time KB
-    chunkContentSizeBytes *= 1024
+    require(chunkContentSizeBytes > 0) { "chunkContentSizeKbs must be > 0: ($chunkContentSizeBytes)" }
+    // Convert KB value to bytes with overflow protection
+    val chunkSizeAsBytes = chunkContentSizeBytes.toLong() * 1024
+    require(chunkSizeAsBytes <= Int.MAX_VALUE) {
+      "chunkContentSizeKbs value $chunkContentSizeBytes is too large (max: ${Int.MAX_VALUE / 1024})"
+    }
+    chunkContentSizeBytes = chunkSizeAsBytes.toInt()
     logger.info { "chunkContentSizeBytes: $chunkContentSizeBytes" }
 
     if (minGzipSizeBytes == -1)

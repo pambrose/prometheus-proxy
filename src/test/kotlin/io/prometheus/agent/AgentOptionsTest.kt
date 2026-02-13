@@ -297,5 +297,58 @@ class AgentOptionsTest : StringSpec() {
         )
       }
     }
+
+    // ==================== Bug #9: chunkContentSizeBytes overflow protection ====================
+
+    // Bug #9: The *= 1024 multiplication was applied unconditionally with no overflow
+    // protection. For large KB values (e.g., 2097152), the multiplication overflows
+    // Int.MAX_VALUE silently, producing a negative or incorrect value. The fix validates
+    // the KB value is positive and checks for overflow before the conversion.
+
+    "Bug #9: chunkContentSizeBytes should correctly convert KB to bytes" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--chunk", "64"),
+        false,
+      )
+      options.chunkContentSizeBytes shouldBe 64 * 1024
+    }
+
+    "Bug #9: chunkContentSizeBytes of 1 KB should be accepted" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--chunk", "1"),
+        false,
+      )
+      options.chunkContentSizeBytes shouldBe 1024
+    }
+
+    "Bug #9: chunkContentSizeBytes at max safe KB value should be accepted" {
+      // Int.MAX_VALUE / 1024 = 2097151
+      val maxSafeKb = (Int.MAX_VALUE / 1024).toString()
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--chunk", maxSafeKb),
+        false,
+      )
+      options.chunkContentSizeBytes shouldBe (Int.MAX_VALUE / 1024) * 1024
+    }
+
+    "Bug #9: chunkContentSizeBytes exceeding max safe KB should throw" {
+      // Int.MAX_VALUE / 1024 + 1 = 2097152, which overflows when multiplied by 1024
+      val overflowKb = (Int.MAX_VALUE / 1024 + 1).toString()
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--chunk", overflowKb),
+          false,
+        )
+      }
+    }
+
+    "Bug #9: chunkContentSizeBytes of 0 should throw" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--chunk", "0"),
+          false,
+        )
+      }
+    }
   }
 }
