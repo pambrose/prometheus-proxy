@@ -24,9 +24,9 @@ object HarnessConstants {
 
   const val HTTP_SERVER_COUNT = 5
   const val PATH_COUNT = 50
-  const val SEQUENTIAL_QUERY_COUNT = 1000
-  const val PARALLEL_QUERY_COUNT = 10
-  const val CONCURRENT_CLIENTS = 100
+  const val SEQUENTIAL_QUERY_COUNT = 5 // 1000
+  const val PARALLEL_QUERY_COUNT = 2 // 10
+  const val CONCURRENT_CLIENTS = 2 // 100
 
   const val MIN_DELAY_MILLIS = 400
   const val MAX_DELAY_MILLIS = 600

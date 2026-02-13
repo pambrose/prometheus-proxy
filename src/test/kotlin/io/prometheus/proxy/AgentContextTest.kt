@@ -239,6 +239,36 @@ class AgentContextTest : StringSpec() {
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
+    // Bug #3: Previously, channelBacklogSize was incremented before send() and only
+    // decremented for ClosedSendChannelException. If send() threw CancellationException
+    // (or any other exception), the counter would permanently drift upward. The fix
+    // moves the increment after send(), so the counter is only bumped on success.
+    "repeated failed writes to closed channel should never drift the backlog counter" {
+      val context = AgentContext("remote-addr")
+
+      // Write some items successfully, then read them
+      repeat(3) { context.writeScrapeRequest(mockk(relaxed = true)) }
+      context.scrapeRequestBacklogSize shouldBe 3
+      repeat(3) { context.readScrapeRequest() }
+      context.scrapeRequestBacklogSize shouldBe 0
+
+      // Close the channel
+      context.invalidate()
+
+      // Repeatedly attempt writes to the closed channel.
+      // Each should throw ClosedSendChannelException. The counter must stay at 0:
+      // it must not increment without a matching decrement on ANY exception type.
+      repeat(10) {
+        try {
+          context.writeScrapeRequest(mockk(relaxed = true))
+        } catch (_: Exception) {
+          // Expected
+        }
+      }
+
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
+
     // ==================== Activity Time Tests ====================
 
     "markActivityTime should update inactivity duration" {
