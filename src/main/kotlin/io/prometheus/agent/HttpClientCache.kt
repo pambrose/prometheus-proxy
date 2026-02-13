@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -55,7 +56,7 @@ internal class HttpClientCache(
 
   init {
     scope.launch {
-      while (true) {
+      while (isActive) {
         delay(cleanupInterval)
         val clientsToClose =
           runCatching {
