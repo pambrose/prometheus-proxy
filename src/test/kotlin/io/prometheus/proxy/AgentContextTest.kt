@@ -239,10 +239,8 @@ class AgentContextTest : StringSpec() {
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-    // Bug #3: Previously, channelBacklogSize was incremented before send() and only
-    // decremented for ClosedSendChannelException. If send() threw CancellationException
-    // (or any other exception), the counter would permanently drift upward. The fix
-    // moves the increment after send(), so the counter is only bumped on success.
+    // Failed writes to a closed notifier channel should clean up the queued item,
+    // keeping backlog size accurate.
     "repeated failed writes to closed channel should never drift the backlog counter" {
       val context = AgentContext("remote-addr")
 
@@ -266,6 +264,70 @@ class AgentContextTest : StringSpec() {
         }
       }
 
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
+
+    // Bug #1: Previously, channelBacklogSize was a manual AtomicInt counter that was
+    // incremented AFTER send() and decremented AFTER receive(). Because the UNLIMITED
+    // channel's send() returns immediately, a consumer could receive and decrement the
+    // counter before the producer incremented it, driving the counter negative.
+    // The fix replaces the manual counter with ConcurrentLinkedQueue.size, which always
+    // reflects the true number of buffered items.
+    "backlog size should never go negative under concurrent read-write" {
+      val context = AgentContext("remote-addr")
+      val iterations = 1000
+      val observedNegative = java.util.concurrent.atomic.AtomicBoolean(false)
+
+      // Writer: rapidly write items
+      val writerThread = Thread {
+        kotlinx.coroutines.runBlocking {
+          repeat(iterations) {
+            context.writeScrapeRequest(mockk(relaxed = true))
+          }
+        }
+      }
+
+      // Reader: rapidly read items and check backlog after each read
+      val readerThread = Thread {
+        kotlinx.coroutines.runBlocking {
+          repeat(iterations) {
+            context.readScrapeRequest()
+            if (context.scrapeRequestBacklogSize < 0) {
+              observedNegative.set(true)
+            }
+          }
+        }
+      }
+
+      writerThread.start()
+      readerThread.start()
+      writerThread.join(10000)
+      readerThread.join(10000)
+
+      writerThread.isAlive.shouldBeFalse()
+      readerThread.isAlive.shouldBeFalse()
+      observedNegative.get().shouldBeFalse()
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
+
+    "backlog size should accurately reflect queue contents after interleaved operations" {
+      val context = AgentContext("remote-addr")
+
+      // Write 5
+      repeat(5) { context.writeScrapeRequest(mockk(relaxed = true)) }
+      context.scrapeRequestBacklogSize shouldBe 5
+
+      // Read 2
+      context.readScrapeRequest()
+      context.readScrapeRequest()
+      context.scrapeRequestBacklogSize shouldBe 3
+
+      // Write 3 more
+      repeat(3) { context.writeScrapeRequest(mockk(relaxed = true)) }
+      context.scrapeRequestBacklogSize shouldBe 6
+
+      // Read all remaining
+      repeat(6) { context.readScrapeRequest() }
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
