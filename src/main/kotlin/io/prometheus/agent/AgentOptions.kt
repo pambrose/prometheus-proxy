@@ -150,8 +150,7 @@ class AgentOptions(
       agentName = AGENT_NAME.getEnv(agentConfigVals.name)
     logger.info { "agentName: $agentName" }
 
-    if (!consolidated)
-      consolidated = CONSOLIDATED.getEnv(agentConfigVals.consolidated)
+    consolidated = resolveBooleanOption(consolidated, CONSOLIDATED, agentConfigVals.consolidated)
     logger.info { "consolidated: $consolidated" }
 
     if (scrapeTimeoutSecs == -1)
@@ -178,8 +177,8 @@ class AgentOptions(
 
     assignHttpClientConfigVals(agentConfigVals)
 
-    if (!keepAliveWithoutCalls)
-      keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
+    keepAliveWithoutCalls =
+      resolveBooleanOption(keepAliveWithoutCalls, KEEPALIVE_WITHOUT_CALLS, agentConfigVals.grpc.keepAliveWithoutCalls)
     logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
 
     if (unaryDeadlineSecs == -1)
@@ -222,8 +221,8 @@ class AgentOptions(
 
   private fun assignHttpClientConfigVals(agentConfigVals: ConfigVals.Agent) {
     agentConfigVals.http.apply {
-      if (!trustAllX509Certificates)
-        trustAllX509Certificates = TRUST_ALL_X509_CERTIFICATES.getEnv(enableTrustAllX509Certificates)
+      trustAllX509Certificates =
+        resolveBooleanOption(trustAllX509Certificates, TRUST_ALL_X509_CERTIFICATES, enableTrustAllX509Certificates)
       logger.info { "http.trustAllX509Certificates: $trustAllX509Certificates" }
       if (trustAllX509Certificates) {
         logger.warn {

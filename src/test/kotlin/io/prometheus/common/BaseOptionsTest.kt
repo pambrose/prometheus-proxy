@@ -2,13 +2,17 @@
 
 package io.prometheus.common
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.agent.AgentOptions
+import io.prometheus.common.BaseOptions.Companion.resolveBoolean
 import io.prometheus.proxy.ProxyOptions
 import java.io.File
 import java.net.URI
@@ -313,6 +317,105 @@ class BaseOptionsTest : StringSpec() {
       val options = ProxyOptions(listOf())
       options.configVals.proxy.http.port shouldBeGreaterThan 0
       options.configVals.proxy.admin.pingPath.shouldNotBeEmpty()
+    }
+
+    // ==================== Bug #2: resolveBoolean priority tests (CLI > env > config) ====================
+
+    "resolveBoolean should return config default when env is null and cli is false" {
+      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = null, configDefault = false).shouldBeFalse()
+      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = null, configDefault = true).shouldBeTrue()
+    }
+
+    "resolveBoolean should return cli=true regardless of env or config" {
+      resolveBoolean(cliValue = true, envVarName = "TEST", envVarValue = null, configDefault = false).shouldBeTrue()
+      resolveBoolean(cliValue = true, envVarName = "TEST", envVarValue = "false", configDefault = false).shouldBeTrue()
+      resolveBoolean(cliValue = true, envVarName = "TEST", envVarValue = "true", configDefault = false).shouldBeTrue()
+    }
+
+    "resolveBoolean should let env=true override config=false when cli is false" {
+      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "true", configDefault = false).shouldBeTrue()
+    }
+
+    "resolveBoolean should let env=false override config=true when cli is false" {
+      resolveBoolean(
+        cliValue = false,
+        envVarName = "TEST",
+        envVarValue = "false",
+        configDefault = true,
+      ).shouldBeFalse()
+    }
+
+    "resolveBoolean should handle case-insensitive TRUE" {
+      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "TRUE", configDefault = false).shouldBeTrue()
+    }
+
+    "resolveBoolean should handle case-insensitive FALSE" {
+      resolveBoolean(
+        cliValue = false,
+        envVarName = "TEST",
+        envVarValue = "FALSE",
+        configDefault = true,
+      ).shouldBeFalse()
+    }
+
+    "resolveBoolean should handle mixed case True and False" {
+      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "True", configDefault = false).shouldBeTrue()
+      resolveBoolean(
+        cliValue = false,
+        envVarName = "TEST",
+        envVarValue = "False",
+        configDefault = true,
+      ).shouldBeFalse()
+    }
+
+    "resolveBoolean should throw on invalid env var value" {
+      val ex =
+        shouldThrow<IllegalArgumentException> {
+          resolveBoolean(cliValue = false, envVarName = "MY_VAR", envVarValue = "invalid", configDefault = false)
+        }
+      ex.message shouldContain "MY_VAR"
+      ex.message shouldContain "invalid"
+    }
+
+    "resolveBoolean should throw on empty string env var value" {
+      shouldThrow<IllegalArgumentException> {
+        resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "", configDefault = false)
+      }
+    }
+
+    "resolveBoolean should throw on numeric env var value" {
+      shouldThrow<IllegalArgumentException> {
+        resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "1", configDefault = false)
+      }
+    }
+
+    // ==================== Bug #2: Integration tests (CLI > env > config) ====================
+
+    "env=false should override config=true when no CLI flag" {
+      resolveBoolean(
+        cliValue = false,
+        envVarName = "ADMIN_ENABLED",
+        envVarValue = "false",
+        configDefault = true,
+      ).shouldBeFalse()
+    }
+
+    "CLI --admin flag should win over env=false" {
+      resolveBoolean(
+        cliValue = true,
+        envVarName = "ADMIN_ENABLED",
+        envVarValue = "false",
+        configDefault = false,
+      ).shouldBeTrue()
+    }
+
+    "config default should win when no CLI flag and no env var" {
+      resolveBoolean(
+        cliValue = false,
+        envVarName = "ADMIN_ENABLED",
+        envVarValue = null,
+        configDefault = true,
+      ).shouldBeTrue()
     }
   }
 }

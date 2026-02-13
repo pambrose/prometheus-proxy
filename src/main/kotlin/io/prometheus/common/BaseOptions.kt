@@ -123,6 +123,12 @@ abstract class BaseOptions protected constructor(
   val isTlsEnabled: Boolean
     get() = certChainFilePath.isNotEmpty() || privateKeyFilePath.isNotEmpty()
 
+  protected fun resolveBooleanOption(
+    cliValue: Boolean,
+    envVar: EnvVars,
+    configDefault: Boolean,
+  ): Boolean = resolveBoolean(cliValue, envVar.name, System.getenv(envVar.name), configDefault)
+
   protected abstract fun assignConfigVals()
 
   protected fun parseOptions() {
@@ -174,8 +180,7 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignAdminEnabled(defaultVal: Boolean) {
-    if (!adminEnabled)
-      adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
+    adminEnabled = resolveBooleanOption(adminEnabled, ADMIN_ENABLED, defaultVal)
     logger.info { "adminEnabled: $adminEnabled" }
   }
 
@@ -186,14 +191,12 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignMetricsEnabled(defaultVal: Boolean) {
-    if (!metricsEnabled)
-      metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
+    metricsEnabled = resolveBooleanOption(metricsEnabled, METRICS_ENABLED, defaultVal)
     logger.info { "metricsEnabled: $metricsEnabled" }
   }
 
   protected fun assignDebugEnabled(defaultVal: Boolean) {
-    if (!debugEnabled)
-      debugEnabled = DEBUG_ENABLED.getEnv(defaultVal)
+    debugEnabled = resolveBooleanOption(debugEnabled, DEBUG_ENABLED, defaultVal)
     logger.info { "debugEnabled: $debugEnabled" }
   }
 
@@ -204,8 +207,7 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignTransportFilterDisabled(defaultVal: Boolean) {
-    if (!transportFilterDisabled)
-      transportFilterDisabled = TRANSPORT_FILTER_DISABLED.getEnv(defaultVal)
+    transportFilterDisabled = resolveBooleanOption(transportFilterDisabled, TRANSPORT_FILTER_DISABLED, defaultVal)
     logger.info { "transportFilterDisabled: $transportFilterDisabled" }
   }
 
@@ -316,5 +318,18 @@ abstract class BaseOptions protected constructor(
     const val DEBUG = "debug"
     const val HTTP_PREFIX = "http://"
     const val HTTPS_PREFIX = "https://"
+
+    // Priority: CLI > env > config
+    internal fun resolveBoolean(
+      cliValue: Boolean,
+      envVarName: String,
+      envVarValue: String?,
+      configDefault: Boolean,
+    ): Boolean =
+      when {
+        cliValue -> true
+        envVarValue != null -> EnvVars.parseBooleanStrict(envVarName, envVarValue)
+        else -> configDefault
+      }
   }
 }
