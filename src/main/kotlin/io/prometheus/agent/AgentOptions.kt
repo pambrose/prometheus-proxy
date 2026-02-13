@@ -225,6 +225,12 @@ class AgentOptions(
       if (!trustAllX509Certificates)
         trustAllX509Certificates = TRUST_ALL_X509_CERTIFICATES.getEnv(enableTrustAllX509Certificates)
       logger.info { "http.trustAllX509Certificates: $trustAllX509Certificates" }
+      if (trustAllX509Certificates) {
+        logger.warn {
+          "X.509 certificate verification is disabled -- ALL certificates will be trusted. " +
+            "Do not use this in production."
+        }
+      }
 
       if (maxConcurrentHttpClients == -1)
         maxConcurrentHttpClients = MAX_CONCURRENT_CLIENTS.getEnv(maxConcurrentClients)
