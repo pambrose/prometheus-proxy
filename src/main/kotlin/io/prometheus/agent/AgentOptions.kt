@@ -100,6 +100,13 @@ class AgentOptions(
   var httpClientTimeoutSecs = -1
     private set
 
+  @Parameter(
+    names = ["--max_content_length_mbytes"],
+    description = "Maximum allowed size of scrape response (megabytes)",
+  )
+  var maxContentLengthMBytes = -1
+    private set
+
   @Parameter(names = ["--max_cache_size"], description = "Maximum number of HTTP clients to cache")
   var maxCacheSize = -1
     private set
@@ -246,6 +253,11 @@ class AgentOptions(
         httpClientTimeoutSecs = CLIENT_TIMEOUT_SECS.getEnv(clientTimeoutSecs)
       require(httpClientTimeoutSecs > 0) { "http.clientTimeoutSecs must be > 0" }
       logger.info { "http.clientTimeoutSecs: $httpClientTimeoutSecs" }
+
+      if (this@AgentOptions.maxContentLengthMBytes == -1)
+        this@AgentOptions.maxContentLengthMBytes = agentConfigVals.http.maxContentLengthMBytes
+      require(this@AgentOptions.maxContentLengthMBytes > 0) { "http.maxContentLengthMBytes must be > 0" }
+      logger.info { "http.maxContentLengthMBytes: ${this@AgentOptions.maxContentLengthMBytes}" }
 
       if (maxCacheSize == -1)
         maxCacheSize = MAX_CLIENT_CACHE_SIZE.getEnv(clientCache.maxSize)

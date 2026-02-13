@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+@file:Suppress(
+  "UndocumentedPublicClass",
+  "UndocumentedPublicFunction",
+  "TooGenericExceptionCaught",
+  "InstanceOfCheckForException",
+)
 
 package io.prometheus.agent
 
@@ -160,8 +165,36 @@ internal class AgentHttpService(
   ): ScrapeResults {
     val statusCode = response.status.value
     return if (response.status.isSuccess()) {
+      val maxContentLength = agent.options.maxContentLengthMBytes * 1024L * 1024L
+      val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+      if (contentLength != null && contentLength > maxContentLength) {
+        val msg = "Content length $contentLength exceeds maximum allowed size $maxContentLength"
+        logger.warn { msg }
+        return ScrapeResults(
+          srAgentId = scrapeRequest.agentId,
+          srScrapeId = scrapeRequest.scrapeId,
+          srStatusCode = HttpStatusCode.PayloadTooLarge.value,
+          srUrl = if (scrapeRequest.debugEnabled) url else "",
+          srFailureReason = if (scrapeRequest.debugEnabled) msg else "",
+          scrapeCounterMsg = UNSUCCESSFUL_MSG,
+        )
+      }
+
       val contentType = response.headers[CONTENT_TYPE].orEmpty()
       val content = response.bodyAsText()
+
+      if (content.length > maxContentLength) {
+        val msg = "Content length ${content.length} exceeds maximum allowed size $maxContentLength"
+        logger.warn { msg }
+        return ScrapeResults(
+          srAgentId = scrapeRequest.agentId,
+          srScrapeId = scrapeRequest.scrapeId,
+          srStatusCode = HttpStatusCode.PayloadTooLarge.value,
+          srUrl = if (scrapeRequest.debugEnabled) url else "",
+          srFailureReason = if (scrapeRequest.debugEnabled) msg else "",
+          scrapeCounterMsg = UNSUCCESSFUL_MSG,
+        )
+      }
       val zipped = content.length > agent.options.minGzipSizeBytes
       ScrapeResults(
         srAgentId = scrapeRequest.agentId,
