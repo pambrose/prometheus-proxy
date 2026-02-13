@@ -29,12 +29,20 @@ object SslSettings {
   fun getKeyStore(
     fileName: String,
     password: String,
+  ): KeyStore = getKeyStore(fileName, password.toCharArray())
+
+  internal fun getKeyStore(
+    fileName: String,
+    password: CharArray,
   ): KeyStore =
     KeyStore.getInstance(KeyStore.getDefaultType())
       .apply {
-        FileInputStream(fileName).use { keyStoreFile ->
-          val keyStorePassword = password.toCharArray()
-          load(keyStoreFile, keyStorePassword)
+        try {
+          FileInputStream(fileName).use { keyStoreFile ->
+            load(keyStoreFile, password)
+          }
+        } finally {
+          password.fill('\u0000')
         }
       }
 

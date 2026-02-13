@@ -20,10 +20,13 @@ package io.prometheus.agent
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import java.io.File
 import java.io.FileNotFoundException
+import java.io.FileOutputStream
 import java.security.KeyStore
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
@@ -45,9 +48,37 @@ class SslSettingsTest : StringSpec() {
       }
     }
 
-    // Tests with valid keystore would require creating a test keystore file,
-    // which is typically done in integration tests. The existing TLS tests
-    // in HarnessTests cover this functionality with actual cert files.
+    // Bug #4: getKeyStore did not zero the password char array after use, leaving
+    // the plaintext password in memory until GC. The fix zeros the array in a finally
+    // block so it is cleared on both success and failure paths.
+
+    "getKeyStore should zero password char array after successful load" {
+      // Create a temporary keystore to test the success path
+      val storePassword = "test-password"
+      val tmpFile = File.createTempFile("test-keystore", ".jks")
+      tmpFile.deleteOnExit()
+      KeyStore.getInstance(KeyStore.getDefaultType()).apply {
+        load(null, null)
+        FileOutputStream(tmpFile).use { store(it, storePassword.toCharArray()) }
+      }
+
+      val password = storePassword.toCharArray()
+      SslSettings.getKeyStore(tmpFile.absolutePath, password)
+
+      password.all { it == '\u0000' }.shouldBeTrue()
+      tmpFile.delete()
+    }
+
+    "getKeyStore should zero password char array even when file does not exist" {
+      val password = "secret-password".toCharArray()
+
+      shouldThrow<FileNotFoundException> {
+        SslSettings.getKeyStore("non-existent.jks", password)
+      }
+
+      // The finally block should have zeroed the array despite the exception
+      password.all { it == '\u0000' }.shouldBeTrue()
+    }
 
     // ==================== getTrustManagerFactory Tests ====================
 
