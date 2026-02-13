@@ -13,6 +13,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.header
 import io.ktor.server.response.respondText
@@ -145,6 +146,14 @@ class AgentHttpServiceTest : StringSpec() {
     return mockAgent
   }
 
+  private suspend fun startServerAndGetPort(server: EmbeddedServer<*, *>): Int {
+    server.start(wait = false)
+    val port = server.engine.resolvedConnectors().first().port
+    // Allow the CIO server engine to fully start accepting connections
+    delay(100)
+    return port
+  }
+
   init {
     // ==================== Invalid Path Tests ====================
 
@@ -242,10 +251,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("test_metric{label=\"value\"} 42\n")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -306,10 +315,10 @@ class AgentHttpServiceTest : StringSpec() {
         routing {
           // No route for /metrics, Ktor will return 404
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -371,10 +380,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("ok")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -413,10 +422,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("ok")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -455,10 +464,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText(largeContent)
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         val mockAgent = createMockAgentWithPaths()
         // Set low gzip threshold so content gets zipped
@@ -498,10 +507,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText(smallContent)
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         val mockAgent = createMockAgentWithPaths()
         // minGzipSizeBytes is already 1_000_000 from createMockAgentWithPaths
@@ -542,10 +551,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("ok")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -582,10 +591,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("ok")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -623,10 +632,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("too late")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         val mockAgent = createMockAgentWithPaths()
         // Set a very short timeout
@@ -667,10 +676,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("metric_value 1.0\n")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -710,10 +719,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("bad request")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val mockAgent = createMockAgentWithRetries(3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -743,10 +752,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("unauthorized")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val mockAgent = createMockAgentWithRetries(3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -776,10 +785,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("forbidden")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val mockAgent = createMockAgentWithRetries(3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -809,10 +818,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("server error")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val mockAgent = createMockAgentWithRetries(2)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -844,10 +853,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("unavailable")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val mockAgent = createMockAgentWithRetries(2)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -878,10 +887,10 @@ class AgentHttpServiceTest : StringSpec() {
             call.respondText("not found")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val mockAgent = createMockAgentWithRetries(3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
