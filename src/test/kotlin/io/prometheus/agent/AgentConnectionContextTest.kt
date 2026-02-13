@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+@file:Suppress(
+  "UndocumentedPublicClass",
+  "UndocumentedPublicFunction",
+  "TooGenericExceptionCaught",
+  "SwallowedException",
+)
 
 package io.prometheus.agent
 
@@ -214,7 +219,7 @@ class AgentConnectionContextTest : StringSpec() {
 
       coroutineScope {
         // Launch several "scrape" coroutines that will try to send results
-        val jobs = (1..5).map { i ->
+        (1..5).map { i ->
           launch(Dispatchers.IO) {
             try {
               // Simulate scrape work
@@ -223,7 +228,7 @@ class AgentConnectionContextTest : StringSpec() {
                 ScrapeResults(srAgentId = "agent-1", srScrapeId = i.toLong(), srValidResponse = true),
               )
               completedCount.incrementAndGet()
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
               threwException.set(true)
             }
           }
@@ -275,7 +280,7 @@ class AgentConnectionContextTest : StringSpec() {
       val backlogSize = AtomicInteger(0)
 
       coroutineScope {
-        val jobs = (1..10).map { i ->
+        (1..10).map { i ->
           launch(Dispatchers.IO) {
             backlogSize.incrementAndGet()
             try {

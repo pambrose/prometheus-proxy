@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.google.protobuf.ByteString
+import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -34,6 +35,7 @@ import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.agent.RequestFailureException
+import io.prometheus.common.ConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ScrapeResponse
@@ -66,9 +68,26 @@ class ProxyServiceImplTest : StringSpec() {
     val mockAgentContextManager = mockk<AgentContextManager>(relaxed = true)
     val mockPathManager = mockk<ProxyPathManager>(relaxed = true)
     val mockScrapeRequestManager = mockk<ScrapeRequestManager>(relaxed = true)
+    every { mockScrapeRequestManager.containsScrapeRequest(any()) } returns true
+
+    val config = ConfigFactory.parseString(
+      """
+      proxy {
+        internal {
+          maxZippedContentSizeMBytes = 5
+          maxUnzippedContentSizeMBytes = 10
+        }
+      }
+      agent {
+        pathConfigs = []
+      }
+      """.trimIndent(),
+    )
+    val configVals = ConfigVals(config)
 
     val mockProxy = mockk<Proxy>(relaxed = true)
     every { mockProxy.options } returns mockOptions
+    every { mockProxy.proxyConfigVals } returns configVals.proxy
     every { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers {
       val block = firstArg<ProxyMetrics.() -> Unit>()
       block(mockMetrics)
@@ -852,8 +871,8 @@ class ProxyServiceImplTest : StringSpec() {
       }
 
       every { contextManager.putChunkedContext(scrapeId, any()) } returns Unit
-      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header)
-      every { contextManager.removeChunkedContext(scrapeId) } returns ChunkedContext(header).apply {
+      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000)
+      every { contextManager.removeChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000).apply {
         applyChunk(data, data.size, 1, checksum)
       }
       every { scrapeRequestManager.assignScrapeResults(any()) } returns Unit
@@ -1007,6 +1026,7 @@ class ProxyServiceImplTest : StringSpec() {
             headerUrl = "http://test/metrics"
           }
         },
+        1000000,
       )
       completedChunkedContext.applyChunk(data, data.size, 1, crc.value)
 
@@ -1112,7 +1132,7 @@ class ProxyServiceImplTest : StringSpec() {
       }
 
       // Use a real ChunkedContext so applyChunk() actually validates
-      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header)
+      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000)
 
       val service = ProxyServiceImpl(proxy)
       val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk))
@@ -1167,10 +1187,10 @@ class ProxyServiceImplTest : StringSpec() {
       }
 
       // Use a real ChunkedContext that has had the chunk applied, so applySummary() validates
-      val realContext = ChunkedContext(header).apply {
+      val realContext = ChunkedContext(header, 1000000).apply {
         applyChunk(data, data.size, 1, correctChecksum)
       }
-      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header)
+      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000)
       every { contextManager.removeChunkedContext(scrapeId) } returns realContext
 
       val service = ProxyServiceImpl(proxy)
