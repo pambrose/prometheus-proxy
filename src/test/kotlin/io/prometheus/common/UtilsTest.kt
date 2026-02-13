@@ -18,6 +18,7 @@
 
 package io.prometheus.common
 
+import ch.qos.logback.classic.Logger
 import io.grpc.Status
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -26,6 +27,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.common.Utils.HostPort
+import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.exceptionDetails
@@ -35,6 +37,8 @@ import io.prometheus.common.Utils.toJsonElement
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.slf4j.Logger.ROOT_LOGGER_NAME
+import org.slf4j.LoggerFactory
 
 class UtilsTest : StringSpec() {
   // ==================== Type Check Helper ====================
@@ -43,7 +47,13 @@ class UtilsTest : StringSpec() {
     (this is T).shouldBeTrue()
   }
 
+  private val originalLogLevel = (LoggerFactory.getLogger(ROOT_LOGGER_NAME) as Logger).level
+
   init {
+    afterTest {
+      setLogLevel("test", originalLogLevel.levelStr.lowercase())
+    }
+
     // ==================== decodeParams Tests ====================
 
     "decodeParams should return empty string for blank input" {
@@ -75,6 +85,26 @@ class UtilsTest : StringSpec() {
       val result = decodeParams("key=value")
 
       result shouldBe "?key=value"
+    }
+
+    // ==================== appendQueryParams Tests ====================
+
+    "appendQueryParams should append query params to base url without query" {
+      val url = appendQueryParams("http://localhost:8080/metrics", "foo%3Dbar%26baz%3Dqux")
+
+      url shouldBe "http://localhost:8080/metrics?foo=bar&baz=qux"
+    }
+
+    "appendQueryParams should append query params to base url with existing query" {
+      val url = appendQueryParams("http://localhost:8080/metrics?existing=1", "foo%3Dbar")
+
+      url shouldBe "http://localhost:8080/metrics?existing=1&foo=bar"
+    }
+
+    "appendQueryParams should handle base url ending with delimiter" {
+      val url = appendQueryParams("http://localhost:8080/metrics?", "foo%3Dbar")
+
+      url shouldBe "http://localhost:8080/metrics?foo=bar"
     }
 
     // ==================== lowercase Tests ====================

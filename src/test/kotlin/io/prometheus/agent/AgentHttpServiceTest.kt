@@ -1,4 +1,4 @@
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction", "LargeClass")
 
 package io.prometheus.agent
 
@@ -395,6 +395,49 @@ class AgentHttpServiceTest : StringSpec() {
 
         results.srValidResponse.shouldBeTrue()
         receivedUrl shouldContain "foo"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "fetchScrapeUrl should append query params to existing query" {
+      var existingParam: String? = null
+      var fooParam: String? = null
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            existingParam = call.request.queryParameters["existing"]
+            fooParam = call.request.queryParameters["foo"]
+            call.respondText("ok")
+          }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+
+        val mockAgent = createMockAgentWithPaths()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics?existing=1")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 51L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = "foo%3Dbar"
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srValidResponse.shouldBeTrue()
+        existingParam shouldBe "1"
+        fooParam shouldBe "bar"
 
         service.close()
       } finally {

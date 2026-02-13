@@ -51,7 +51,7 @@ import io.prometheus.Agent
 import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
-import io.prometheus.common.Utils.decodeParams
+import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.grpc.ScrapeRequest
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -83,7 +83,7 @@ internal class AgentHttpService(
   ): ScrapeResults {
     val requestTimer = if (agent.isMetricsEnabled) agent.startTimer(agent) else null
     // Add the incoming query params to the url
-    val url = pathContext.url + decodeParams(req.encodedQueryParams)
+    val url = appendQueryParams(pathContext.url, req.encodedQueryParams)
     logger.debug { "Fetching $pathContext ${if (url.isNotBlank()) "URL: $url" else ""}" }
 
     // Content is fetched here

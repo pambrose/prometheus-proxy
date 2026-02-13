@@ -56,6 +56,7 @@ import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.grpc.registerPathRequest
 import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
@@ -393,6 +394,12 @@ internal class AgentGrpcService(
   ) {
     val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
     val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
+
+    fun closeAll() {
+      connectionContext.close()
+      nonChunkedChannel.close()
+      chunkedChannel.close()
+    }
     coroutineScope {
       // Ends by connectionContext.close()
       launch(Dispatchers.IO) {
@@ -403,6 +410,7 @@ internal class AgentGrpcService(
             if (agent.isRunning)
               Status.fromThrowable(e)
                 .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
+            if (e !is CancellationException) closeAll()
           }
         } finally {
           // Close channels when the producer finishes so consumers' consumeAsFlow() will complete.
@@ -420,6 +428,7 @@ internal class AgentGrpcService(
           if (agent.isRunning)
             Status.fromThrowable(e)
               .apply { logger.error(e) { "writeResponsesToProxy(): ${exceptionDetails(e)}" } }
+          if (e !is CancellationException) closeAll()
         }
       }
 
@@ -430,6 +439,7 @@ internal class AgentGrpcService(
           if (agent.isRunning)
             Status.fromThrowable(e)
               .apply { logger.error(e) { "writeChunkedResponsesToProxy(): ${exceptionDetails(e)}" } }
+          if (e !is CancellationException) closeAll()
         }
       }
     }

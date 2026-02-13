@@ -23,6 +23,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.client.HttpClient
@@ -590,6 +591,38 @@ class ProxyHttpRoutesTest : StringSpec() {
       response.statusCode shouldBe HttpStatusCode.OK
       response.updateMsg shouldBe "success"
       response.contentText shouldBe originalContent
+    }
+
+    "submitScrapeRequest should return BadGateway for invalid gzip content" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val agentContext = AgentContext("test-remote")
+
+      launch {
+        val wrapper = agentContext.readScrapeRequest()!!
+        val results = ScrapeResults(
+          srAgentId = agentContext.agentId,
+          srScrapeId = wrapper.scrapeId,
+          srValidResponse = true,
+          srStatusCode = 200,
+          srContentType = "text/plain; charset=utf-8",
+          srZipped = true,
+          srContentAsZipped = "not-gzip".toByteArray(),
+          srUrl = "http://localhost:8080/metrics",
+        )
+        proxy.scrapeRequestManager.assignScrapeResults(results)
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.BadGateway
+      response.updateMsg shouldBe "invalid_gzip"
+      response.failureReason.shouldNotBeEmpty()
     }
 
     "submitScrapeRequest should return PayloadTooLarge for zip bombs" {

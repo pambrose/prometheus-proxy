@@ -745,12 +745,11 @@ class HttpClientCacheTest : StringSpec() {
 
       try {
         // Populate cache so cleanup has expired entries to process
-        val mockClients = (1..5).map { i ->
+        (1..5).forEach { i ->
           val client = mockk<HttpClient>(relaxed = true)
           val key = ClientKey("user$i", "pass$i")
           val entry = fastCache.getOrCreateClient(key) { client }
           fastCache.onFinishedWithClient(entry)
-          client
         }
 
         // Let entries expire and cleanup process several cycles
