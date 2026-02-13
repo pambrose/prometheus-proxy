@@ -121,13 +121,24 @@ abstract class BaseOptions protected constructor(
     private set
 
   val isTlsEnabled: Boolean
-    get() = certChainFilePath.isNotEmpty() || privateKeyFilePath.isNotEmpty()
+    get() = certChainFilePath.isNotEmpty() && privateKeyFilePath.isNotEmpty()
 
   protected fun resolveBooleanOption(
     cliValue: Boolean,
     envVar: EnvVars,
     configDefault: Boolean,
   ): Boolean = resolveBoolean(cliValue, envVar.name, System.getenv(envVar.name), configDefault)
+
+  protected fun validateTlsConfig() {
+    val hasCert = certChainFilePath.isNotEmpty()
+    val hasKey = privateKeyFilePath.isNotEmpty()
+    require(hasCert == hasKey) {
+      if (hasCert)
+        "Incomplete TLS configuration: certificate chain file is set but private key file is missing (use --key)"
+      else
+        "Incomplete TLS configuration: private key file is set but certificate chain file is missing (use --cert)"
+    }
+  }
 
   protected abstract fun assignConfigVals()
 

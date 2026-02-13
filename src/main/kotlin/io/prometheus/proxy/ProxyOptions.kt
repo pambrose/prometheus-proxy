@@ -175,6 +175,7 @@ class ProxyOptions(
           assignCertChainFilePath(tls.certChainFilePath)
           assignPrivateKeyFilePath(tls.privateKeyFilePath)
           assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
+          validateTlsConfig()
 
           logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
           logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }

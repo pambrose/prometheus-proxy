@@ -198,6 +198,7 @@ class AgentOptions(
       assignCertChainFilePath(tls.certChainFilePath)
       assignPrivateKeyFilePath(tls.privateKeyFilePath)
       assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
+      validateTlsConfig()
 
       logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
       logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }

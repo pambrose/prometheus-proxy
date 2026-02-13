@@ -91,20 +91,31 @@ class BaseOptionsTest : StringSpec() {
 
     // ==================== Transport Filter and TLS ====================
 
-    // Bug #10: isTlsEnabled property for detecting plaintext auth header forwarding
     "isTlsEnabled should be false when no TLS options set" {
       val options = ProxyOptions(listOf())
       options.isTlsEnabled shouldBe false
     }
 
-    "isTlsEnabled should be true when cert chain file path is set" {
-      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem"))
+    // Bug #3: isTlsEnabled requires BOTH cert and key (AND, not OR)
+    "isTlsEnabled should be true when both cert and key are set" {
+      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"))
       options.isTlsEnabled shouldBe true
     }
 
-    "isTlsEnabled should be true when private key file path is set" {
-      val options = ProxyOptions(listOf("-k", "/path/to/key.pem"))
-      options.isTlsEnabled shouldBe true
+    "partial TLS config with only cert should fail fast" {
+      val ex =
+        shouldThrow<IllegalArgumentException> {
+          ProxyOptions(listOf("-t", "/path/to/cert.pem"))
+        }
+      ex.message shouldContain "private key file is missing"
+    }
+
+    "partial TLS config with only key should fail fast" {
+      val ex =
+        shouldThrow<IllegalArgumentException> {
+          ProxyOptions(listOf("-k", "/path/to/key.pem"))
+        }
+      ex.message shouldContain "certificate chain file is missing"
     }
 
     "transportFilterDisabled should be settable via --tf_disabled" {
@@ -118,12 +129,12 @@ class BaseOptionsTest : StringSpec() {
     }
 
     "certChainFilePath should be settable via -t flag" {
-      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem"))
+      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"))
       options.certChainFilePath shouldBe "/path/to/cert.pem"
     }
 
     "privateKeyFilePath should be settable via -k flag" {
-      val options = ProxyOptions(listOf("-k", "/path/to/key.pem"))
+      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"))
       options.privateKeyFilePath shouldBe "/path/to/key.pem"
     }
 
