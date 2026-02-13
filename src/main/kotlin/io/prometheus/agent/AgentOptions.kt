@@ -238,23 +238,23 @@ class AgentOptions(
 
       if (maxCacheSize == -1)
         maxCacheSize = MAX_CLIENT_CACHE_SIZE.getEnv(clientCache.maxSize)
-      require(maxCacheSize > 1) { "http.clientCache.maxSize must be > 1: ($maxCacheSize)" }
+      require(maxCacheSize > 0) { "http.clientCache.maxSize must be > 0: ($maxCacheSize)" }
       logger.info { "http.clientCache.maxSize: $maxCacheSize" }
 
       if (maxCacheAgeMins == -1)
         maxCacheAgeMins = MAX_CLIENT_CACHE_AGE_MINS.getEnv(clientCache.maxAgeMins)
-      require(maxCacheAgeMins > 1) { "http.clientCache.maxCacheAgeMins must be > 1: ($maxCacheAgeMins)" }
+      require(maxCacheAgeMins > 0) { "http.clientCache.maxCacheAgeMins must be > 0: ($maxCacheAgeMins)" }
       logger.info { "http.clientCache.maxCacheAgeMins: $maxCacheAgeMins" }
 
       if (maxCacheIdleMins == -1)
         maxCacheIdleMins = MAX_CLIENT_CACHE_IDLE_MINS.getEnv(clientCache.maxIdleMins)
-      require(maxCacheIdleMins > 1) { "http.clientCache.maxCacheIdleMins must be > 1: ($maxCacheIdleMins)" }
+      require(maxCacheIdleMins > 0) { "http.clientCache.maxCacheIdleMins must be > 0: ($maxCacheIdleMins)" }
       logger.info { "http.clientCache.maxCacheIdleMins: $maxCacheIdleMins" }
 
       if (cacheCleanupIntervalMins == -1)
         cacheCleanupIntervalMins = CLIENT_CACHE_CLEANUP_INTERVAL_MINS.getEnv(clientCache.cleanupIntervalMins)
-      require(cacheCleanupIntervalMins > 1) {
-        "http.clientCache.cleanupIntervalMins must be > 1: ($cacheCleanupIntervalMins)"
+      require(cacheCleanupIntervalMins > 0) {
+        "http.clientCache.cleanupIntervalMins must be > 0: ($cacheCleanupIntervalMins)"
       }
       logger.info { "http.clientCache.cleanupIntervalMins: $cacheCleanupIntervalMins" }
     }

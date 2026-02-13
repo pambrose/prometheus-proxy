@@ -84,22 +84,22 @@ class AgentOptionsTest : StringSpec() {
 
     "maxCacheSize should have valid default" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
-      options.maxCacheSize shouldBeGreaterThan 1
+      options.maxCacheSize shouldBeGreaterThan 0
     }
 
     "maxCacheAgeMins should have valid default" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
-      options.maxCacheAgeMins shouldBeGreaterThan 1
+      options.maxCacheAgeMins shouldBeGreaterThan 0
     }
 
     "maxCacheIdleMins should have valid default" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
-      options.maxCacheIdleMins shouldBeGreaterThan 1
+      options.maxCacheIdleMins shouldBeGreaterThan 0
     }
 
     "cacheCleanupIntervalMins should have valid default" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
-      options.cacheCleanupIntervalMins shouldBeGreaterThan 1
+      options.cacheCleanupIntervalMins shouldBeGreaterThan 0
     }
 
     // ==================== gRPC Settings Tests ====================
@@ -222,6 +222,77 @@ class AgentOptionsTest : StringSpec() {
       shouldThrow<IllegalArgumentException> {
         AgentOptions(
           listOf("--name", "test", "--proxy", "host", "--client_timeout_secs", "0"),
+          false,
+        )
+      }
+    }
+
+    // Bug #5: Cache validations used > 1 instead of > 0, rejecting the valid value of 1.
+    // These tests verify that 1 is now accepted and 0 is still rejected.
+
+    "maxCacheSize of 1 should be accepted" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--max_cache_size", "1"),
+        false,
+      )
+      options.maxCacheSize shouldBe 1
+    }
+
+    "maxCacheSize of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--max_cache_size", "0"),
+          false,
+        )
+      }
+    }
+
+    "maxCacheAgeMins of 1 should be accepted" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--max_cache_age_mins", "1"),
+        false,
+      )
+      options.maxCacheAgeMins shouldBe 1
+    }
+
+    "maxCacheAgeMins of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--max_cache_age_mins", "0"),
+          false,
+        )
+      }
+    }
+
+    "maxCacheIdleMins of 1 should be accepted" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--max_cache_idle_mins", "1"),
+        false,
+      )
+      options.maxCacheIdleMins shouldBe 1
+    }
+
+    "maxCacheIdleMins of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--max_cache_idle_mins", "0"),
+          false,
+        )
+      }
+    }
+
+    "cacheCleanupIntervalMins of 1 should be accepted" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "1"),
+        false,
+      )
+      options.cacheCleanupIntervalMins shouldBe 1
+    }
+
+    "cacheCleanupIntervalMins of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "0"),
           false,
         )
       }
