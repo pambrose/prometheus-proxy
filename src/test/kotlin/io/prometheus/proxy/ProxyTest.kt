@@ -86,7 +86,7 @@ class ProxyTest : StringSpec() {
       targets[0].jsonPrimitive.content shouldBe "proxy.example.com:8080"
 
       val labels = entry["labels"]!!.jsonObject
-      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "app1_metrics"
+      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "/app1_metrics"
       labels["agentName"]!!.jsonPrimitive.content shouldBe "agent-01"
       labels["hostName"]!!.jsonPrimitive.content shouldBe "internal.host.com"
     }
@@ -102,7 +102,7 @@ class ProxyTest : StringSpec() {
 
       json.size shouldBe 2
       val paths = json.map { it.jsonObject["labels"]!!.jsonObject["__metrics_path__"]!!.jsonPrimitive.content }
-      paths.toSet() shouldBe setOf("metrics1", "metrics2")
+      paths.toSet() shouldBe setOf("/metrics1", "/metrics2")
     }
 
     "buildServiceDiscoveryJson should include custom labels from agent" {
@@ -130,10 +130,40 @@ class ProxyTest : StringSpec() {
       json.size shouldBe 1
       val labels = json[0].jsonObject["labels"]!!.jsonObject
       // Standard labels should still be present
-      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "metrics"
+      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "/metrics"
       labels["agentName"]!!.jsonPrimitive.content shouldBe "agent-bad-labels"
       // Invalid JSON labels should not cause custom keys to appear
       labels.containsKey("environment").shouldBeFalse()
+    }
+
+    // Bug #10: __metrics_path__ must include a leading slash per Prometheus SD convention
+    "buildServiceDiscoveryJson should include leading slash in __metrics_path__" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("my_metrics", "", agentContext)
+
+      val json = proxy.buildServiceDiscoveryJson()
+
+      json.size shouldBe 1
+      val labels = json[0].jsonObject["labels"]!!.jsonObject
+      val metricsPath = labels["__metrics_path__"]!!.jsonPrimitive.content
+      metricsPath shouldBe "/my_metrics"
+      metricsPath[0] shouldBe '/'
+    }
+
+    "buildServiceDiscoveryJson should not double-slash paths that already have slashes internally" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      // Paths in the pathMap never have a leading slash (stripped by HTTP handler),
+      // but they might contain internal slashes for nested paths
+      proxy.pathManager.addPath("app/metrics", "", agentContext)
+
+      val json = proxy.buildServiceDiscoveryJson()
+
+      val labels = json[0].jsonObject["labels"]!!.jsonObject
+      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "/app/metrics"
     }
 
     // ==================== removeAgentContext Tests ====================

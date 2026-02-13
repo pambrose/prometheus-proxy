@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -48,17 +49,26 @@ internal class HttpClientCache(
   private val accessMutex = Mutex()
   private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+  // Clients removed via removeEntry() that are not in use and need to be closed.
+  // Only accessed while holding accessMutex. Drained after releasing the mutex
+  // so that potentially slow HttpClient.close() calls don't block other cache operations.
+  private val pendingCloses = mutableListOf<HttpClient>()
+
   init {
     scope.launch {
-      while (true) {
+      while (isActive) {
         delay(cleanupInterval)
-        runCatching {
-          accessMutex.withLock {
-            cleanupExpiredEntries()
+        val clientsToClose =
+          runCatching {
+            accessMutex.withLock {
+              cleanupExpiredEntries()
+              drainPendingCloses()
+            }
+          }.getOrElse { e ->
+            logger.error(e) { "Error during HTTP client cache cleanup" }
+            emptyList()
           }
-        }.onFailure { e ->
-          logger.error(e) { "Error during HTTP client cache cleanup" }
-        }
+        clientsToClose.forEach { it.close() }
       }
     }
   }
@@ -124,27 +134,32 @@ internal class HttpClientCache(
     val maskedString = key.maskedKey()
     val now = System.currentTimeMillis()
 
-    return accessMutex.withLock {
-      cache[cacheKey]?.let { entry ->
-        if (isEntryValid(entry, now)) {
-          entry.lastAccessedAt = now
-          updateAccessOrder(cacheKey, now)
-          logger.debug { "Using cached HTTP client for key: $maskedString" }
-          entry.onStartWithClient()
-          return@withLock entry
-        } else {
-          logger.debug { "Removing expired HTTP client for key: $maskedString" }
-          removeEntry(cacheKey)
-        }
+    val (entry, clientsToClose) =
+      accessMutex.withLock {
+        val result = cache[cacheKey]?.let { existing ->
+          if (isEntryValid(existing, now)) {
+            existing.lastAccessedAt = now
+            updateAccessOrder(cacheKey, now)
+            logger.debug { "Using cached HTTP client for key: $maskedString" }
+            existing.onStartWithClient()
+            existing
+          } else {
+            logger.debug { "Removing expired HTTP client for key: $maskedString" }
+            removeEntry(cacheKey)
+            null
+          }
+        } ?: createAndCacheClient(
+          cacheKey,
+          maskedString,
+          clientFactory = clientFactory,
+          now = now,
+        ).apply { onStartWithClient() }
+
+        result to drainPendingCloses()
       }
 
-      createAndCacheClient(
-        cacheKey,
-        maskedString,
-        clientFactory = clientFactory,
-        now = now,
-      ).apply { onStartWithClient() }
-    }
+    clientsToClose.forEach { it.close() }
+    return entry
   }
 
   // When an agent is done with client for a given scrape, the entry is marked as not in use.
@@ -205,11 +220,24 @@ internal class HttpClientCache(
     }
   }
 
-  // Called with mutex
+  // Called with mutex. Marks the entry for close. If the entry is not in use,
+  // adds its client to pendingCloses for closing outside the lock.
   private fun removeEntry(keyString: String) {
     val entry = cache.remove(keyString)
-    entry?.markForClose()
+    if (entry != null) {
+      entry.markForClose()
+      if (!entry.isInUse()) {
+        pendingCloses += entry.client
+      }
+      // In-use entries will be closed when the last user calls onFinishedWithClient()
+    }
     accessOrder.remove(keyString)
+  }
+
+  // Called with mutex. Returns and clears the pending-close list.
+  private fun drainPendingCloses(): List<HttpClient> {
+    if (pendingCloses.isEmpty()) return emptyList()
+    return pendingCloses.toList().also { pendingCloses.clear() }
   }
 
   // Called with mutex
@@ -241,6 +269,8 @@ internal class HttpClientCache(
         }
         // In-use entries will be closed when the last user calls onFinishedWithClient()
       }
+      // Drain any pending closes from prior removeEntry() calls
+      clientsToClose += drainPendingCloses()
       cache.clear()
       accessOrder.clear()
     }

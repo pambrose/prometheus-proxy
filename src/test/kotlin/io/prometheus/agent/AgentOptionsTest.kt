@@ -84,22 +84,22 @@ class AgentOptionsTest : StringSpec() {
 
     "maxCacheSize should have valid default" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
-      options.maxCacheSize shouldBeGreaterThan 1
+      options.maxCacheSize shouldBeGreaterThan 0
     }
 
     "maxCacheAgeMins should have valid default" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
-      options.maxCacheAgeMins shouldBeGreaterThan 1
+      options.maxCacheAgeMins shouldBeGreaterThan 0
     }
 
     "maxCacheIdleMins should have valid default" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
-      options.maxCacheIdleMins shouldBeGreaterThan 1
+      options.maxCacheIdleMins shouldBeGreaterThan 0
     }
 
     "cacheCleanupIntervalMins should have valid default" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
-      options.cacheCleanupIntervalMins shouldBeGreaterThan 1
+      options.cacheCleanupIntervalMins shouldBeGreaterThan 0
     }
 
     // ==================== gRPC Settings Tests ====================
@@ -222,6 +222,130 @@ class AgentOptionsTest : StringSpec() {
       shouldThrow<IllegalArgumentException> {
         AgentOptions(
           listOf("--name", "test", "--proxy", "host", "--client_timeout_secs", "0"),
+          false,
+        )
+      }
+    }
+
+    // Bug #5: Cache validations used > 1 instead of > 0, rejecting the valid value of 1.
+    // These tests verify that 1 is now accepted and 0 is still rejected.
+
+    "maxCacheSize of 1 should be accepted" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--max_cache_size", "1"),
+        false,
+      )
+      options.maxCacheSize shouldBe 1
+    }
+
+    "maxCacheSize of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--max_cache_size", "0"),
+          false,
+        )
+      }
+    }
+
+    "maxCacheAgeMins of 1 should be accepted" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--max_cache_age_mins", "1"),
+        false,
+      )
+      options.maxCacheAgeMins shouldBe 1
+    }
+
+    "maxCacheAgeMins of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--max_cache_age_mins", "0"),
+          false,
+        )
+      }
+    }
+
+    "maxCacheIdleMins of 1 should be accepted" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--max_cache_idle_mins", "1"),
+        false,
+      )
+      options.maxCacheIdleMins shouldBe 1
+    }
+
+    "maxCacheIdleMins of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--max_cache_idle_mins", "0"),
+          false,
+        )
+      }
+    }
+
+    "cacheCleanupIntervalMins of 1 should be accepted" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "1"),
+        false,
+      )
+      options.cacheCleanupIntervalMins shouldBe 1
+    }
+
+    "cacheCleanupIntervalMins of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "0"),
+          false,
+        )
+      }
+    }
+
+    // ==================== Bug #9: chunkContentSizeBytes overflow protection ====================
+
+    // Bug #9: The *= 1024 multiplication was applied unconditionally with no overflow
+    // protection. For large KB values (e.g., 2097152), the multiplication overflows
+    // Int.MAX_VALUE silently, producing a negative or incorrect value. The fix validates
+    // the KB value is positive and checks for overflow before the conversion.
+
+    "Bug #9: chunkContentSizeBytes should correctly convert KB to bytes" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--chunk", "64"),
+        false,
+      )
+      options.chunkContentSizeBytes shouldBe 64 * 1024
+    }
+
+    "Bug #9: chunkContentSizeBytes of 1 KB should be accepted" {
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--chunk", "1"),
+        false,
+      )
+      options.chunkContentSizeBytes shouldBe 1024
+    }
+
+    "Bug #9: chunkContentSizeBytes at max safe KB value should be accepted" {
+      // Int.MAX_VALUE / 1024 = 2097151
+      val maxSafeKb = (Int.MAX_VALUE / 1024).toString()
+      val options = AgentOptions(
+        listOf("--name", "test", "--proxy", "host", "--chunk", maxSafeKb),
+        false,
+      )
+      options.chunkContentSizeBytes shouldBe (Int.MAX_VALUE / 1024) * 1024
+    }
+
+    "Bug #9: chunkContentSizeBytes exceeding max safe KB should throw" {
+      // Int.MAX_VALUE / 1024 + 1 = 2097152, which overflows when multiplied by 1024
+      val overflowKb = (Int.MAX_VALUE / 1024 + 1).toString()
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--chunk", overflowKb),
+          false,
+        )
+      }
+    }
+
+    "Bug #9: chunkContentSizeBytes of 0 should throw" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "--chunk", "0"),
           false,
         )
       }

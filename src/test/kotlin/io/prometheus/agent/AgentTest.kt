@@ -18,16 +18,28 @@
 
 package io.prometheus.agent
 
+import io.grpc.Status
+import io.grpc.StatusException
+import io.grpc.StatusRuntimeException
+import io.kotest.assertions.throwables.shouldNotThrow
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.concurrent.CountDownLatch
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.minusAssign
+import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -166,6 +178,35 @@ class AgentTest : StringSpec() {
       invoked.shouldBeTrue()
     }
 
+    // ==================== Bug #12: currentCacheSize non-blocking ====================
+
+    // Bug #12: The health check previously used runBlocking { getCacheStats().totalEntries }
+    // which could block the health check thread while waiting for the cache mutex.
+    // The fix uses currentCacheSize() which reads from ConcurrentHashMap.size (non-blocking).
+    "httpClientCache.currentCacheSize should return 0 for empty cache" {
+      val agent = createTestAgent()
+
+      val size = agent.agentHttpService.httpClientCache.currentCacheSize()
+
+      size shouldBe 0
+    }
+
+    "httpClientCache.currentCacheSize should not require coroutine context" {
+      val agent = createTestAgent()
+
+      // currentCacheSize() reads from ConcurrentHashMap.size and must work from any thread
+      // without needing runBlocking or a coroutine context. The old getCacheStats() approach
+      // required a coroutine context (mutex), which would deadlock in health check callbacks.
+      val thread = Thread {
+        val size = agent.agentHttpService.httpClientCache.currentCacheSize()
+        size shouldBe 0
+      }
+      thread.start()
+      thread.join(5000)
+
+      thread.isAlive.shouldBeFalse()
+    }
+
     // ==================== Construction / launchId / toString Tests ====================
 
     "launchId should be a 15-character string" {
@@ -183,6 +224,186 @@ class AgentTest : StringSpec() {
       str shouldContain "agentName"
       str shouldContain "tostring-agent"
       str shouldContain "proxyHost"
+    }
+
+    // ==================== Bug #5: scrapeRequestBacklogSize should not go negative ====================
+
+    "scrapeRequestBacklogSize should start at zero" {
+      val agent = createTestAgent()
+
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
+    }
+
+    "scrapeRequestBacklogSize increment and decrement should balance to zero" {
+      val agent = createTestAgent()
+
+      agent.scrapeRequestBacklogSize += 1
+      agent.scrapeRequestBacklogSize += 1
+      agent.scrapeRequestBacklogSize += 1
+      agent.scrapeRequestBacklogSize.load() shouldBe 3
+
+      agent.scrapeRequestBacklogSize -= 1
+      agent.scrapeRequestBacklogSize -= 1
+      agent.scrapeRequestBacklogSize -= 1
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
+    }
+
+    // Bug #5: Verifies that coroutineScope guarantees all finally blocks run before
+    // returning, so a counter incremented in launch and decremented in finally will
+    // always return to zero -- no store(0) needed.
+    "scrapeRequestBacklogSize pattern should return to zero after coroutineScope completes" {
+      val counter = AtomicInt(0)
+
+      coroutineScope {
+        repeat(10) {
+          launch {
+            counter += 1
+            try {
+              delay(10.milliseconds)
+            } finally {
+              counter -= 1
+            }
+          }
+        }
+      }
+
+      // After coroutineScope, all children have completed including finally blocks
+      counter.load() shouldBe 0
+    }
+
+    // Bug #5: Simulates the previous bug: a store(0) between in-flight increments
+    // and their corresponding decrements drives the counter negative.
+    "store(0) during in-flight decrements would produce negative counter" {
+      val counter = AtomicInt(0)
+
+      // Simulate: 3 scrapes in flight
+      counter += 1
+      counter += 1
+      counter += 1
+      counter.load() shouldBe 3
+
+      // Simulate: reconnect resets to 0 while decrements are still pending
+      counter.store(0)
+      counter.load() shouldBe 0
+
+      // Simulate: in-flight finally blocks decrement after the reset
+      counter -= 1
+      counter -= 1
+      counter -= 1
+      counter.load() shouldBe -3 // Bug! Counter is negative
+    }
+
+    // Bug #5: Without store(0), the counter naturally returns to zero.
+    "without store(0) counter naturally returns to zero" {
+      val counter = AtomicInt(0)
+
+      // Simulate: 3 scrapes in flight
+      counter += 1
+      counter += 1
+      counter += 1
+      counter.load() shouldBe 3
+
+      // No store(0) -- just let the finally blocks run
+      counter -= 1
+      counter -= 1
+      counter -= 1
+      counter.load() shouldBe 0
+    }
+
+    // Bug #5: Verify the health check uses non-negative values
+    "scrapeRequestBacklogSize should never be negative for health check" {
+      val agent = createTestAgent()
+
+      // Simulate balanced increment/decrement cycles
+      repeat(5) {
+        agent.scrapeRequestBacklogSize += 1
+        agent.scrapeRequestBacklogSize -= 1
+      }
+
+      agent.scrapeRequestBacklogSize.load() shouldBeGreaterThanOrEqual 0
+    }
+
+    // ==================== Bug #8: handleConnectionFailure should rethrow JVM Errors ====================
+
+    // Bug #8: Before the fix, the reconnect loop's onFailure handler caught all Throwable
+    // (via runCatchingCancellable + else branch) including Error subclasses like
+    // OutOfMemoryError and StackOverflowError. These were logged at warn level and
+    // the agent continued running in a potentially corrupted state.
+    //
+    // The fix adds an `is Error` branch that re-throws, causing the agent to terminate
+    // on fatal JVM errors instead of swallowing them.
+
+    "Bug #8: handleConnectionFailure should rethrow StackOverflowError" {
+      val agent = createTestAgent()
+
+      shouldThrow<StackOverflowError> {
+        agent.handleConnectionFailure(StackOverflowError("test stack overflow"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should rethrow OutOfMemoryError" {
+      val agent = createTestAgent()
+
+      shouldThrow<OutOfMemoryError> {
+        agent.handleConnectionFailure(OutOfMemoryError("test OOM"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should rethrow VirtualMachineError subclasses" {
+      val agent = createTestAgent()
+
+      shouldThrow<InternalError> {
+        agent.handleConnectionFailure(InternalError("test internal error"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should rethrow AssertionError" {
+      val agent = createTestAgent()
+
+      // AssertionError is an Error subclass
+      shouldThrow<AssertionError> {
+        agent.handleConnectionFailure(AssertionError("test assertion"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should not throw for RequestFailureException" {
+      val agent = createTestAgent()
+
+      shouldNotThrow<Throwable> {
+        agent.handleConnectionFailure(RequestFailureException("invalid response"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should not throw for StatusRuntimeException" {
+      val agent = createTestAgent()
+
+      shouldNotThrow<Throwable> {
+        agent.handleConnectionFailure(StatusRuntimeException(Status.UNAVAILABLE))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should not throw for StatusException" {
+      val agent = createTestAgent()
+
+      shouldNotThrow<Throwable> {
+        agent.handleConnectionFailure(StatusException(Status.UNAVAILABLE))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should not throw for RuntimeException" {
+      val agent = createTestAgent()
+
+      shouldNotThrow<Throwable> {
+        agent.handleConnectionFailure(RuntimeException("network error"))
+      }
+    }
+
+    "Bug #8: handleConnectionFailure should not throw for IOException" {
+      val agent = createTestAgent()
+
+      shouldNotThrow<Throwable> {
+        agent.handleConnectionFailure(java.io.IOException("connection reset"))
+      }
     }
   }
 }

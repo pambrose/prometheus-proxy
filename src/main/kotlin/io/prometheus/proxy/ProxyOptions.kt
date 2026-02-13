@@ -107,8 +107,7 @@ class ProxyOptions(
           proxyAgentPort = AGENT_PORT.getEnv(proxyConfigVals.agent.port)
         logger.info { "proxyAgentPort: $proxyAgentPort" }
 
-        if (!sdEnabled)
-          sdEnabled = SD_ENABLED.getEnv(proxyConfigVals.service.discovery.enabled)
+        sdEnabled = resolveBooleanOption(sdEnabled, SD_ENABLED, proxyConfigVals.service.discovery.enabled)
         logger.info { "sdEnabled: $sdEnabled" }
 
         if (sdPath.isEmpty())
@@ -125,8 +124,8 @@ class ProxyOptions(
         else
           logger.info { "sdTargetPrefix: $sdTargetPrefix" }
 
-        if (!reflectionDisabled)
-          reflectionDisabled = REFLECTION_DISABLED.getEnv(proxyConfigVals.reflectionDisabled)
+        reflectionDisabled =
+          resolveBooleanOption(reflectionDisabled, REFLECTION_DISABLED, proxyConfigVals.reflectionDisabled)
         logger.info { "reflectionDisabled: $reflectionDisabled" }
 
         if (handshakeTimeoutSecs == -1L)
@@ -134,9 +133,12 @@ class ProxyOptions(
         val hsTimeout = if (handshakeTimeoutSecs == -1L) "default (120)" else handshakeTimeoutSecs
         logger.info { "grpc.handshakeTimeoutSecs: $hsTimeout" }
 
-        if (!permitKeepAliveWithoutCalls)
-          permitKeepAliveWithoutCalls =
-            PERMIT_KEEPALIVE_WITHOUT_CALLS.getEnv(proxyConfigVals.grpc.permitKeepAliveWithoutCalls)
+        permitKeepAliveWithoutCalls =
+          resolveBooleanOption(
+            permitKeepAliveWithoutCalls,
+            PERMIT_KEEPALIVE_WITHOUT_CALLS,
+            proxyConfigVals.grpc.permitKeepAliveWithoutCalls,
+          )
         logger.info { "grpc.permitKeepAliveWithoutCalls: $permitKeepAliveWithoutCalls" }
 
         if (permitKeepAliveTimeSecs == -1L)
@@ -173,6 +175,7 @@ class ProxyOptions(
           assignCertChainFilePath(tls.certChainFilePath)
           assignPrivateKeyFilePath(tls.privateKeyFilePath)
           assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
+          validateTlsConfig()
 
           logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
           logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }

@@ -150,9 +150,33 @@ object ProxyHttpRoutes {
     return ResponseResults(
       statusCode = if (statusCodes.contains(HttpStatusCode.OK)) HttpStatusCode.OK else statusCodes[0],
       contentType = okContentType ?: contentTypes[0],
-      contentText = results.joinToString("\n") { it.contentText },
+      contentText = mergeContentTexts(results),
       updateMsg = updateMsgs,
     )
+  }
+
+  // Bug #13: When consolidated paths have multiple agents returning OpenMetrics format,
+  // each agent's response ends with "# EOF". Naively joining with "\n" produces
+  // "# EOF" markers in the middle of the stream, which is invalid OpenMetrics.
+  // This function strips trailing "# EOF" lines from each result and appends a
+  // single "# EOF" at the end if any result contained one.
+  internal fun mergeContentTexts(results: List<ScrapeRequestResponse>): String {
+    if (results.size == 1) return results[0].contentText
+
+    var hasEof = false
+    val stripped = results.map { result ->
+      val text = result.contentText
+      val trimmed = text.trimEnd()
+      if (trimmed.endsWith("# EOF")) {
+        hasEof = true
+        trimmed.removeSuffix("# EOF").trimEnd()
+      } else {
+        text
+      }
+    }
+
+    val joined = stripped.joinToString("\n")
+    return if (hasEof) "$joined\n# EOF" else joined
   }
 
   private suspend fun RoutingContext.executeScrapeRequests(

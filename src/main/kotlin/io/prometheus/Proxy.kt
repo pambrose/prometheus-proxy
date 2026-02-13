@@ -406,7 +406,8 @@ class Proxy(
             add(JsonPrimitive(options.sdTargetPrefix))
           }
           putJsonObject("labels") {
-            put("__metrics_path__", JsonPrimitive(path))
+            val pathWithSlash = if (path.startsWith("/")) path else "/$path"
+            put("__metrics_path__", JsonPrimitive(pathWithSlash))
 
             val agentContexts = agentContextInfo.agentContexts
             put("agentName", JsonPrimitive(agentContexts.joinToString { it.agentName }))

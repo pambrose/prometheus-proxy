@@ -24,12 +24,9 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
-import kotlinx.coroutines.channels.ClosedSendChannelException
-import kotlin.concurrent.atomics.AtomicInt
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
-import kotlin.concurrent.atomics.minusAssign
-import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
 
@@ -38,8 +35,8 @@ internal class AgentContext(
 ) {
   val agentId = AGENT_ID_GENERATOR.incrementAndFetch().toString()
 
-  private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(UNLIMITED)
-  private val channelBacklogSize = AtomicInt(0)
+  private val scrapeRequestQueue = ConcurrentLinkedQueue<ScrapeRequestWrapper>()
+  private val scrapeRequestNotifier = Channel<Unit>(UNLIMITED)
 
   private val clock = Monotonic
   private var lastActivityTimeMark: TimeMark by nonNullableReference(clock.markNow())
@@ -64,7 +61,7 @@ internal class AgentContext(
     get() = lastActivityTimeMark.elapsedNow()
 
   val scrapeRequestBacklogSize: Int
-    get() = channelBacklogSize.load()
+    get() = scrapeRequestQueue.size
 
   init {
     markActivityTime(true)
@@ -78,34 +75,32 @@ internal class AgentContext(
   }
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
-    channelBacklogSize += 1
+    scrapeRequestQueue.add(scrapeRequest)
     try {
-      scrapeRequestChannel.send(scrapeRequest)
-    } catch (e: ClosedSendChannelException) {
-      channelBacklogSize -= 1
+      scrapeRequestNotifier.send(Unit)
+    } catch (e: Exception) {
+      scrapeRequestQueue.remove(scrapeRequest)
       throw e
     }
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
-    scrapeRequestChannel.receiveCatching().getOrNull()
-      ?.apply {
-        channelBacklogSize -= 1
-      }
+    scrapeRequestNotifier.receiveCatching().getOrNull()?.let {
+      scrapeRequestQueue.poll()
+    }
 
-  fun isValid() = valid && !scrapeRequestChannel.isClosedForReceive
+  fun isValid() = valid && !scrapeRequestNotifier.isClosedForReceive
 
   fun isNotValid() = !isValid()
 
   fun invalidate() {
     valid = false
-    scrapeRequestChannel.close()
+    scrapeRequestNotifier.close()
     // Drain any buffered scrape requests and close their completion channels
     // so HTTP handlers waiting on awaitCompleted() are notified immediately
     // instead of waiting for the full scrape timeout to expire.
     while (true) {
-      val wrapper = scrapeRequestChannel.tryReceive().getOrNull() ?: break
-      channelBacklogSize -= 1
+      val wrapper = scrapeRequestQueue.poll() ?: break
       wrapper.closeChannel()
     }
   }

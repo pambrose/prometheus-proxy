@@ -187,7 +187,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
-      every { proxy.pathManager.addPath(testPath, testLabels, mockAgentContext) } returns true
+      every { proxy.pathManager.addPath(testPath, testLabels, mockAgentContext) } returns null
       every { proxy.pathManager.pathMapSize } returns 5
 
       val request = registerPathRequest {
@@ -205,6 +205,55 @@ class ProxyServiceImplTest : StringSpec() {
 
       verify { proxy.pathManager.addPath(testPath, testLabels, mockAgentContext) }
       verify { mockAgentContext.markActivityTime(false) }
+    }
+
+    // Bug #11: registerPath should propagate the actual failure reason from addPath,
+    // not always say "Invalid agentId" which is misleading for consolidated mismatch.
+    "registerPath should include addPath failure reason when path registration rejected" {
+      val proxy = createMockProxy()
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "test-agent-consolidated"
+      val testPath = "/metrics"
+      val rejectionReason = "Consolidated agent rejected for non-consolidated path /metrics"
+
+      every { mockAgentContext.agentId } returns testAgentId
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+      every { proxy.pathManager.addPath(testPath, any(), mockAgentContext) } returns rejectionReason
+      every { proxy.pathManager.pathMapSize } returns 0
+
+      val request = registerPathRequest {
+        agentId = testAgentId
+        path = testPath
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val response = service.registerPath(request)
+
+      response.valid.shouldBeFalse()
+      response.pathId shouldBe -1
+      // Before the fix, this was "Invalid agentId: test-agent-consolidated (registerPath)"
+      response.reason shouldBe rejectionReason
+      response.reason shouldContain "Consolidated"
+    }
+
+    "registerPath should say Invalid agentId when agent context is missing" {
+      val proxy = createMockProxy()
+      val testAgentId = "missing-agent-456"
+
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns null
+      every { proxy.pathManager.pathMapSize } returns 0
+
+      val request = registerPathRequest {
+        agentId = testAgentId
+        path = "/metrics"
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val response = service.registerPath(request)
+
+      response.valid.shouldBeFalse()
+      response.reason shouldContain "Invalid agentId"
+      response.reason shouldContain testAgentId
     }
 
     "registerPath should fail with missing agent context" {
@@ -847,6 +896,7 @@ class ProxyServiceImplTest : StringSpec() {
     "writeChunkedResponsesToProxy should clean up orphaned contexts on stream failure" {
       val proxy = createMockProxy(isRunning = true)
       val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId = 400L
 
       val chunkedContext = mockk<ChunkedContext>(relaxed = true)
@@ -878,11 +928,14 @@ class ProxyServiceImplTest : StringSpec() {
       verify { contextManager.putChunkedContext(scrapeId, any()) }
       // Verify the orphaned context was cleaned up
       verify { contextManager.removeChunkedContext(scrapeId) }
+      // Bug #4: Verify the waiting HTTP handler is notified via failScrapeRequest
+      verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("abandoned") }) }
     }
 
     "writeChunkedResponsesToProxy should clean up multiple orphaned contexts on stream failure" {
       val proxy = createMockProxy(isRunning = true)
       val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId1 = 401L
       val scrapeId2 = 402L
 
@@ -926,11 +979,15 @@ class ProxyServiceImplTest : StringSpec() {
       // Both orphaned contexts should be cleaned up
       verify { contextManager.removeChunkedContext(scrapeId1) }
       verify { contextManager.removeChunkedContext(scrapeId2) }
+      // Bug #4: Both orphaned scrape requests should be failed
+      verify { scrapeRequestManager.failScrapeRequest(scrapeId1, match { it.contains("abandoned") }) }
+      verify { scrapeRequestManager.failScrapeRequest(scrapeId2, match { it.contains("abandoned") }) }
     }
 
     "writeChunkedResponsesToProxy should not clean up completed contexts on stream failure" {
       val proxy = createMockProxy(isRunning = true)
       val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
       val completedScrapeId = 403L
       val orphanedScrapeId = 404L
 
@@ -1010,10 +1067,119 @@ class ProxyServiceImplTest : StringSpec() {
 
       result shouldBe EMPTY_INSTANCE
 
-      // Completed context was removed by summary processing
+      // Completed context was removed by summary processing (assignScrapeResults called)
       verify(exactly = 1) { contextManager.removeChunkedContext(completedScrapeId) }
-      // Orphaned context should be cleaned up during cleanup phase
+      verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(any()) }
+      // Orphaned context should be cleaned up and failed during cleanup phase
       verify { contextManager.removeChunkedContext(orphanedScrapeId) }
+      // Bug #4: Only the orphaned scrape should be failed, not the completed one
+      verify { scrapeRequestManager.failScrapeRequest(orphanedScrapeId, match { it.contains("abandoned") }) }
+      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(eq(completedScrapeId), any()) }
+    }
+
+    // Bug #2: Chunk validation failure left the HTTP handler waiting until timeout.
+    // The fix calls failScrapeRequest() to notify the handler immediately.
+
+    "writeChunkedResponsesToProxy should notify handler on chunk validation failure" {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      val scrapeId = 500L
+
+      // Create a ChunkedContext from a real header, then set up the mock
+      // to return it. Send a chunk with a bad checksum to trigger validation failure.
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrapeId
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+
+      val data = "test chunk data".toByteArray()
+      val badChecksum = 12345L // Wrong checksum to trigger ChunkValidationException
+
+      val chunk = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = scrapeId
+          chunkCount = 1
+          chunkByteCount = data.size
+          chunkChecksum = badChecksum
+          chunkBytes = ByteString.copyFrom(data)
+        }
+      }
+
+      // Use a real ChunkedContext so applyChunk() actually validates
+      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header)
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk))
+
+      result shouldBe EMPTY_INSTANCE
+
+      // The waiting HTTP handler should have been notified via failScrapeRequest
+      verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Chunk") }) }
+      // Context should have been cleaned up
+      verify { contextManager.removeChunkedContext(scrapeId) }
+    }
+
+    "writeChunkedResponsesToProxy should notify handler on summary validation failure" {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      val scrapeId = 501L
+
+      val data = "test chunk data".toByteArray()
+      val crc = CRC32()
+      crc.update(data)
+      val correctChecksum = crc.value
+
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrapeId
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+
+      val chunk = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = scrapeId
+          chunkCount = 1
+          chunkByteCount = data.size
+          chunkChecksum = correctChecksum
+          chunkBytes = ByteString.copyFrom(data)
+        }
+      }
+
+      // Summary with wrong checksum to trigger ChunkValidationException
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = scrapeId
+          summaryChunkCount = 1
+          summaryByteCount = data.size
+          summaryChecksum = 99999L // Wrong checksum
+        }
+      }
+
+      // Use a real ChunkedContext that has had the chunk applied, so applySummary() validates
+      val realContext = ChunkedContext(header).apply {
+        applyChunk(data, data.size, 1, correctChecksum)
+      }
+      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header)
+      every { contextManager.removeChunkedContext(scrapeId) } returns realContext
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk, summary))
+
+      result shouldBe EMPTY_INSTANCE
+
+      // The waiting HTTP handler should have been notified via failScrapeRequest
+      verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Summary") }) }
     }
 
     "writeResponsesToProxy should call assignScrapeResults for each response" {

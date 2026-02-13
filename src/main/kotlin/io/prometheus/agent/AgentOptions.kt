@@ -150,8 +150,7 @@ class AgentOptions(
       agentName = AGENT_NAME.getEnv(agentConfigVals.name)
     logger.info { "agentName: $agentName" }
 
-    if (!consolidated)
-      consolidated = CONSOLIDATED.getEnv(agentConfigVals.consolidated)
+    consolidated = resolveBooleanOption(consolidated, CONSOLIDATED, agentConfigVals.consolidated)
     logger.info { "consolidated: $consolidated" }
 
     if (scrapeTimeoutSecs == -1)
@@ -164,8 +163,13 @@ class AgentOptions(
 
     if (chunkContentSizeBytes == -1)
       chunkContentSizeBytes = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
-    // Multiply the value time KB
-    chunkContentSizeBytes *= 1024
+    require(chunkContentSizeBytes > 0) { "chunkContentSizeKbs must be > 0: ($chunkContentSizeBytes)" }
+    // Convert KB value to bytes with overflow protection
+    val chunkSizeAsBytes = chunkContentSizeBytes.toLong() * 1024
+    require(chunkSizeAsBytes <= Int.MAX_VALUE) {
+      "chunkContentSizeKbs value $chunkContentSizeBytes is too large (max: ${Int.MAX_VALUE / 1024})"
+    }
+    chunkContentSizeBytes = chunkSizeAsBytes.toInt()
     logger.info { "chunkContentSizeBytes: $chunkContentSizeBytes" }
 
     if (minGzipSizeBytes == -1)
@@ -178,8 +182,8 @@ class AgentOptions(
 
     assignHttpClientConfigVals(agentConfigVals)
 
-    if (!keepAliveWithoutCalls)
-      keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
+    keepAliveWithoutCalls =
+      resolveBooleanOption(keepAliveWithoutCalls, KEEPALIVE_WITHOUT_CALLS, agentConfigVals.grpc.keepAliveWithoutCalls)
     logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
 
     if (unaryDeadlineSecs == -1)
@@ -199,6 +203,7 @@ class AgentOptions(
       assignCertChainFilePath(tls.certChainFilePath)
       assignPrivateKeyFilePath(tls.privateKeyFilePath)
       assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
+      validateTlsConfig()
 
       logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
       logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
@@ -222,9 +227,15 @@ class AgentOptions(
 
   private fun assignHttpClientConfigVals(agentConfigVals: ConfigVals.Agent) {
     agentConfigVals.http.apply {
-      if (!trustAllX509Certificates)
-        trustAllX509Certificates = TRUST_ALL_X509_CERTIFICATES.getEnv(enableTrustAllX509Certificates)
+      trustAllX509Certificates =
+        resolveBooleanOption(trustAllX509Certificates, TRUST_ALL_X509_CERTIFICATES, enableTrustAllX509Certificates)
       logger.info { "http.trustAllX509Certificates: $trustAllX509Certificates" }
+      if (trustAllX509Certificates) {
+        logger.warn {
+          "X.509 certificate verification is disabled -- ALL certificates will be trusted. " +
+            "Do not use this in production."
+        }
+      }
 
       if (maxConcurrentHttpClients == -1)
         maxConcurrentHttpClients = MAX_CONCURRENT_CLIENTS.getEnv(maxConcurrentClients)
@@ -238,23 +249,23 @@ class AgentOptions(
 
       if (maxCacheSize == -1)
         maxCacheSize = MAX_CLIENT_CACHE_SIZE.getEnv(clientCache.maxSize)
-      require(maxCacheSize > 1) { "http.clientCache.maxSize must be > 1: ($maxCacheSize)" }
+      require(maxCacheSize > 0) { "http.clientCache.maxSize must be > 0: ($maxCacheSize)" }
       logger.info { "http.clientCache.maxSize: $maxCacheSize" }
 
       if (maxCacheAgeMins == -1)
         maxCacheAgeMins = MAX_CLIENT_CACHE_AGE_MINS.getEnv(clientCache.maxAgeMins)
-      require(maxCacheAgeMins > 1) { "http.clientCache.maxCacheAgeMins must be > 1: ($maxCacheAgeMins)" }
+      require(maxCacheAgeMins > 0) { "http.clientCache.maxCacheAgeMins must be > 0: ($maxCacheAgeMins)" }
       logger.info { "http.clientCache.maxCacheAgeMins: $maxCacheAgeMins" }
 
       if (maxCacheIdleMins == -1)
         maxCacheIdleMins = MAX_CLIENT_CACHE_IDLE_MINS.getEnv(clientCache.maxIdleMins)
-      require(maxCacheIdleMins > 1) { "http.clientCache.maxCacheIdleMins must be > 1: ($maxCacheIdleMins)" }
+      require(maxCacheIdleMins > 0) { "http.clientCache.maxCacheIdleMins must be > 0: ($maxCacheIdleMins)" }
       logger.info { "http.clientCache.maxCacheIdleMins: $maxCacheIdleMins" }
 
       if (cacheCleanupIntervalMins == -1)
         cacheCleanupIntervalMins = CLIENT_CACHE_CLEANUP_INTERVAL_MINS.getEnv(clientCache.cleanupIntervalMins)
-      require(cacheCleanupIntervalMins > 1) {
-        "http.clientCache.cleanupIntervalMins must be > 1: ($cacheCleanupIntervalMins)"
+      require(cacheCleanupIntervalMins > 0) {
+        "http.clientCache.cleanupIntervalMins must be > 0: ($cacheCleanupIntervalMins)"
       }
       logger.info { "http.clientCache.cleanupIntervalMins: $cacheCleanupIntervalMins" }
     }

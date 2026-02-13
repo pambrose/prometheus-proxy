@@ -2,13 +2,17 @@
 
 package io.prometheus.common
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.agent.AgentOptions
+import io.prometheus.common.BaseOptions.Companion.resolveBoolean
 import io.prometheus.proxy.ProxyOptions
 import java.io.File
 import java.net.URI
@@ -87,20 +91,31 @@ class BaseOptionsTest : StringSpec() {
 
     // ==================== Transport Filter and TLS ====================
 
-    // Bug #10: isTlsEnabled property for detecting plaintext auth header forwarding
     "isTlsEnabled should be false when no TLS options set" {
       val options = ProxyOptions(listOf())
       options.isTlsEnabled shouldBe false
     }
 
-    "isTlsEnabled should be true when cert chain file path is set" {
-      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem"))
+    // Bug #3: isTlsEnabled requires BOTH cert and key (AND, not OR)
+    "isTlsEnabled should be true when both cert and key are set" {
+      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"))
       options.isTlsEnabled shouldBe true
     }
 
-    "isTlsEnabled should be true when private key file path is set" {
-      val options = ProxyOptions(listOf("-k", "/path/to/key.pem"))
-      options.isTlsEnabled shouldBe true
+    "partial TLS config with only cert should fail fast" {
+      val ex =
+        shouldThrow<IllegalArgumentException> {
+          ProxyOptions(listOf("-t", "/path/to/cert.pem"))
+        }
+      ex.message shouldContain "private key file is missing"
+    }
+
+    "partial TLS config with only key should fail fast" {
+      val ex =
+        shouldThrow<IllegalArgumentException> {
+          ProxyOptions(listOf("-k", "/path/to/key.pem"))
+        }
+      ex.message shouldContain "certificate chain file is missing"
     }
 
     "transportFilterDisabled should be settable via --tf_disabled" {
@@ -114,12 +129,12 @@ class BaseOptionsTest : StringSpec() {
     }
 
     "certChainFilePath should be settable via -t flag" {
-      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem"))
+      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"))
       options.certChainFilePath shouldBe "/path/to/cert.pem"
     }
 
     "privateKeyFilePath should be settable via -k flag" {
-      val options = ProxyOptions(listOf("-k", "/path/to/key.pem"))
+      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"))
       options.privateKeyFilePath shouldBe "/path/to/key.pem"
     }
 
@@ -294,12 +309,124 @@ class BaseOptionsTest : StringSpec() {
       options.debugEnabled shouldBe true
     }
 
+    // ==================== readConfig Error Message ====================
+
+    // The readConfig error message uses escaped-dollar interpolation to produce a
+    // literal "$" before the env var name (e.g., "$AGENT_CONFIG"). This replaced the
+    // Kotlin 2.x multi-dollar syntax ($$"...$$$envConfig") for clarity. This test
+    // verifies the interpolation produces the expected output.
+    "readConfig error message should include literal dollar sign before env var name" {
+      val envConfig = "AGENT_CONFIG"
+      val message = "A configuration file or url must be specified with --config or \$$envConfig"
+
+      message shouldBe "A configuration file or url must be specified with --config or \$AGENT_CONFIG"
+    }
+
     // ==================== ConfigVals Tests ====================
 
     "configVals should be initialized after construction" {
       val options = ProxyOptions(listOf())
       options.configVals.proxy.http.port shouldBeGreaterThan 0
       options.configVals.proxy.admin.pingPath.shouldNotBeEmpty()
+    }
+
+    // ==================== Bug #2: resolveBoolean priority tests (CLI > env > config) ====================
+
+    "resolveBoolean should return config default when env is null and cli is false" {
+      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = null, configDefault = false).shouldBeFalse()
+      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = null, configDefault = true).shouldBeTrue()
+    }
+
+    "resolveBoolean should return cli=true regardless of env or config" {
+      resolveBoolean(cliValue = true, envVarName = "TEST", envVarValue = null, configDefault = false).shouldBeTrue()
+      resolveBoolean(cliValue = true, envVarName = "TEST", envVarValue = "false", configDefault = false).shouldBeTrue()
+      resolveBoolean(cliValue = true, envVarName = "TEST", envVarValue = "true", configDefault = false).shouldBeTrue()
+    }
+
+    "resolveBoolean should let env=true override config=false when cli is false" {
+      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "true", configDefault = false).shouldBeTrue()
+    }
+
+    "resolveBoolean should let env=false override config=true when cli is false" {
+      resolveBoolean(
+        cliValue = false,
+        envVarName = "TEST",
+        envVarValue = "false",
+        configDefault = true,
+      ).shouldBeFalse()
+    }
+
+    "resolveBoolean should handle case-insensitive TRUE" {
+      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "TRUE", configDefault = false).shouldBeTrue()
+    }
+
+    "resolveBoolean should handle case-insensitive FALSE" {
+      resolveBoolean(
+        cliValue = false,
+        envVarName = "TEST",
+        envVarValue = "FALSE",
+        configDefault = true,
+      ).shouldBeFalse()
+    }
+
+    "resolveBoolean should handle mixed case True and False" {
+      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "True", configDefault = false).shouldBeTrue()
+      resolveBoolean(
+        cliValue = false,
+        envVarName = "TEST",
+        envVarValue = "False",
+        configDefault = true,
+      ).shouldBeFalse()
+    }
+
+    "resolveBoolean should throw on invalid env var value" {
+      val ex =
+        shouldThrow<IllegalArgumentException> {
+          resolveBoolean(cliValue = false, envVarName = "MY_VAR", envVarValue = "invalid", configDefault = false)
+        }
+      ex.message shouldContain "MY_VAR"
+      ex.message shouldContain "invalid"
+    }
+
+    "resolveBoolean should throw on empty string env var value" {
+      shouldThrow<IllegalArgumentException> {
+        resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "", configDefault = false)
+      }
+    }
+
+    "resolveBoolean should throw on numeric env var value" {
+      shouldThrow<IllegalArgumentException> {
+        resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "1", configDefault = false)
+      }
+    }
+
+    // ==================== Bug #2: Integration tests (CLI > env > config) ====================
+
+    "env=false should override config=true when no CLI flag" {
+      resolveBoolean(
+        cliValue = false,
+        envVarName = "ADMIN_ENABLED",
+        envVarValue = "false",
+        configDefault = true,
+      ).shouldBeFalse()
+    }
+
+    "CLI --admin flag should win over env=false" {
+      resolveBoolean(
+        cliValue = true,
+        envVarName = "ADMIN_ENABLED",
+        envVarValue = "false",
+        configDefault = false,
+      ).shouldBeTrue()
+    }
+
+    "config default should win when no CLI flag and no env var" {
+      resolveBoolean(
+        cliValue = false,
+        envVarName = "ADMIN_ENABLED",
+        envVarValue = null,
+        configDefault = true,
+      ).shouldBeTrue()
     }
   }
 }

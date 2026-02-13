@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ScrapeResults
 import java.util.concurrent.ConcurrentHashMap
 
@@ -47,6 +48,23 @@ internal class ScrapeRequestManager {
         wrapper.markComplete()
         wrapper.agentContext.markActivityTime(true)
       } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
+  }
+
+  fun failScrapeRequest(
+    scrapeId: Long,
+    failureReason: String,
+  ) {
+    scrapeRequestMap[scrapeId]
+      ?.also { wrapper ->
+        wrapper.scrapeResults = ScrapeResults(
+          srAgentId = wrapper.agentContext.agentId,
+          srScrapeId = scrapeId,
+          srStatusCode = HttpStatusCode.BadGateway.value,
+          srFailureReason = failureReason,
+        )
+        wrapper.markComplete()
+        wrapper.agentContext.markActivityTime(true)
+      } ?: logger.warn { "failScrapeRequest() missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
   }
 
   fun removeFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {

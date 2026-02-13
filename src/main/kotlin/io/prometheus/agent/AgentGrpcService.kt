@@ -112,10 +112,7 @@ internal class AgentGrpcService(
 
     tlsContext =
       agent.options.run {
-        if (certChainFilePath.isNotEmpty() ||
-          privateKeyFilePath.isNotEmpty() ||
-          trustCertCollectionFilePath.isNotEmpty()
-        )
+        if (isTlsEnabled || trustCertCollectionFilePath.isNotEmpty())
           buildClientTlsContext(
             certChainFilePath = certChainFilePath,
             privateKeyFilePath = privateKeyFilePath,
@@ -149,8 +146,6 @@ internal class AgentGrpcService(
 
       if (grpcStarted)
         shutDownLocked()
-      else
-        grpcStarted = true
 
       channel =
         channel(
@@ -173,6 +168,8 @@ internal class AgentGrpcService(
           if (options.keepAliveWithoutCalls)
             keepAliveWithoutCalls(options.keepAliveWithoutCalls)
         }
+
+      grpcStarted = true
 
       val interceptors =
         buildList<ClientInterceptor> {

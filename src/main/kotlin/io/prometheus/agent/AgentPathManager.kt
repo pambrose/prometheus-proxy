@@ -22,16 +22,20 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 
 internal class AgentPathManager(
   private val agent: Agent,
 ) {
   private val agentConfigVals = agent.configVals.agent
-  private val pathContextMap = HashMap<String, PathContext>()
+  private val pathContextMap = ConcurrentHashMap<String, PathContext>()
+  private val pathMutex = Mutex()
 
-  operator fun get(path: String): PathContext? = synchronized(pathContextMap) { pathContextMap[path] }
+  operator fun get(path: String): PathContext? = pathContextMap[path]
 
-  fun clear() = synchronized(pathContextMap) { pathContextMap.clear() }
+  fun clear() = pathContextMap.clear()
 
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
@@ -70,10 +74,10 @@ internal class AgentPathManager(
 
     val path = pathVal.removePrefix("/")
     val labelsJson = labels.defaultEmptyJsonObject()
-    val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
-    if (!agent.isTestMode)
-      logger.info { "Registered $url as /$path with labels $labelsJson" }
-    synchronized(pathContextMap) {
+    pathMutex.withLock {
+      val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
+      if (!agent.isTestMode)
+        logger.info { "Registered $url as /$path with labels $labelsJson" }
       pathContextMap[path] = PathContext(pathId, path, url, labelsJson)
     }
   }
@@ -82,12 +86,14 @@ internal class AgentPathManager(
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
 
     val path = pathVal.removePrefix("/")
-    agent.grpcService.unregisterPathOnProxy(path)
-    val pathContext = synchronized(pathContextMap) { pathContextMap.remove(path) }
-    if (pathContext == null) {
-      logger.info { "No path value /$path found in pathContextMap when unregistering" }
-    } else if (!agent.isTestMode) {
-      logger.info { "Unregistered /$path for ${pathContext.url}" }
+    pathMutex.withLock {
+      agent.grpcService.unregisterPathOnProxy(path)
+      val pathContext = pathContextMap.remove(path)
+      if (pathContext == null) {
+        logger.info { "No path value /$path found in pathContextMap when unregistering" }
+      } else if (!agent.isTestMode) {
+        logger.info { "Unregistered /$path for ${pathContext.url}" }
+      }
     }
   }
 

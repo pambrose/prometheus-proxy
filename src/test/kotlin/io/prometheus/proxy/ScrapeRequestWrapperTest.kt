@@ -254,5 +254,50 @@ class ScrapeRequestWrapperTest : StringSpec() {
       // Second call should not throw — channel is already closed
       wrapper.markComplete()
     }
+
+    // ==================== Bug #15: markComplete double-call protection ====================
+
+    // Bug #15: Before the fix, calling markComplete() twice would invoke
+    // requestTimer?.observeDuration() twice, recording a duplicate latency observation
+    // and skewing metrics. The fix uses an AtomicBoolean so observeDuration is only
+    // called once.
+
+    "Bug #15: markComplete with metrics should only observeDuration once" {
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.isMetricsEnabled } returns true
+      val mockSummary = mockk<io.prometheus.client.Summary>(relaxed = true)
+      val mockTimer = mockk<io.prometheus.client.Summary.Timer>(relaxed = true)
+      val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
+      every { mockProxy.metrics } returns mockMetrics
+      every { mockMetrics.scrapeRequestLatency } returns mockSummary
+      every { mockSummary.startTimer() } returns mockTimer
+
+      val wrapper = ScrapeRequestWrapper(
+        agentContext = createAgentContext(),
+        proxy = mockProxy,
+        pathVal = "/metrics",
+        encodedQueryParamsVal = "",
+        authHeaderVal = "",
+        acceptVal = null,
+        debugEnabledVal = false,
+      )
+
+      wrapper.markComplete()
+      wrapper.markComplete()
+      wrapper.markComplete()
+
+      // observeDuration should only be called once despite three markComplete calls
+      io.mockk.verify(exactly = 1) { mockTimer.observeDuration() }
+    }
+
+    "Bug #15: markComplete should close channel only once" {
+      val wrapper = createWrapper()
+
+      wrapper.markComplete()
+
+      // Second and third calls should be no-ops (no exceptions)
+      wrapper.markComplete()
+      wrapper.markComplete()
+    }
   }
 }

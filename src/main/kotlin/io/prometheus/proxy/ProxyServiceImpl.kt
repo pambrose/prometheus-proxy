@@ -104,18 +104,24 @@ internal class ProxyServiceImpl(
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
     var isValid = false
+    var failureReason = ""
 
     proxy.agentContextManager.getAgentContext(request.agentId)
       ?.apply {
-        isValid = proxy.pathManager.addPath(request.path, request.labels, this)
+        val addPathResult = proxy.pathManager.addPath(request.path, request.labels, this)
+        isValid = addPathResult == null
+        if (!isValid) failureReason = addPathResult!!
         markActivityTime(false)
-      } ?: logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
+      } ?: run {
+      failureReason = "Invalid agentId: ${request.agentId} (registerPath)"
+      logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
+    }
 
     return registerPathResponse {
       pathId = if (isValid) PATH_ID_GENERATOR.fetchAndIncrement() else -1
       valid = isValid
       if (!isValid) {
-        reason = "Invalid agentId: ${request.agentId} (registerPath)"
+        reason = failureReason
       }
       pathCount = proxy.pathManager.pathMapSize
     }
@@ -224,6 +230,10 @@ internal class ProxyServiceImpl(
                     logger.error(e) { "Chunk validation failed for scrapeId: $chunkScrapeId, discarding context" }
                     contextManager.removeChunkedContext(chunkScrapeId)
                     activeScrapeIds -= chunkScrapeId
+                    proxy.scrapeRequestManager.failScrapeRequest(
+                      chunkScrapeId,
+                      "Chunk validation failed: ${e.message}",
+                    )
                   }
                 }
               }
@@ -247,6 +257,10 @@ internal class ProxyServiceImpl(
                     proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
                   } catch (e: ChunkValidationException) {
                     logger.error(e) { "Summary validation failed for scrapeId: $summaryScrapeId" }
+                    proxy.scrapeRequestManager.failScrapeRequest(
+                      summaryScrapeId,
+                      "Summary validation failed: ${e.message}",
+                    )
                   }
                 }
               }
@@ -272,7 +286,13 @@ internal class ProxyServiceImpl(
       val contextManager = proxy.agentContextManager
       activeScrapeIds.forEach { scrapeId ->
         contextManager.removeChunkedContext(scrapeId)
-          ?.also { logger.warn { "Cleaned up orphaned ChunkedContext for scrapeId: $scrapeId" } }
+          ?.also {
+            logger.warn { "Cleaned up orphaned ChunkedContext for scrapeId: $scrapeId" }
+            proxy.scrapeRequestManager.failScrapeRequest(
+              scrapeId,
+              "Chunked transfer abandoned: stream terminated before summary received",
+            )
+          }
       }
     }
 

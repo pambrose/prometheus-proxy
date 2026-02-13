@@ -25,9 +25,12 @@ import io.kotest.matchers.shouldBe
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class AgentConnectionContextTest : StringSpec() {
   init {
@@ -150,6 +153,143 @@ class AgentConnectionContextTest : StringSpec() {
       val channel = context.scrapeResults()
       val result = channel.receiveCatching()
       result.isClosed.shouldBeTrue()
+    }
+
+    // ==================== Bug #7: In-flight scrape results silently lost on disconnect ====================
+
+    // Bug #7: Before the fix, sendScrapeResults() used channel.send() which throws
+    // ClosedSendChannelException when the channel is closed (disconnect). This caused:
+    // 1. The exception propagated from the inner launch, cancelling sibling scrape coroutines
+    // 2. Successfully computed scrape results were silently dropped
+    // 3. The proxy timed out waiting for results that were actually computed
+    //
+    // The fix uses trySend() instead of send(). For an UNLIMITED channel, trySend() always
+    // succeeds immediately if open. If the channel is closed, it returns a failure result
+    // and logs a warning instead of throwing.
+
+    "Bug #7: sendScrapeResults on open channel should deliver result" {
+      val context = AgentConnectionContext()
+      val result = ScrapeResults(srAgentId = "agent-1", srScrapeId = 42L, srValidResponse = true)
+
+      context.sendScrapeResults(result)
+
+      val channel = context.scrapeResults()
+      val received = channel.tryReceive()
+      received.isSuccess.shouldBeTrue()
+      received.getOrThrow().srScrapeId shouldBe 42L
+
+      context.close()
+    }
+
+    "Bug #7: sendScrapeResults on closed channel should not throw" {
+      val context = AgentConnectionContext()
+
+      // Close the context first
+      context.close()
+
+      // Sending to a closed channel should NOT throw ClosedSendChannelException
+      val result = ScrapeResults(srAgentId = "agent-1", srScrapeId = 99L, srValidResponse = true)
+      context.sendScrapeResults(result) // should not throw
+
+      // The result is dropped (not in the channel)
+      val channel = context.scrapeResults()
+      val received = channel.receiveCatching()
+      received.isClosed.shouldBeTrue()
+    }
+
+    "Bug #7: in-flight scrape coroutines should not be cancelled by closed channel" {
+      // Simulates the real bug scenario: multiple coroutines are processing scrapes,
+      // then close() is called. With the old send(), one ClosedSendChannelException
+      // would cancel ALL sibling coroutines. With trySend(), each coroutine completes
+      // independently.
+      val context = AgentConnectionContext()
+      val completedCount = AtomicInteger(0)
+      val threwException = AtomicBoolean(false)
+
+      coroutineScope {
+        // Launch several "scrape" coroutines that will try to send results
+        val jobs = (1..5).map { i ->
+          launch(Dispatchers.IO) {
+            try {
+              // Simulate scrape work
+              delay(50)
+              context.sendScrapeResults(
+                ScrapeResults(srAgentId = "agent-1", srScrapeId = i.toLong(), srValidResponse = true),
+              )
+              completedCount.incrementAndGet()
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+              threwException.set(true)
+            }
+          }
+        }
+
+        // Close the context while scrapes are in-flight
+        delay(10)
+        context.close()
+      }
+
+      // All coroutines should complete without throwing
+      threwException.get().shouldBeFalse()
+      // All coroutines should have completed (even though some results were dropped)
+      completedCount.get() shouldBe 5
+    }
+
+    "Bug #7: results sent before close should be drainable alongside dropped post-close sends" {
+      val context = AgentConnectionContext()
+
+      // Send a result before close
+      context.sendScrapeResults(
+        ScrapeResults(srAgentId = "agent-1", srScrapeId = 1L, srValidResponse = true),
+      )
+
+      // Close the context
+      context.close()
+
+      // Try sending after close - should not throw
+      context.sendScrapeResults(
+        ScrapeResults(srAgentId = "agent-1", srScrapeId = 2L, srValidResponse = true),
+      )
+
+      // Only the pre-close result should be drainable
+      val channel = context.scrapeResults()
+      val received1 = channel.receiveCatching()
+      received1.isSuccess.shouldBeTrue()
+      received1.getOrNull()!!.srScrapeId shouldBe 1L
+
+      // Next receive should show channel is closed (post-close result was dropped)
+      val received2 = channel.receiveCatching()
+      received2.isClosed.shouldBeTrue()
+    }
+
+    "Bug #7: backlog counter should remain accurate when sends are dropped" {
+      // Verifies that the try/finally pattern for scrapeRequestBacklogSize works
+      // correctly even when sendScrapeResults drops the result on a closed channel.
+      // The counter should still decrement in the finally block.
+      val context = AgentConnectionContext()
+      val backlogSize = AtomicInteger(0)
+
+      coroutineScope {
+        val jobs = (1..10).map { i ->
+          launch(Dispatchers.IO) {
+            backlogSize.incrementAndGet()
+            try {
+              delay(20)
+              context.sendScrapeResults(
+                ScrapeResults(srAgentId = "agent-1", srScrapeId = i.toLong(), srValidResponse = true),
+              )
+            } finally {
+              backlogSize.decrementAndGet()
+            }
+          }
+        }
+
+        // Close mid-flight
+        delay(5)
+        context.close()
+      }
+
+      // After all coroutines complete, backlog should be exactly 0
+      backlogSize.get() shouldBe 0
     }
   }
 }

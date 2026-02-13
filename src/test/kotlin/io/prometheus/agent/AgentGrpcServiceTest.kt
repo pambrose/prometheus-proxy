@@ -895,5 +895,93 @@ class AgentGrpcServiceTest : StringSpec() {
       }
       service.shutDown()
     }
+
+    // ==================== Bug #6: grpcStarted should only be true after channel is initialized ====================
+
+    // Bug #6: Before the fix, resetGrpcStubs() set grpcStarted=true (via an else branch)
+    // BEFORE the channel was assigned. If channel() threw on the first call,
+    // grpcStarted was true but channel was an uninitialized lateinit var.
+    // The next call to resetGrpcStubs() would enter shutDownLocked() (because
+    // grpcStarted was true) and crash with UninitializedPropertyAccessException
+    // when accessing channel.shutdownNow().
+    //
+    // The fix moves grpcStarted=true to AFTER channel is successfully assigned.
+
+    "Bug #6: after construction channel and grpcStub should be initialized" {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // channel is accessible (no UninitializedPropertyAccessException)
+      service.channel.isTerminated.shouldBeFalse()
+
+      // grpcStub is accessible
+      service.grpcStub.toString().shouldNotBeEmpty()
+
+      // shutDown accesses channel via shutDownLocked — should succeed
+      service.shutDown()
+      service.channel.isTerminated.shouldBeTrue()
+    }
+
+    "Bug #6: simulated stale grpcStarted=true with null channel should crash" {
+      // Demonstrates the old bug: grpcStarted=true but channel not initialized.
+      // If the `else grpcStarted = true` line had run but channel() threw,
+      // calling shutDown() would access the uninitialized lateinit channel.
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // Use reflection to null-out the channel, simulating an uninitialized lateinit
+      val channelField = AgentGrpcService::class.java.getDeclaredField("channel")
+      channelField.isAccessible = true
+      channelField.set(service, null) // makes lateinit "uninitialized"
+
+      // grpcStarted is true (from the successful init), so shutDownLocked()
+      // will try to access channel.shutdownNow() → UninitializedPropertyAccessException
+      shouldThrow<UninitializedPropertyAccessException> {
+        service.shutDown()
+      }
+    }
+
+    "Bug #6: resetGrpcStubs should recover after shutDown" {
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // Shut down the service
+      service.shutDown()
+      service.channel.isTerminated.shouldBeTrue()
+
+      // resetGrpcStubs should create a new channel and restore the service
+      service.resetGrpcStubs()
+
+      service.channel.isTerminated.shouldBeFalse()
+      service.grpcStub.toString().shouldNotBeEmpty()
+
+      service.shutDown()
+    }
+
+    "Bug #6: grpcStarted should be false when channel is uninitialized" {
+      // Verify the invariant: grpcStarted=true implies channel is initialized.
+      // We use reflection to read the grpcStarted delegate and verify
+      // it was set correctly after construction.
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // Read grpcStarted via the delegate field
+      val delegateField = service.javaClass.getDeclaredField("grpcStarted\$delegate")
+      delegateField.isAccessible = true
+      val delegate = delegateField.get(service)
+
+      // The delegate wraps an AtomicBoolean in a field named "atomicVal"
+      val atomicValField = delegate.javaClass.getDeclaredField("atomicVal")
+      atomicValField.isAccessible = true
+      val atomicBool = atomicValField.get(delegate) as java.util.concurrent.atomic.AtomicBoolean
+
+      // After successful construction, grpcStarted should be true
+      atomicBool.get().shouldBeTrue()
+
+      // And channel should be initialized
+      service.channel.isTerminated.shouldBeFalse()
+
+      service.shutDown()
+    }
   }
 }

@@ -232,7 +232,10 @@ class Agent(
 
       // Reset values for each connection attempt
       pathManager.clear()
-      scrapeRequestBacklogSize.store(0)
+      // Note: scrapeRequestBacklogSize is NOT reset here. The coroutineScope below
+      // guarantees all child scrape coroutines (and their finally blocks) complete
+      // before connectToProxy() returns, so the counter is already at 0.
+      // A store(0) here would race with in-flight finally blocks, driving the counter negative.
       lastMsgSentMark = clock.markNow()
 
       if (grpcService.connectAgent(configVals.agent.transportFilterDisabled)) {
@@ -332,28 +335,37 @@ class Agent(
             connectToProxy()
             logger.info { "Disconnected from proxy at $proxyHost" }
           }
-        }.onFailure { e ->
-          when (e) {
-            is RequestFailureException -> {
-              logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
-            }
-
-            is StatusRuntimeException -> {
-              logger.info { "Disconnected from proxy at $proxyHost" }
-            }
-
-            is StatusException -> {
-              logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
-            }
-
-            // Catch anything else to avoid exiting the retry loop
-            else -> {
-              logger.warn(e) { "Throwable caught ${e.simpleClassName} ${e.message}" }
-            }
-          }
-        }
+        }.onFailure { e -> handleConnectionFailure(e) }
       } finally {
         logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
+      }
+    }
+  }
+
+  internal fun handleConnectionFailure(e: Throwable) {
+    when (e) {
+      is RequestFailureException -> {
+        logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
+      }
+
+      is StatusRuntimeException -> {
+        logger.info { "Disconnected from proxy at $proxyHost" }
+      }
+
+      is StatusException -> {
+        logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
+      }
+
+      // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.)
+      // so the agent terminates instead of running in a corrupted state.
+      is Error -> {
+        logger.error(e) { "Fatal JVM error ${e.simpleClassName}: ${e.message}" }
+        throw e
+      }
+
+      // Catch anything else to avoid exiting the retry loop
+      else -> {
+        logger.warn(e) { "Throwable caught ${e.simpleClassName} ${e.message}" }
       }
     }
   }
@@ -381,7 +393,7 @@ class Agent(
     healthCheckRegistry.register(
       "http_client_cache_size_check",
       healthCheck {
-        val currentSize = runBlocking { agentHttpService.httpClientCache.getCacheStats().totalEntries }
+        val currentSize = agentHttpService.httpClientCache.currentCacheSize()
         val threshold = options.maxCacheSize + 1
         if (currentSize >= threshold)
           HealthCheck.Result.unhealthy("HTTP client cache size $currentSize >= threshold $threshold")

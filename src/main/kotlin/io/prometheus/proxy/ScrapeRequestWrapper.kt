@@ -25,6 +25,7 @@ import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.fetchAndIncrement
 import kotlin.time.Duration
@@ -42,6 +43,7 @@ internal class ScrapeRequestWrapper(
   private val clock = Monotonic
   private val createTimeMark = clock.markNow()
   private val completeChannel = Channel<Boolean>()
+  private val completed = AtomicBoolean(false)
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
   val scrapeRequest =
@@ -65,9 +67,11 @@ internal class ScrapeRequestWrapper(
   fun ageDuration() = createTimeMark.elapsedNow()
 
   fun markComplete() {
-    requestTimer?.observeDuration()
-    // Required
-    closeChannel()
+    if (completed.compareAndSet(false, true)) {
+      requestTimer?.observeDuration()
+      // Required
+      closeChannel()
+    }
   }
 
   fun closeChannel() {

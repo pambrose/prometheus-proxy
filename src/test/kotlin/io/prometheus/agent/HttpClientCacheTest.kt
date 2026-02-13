@@ -632,6 +632,104 @@ class HttpClientCacheTest : StringSpec() {
       (entry1 == entry2).shouldBeFalse()
     }
 
+    // Bug #1: removeEntry() called markForClose() but never closed idle clients.
+    // Evicted/expired entries that were not in use leaked their HttpClient.
+    // The fix collects idle clients in pendingCloses and closes them after releasing the mutex.
+
+    "eviction of idle entry should close the evicted client" {
+      val evictCache = HttpClientCache(
+        maxCacheSize = 2,
+        maxAge = 30.seconds,
+        maxIdleTime = 30.seconds,
+        cleanupInterval = 30.seconds,
+      )
+
+      try {
+        val mockClient = mockk<HttpClient>(relaxed = true)
+        val key = ClientKey("evict-me", "pass")
+
+        // Get entry and release it (not in use)
+        val entry = evictCache.getOrCreateClient(key) { mockClient }
+        evictCache.onFinishedWithClient(entry)
+
+        // Ensure older timestamp so this entry is evicted first
+        delay(50.milliseconds)
+
+        // Not closed yet
+        verify(exactly = 0) { mockClient.close() }
+
+        // Fill cache past capacity to trigger LRU eviction of the idle entry
+        for (i in 1..2) {
+          val k = ClientKey("other$i", "pass$i")
+          val e = evictCache.getOrCreateClient(k) { mockk<HttpClient>(relaxed = true) }
+          evictCache.onFinishedWithClient(e)
+        }
+
+        // The evicted idle client should have been closed
+        verify(exactly = 1) { mockClient.close() }
+      } finally {
+        evictCache.close()
+      }
+    }
+
+    "cleanup of expired idle entries should close their clients" {
+      val mockClient = mockk<HttpClient>(relaxed = true)
+      val cleanupCache = HttpClientCache(
+        maxCacheSize = 10,
+        maxAge = 200.milliseconds,
+        maxIdleTime = 100.milliseconds,
+        cleanupInterval = 100.milliseconds,
+      )
+
+      try {
+        val key = ClientKey("expire-me", "pass")
+        val entry = cleanupCache.getOrCreateClient(key) { mockClient }
+        cleanupCache.onFinishedWithClient(entry)
+
+        // Not closed yet
+        verify(exactly = 0) { mockClient.close() }
+
+        // Wait for expiry + multiple cleanup cycles
+        delay(600.milliseconds)
+
+        // The expired idle client should have been closed by the cleanup coroutine
+        verify(exactly = 1) { mockClient.close() }
+      } finally {
+        cleanupCache.close()
+      }
+    }
+
+    "replacing an expired idle entry on access should close the old client" {
+      val replaceCache = HttpClientCache(
+        maxCacheSize = 10,
+        maxAge = 200.milliseconds,
+        maxIdleTime = 100.milliseconds,
+        cleanupInterval = 30.seconds, // Long interval -- replacement happens on access, not cleanup
+      )
+
+      try {
+        val oldClient = mockk<HttpClient>(relaxed = true)
+        val key = ClientKey("replace-me", "pass")
+
+        val entry = replaceCache.getOrCreateClient(key) { oldClient }
+        replaceCache.onFinishedWithClient(entry)
+
+        verify(exactly = 0) { oldClient.close() }
+
+        // Wait for the entry to expire
+        delay(300.milliseconds)
+
+        // Access the same key -- expired entry is replaced with a new one
+        val newEntry = replaceCache.getOrCreateClient(key) { mockk<HttpClient>(relaxed = true) }
+        replaceCache.onFinishedWithClient(newEntry)
+
+        // The old expired client should have been closed
+        verify(exactly = 1) { oldClient.close() }
+      } finally {
+        replaceCache.close()
+      }
+    }
+
     "cleanupExpiredEntries should remove all expired entries" {
       // Create a cache with short expiry but long cleanup interval (manual cleanup)
       val testCache = HttpClientCache(

@@ -53,7 +53,7 @@ internal class ProxyGrpcService(
   init {
     val options = proxy.options
     val tlsContext =
-      if (options.certChainFilePath.isNotEmpty() || options.privateKeyFilePath.isNotEmpty())
+      if (options.isTlsEnabled)
         buildServerTlsContext(
           certChainFilePath = options.certChainFilePath,
           privateKeyFilePath = options.privateKeyFilePath,

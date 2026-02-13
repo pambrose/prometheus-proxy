@@ -138,6 +138,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
+        delay(100.milliseconds) // Allow CIO engine to fully initialize
         val client = HttpClient(CIO) { expectSuccess = false }
 
         val response = client.get("http://localhost:$port/discovery")
@@ -167,6 +168,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
+        delay(100.milliseconds) // Allow CIO engine to fully initialize
         val client = HttpClient(CIO) { expectSuccess = false }
 
         val response = client.get("http://localhost:$port/discovery")
@@ -761,6 +763,137 @@ class ProxyHttpRoutesTest : StringSpec() {
       } finally {
         server.stop(0, 0)
       }
+    }
+
+    // ==================== Bug #13: Consolidated OpenMetrics EOF Handling Tests ====================
+
+    // Bug #13: When consolidated paths have multiple agents returning OpenMetrics format,
+    // each agent's response ends with "# EOF". Naively joining with "\n" produces
+    // "# EOF" markers mid-stream, which is invalid OpenMetrics. mergeContentTexts()
+    // strips intermediate "# EOF" markers and appends a single one at the end.
+
+    "Bug #13: mergeContentTexts should strip intermediate EOF markers" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n# EOF",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_b 2.0\n# EOF",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      merged shouldContain "metric_a 1.0"
+      merged shouldContain "metric_b 2.0"
+      // Should end with exactly one # EOF
+      merged.trimEnd().endsWith("# EOF") shouldBe true
+      // Should NOT have # EOF in the middle
+      val eofCount = merged.split("# EOF").size - 1
+      eofCount shouldBe 1
+    }
+
+    "Bug #13: mergeContentTexts should not add EOF when no results have it" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_b 2.0\n",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      merged shouldContain "metric_a 1.0"
+      merged shouldContain "metric_b 2.0"
+      merged shouldNotContain "# EOF"
+    }
+
+    "Bug #13: mergeContentTexts should return single result unchanged" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n# EOF",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      // Single result should be returned as-is
+      merged shouldBe "metric_a 1.0\n# EOF"
+    }
+
+    "Bug #13: mergeContentTexts should handle three agents with EOF" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n# EOF",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_b 2.0\n# EOF",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_c 3.0\n# EOF",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      merged shouldContain "metric_a 1.0"
+      merged shouldContain "metric_b 2.0"
+      merged shouldContain "metric_c 3.0"
+      val eofCount = merged.split("# EOF").size - 1
+      eofCount shouldBe 1
+      merged.trimEnd().endsWith("# EOF") shouldBe true
+    }
+
+    "Bug #13: mergeContentTexts should handle mixed EOF and non-EOF results" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n# EOF",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_b 2.0\n",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      merged shouldContain "metric_a 1.0"
+      merged shouldContain "metric_b 2.0"
+      // If any result had EOF, the merged result should end with EOF
+      val eofCount = merged.split("# EOF").size - 1
+      eofCount shouldBe 1
+      merged.trimEnd().endsWith("# EOF") shouldBe true
     }
 
     "handleServiceDiscoveryEndpoint should not register when sdEnabled is false" {
