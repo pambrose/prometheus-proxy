@@ -56,12 +56,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
-import kotlin.concurrent.atomics.plusAssign
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -243,7 +241,7 @@ class Agent(
         pathManager.registerPaths()
 
         // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
-        val connectionContext = AgentConnectionContext()
+        val connectionContext = AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * 2)
 
         coroutineScope {
           // Ends on disconnect from server
@@ -294,23 +292,17 @@ class Agent(
               // Limits the number of concurrent scrapes below
               val semaphore = Semaphore(max)
 
-              // The scrape request processing loop uses a Semaphore to limit concurrency,
-              // but the for loop runs within a single coroutine. Without launching a new
-              // coroutine per request, semaphore.withPermit is called sequentially — only
-              // one permit is ever held at a time, so the semaphore serves no purpose.
-              // All scrape requests are processed one at a time regardless of maxConcurrentHttpClients.
-              // The loop needs an inner `launch` so each iteration runs in its own coroutine, with the semaphore
-              // actually limiting how many execute concurrently.
               for (scrapeRequestAction in connectionContext.scrapeRequestActions()) {
+                // Acquisition must happen before launch to provide backpressure to the channel
+                // and avoid creating unbounded waiting coroutines (Bug #1).
+                semaphore.acquire()
                 launch {
-                  scrapeRequestBacklogSize += 1
                   try {
-                    semaphore.withPermit {
-                      // The url fetch occurs here during scrapeRequestAction.invoke()
-                      val scrapeResponse = scrapeRequestAction.invoke()
-                      connectionContext.sendScrapeResults(scrapeResponse)
-                    }
+                    // The url fetch occurs here during scrapeRequestAction.invoke()
+                    val scrapeResponse = scrapeRequestAction.invoke()
+                    connectionContext.sendScrapeResults(scrapeResponse)
                   } finally {
+                    semaphore.release()
                     scrapeRequestBacklogSize -= 1
                   }
                 }

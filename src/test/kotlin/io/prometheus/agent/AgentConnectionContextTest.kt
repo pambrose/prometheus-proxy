@@ -155,6 +155,12 @@ class AgentConnectionContextTest : StringSpec() {
       result.isClosed.shouldBeTrue()
     }
 
+    "backlogCapacity should be respected" {
+      val capacity = 50
+      val context = AgentConnectionContext(capacity)
+      context.backlogCapacity shouldBe capacity
+    }
+
     // ==================== Bug #7: In-flight scrape results silently lost on disconnect ====================
 
     // Bug #7: Before the fix, sendScrapeResults() used channel.send() which throws

@@ -25,9 +25,11 @@ import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 
-internal class AgentConnectionContext {
+internal class AgentConnectionContext(
+  val backlogCapacity: Int = 128,
+) {
   private var disconnected by atomicBoolean(false)
-  private val scrapeRequestActionsChannel = Channel<ScrapeRequestAction>(UNLIMITED)
+  private val scrapeRequestActionsChannel = Channel<ScrapeRequestAction>(backlogCapacity)
   private val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED)
   private val closeLock = Any()
 

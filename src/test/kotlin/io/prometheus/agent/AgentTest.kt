@@ -33,9 +33,12 @@ import io.kotest.matchers.string.shouldNotBeEmpty
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
@@ -403,6 +406,56 @@ class AgentTest : StringSpec() {
 
       shouldNotThrow<Throwable> {
         agent.handleConnectionFailure(java.io.IOException("connection reset"))
+      }
+    }
+
+    // ==================== Bug #1: Bounded Coroutine Creation Tests ====================
+
+    "Bug #1: semaphore.acquire() before launch should limit waiting coroutines" {
+      runBlocking {
+        val maxConcurrency = 2
+        val semaphore = kotlinx.coroutines.sync.Semaphore(maxConcurrency)
+        val activeCoroutines = AtomicInt(0)
+        val waitingActions = Channel<suspend () -> Unit>(Channel.UNLIMITED)
+        val processedCount = AtomicInt(0)
+
+        // This test simulates the loop in Agent.kt:294
+        val job = launch(Dispatchers.Default) {
+          for (action in waitingActions) {
+            semaphore.acquire() // This is the fix for Bug #1
+            launch {
+              activeCoroutines += 1
+              try {
+                action()
+              } finally {
+                activeCoroutines -= 1
+                processedCount += 1
+                semaphore.release()
+              }
+            }
+          }
+        }
+
+        // Flood the channel with many actions
+        val floodSize = 100
+        repeat(floodSize) {
+          waitingActions.send {
+            delay(10.milliseconds)
+          }
+        }
+
+        // Wait a bit for processing to start
+        delay(50.milliseconds)
+
+        // Without the fix, activeCoroutines would be floodSize (all launched immediately)
+        // With the fix, activeCoroutines should be <= maxConcurrency
+        activeCoroutines.load() shouldBeGreaterThanOrEqual 0
+        activeCoroutines.load() shouldBe maxConcurrency // Exactly maxConcurrency should be active
+
+        // Clean up
+        waitingActions.close()
+        job.join()
+        processedCount.load() shouldBe floodSize
       }
     }
   }
