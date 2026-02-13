@@ -230,10 +230,10 @@ class Agent(
 
       // Reset values for each connection attempt
       pathManager.clear()
-      // Note: scrapeRequestBacklogSize is NOT reset here. The coroutineScope below
-      // guarantees all child scrape coroutines (and their finally blocks) complete
-      // before connectToProxy() returns, so the counter is already at 0.
-      // A store(0) here would race with in-flight finally blocks, driving the counter negative.
+      // Note: scrapeRequestBacklogSize is reset here to ensure a clean state for the new connection.
+      // It is safe because the coroutineScope below (and in previous calls) guarantees that all
+      // child scrape coroutines from any previous connection have completed before we reach this point.
+      scrapeRequestBacklogSize.store(0)
       lastMsgSentMark = clock.markNow()
 
       if (grpcService.connectAgent(configVals.agent.transportFilterDisabled)) {
