@@ -305,6 +305,57 @@ class ScrapeResultsTest : StringSpec() {
       code shouldBe HttpStatusCode.ServiceUnavailable.value
     }
 
+    // ==================== errorCode Cause-Chain Tests ====================
+
+    "errorCode should return RequestTimeout for wrapped HttpRequestTimeoutException" {
+      val timeout = HttpRequestTimeoutException("http://test.com", 5000L)
+      val wrapper = RuntimeException("request failed", timeout)
+      val code = errorCode(wrapper, "http://test.com")
+
+      code shouldBe HttpStatusCode.RequestTimeout.value
+    }
+
+    "errorCode should return RequestTimeout for deeply nested timeout exception" {
+      val timeout = HttpRequestTimeoutException("http://test.com", 5000L)
+      val mid = IOException("io error", timeout)
+      val outer = RuntimeException("outer", mid)
+      val code = errorCode(outer, "http://test.com")
+
+      code shouldBe HttpStatusCode.RequestTimeout.value
+    }
+
+    "errorCode should return RequestTimeout for wrapped SocketTimeoutException" {
+      val timeout = SocketTimeoutException("socket timeout")
+      val wrapper = RuntimeException("request failed", timeout)
+      val code = errorCode(wrapper, "http://test.com")
+
+      code shouldBe HttpStatusCode.RequestTimeout.value
+    }
+
+    "errorCode should return RequestTimeout for wrapped HttpConnectTimeoutException" {
+      val timeout = HttpConnectTimeoutException("connect timeout")
+      val wrapper = RuntimeException("request failed", timeout)
+      val code = errorCode(wrapper, "http://test.com")
+
+      code shouldBe HttpStatusCode.RequestTimeout.value
+    }
+
+    "errorCode should return ServiceUnavailable for non-timeout cause chain" {
+      val inner = IllegalStateException("bad state")
+      val wrapper = RuntimeException("request failed", inner)
+      val code = errorCode(wrapper, "http://test.com")
+
+      code shouldBe HttpStatusCode.ServiceUnavailable.value
+    }
+
+    "errorCode should return ServiceUnavailable for IOException wrapping non-timeout" {
+      val inner = IllegalArgumentException("bad arg")
+      val wrapper = IOException("io error", inner)
+      val code = errorCode(wrapper, "http://test.com")
+
+      code shouldBe HttpStatusCode.ServiceUnavailable.value
+    }
+
     // ==================== Round-Trip Tests ====================
 
     "toScrapeResponse and toScrapeResults should round-trip text content" {
