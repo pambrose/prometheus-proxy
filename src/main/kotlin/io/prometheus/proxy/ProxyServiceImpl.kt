@@ -224,6 +224,10 @@ internal class ProxyServiceImpl(
                     logger.error(e) { "Chunk validation failed for scrapeId: $chunkScrapeId, discarding context" }
                     contextManager.removeChunkedContext(chunkScrapeId)
                     activeScrapeIds -= chunkScrapeId
+                    proxy.scrapeRequestManager.failScrapeRequest(
+                      chunkScrapeId,
+                      "Chunk validation failed: ${e.message}",
+                    )
                   }
                 }
               }
@@ -247,6 +251,10 @@ internal class ProxyServiceImpl(
                     proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
                   } catch (e: ChunkValidationException) {
                     logger.error(e) { "Summary validation failed for scrapeId: $summaryScrapeId" }
+                    proxy.scrapeRequestManager.failScrapeRequest(
+                      summaryScrapeId,
+                      "Summary validation failed: ${e.message}",
+                    )
                   }
                 }
               }

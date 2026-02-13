@@ -1016,6 +1016,111 @@ class ProxyServiceImplTest : StringSpec() {
       verify { contextManager.removeChunkedContext(orphanedScrapeId) }
     }
 
+    // Bug #2: Chunk validation failure left the HTTP handler waiting until timeout.
+    // The fix calls failScrapeRequest() to notify the handler immediately.
+
+    "writeChunkedResponsesToProxy should notify handler on chunk validation failure" {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      val scrapeId = 500L
+
+      // Create a ChunkedContext from a real header, then set up the mock
+      // to return it. Send a chunk with a bad checksum to trigger validation failure.
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrapeId
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+
+      val data = "test chunk data".toByteArray()
+      val badChecksum = 12345L // Wrong checksum to trigger ChunkValidationException
+
+      val chunk = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = scrapeId
+          chunkCount = 1
+          chunkByteCount = data.size
+          chunkChecksum = badChecksum
+          chunkBytes = ByteString.copyFrom(data)
+        }
+      }
+
+      // Use a real ChunkedContext so applyChunk() actually validates
+      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header)
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk))
+
+      result shouldBe EMPTY_INSTANCE
+
+      // The waiting HTTP handler should have been notified via failScrapeRequest
+      verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Chunk") }) }
+      // Context should have been cleaned up
+      verify { contextManager.removeChunkedContext(scrapeId) }
+    }
+
+    "writeChunkedResponsesToProxy should notify handler on summary validation failure" {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      val scrapeId = 501L
+
+      val data = "test chunk data".toByteArray()
+      val crc = CRC32()
+      crc.update(data)
+      val correctChecksum = crc.value
+
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrapeId
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+
+      val chunk = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = scrapeId
+          chunkCount = 1
+          chunkByteCount = data.size
+          chunkChecksum = correctChecksum
+          chunkBytes = ByteString.copyFrom(data)
+        }
+      }
+
+      // Summary with wrong checksum to trigger ChunkValidationException
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = scrapeId
+          summaryChunkCount = 1
+          summaryByteCount = data.size
+          summaryChecksum = 99999L // Wrong checksum
+        }
+      }
+
+      // Use a real ChunkedContext that has had the chunk applied, so applySummary() validates
+      val realContext = ChunkedContext(header).apply {
+        applyChunk(data, data.size, 1, correctChecksum)
+      }
+      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header)
+      every { contextManager.removeChunkedContext(scrapeId) } returns realContext
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk, summary))
+
+      result shouldBe EMPTY_INSTANCE
+
+      // The waiting HTTP handler should have been notified via failScrapeRequest
+      verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Summary") }) }
+    }
+
     "writeResponsesToProxy should call assignScrapeResults for each response" {
       val proxy = createMockProxy()
       val scrapeRequestManager = proxy.scrapeRequestManager

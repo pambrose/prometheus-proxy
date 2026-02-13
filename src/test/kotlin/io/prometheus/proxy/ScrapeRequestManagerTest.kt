@@ -22,8 +22,11 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.ktor.http.HttpStatusCode
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.common.ScrapeResults
 
@@ -211,6 +214,41 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.assignScrapeResults(results)
 
       verify { agentContext.markActivityTime(true) }
+    }
+
+    // ==================== failScrapeRequest Tests ====================
+
+    // Bug #2: Chunk/summary validation failures left the HTTP handler waiting until timeout.
+    // failScrapeRequest() notifies the waiting handler immediately with an error result.
+
+    "failScrapeRequest should set error results and call markComplete" {
+      val manager = ScrapeRequestManager()
+      val resultsSlot = slot<ScrapeResults>()
+      val wrapper = createMockWrapper(300L)
+      every { wrapper.agentContext.agentId } returns "agent-99"
+      every { wrapper.scrapeResults = capture(resultsSlot) } answers { nothing }
+
+      manager.addToScrapeRequestMap(wrapper)
+      manager.failScrapeRequest(300L, "Chunk checksum mismatch")
+
+      verify { wrapper.markComplete() }
+      verify { wrapper.agentContext.markActivityTime(true) }
+
+      val captured = resultsSlot.captured
+      captured.srScrapeId shouldBe 300L
+      captured.srAgentId shouldBe "agent-99"
+      captured.srStatusCode shouldBe HttpStatusCode.BadGateway.value
+      captured.srFailureReason shouldContain "Chunk checksum mismatch"
+      captured.srValidResponse shouldBe false
+    }
+
+    "failScrapeRequest should handle missing scrapeId gracefully" {
+      val manager = ScrapeRequestManager()
+
+      // Should not throw
+      manager.failScrapeRequest(999L, "no such request")
+
+      manager.scrapeMapSize shouldBe 0
     }
   }
 }
