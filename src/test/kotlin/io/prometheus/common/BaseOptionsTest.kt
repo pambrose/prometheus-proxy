@@ -294,6 +294,19 @@ class BaseOptionsTest : StringSpec() {
       options.debugEnabled shouldBe true
     }
 
+    // ==================== readConfig Error Message ====================
+
+    // The readConfig error message uses escaped-dollar interpolation to produce a
+    // literal "$" before the env var name (e.g., "$AGENT_CONFIG"). This replaced the
+    // Kotlin 2.x multi-dollar syntax ($$"...$$$envConfig") for clarity. This test
+    // verifies the interpolation produces the expected output.
+    "readConfig error message should include literal dollar sign before env var name" {
+      val envConfig = "AGENT_CONFIG"
+      val message = "A configuration file or url must be specified with --config or \$$envConfig"
+
+      message shouldBe "A configuration file or url must be specified with --config or \$AGENT_CONFIG"
+    }
+
     // ==================== ConfigVals Tests ====================
 
     "configVals should be initialized after construction" {
