@@ -104,18 +104,24 @@ internal class ProxyServiceImpl(
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
     var isValid = false
+    var failureReason = ""
 
     proxy.agentContextManager.getAgentContext(request.agentId)
       ?.apply {
-        isValid = proxy.pathManager.addPath(request.path, request.labels, this)
+        val addPathResult = proxy.pathManager.addPath(request.path, request.labels, this)
+        isValid = addPathResult == null
+        if (!isValid) failureReason = addPathResult!!
         markActivityTime(false)
-      } ?: logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
+      } ?: run {
+      failureReason = "Invalid agentId: ${request.agentId} (registerPath)"
+      logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
+    }
 
     return registerPathResponse {
       pathId = if (isValid) PATH_ID_GENERATOR.fetchAndIncrement() else -1
       valid = isValid
       if (!isValid) {
-        reason = "Invalid agentId: ${request.agentId} (registerPath)"
+        reason = failureReason
       }
       pathCount = proxy.pathManager.pathMapSize
     }

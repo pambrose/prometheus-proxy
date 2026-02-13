@@ -187,7 +187,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
-      every { proxy.pathManager.addPath(testPath, testLabels, mockAgentContext) } returns true
+      every { proxy.pathManager.addPath(testPath, testLabels, mockAgentContext) } returns null
       every { proxy.pathManager.pathMapSize } returns 5
 
       val request = registerPathRequest {
@@ -205,6 +205,55 @@ class ProxyServiceImplTest : StringSpec() {
 
       verify { proxy.pathManager.addPath(testPath, testLabels, mockAgentContext) }
       verify { mockAgentContext.markActivityTime(false) }
+    }
+
+    // Bug #11: registerPath should propagate the actual failure reason from addPath,
+    // not always say "Invalid agentId" which is misleading for consolidated mismatch.
+    "registerPath should include addPath failure reason when path registration rejected" {
+      val proxy = createMockProxy()
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "test-agent-consolidated"
+      val testPath = "/metrics"
+      val rejectionReason = "Consolidated agent rejected for non-consolidated path /metrics"
+
+      every { mockAgentContext.agentId } returns testAgentId
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+      every { proxy.pathManager.addPath(testPath, any(), mockAgentContext) } returns rejectionReason
+      every { proxy.pathManager.pathMapSize } returns 0
+
+      val request = registerPathRequest {
+        agentId = testAgentId
+        path = testPath
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val response = service.registerPath(request)
+
+      response.valid.shouldBeFalse()
+      response.pathId shouldBe -1
+      // Before the fix, this was "Invalid agentId: test-agent-consolidated (registerPath)"
+      response.reason shouldBe rejectionReason
+      response.reason shouldContain "Consolidated"
+    }
+
+    "registerPath should say Invalid agentId when agent context is missing" {
+      val proxy = createMockProxy()
+      val testAgentId = "missing-agent-456"
+
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns null
+      every { proxy.pathManager.pathMapSize } returns 0
+
+      val request = registerPathRequest {
+        agentId = testAgentId
+        path = "/metrics"
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val response = service.registerPath(request)
+
+      response.valid.shouldBeFalse()
+      response.reason shouldContain "Invalid agentId"
+      response.reason shouldContain testAgentId
     }
 
     "registerPath should fail with missing agent context" {
