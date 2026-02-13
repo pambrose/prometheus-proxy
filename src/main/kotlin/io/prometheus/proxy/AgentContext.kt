@@ -24,7 +24,6 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
-import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -78,13 +77,8 @@ internal class AgentContext(
   }
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
+    scrapeRequestChannel.send(scrapeRequest)
     channelBacklogSize += 1
-    try {
-      scrapeRequestChannel.send(scrapeRequest)
-    } catch (e: ClosedSendChannelException) {
-      channelBacklogSize -= 1
-      throw e
-    }
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
