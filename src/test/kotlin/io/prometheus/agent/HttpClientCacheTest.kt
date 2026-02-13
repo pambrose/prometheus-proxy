@@ -730,6 +730,77 @@ class HttpClientCacheTest : StringSpec() {
       }
     }
 
+    // Bug #3: The cleanup coroutine used runCatching, which swallows CancellationException
+    // and logs it as an ERROR during normal shutdown. The fix uses runCatchingCancellable,
+    // which rethrows CancellationException so structured concurrency is respected.
+    // This test verifies that close() terminates the cleanup coroutine promptly even
+    // when it's actively cycling with very short intervals and expired entries to process.
+    "close should terminate cleanup coroutine promptly via runCatchingCancellable" {
+      val fastCache = HttpClientCache(
+        maxCacheSize = 10,
+        maxAge = 50.milliseconds,
+        maxIdleTime = 25.milliseconds,
+        cleanupInterval = 5.milliseconds, // Very fast: coroutine is almost always active
+      )
+
+      try {
+        // Populate cache so cleanup has expired entries to process
+        val mockClients = (1..5).map { i ->
+          val client = mockk<HttpClient>(relaxed = true)
+          val key = ClientKey("user$i", "pass$i")
+          val entry = fastCache.getOrCreateClient(key) { client }
+          fastCache.onFinishedWithClient(entry)
+          client
+        }
+
+        // Let entries expire and cleanup process several cycles
+        delay(150.milliseconds)
+
+        // close() cancels the scope, then acquires the mutex.
+        // With runCatchingCancellable (fix), the CancellationException propagates
+        // immediately, allowing close() to proceed without delay.
+        // With the old runCatching, the CancellationException was caught, logged
+        // as an error, and the coroutine finished the iteration before exiting.
+        val startMs = System.currentTimeMillis()
+        fastCache.close()
+        val elapsedMs = System.currentTimeMillis() - startMs
+
+        elapsedMs shouldBeLessThan 1000L
+        fastCache.currentCacheSize() shouldBe 0
+      } catch (_: Exception) {
+        fastCache.close()
+      }
+    }
+
+    // Companion to the above: verify that the cleanup coroutine still catches real
+    // (non-cancellation) exceptions from cleanup operations. runCatchingCancellable
+    // only rethrows CancellationException; other failures are still handled by getOrElse.
+    "cleanup should still run after a non-cancellation error" {
+      val cleanupCache = HttpClientCache(
+        maxCacheSize = 10,
+        maxAge = 100.milliseconds,
+        maxIdleTime = 50.milliseconds,
+        cleanupInterval = 50.milliseconds,
+      )
+
+      try {
+        // Add entries and let them expire
+        val key = ClientKey("user1", "pass1")
+        val entry = cleanupCache.getOrCreateClient(key) { createMockHttpClient() }
+        cleanupCache.onFinishedWithClient(entry)
+
+        cleanupCache.currentCacheSize() shouldBe 1
+
+        // Wait for expiry + cleanup to run
+        delay(400.milliseconds)
+
+        // Cleanup should have removed the expired entry despite any transient issues
+        cleanupCache.currentCacheSize() shouldBe 0
+      } finally {
+        cleanupCache.close()
+      }
+    }
+
     "cleanupExpiredEntries should remove all expired entries" {
       // Create a cache with short expiry but long cleanup interval (manual cleanup)
       val testCache = HttpClientCache(

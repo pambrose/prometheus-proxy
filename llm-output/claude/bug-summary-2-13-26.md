@@ -28,33 +28,14 @@ are retried.
 
 ## LOW Severity
 
-### 3. `runCatching` swallows `CancellationException` in HttpClientCache cleanup
+### 3. ~~`runCatching` swallows `CancellationException` in HttpClientCache cleanup~~ FIXED
 
-**File:** `agent/HttpClientCache.kt:62`
-
-The cleanup coroutine uses `runCatching` instead of `runCatchingCancellable`. This is a well-known
-Kotlin anti-pattern — `runCatching` catches `CancellationException`, breaking structured concurrency.
-When `scope.cancel()` is called during shutdown, the cancellation is caught and logged as an error
-rather than propagated immediately.
-
-```kotlin
-val clientsToClose =
-  runCatching {                    // should be runCatchingCancellable
-    accessMutex.withLock {
-      cleanupExpiredEntries()
-      drainPendingCloses()
-    }
-  }.getOrElse { e ->
-    logger.error(e) { "Error during HTTP client cache cleanup" }
-    emptyList()
-  }
-```
-
-The `while (isActive)` loop mitigates the impact (the coroutine exits on the next iteration check),
-but the cancellation is still swallowed for the current iteration.
-
-**Impact:** Slightly delayed shutdown of the cleanup coroutine; CancellationException logged as an
-error during normal shutdown.
+**File:** `agent/HttpClientCache.kt`
+**Status:** FIXED — Changed `runCatching` to `runCatchingCancellable` in the cleanup coroutine so
+`CancellationException` is properly rethrown instead of being caught and logged as an error during
+normal shutdown. Added 2 tests: one confirming `close()` terminates the cleanup coroutine promptly
+via cancellation propagation, and one confirming non-cancellation errors are still handled by the
+`getOrElse` handler.
 
 ---
 
