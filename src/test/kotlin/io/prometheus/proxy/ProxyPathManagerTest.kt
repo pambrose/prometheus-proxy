@@ -762,7 +762,7 @@ class ProxyPathManagerTest : StringSpec() {
     // were left orphaned — still in the agentContextManager but with no paths in the
     // pathMap. The fix invalidates displaced agents that have no other registered paths.
 
-    "overwriting non-consolidated path should invalidate displaced agent with no other paths" {
+    "overwriting non-consolidated path should invalidate displaced agent that is already disconnected" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -773,13 +773,46 @@ class ProxyPathManagerTest : StringSpec() {
       oldAgent.isValid().shouldBeTrue()
 
       manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
+
+      // Simulate the old agent's connection dying before the overwrite
+      oldAgent.invalidate()
+      oldAgent.isValid().shouldBeFalse()
+
       manager.addPath("/metrics", """{"job":"test"}""", newAgent)
 
-      // Old agent should be invalidated since it has no other paths
+      // Old agent was already invalid and had no other paths — invalidate is a no-op but safe
       oldAgent.isValid().shouldBeFalse()
       // New agent remains valid
       newAgent.isValid().shouldBeTrue()
 
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.agentContexts.shouldHaveSize(1)
+      info.agentContexts[0].agentId shouldBe newAgent.agentId
+    }
+
+    // Orphan invalidation fix: A live (valid) agent displaced from a path should NOT be
+    // invalidated, because it may still be mid-registration for additional paths.
+    // Only dead (isNotValid) agents are invalidated on displacement.
+    "overwriting path should not invalidate displaced agent that is still connected" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+
+      val oldAgent = AgentContext("remote-old")
+      val newAgent = AgentContext("remote-new")
+
+      oldAgent.isValid().shouldBeTrue()
+
+      manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
+
+      // Old agent is still connected (valid) — simulates mid-registration
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+
+      // Old agent should NOT be invalidated because its connection is still alive
+      oldAgent.isValid().shouldBeTrue()
+      newAgent.isValid().shouldBeTrue()
+
+      // Path should now belong to the new agent
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
       info.agentContexts.shouldHaveSize(1)
@@ -861,7 +894,7 @@ class ProxyPathManagerTest : StringSpec() {
       info.agentContexts.shouldHaveSize(2)
     }
 
-    "overwriting should invalidate displaced agents with backlog and drain it" {
+    "overwriting should invalidate displaced dead agents with backlog and drain it" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -875,12 +908,38 @@ class ProxyPathManagerTest : StringSpec() {
       oldAgent.writeScrapeRequest(mockk(relaxed = true))
       oldAgent.scrapeRequestBacklogSize shouldBe 2
 
-      // Overwrite the path
-      manager.addPath("/metrics", """{"job":"test"}""", newAgent)
-
-      // Old agent should be invalidated and backlog drained
+      // Simulate the old agent's connection dying
+      oldAgent.invalidate()
       oldAgent.isValid().shouldBeFalse()
       oldAgent.scrapeRequestBacklogSize shouldBe 0
+
+      // Overwrite the path — old agent is already dead, invalidation is safe
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+
+      oldAgent.isValid().shouldBeFalse()
+    }
+
+    "overwriting should not invalidate displaced live agent even with backlog" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+
+      val oldAgent = AgentContext("remote-old")
+      val newAgent = AgentContext("remote-new")
+
+      manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
+
+      // Build up backlog on old agent
+      oldAgent.writeScrapeRequest(mockk(relaxed = true))
+      oldAgent.writeScrapeRequest(mockk(relaxed = true))
+      oldAgent.scrapeRequestBacklogSize shouldBe 2
+
+      // Old agent is still connected — overwrite should NOT invalidate
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+
+      // Old agent should still be valid (not invalidated)
+      oldAgent.isValid().shouldBeTrue()
+      // Backlog should still be 2 (not drained)
+      oldAgent.scrapeRequestBacklogSize shouldBe 2
     }
   }
 }
