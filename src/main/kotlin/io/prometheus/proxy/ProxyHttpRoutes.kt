@@ -45,7 +45,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 object ProxyHttpRoutes {
@@ -222,7 +221,6 @@ object ProxyHttpRoutes {
     try {
       val proxyConfigVals = proxy.proxyConfigVals
       val timeoutTime = proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
-      val checkTime = proxyConfigVals.internal.scrapeRequestCheckMillis.milliseconds
 
       proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
       try {
@@ -235,15 +233,14 @@ object ProxyHttpRoutes {
         )
       }
 
-      // Loops while not yet completed (awaitCompleted returns false on timeout)
-      while (!scrapeRequest.awaitCompleted(checkTime)) {
-        // Check if the agent is disconnected or agent is hung
-        if (scrapeRequest.ageDuration() >= timeoutTime || !scrapeRequest.agentContext.isValid() || !proxy.isRunning)
-          return ScrapeRequestResponse(
-            statusCode = HttpStatusCode.ServiceUnavailable,
-            updateMsg = "timed_out",
-            fetchDuration = scrapeRequest.ageDuration(),
-          )
+      // Suspends until completed, agent disconnects, or timeout expires.
+      // The polling loop (Bug #2) is replaced by a single awaitCompleted() call.
+      if (!scrapeRequest.awaitCompleted(timeoutTime)) {
+        return ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "timed_out",
+          fetchDuration = scrapeRequest.ageDuration(),
+        )
       }
     } finally {
       scrapeRequest.closeChannel()

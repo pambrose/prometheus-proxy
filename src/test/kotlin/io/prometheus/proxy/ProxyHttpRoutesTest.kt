@@ -478,6 +478,53 @@ class ProxyHttpRoutesTest : StringSpec() {
       response.updateMsg shouldBe "timed_out"
     }
 
+    "submitScrapeRequest should unblock immediately when agent is removed" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val agentContext = AgentContext("test-remote")
+      proxy.agentContextManager.addAgentContext(agentContext)
+
+      launch {
+        delay(200.milliseconds)
+        proxy.removeAgentContext(agentContext.agentId, "test disconnect")
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      // It should return 502 Bad Gateway because failScrapeRequest uses that code
+      response.statusCode shouldBe HttpStatusCode.BadGateway
+      response.updateMsg shouldBe "path_not_found" // assigned by failScrapeRequest
+    }
+
+    "submitScrapeRequest should unblock immediately when proxy is shut down" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val agentContext = AgentContext("test-remote")
+      proxy.agentContextManager.addAgentContext(agentContext)
+
+      launch {
+        delay(200.milliseconds)
+        // Simulate what Proxy.shutDown() does
+        proxy.agentContextManager.invalidateAllAgentContexts()
+        proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.BadGateway
+      response.updateMsg shouldBe "path_not_found"
+    }
+
     "submitScrapeRequest should return success for valid non-zipped response" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
       val agentContext = AgentContext("test-remote")
