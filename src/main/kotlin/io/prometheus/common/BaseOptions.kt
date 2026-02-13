@@ -275,7 +275,7 @@ abstract class BaseOptions protected constructor(
     when {
       configName.isBlank() -> {
         if (exitOnMissingConfig) {
-          logger.error { $$"A configuration file or url must be specified with --config or $$$envConfig" }
+          logger.error { "A configuration file or url must be specified with --config or \$$envConfig" }
           exitProcess(1)
         }
         return fallback
