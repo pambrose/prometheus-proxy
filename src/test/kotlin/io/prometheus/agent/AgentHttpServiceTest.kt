@@ -3,6 +3,7 @@
 package io.prometheus.agent
 
 import com.typesafe.config.ConfigFactory
+import io.kotest.assertions.fail
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -18,10 +19,12 @@ import io.ktor.server.routing.routing
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.spyk
 import io.prometheus.Agent
 import io.prometheus.common.ConfigVals
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -598,6 +601,73 @@ class AgentHttpServiceTest : StringSpec() {
         service.close()
       } finally {
         server.stop(0, 0)
+      }
+    }
+
+    // ==================== Cancellation Handling Tests (Bug #3) ====================
+
+    "fetchScrapeUrl should rethrow generic CancellationException" {
+      val mockAgent = createMockAgentWithPaths()
+      val service = AgentHttpService(mockAgent)
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:8080/metrics")
+
+      val request = scrapeRequest {
+        agentId = "agent-1"
+        scrapeId = 70L
+        path = "metrics"
+      }
+
+      val spiedService = spyk(service)
+      // Mock the internal fetchContent call to throw CancellationException
+      coEvery {
+        spiedService.fetchContent(any<String>(), any())
+      } coAnswers {
+        throw CancellationException("System shutdown")
+      }
+
+      io.kotest.assertions.throwables.shouldThrow<CancellationException> {
+        spiedService.fetchScrapeUrl(request)
+      }
+    }
+
+    "fetchScrapeUrl should NOT rethrow HttpRequestTimeoutException" {
+      val mockAgent = createMockAgentWithPaths()
+      val service = AgentHttpService(mockAgent)
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:8080/metrics")
+
+      val request = scrapeRequest {
+        agentId = "agent-1"
+        scrapeId = 71L
+        path = "metrics"
+      }
+
+      val spiedService = spyk(service)
+      // HttpRequestTimeoutException is a CancellationException, but should be caught and converted to 408
+      coEvery {
+        spiedService.fetchContent(any<String>(), any())
+      } coAnswers {
+        throw io.ktor.client.plugins.HttpRequestTimeoutException("url", 1000L)
+      }
+
+      // If it throws, it's a bug (swallowing timeout or rethrowing shutdown)
+      // but let's see what it actually throws if it does
+      try {
+        val results = spiedService.fetchScrapeUrl(request)
+        results.srStatusCode shouldBe 408
+        results.srValidResponse shouldBe false
+      } catch (e: Throwable) {
+        // If it throws HttpRequestTimeoutException (or a CancellationException wrapping it),
+        // then our isTimeout check failed.
+        val isTimeout = e is io.ktor.client.plugins.HttpRequestTimeoutException ||
+          e.cause is io.ktor.client.plugins.HttpRequestTimeoutException ||
+          e.javaClass.name.endsWith("HttpRequestTimeoutException") ||
+          e.cause?.javaClass?.name?.endsWith("HttpRequestTimeoutException") == true
+
+        if (isTimeout) {
+          fail("fetchScrapeUrl rethrew HttpRequestTimeoutException (or wrapper) but it should have been caught: $e")
+        } else {
+          throw e // Rethrow real cancellations
+        }
       }
     }
   }
