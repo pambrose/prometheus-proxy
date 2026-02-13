@@ -134,8 +134,11 @@ internal class AgentHttpService(
       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
+
+      // Set non-default headers
       if (request.accept.isNotEmpty()) header(ACCEPT, request.accept)
-      request.authHeader.ifBlank { null }?.also { header(HttpHeaders.Authorization, it) }
+      val authHeader = request.authHeader.ifBlank { null }
+      authHeader?.also { header(HttpHeaders.Authorization, it) }
     }
 
   private suspend fun buildScrapeResults(
@@ -178,14 +181,13 @@ internal class AgentHttpService(
       engine {
         // If internal.cioTimeoutSecs is set to a non-default and httpClientTimeoutSecs is set to the default, then use
         // internal.cioTimeoutSecs value. Otherwise, use httpClientTimeoutSecs.
-        val timeout =
-          (
-            if (agent.configVals.agent.internal.cioTimeoutSecs != 90 && agent.options.httpClientTimeoutSecs == 90)
-              agent.configVals.agent.internal.cioTimeoutSecs
-            else
-              agent.options.httpClientTimeoutSecs
-            ).seconds
-        requestTimeout = timeout.inWholeMilliseconds
+        val timeoutSecs =
+          if (agent.configVals.agent.internal.cioTimeoutSecs != 90 && agent.options.httpClientTimeoutSecs == 90)
+            agent.configVals.agent.internal.cioTimeoutSecs
+          else
+            agent.options.httpClientTimeoutSecs
+
+        requestTimeout = timeoutSecs.seconds.inWholeMilliseconds
 
         if (agent.options.trustAllX509Certificates) {
           https {
