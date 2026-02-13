@@ -28,9 +28,36 @@ import io.ktor.server.response.respondText
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.MISSING_PATH_MSG
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPInputStream
 
 object ProxyUtils {
   private val logger = logger {}
+
+  fun ByteArray.unzip(maxSize: Long): String {
+    if (isEmpty()) return ""
+    GZIPInputStream(ByteArrayInputStream(this)).use { gzis ->
+      ByteArrayOutputStream().use { baos ->
+        val buffer = ByteArray(1024)
+        var totalBytes = 0L
+        while (true) {
+          val len = gzis.read(buffer)
+          if (len <= 0) break
+          totalBytes += len
+          if (totalBytes > maxSize) {
+            val msg = "Unzipped content size exceeds limit of $maxSize bytes"
+            logger.error { msg }
+            throw ZipBombException(msg)
+          }
+          baos.write(buffer, 0, len)
+        }
+        return baos.toString(Charsets.UTF_8.name())
+      }
+    }
+  }
+
+  class ZipBombException(message: String) : RuntimeException(message)
 
   fun invalidAgentContextResponse(
     path: String,

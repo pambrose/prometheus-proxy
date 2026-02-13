@@ -180,6 +180,7 @@ class ProxyOptions(
           logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
           logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }
           logger.info { "internal.maxAgentInactivitySecs: ${internal.maxAgentInactivitySecs}" }
+          logger.info { "internal.maxUnzippedContentSizeMBytes: ${internal.maxUnzippedContentSizeMBytes}" }
         }
 
         if (logLevel.isEmpty())

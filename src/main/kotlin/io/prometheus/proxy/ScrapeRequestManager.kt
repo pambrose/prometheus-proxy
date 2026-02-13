@@ -67,6 +67,19 @@ internal class ScrapeRequestManager {
       } ?: logger.warn { "failScrapeRequest() missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
   }
 
+  fun failAllScrapeRequests(
+    agentId: String,
+    failureReason: String,
+  ) {
+    scrapeRequestMap.values
+      .filter { it.agentContext.agentId == agentId }
+      .forEach { failScrapeRequest(it.scrapeId, failureReason) }
+  }
+
+  fun failAllInFlightScrapeRequests(failureReason: String) {
+    scrapeRequestMap.values.forEach { failScrapeRequest(it.scrapeId, failureReason) }
+  }
+
   fun removeFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {
     logger.debug { "Removing scrapeId: $scrapeId from scrapeRequestMap" }
     return scrapeRequestMap.remove(scrapeId)

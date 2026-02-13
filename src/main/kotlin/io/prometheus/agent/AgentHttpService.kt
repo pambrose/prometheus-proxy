@@ -28,6 +28,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpRequestRetry
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.auth.Auth
 import io.ktor.client.plugins.auth.providers.BasicAuthCredentials
@@ -81,51 +82,62 @@ internal class AgentHttpService(
     logger.debug { "Fetching $pathContext ${if (url.isNotBlank()) "URL: $url" else ""}" }
 
     // Content is fetched here
-    val results = try {
-      fetchContent(url, req)
-    } finally {
-      requestTimer?.observeDuration()
-    }
+    val results =
+      try {
+        fetchContent(url, req)
+      } catch (e: Throwable) {
+        // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
+        // but let other CancellationExceptions propagate (like system shutdown).
+        // Ktor often wraps the timeout exception, so we check the cause as well.
+        // We also check class names to handle cases where exceptions might be wrapped or mocked.
+        var isTimeout = e is HttpRequestTimeoutException
+        var curr: Throwable? = e
+        while (!isTimeout && curr != null) {
+          if (curr is HttpRequestTimeoutException ||
+            curr.javaClass.simpleName == "HttpRequestTimeoutException" ||
+            curr.simpleClassName == "HttpRequestTimeoutException"
+          ) {
+            isTimeout = true
+          }
+          curr = curr.cause
+        }
+
+        if (e is kotlinx.coroutines.CancellationException && !isTimeout) {
+          throw e
+        }
+
+        ScrapeResults(
+          srAgentId = req.agentId,
+          srScrapeId = req.scrapeId,
+          srStatusCode = errorCode(e, url),
+          srFailureReason =
+            if (req.debugEnabled) "${e.simpleClassName} - ${e.message}" else (e.message ?: e.simpleClassName),
+          srUrl = if (req.debugEnabled) url else "",
+        )
+      } finally {
+        requestTimer?.observeDuration()
+      }
     agent.updateScrapeCounter(results.scrapeCounterMsg)
     return results
   }
 
-  private suspend fun fetchContent(
+  internal suspend fun fetchContent(
     url: String,
     scrapeRequest: ScrapeRequest,
   ): ScrapeResults {
-    // Do not rethrow CancellationException here
-    // Ktor's HttpTimeout plugin signals timeouts by cancelling the coroutine's
-    // execution context with a CancellationException wrapping
-    // an HttpRequestTimeoutException. runCatchingCancellable rethrows CancellationException,
-    // so the .onFailure handler that sets the
-    // 408 status codes never fired. The agent never sent a timeout response back to the proxy,
-    // causing the proxy to wait indefinitely
-    // until the test client's own timeout fired.
-    return runCatching {
-      val clientKey = with(Url(url)) { ClientKey(user, password) }
-      val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(clientKey) }
-      try {
-        var result: ScrapeResults? = null
-        entry.client.get(
-          url = url,
-          setUp = prepareRequestHeaders(scrapeRequest),
-        ) { response ->
-          result = buildScrapeResults(response, url, scrapeRequest)
-        }
-        requireNotNull(result) { "Response handler was not called for $url" }
-      } finally {
-        httpClientCache.onFinishedWithClient(entry)
+    val clientKey = with(Url(url)) { ClientKey(user, password) }
+    val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(clientKey) }
+    try {
+      var result: ScrapeResults? = null
+      entry.client.get(
+        url = url,
+        setUp = prepareRequestHeaders(scrapeRequest),
+      ) { response ->
+        result = buildScrapeResults(response, url, scrapeRequest)
       }
-    }.getOrElse { e ->
-      ScrapeResults(
-        srAgentId = scrapeRequest.agentId,
-        srScrapeId = scrapeRequest.scrapeId,
-        srStatusCode = errorCode(e, url),
-        srFailureReason =
-          if (scrapeRequest.debugEnabled) "${e.simpleClassName} - ${e.message}" else (e.message ?: e.simpleClassName),
-        srUrl = if (scrapeRequest.debugEnabled) url else "",
-      )
+      return requireNotNull(result) { "Response handler was not called for $url" }
+    } finally {
+      httpClientCache.onFinishedWithClient(entry)
     }
   }
 

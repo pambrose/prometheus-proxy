@@ -242,6 +242,7 @@ class Proxy(
 
   override fun shutDown() {
     agentContextManager.invalidateAllAgentContexts()
+    scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
     grpcService.stopSync()
     httpService.stopSync()
     if (proxyConfigVals.internal.staleAgentCheckEnabled)
@@ -319,6 +320,7 @@ class Proxy(
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
     pathManager.removeFromPathManager(agentId, reason)
+    scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason")
     return agentContextManager.removeFromContextManager(agentId, reason)
   }
 
