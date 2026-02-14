@@ -52,6 +52,7 @@ import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.appendQueryParams
+import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.ScrapeRequest
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -84,7 +85,8 @@ internal class AgentHttpService(
     val requestTimer = if (agent.isMetricsEnabled) agent.startTimer(agent) else null
     // Add the incoming query params to the url
     val url = appendQueryParams(pathContext.url, req.encodedQueryParams)
-    logger.debug { "Fetching $pathContext ${if (url.isNotBlank()) "URL: $url" else ""}" }
+    val logUrl = sanitizeUrl(url)
+    logger.debug { "Fetching $pathContext ${if (url.isNotBlank()) "URL: $logUrl" else ""}" }
 
     // Content is fetched here
     val results =
@@ -114,10 +116,10 @@ internal class AgentHttpService(
         ScrapeResults(
           srAgentId = req.agentId,
           srScrapeId = req.scrapeId,
-          srStatusCode = errorCode(e, url),
+          srStatusCode = errorCode(e, logUrl),
           srFailureReason =
             if (req.debugEnabled) "${e.simpleClassName} - ${e.message}" else (e.message ?: e.simpleClassName),
-          srUrl = if (req.debugEnabled) url else "",
+          srUrl = if (req.debugEnabled) logUrl else "",
         )
       } finally {
         requestTimer?.observeDuration()
@@ -140,7 +142,7 @@ internal class AgentHttpService(
       ) { response ->
         result = buildScrapeResults(response, url, scrapeRequest)
       }
-      return requireNotNull(result) { "Response handler was not called for $url" }
+      return requireNotNull(result) { "Response handler was not called for ${sanitizeUrl(url)}" }
     } finally {
       httpClientCache.onFinishedWithClient(entry)
     }
@@ -164,6 +166,7 @@ internal class AgentHttpService(
     scrapeRequest: ScrapeRequest,
   ): ScrapeResults {
     val statusCode = response.status.value
+    val safeUrl = sanitizeUrl(url)
     return if (response.status.isSuccess()) {
       val maxContentLength = agent.options.maxContentLengthMBytes * 1024L * 1024L
       val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
@@ -174,7 +177,7 @@ internal class AgentHttpService(
           srAgentId = scrapeRequest.agentId,
           srScrapeId = scrapeRequest.scrapeId,
           srStatusCode = HttpStatusCode.PayloadTooLarge.value,
-          srUrl = if (scrapeRequest.debugEnabled) url else "",
+          srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
           srFailureReason = if (scrapeRequest.debugEnabled) msg else "",
           scrapeCounterMsg = UNSUCCESSFUL_MSG,
         )
@@ -183,14 +186,15 @@ internal class AgentHttpService(
       val contentType = response.headers[CONTENT_TYPE].orEmpty()
       val content = response.bodyAsText()
 
-      if (content.length > maxContentLength) {
-        val msg = "Content length ${content.length} exceeds maximum allowed size $maxContentLength"
+      val contentByteSize = content.encodeToByteArray().size.toLong()
+      if (contentByteSize > maxContentLength) {
+        val msg = "Content size $contentByteSize bytes exceeds maximum allowed size $maxContentLength"
         logger.warn { msg }
         return ScrapeResults(
           srAgentId = scrapeRequest.agentId,
           srScrapeId = scrapeRequest.scrapeId,
           srStatusCode = HttpStatusCode.PayloadTooLarge.value,
-          srUrl = if (scrapeRequest.debugEnabled) url else "",
+          srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
           srFailureReason = if (scrapeRequest.debugEnabled) msg else "",
           scrapeCounterMsg = UNSUCCESSFUL_MSG,
         )
@@ -205,7 +209,7 @@ internal class AgentHttpService(
         srZipped = zipped,
         srContentAsText = if (!zipped) content else "",
         srContentAsZipped = if (zipped) content.zip() else EMPTY_BYTE_ARRAY,
-        srUrl = if (scrapeRequest.debugEnabled) url else "",
+        srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
         scrapeCounterMsg = SUCCESS_MSG,
       )
     } else {
@@ -213,7 +217,7 @@ internal class AgentHttpService(
         srAgentId = scrapeRequest.agentId,
         srScrapeId = scrapeRequest.scrapeId,
         srStatusCode = statusCode,
-        srUrl = if (scrapeRequest.debugEnabled) url else "",
+        srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
         srFailureReason = if (scrapeRequest.debugEnabled) "Unsuccessful response code $statusCode" else "",
         scrapeCounterMsg = UNSUCCESSFUL_MSG,
       )

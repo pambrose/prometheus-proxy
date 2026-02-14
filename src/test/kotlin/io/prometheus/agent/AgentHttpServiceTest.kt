@@ -926,6 +926,20 @@ class AgentHttpServiceTest : StringSpec() {
       }
     }
 
+    // ==================== Bug #6: Byte Count vs Char Count Tests ====================
+
+    "content byte count should differ from char count for multi-byte UTF-8" {
+      // Demonstrates the bug: content.length (char count) can undercount for multi-byte chars
+      val content = "\u4e16\u754c" // "世界" - 2 chars but 6 bytes in UTF-8
+      content.length shouldBe 2
+      content.encodeToByteArray().size shouldBe 6
+    }
+
+    "content byte count should equal char count for ASCII" {
+      val content = "hello_world_metric 42.0"
+      content.length shouldBe content.encodeToByteArray().size
+    }
+
     // ==================== Cancellation Handling Tests (Bug #3) ====================
 
     "fetchScrapeUrl should rethrow generic CancellationException" {
