@@ -22,8 +22,8 @@ import com.github.pambrose.common.util.runCatchingCancellable
 import com.google.protobuf.Empty
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Status
+import io.grpc.StatusException
 import io.prometheus.Proxy
-import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.grpc.AgentInfo
@@ -59,7 +59,7 @@ internal class ProxyServiceImpl(
     if (proxy.options.transportFilterDisabled) {
       val msg = "Agent (false) and Proxy (true) do not have matching transportFilterDisabled config values"
       logger.error { msg }
-      throw RequestFailureException(msg)
+      throw StatusException(Status.FAILED_PRECONDITION.withDescription(msg))
     }
 
     proxy.metrics { connectCount.inc() }
@@ -70,7 +70,7 @@ internal class ProxyServiceImpl(
     if (!proxy.options.transportFilterDisabled) {
       val msg = "Agent (true) and Proxy (false) do not have matching transportFilterDisabled config values"
       logger.error { msg }
-      throw RequestFailureException(msg)
+      throw StatusException(Status.FAILED_PRECONDITION.withDescription(msg))
     }
 
     proxy.metrics { connectCount.inc() }

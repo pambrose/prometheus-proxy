@@ -20,6 +20,8 @@ package io.prometheus.proxy
 
 import com.google.protobuf.ByteString
 import com.typesafe.config.ConfigFactory
+import io.grpc.Status
+import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -34,7 +36,6 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.Proxy
-import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -111,15 +112,21 @@ class ProxyServiceImplTest : StringSpec() {
       verify { proxy.metrics(any<ProxyMetrics.() -> Unit>()) }
     }
 
-    "connectAgent should throw when transportFilterDisabled mismatch" {
+    "connectAgent should throw StatusException with FAILED_PRECONDITION when transportFilterDisabled mismatch" {
       val proxy = createMockProxy(transportFilterDisabled = true)
       val service = ProxyServiceImpl(proxy)
 
-      val exception = shouldThrow<RequestFailureException> {
+      // Before the fix, this threw RequestFailureException (a plain Exception), which gRPC
+      // converted to Status.UNKNOWN on the wire. The agent never saw the RequestFailureException
+      // type — it received StatusRuntimeException(UNKNOWN), taking the wrong error-handling path.
+      // After the fix, a StatusException with FAILED_PRECONDITION is thrown, which gRPC preserves
+      // on the wire so the agent receives the correct status code and description.
+      val exception = shouldThrow<StatusException> {
         service.connectAgent(EMPTY_INSTANCE)
       }
 
-      exception.message shouldContain "do not have matching transportFilterDisabled config values"
+      exception.status.code shouldBe Status.Code.FAILED_PRECONDITION
+      exception.status.description shouldContain "do not have matching transportFilterDisabled config values"
     }
 
     // Tests the transport filter security mechanism: when transportFilterDisabled=true on both
@@ -142,15 +149,16 @@ class ProxyServiceImplTest : StringSpec() {
       verify { proxy.metrics(any<ProxyMetrics.() -> Unit>()) }
     }
 
-    "connectAgentWithTransportFilterDisabled should throw when transportFilterDisabled is false" {
+    "connectAgentWithTransportFilterDisabled should throw StatusException with FAILED_PRECONDITION when mismatch" {
       val proxy = createMockProxy(transportFilterDisabled = false)
       val service = ProxyServiceImpl(proxy)
 
-      val exception = shouldThrow<RequestFailureException> {
+      val exception = shouldThrow<StatusException> {
         service.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE)
       }
 
-      exception.message shouldContain "do not have matching transportFilterDisabled config values"
+      exception.status.code shouldBe Status.Code.FAILED_PRECONDITION
+      exception.status.description shouldContain "do not have matching transportFilterDisabled config values"
     }
 
     "registerAgent should succeed with valid agent context" {
