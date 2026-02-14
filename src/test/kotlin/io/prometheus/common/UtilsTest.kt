@@ -18,7 +18,7 @@
 
 package io.prometheus.common
 
-import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -37,8 +37,6 @@ import io.prometheus.common.Utils.toJsonElement
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import org.slf4j.Logger.ROOT_LOGGER_NAME
-import org.slf4j.LoggerFactory
 
 class UtilsTest : StringSpec() {
   // ==================== Type Check Helper ====================
@@ -47,7 +45,7 @@ class UtilsTest : StringSpec() {
     (this is T).shouldBeTrue()
   }
 
-  private val originalLogLevel = (LoggerFactory.getLogger(ROOT_LOGGER_NAME) as Logger).level
+  private val originalLogLevel = Level.INFO // (LoggerFactory.getLogger(ROOT_LOGGER_NAME) as Logger).level
 
   init {
     afterTest {
