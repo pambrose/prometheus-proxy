@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.ktor.client.utils.EmptyContent.contentType
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -50,6 +51,7 @@ import io.prometheus.grpc.registerPathRequest
 import io.prometheus.grpc.scrapeResponse
 import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
+import jdk.javadoc.internal.doclets.formats.html.markup.HtmlStyle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -549,7 +551,7 @@ class ProxyServiceImplTest : StringSpec() {
       crc.update(data)
 
       val header = chunkedScrapeResponse {
-        header = headerData {
+        HtmlStyle.header = headerData {
           headerValidResponse = true
           headerScrapeId = scrapeId
           headerAgentId = "agent-1"
@@ -592,7 +594,7 @@ class ProxyServiceImplTest : StringSpec() {
       val crc = CRC32()
 
       val header = chunkedScrapeResponse {
-        header = headerData {
+        HtmlStyle.header = headerData {
           headerValidResponse = true
           headerScrapeId = scrapeId
           headerAgentId = "agent-1"
@@ -841,7 +843,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       val emptyResponse = chunkedScrapeResponse {}
       val header = chunkedScrapeResponse {
-        header = headerData {
+        HtmlStyle.header = headerData {
           headerScrapeId = scrapeId
           headerValidResponse = true
           headerAgentId = "agent-1"
@@ -922,7 +924,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { contextManager.removeChunkedContext(scrapeId) } returns chunkedContext
 
       val header = chunkedScrapeResponse {
-        header = headerData {
+        HtmlStyle.header = headerData {
           headerValidResponse = true
           headerScrapeId = scrapeId
           headerAgentId = "agent-1"
@@ -962,7 +964,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { contextManager.removeChunkedContext(scrapeId2) } returns mockk(relaxed = true)
 
       val header1 = chunkedScrapeResponse {
-        header = headerData {
+        HtmlStyle.header = headerData {
           headerValidResponse = true
           headerScrapeId = scrapeId1
           headerAgentId = "agent-1"
@@ -972,7 +974,7 @@ class ProxyServiceImplTest : StringSpec() {
         }
       }
       val header2 = chunkedScrapeResponse {
-        header = headerData {
+        HtmlStyle.header = headerData {
           headerValidResponse = true
           headerScrapeId = scrapeId2
           headerAgentId = "agent-1"
@@ -1017,7 +1019,7 @@ class ProxyServiceImplTest : StringSpec() {
       // Set up the completed context's chunked context for the summary removal
       val completedChunkedContext = ChunkedContext(
         chunkedScrapeResponse {
-          header = headerData {
+          HtmlStyle.header = headerData {
             headerValidResponse = true
             headerScrapeId = completedScrapeId
             headerAgentId = "agent-1"
@@ -1035,7 +1037,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { contextManager.removeChunkedContext(orphanedScrapeId) } returns mockk(relaxed = true)
 
       val header1 = chunkedScrapeResponse {
-        header = headerData {
+        HtmlStyle.header = headerData {
           headerValidResponse = true
           headerScrapeId = completedScrapeId
           headerAgentId = "agent-1"
@@ -1062,7 +1064,7 @@ class ProxyServiceImplTest : StringSpec() {
         }
       }
       val header2 = chunkedScrapeResponse {
-        header = headerData {
+        HtmlStyle.header = headerData {
           headerValidResponse = true
           headerScrapeId = orphanedScrapeId
           headerAgentId = "agent-1"
@@ -1109,7 +1111,7 @@ class ProxyServiceImplTest : StringSpec() {
       // Create a ChunkedContext from a real header, then set up the mock
       // to return it. Send a chunk with a bad checksum to trigger validation failure.
       val header = chunkedScrapeResponse {
-        header = headerData {
+        HtmlStyle.header = headerData {
           headerValidResponse = true
           headerScrapeId = scrapeId
           headerAgentId = "agent-1"
@@ -1157,7 +1159,7 @@ class ProxyServiceImplTest : StringSpec() {
       val correctChecksum = crc.value
 
       val header = chunkedScrapeResponse {
-        header = headerData {
+        HtmlStyle.header = headerData {
           headerValidResponse = true
           headerScrapeId = scrapeId
           headerAgentId = "agent-1"

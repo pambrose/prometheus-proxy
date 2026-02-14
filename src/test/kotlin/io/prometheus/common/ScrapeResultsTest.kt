@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,10 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
 import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.utils.EmptyContent.contentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.network.sockets.SocketTimeoutException
+import io.ktor.server.util.url
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.grpc.scrapeResponse

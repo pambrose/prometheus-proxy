@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
+import jdk.javadoc.internal.doclets.formats.html.markup.HtmlStyle
 import java.util.zip.CRC32
 
 // Tests for ChunkedContext which manages the state of a chunked scrape response.
@@ -40,7 +41,7 @@ class ChunkedContextTest : StringSpec() {
     url: String = "http://localhost:8080/metrics",
     contentType: String = "text/plain",
   ) = chunkedScrapeResponse {
-    header = headerData {
+    HtmlStyle.header = headerData {
       headerValidResponse = validResponse
       headerScrapeId = scrapeId
       headerAgentId = agentId

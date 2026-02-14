@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,16 @@ import com.github.pambrose.common.util.simpleClassName
 import com.google.protobuf.ByteString
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.utils.EmptyContent.contentType
 import io.ktor.http.HttpStatusCode.Companion.RequestTimeout
 import io.ktor.http.HttpStatusCode.Companion.ServiceUnavailable
 import io.ktor.network.sockets.SocketTimeoutException
+import io.ktor.server.util.url
 import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import io.prometheus.grpc.scrapeResponse
+import jdk.javadoc.internal.doclets.formats.html.markup.HtmlStyle
 import kotlinx.coroutines.TimeoutCancellationException
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
@@ -65,7 +68,7 @@ internal class ScrapeResults(
 
   fun toScrapeResponseHeader() =
     chunkedScrapeResponse {
-      header = headerData {
+      HtmlStyle.header = headerData {
         headerValidResponse = srValidResponse
         headerAgentId = srAgentId
         headerScrapeId = srScrapeId
