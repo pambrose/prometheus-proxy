@@ -213,7 +213,7 @@ internal class ProxyServiceImpl(
             val scrapeId = response.header.headerScrapeId
             if (proxy.scrapeRequestManager.containsScrapeRequest(scrapeId)) {
               logger.debug { "Reading header for scrapeId: $scrapeId" }
-              val maxZippedSize = proxy.proxyConfigVals.internal.maxZippedContentSizeMBytes * 1024 * 1024
+              val maxZippedSize = proxy.proxyConfigVals.internal.maxZippedContentSizeMBytes * 1024L * 1024L
               contextManager.putChunkedContext(scrapeId, ChunkedContext(response, maxZippedSize))
               activeScrapeIds += scrapeId
             } else {

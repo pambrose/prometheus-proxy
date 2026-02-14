@@ -398,6 +398,42 @@ class ChunkedContextTest : StringSpec() {
       scrapeResults.srContentAsZipped.contentEquals(fullData).shouldBeTrue()
     }
 
+    // ==================== Int Overflow Fix Tests ====================
+
+    "maxZippedContentSize should accept Long values without Int overflow" {
+      // Before the fix, maxZippedContentSize was Int. A config value of 2048 MB
+      // computed as 2048 * 1024 * 1024 would overflow Int (2,147,483,648 > Int.MAX_VALUE),
+      // producing a negative number. This caused the size check to reject all chunks
+      // since any positive totalByteCount > negative maxZippedContentSize.
+      val largeLimitMBytes = 2048
+      val largeLimit = largeLimitMBytes * 1024L * 1024L // 2,147,483,648 — overflows Int
+
+      val response = createHeaderResponse()
+      val context = ChunkedContext(response, largeLimit)
+
+      val data = "test data".toByteArray()
+      val checksum = CRC32().apply { update(data) }.value
+
+      // With the Int overflow bug, this would throw ChunkValidationException because
+      // maxZippedContentSize would be negative (-2,147,483,648)
+      context.applyChunk(data, data.size, 1, checksum)
+      context.totalByteCount shouldBe data.size
+    }
+
+    "maxZippedContentSize should work with values larger than Int.MAX_VALUE" {
+      val limitMBytes = 4096L
+      val limit = limitMBytes * 1024L * 1024L // 4,294,967,296
+
+      val response = createHeaderResponse()
+      val context = ChunkedContext(response, limit)
+
+      val data = "metrics content".toByteArray()
+      val checksum = CRC32().apply { update(data) }.value
+
+      context.applyChunk(data, data.size, 1, checksum)
+      context.totalChunkCount shouldBe 1
+    }
+
     // ==================== Edge Case Tests ====================
 
     "applySummary should throw when called before any chunks" {

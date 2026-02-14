@@ -25,7 +25,7 @@ import java.util.zip.CRC32
 
 internal class ChunkedContext(
   response: ChunkedScrapeResponse,
-  private val maxZippedContentSize: Int,
+  private val maxZippedContentSize: Long,
 ) {
   private val checksum = CRC32()
   private val baos = ByteArrayOutputStream()
