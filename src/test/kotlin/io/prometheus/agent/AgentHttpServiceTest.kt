@@ -238,6 +238,29 @@ class AgentHttpServiceTest : StringSpec() {
       results.srFailureReason shouldBe ""
     }
 
+    // ==================== Bug #9: Invalid Path Status Code Test ====================
+
+    "fetchScrapeUrl should return 404 Not Found for invalid path" {
+      val mockAgent = createMockAgent()
+      every { mockAgent.pathManager[any()] } returns null
+
+      val service = AgentHttpService(mockAgent)
+      val request = scrapeRequest {
+        agentId = "agent-1"
+        scrapeId = 90L
+        path = "/nonexistent"
+        accept = ""
+        debugEnabled = false
+        encodedQueryParams = ""
+        authHeader = ""
+      }
+
+      val results = service.fetchScrapeUrl(request)
+
+      results.srStatusCode shouldBe 404
+      results.srValidResponse.shouldBeFalse()
+    }
+
     // ==================== Close Tests ====================
 
     "close should close httpClientCache" {

@@ -291,6 +291,7 @@ internal class AgentHttpService(
       return ScrapeResults(
         srAgentId = scrapeRequest.agentId,
         srScrapeId = scrapeRequest.scrapeId,
+        srStatusCode = HttpStatusCode.NotFound.value,
         scrapeCounterMsg = INVALID_PATH_MSG,
         srUrl = if (scrapeRequest.debugEnabled) "None" else "",
         srFailureReason = if (scrapeRequest.debugEnabled) "Invalid path: ${scrapeRequest.path}" else "",
