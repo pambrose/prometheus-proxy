@@ -16,17 +16,29 @@
 
 package io.prometheus.harness
 
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.prometheus.harness.HarnessConfig.MEDIUM
 import java.io.File
 
 object HarnessConstants {
-  const val PROXY_PORT = 9505
-  const val ADD_REMOVE_REPS = 1000
+  val logger = logger {}
 
-  const val HTTP_SERVER_COUNT = 5
-  const val PATH_COUNT = 50
-  const val SEQUENTIAL_QUERY_COUNT = 1000
-  const val PARALLEL_QUERY_COUNT = 10
-  const val CONCURRENT_CLIENTS = 100
+  val HARNESS_CONFIG: HarnessConfig
+
+  init {
+    val defaultValue = MEDIUM
+    val harnessConfigName = System.getenv("HARNESS_CONFIG") ?: defaultValue.name
+    HARNESS_CONFIG =
+      runCatching {
+        HarnessConfig.valueOf(harnessConfigName)
+      }.getOrElse {
+        logger.warn { "Invalid HARNESS_CONFIG: $harnessConfigName - using $defaultValue" }
+        defaultValue
+      }
+    logger.info { "HarnessConfig: ${HARNESS_CONFIG.name}" }
+  }
+
+  const val PROXY_PORT = 9505
 
   const val MIN_DELAY_MILLIS = 400
   const val MAX_DELAY_MILLIS = 600
@@ -34,8 +46,8 @@ object HarnessConstants {
   const val DEFAULT_SCRAPE_TIMEOUT_SECS = 3
   const val DEFAULT_CHUNK_SIZE_BYTES = 5
 
-  private const val TRAVIS_FILE = "etc/test-configs/travis.conf"
-  private const val JUNIT_FILE = "etc/test-configs/junit-test.conf"
+  private const val TRAVIS_FILE = "config/test-configs/travis.conf"
+  private const val JUNIT_FILE = "config/test-configs/junit-test.conf"
   private const val GH_PREFIX = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/"
 
   val CONFIG_ARG = listOf("--config", "${if (File(TRAVIS_FILE).exists()) "" else GH_PREFIX}$TRAVIS_FILE")

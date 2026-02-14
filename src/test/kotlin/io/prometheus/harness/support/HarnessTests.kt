@@ -43,12 +43,9 @@ import io.ktor.server.routing.routing
 import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.harness.HarnessConstants.HTTP_SERVER_COUNT
+import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
 import io.prometheus.harness.HarnessConstants.MAX_DELAY_MILLIS
 import io.prometheus.harness.HarnessConstants.MIN_DELAY_MILLIS
-import io.prometheus.harness.HarnessConstants.PARALLEL_QUERY_COUNT
-import io.prometheus.harness.HarnessConstants.PATH_COUNT
-import io.prometheus.harness.HarnessConstants.SEQUENTIAL_QUERY_COUNT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -65,10 +62,10 @@ import kotlin.time.Duration.Companion.seconds
 data class ProxyCallTestArgs(
   val agent: Agent,
   val proxyPort: Int,
-  val httpServerCount: Int = HTTP_SERVER_COUNT,
-  val pathCount: Int = PATH_COUNT,
-  val sequentialQueryCount: Int = SEQUENTIAL_QUERY_COUNT,
-  val parallelQueryCount: Int = PARALLEL_QUERY_COUNT,
+  val httpServerCount: Int = HARNESS_CONFIG.httpServerCount,
+  val pathCount: Int = HARNESS_CONFIG.pathCount,
+  val sequentialQueryCount: Int = HARNESS_CONFIG.sequentialQueryCount,
+  val parallelQueryCount: Int = HARNESS_CONFIG.parallelQueryCount,
   val startPort: Int = 9600,
   val caller: String,
 )
@@ -193,7 +190,7 @@ internal object HarnessTests {
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
     newSingleThreadContext("test-single")
       .use { dispatcher ->
-        withTimeoutOrNull(1.minutes.inWholeMilliseconds) {
+        withTimeoutOrNull(1.minutes) {
           httpClient { client ->
             val counter = AtomicInt(0)
             repeat(args.sequentialQueryCount) { cnt ->
@@ -216,7 +213,7 @@ internal object HarnessTests {
     logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
     newFixedThreadPoolContext(5, "test-multi")
       .use { dispatcher ->
-        withTimeoutOrNull(1.minutes.inWholeMilliseconds) {
+        withTimeoutOrNull(1.minutes) {
           httpClient { client ->
             val counter = AtomicInt(0)
             val jobs =

@@ -23,7 +23,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
 import io.prometheus.agent.AgentPathManager
-import io.prometheus.harness.HarnessConstants
+import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -65,7 +65,7 @@ internal object BasicHarnessTests {
     val originalSize = pathManager.pathMapSize()
 
     var cnt = 0
-    repeat(HarnessConstants.ADD_REMOVE_REPS) { i ->
+    repeat(HARNESS_CONFIG.addRemoveReps) { i ->
       val path = "test-$i"
       pathManager.let { manager ->
         manager.registerPath(path, "$proxyPort/$path".withPrefix())
@@ -105,10 +105,10 @@ internal object BasicHarnessTests {
     // Take into account pre-existing paths already registered
     val originalSize = pathManager.pathMapSize()
 
-    withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
+    withTimeoutOrNull(30.seconds) {
       val mutex = Mutex()
       val jobs =
-        List(HarnessConstants.ADD_REMOVE_REPS) { i ->
+        List(HARNESS_CONFIG.addRemoveReps) { i ->
           launch(Dispatchers.IO + exceptionHandler(logger)) {
             val path = "test-$i}"
             val url = "$proxyPort/$path".withPrefix()
@@ -123,10 +123,10 @@ internal object BasicHarnessTests {
       }
     }.shouldNotBeNull()
 
-    paths.size shouldBe HarnessConstants.ADD_REMOVE_REPS
-    pathManager.pathMapSize() shouldBe (originalSize + HarnessConstants.ADD_REMOVE_REPS)
+    paths.size shouldBe HARNESS_CONFIG.addRemoveReps
+    pathManager.pathMapSize() shouldBe (originalSize + HARNESS_CONFIG.addRemoveReps)
 
-    withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
+    withTimeoutOrNull(30.seconds) {
       val jobs =
         List(paths.size) {
           launch(Dispatchers.IO + exceptionHandler(logger)) {

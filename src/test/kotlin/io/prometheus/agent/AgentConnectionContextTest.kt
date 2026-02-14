@@ -280,7 +280,7 @@ class AgentConnectionContextTest : StringSpec() {
       val backlogSize = AtomicInteger(0)
 
       coroutineScope {
-        (1..10).map { i ->
+        (1..10).forEach { i ->
           launch(Dispatchers.IO) {
             backlogSize.incrementAndGet()
             try {

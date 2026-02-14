@@ -25,7 +25,6 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
-import jdk.javadoc.internal.doclets.formats.html.markup.HtmlStyle
 import java.util.zip.CRC32
 
 // Tests for ChunkedContext which manages the state of a chunked scrape response.
@@ -41,7 +40,7 @@ class ChunkedContextTest : StringSpec() {
     url: String = "http://localhost:8080/metrics",
     contentType: String = "text/plain",
   ) = chunkedScrapeResponse {
-    HtmlStyle.header = headerData {
+    header = headerData {
       headerValidResponse = validResponse
       headerScrapeId = scrapeId
       headerAgentId = agentId

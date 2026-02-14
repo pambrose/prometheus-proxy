@@ -79,7 +79,7 @@ internal class ScrapeRequestWrapper(
   }
 
   suspend fun awaitCompleted(timeout: Duration): Boolean {
-    withTimeoutOrNull(timeout.inWholeMilliseconds) {
+    withTimeoutOrNull(timeout) {
       // Suspends until the completeChannel is closed by markComplete() or closeChannel(), or times out
       completeChannel.receiveCatching()
     }
