@@ -189,5 +189,25 @@ class ProxyOptionsTest : StringSpec() {
       val options = ProxyOptions(listOf())
       options.permitKeepAliveTimeSecs shouldBe -1L
     }
+
+    // ==================== Bug #8: SD config values should be set when SD enabled ====================
+
+    "sdPath and sdTargetPrefix should be accessible when sdEnabled is true" {
+      val options = ProxyOptions(
+        listOf("--sd_enabled", "--sd_path", "/discovery", "--sd_target_prefix", "http://proxy:8080"),
+      )
+      options.sdEnabled.shouldBeTrue()
+      options.sdPath shouldBe "/discovery"
+      options.sdTargetPrefix shouldBe "http://proxy:8080"
+    }
+
+    "sdPath and sdTargetPrefix should be set when sdEnabled is false" {
+      val options = ProxyOptions(listOf())
+      options.sdEnabled.shouldBeFalse()
+      // Values should still be assigned from config defaults (even when SD disabled)
+      // Bug #8 fix ensures these values are logged regardless of sdEnabled state
+      options.sdPath shouldBe options.configVals.proxy.service.discovery.path
+      options.sdTargetPrefix shouldBe options.configVals.proxy.service.discovery.targetPrefix
+    }
   }
 }

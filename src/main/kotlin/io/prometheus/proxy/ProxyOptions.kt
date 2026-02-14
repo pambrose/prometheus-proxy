@@ -107,25 +107,30 @@ class ProxyOptions(
           proxyAgentPort = AGENT_PORT.getEnv(proxyConfigVals.agent.port)
         logger.info { "proxyAgentPort: $proxyAgentPort" }
 
-        sdEnabled = resolveBooleanOption(sdEnabled, SD_ENABLED, proxyConfigVals.service.discovery.enabled)
+        sdEnabled =
+          resolveBooleanOption(sdEnabled, SD_ENABLED, proxyConfigVals.service.discovery.enabled, "--sd_enabled")
         logger.info { "sdEnabled: $sdEnabled" }
 
         if (sdPath.isEmpty())
           sdPath = SD_PATH.getEnv(proxyConfigVals.service.discovery.path)
         if (sdEnabled)
           require(sdPath.isNotEmpty()) { "sdPath is empty" }
-        else
-          logger.info { "sdPath: $sdPath" }
+        logger.info { "sdPath: $sdPath" }
 
         if (sdTargetPrefix.isEmpty())
           sdTargetPrefix = SD_TARGET_PREFIX.getEnv(proxyConfigVals.service.discovery.targetPrefix)
         if (sdEnabled)
           require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
-        else
-          logger.info { "sdTargetPrefix: $sdTargetPrefix" }
+        logger.info { "sdTargetPrefix: $sdTargetPrefix" }
 
         reflectionDisabled =
-          resolveBooleanOption(reflectionDisabled, REFLECTION_DISABLED, proxyConfigVals.reflectionDisabled)
+          resolveBooleanOption(
+            reflectionDisabled,
+            REFLECTION_DISABLED,
+            proxyConfigVals.reflectionDisabled,
+            "--ref-disabled",
+            "--ref_disabled",
+          )
         logger.info { "reflectionDisabled: $reflectionDisabled" }
 
         if (handshakeTimeoutSecs == -1L)
@@ -138,6 +143,7 @@ class ProxyOptions(
             permitKeepAliveWithoutCalls,
             PERMIT_KEEPALIVE_WITHOUT_CALLS,
             proxyConfigVals.grpc.permitKeepAliveWithoutCalls,
+            "--permit_keepalive_without_calls",
           )
         logger.info { "grpc.permitKeepAliveWithoutCalls: $permitKeepAliveWithoutCalls" }
 
