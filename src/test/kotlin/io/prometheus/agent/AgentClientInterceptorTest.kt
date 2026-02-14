@@ -26,7 +26,6 @@ import io.grpc.Metadata
 import io.grpc.MethodDescriptor
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
-import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -175,7 +174,7 @@ class AgentClientInterceptorTest : StringSpec() {
       verify { mockAgent.agentId = "test-agent-42" }
     }
 
-    "onHeaders should throw StatusRuntimeException when agent ID key is missing from headers" {
+    "onHeaders should cancel call when agent ID key is missing from headers" {
       val mockAgent = mockk<Agent>(relaxed = true)
       every { mockAgent.agentId } returns ""
 
@@ -190,18 +189,24 @@ class AgentClientInterceptorTest : StringSpec() {
       val mockNextChannel = mockk<Channel>(relaxed = true)
       every { mockNextChannel.newCall(any<MethodDescriptor<Any, Any>>(), any()) } returns mockUnderlyingCall
 
+      val originalListener = mockk<ClientCall.Listener<Any>>(relaxed = true)
       val call = interceptor.interceptCall(mockMethod, CallOptions.DEFAULT, mockNextChannel)
-      call.start(mockk(relaxed = true), Metadata())
+      call.start(originalListener, Metadata())
 
-      // Trigger onHeaders with empty headers (no AGENT_ID key) — should throw StatusRuntimeException
-      shouldThrow<StatusRuntimeException> {
-        listenerSlot.captured.onHeaders(Metadata())
-      }
+      // Before the fix, this threw StatusRuntimeException from inside onHeaders,
+      // violating the gRPC ClientCall.Listener contract and causing undefined transport behavior.
+      // After the fix, it cancels the underlying call instead of throwing.
+      listenerSlot.captured.onHeaders(Metadata())
 
+      // The underlying call should have been cancelled with the error details
+      verify { mockUnderlyingCall.cancel(match { it.contains("AGENT_ID") }, any<StatusRuntimeException>()) }
+      // The original listener's onHeaders should NOT have been called
+      verify(exactly = 0) { originalListener.onHeaders(any()) }
+      // agentId should not have been assigned
       verify(exactly = 0) { mockAgent.agentId = any() }
     }
 
-    "onHeaders missing agent ID should throw INTERNAL status with descriptive message" {
+    "onHeaders missing agent ID should cancel with INTERNAL status and descriptive message" {
       val mockAgent = mockk<Agent>(relaxed = true)
       every { mockAgent.agentId } returns ""
 
@@ -209,8 +214,11 @@ class AgentClientInterceptorTest : StringSpec() {
       val mockMethod = mockk<MethodDescriptor<Any, Any>>(relaxed = true)
 
       val listenerSlot = slot<ClientCall.Listener<Any>>()
+      val causeSlot = slot<StatusRuntimeException>()
+      val msgSlot = slot<String>()
       val mockUnderlyingCall = mockk<ClientCall<Any, Any>>(relaxed = true)
       every { mockUnderlyingCall.start(capture(listenerSlot), any()) } answers {}
+      every { mockUnderlyingCall.cancel(capture(msgSlot), capture(causeSlot)) } answers {}
 
       val mockNextChannel = mockk<Channel>(relaxed = true)
       every { mockNextChannel.newCall(any<MethodDescriptor<Any, Any>>(), any()) } returns mockUnderlyingCall
@@ -218,12 +226,13 @@ class AgentClientInterceptorTest : StringSpec() {
       val call = interceptor.interceptCall(mockMethod, CallOptions.DEFAULT, mockNextChannel)
       call.start(mockk(relaxed = true), Metadata())
 
-      val exception = shouldThrow<StatusRuntimeException> {
-        listenerSlot.captured.onHeaders(Metadata())
-      }
+      // Should not throw — cancels the call instead
+      listenerSlot.captured.onHeaders(Metadata())
 
-      exception.status.code shouldBe Status.Code.INTERNAL
-      exception.status.description.shouldContain("AGENT_ID")
+      // Verify the cancel was called with the correct status and message
+      msgSlot.captured shouldContain "AGENT_ID"
+      causeSlot.captured.status.code shouldBe Status.Code.INTERNAL
+      causeSlot.captured.status.description.shouldContain("AGENT_ID")
     }
   }
 }

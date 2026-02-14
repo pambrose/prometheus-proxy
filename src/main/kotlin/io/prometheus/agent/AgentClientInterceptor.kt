@@ -40,10 +40,9 @@ internal class AgentClientInterceptor(
     method: MethodDescriptor<ReqT, RespT>,
     callOptions: CallOptions,
     next: Channel,
-  ): ClientCall<ReqT, RespT> =
-    object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-      next.newCall(method, callOptions),
-    ) {
+  ): ClientCall<ReqT, RespT> {
+    val delegate = next.newCall(method, callOptions)
+    return object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(delegate) {
       override fun start(
         responseListener: Listener<RespT>,
         metadata: Metadata,
@@ -59,9 +58,15 @@ internal class AgentClientInterceptor(
                       agent.agentId = agentId
                       check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
                       logger.info { "Assigned agentId: $agentId to $agent" }
-                    } ?: throw StatusRuntimeException(
-                    Status.INTERNAL.withDescription("Headers missing AGENT_ID key"),
-                  )
+                    } ?: run {
+                    // Cancel the call instead of throwing from the listener callback.
+                    // Throwing from onHeaders violates the gRPC ClientCall.Listener contract
+                    // and can cause undefined transport behavior.
+                    val msg = "Headers missing AGENT_ID key"
+                    logger.error { msg }
+                    delegate.cancel(msg, StatusRuntimeException(Status.INTERNAL.withDescription(msg)))
+                    return
+                  }
                 }
               }
 
@@ -72,6 +77,7 @@ internal class AgentClientInterceptor(
         )
       }
     }
+  }
 
   companion object {
     private val logger = logger {}
