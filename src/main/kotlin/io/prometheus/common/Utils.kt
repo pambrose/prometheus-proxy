@@ -36,6 +36,8 @@ object Utils {
   fun decodeParams(encodedQueryParams: String): String =
     if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8)}" else ""
 
+  fun sanitizeUrl(url: String): String = url.replace(Regex("(://)[^@/?#]+@"), "$1***@")
+
   fun appendQueryParams(
     baseUrl: String,
     encodedQueryParams: String,

@@ -32,6 +32,7 @@ import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.parseHostPort
+import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.setLogLevel
 import io.prometheus.common.Utils.toJsonElement
 import kotlinx.serialization.json.JsonArray
@@ -424,6 +425,36 @@ class UtilsTest : StringSpec() {
         parseHostPort("   ", 50051)
       }
       exception.message shouldContain "must not be blank"
+    }
+
+    // ==================== Bug #5: sanitizeUrl Tests ====================
+
+    "sanitizeUrl should strip user and password from URL" {
+      sanitizeUrl("http://admin:secret@host:8080/metrics") shouldBe "http://***@host:8080/metrics"
+    }
+
+    "sanitizeUrl should strip user-only credentials from URL" {
+      sanitizeUrl("http://admin@host/metrics") shouldBe "http://***@host/metrics"
+    }
+
+    "sanitizeUrl should not modify URL without credentials" {
+      sanitizeUrl("http://host:8080/metrics") shouldBe "http://host:8080/metrics"
+    }
+
+    "sanitizeUrl should handle https URL with credentials" {
+      sanitizeUrl("https://user:pass@example.com/path?q=1") shouldBe "https://***@example.com/path?q=1"
+    }
+
+    "sanitizeUrl should not modify URL with @ in query string" {
+      sanitizeUrl("http://host/path?email=user@example.com") shouldBe "http://host/path?email=user@example.com"
+    }
+
+    "sanitizeUrl should handle empty string" {
+      sanitizeUrl("") shouldBe ""
+    }
+
+    "sanitizeUrl should handle URL without scheme" {
+      sanitizeUrl("host:8080/metrics") shouldBe "host:8080/metrics"
     }
   }
 }
