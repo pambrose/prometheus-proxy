@@ -23,48 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build System and Common Commands
 
-This project uses **Gradle** with Kotlin DSL for build management. All commands should be run from the project root.
-
 Gradle with Kotlin DSL. Java 17+ required. All commands from project root.
-
-### Essential Commands
-
-```bash
-# Build the project (with tests)
-./gradlew build
-
-# Build without tests
-./gradlew build -x test
-
-# Run tests
-./gradlew test
-
-# Run specific test
-./gradlew test --tests "TestClassName"
-
-# Generate JAR files for proxy and agent
-./gradlew agentJar proxyJar
-
-# Clean build artifacts
-./gradlew clean
-
-# Check for dependency updates
-./gradlew dependencyUpdates
-
-# Generate code coverage report
-./gradlew koverMergedHtmlReport
-```
-
-### Code Quality and Linting
-
-```bash
-./gradlew lintKotlinMain lintKotlinTest  # Run kotlinter linter
-./gradlew detekt                         # Run detekt static analysis
-./gradlew formatKotlin                   # Auto-format code
-```
-
-Always run lint and build before completing tasks:
-`./gradlew detekt && ./gradlew lintKotlinMain && ./gradlew build -xtest`
 
 ```bash
 ./gradlew build                          # Build with tests
@@ -78,14 +37,31 @@ Always run lint and build before completing tasks:
 ./gradlew koverMergedHtmlReport          # Code coverage report
 ```
 
+### Code Quality
+
+```bash
+./gradlew lintKotlinMain lintKotlinTest  # Run kotlinter linter
+./gradlew detekt                         # Run detekt static analysis
+./gradlew formatKotlin                   # Auto-format code
+```
+
+Always run lint and build before completing tasks:
+`./gradlew detekt && ./gradlew lintKotlinMain && ./gradlew build -xtest`
+
+### Useful Make Targets
+
+```bash
+make tests        # Rerun all checks (lint + tests)
+make nh-tests     # Unit tests only (agent, proxy, common, misc — no harness)
+make ip-tests     # In-process integration tests only
+make netty-tests  # Netty integration tests only
+make tls-tests    # TLS integration tests only
+make tsconfig     # Regenerate ConfigVals from config/config.conf via tscfg
+```
+
 ## Architecture
 
 A **Prometheus Proxy** system enabling Prometheus to scrape metrics from endpoints behind firewalls.
-
-## Project Architecture
-
-This is a **Prometheus Proxy** system that enables Prometheus to scrape metrics from endpoints behind firewalls. The
-system consists of two main components:
 
 ### Request Flow
 
@@ -96,50 +72,25 @@ Prometheus → Proxy HTTP (:8080) → AgentContext lookup → ScrapeRequest via 
 
 ### Core Components
 
-1. **Proxy (`io.prometheus.Proxy`)** - Runs outside the firewall alongside Prometheus
-  - Listens for agent connections on port 50051 (gRPC)
-  - Serves proxied metrics on port 8080 (HTTP)
-  - Manages agent contexts and path routing
-  - Handles service discovery for Prometheus
+1. **Proxy (`io.prometheus.Proxy`)** — Runs outside the firewall alongside Prometheus
+   - `ProxyGrpcService` — accepts agent connections on port 50051
+   - `ProxyHttpService` / `ProxyHttpRoutes` — serves proxied metrics on port 8080
+   - `ProxyPathManager` — maps URL paths to agent contexts
+   - `AgentContextManager` — tracks connected agents
+   - `ScrapeRequestManager` — manages scrape request lifecycle with timeouts
+   - `ProxyServiceImpl` — implements the gRPC `ProxyService` definition
 
-- `ProxyGrpcService` — accepts agent connections on port 50051
-- `ProxyHttpService` / `ProxyHttpRoutes` — serves proxied metrics on port 8080
-- `ProxyPathManager` — maps URL paths to agent contexts
-- `AgentContextManager` — tracks connected agents
-- `ScrapeRequestManager` — manages scrape request lifecycle with timeouts
-- `ProxyServiceImpl` — implements the gRPC `ProxyService` definition
+2. **Agent (`io.prometheus.Agent`)** — Runs inside the firewall with monitored services
+   - `AgentGrpcService` — connects to proxy, streams scrape requests/responses
+   - `AgentHttpService` — scrapes actual metrics endpoints using Ktor HTTP client
+   - `AgentPathManager` — manages path registrations
+   - `HttpClientCache` — caches HTTP clients keyed by auth credentials (TTL/idle eviction)
 
-2. **Agent (`io.prometheus.Agent`)** - Runs inside the firewall with monitored services
-  - Connects to proxy via gRPC
-  - Scrapes actual metrics endpoints
-  - Registers available paths with proxy
-  - Handles concurrent scraping with configurable limits
-
-- `AgentGrpcService` — connects to proxy, streams scrape requests/responses
-- `AgentHttpService` — scrapes actual metrics endpoints using Ktor HTTP client
-- `AgentPathManager` — manages path registrations
-- `HttpClientCache` — caches HTTP clients keyed by auth credentials (TTL/idle eviction)
-
-**Common (`io.prometheus.common/`)** — shared between proxy and agent:
-
-- `BaseOptions` — CLI argument parsing and config loading
-- `ConfigVals` — type-safe config wrapper (generated from HOCON via tscfg)
-- `ScrapeResults` — scrape response data model
-- `EnvVars` — environment variable mappings
-
-### Key Architectural Patterns
-
-- **gRPC Communication**: Agents connect to proxy using gRPC with optional TLS
-- **Coroutine-based Concurrency**: Heavy use of Kotlin coroutines for async operations
-- **Service Discovery**: Built-in Prometheus service discovery endpoint support
-- **Health Checks**: Comprehensive health checking via Dropwizard metrics
-- **Configuration**: Uses Typesafe Config (HOCON) for flexible configuration
-
-### Package Structure
-
-- `io.prometheus.common/` - Shared utilities, configuration, and constants
-- `io.prometheus.proxy/` - Proxy-specific components (HTTP service, gRPC service, path management)
-- `io.prometheus.agent/` - Agent-specific components (HTTP client, gRPC client, path management)
+3. **Common (`io.prometheus.common/`)** — shared between proxy and agent
+   - `BaseOptions` — CLI argument parsing and config loading
+   - `ConfigVals` — type-safe config wrapper (auto-generated from HOCON via tscfg; see `make tsconfig`)
+   - `ScrapeResults` — scrape response data model
+   - `EnvVars` — environment variable mappings
 
 ### gRPC Service Definition
 
@@ -150,74 +101,28 @@ Defined in `src/main/proto/proxy_service.proto`. Key RPCs:
 - `writeChunkedResponsesToProxy` — client-streaming: chunked responses for large payloads (>32KB default)
 - `registerAgent` / `registerPath` / `unregisterPath` — agent registration lifecycle
 - `sendHeartBeat` — keepalive during inactivity (default 5s)
-- `connectAgentWithTransportFilterDisabled` — for nginx reverse proxy scenarios
 
 ### Key Mechanisms
 
-- **Chunking**: Large metric payloads are split into `ChunkedScrapeResponse` messages to stay within gRPC limits.
-  Configurable via `chunkContentSizeKbs`.
-- **Stale agent cleanup**: `AgentContextCleanupService` evicts inactive agents after `maxAgentInactivitySecs` (default
-  60s).
+- **Chunking**: Large metric payloads are split into `ChunkedScrapeResponse` messages to stay within gRPC limits. Configurable via `chunkContentSizeKbs`.
+- **Stale agent cleanup**: `AgentContextCleanupService` evicts inactive agents after `maxAgentInactivitySecs` (default 60s).
 - **Consolidated mode**: Multiple agents can register the same path for redundancy.
 - **Embedded agent**: Agents can run inside other JVM apps via `startAsyncAgent()`.
 
 ## Configuration
 
-The system uses **Typesafe Config** with support for:
-
-- HOCON (.conf files)
-- JSON (.json files)
-- Java Properties (.properties/.prop files)
-- Environment variables
-- Command-line arguments
-
-Configuration reference is in `config/config.conf`.
-
-Uses Typesafe Config (HOCON). Precedence: CLI args → env vars → config file. Reference schema: `etc/config/config.conf`.
-Example configs in `examples/`.
+Uses Typesafe Config (HOCON). Precedence: CLI args → env vars → config file. Reference schema: `config/config.conf`. Example configs in `examples/`.
 
 The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`make tsconfig`).
 
 ## Testing
 
 - **Framework**: Kotest with JUnit 5 runner, MockK for mocking
-- **Coverage**: Kover
-- **Mocking Framework**: MockK for Kotlin-friendly mocking
-- **Test Location**: `src/test/kotlin/`
-- **Coverage**: Uses Kover for coverage reporting
-- **Test Types**: Unit tests, integration tests, and TLS tests
-
-### Testing with DI and MockK
-
-The codebase now supports Dependency Injection with MockK for better testing:
-
-```bash
-# Run tests with coverage
-./gradlew test
-
-# Run tests with coverage report
-./gradlew koverMergedHtmlReport
-```
-
-Example test with MockK:
-
-```kotlin
-val mockService = mockk<AgentGrpcService>(relaxed = true)
-every { mockService.connectAgent(any()) } returns true
-
-val factory = TestAgentFactory()
-val agent = factory.createTestAgent(
-  options = testOptions,
-  grpcService = mockService
-)
-
-verify { mockService.connectAgent(any()) }
-```
+- **Coverage**: Kover (`./gradlew koverMergedHtmlReport`)
 
 ### Test Structure
 
 Integration tests in `src/test/kotlin/io/prometheus/harness/`:
-
 - `InProcessTest*` — uses gRPC in-process server (no network I/O, faster)
 - `NettyTest*` — tests over actual network transport
 - `TlsNoMutualAuthTest` / `TlsWithMutualAuthTest` — TLS communication tests
@@ -225,35 +130,9 @@ Integration tests in `src/test/kotlin/io/prometheus/harness/`:
 
 Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`.
 
-## Development Notes
-
-- **Language**: Kotlin with Java 17+ requirement
-- **Key Dependencies**: gRPC, Ktor (HTTP client/server), Dropwizard Metrics, Prometheus client
-- **Build Tool**: Gradle 8.x with Kotlin DSL
-- **Code Style**: Uses kotlinter for formatting and detekt for static analysis
-- **Logging**: Uses kotlin-logging with Logback
-
-## Important Files
-
-- `build.gradle.kts` - Main build configuration
-- `gradle/libs.versions.toml` - Dependency version catalog
-- `config/config.conf` - Configuration schema and defaults
-- `src/main/proto/proxy_service.proto` - gRPC service definition
-- `etc/detekt/detekt.yml` - Static analysis configuration
-
-## Docker Support
-
-The project builds multi-arch Docker images for both proxy and agent:
-
-- `pambrose/prometheus-proxy:VERSION`
-- `pambrose/prometheus-agent:VERSION`
-
-Docker files are in `etc/docker/` directory.
-
 ## Code Style
 
 - 2-space indentation for Kotlin, tabs for Makefiles
 - Max line length: 120 characters
 - Kotlinter + detekt enforce style (see `etc/detekt/detekt.yml`)
-- Always add comments where appropriate
 - Mimic existing code patterns in nearby files
