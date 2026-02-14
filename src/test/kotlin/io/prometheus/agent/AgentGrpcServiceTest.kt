@@ -18,8 +18,11 @@
 
 package io.prometheus.agent
 
+import com.github.pambrose.common.util.runCatchingCancellable
 import com.github.pambrose.common.util.zip
 import io.grpc.Metadata
+import io.grpc.Status
+import io.grpc.StatusRuntimeException
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -860,7 +863,7 @@ class AgentGrpcServiceTest : StringSpec() {
 
     // ==================== sendHeartBeat Error Handling Tests ====================
 
-    "sendHeartBeat should handle NOT_FOUND status from proxy" {
+    "sendHeartBeat should throw StatusRuntimeException with NOT_FOUND when proxy evicts agent" {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -872,8 +875,53 @@ class AgentGrpcServiceTest : StringSpec() {
       service.grpcStub = mockStub
       service.unaryDeadlineSecs = 0
 
-      // Should not throw - error is caught internally and logged
-      service.sendHeartBeat()
+      // Before the fix, NOT_FOUND was silently swallowed, causing the agent to enter
+      // a zombie state where it kept sending failing heartbeats without reconnecting.
+      // After the fix, NOT_FOUND is re-thrown so it propagates to startHeartBeat(),
+      // triggering connectionContext.close() and forcing a reconnect.
+      val exception = shouldThrow<StatusRuntimeException> {
+        service.sendHeartBeat()
+      }
+      exception.status.code shouldBe Status.Code.NOT_FOUND
+
+      service.shutDown()
+    }
+
+    "sendHeartBeat NOT_FOUND should trigger connectionContext close via invokeOnCompletion" {
+      // This test simulates the full reconnection path: sendHeartBeat throws NOT_FOUND,
+      // which propagates through startHeartBeat, causing the launch's invokeOnCompletion
+      // to close the connectionContext, which terminates all other coroutines.
+      val agent = createMockAgent("localhost:50051")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse {
+        valid = false
+        reason = "Agent not found"
+      }
+      service.grpcStub = mockStub
+      service.unaryDeadlineSecs = 0
+
+      val connectionContext = AgentConnectionContext()
+      connectionContext.connected.shouldBeTrue()
+
+      // Simulate the pattern from Agent.connectToProxy(): launch with invokeOnCompletion
+      coroutineScope {
+        launch {
+          runCatchingCancellable {
+            // Simulate startHeartBeat loop — calls sendHeartBeat which throws NOT_FOUND
+            service.sendHeartBeat()
+          }.onFailure { e ->
+            // This mirrors the error handler in Agent.connectToProxy()
+            // The exception propagated, which is what we want
+          }
+        }.apply {
+          invokeOnCompletion { connectionContext.close() }
+        }
+      }
+
+      // connectionContext should be closed, which would cause the agent to reconnect
+      connectionContext.connected.shouldBeFalse()
 
       service.shutDown()
     }

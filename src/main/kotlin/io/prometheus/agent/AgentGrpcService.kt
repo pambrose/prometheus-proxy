@@ -282,10 +282,18 @@ internal class AgentGrpcService(
                 }
               }
           }.onFailure { e ->
-            if (e is StatusRuntimeException)
+            if (e is StatusRuntimeException) {
               logger.error { "sendHeartBeat() failed ${e.status}" }
-            else
+              // NOT_FOUND means the proxy has evicted this agent's context.
+              // Re-throw so the exception propagates to startHeartBeat(), triggering
+              // connectionContext.close() via invokeOnCompletion and forcing a reconnect.
+              // Without this, the agent enters a zombie state: the heartbeat loop continues
+              // but no scrape requests are ever routed to this agent.
+              if (e.status.code == Status.Code.NOT_FOUND)
+                throw e
+            } else {
               logger.error { "sendHeartBeat() failed ${e.message}" }
+            }
           }
       }
   }
