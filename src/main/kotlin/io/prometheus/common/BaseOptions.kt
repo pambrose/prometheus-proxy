@@ -115,6 +115,8 @@ abstract class BaseOptions protected constructor(
   var dynamicParams = mutableMapOf<String, String>()
     private set
 
+  private var cliArgs: Array<String> = emptyArray()
+
   private lateinit var config: Config
 
   lateinit var configVals: ConfigVals
@@ -123,11 +125,24 @@ abstract class BaseOptions protected constructor(
   val isTlsEnabled: Boolean
     get() = certChainFilePath.isNotEmpty() && privateKeyFilePath.isNotEmpty()
 
+  private fun isFlagInArgs(vararg names: String): Boolean =
+    cliArgs.any { arg -> names.any { name -> arg.equals(name, ignoreCase = true) } }
+
   protected fun resolveBooleanOption(
     cliValue: Boolean,
     envVar: EnvVars,
     configDefault: Boolean,
   ): Boolean = resolveBoolean(cliValue, envVar.name, System.getenv(envVar.name), configDefault)
+
+  protected fun resolveBooleanOption(
+    cliValue: Boolean,
+    envVar: EnvVars,
+    configDefault: Boolean,
+    vararg cliNames: String,
+  ): Boolean {
+    val cliExplicitlySet = isFlagInArgs(*cliNames)
+    return resolveBoolean(cliValue, cliExplicitlySet, envVar.name, System.getenv(envVar.name), configDefault)
+  }
 
   protected fun validateTlsConfig() {
     val hasCert = certChainFilePath.isNotEmpty()
@@ -143,6 +158,8 @@ abstract class BaseOptions protected constructor(
   protected abstract fun assignConfigVals()
 
   protected fun parseOptions() {
+    cliArgs = args
+
     fun parseArgs(args: Array<String>?) {
       try {
         val jcom =
@@ -191,7 +208,7 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignAdminEnabled(defaultVal: Boolean) {
-    adminEnabled = resolveBooleanOption(adminEnabled, ADMIN_ENABLED, defaultVal)
+    adminEnabled = resolveBooleanOption(adminEnabled, ADMIN_ENABLED, defaultVal, "-r", "--admin")
     logger.info { "adminEnabled: $adminEnabled" }
   }
 
@@ -202,12 +219,12 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignMetricsEnabled(defaultVal: Boolean) {
-    metricsEnabled = resolveBooleanOption(metricsEnabled, METRICS_ENABLED, defaultVal)
+    metricsEnabled = resolveBooleanOption(metricsEnabled, METRICS_ENABLED, defaultVal, "-e", "--metrics")
     logger.info { "metricsEnabled: $metricsEnabled" }
   }
 
   protected fun assignDebugEnabled(defaultVal: Boolean) {
-    debugEnabled = resolveBooleanOption(debugEnabled, DEBUG_ENABLED, defaultVal)
+    debugEnabled = resolveBooleanOption(debugEnabled, DEBUG_ENABLED, defaultVal, "-b", "--debug")
     logger.info { "debugEnabled: $debugEnabled" }
   }
 
@@ -218,7 +235,14 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignTransportFilterDisabled(defaultVal: Boolean) {
-    transportFilterDisabled = resolveBooleanOption(transportFilterDisabled, TRANSPORT_FILTER_DISABLED, defaultVal)
+    transportFilterDisabled =
+      resolveBooleanOption(
+        transportFilterDisabled,
+        TRANSPORT_FILTER_DISABLED,
+        defaultVal,
+        "--tf-disabled",
+        "--tf_disabled",
+      )
     logger.info { "transportFilterDisabled: $transportFilterDisabled" }
   }
 
@@ -330,17 +354,28 @@ abstract class BaseOptions protected constructor(
     const val HTTP_PREFIX = "http://"
     const val HTTPS_PREFIX = "https://"
 
-    // Priority: CLI > env > config
+    // Priority: CLI (if explicitly set) > env > config
     internal fun resolveBoolean(
       cliValue: Boolean,
+      cliExplicitlySet: Boolean,
       envVarName: String,
       envVarValue: String?,
       configDefault: Boolean,
     ): Boolean =
       when {
-        cliValue -> true
+        cliExplicitlySet -> cliValue
         envVarValue != null -> EnvVars.parseBooleanStrict(envVarName, envVarValue)
         else -> configDefault
       }
+
+    // Legacy overload: assumes CLI was explicitly set when cliValue is true.
+    // With JCommander arity-0 booleans, this is correct for the enable case.
+    // Use the overload with cliExplicitlySet for proper disable-from-CLI support.
+    internal fun resolveBoolean(
+      cliValue: Boolean,
+      envVarName: String,
+      envVarValue: String?,
+      configDefault: Boolean,
+    ): Boolean = resolveBoolean(cliValue, cliValue, envVarName, envVarValue, configDefault)
   }
 }

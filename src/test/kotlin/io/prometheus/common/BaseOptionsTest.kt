@@ -444,5 +444,57 @@ class BaseOptionsTest : StringSpec() {
         configDefault = true,
       ).shouldBeTrue()
     }
+
+    // ==================== Bug #7: resolveBoolean with cliExplicitlySet ====================
+
+    "resolveBoolean with cliExplicitlySet=true and cliValue=false should return false" {
+      resolveBoolean(
+        cliValue = false,
+        cliExplicitlySet = true,
+        envVarName = "TEST",
+        envVarValue = "true",
+        configDefault = true,
+      ).shouldBeFalse()
+    }
+
+    "resolveBoolean with cliExplicitlySet=true and cliValue=true should return true" {
+      resolveBoolean(
+        cliValue = true,
+        cliExplicitlySet = true,
+        envVarName = "TEST",
+        envVarValue = "false",
+        configDefault = false,
+      ).shouldBeTrue()
+    }
+
+    "resolveBoolean with cliExplicitlySet=false should use env var" {
+      resolveBoolean(
+        cliValue = false,
+        cliExplicitlySet = false,
+        envVarName = "TEST",
+        envVarValue = "true",
+        configDefault = false,
+      ).shouldBeTrue()
+    }
+
+    "resolveBoolean with cliExplicitlySet=false and no env should use config default" {
+      resolveBoolean(
+        cliValue = false,
+        cliExplicitlySet = false,
+        envVarName = "TEST",
+        envVarValue = null,
+        configDefault = true,
+      ).shouldBeTrue()
+    }
+
+    "resolveBoolean explicit CLI=false should override env=true and config=true" {
+      resolveBoolean(
+        cliValue = false,
+        cliExplicitlySet = true,
+        envVarName = "TEST",
+        envVarValue = "true",
+        configDefault = true,
+      ).shouldBeFalse()
+    }
   }
 }
