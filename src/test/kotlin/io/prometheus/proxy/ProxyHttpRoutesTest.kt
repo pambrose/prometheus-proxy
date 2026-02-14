@@ -240,7 +240,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       results.statusCode shouldBe HttpStatusCode.OK
       results.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
       results.contentText shouldBe ""
-      results.updateMsg shouldBe ""
+      results.updateMsgs shouldBe emptyList()
     }
 
     "ResponseResults should accept custom values" {
@@ -248,12 +248,12 @@ class ProxyHttpRoutesTest : StringSpec() {
         statusCode = HttpStatusCode.ServiceUnavailable,
         contentType = ContentType.Application.Json.withCharset(Charsets.UTF_8),
         contentText = """{"error":"proxy stopped"}""",
-        updateMsg = "proxy_stopped",
+        updateMsgs = listOf("proxy_stopped"),
       )
 
       results.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       results.contentText shouldBe """{"error":"proxy stopped"}"""
-      results.updateMsg shouldBe "proxy_stopped"
+      results.updateMsgs shouldBe listOf("proxy_stopped")
     }
 
     "ResponseResults copy should produce modified instance" {
@@ -262,12 +262,12 @@ class ProxyHttpRoutesTest : StringSpec() {
       val modified = results.copy(
         statusCode = HttpStatusCode.NotFound,
         contentText = "modified content",
-        updateMsg = "modified_msg",
+        updateMsgs = listOf("modified_msg"),
       )
 
       modified.statusCode shouldBe HttpStatusCode.NotFound
       modified.contentText shouldBe "modified content"
-      modified.updateMsg shouldBe "modified_msg"
+      modified.updateMsgs shouldBe listOf("modified_msg")
     }
 
     // ==================== ClosedSendChannelException Handling Tests ====================

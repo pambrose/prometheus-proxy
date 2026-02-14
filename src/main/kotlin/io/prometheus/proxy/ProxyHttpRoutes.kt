@@ -72,7 +72,7 @@ object ProxyHttpRoutes {
         call.respondWith(prettyPrint, ContentType.Application.Json.withCharset(Charsets.UTF_8))
       }
     } else {
-      logger.info { "Not adding /${proxy.options.sdPath} service discovery endpoint" }
+      logger.info { "Not adding ${proxy.options.sdPath.ensureLeadingSlash()} service discovery endpoint" }
     }
   }
 
@@ -98,7 +98,7 @@ object ProxyHttpRoutes {
           else -> processRequestsBasedOnPath(proxy, path, queryParams)
         }
 
-      incrementScrapeRequestCount(proxy, responseResults.updateMsg)
+      responseResults.updateMsgs.forEach { incrementScrapeRequestCount(proxy, it) }
 //      if (proxy.options.debugEnabled)
 //        logger.info { "CT check - handleClientRequests() contentType: ${responseResults.contentType}" }
       call.respondWith(responseResults.contentText, responseResults.contentType, responseResults.statusCode)
@@ -133,13 +133,13 @@ object ProxyHttpRoutes {
         statusCode = HttpStatusCode.ServiceUnavailable,
         contentType = Text.Plain.withCharset(Charsets.UTF_8),
         contentText = "No agents available to handle request",
-        updateMsg = "no_agents",
+        updateMsgs = listOf("no_agents"),
       )
     }
 
     val statusCodes = results.map { it.statusCode }.distinct()
     val contentTypes = results.map { it.contentType }.distinct()
-    val updateMsgs: String = results.joinToString("\n") { it.updateMsg }
+    val updateMsgs: List<String> = results.map { it.updateMsg }
     // Grab the contentType of the first OK in the list
     val okContentType: ContentType? = results.firstOrNull { it.statusCode == HttpStatusCode.OK }?.contentType
 //    if (proxy.options.debugEnabled) {
@@ -151,7 +151,7 @@ object ProxyHttpRoutes {
       statusCode = if (statusCodes.contains(HttpStatusCode.OK)) HttpStatusCode.OK else statusCodes[0],
       contentType = okContentType ?: contentTypes[0],
       contentText = mergeContentTexts(results),
-      updateMsg = updateMsgs,
+      updateMsgs = updateMsgs,
     )
   }
 
@@ -368,5 +368,5 @@ data class ResponseResults(
   val statusCode: HttpStatusCode = HttpStatusCode.OK,
   val contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
   val contentText: String = "",
-  val updateMsg: String = "",
+  val updateMsgs: List<String> = emptyList(),
 )
