@@ -64,7 +64,7 @@ cases).
 ## 4. Missing Protection Against "Zip Bombs" (Fixed)
 
 **File:** `src/main/kotlin/io/prometheus/proxy/ProxyHttpRoutes.kt`, `src/main/kotlin/io/prometheus/proxy/ProxyUtils.kt`,
-`src/main/java/io/prometheus/common/ConfigVals.java`, `etc/config/config.conf`
+`src/main/java/io/prometheus/common/ConfigVals.java`, `config/config.conf`
 
 **Description:**
 The Proxy previously unzipped gzipped content from the Agent in memory without size limits, making it vulnerable to "zip

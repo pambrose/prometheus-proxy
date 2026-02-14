@@ -308,13 +308,13 @@ Highlights include:
 * config files can reference environment variables
 
 All the proxy and agent properties are
-described [here](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf). The only required
+described [here](https://github.com/pambrose/prometheus-proxy/blob/master/config/config.conf). The only required
 argument is an agent config value, which should have an `agent.pathConfigs` value.
 
 Configuration values are evaluated in order: CLI options → environment variables → config file values.
 
 **📖 Complete configuration reference:** [
-`/etc/config/config.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/etc/config/config.conf)
+`/config/config.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/config/config.conf)
 
 ### Proxy CLI Options
 
@@ -689,4 +689,4 @@ This project is licensed under the Apache License 2.0 - see [License.txt](Licens
 
 * [Prometheus.io](http://prometheus.io)
 * [gRPC](http://grpc.io)
-* [Typesafe Config](https://github.com/typesafehub/config)
+* [Typesafe Config](https://github.com/carueda/tscfg)

@@ -39,7 +39,7 @@ reports:
 	./gradlew koverMergedHtmlReport
 
 tsconfig:
-	java -jar ./etc/jars/tscfg-1.2.4.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
+	java -jar ./config/jars/tscfg-1.2.5.jar --spec config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
 distro: build jars
 

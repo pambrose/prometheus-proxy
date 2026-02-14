@@ -130,7 +130,7 @@ The system uses **Typesafe Config** with support for:
 - Environment variables
 - Command-line arguments
 
-Configuration reference is in `etc/config/config.conf`.
+Configuration reference is in `config/config.conf`.
 
 ## Testing
 
@@ -179,9 +179,9 @@ verify { mockService.connectAgent(any()) }
 
 - `build.gradle.kts` - Main build configuration
 - `gradle/libs.versions.toml` - Dependency version catalog
-- `etc/config/config.conf` - Configuration schema and defaults
+- `config/config.conf` - Configuration schema and defaults
 - `src/main/proto/proxy_service.proto` - gRPC service definition
-- `config/detekt/detekt.yml` - Static analysis configuration
+- `etc/detekt/detekt.yml` - Static analysis configuration
 
 ## Docker Support
 

@@ -35,7 +35,7 @@ OpenSpec workflows.
   - `proxy/` - Proxy service components
   - `common/` - Shared utilities and types
 - `src/test/kotlin/` - Test files using Kotest framework
-- `config/detekt/` - Static analysis configuration
+- `etc/detekt/` - Static analysis configuration
 - `openspec/` - OpenSpec specifications and change proposals
 - Key files: `build.gradle.kts`, `.editorconfig`, `detekt.yml`
 
