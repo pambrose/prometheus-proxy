@@ -41,7 +41,7 @@ from the map if so.
 ## 3. Missing Zipped Content Size Limit in Proxy (Fixed)
 
 **Files:** `src/main/kotlin/io/prometheus/proxy/ChunkedContext.kt`,
-`src/main/kotlin/io/prometheus/proxy/ProxyServiceImpl.kt`, `etc/config/config.conf`
+`src/main/kotlin/io/prometheus/proxy/ProxyServiceImpl.kt`, `config/config.conf`
 
 **Description:**
 While the Proxy had a limit for *unzipped* content, it lacked a limit for the raw *zipped* data accumulated during gRPC
@@ -59,7 +59,7 @@ memory before decompression even began.
 ## 4. Missing Scrape Response Size Limit in Agent (Fixed)
 
 **Files:** `src/main/kotlin/io/prometheus/agent/AgentHttpService.kt`,
-`src/main/kotlin/io/prometheus/agent/AgentOptions.kt`, `etc/config/config.conf`
+`src/main/kotlin/io/prometheus/agent/AgentOptions.kt`, `config/config.conf`
 
 **Description:**
 The Agent would read the entire body of an HTTP scrape response into memory without checking its size. If a monitored

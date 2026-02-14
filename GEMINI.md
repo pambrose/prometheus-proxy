@@ -57,7 +57,7 @@ After building, the JAR files are located in `build/libs/`:
 
 - Follows standard Kotlin conventions, enforced by **ktlint** via the `kotlinter` plugin.
 - **Detekt** is used for additional static analysis.
-- Configuration for Detekt is in `config/detekt/detekt.yml`.
+- Configuration for Detekt is in `etc/detekt/detekt.yml`.
 
 ### Testing Practices
 
@@ -68,7 +68,7 @@ After building, the JAR files are located in `build/libs/`:
 
 ### Configuration
 
-- Default configuration values are in `etc/config/config.conf`.
+- Default configuration values are in `config/config.conf`.
 - Configuration supports HOCON, JSON, and Java properties.
 - Environment variables (e.g., `PROXY_CONFIG`, `AGENT_CONFIG`) and CLI arguments can override file-based settings.
 
@@ -79,7 +79,7 @@ After building, the JAR files are located in `build/libs/`:
 - `src/main/kotlin/io/prometheus/Proxy.kt`: Main entry point for the Proxy service.
 - `src/main/kotlin/io/prometheus/Agent.kt`: Main entry point for the Agent service.
 - `src/main/proto/proxy_service.proto`: gRPC service and message definitions.
-- `etc/config/config.conf`: Comprehensive configuration reference.
+- `config/config.conf`: Comprehensive configuration reference.
 - `docs/`: Additional documentation and architecture diagrams.
 - `examples/`: Sample HOCON configuration files for various use cases.
 - `testing/certs/`: Certificates for testing TLS/mTLS.

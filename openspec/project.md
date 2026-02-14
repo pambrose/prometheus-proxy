@@ -34,7 +34,7 @@ directly to external Prometheus instances.
 ### Code Style
 
 - **Formatter**: Uses kotlinter plugin with standard Kotlin formatting conventions
-- **Linter**: detekt for static analysis (config: `config/detekt/detekt.yml`)
+- **Linter**: detekt for static analysis (config: `etc/detekt/detekt.yml`)
 - **Commands**:
   - `./gradlew formatKotlin` to format code
   - `./gradlew lintKotlinMain lintKotlinTest` to lint

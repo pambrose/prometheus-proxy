@@ -494,7 +494,7 @@ correct; the comment is wrong.
 
 ### L14: Typo "Overide" in configuration comment -- FIXED
 
-**File:** `etc/config/config.conf:145` and `src/main/java/io/prometheus/common/ConfigVals.java:321`
+**File:** `config/config.conf:145` and `src/main/java/io/prometheus/common/ConfigVals.java:321`
 
 ```
 overrideAuthority = ""  // Overide authority
