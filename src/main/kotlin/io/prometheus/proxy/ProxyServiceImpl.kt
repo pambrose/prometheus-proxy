@@ -46,9 +46,9 @@ import io.prometheus.grpc.pathMapSizeResponse
 import io.prometheus.grpc.registerAgentResponse
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import java.util.concurrent.CancellationException
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.fetchAndIncrement
 
@@ -163,13 +163,15 @@ internal class ProxyServiceImpl(
     flow {
       val agentId = request.agentId
       try {
-        proxy.agentContextManager.getAgentContext(agentId)
-          ?.also { agentContext ->
-            while (proxy.isRunning && agentContext.isValid()) {
-              agentContext.readScrapeRequest()?.apply { emit(scrapeRequest) }
-            }
-          }
-          ?: logger.warn { "readRequestsFromProxy(): No AgentContext found for agentId: $agentId" }
+        val agentContext = proxy.agentContextManager.getAgentContext(agentId)
+          ?: throw StatusException(
+            Status.NOT_FOUND.withDescription(
+              "No AgentContext found for agentId: $agentId",
+            ),
+          )
+        while (proxy.isRunning && agentContext.isValid()) {
+          agentContext.readScrapeRequest()?.apply { emit(scrapeRequest) }
+        }
       } finally {
         // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to
         // detect agent disconnect and clean up. Handle cleanup here on stream termination.

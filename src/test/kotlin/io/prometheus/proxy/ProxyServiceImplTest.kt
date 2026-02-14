@@ -467,7 +467,7 @@ class ProxyServiceImplTest : StringSpec() {
       emittedRequests[0] shouldBe mockScrapeRequest
     }
 
-    "readRequestsFromProxy should emit nothing when agent context is missing" {
+    "readRequestsFromProxy should throw NOT_FOUND when agent context is missing" {
       val proxy = createMockProxy()
       val testAgentId = "missing-agent-123"
 
@@ -480,10 +480,27 @@ class ProxyServiceImplTest : StringSpec() {
       val service = ProxyServiceImpl(proxy)
       val flow = service.readRequestsFromProxy(request)
 
-      val emittedRequests = mutableListOf<io.prometheus.grpc.ScrapeRequest>()
-      flow.collect { emittedRequests.add(it) }
+      val exception = shouldThrow<StatusException> {
+        flow.collect {}
+      }
 
-      emittedRequests.size shouldBe 0
+      exception.status.code shouldBe Status.NOT_FOUND.code
+      exception.status.description shouldContain testAgentId
+    }
+
+    // ==================== Bug #11: CancellationException Import Tests ====================
+
+    "writeResponsesToProxy should rethrow kotlinx CancellationException" {
+      val proxy = createMockProxy()
+      val service = ProxyServiceImpl(proxy)
+
+      val failingFlow = flow<ScrapeResponse> {
+        throw kotlinx.coroutines.CancellationException("coroutine cancelled")
+      }
+
+      shouldThrow<kotlinx.coroutines.CancellationException> {
+        service.writeResponsesToProxy(failingFlow)
+      }
     }
 
     // ==================== writeResponsesToProxy Tests ====================
