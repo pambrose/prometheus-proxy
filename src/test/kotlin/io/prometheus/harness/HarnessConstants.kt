@@ -52,5 +52,5 @@ object HarnessConstants {
 
   val CONFIG_ARG = listOf("--config", "${if (File(TRAVIS_FILE).exists()) "" else GH_PREFIX}$TRAVIS_FILE")
 
-  val OPTIONS_CONFIG = "${if (File(JUNIT_FILE).exists()) GH_PREFIX else ""}$JUNIT_FILE"
+  val OPTIONS_CONFIG = "${if (File(JUNIT_FILE).exists()) "" else GH_PREFIX}$JUNIT_FILE"
 }
