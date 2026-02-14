@@ -92,6 +92,7 @@ configureKotlinter()
 configureDetekt()
 configureVersions()
 configureCoverage()
+configureSecrets()
 
 fun Project.configureKotlin() {
   tasks.withType<JavaCompile> {
@@ -284,6 +285,24 @@ fun Project.configureVersions() {
     rejectVersionIf {
       isNonStable(candidate.version)
     }
+  }
+}
+
+fun Project.configureSecrets() {
+  val secretsFile = file("secrets/secrets.env")
+  if (secretsFile.exists()) {
+    val envVars =
+      secretsFile.readLines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && !it.startsWith("#") }
+        .mapNotNull { line ->
+          val idx = line.indexOf('=')
+          if (idx > 0) line.substring(0, idx) to line.substring(idx + 1) else null
+        }
+        .toMap()
+
+    tasks.withType<JavaExec> { environment(envVars) }
+    tasks.withType<Test> { environment(envVars) }
   }
 }
 
