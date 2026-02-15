@@ -234,6 +234,74 @@ class AgentContextCleanupServiceTest : StringSpec() {
       stopDuration shouldBeLessThan 5000L
     }
 
+    // ==================== TOCTOU Re-check Tests ====================
+
+    "cleanup should skip eviction when agent becomes active between check and evict" {
+      val configVals = createConfigVals(
+        maxAgentInactivitySecs = 2,
+        staleAgentCheckPauseSecs = 1,
+      )
+
+      val agentContextManager = AgentContextManager(isTestMode = true)
+
+      // Create an agent that starts stale but becomes active before eviction.
+      // The first call to inactivityDuration (during findStaleAgents) returns 5s (stale).
+      // Subsequent calls (during the re-check) return 1s (active).
+      val agentContext = mockk<AgentContext>(relaxed = true)
+      every { agentContext.agentId } returns "revived-agent"
+      every { agentContext.inactivityDuration } returnsMany listOf(5.seconds, 1.seconds)
+
+      agentContextManager.putAgentContext("revived-agent", agentContext)
+
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.agentContextManager } returns agentContextManager
+
+      val service = AgentContextCleanupService(mockProxy, configVals)
+
+      service.startAsync()
+      Thread.sleep(1500)
+      service.stopAsync().awaitTerminated()
+
+      // The agent was stale at check time but active at eviction time -- should NOT be evicted
+      verify(exactly = 0) { mockProxy.removeAgentContext("revived-agent", any()) }
+    }
+
+    "cleanup should still evict agent that remains stale at re-check" {
+      val configVals = createConfigVals(
+        maxAgentInactivitySecs = 2,
+        staleAgentCheckPauseSecs = 1,
+      )
+
+      val agentContextManager = AgentContextManager(isTestMode = true)
+
+      // Agent remains stale across both checks
+      val agentContext = mockk<AgentContext>(relaxed = true)
+      every { agentContext.agentId } returns "still-stale"
+      every { agentContext.inactivityDuration } returns 5.seconds
+
+      agentContextManager.putAgentContext("still-stale", agentContext)
+
+      val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.agentContextManager } returns agentContextManager
+      every { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers {
+        val block = firstArg<ProxyMetrics.() -> Unit>()
+        block(mockMetrics)
+      }
+      every { mockProxy.removeAgentContext(any(), any()) } answers {
+        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<String>())
+      }
+
+      val service = AgentContextCleanupService(mockProxy, configVals)
+
+      service.startAsync()
+      Thread.sleep(1500)
+      service.stopAsync().awaitTerminated()
+
+      // Agent remained stale -- should be evicted
+      verify(atLeast = 1) { mockProxy.removeAgentContext("still-stale", "Eviction") }
+    }
+
     // ==================== Multiple Stale Agents Test ====================
 
     "cleanup should evict multiple stale agents in single cycle" {

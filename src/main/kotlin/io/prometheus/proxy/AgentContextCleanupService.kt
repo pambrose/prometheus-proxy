@@ -48,12 +48,20 @@ internal class AgentContextCleanupService(
       val agentsToEvict = proxy.agentContextManager.findStaleAgents(maxAgentInactivityTime)
 
       agentsToEvict.forEach { (agentId, agentContext) ->
+        // Re-check inactivity to avoid a TOCTOU race: the agent may have sent a
+        // heartbeat between the findStaleAgents snapshot and this eviction attempt.
         val inactiveTime = agentContext.inactivityDuration
-        logger.info {
-          "Evicting agentId $agentId after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
+        if (inactiveTime > maxAgentInactivityTime) {
+          logger.info {
+            "Evicting agentId $agentId after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
+          }
+          proxy.removeAgentContext(agentId, "Eviction")
+          proxy.metrics { agentEvictionCount.inc() }
+        } else {
+          logger.debug {
+            "Skipping eviction for agentId $agentId: activity detected since stale check ($inactiveTime)"
+          }
         }
-        proxy.removeAgentContext(agentId, "Eviction")
-        proxy.metrics { agentEvictionCount.inc() }
       }
       shutdownLatch.await(pauseTimeSecs.inWholeMilliseconds, TimeUnit.MILLISECONDS)
     }

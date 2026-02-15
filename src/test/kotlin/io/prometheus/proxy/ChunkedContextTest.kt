@@ -24,6 +24,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import java.util.zip.CRC32
@@ -560,15 +561,52 @@ class ChunkedContextTest : StringSpec() {
       context.totalByteCount shouldBe data.size.toLong()
     }
 
-    "applyChunk should throw when chunkByteCount exceeds data size" {
+    "applyChunk should throw ChunkValidationException when chunkByteCount exceeds data size" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response, 1000000)
 
       val data = "short".toByteArray()
-      // chunkByteCount (1000) > data.size (5) triggers ArrayIndexOutOfBoundsException
-      shouldThrow<Exception> {
+      // chunkByteCount (1000) > data.size (5) -- now caught by the validation guard
+      val ex = shouldThrow<ChunkValidationException> {
         context.applyChunk(data, 1000, 1, 0)
       }
+      ex.message shouldContain "chunkByteCount (1000) is invalid for data size (5)"
+    }
+
+    "applyChunk should throw ChunkValidationException when chunkByteCount is negative" {
+      val response = createHeaderResponse()
+      val context = ChunkedContext(response, 1000000)
+
+      val data = "test data".toByteArray()
+      val ex = shouldThrow<ChunkValidationException> {
+        context.applyChunk(data, -1, 1, 0)
+      }
+      ex.message shouldContain "chunkByteCount (-1) is invalid for data size"
+    }
+
+    "applyChunk should succeed when chunkByteCount equals data size" {
+      val response = createHeaderResponse()
+      val context = ChunkedContext(response, 1000000)
+
+      val data = "exact match".toByteArray()
+      val checksum = CRC32().apply { update(data) }.value
+
+      context.applyChunk(data, data.size, 1, checksum)
+      context.totalByteCount shouldBe data.size
+    }
+
+    "applyChunk should succeed when chunkByteCount is less than data size" {
+      val response = createHeaderResponse()
+      val context = ChunkedContext(response, 1000000)
+
+      val buffer = ByteArray(1024)
+      val realData = "partial".toByteArray()
+      realData.copyInto(buffer)
+
+      val checksum = CRC32().apply { update(buffer, 0, realData.size) }.value
+
+      context.applyChunk(buffer, realData.size, 1, checksum)
+      context.totalByteCount shouldBe realData.size
     }
   }
 }

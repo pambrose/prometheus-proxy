@@ -43,6 +43,11 @@ internal class ChunkedContext(
     chunkCount: Int,
     chunkChecksum: Long,
   ) {
+    if (chunkByteCount < 0 || chunkByteCount > data.size)
+      throw ChunkValidationException(
+        "chunkByteCount ($chunkByteCount) is invalid for data size (${data.size})",
+      )
+
     totalChunkCount++
     totalByteCount += chunkByteCount
 
