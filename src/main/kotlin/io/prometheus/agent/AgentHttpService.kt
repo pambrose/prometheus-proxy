@@ -125,6 +125,11 @@ internal class AgentHttpService(
       val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
       logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
       timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
+
+      // Set non-default headers
+      request.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
+      val authHeader = request.authHeader.ifBlank { null }
+      authHeader?.also { header(HttpHeaders.Authorization, it) }
     }
 
   private fun processHttpResponse(
@@ -190,13 +195,6 @@ internal class AgentHttpService(
             trustManager = TrustAllX509TrustManager
           }
         }
-      }
-
-      // Set default headers
-      defaultRequest {
-        scrapeRequest.accept.also { if (it.isNotEmpty()) header(ACCEPT, it) }
-        val authHeader = scrapeRequest.authHeader.ifBlank { null }
-        authHeader?.also { header(HttpHeaders.Authorization, it) }
       }
 
       install(HttpTimeout)
