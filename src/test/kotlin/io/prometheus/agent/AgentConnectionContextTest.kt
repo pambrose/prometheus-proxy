@@ -39,24 +39,27 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class AgentConnectionContextTest : StringSpec() {
   init {
-    "close should disconnect context" {
+    "close should disconnect context and return 0 when empty" {
       val context = AgentConnectionContext()
       context.connected.shouldBeTrue()
 
-      context.close()
+      val drained = context.close()
 
       context.connected.shouldBeFalse()
+      drained shouldBe 0
     }
 
-    "close should be idempotent" {
+    "close should be idempotent and return 0 on second call" {
       val context = AgentConnectionContext()
 
-      context.close()
+      val drained1 = context.close()
       context.connected.shouldBeFalse()
+      drained1 shouldBe 0
 
-      // Second close should not throw
-      context.close()
+      // Second close should not throw and return 0
+      val drained2 = context.close()
       context.connected.shouldBeFalse()
+      drained2 shouldBe 0
     }
 
     // Bug #7: The old code used runBlocking { accessMutex.withLock { ... } } in close().
@@ -164,6 +167,42 @@ class AgentConnectionContextTest : StringSpec() {
       val capacity = 50
       val context = AgentConnectionContext(capacity)
       context.backlogCapacity shouldBe capacity
+    }
+
+    // ==================== Bug #5: close() drains scrapeRequestActionsChannel ====================
+
+    "Bug #5: close should drain buffered scrape request actions and return count" {
+      val context = AgentConnectionContext()
+
+      // Buffer some scrape request actions
+      context.sendScrapeRequestAction {
+        ScrapeResults(srAgentId = "agent-1", srScrapeId = 1L, srValidResponse = true)
+      }
+      context.sendScrapeRequestAction {
+        ScrapeResults(srAgentId = "agent-1", srScrapeId = 2L, srValidResponse = true)
+      }
+      context.sendScrapeRequestAction {
+        ScrapeResults(srAgentId = "agent-1", srScrapeId = 3L, srValidResponse = true)
+      }
+
+      val drained = context.close()
+
+      drained shouldBe 3
+      context.connected.shouldBeFalse()
+    }
+
+    "Bug #5: second close should return 0 after items already drained" {
+      val context = AgentConnectionContext()
+
+      context.sendScrapeRequestAction {
+        ScrapeResults(srAgentId = "agent-1", srScrapeId = 1L, srValidResponse = true)
+      }
+
+      val drained1 = context.close()
+      drained1 shouldBe 1
+
+      val drained2 = context.close()
+      drained2 shouldBe 0
     }
 
     // ==================== Bug #7: In-flight scrape results silently lost on disconnect ====================

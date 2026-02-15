@@ -53,17 +53,25 @@ internal class AgentConnectionContext(
     }
   }
 
-  fun close() {
+  fun close(): Int {
     synchronized(closeLock) {
       if (!disconnected) {
         disconnected = true
-        scrapeRequestActionsChannel.cancel()
+        // Close (not cancel) and drain the scrape request actions channel so that
+        // callers can adjust scrapeRequestBacklogSize by the drained count.
+        scrapeRequestActionsChannel.close()
+        var drained = 0
+        while (scrapeRequestActionsChannel.tryReceive().isSuccess) {
+          drained++
+        }
         // Use close() instead of cancel() so buffered results can still be drained
         // by the consumer. cancel() discards all buffered items, causing the proxy
         // to time out waiting for results that were already computed.
         scrapeResultsChannel.close()
-        logger.info { "AgentConnectionContext closed" }
+        logger.info { "AgentConnectionContext closed (drained $drained pending scrape requests)" }
+        return drained
       }
+      return 0
     }
   }
 
