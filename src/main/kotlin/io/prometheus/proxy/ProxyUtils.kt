@@ -70,7 +70,7 @@ object ProxyUtils {
     logger.error { message }
     return ResponseResults(
       statusCode = HttpStatusCode.NotFound,
-      updateMsg = "invalid_agent_context",
+      updateMsgs = listOf("invalid_agent_context"),
     )
   }
 
@@ -83,7 +83,7 @@ object ProxyUtils {
     logger.error { message }
     return ResponseResults(
       statusCode = HttpStatusCode.NotFound,
-      updateMsg = "invalid_path",
+      updateMsgs = listOf("invalid_path"),
     )
   }
 
@@ -92,7 +92,7 @@ object ProxyUtils {
     logger.info { MISSING_PATH_MSG }
     return ResponseResults(
       statusCode = HttpStatusCode.NotFound,
-      updateMsg = "missing_path",
+      updateMsgs = listOf("missing_path"),
     )
   }
 
@@ -100,7 +100,7 @@ object ProxyUtils {
     logger.error { "Proxy stopped" }
     return ResponseResults(
       statusCode = HttpStatusCode.ServiceUnavailable,
-      updateMsg = "proxy_stopped",
+      updateMsgs = listOf("proxy_stopped"),
     )
   }
 

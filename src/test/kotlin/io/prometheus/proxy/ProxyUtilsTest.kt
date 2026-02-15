@@ -45,7 +45,7 @@ class ProxyUtilsTest : StringSpec() {
       val result = ProxyUtils.invalidAgentContextResponse("test-path", mockProxy)
 
       result.statusCode shouldBe HttpStatusCode.NotFound
-      result.updateMsg shouldBe "invalid_agent_context"
+      result.updateMsgs shouldBe listOf("invalid_agent_context")
       verify { mockProxy.logActivity("Invalid AgentContext for /test-path") }
     }
 
@@ -55,7 +55,7 @@ class ProxyUtilsTest : StringSpec() {
       val result = ProxyUtils.invalidPathResponse("invalid-path", mockProxy)
 
       result.statusCode shouldBe HttpStatusCode.NotFound
-      result.updateMsg shouldBe "invalid_path"
+      result.updateMsgs shouldBe listOf("invalid_path")
       verify { mockProxy.logActivity("Invalid path request /invalid-path") }
     }
 
@@ -65,7 +65,7 @@ class ProxyUtilsTest : StringSpec() {
       val result = ProxyUtils.emptyPathResponse(mockProxy)
 
       result.statusCode shouldBe HttpStatusCode.NotFound
-      result.updateMsg shouldBe "missing_path"
+      result.updateMsgs shouldBe listOf("missing_path")
       verify { mockProxy.logActivity(any()) }
     }
 
@@ -73,7 +73,7 @@ class ProxyUtilsTest : StringSpec() {
       val result = ProxyUtils.proxyNotRunningResponse()
 
       result.statusCode shouldBe HttpStatusCode.ServiceUnavailable
-      result.updateMsg shouldBe "proxy_stopped"
+      result.updateMsgs shouldBe listOf("proxy_stopped")
     }
 
     "incrementScrapeRequestCount should call metrics for non-empty type" {
@@ -134,10 +134,10 @@ class ProxyUtilsTest : StringSpec() {
       val result4 = ProxyUtils.proxyNotRunningResponse()
 
       // Each call returns its own independent instance
-      result1.updateMsg shouldBe "invalid_path"
-      result2.updateMsg shouldBe "invalid_agent_context"
-      result3.updateMsg shouldBe "missing_path"
-      result4.updateMsg shouldBe "proxy_stopped"
+      result1.updateMsgs shouldBe listOf("invalid_path")
+      result2.updateMsgs shouldBe listOf("invalid_agent_context")
+      result3.updateMsgs shouldBe listOf("missing_path")
+      result4.updateMsgs shouldBe listOf("proxy_stopped")
 
       // Copying one result does not affect others
       val modified = result1.copy(contentText = "modified")

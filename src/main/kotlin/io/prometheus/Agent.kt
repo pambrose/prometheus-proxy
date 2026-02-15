@@ -254,7 +254,10 @@ class Agent(
                   .apply { logger.error(e) { "readRequestsFromProxy(): ${exceptionDetails(e)}" } }
             }
           }.apply {
-            invokeOnCompletion { connectionContext.close() }
+            invokeOnCompletion {
+              val drained = connectionContext.close()
+              if (drained > 0) scrapeRequestBacklogSize -= drained
+            }
           }
 
           // Ends on !isRunning || !connectionContext.connected (which is connectionContext.closed())
@@ -267,7 +270,10 @@ class Agent(
                   .apply { logger.error(e) { "startHeartBeat(): ${exceptionDetails(e)}" } }
             }
           }.apply {
-            invokeOnCompletion { connectionContext.close() }
+            invokeOnCompletion {
+              val drained = connectionContext.close()
+              if (drained > 0) scrapeRequestBacklogSize -= drained
+            }
           }
 
           // Ends on disconnect from server
@@ -281,7 +287,10 @@ class Agent(
                   .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): ${exceptionDetails(e)}" } }
             }
           }.apply {
-            invokeOnCompletion { connectionContext.close() }
+            invokeOnCompletion {
+              val drained = connectionContext.close()
+              if (drained > 0) scrapeRequestBacklogSize -= drained
+            }
           }
 
           // Ends on disconnect from server
@@ -313,7 +322,10 @@ class Agent(
                   .apply { logger.error(e) { "scrapeResultsChannel.send(): ${exceptionDetails(e)}" } }
             }
           }.apply {
-            invokeOnCompletion { connectionContext.close() }
+            invokeOnCompletion {
+              val drained = connectionContext.close()
+              if (drained > 0) scrapeRequestBacklogSize -= drained
+            }
           }
         }
         logger.info { "connectToProxy() completed" }
