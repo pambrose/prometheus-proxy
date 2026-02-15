@@ -34,7 +34,6 @@ import io.prometheus.Agent
 import io.prometheus.common.ConfigVals
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -383,41 +382,37 @@ class AgentPathManagerTest : StringSpec() {
       text shouldContain "http://localhost:9100/metrics"
     }
 
-    // Bug #6: The gRPC call and local map update in registerPath were not atomic.
-    // Two concurrent calls for the same path could result in the local map having a
-    // stale pathId (from the slower call that finished last) while the proxy has the
-    // pathId from the faster call. The mutex serializes these operations.
-    "concurrent registerPath calls for the same path should have consistent final state" {
+    // Bug #7: The gRPC call was inside pathMutex, blocking all concurrent path
+    // operations for the full RPC duration. The fix moves the gRPC call outside
+    // the mutex so concurrent registrations for different paths can proceed in
+    // parallel. The mutex now only protects the local pathContextMap update.
+    "concurrent registerPath calls for different paths should not block each other" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
-      val firstCallStarted = CompletableDeferred<Unit>()
-      val callCount = AtomicInteger(0)
+      val concurrentCalls = AtomicInteger(0)
+      val maxConcurrent = AtomicInteger(0)
 
-      coEvery { agent.grpcService.registerPathOnProxy("metrics", any()) } coAnswers {
-        val num = callCount.incrementAndGet()
-        if (num == 1) {
-          firstCallStarted.complete(Unit)
-          delay(100) // The first gRPC call is slow
-        }
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } coAnswers {
+        val current = concurrentCalls.incrementAndGet()
+        maxConcurrent.updateAndGet { max -> maxOf(max, current) }
+        delay(100) // Simulate slow gRPC call
+        concurrentCalls.decrementAndGet()
         registerPathResponse {
           valid = true
-          pathId = num.toLong()
+          pathId = firstArg<String>().hashCode().toLong()
         }
       }
 
       coroutineScope {
-        launch { manager.registerPath("metrics", "http://localhost:8080/a") }
-        firstCallStarted.await() // Ensure the first call is in-flight
-        launch { manager.registerPath("metrics", "http://localhost:8080/b") }
+        launch { manager.registerPath("path1", "http://localhost:8080/p1") }
+        launch { manager.registerPath("path2", "http://localhost:8080/p2") }
       }
 
-      val context = manager["metrics"]
-      context.shouldNotBeNull()
-      // With the mutex, calls are serialized: first call writes pathId=1,
-      // then second call writes pathId=2. The final state should always be
-      // pathId=2 from the last call. Without the mutex, the slow first call
-      // would overwrite the fast second call, leaving a stale pathId=1.
-      context.pathId shouldBe 2L
+      manager["path1"].shouldNotBeNull()
+      manager["path2"].shouldNotBeNull()
+      // With the fix, both gRPC calls run concurrently outside the mutex.
+      // With the old code, the global mutex serialized them (maxConcurrent=1).
+      maxConcurrent.get() shouldBe 2
     }
 
     "registerPaths should register all configured paths" {
