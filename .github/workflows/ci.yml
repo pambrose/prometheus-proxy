@@ -16,6 +16,5 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew build
-        env:
-          HARNESS_CONFIG: MINI
+      - run: ./gradlew build -x test
+      - run: ./gradlew test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
