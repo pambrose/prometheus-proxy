@@ -18,6 +18,8 @@
 - Fix catch-all HTTP exception handler from `NotFound` (404) to `InternalServerError` (500)
 - Fix `errorCode()` to walk the exception cause chain for wrapped timeout exceptions
 - Fix OpenMetrics `# EOF` marker handling in consolidated responses — intermediate `# EOF` markers are now stripped
+- Fix `parseHostPort` to strip brackets from IPv6 addresses in `HostPort` — `[::1]:50051` now yields host `::1` instead
+  of `[::1]`
 
 ### Concurrency & Resource Management
 
@@ -134,6 +136,23 @@
 | serialization  | 1.9.0  | 1.10.0 |
 | slf4j          | 2.0.13 | 2.0.17 |
 | typesafe       | 1.4.4  | 1.4.5  |
+
+---
+
+## CI/CD
+
+- Added GitHub Actions CI workflow for building the project on push/PR to `master`
+- Added GitHub Actions workflow for deploying Dokka API documentation to GitHub Pages
+- Removed Travis CI configuration (`.travis.yml`)
+
+---
+
+## Documentation
+
+- Integrated Dokka for HTML API documentation generation (`./gradlew dokkaHtml`)
+- Added KDoc documentation across agent, proxy, and common packages
+- Added module and package documentation (`docs/packages.md`)
+- Added improvements roadmap document (`docs/improvements.md`)
 
 ---
 
