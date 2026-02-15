@@ -98,6 +98,7 @@ message HeaderData {
   string header_failure_reason = 5;
   string header_url = 6;
   string header_content_type = 7;
+  bool header_zipped = 8;
 }
 
 message ChunkData {

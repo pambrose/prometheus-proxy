@@ -73,6 +73,7 @@ internal class ScrapeResults(
         headerFailureReason = srFailureReason
         headerUrl = srUrl
         headerContentType = srContentType
+        headerZipped = srZipped
       }
     }
 

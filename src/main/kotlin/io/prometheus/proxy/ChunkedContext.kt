@@ -82,7 +82,7 @@ internal class ChunkedContext(
         srScrapeId = headerScrapeId,
         srAgentId = headerAgentId,
         srStatusCode = headerStatusCode,
-        srZipped = true,
+        srZipped = headerZipped,
         srContentAsZipped = baos.toByteArray(),
         srFailureReason = headerFailureReason,
         srUrl = headerUrl,

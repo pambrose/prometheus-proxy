@@ -20,6 +20,7 @@ package io.prometheus.proxy
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -39,6 +40,7 @@ class ChunkedContextTest : StringSpec() {
     failureReason: String = "",
     url: String = "http://localhost:8080/metrics",
     contentType: String = "text/plain",
+    zipped: Boolean = true,
   ) = chunkedScrapeResponse {
     header = headerData {
       headerValidResponse = validResponse
@@ -48,6 +50,7 @@ class ChunkedContextTest : StringSpec() {
       headerFailureReason = failureReason
       headerUrl = url
       headerContentType = contentType
+      headerZipped = zipped
     }
   }
 
@@ -469,6 +472,34 @@ class ChunkedContextTest : StringSpec() {
 
       context.totalChunkCount shouldBe 1
       context.totalByteCount shouldBe 0
+    }
+
+    // Bug #10: applySummary hardcoded srZipped=true. Now it reads headerZipped
+    // from the header, so non-zipped chunked content is correctly represented.
+    "Bug #10: applySummary should propagate headerZipped=true from header" {
+      val response = createHeaderResponse(zipped = true)
+      val context = ChunkedContext(response, 1000000)
+
+      val crc = CRC32()
+      val data = "test".toByteArray()
+      crc.update(data)
+      context.applyChunk(data, data.size, 1, crc.value)
+
+      val scrapeResults = context.applySummary(1, data.size, crc.value)
+      scrapeResults.srZipped.shouldBeTrue()
+    }
+
+    "Bug #10: applySummary should propagate headerZipped=false from header" {
+      val response = createHeaderResponse(zipped = false)
+      val context = ChunkedContext(response, 1000000)
+
+      val crc = CRC32()
+      val data = "test".toByteArray()
+      crc.update(data)
+      context.applyChunk(data, data.size, 1, crc.value)
+
+      val scrapeResults = context.applySummary(1, data.size, crc.value)
+      scrapeResults.srZipped.shouldBeFalse()
     }
 
     "applyChunk should throw when chunkByteCount exceeds data size" {
