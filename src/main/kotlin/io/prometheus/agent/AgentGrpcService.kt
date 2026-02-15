@@ -83,7 +83,7 @@ import kotlin.concurrent.withLock
  * @param agent the parent [Agent] instance
  * @param options agent configuration options (proxy hostname, keepalive, TLS, etc.)
  * @param inProcessServerName the in-process server name (empty for Netty mode)
- * @see Agent
+ * @see io.prometheus.Agent
  * @see AgentConnectionContext
  * @see AgentHttpService
  */

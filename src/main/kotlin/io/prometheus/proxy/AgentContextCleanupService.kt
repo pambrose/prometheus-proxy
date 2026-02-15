@@ -39,7 +39,7 @@ import kotlin.time.Duration.Companion.seconds
  * @param configVals internal proxy configuration (inactivity timeout, check interval)
  * @param initBlock optional initialization block run after listener registration
  * @see AgentContextManager
- * @see Proxy
+ * @see io.prometheus.Proxy
  */
 internal class AgentContextCleanupService(
   private val proxy: Proxy,

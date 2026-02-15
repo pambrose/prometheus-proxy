@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * @param agent the parent [Agent] instance
  * @see AgentGrpcService
- * @see Agent
+ * @see io.prometheus.Agent
  */
 internal class AgentPathManager(
   private val agent: Agent,

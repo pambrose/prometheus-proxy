@@ -33,7 +33,7 @@ import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
  *
  * @param backlogCapacity maximum number of buffered scrape request actions
  * @see AgentGrpcService
- * @see Agent
+ * @see io.prometheus.Agent
  */
 internal class AgentConnectionContext(
   val backlogCapacity: Int = 128,

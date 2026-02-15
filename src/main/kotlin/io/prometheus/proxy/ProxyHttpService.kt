@@ -45,7 +45,7 @@ import kotlin.time.DurationUnit.SECONDS
  * @param httpPort the HTTP listen port for Prometheus scrape requests
  * @param isTestMode when true, suppresses verbose logging during tests
  * @see ProxyHttpRoutes
- * @see Proxy
+ * @see io.prometheus.Proxy
  */
 internal class ProxyHttpService(
   private val proxy: Proxy,

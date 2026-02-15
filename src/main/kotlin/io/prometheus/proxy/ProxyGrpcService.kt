@@ -49,7 +49,7 @@ import kotlin.time.Duration.Companion.seconds
  * @param port the gRPC listen port (-1 for in-process mode)
  * @param inProcessName the in-process server name (empty for Netty mode)
  * @see ProxyServiceImpl
- * @see Proxy
+ * @see io.prometheus.Proxy
  */
 internal class ProxyGrpcService(
   private val proxy: Proxy,
