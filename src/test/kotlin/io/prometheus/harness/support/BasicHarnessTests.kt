@@ -110,7 +110,7 @@ internal object BasicHarnessTests {
       val jobs =
         List(HARNESS_CONFIG.addRemoveReps) { i ->
           launch(Dispatchers.IO + exceptionHandler(logger)) {
-            val path = "test-$i}"
+            val path = "test-$i"
             val url = "$proxyPort/$path".withPrefix()
             mutex.withLock { paths += path }
             pathManager.registerPath(path, url)
