@@ -25,6 +25,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.ints.shouldBeLessThanOrEqual
+import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -45,6 +46,7 @@ import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlin.time.measureTime
 import io.ktor.server.cio.CIO as ServerCIO
 
 class AgentHttpServiceTest : StringSpec() {
@@ -963,6 +965,53 @@ class AgentHttpServiceTest : StringSpec() {
       content.length shouldBe content.encodeToByteArray().size
     }
 
+    "Bug #2: gzip threshold should use byte count not char count for multi-byte content" {
+      // Create content with multi-byte UTF-8 chars where charCount < threshold < byteCount
+      // Each CJK char is 3 bytes in UTF-8, so 200 chars = 600 bytes
+      val multiByte = "\u4e16".repeat(200) // 200 chars, 600 bytes
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText(multiByte)
+          }
+        }
+      }
+
+      try {
+        val port = startServerAndGetPort(server)
+
+        val mockAgent = createMockAgentWithPaths()
+        // Set threshold between char count (200) and byte count (600)
+        val options = mockAgent.options
+        every { options.minGzipSizeBytes } returns 300
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 66L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe 200
+        results.srValidResponse.shouldBeTrue()
+        // With the fix, byte count (600) > threshold (300) -> zipped
+        // Without the fix, char count (200) < threshold (300) -> not zipped
+        results.srZipped.shouldBeTrue()
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
     // ==================== Cancellation Handling Tests (Bug #3) ====================
 
     "fetchScrapeUrl should rethrow generic CancellationException" {
@@ -986,6 +1035,48 @@ class AgentHttpServiceTest : StringSpec() {
 
       io.kotest.assertions.throwables.shouldThrow<CancellationException> {
         spiedService.fetchScrapeUrl(request)
+      }
+    }
+
+    // ==================== Bug #3: Retry timeout bounded by scrapeTimeoutSecs ====================
+
+    "Bug #3: total fetch time should be bounded by scrapeTimeoutSecs despite retries" {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.response.status(HttpStatusCode.InternalServerError)
+            call.respondText("server error")
+          }
+        }
+      }
+
+      try {
+        val port = startServerAndGetPort(server)
+
+        val mockAgent = createMockAgentWithRetries(10)
+        // Set a short scrape timeout of 3 seconds
+        every { mockAgent.options.scrapeTimeoutSecs } returns 3
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 86L
+          path = "metrics"
+        }
+
+        val elapsed = measureTime {
+          service.fetchScrapeUrl(request)
+        }
+
+        // Total time should be bounded by scrapeTimeoutSecs (3s) + some margin
+        // Without the fix, 10 retries with exponential delay could take much longer
+        elapsed.inWholeSeconds shouldBeLessThan 6L
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
       }
     }
 

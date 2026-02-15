@@ -54,6 +54,8 @@ import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.ScrapeRequest
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -91,21 +93,18 @@ internal class AgentHttpService(
     // Content is fetched here
     val results =
       try {
-        fetchContent(url, req)
+        withTimeout(agent.options.scrapeTimeoutSecs.seconds) {
+          fetchContent(url, req)
+        }
       } catch (e: Throwable) {
         // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
         // but let other CancellationExceptions propagate (like system shutdown).
         // Ktor often wraps the timeout exception, so we check the cause as well.
         // We also check class names to handle cases where exceptions might be wrapped or mocked.
-        var isTimeout = e is HttpRequestTimeoutException
+        var isTimeout = e is HttpRequestTimeoutException || e is TimeoutCancellationException
         var curr: Throwable? = e
         while (!isTimeout && curr != null) {
-          if (curr is HttpRequestTimeoutException ||
-            curr.javaClass.simpleName == "HttpRequestTimeoutException" ||
-            curr.simpleClassName == "HttpRequestTimeoutException"
-          ) {
-            isTimeout = true
-          }
+          isTimeout = isTimeoutException(curr)
           curr = curr.cause
         }
 
@@ -199,7 +198,7 @@ internal class AgentHttpService(
           scrapeCounterMsg = UNSUCCESSFUL_MSG,
         )
       }
-      val zipped = content.length > agent.options.minGzipSizeBytes
+      val zipped = contentByteSize > agent.options.minGzipSizeBytes
       ScrapeResults(
         srAgentId = scrapeRequest.agentId,
         srScrapeId = scrapeRequest.scrapeId,
@@ -258,7 +257,7 @@ internal class AgentHttpService(
               response.status.value in 500..599
             }
             modifyRequest { it.headers.append("x-retry-count", retryCount.toString()) }
-            exponentialDelay()
+            exponentialDelay(maxDelayMs = 5000L)
           }
         }
       }
@@ -285,6 +284,12 @@ internal class AgentHttpService(
     private const val INVALID_PATH_MSG = "invalid_path"
     private const val SUCCESS_MSG = "success"
     private const val UNSUCCESSFUL_MSG = "unsuccessful"
+
+    private fun isTimeoutException(e: Throwable): Boolean =
+      e is HttpRequestTimeoutException ||
+        e is TimeoutCancellationException ||
+        e.javaClass.simpleName == "HttpRequestTimeoutException" ||
+        e.simpleClassName == "HttpRequestTimeoutException"
 
     private fun handleInvalidPath(scrapeRequest: ScrapeRequest): ScrapeResults {
       logger.warn { "Invalid path in fetchScrapeUrl(): ${scrapeRequest.path}" }
