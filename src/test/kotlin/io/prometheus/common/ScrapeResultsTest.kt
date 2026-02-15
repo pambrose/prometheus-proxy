@@ -24,10 +24,8 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
 import io.ktor.client.plugins.HttpRequestTimeoutException
-import io.ktor.client.utils.EmptyContent.contentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.network.sockets.SocketTimeoutException
-import io.ktor.server.util.url
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.grpc.scrapeResponse
@@ -174,6 +172,7 @@ class ScrapeResultsTest : StringSpec() {
         srValidResponse = true,
         srStatusCode = 200,
         srContentType = "text/plain",
+        srZipped = true,
         srUrl = "http://localhost/metrics",
       )
 
@@ -185,6 +184,22 @@ class ScrapeResultsTest : StringSpec() {
       response.header.headerStatusCode shouldBe 200
       response.header.headerContentType shouldBe "text/plain"
       response.header.headerUrl shouldBe "http://localhost/metrics"
+      response.header.headerZipped.shouldBeTrue()
+    }
+
+    // Bug #10: toScrapeResponseHeader now propagates srZipped to headerZipped
+    "Bug #10: toScrapeResponseHeader should propagate srZipped=false" {
+      val results = ScrapeResults(
+        srAgentId = "agent-chunk",
+        srScrapeId = 401L,
+        srValidResponse = true,
+        srStatusCode = 200,
+        srZipped = false,
+      )
+
+      val response = results.toScrapeResponseHeader()
+
+      response.header.headerZipped.shouldBeFalse()
     }
 
     "toScrapeResponseHeader should include failure reason" {
