@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.agent
 
 import com.github.pambrose.common.util.runCatchingCancellable
@@ -38,6 +36,21 @@ import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
+/**
+ * LRU cache for Ktor [HttpClient] instances keyed by authentication credentials.
+ *
+ * Caches HTTP clients to avoid creating a new client per scrape request. Entries are
+ * evicted when they exceed [maxAge], sit idle longer than [maxIdleTime], or when the
+ * cache exceeds [maxCacheSize] (least-recently-used eviction). A background coroutine
+ * periodically cleans up expired entries. Credential-based keys are masked in logs to
+ * prevent leaking secrets.
+ *
+ * @param maxCacheSize maximum number of cached clients
+ * @param maxAge maximum lifetime of a cache entry
+ * @param maxIdleTime maximum idle time before an entry is considered expired
+ * @param cleanupInterval interval between background cleanup sweeps
+ * @see AgentHttpService
+ */
 internal class HttpClientCache(
   private val maxCacheSize: Int = 100,
   private val maxAge: Duration = 30.minutes,

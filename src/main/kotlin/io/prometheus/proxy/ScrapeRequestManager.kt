@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -23,6 +21,18 @@ import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ScrapeResults
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Tracks in-flight scrape requests and assigns results when responses arrive.
+ *
+ * Maintains a concurrent map of scrape ID to [ScrapeRequestWrapper]. When a scrape
+ * response (or chunked summary) arrives, the corresponding wrapper is located, populated
+ * with [ScrapeResults][io.prometheus.common.ScrapeResults], and marked complete so the
+ * waiting HTTP handler can return. Also supports failing individual or bulk requests
+ * (e.g., on agent disconnect or chunk validation failure).
+ *
+ * @see ScrapeRequestWrapper
+ * @see ProxyServiceImpl
+ */
 internal class ScrapeRequestManager {
   // Map scrape_id to ScrapeRequestWrapper
   private val scrapeRequestMap = ConcurrentHashMap<Long, ScrapeRequestWrapper>()

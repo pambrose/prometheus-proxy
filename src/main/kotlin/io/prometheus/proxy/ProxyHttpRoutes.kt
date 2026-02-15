@@ -48,6 +48,18 @@ import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * HTTP routing logic for the proxy's Ktor server.
+ *
+ * Defines the routes that handle incoming Prometheus scrape requests and service discovery.
+ * For each scrape request, resolves the path to one or more [AgentContext] instances,
+ * dispatches scrape requests through the gRPC stream, awaits responses, and merges results
+ * from consolidated agents. Handles OpenMetrics `# EOF` deduplication when merging.
+ *
+ * @see ProxyHttpService
+ * @see ProxyPathManager
+ * @see AgentContext
+ */
 object ProxyHttpRoutes {
   private val logger = logger {}
   private val format = Json { prettyPrint = true }

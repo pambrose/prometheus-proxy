@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction", "TooGenericExceptionCaught")
+@file:Suppress("TooGenericExceptionCaught")
 
 package io.prometheus.agent
 
@@ -72,6 +72,21 @@ import java.util.zip.CRC32
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
 
+/**
+ * gRPC client that manages the agent's connection to the proxy.
+ *
+ * Handles the full gRPC lifecycle: channel and stub creation, TLS configuration, agent
+ * registration, path registration/unregistration, heartbeat sending, and bidirectional
+ * scrape request/response streaming (including chunked transfers for large payloads).
+ * Supports reconnection by resetting stubs and channels on demand.
+ *
+ * @param agent the parent [Agent] instance
+ * @param options agent configuration options (proxy hostname, keepalive, TLS, etc.)
+ * @param inProcessServerName the in-process server name (empty for Netty mode)
+ * @see Agent
+ * @see AgentConnectionContext
+ * @see AgentHttpService
+ */
 internal class AgentGrpcService(
   internal val agent: Agent,
   private val options: AgentOptions,

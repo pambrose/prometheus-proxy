@@ -15,8 +15,6 @@
  */
 
 @file:Suppress(
-  "UndocumentedPublicClass",
-  "UndocumentedPublicFunction",
   "TooGenericExceptionCaught",
   "InstanceOfCheckForException",
 )
@@ -59,6 +57,20 @@ import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Scrapes actual metrics endpoints via HTTP and builds [ScrapeResults].
+ *
+ * When the proxy dispatches a scrape request, this service fetches the target URL using
+ * a Ktor [HttpClient] obtained from [HttpClientCache]. Handles response parsing, gzip
+ * compression for large payloads, content-length limits, timeout/retry logic, and
+ * authentication header forwarding. Returns [ScrapeResults] that are sent back to the
+ * proxy over gRPC.
+ *
+ * @param agent the parent [Agent] instance
+ * @see AgentGrpcService
+ * @see HttpClientCache
+ * @see AgentPathManager
+ */
 internal class AgentHttpService(
   val agent: Agent,
 ) {

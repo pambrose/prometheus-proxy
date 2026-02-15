@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction", "TooGenericExceptionCaught")
+@file:Suppress("TooGenericExceptionCaught")
 
 package io.prometheus.proxy
 
@@ -30,6 +30,19 @@ import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
 
+/**
+ * Represents a single connected agent on the proxy side.
+ *
+ * Each agent connection creates an [AgentContext] that holds the agent's identity (ID, name,
+ * hostname), validity state, activity timestamps, and a queue of pending scrape requests.
+ * The proxy writes scrape requests into the queue and the gRPC streaming RPC drains them.
+ * When the agent disconnects or is evicted, the context is invalidated and all pending
+ * requests are drained and closed.
+ *
+ * @param remoteAddr the remote address of the connected agent
+ * @see AgentContextManager
+ * @see ProxyPathManager
+ */
 internal class AgentContext(
   private val remoteAddr: String,
 ) {

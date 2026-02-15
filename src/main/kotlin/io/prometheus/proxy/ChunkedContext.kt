@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
 import io.prometheus.common.ScrapeResults
@@ -23,6 +21,19 @@ import io.prometheus.grpc.ChunkedScrapeResponse
 import java.io.ByteArrayOutputStream
 import java.util.zip.CRC32
 
+/**
+ * Accumulates chunked scrape response data with CRC32 integrity validation.
+ *
+ * When a scrape response exceeds the gRPC message size limit, the agent sends it as a
+ * sequence of header, chunk, and summary messages. This class reassembles the chunks into
+ * a single byte stream, validating running CRC32 checksums and byte/chunk counts at each
+ * step. On successful summary validation, it produces a complete [ScrapeResults].
+ *
+ * @param response the initial chunked response containing the header
+ * @param maxZippedContentSize maximum allowed total zipped content size in bytes
+ * @see AgentContextManager
+ * @see ProxyServiceImpl
+ */
 internal class ChunkedContext(
   response: ChunkedScrapeResponse,
   private val maxZippedContentSize: Long,

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction", "UnstableApiUsage")
+@file:Suppress("UnstableApiUsage")
 
 package io.prometheus.proxy
 
@@ -34,6 +34,19 @@ import io.prometheus.proxy.ProxyHttpRoutes.handleRequests
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit.SECONDS
 
+/**
+ * HTTP server that serves Prometheus scrape requests.
+ *
+ * Runs a Ktor CIO embedded server on a configurable port. Incoming HTTP GET requests are
+ * routed by [ProxyHttpRoutes] to the appropriate agent via gRPC, and the scraped metrics
+ * are returned to Prometheus. Also serves the optional service discovery endpoint.
+ *
+ * @param proxy the parent [Proxy] instance
+ * @param httpPort the HTTP listen port for Prometheus scrape requests
+ * @param isTestMode when true, suppresses verbose logging during tests
+ * @see ProxyHttpRoutes
+ * @see Proxy
+ */
 internal class ProxyHttpService(
   private val proxy: Proxy,
   val httpPort: Int,

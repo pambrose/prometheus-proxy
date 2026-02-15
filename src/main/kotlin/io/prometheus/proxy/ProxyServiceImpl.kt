@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
 import com.github.pambrose.common.util.runCatchingCancellable
@@ -52,6 +50,20 @@ import kotlinx.coroutines.flow.flow
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.fetchAndIncrement
 
+/**
+ * Server-side implementation of the `ProxyService` gRPC service.
+ *
+ * Handles all gRPC RPCs defined in `proxy_service.proto`: agent connection and registration,
+ * path registration/unregistration, heartbeat processing, and bidirectional scrape request/response
+ * streaming (including chunked transfers for large payloads). Validates agent identity on every
+ * call and delegates state management to [AgentContextManager], [ProxyPathManager], and
+ * [ScrapeRequestManager].
+ *
+ * @param proxy the parent [Proxy] instance
+ * @see ProxyGrpcService
+ * @see AgentContextManager
+ * @see ScrapeRequestManager
+ */
 internal class ProxyServiceImpl(
   private val proxy: Proxy,
 ) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {

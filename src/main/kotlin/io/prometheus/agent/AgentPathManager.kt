@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.agent
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -26,6 +24,17 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Manages the agent's path registration lifecycle with the proxy.
+ *
+ * Loads path configurations from the agent's HOCON config, registers each path with
+ * the proxy via gRPC, and maintains a local map of path to [PathContext] (URL, labels,
+ * path ID). Supports dynamic registration and unregistration at runtime.
+ *
+ * @param agent the parent [Agent] instance
+ * @see AgentGrpcService
+ * @see Agent
+ */
 internal class AgentPathManager(
   private val agent: Agent,
 ) {

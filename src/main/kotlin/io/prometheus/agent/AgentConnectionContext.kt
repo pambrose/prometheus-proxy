@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.agent
 
 import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
@@ -25,6 +23,18 @@ import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 
+/**
+ * Bidirectional channel pair for a single agent-to-proxy connection.
+ *
+ * Holds two coroutine channels: one for inbound scrape request actions (bounded by
+ * [backlogCapacity]) and one for outbound scrape results (unbounded). Manages the
+ * connection's disconnected state and provides a [close] method that drains pending
+ * requests and closes both channels so waiting coroutines are notified.
+ *
+ * @param backlogCapacity maximum number of buffered scrape request actions
+ * @see AgentGrpcService
+ * @see Agent
+ */
 internal class AgentConnectionContext(
   val backlogCapacity: Int = 128,
 ) {

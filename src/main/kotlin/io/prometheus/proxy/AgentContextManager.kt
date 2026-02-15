@@ -14,14 +14,25 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 
+/**
+ * Registry for connected agents and in-flight chunked scrape contexts.
+ *
+ * Manages two concurrent maps: one mapping agent IDs to their [AgentContext] instances,
+ * and another mapping scrape IDs to [ChunkedContext] instances for chunked transfers.
+ * Provides lookup, addition, removal, stale-agent detection, and bulk invalidation of
+ * agent contexts.
+ *
+ * @param isTestMode when true, suppresses verbose logging during tests
+ * @see AgentContext
+ * @see ChunkedContext
+ * @see AgentContextCleanupService
+ */
 internal class AgentContextManager(
   private val isTestMode: Boolean,
 ) {

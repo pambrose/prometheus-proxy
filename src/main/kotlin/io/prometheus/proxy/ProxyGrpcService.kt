@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
 import brave.grpc.GrpcTracing
@@ -40,6 +38,19 @@ import io.prometheus.Proxy
 import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Manages the gRPC server lifecycle for the proxy.
+ *
+ * Configures and runs the gRPC server that agents connect to for scrape request streaming.
+ * Handles TLS setup, server interceptors, transport filters, keepalive settings, and
+ * optional Zipkin tracing. Supports both Netty (network) and in-process transports.
+ *
+ * @param proxy the parent [Proxy] instance
+ * @param port the gRPC listen port (-1 for in-process mode)
+ * @param inProcessName the in-process server name (empty for Netty mode)
+ * @see ProxyServiceImpl
+ * @see Proxy
+ */
 internal class ProxyGrpcService(
   private val proxy: Proxy,
   private val port: Int = -1,

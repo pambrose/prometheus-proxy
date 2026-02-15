@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
 import com.github.pambrose.common.concurrent.GenericExecutionThreadService
@@ -29,6 +27,20 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Background service that periodically evicts stale agent contexts.
+ *
+ * Runs a loop that checks for agents whose last activity exceeds
+ * `maxAgentInactivitySecs`. Stale agents are removed from the path map and context
+ * manager, and their in-flight scrape requests are failed. A TOCTOU re-check guards
+ * against evicting agents that sent a heartbeat between the scan and the eviction.
+ *
+ * @param proxy the parent [Proxy] instance
+ * @param configVals internal proxy configuration (inactivity timeout, check interval)
+ * @param initBlock optional initialization block run after listener registration
+ * @see AgentContextManager
+ * @see Proxy
+ */
 internal class AgentContextCleanupService(
   private val proxy: Proxy,
   private val configVals: ConfigVals.Proxy2.Internal2,

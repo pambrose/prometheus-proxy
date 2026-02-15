@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -25,6 +23,19 @@ import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 
+/**
+ * Maps scrape URL paths to their registered [AgentContext] instances.
+ *
+ * Maintains a synchronized path map that supports both exclusive (one agent per path) and
+ * consolidated (multiple agents per path) registration modes. Handles path addition, removal,
+ * agent displacement, and cleanup on agent disconnect. Provides the service discovery path list
+ * and plain-text diagnostics.
+ *
+ * @param proxy the parent [Proxy] instance
+ * @param isTestMode when true, suppresses verbose logging during tests
+ * @see AgentContext
+ * @see AgentContextManager
+ */
 internal class ProxyPathManager(
   private val proxy: Proxy,
   private val isTestMode: Boolean,
