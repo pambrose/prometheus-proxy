@@ -130,7 +130,7 @@ Both the stale-agent cleanup timer and gRPC transport termination can fire for t
 on second call without exceptions; 1 test in `ProxyServerTransportFilterTest.kt` verifying
 `transportTerminated` handles already-removed agents gracefully.
 
-### 10. Chunked response header lacks `zipped` flag
+### 10. Chunked response header lacks `zipped` flag — FIXED
 
 **Files:** `proxy_service.proto:93-101`, `ChunkedContext.kt:85`
 
@@ -138,39 +138,70 @@ on second call without exceptions; 1 test in `ProxyServerTransportFilterTest.kt`
 chunked, but it's fragile — if someone ever chunks non-zipped content, the proxy will incorrectly mark it as
 zipped.
 
-## Test Issues
+**Fix:** Added `bool header_zipped = 8` field to the `HeaderData` proto message. Updated
+`ScrapeResults.toScrapeResponseHeader()` to set `headerZipped = srZipped`, and updated
+`ChunkedContext.applySummary()` to read `header.headerZipped` instead of hardcoding `true`.
 
-### 11. Tests that don't test what they claim
+**Tests:** 2 tests in `ChunkedContextTest.kt` verifying `applySummary` propagates `headerZipped=true` and
+`headerZipped=false` from the header; 1 test in `ScrapeResultsTest.kt` verifying `toScrapeResponseHeader`
+propagates `srZipped=false` to the header.
+
+## Test Issues (Fixed)
+
+### 11. Tests that don't test what they claim — FIXED
 
 - `ProxyHttpConfigTest.kt:143-156` — Compression priority tests compare hardcoded local constants to themselves,
   never reading actual config values. Changes to production code won't be caught.
 - `ScrapeRequestManagerTest.kt:267-292` — Test named "markComplete should only call observeDuration once" asserts
   `markCompleteCallCount shouldBe 2`.
 
-### 12. Non-thread-safe shared map in harness tests
+**Fix:** Replaced the self-referential compression tests with integration tests that actually exercise the
+production `configureCompression()` configuration through embedded HTTP servers: (a) "gzip should be preferred
+over deflate for large responses" sends `Accept-Encoding: gzip, deflate` and verifies gzip is used; (b) "small
+responses should not be deflate-compressed" verifies deflate is not applied below the 1024-byte threshold.
+Renamed the misleading `ScrapeRequestManagerTest` test to "assignScrapeResults should call markComplete each time
+wrapper is in map" to accurately reflect what the test verifies.
+
+### 12. Non-thread-safe shared map in harness tests — FIXED
 
 **File:** `HarnessTests.kt:75`
 
 `contentMap` is a plain `mutableMapOf` written to by multiple concurrent coroutines in the parallel proxy call
 tests with no synchronization.
 
-### 13. Silent timeout swallowing
+**Fix:** Changed `mutableMapOf<Int, String>()` to `java.util.concurrent.ConcurrentHashMap<Int, String>()` for
+proper thread-safety and happens-before guarantees across coroutines.
+
+### 13. Silent timeout swallowing — FIXED
 
 **File:** `HarnessTests.kt:191-210,213-236`
 
 Tests wrap work in `withTimeoutOrNull(1.minutes)`. If a timeout occurs, assertions are skipped and the test
 silently passes.
 
-### 14. `ProxyHttpRoutesTest` proxy instances never cleaned up
+**Fix:** Changed `withTimeoutOrNull(1.minutes)` to `withTimeout(1.minutes)` in both the sequential and parallel
+proxy call test sections. Timeouts now throw `TimeoutCancellationException` and fail the test instead of being
+silently swallowed. (Note: `BasicHarnessTests.kt` already called `.shouldNotBeNull()` on the result, so it was
+not affected.)
+
+### 14. `ProxyHttpRoutesTest` proxy instances never cleaned up — FIXED
 
 **File:** `ProxyHttpRoutesTest.kt:75-108`
 
 Two `Proxy` spy instances start internal services but are never stopped, potentially leaking threads and ports
 across test runs.
 
-### 15. Reflection-based field nulling is fragile
+**Fix:** Added `testProxies` tracking list and `afterTest` cleanup block that calls
+`failAllInFlightScrapeRequests("test cleanup")` and `invalidateAllAgentContexts()` on each tracked proxy. Both
+`createSpyProxyForSubmit` and `createSpyProxyForRoutes` now register their proxies for cleanup.
+
+### 15. Reflection-based field nulling is fragile — FIXED
 
 **File:** `AgentGrpcServiceTest.kt:982-998`
 
 Uses reflection to null a `lateinit` field by name. Will break at runtime with a confusing error if the field is
 ever renamed.
+
+**Fix:** Replaced string literal `getDeclaredField("channel")` with property reference
+`getDeclaredField(AgentGrpcService::channel.name)`. If the `channel` property is renamed, the code now fails at
+compile time with a clear error instead of at runtime with a confusing `NoSuchFieldException`.

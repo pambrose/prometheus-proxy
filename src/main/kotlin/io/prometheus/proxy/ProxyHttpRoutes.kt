@@ -175,7 +175,7 @@ object ProxyHttpRoutes {
         hasEof = true
         trimmed.removeSuffix("# EOF").trimEnd()
       } else {
-        text
+        trimmed
       }
     }
 

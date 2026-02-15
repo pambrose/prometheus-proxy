@@ -33,7 +33,7 @@ internal class ChunkedContext(
 
   var totalChunkCount = 0
     private set
-  var totalByteCount = 0
+  var totalByteCount = 0L
     private set
 
   @Suppress("ThrowsCount")
@@ -70,7 +70,7 @@ internal class ChunkedContext(
   ): ScrapeResults {
     if (totalChunkCount != summaryChunkCount)
       throw ChunkValidationException("Summary chunk count mismatch: expected $summaryChunkCount, got $totalChunkCount")
-    if (totalByteCount != summaryByteCount)
+    if (totalByteCount != summaryByteCount.toLong())
       throw ChunkValidationException("Summary byte count mismatch: expected $summaryByteCount, got $totalByteCount")
     if (checksum.value != summaryChecksum)
       throw ChunkValidationException("Summary checksum mismatch: expected $summaryChecksum, got ${checksum.value}")

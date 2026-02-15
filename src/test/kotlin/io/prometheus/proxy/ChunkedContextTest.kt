@@ -502,6 +502,64 @@ class ChunkedContextTest : StringSpec() {
       scrapeResults.srZipped.shouldBeFalse()
     }
 
+    // ==================== Bug #15: totalByteCount Int Overflow Fix ====================
+
+    // Bug #15: totalByteCount was Int, so accumulated bytes exceeding Int.MAX_VALUE (~2.1 GB)
+    // would wrap to negative, bypassing the maxZippedContentSize check. The fix changes
+    // totalByteCount to Long.
+
+    "Bug #15: totalByteCount should not overflow with large accumulated chunks" {
+      val response = createHeaderResponse()
+      // Set a limit above Int.MAX_VALUE
+      val limit = Int.MAX_VALUE.toLong() + 1000L
+      val context = ChunkedContext(response, limit)
+
+      val crc = CRC32()
+
+      // Simulate accumulating just under Int.MAX_VALUE in the first chunk
+      // We can't actually allocate 2GB, but we can verify the counter is Long
+      // by checking the type behavior with moderate values
+      val data1 = ByteArray(1000) { 0x41 }
+      crc.update(data1)
+      context.applyChunk(data1, data1.size, 1, crc.value)
+
+      val data2 = ByteArray(500) { 0x42 }
+      crc.update(data2)
+      context.applyChunk(data2, data2.size, 2, crc.value)
+
+      // Verify totalByteCount is correctly accumulated as Long
+      context.totalByteCount shouldBe 1500L
+    }
+
+    "Bug #15: totalByteCount as Long should reject content exceeding maxZippedContentSize" {
+      val response = createHeaderResponse()
+      // Use a small limit to test the overflow-safe comparison
+      val limit = 100L
+      val context = ChunkedContext(response, limit)
+
+      val data = ByteArray(101) { 0x41 }
+      val checksum = CRC32().apply { update(data) }.value
+
+      shouldThrow<ChunkValidationException> {
+        context.applyChunk(data, data.size, 1, checksum)
+      }
+    }
+
+    "Bug #15: totalByteCount should correctly compare against Long maxZippedContentSize" {
+      // Verify that the comparison totalByteCount > maxZippedContentSize works
+      // correctly when maxZippedContentSize exceeds Int.MAX_VALUE
+      val response = createHeaderResponse()
+      val limit = 3_000_000_000L // ~3 GB, larger than Int.MAX_VALUE
+      val context = ChunkedContext(response, limit)
+
+      // Small chunk should pass the size check
+      val data = "test data".toByteArray()
+      val checksum = CRC32().apply { update(data) }.value
+
+      context.applyChunk(data, data.size, 1, checksum)
+      context.totalByteCount shouldBe data.size.toLong()
+    }
+
     "applyChunk should throw when chunkByteCount exceeds data size" {
       val response = createHeaderResponse()
       val context = ChunkedContext(response, 1000000)

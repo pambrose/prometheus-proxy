@@ -1172,6 +1172,121 @@ class ProxyHttpRoutesTest : StringSpec() {
       merged.trimEnd().endsWith("# EOF") shouldBe true
     }
 
+    // ==================== Bug #14: Trailing Whitespace Inconsistency in mergeContentTexts ====================
+
+    // Bug #14: When merging content from multiple agents, lines ending with "# EOF" had
+    // trailing whitespace stripped (via trimEnd()), but lines without "# EOF" preserved
+    // the raw text including trailing newlines. When joined with "\n", this produced
+    // double-newlines in the merged output — e.g., "metric1\nmetric2\n\n# EOF".
+    // The fix uses `trimmed` instead of `text` for the non-EOF branch.
+
+    "Bug #14: mergeContentTexts should not produce double newlines with trailing whitespace" {
+      // Agent1 has EOF with trailing newline; Agent2 has trailing newline but no EOF
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n# EOF\n",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_b 2.0\n",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      // Before the fix: "metric_a 1.0\nmetric_b 2.0\n\n# EOF" (double newline)
+      // After the fix:  "metric_a 1.0\nmetric_b 2.0\n# EOF" (single newline)
+      merged shouldNotContain "\n\n"
+      merged shouldContain "metric_a 1.0"
+      merged shouldContain "metric_b 2.0"
+      merged.trimEnd().endsWith("# EOF") shouldBe true
+    }
+
+    "Bug #14: mergeContentTexts should trim trailing whitespace from non-EOF results" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_b 2.0\n",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      // Both results have trailing newlines; they should be trimmed before joining
+      merged shouldBe "metric_a 1.0\nmetric_b 2.0"
+      merged shouldNotContain "\n\n"
+    }
+
+    "Bug #14: mergeContentTexts should handle mixed trailing whitespace with EOF" {
+      // Three agents: two with trailing newlines + EOF, one without EOF but with trailing whitespace
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n# EOF\n",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_b 2.0  \n  ",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_c 3.0\n# EOF\n",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      merged shouldContain "metric_a 1.0"
+      merged shouldContain "metric_b 2.0"
+      merged shouldContain "metric_c 3.0"
+      merged shouldNotContain "\n\n"
+      val eofCount = merged.split("# EOF").size - 1
+      eofCount shouldBe 1
+    }
+
+    "Bug #14: mergeContentTexts should produce clean output with no trailing whitespace per entry" {
+      // Verify that each entry's trailing whitespace is stripped before joining,
+      // regardless of whether the entry has EOF
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_a 1.0\n# EOF\n\n",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentText = "metric_b 2.0\n\n\n",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeContentTexts(results)
+
+      // Both entries have multiple trailing newlines that should be trimmed
+      merged shouldBe "metric_a 1.0\nmetric_b 2.0\n# EOF"
+    }
+
     "handleServiceDiscoveryEndpoint should not register when sdEnabled is false" {
       val proxy = createSpyProxyForRoutes()
       // SD is disabled by default
