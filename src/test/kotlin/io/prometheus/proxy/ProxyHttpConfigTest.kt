@@ -85,7 +85,7 @@ class ProxyHttpConfigTest : StringSpec() {
 
       // Apply gzip configuration similar to ProxyHttpConfig
       config.gzip {
-        priority = 1.0
+        priority = 10.0
       }
 
       // Configuration should be applied without throwing
@@ -97,7 +97,7 @@ class ProxyHttpConfigTest : StringSpec() {
 
       // Apply deflate configuration similar to ProxyHttpConfig
       config.deflate {
-        priority = 10.0
+        priority = 1.0
         minimumSize(1024)
       }
 
@@ -110,10 +110,10 @@ class ProxyHttpConfigTest : StringSpec() {
 
       // Apply both gzip and deflate like ProxyHttpConfig does
       config.gzip {
-        priority = 1.0
+        priority = 10.0
       }
       config.deflate {
-        priority = 10.0
+        priority = 1.0
         minimumSize(1024)
       }
 
@@ -141,12 +141,12 @@ class ProxyHttpConfigTest : StringSpec() {
     // ==================== Compression Priority Tests ====================
 
     "gzip should have higher priority than deflate in config" {
-      // In ProxyHttpConfig, gzip has priority 1.0 and deflate has 10.0
-      // Lower numbers = higher priority in Ktor
-      val gzipPriority = 1.0
-      val deflatePriority = 10.0
+      // In ProxyHttpConfig, gzip has priority 10.0 and deflate has 1.0
+      // Higher numbers = higher priority in Ktor
+      val gzipPriority = 10.0
+      val deflatePriority = 1.0
 
-      (gzipPriority < deflatePriority) shouldBe true
+      (gzipPriority > deflatePriority) shouldBe true
     }
 
     "deflate minimum size should be 1024 bytes" {
