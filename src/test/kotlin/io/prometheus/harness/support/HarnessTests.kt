@@ -52,7 +52,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.newSingleThreadContext
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withTimeout
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
@@ -72,7 +72,7 @@ data class ProxyCallTestArgs(
 
 internal object HarnessTests {
   private val logger = logger {}
-  private val contentMap = mutableMapOf<Int, String>()
+  private val contentMap = java.util.concurrent.ConcurrentHashMap<Int, String>()
 
   suspend fun timeoutTest(
     pathManager: AgentPathManager,
@@ -190,7 +190,7 @@ internal object HarnessTests {
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
     newSingleThreadContext("test-single")
       .use { dispatcher ->
-        withTimeoutOrNull(1.minutes) {
+        withTimeout(1.minutes) {
           httpClient { client ->
             val counter = AtomicInt(0)
             repeat(args.sequentialQueryCount) { cnt ->
@@ -213,7 +213,7 @@ internal object HarnessTests {
     logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
     newFixedThreadPoolContext(5, "test-multi")
       .use { dispatcher ->
-        withTimeoutOrNull(1.minutes) {
+        withTimeout(1.minutes) {
           httpClient { client ->
             val counter = AtomicInt(0)
             val jobs =

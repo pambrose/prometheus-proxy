@@ -265,7 +265,7 @@ class ScrapeRequestManagerTest : StringSpec() {
     // recording a duplicate latency observation and skewing metrics. The fix uses an
     // AtomicBoolean in markComplete() so observeDuration() is only called once.
 
-    "Bug #15: markComplete should only call observeDuration once" {
+    "Bug #15: assignScrapeResults should call markComplete each time wrapper is in map" {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(400L)
       var markCompleteCallCount = 0
@@ -286,8 +286,9 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.assignScrapeResults(results1)
       manager.assignScrapeResults(results2)
 
-      // Both calls go through the manager (since wrapper is still in the map)
-      // but the real markComplete() uses AtomicBoolean to guard observeDuration
+      // Both calls go through the manager (since wrapper is still in the map).
+      // The real ScrapeRequestWrapper.markComplete() uses AtomicBoolean to guard
+      // observeDuration, but the manager itself calls markComplete on every assignment.
       markCompleteCallCount shouldBe 2
     }
 

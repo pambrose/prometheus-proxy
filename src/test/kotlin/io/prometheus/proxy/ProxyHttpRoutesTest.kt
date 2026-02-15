@@ -57,6 +57,18 @@ import io.ktor.server.cio.CIO as ServerCIO
 // ensureLeadingSlash() to ensure consistent route registration regardless of config format.
 @Suppress("LargeClass")
 class ProxyHttpRoutesTest : StringSpec() {
+  private val testProxies = mutableListOf<Proxy>()
+
+  init {
+    afterTest {
+      testProxies.forEach { proxy ->
+        proxy.scrapeRequestManager.failAllInFlightScrapeRequests("test cleanup")
+        proxy.agentContextManager.invalidateAllAgentContexts()
+      }
+      testProxies.clear()
+    }
+  }
+
   private fun callLogActivityForResponse(
     path: String,
     response: ScrapeRequestResponse,
@@ -90,6 +102,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       ),
     )
     every { proxy.isRunning } returns true
+    testProxies += proxy
     return proxy
   }
 
@@ -104,6 +117,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       ),
     )
     every { proxy.isRunning } returns true
+    testProxies += proxy
     return proxy
   }
 

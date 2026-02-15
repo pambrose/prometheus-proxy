@@ -140,19 +140,61 @@ class ProxyHttpConfigTest : StringSpec() {
 
     // ==================== Compression Priority Tests ====================
 
-    "gzip should have higher priority than deflate in config" {
-      // In ProxyHttpConfig, gzip has priority 10.0 and deflate has 1.0
-      // Higher numbers = higher priority in Ktor
-      val gzipPriority = 10.0
-      val deflatePriority = 1.0
+    "gzip should be preferred over deflate for large responses" {
+      val proxy = createTestProxy()
+      val largeContent = "a".repeat(2000)
+      val server = embeddedServer(ServerCIO, port = 0) {
+        val app = this
+        with(ProxyHttpConfig) {
+          app.configureKtorServer(proxy, isTestMode = true)
+        }
+        routing {
+          get("/large") { call.respondText(largeContent) }
+        }
+      }.start(wait = false)
 
-      (gzipPriority > deflatePriority) shouldBe true
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/large") {
+          headers.append(HttpHeaders.AcceptEncoding, "gzip, deflate")
+        }
+        response.status shouldBe HttpStatusCode.OK
+        response.headers[HttpHeaders.ContentEncoding] shouldBe "gzip"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
     }
 
-    "deflate minimum size should be 1024 bytes" {
-      val minimumSize = 1024L
+    "small responses should not be deflate-compressed" {
+      val proxy = createTestProxy()
+      val server = embeddedServer(ServerCIO, port = 0) {
+        val app = this
+        with(ProxyHttpConfig) {
+          app.configureKtorServer(proxy, isTestMode = true)
+        }
+        routing {
+          get("/small") { call.respondText("tiny") }
+        }
+      }.start(wait = false)
 
-      minimumSize shouldBe 1024L
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/small") {
+          headers.append(HttpHeaders.AcceptEncoding, "deflate")
+        }
+        response.status shouldBe HttpStatusCode.OK
+        response.headers[HttpHeaders.ContentEncoding] shouldBe null
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
     }
 
     // Bug #6: gzip was missing minimumSize(1024), causing tiny responses

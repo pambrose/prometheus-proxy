@@ -986,8 +986,10 @@ class AgentGrpcServiceTest : StringSpec() {
       val agent = createMockAgent("localhost:50051")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
-      // Use reflection to null-out the channel, simulating an uninitialized lateinit
-      val channelField = AgentGrpcService::class.java.getDeclaredField("channel")
+      // Use reflection to null-out the channel, simulating an uninitialized lateinit.
+      // Using ::channel property reference for compile-time safety: if the field is
+      // renamed, this line will fail to compile instead of failing at runtime.
+      val channelField = AgentGrpcService::class.java.getDeclaredField(AgentGrpcService::channel.name)
       channelField.isAccessible = true
       channelField.set(service, null) // makes lateinit "uninitialized"
 
