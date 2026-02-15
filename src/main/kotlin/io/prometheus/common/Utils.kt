@@ -63,6 +63,7 @@ object Utils {
   ) {
     val level =
       when (logLevel.lowercase()) {
+        "all" -> Level.ALL
         "trace" -> Level.TRACE
         "debug" -> Level.DEBUG
         "info" -> Level.INFO

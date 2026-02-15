@@ -159,6 +159,7 @@ class UtilsTest : StringSpec() {
 
     "setLogLevel should accept valid log levels" {
       // These should not throw
+      setLogLevel("test", "all")
       setLogLevel("test", "trace")
       setLogLevel("test", "debug")
       setLogLevel("test", "info")
@@ -169,12 +170,26 @@ class UtilsTest : StringSpec() {
 
     "setLogLevel should be case insensitive" {
       // These should not throw
+      setLogLevel("test", "ALL")
       setLogLevel("test", "TRACE")
       setLogLevel("test", "DEBUG")
       setLogLevel("test", "INFO")
       setLogLevel("test", "WARN")
       setLogLevel("test", "ERROR")
       setLogLevel("test", "OFF")
+    }
+
+    // Bug #20: "all" was documented in config.conf as a valid log level but
+    // setLogLevel() did not handle it, throwing IllegalArgumentException.
+    "Bug #20: setLogLevel should accept all as documented in config" {
+      setLogLevel("test", "all")
+      val rootLogger =
+        org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)
+          as ch.qos.logback.classic.Logger
+      rootLogger.level shouldBe Level.ALL
+
+      setLogLevel("test", "ALL")
+      rootLogger.level shouldBe Level.ALL
     }
 
     "setLogLevel should throw for invalid log level" {
