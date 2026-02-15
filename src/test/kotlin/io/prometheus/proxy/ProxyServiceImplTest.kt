@@ -1227,6 +1227,53 @@ class ProxyServiceImplTest : StringSpec() {
       verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Summary") }) }
     }
 
+    // ==================== Bug #20: transportFilterDisabled cleanup Tests ====================
+
+    // Bug #20: When transportFilterDisabled is true and readRequestsFromProxy is called,
+    // the finally block should clean up the AgentContext via removeAgentContext.
+    "Bug #20: readRequestsFromProxy should cleanup on stream termination when transportFilterDisabled" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val agentContext = AgentContext("test-addr")
+      val agentId = agentContext.agentId
+
+      every { proxy.agentContextManager.getAgentContext(agentId) } returns agentContext
+      coEvery { proxy.removeAgentContext(agentId, any()) } returns agentContext
+
+      val service = ProxyServiceImpl(proxy)
+      val request = agentInfo { this.agentId = agentId }
+
+      // Invalidate the agent context immediately so the loop exits
+      agentContext.invalidate()
+
+      val results = mutableListOf<io.prometheus.grpc.ScrapeRequest>()
+      service.readRequestsFromProxy(request).collect { results.add(it) }
+
+      // Verify cleanup was called because transportFilterDisabled is true
+      coVerify { proxy.removeAgentContext(agentId, match { it.contains("transport filter disabled") }) }
+    }
+
+    // Bug #20: When transportFilterDisabled is false, readRequestsFromProxy should NOT
+    // call removeAgentContext (transport filter handles cleanup instead).
+    "Bug #20: readRequestsFromProxy should not cleanup when transportFilterDisabled is false" {
+      val proxy = createMockProxy(transportFilterDisabled = false)
+      val agentContext = AgentContext("test-addr")
+      val agentId = agentContext.agentId
+
+      every { proxy.agentContextManager.getAgentContext(agentId) } returns agentContext
+
+      val service = ProxyServiceImpl(proxy)
+      val request = agentInfo { this.agentId = agentId }
+
+      // Invalidate the agent context immediately so the loop exits
+      agentContext.invalidate()
+
+      val results = mutableListOf<io.prometheus.grpc.ScrapeRequest>()
+      service.readRequestsFromProxy(request).collect { results.add(it) }
+
+      // Verify cleanup was NOT called because transportFilterDisabled is false
+      coVerify(exactly = 0) { proxy.removeAgentContext(any(), any()) }
+    }
+
     "writeResponsesToProxy should call assignScrapeResults for each response" {
       val proxy = createMockProxy()
       val scrapeRequestManager = proxy.scrapeRequestManager

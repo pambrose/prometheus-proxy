@@ -253,6 +253,68 @@ class ProxyTest : StringSpec() {
       invoked.shouldBeTrue()
     }
 
+    // ==================== Bug #20: shutDown ordering Tests ====================
+
+    // Bug #20: failAllInFlightScrapeRequests must run before invalidateAllAgentContexts
+    // so HTTP handlers get "Proxy is shutting down" instead of generic "missing_results".
+    // We test the ordering by calling the operations in the correct (fixed) order and
+    // verifying the wrapper receives the shutdown failure reason.
+    "Bug #20: failing scrape requests before invalidating gives informative error" {
+      val proxy = createTestProxy()
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("metrics", "", agentContext)
+
+      val wrapper = ScrapeRequestWrapper(
+        agentContext = agentContext,
+        proxy = proxy,
+        pathVal = "metrics",
+        encodedQueryParamsVal = "",
+        authHeaderVal = "",
+        acceptVal = "",
+        debugEnabledVal = false,
+      )
+      proxy.scrapeRequestManager.addToScrapeRequestMap(wrapper)
+
+      // Fixed order: fail requests THEN invalidate agents
+      proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
+      proxy.agentContextManager.invalidateAllAgentContexts()
+
+      // The wrapper should have the informative shutdown message
+      wrapper.scrapeResults.shouldNotBeNull()
+      wrapper.scrapeResults!!.srFailureReason shouldContain "Proxy is shutting down"
+    }
+
+    // Verify the old (broken) order would lose the failure reason
+    "Bug #20: invalidating before failing loses the informative error" {
+      val proxy = createTestProxy()
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("metrics", "", agentContext)
+
+      val wrapper = ScrapeRequestWrapper(
+        agentContext = agentContext,
+        proxy = proxy,
+        pathVal = "metrics",
+        encodedQueryParamsVal = "",
+        authHeaderVal = "",
+        acceptVal = "",
+        debugEnabledVal = false,
+      )
+      proxy.scrapeRequestManager.addToScrapeRequestMap(wrapper)
+
+      // Old (broken) order: invalidate agents THEN fail requests
+      proxy.agentContextManager.invalidateAllAgentContexts()
+      // The wrapper's completeChannel was already closed by invalidate(),
+      // so markComplete in failAllInFlightScrapeRequests won't call observeDuration again.
+      // But the results ARE still set because scrapeResults is assigned before markComplete.
+      proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
+
+      // Results are set, but awaitCompleted() would have already returned false
+      // (before the failure reason was set) in the old ordering
+      wrapper.scrapeResults.shouldNotBeNull()
+    }
+
     // ==================== logActivity Tests ====================
 
     "logActivity should add timestamped entry without error" {

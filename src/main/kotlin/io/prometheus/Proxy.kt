@@ -234,18 +234,29 @@ class Proxy(
     grpcService.startSync()
     httpService.startSync()
 
-    if (proxyConfigVals.internal.staleAgentCheckEnabled)
+    // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to detect
+    // agent disconnects. The stale agent cleanup service is the only mechanism to clean up
+    // leaked AgentContexts (e.g., agents that called connectAgentWithTransportFilterDisabled
+    // but crashed before opening a readRequestsFromProxy stream). Force-enable it.
+    if (proxyConfigVals.internal.staleAgentCheckEnabled) {
       agentCleanupService.startSync()
-    else
+    } else if (options.transportFilterDisabled) {
+      logger.warn { "Forcing agent eviction thread on: transportFilterDisabled requires stale agent cleanup" }
+      agentCleanupService.startSync()
+    } else {
       logger.info { "Agent eviction thread not started" }
+    }
   }
 
   override fun shutDown() {
-    agentContextManager.invalidateAllAgentContexts()
+    // Fail in-flight scrape requests BEFORE invalidating agent contexts so that
+    // HTTP handlers waiting on awaitCompleted() receive the informative "Proxy is shutting down"
+    // error message rather than a generic "missing_results" from the agent context drain.
     scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
+    agentContextManager.invalidateAllAgentContexts()
     grpcService.stopSync()
     httpService.stopSync()
-    if (proxyConfigVals.internal.staleAgentCheckEnabled)
+    if (proxyConfigVals.internal.staleAgentCheckEnabled || options.transportFilterDisabled)
       agentCleanupService.stopSync()
     super.shutDown()
   }
