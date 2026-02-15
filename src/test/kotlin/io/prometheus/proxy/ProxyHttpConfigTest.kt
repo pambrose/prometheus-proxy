@@ -155,6 +155,40 @@ class ProxyHttpConfigTest : StringSpec() {
       minimumSize shouldBe 1024L
     }
 
+    // Bug #6: gzip was missing minimumSize(1024), causing tiny responses
+    // (even a few bytes) to be gzip-compressed with unnecessary overhead.
+    // Both gzip and deflate should now skip compression for small responses.
+    "Bug #6: small responses should not be gzip-compressed" {
+      val proxy = createTestProxy()
+      val server = embeddedServer(ServerCIO, port = 0) {
+        val app = this
+        with(ProxyHttpConfig) {
+          app.configureKtorServer(proxy, isTestMode = true)
+        }
+        routing {
+          get("/small") { call.respondText("tiny") }
+        }
+      }.start(wait = false)
+
+      try {
+        val port = server.engine.resolvedConnectors().first().port
+        val client = HttpClient(CIO) { expectSuccess = false }
+
+        val response = client.get("http://localhost:$port/small") {
+          headers.append(HttpHeaders.AcceptEncoding, "gzip")
+        }
+        response.status shouldBe HttpStatusCode.OK
+        // Response should NOT be gzip-encoded because "tiny" is
+        // well below the 1024-byte minimumSize threshold
+        val encoding = response.headers[HttpHeaders.ContentEncoding]
+        encoding shouldBe null
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
     // ==================== StatusPages Integration Tests ====================
 
     "StatusPages NotFound handler should return correct text" {

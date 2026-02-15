@@ -97,10 +97,11 @@ internal object ProxyHttpConfig {
   private fun CompressionConfig.configureCompression() {
     gzip {
       priority = 10.0
+      minimumSize(1024)
     }
     deflate {
       priority = 1.0
-      minimumSize(1024) // condition
+      minimumSize(1024)
     }
   }
 
