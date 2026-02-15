@@ -81,7 +81,7 @@ internal class AgentContextManager(
   ): AgentContext? {
     val agentContext = agentContextMap.remove(agentId)
     if (agentContext == null) {
-      logger.warn { "Missing AgentContext for agentId: $agentId ($reason)" }
+      logger.debug { "AgentContext already removed for agentId: $agentId ($reason)" }
     } else {
       if (!isTestMode)
         logger.info { "Removed $agentContext for agentId: $agentId ($reason)" }

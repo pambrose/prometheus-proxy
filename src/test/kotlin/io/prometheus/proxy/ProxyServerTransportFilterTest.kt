@@ -146,6 +146,31 @@ class ProxyServerTransportFilterTest : StringSpec() {
       agentContextManager.agentContextSize shouldBe 1
     }
 
+    // Bug #9: When the cleanup service already removed the agent, transport
+    // termination should handle the null return gracefully without errors.
+    "Bug #9: transportTerminated should handle already-removed agent gracefully" {
+      val (mockProxy, agentContextManager) = createMockProxy()
+      val filter = ProxyServerTransportFilter(mockProxy)
+
+      // Create a context via transportReady
+      val resultAttrs = filter.transportReady(Attributes.newBuilder().build())
+      val agentId = resultAttrs.get(AGENT_ID_KEY)!!
+      agentContextManager.agentContextSize shouldBe 1
+
+      // Simulate cleanup service removing the agent first
+      agentContextManager.removeFromContextManager(agentId, "Eviction")
+      agentContextManager.agentContextSize shouldBe 0
+
+      // removeAgentContext returns null for already-removed agents
+      every { mockProxy.removeAgentContext(any(), any()) } returns null
+
+      // transportTerminated should not throw
+      filter.transportTerminated(resultAttrs)
+
+      // Verify removeAgentContext was still called
+      verify { mockProxy.removeAgentContext(agentId, "Termination") }
+    }
+
     // ==================== Transport Filter Lifecycle ====================
 
     "transportTerminated should call removeAgentContext with correct reason" {

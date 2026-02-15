@@ -46,7 +46,7 @@ internal class ProxyServerTransportFilter(
       if (context != null)
         logger.info { "Disconnected from $context" }
       else
-        logger.error { "Disconnected with invalid agentId: $agentId" }
+        logger.info { "Agent $agentId already removed before transport terminated" }
     } ?: logger.error { "Missing agentId in transportTerminated()" }
     super.transportTerminated(attributes)
   }

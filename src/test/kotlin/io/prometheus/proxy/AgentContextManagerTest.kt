@@ -308,6 +308,28 @@ class AgentContextManagerTest : StringSpec() {
       elapsed shouldBeLessThan 5000L
     }
 
+    // Bug #9: Double removal should not throw or produce warn/error logs.
+    // This happens when both the cleanup service and transport filter try to
+    // remove the same agent. The second call returns null silently.
+    "Bug #9: double removeFromContextManager should return null on second call" {
+      val manager = AgentContextManager(isTestMode = true)
+      val context = AgentContext("remote-addr")
+
+      manager.addAgentContext(context)
+      manager.agentContextSize shouldBe 1
+
+      // First removal succeeds
+      val first = manager.removeFromContextManager(context.agentId, "Eviction")
+      first.shouldNotBeNull()
+      first shouldBe context
+      manager.agentContextSize shouldBe 0
+
+      // Second removal returns null (already removed) — no exception
+      val second = manager.removeFromContextManager(context.agentId, "Termination")
+      second.shouldBeNull()
+      manager.agentContextSize shouldBe 0
+    }
+
     "invalidateAllAgentContexts with no agents should not fail" {
       val manager = AgentContextManager(isTestMode = true)
 

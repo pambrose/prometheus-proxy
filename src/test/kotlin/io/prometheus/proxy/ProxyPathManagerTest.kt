@@ -791,10 +791,11 @@ class ProxyPathManagerTest : StringSpec() {
       info.agentContexts[0].agentId shouldBe newAgent.agentId
     }
 
-    // Orphan invalidation fix: A live (valid) agent displaced from a path should NOT be
-    // invalidated, because it may still be mid-registration for additional paths.
-    // Only dead (isNotValid) agents are invalidated on displacement.
-    "overwriting path should not invalidate displaced agent that is still connected" {
+    // Bug #8 fix: A live (valid) agent displaced from its only path IS now
+    // invalidated. Without this, the displaced agent stays alive indefinitely
+    // via heartbeats, consuming resources with zero paths. The agent will
+    // reconnect and re-register its paths if needed.
+    "overwriting path should invalidate displaced agent even if still connected" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -805,11 +806,11 @@ class ProxyPathManagerTest : StringSpec() {
 
       manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
 
-      // Old agent is still connected (valid) — simulates mid-registration
+      // Old agent is still connected (valid) but has no other paths
       manager.addPath("/metrics", """{"job":"test"}""", newAgent)
 
-      // Old agent should NOT be invalidated because its connection is still alive
-      oldAgent.isValid().shouldBeTrue()
+      // Old agent IS invalidated because it has zero remaining paths
+      oldAgent.isValid().shouldBeFalse()
       newAgent.isValid().shouldBeTrue()
 
       // Path should now belong to the new agent
@@ -919,7 +920,10 @@ class ProxyPathManagerTest : StringSpec() {
       oldAgent.isValid().shouldBeFalse()
     }
 
-    "overwriting should not invalidate displaced live agent even with backlog" {
+    // Bug #8 fix: displaced live agents with zero remaining paths are now
+    // invalidated even if they have a backlog. The backlog is drained on
+    // invalidation, and the agent will reconnect.
+    "overwriting should invalidate displaced live agent and drain its backlog" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -933,13 +937,13 @@ class ProxyPathManagerTest : StringSpec() {
       oldAgent.writeScrapeRequest(mockk(relaxed = true))
       oldAgent.scrapeRequestBacklogSize shouldBe 2
 
-      // Old agent is still connected — overwrite should NOT invalidate
+      // Old agent is still connected but has zero remaining paths after overwrite
       manager.addPath("/metrics", """{"job":"test"}""", newAgent)
 
-      // Old agent should still be valid (not invalidated)
-      oldAgent.isValid().shouldBeTrue()
-      // Backlog should still be 2 (not drained)
-      oldAgent.scrapeRequestBacklogSize shouldBe 2
+      // Old agent should be invalidated (zero paths remaining)
+      oldAgent.isValid().shouldBeFalse()
+      // Backlog should be drained by invalidation
+      oldAgent.scrapeRequestBacklogSize shouldBe 0
     }
   }
 }

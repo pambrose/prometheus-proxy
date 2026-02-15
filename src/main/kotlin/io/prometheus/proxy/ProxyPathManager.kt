@@ -96,16 +96,15 @@ internal class ProxyPathManager(
         }
         pathMap[path] = AgentContextInfo(false, labels, mutableListOf(agentContext))
 
-        // Invalidate displaced agent contexts that have no other registered paths
-        // AND whose connection is already dead. Live agents (isValid) may still be
-        // registering additional paths concurrently, so invalidating them prematurely
-        // would kill an agent mid-registration. Dead agents are cleaned up here to
-        // avoid waiting for stale agent eviction.
+        // Invalidate displaced agent contexts that have no other registered paths.
+        // Even live agents are invalidated here — a displaced agent with zero paths
+        // would otherwise stay alive indefinitely via heartbeats, consuming resources.
+        // The agent will reconnect and re-register its paths if needed.
         displacedContexts.forEach { displacedContext ->
           val hasOtherPaths = pathMap.any { (_, v) ->
             v.agentContexts.any { it.agentId == displacedContext.agentId }
           }
-          if (!hasOtherPaths && displacedContext.isNotValid()) {
+          if (!hasOtherPaths) {
             logger.info { "Invalidating orphaned $displacedContext after path /$path was overwritten" }
             displacedContext.invalidate()
           }
@@ -171,7 +170,7 @@ internal class ProxyPathManager(
 
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
     if (agentContext == null) {
-      logger.warn { "Missing agent context for agentId: $agentId ($reason)" }
+      logger.debug { "Agent context already removed for agentId: $agentId ($reason)" }
     } else {
       logger.info { "Removing paths for agentId: $agentId ($reason)" }
 
