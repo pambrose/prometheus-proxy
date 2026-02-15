@@ -37,16 +37,35 @@ Comprehensive KDoc (~85 lines) covering:
 - **@param**: `options`, `proxyPort`, `inProcessServerName`, `testMode`, `initBlock`
 - **@see**: `ProxyOptions`, `Agent`
 
-### Undocumented Classes
+### Documented Internal Classes
 
-Internal service classes intentionally suppress documentation requirements:
+All 15 internal service/manager classes have concise KDoc (5–15 lines each) covering purpose,
+responsibilities, constructor parameters, and cross-references:
 
-- `ProxyGrpcService`, `ProxyHttpService`, `ProxyHttpRoutes` — `@Suppress("UndocumentedPublicClass")`
-- `AgentGrpcService`, `AgentHttpService` — `@Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")`
-- All proxy and agent utility/manager classes — no KDoc
+#### Proxy-side (9 classes)
 
-This is a reasonable design choice: the two main entry-point classes are thoroughly documented for users and
-contributors, while internal implementation details rely on clear naming and code structure.
+| Class                        | Summary                                                                  |
+|:-----------------------------|:-------------------------------------------------------------------------|
+| `ProxyGrpcService`           | gRPC server lifecycle, TLS, interceptors, keepalive                      |
+| `ProxyHttpService`           | Ktor HTTP server for Prometheus scrape requests                          |
+| `ProxyHttpRoutes`            | HTTP routing, service discovery, scrape dispatch                         |
+| `ProxyServiceImpl`           | gRPC `ProxyService` implementation (registration, streaming, heartbeats) |
+| `ProxyPathManager`           | Path-to-agent mapping, consolidated/exclusive modes                      |
+| `AgentContextManager`        | Agent context and chunked context registries                             |
+| `ScrapeRequestManager`       | In-flight scrape request tracking and result assignment                  |
+| `AgentContext`               | Connected agent state, scrape queue, activity tracking                   |
+| `ChunkedContext`             | Chunked response reassembly with CRC32 validation                        |
+| `AgentContextCleanupService` | Background stale-agent eviction                                          |
+
+#### Agent-side (5 classes)
+
+| Class                    | Summary                                                       |
+|:-------------------------|:--------------------------------------------------------------|
+| `AgentGrpcService`       | gRPC client, channel/stub management, streaming, reconnection |
+| `AgentHttpService`       | HTTP scraping of metrics endpoints, builds `ScrapeResults`    |
+| `AgentPathManager`       | Path registration lifecycle with the proxy                    |
+| `AgentConnectionContext` | Bidirectional channels for a single connection                |
+| `HttpClientCache`        | LRU cache with TTL/idle eviction, credential masking          |
 
 ## Test Coverage
 
@@ -131,7 +150,5 @@ Coverage excludes generated gRPC classes (`io.prometheus.grpc.*`).
 
 ### Potential Additions
 
-1. **KDoc on service classes** — `ProxyGrpcService`, `AgentGrpcService`, `ProxyHttpService`, `AgentHttpService`, etc.
-2. **KDoc on manager classes** — `ProxyPathManager`, `AgentPathManager`, `AgentContextManager`, `ScrapeRequestManager`
-3. **Package-level documentation** — `package-info` or Dokka module docs
-4. **Dokka integration** — Add Dokka plugin to generate HTML API docs from KDoc
+1. **Package-level documentation** — `package-info` or Dokka module docs
+2. **Dokka integration** — Add Dokka plugin to generate HTML API docs from KDoc
