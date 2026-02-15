@@ -1,5 +1,4 @@
 [![JitPack](https://jitpack.io/v/pambrose/prometheus-proxy.svg)](https://jitpack.io/#pambrose/prometheus-proxy)
-[![Build Status](https://app.travis-ci.com/pambrose/prometheus-proxy.svg?branch=master)](https://app.travis-ci.com/pambrose/prometheus-proxy)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/422df508473443df9fbd8ea00fdee973)](https://app.codacy.com/gh/pambrose/prometheus-proxy/dashboard)
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 [![ktlint](https://img.shields.io/badge/ktlint%20code--style-%E2%9D%A4-FF4081)](https://pinterest.github.io/ktlint/)
@@ -341,7 +340,7 @@ Configuration values are evaluated in order: CLI options → environment variabl
 | --max_connection_idle_secs      <br> MAX_CONNECTION_IDLE_SECS        <br> proxy.grpc.maxConnectionIdleSecs       | INT_MAX                  | Max time that a gRPC channel may have no outstanding rpcs (seconds)                                                     |
 | --max_connection_age_secs       <br> MAX_CONNECTION_AGE_SECS         <br> proxy.grpc.maxConnectionAgeSecs        | INT_MAX                  | Max time that a gRPC channel may exist (seconds)                                                                        |
 | --max_connection_age_grace_secs <br> MAX_CONNECTION_AGE_GRACE_SECS   <br> proxy.grpc.maxConnectionAgeGraceSecs   | INT_MAX                  | Grace period after the gRPC channel reaches its max age (seconds)                                                       |
-| --log_level                     <br> PROXY_LOG_LEVEL                 <br> proxy.logLevel                         | "info"                   | Log level ("trace", "debug", "info", "warn", "error", "off")                                                            |
+| --log_level                     <br> PROXY_LOG_LEVEL                 <br> proxy.logLevel                         | "info"                   | Log level ("all", "trace", "debug", "info", "warn", "error", "off")                                                     |
 | --cert, -t                      <br> CERT_CHAIN_FILE_PATH            <br> proxy.tls.certChainFilePath            |                          | Certificate chain file path                                                                                             |
 | --key, -k                       <br> PRIVATE_KEY_FILE_PATH           <br> proxy.tls.privateKeyFilePath           |                          | Private key file path                                                                                                   |
 | --trust, -s                     <br> TRUST_CERT_COLLECTION_FILE_PATH <br> proxy.tls.trustCertCollectionFilePath  |                          | Trust certificate collection file path                                                                                  |
@@ -379,7 +378,7 @@ Configuration values are evaluated in order: CLI options → environment variabl
 | --keepalive_timeout_secs      <br> KEEPALIVE_TIMEOUT_SECS             <br> agent.grpc.keepAliveTimeoutSecs            | 20      | The timeout for a PING gRPC frame to be acknowledged (seconds)                                 |
 | --keepalive_without_calls     <br> KEEPALIVE_WITHOUT_CALLS            <br> agent.grpc.keepAliveWithoutCalls           | false   | Is it permissible to send gRPC keepalive pings from the client without any outstanding streams |
 | --unary_deadline_secs         <br> UNARY_DEADLINE_SECS                <br> agent.grpc.unaryDeadlineSecs               | 30      | The timeout for gRPC unary calls (seconds)                                                     |
-| --log_level                   <br> AGENT_LOG_LEVEL                    <br> agent.logLevel                             | "info"  | Log level ("trace", "debug", "info", "warn", "error", "off")                                   |
+| --log_level                   <br> AGENT_LOG_LEVEL                    <br> agent.logLevel                             | "info"  | Log level ("all", "trace", "debug", "info", "warn", "error", "off")                            |
 | --cert, -t                    <br> CERT_CHAIN_FILE_PATH               <br> agent.tls.certChainFilePath                |         | Certificate chain file path                                                                    |
 | --key, -k                     <br> PRIVATE_KEY_FILE_PATH              <br> agent.tls.privateKeyFilePath               |         | Private key file path                                                                          |
 | --trust, -s                   <br> TRUST_CERT_COLLECTION_FILE_PATH    <br> agent.tls.trustCertCollectionFilePath      |         | Trust certificate collection file path                                                         |
@@ -410,7 +409,7 @@ Control logging levels with:
 - **CLI options:** `--log_level`
 - **Properties:** `proxy.logLevel`, `agent.logLevel`
 
-**Available levels:** `trace`, `debug`, `info`, `warn`, `error`, `off`
+**Available levels:** `all`, `trace`, `debug`, `info`, `warn`, `error`, `off`
 
 **Custom logging:** Use `-Dlogback.configurationFile=/path/to/logback.xml`
 
@@ -461,7 +460,7 @@ Enable the debug servlet with the `DEBUG_ENABLED` environment var, the `--debug`
 `proxy/agent.admin.debugEnabled` properties. The debug servlet also requires that the admin servlets
 are enabled.
 
-Descriptions of the servlets are [here](http://metrics.dropwizard.io/3.2.2/manual/servlets.html). The path names can be
+Descriptions of the servlets are [here](https://metrics.dropwizard.io/). The path names can be
 changed in the configuration file. To disable an admin servlet, assign its property path to "".
 
 ## 📝 Examples & Use Cases
