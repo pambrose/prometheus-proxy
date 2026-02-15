@@ -326,6 +326,53 @@ class AgentTest : StringSpec() {
       agent.scrapeRequestBacklogSize.load() shouldBeGreaterThanOrEqual 0
     }
 
+    // Bug #20: decrementBacklog should clamp at zero to prevent negative values
+    "Bug #20: decrementBacklog should not go below zero" {
+      val agent = createTestAgent()
+      agent.scrapeRequestBacklogSize.store(2)
+
+      // Decrementing by more than current value should clamp at 0
+      agent.decrementBacklog(5)
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
+    }
+
+    "Bug #20: decrementBacklog should decrement normally when value is sufficient" {
+      val agent = createTestAgent()
+      agent.scrapeRequestBacklogSize.store(10)
+
+      agent.decrementBacklog(3)
+      agent.scrapeRequestBacklogSize.load() shouldBe 7
+
+      agent.decrementBacklog(7)
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
+    }
+
+    "Bug #20: decrementBacklog from zero should stay at zero" {
+      val agent = createTestAgent()
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
+
+      agent.decrementBacklog(1)
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
+    }
+
+    "Bug #20: concurrent decrementBacklog should never go negative" {
+      val agent = createTestAgent()
+      agent.scrapeRequestBacklogSize.store(50)
+
+      runBlocking {
+        // Launch 100 coroutines each decrementing by 1 — only 50 should succeed
+        coroutineScope {
+          repeat(100) {
+            launch(Dispatchers.IO) {
+              agent.decrementBacklog(1)
+            }
+          }
+        }
+      }
+
+      agent.scrapeRequestBacklogSize.load() shouldBe 0
+    }
+
     // ==================== Bug #8: handleConnectionFailure should rethrow JVM Errors ====================
 
     // Bug #8: Before the fix, the reconnect loop's onFailure handler caught all Throwable
