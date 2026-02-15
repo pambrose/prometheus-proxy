@@ -55,7 +55,7 @@ internal class AgentConnectionContext(
 
   fun close(): Int {
     synchronized(closeLock) {
-      if (!disconnected) {
+      return if (!disconnected) {
         disconnected = true
         // Close (not cancel) and drain the scrape request actions channel so that
         // callers can adjust scrapeRequestBacklogSize by the drained count.
@@ -69,9 +69,10 @@ internal class AgentConnectionContext(
         // to time out waiting for results that were already computed.
         scrapeResultsChannel.close()
         logger.info { "AgentConnectionContext closed (drained $drained pending scrape requests)" }
-        return drained
+        drained
+      } else {
+        0
       }
-      return 0
     }
   }
 

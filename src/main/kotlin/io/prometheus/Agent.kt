@@ -59,7 +59,6 @@ import kotlinx.coroutines.sync.Semaphore
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.minusAssign
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -174,6 +173,22 @@ class Agent(
 
   internal val agentName = options.agentName.ifBlank { "Unnamed-${hostInfo.hostName}" }
   internal val scrapeRequestBacklogSize = AtomicInt(0)
+
+  /**
+   * Atomically decrements scrapeRequestBacklogSize by [delta], clamping at zero.
+   *
+   * During disconnect, both connectionContext.close() (which drains buffered channel items)
+   * and individual scrape coroutine finally blocks can race to decrement the counter for
+   * overlapping items. This CAS loop prevents the counter from going negative.
+   */
+  internal fun decrementBacklog(delta: Int) {
+    while (true) {
+      val current = scrapeRequestBacklogSize.load()
+      val next = maxOf(current - delta, 0)
+      if (scrapeRequestBacklogSize.compareAndSet(current, next)) return
+    }
+  }
+
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
@@ -256,7 +271,7 @@ class Agent(
           }.apply {
             invokeOnCompletion {
               val drained = connectionContext.close()
-              if (drained > 0) scrapeRequestBacklogSize -= drained
+              if (drained > 0) decrementBacklog(drained)
             }
           }
 
@@ -272,7 +287,7 @@ class Agent(
           }.apply {
             invokeOnCompletion {
               val drained = connectionContext.close()
-              if (drained > 0) scrapeRequestBacklogSize -= drained
+              if (drained > 0) decrementBacklog(drained)
             }
           }
 
@@ -289,7 +304,7 @@ class Agent(
           }.apply {
             invokeOnCompletion {
               val drained = connectionContext.close()
-              if (drained > 0) scrapeRequestBacklogSize -= drained
+              if (drained > 0) decrementBacklog(drained)
             }
           }
 
@@ -312,7 +327,7 @@ class Agent(
                     connectionContext.sendScrapeResults(scrapeResponse)
                   } finally {
                     semaphore.release()
-                    scrapeRequestBacklogSize -= 1
+                    decrementBacklog(1)
                   }
                 }
               }
@@ -324,7 +339,7 @@ class Agent(
           }.apply {
             invokeOnCompletion {
               val drained = connectionContext.close()
-              if (drained > 0) scrapeRequestBacklogSize -= drained
+              if (drained > 0) decrementBacklog(drained)
             }
           }
         }
