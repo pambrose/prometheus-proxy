@@ -435,13 +435,27 @@ controlled by the `--max_concurrent_clients` CLI option, the `MAX_CONCURRENT_CLI
 or the `agent.http.maxConcurrentClients` property. The default value is 1.
 
 The HTTP client timeout is controlled by the `--client_timeout_secs` CLI option, the `CLIENT_TIMEOUT_SECS` environment
-variable, or the `agent.http.clientTimeoutSecs` property. The default value is 90 seconds. This value replaces the
-`agent.configVals.agent.internal.cioTimeoutSecs` value.
+variable, or the `agent.http.clientTimeoutSecs` property. The default value is 90 seconds. (This value replaces the
+`agent.configVals.agent.internal.cioTimeoutSecs` value.)
 
 The maximum scrape response size is controlled by the `--max_content_length_mbytes` CLI option,
 the `AGENT_MAX_CONTENT_LENGTH_MBYTES` environment variable, or the `agent.http.maxContentLengthMBytes` property.
 The default value is 10 megabytes. Responses exceeding this size will be rejected with an `HTTP 413 Payload Too Large`
 error to prevent memory exhaustion.
+
+### Proxy Content Size Limits
+
+The proxy enforces size limits on content received from agents during chunked transfers to protect against
+zip bombs and excessive memory usage. These are configured via the config file only (no CLI flags):
+
+| Property                                      | Default | Description                                                       |
+|:----------------------------------------------|:--------|:------------------------------------------------------------------|
+| `proxy.internal.maxZippedContentSizeMBytes`   | 5       | Maximum allowed size of zipped content in chunked transfers (MB)  |
+| `proxy.internal.maxUnzippedContentSizeMBytes` | 10      | Maximum allowed size of unzipped content after decompression (MB) |
+
+Zipped content exceeding `maxZippedContentSizeMBytes` during chunked transfer will be rejected with an
+`HTTP 502 Bad Gateway` error. Unzipped content exceeding `maxUnzippedContentSizeMBytes` will be rejected with an
+`HTTP 413 Payload Too Large` error. Increase these values if your metrics endpoints produce large responses.
 
 ### Admin Servlets
 
