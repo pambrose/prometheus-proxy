@@ -245,13 +245,13 @@ class UtilsTest : StringSpec() {
     "parseHostPort should handle bracketed IPv6 with port" {
       val result = parseHostPort("[::1]:50051", 9090)
 
-      result shouldBe HostPort("[::1]", 50051)
+      result shouldBe HostPort("::1", 50051)
     }
 
     "parseHostPort should handle bracketed IPv6 without port" {
       val result = parseHostPort("[::1]", 50051)
 
-      result shouldBe HostPort("[::1]", 50051)
+      result shouldBe HostPort("::1", 50051)
     }
 
     "parseHostPort should handle unbracketed IPv6 without port" {
@@ -301,7 +301,7 @@ class UtilsTest : StringSpec() {
     "parseHostPort should handle bracketed full IPv6 with port" {
       val result = parseHostPort("[2001:db8::1]:8443", 50051)
 
-      result shouldBe HostPort("[2001:db8::1]", 8443)
+      result shouldBe HostPort("2001:db8::1", 8443)
     }
 
     // M4: parseHostPort now validates port values with descriptive error messages

@@ -115,13 +115,13 @@ object Utils {
 
           closeBracket + 1 < hostPort.length && hostPort[closeBracket + 1] == ':' -> {
             HostPort(
-              hostPort.substring(0, closeBracket + 1),
+              hostPort.substring(1, closeBracket),
               parsePort(hostPort.substring(closeBracket + 2), hostPort),
             )
           }
 
           else -> {
-            HostPort(hostPort.substring(0, closeBracket + 1), defaultPort)
+            HostPort(hostPort.substring(1, closeBracket), defaultPort)
           }
         }
       }
