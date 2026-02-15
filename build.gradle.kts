@@ -17,6 +17,7 @@ plugins {
   alias(libs.plugins.buildconfig)
   alias(libs.plugins.kover)
   alias(libs.plugins.detekt)
+  alias(libs.plugins.dokka)
   // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
   // id("jacoco")
   // id("com.github.kt3k.coveralls") version "2.12.0"
@@ -90,6 +91,7 @@ configurePublishing()
 configureTesting()
 configureKotlinter()
 configureDetekt()
+configureDokka()
 configureVersions()
 configureCoverage()
 configureSecrets()
@@ -269,6 +271,35 @@ fun Project.configureDetekt() {
     allRules = false
     config.setFrom("$projectDir/etc/detekt/detekt.yml")
     baseline = file("$projectDir/etc/detekt/baseline.xml")
+  }
+}
+
+fun Project.configureDokka() {
+  dokka {
+    moduleName.set("Prometheus Proxy")
+
+    dokkaPublications.html {
+      outputDirectory.set(layout.buildDirectory.dir("dokka/html"))
+      includes.from("docs/packages.md")
+    }
+
+    dokkaSourceSets.main {
+      documentedVisibilities(
+        org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier.Public,
+        org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier.Internal,
+      )
+
+      perPackageOption {
+        matchingRegex.set("io\\.prometheus\\.grpc.*")
+        suppress.set(true)
+      }
+
+      sourceLink {
+        localDirectory.set(file("src/main/kotlin"))
+        remoteUrl("https://github.com/pambrose/prometheus-proxy/tree/master/src/main/kotlin")
+        remoteLineSuffix.set("#L")
+      }
+    }
   }
 }
 

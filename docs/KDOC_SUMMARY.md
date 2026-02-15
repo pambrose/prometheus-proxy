@@ -146,9 +146,35 @@ Generate coverage report:
 
 Coverage excludes generated gRPC classes (`io.prometheus.grpc.*`).
 
-## Documentation Opportunities
+## Package-Level Documentation
 
-### Potential Additions
+Package-level documentation is provided in [`docs/packages.md`](packages.md) using Dokka's
+`# Module` / `# Package` format. The following packages are documented:
 
-1. **Package-level documentation** — `package-info` or Dokka module docs
-2. **Dokka integration** — Add Dokka plugin to generate HTML API docs from KDoc
+| Package                | Description                                                  |
+|:-----------------------|:-------------------------------------------------------------|
+| `io.prometheus`        | Top-level entry points: Agent and Proxy                      |
+| `io.prometheus.proxy`  | Proxy-side services, managers, and data models               |
+| `io.prometheus.agent`  | Agent-side services for gRPC communication and HTTP scraping |
+| `io.prometheus.common` | Shared utilities, configuration, and data models             |
+
+## Dokka Integration
+
+HTML API documentation is generated via the [Dokka](https://github.com/Kotlin/dokka) Gradle plugin (v2.1.0).
+
+```bash
+# Generate HTML docs
+make dokka
+# Or directly:
+./gradlew :dokkaGeneratePublicationHtml
+
+# Output: build/dokka/html/index.html
+```
+
+Configuration (in `build.gradle.kts` via `configureDokka()`):
+
+- Module name: "Prometheus Proxy"
+- Includes package docs from `docs/packages.md`
+- Documents both `public` and `internal` visibility
+- Suppresses generated gRPC classes (`io.prometheus.grpc.*`)
+- Source links point to the GitHub repository

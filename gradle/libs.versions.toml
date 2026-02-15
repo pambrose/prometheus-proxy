@@ -2,6 +2,7 @@
 # Plugins
 config = "6.0.7"
 detekt = "1.23.8"
+dokka = "2.1.0"
 kotlinter = "5.4.2"
 kotlin = "2.3.10"
 kover = "0.9.7"
@@ -19,7 +20,7 @@ jcommander = "3.0"
 jetty = "10.0.26"
 kotest = "6.1.3"
 ktor = "3.4.0"
-logback = "1.5.29"
+logback = "1.5.31"
 logging = "7.0.14"
 mockk = "1.14.9"
 prometheus = "0.16.0"
@@ -114,6 +115,7 @@ shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "config" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 
 [bundles]
 ktor = [

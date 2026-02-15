@@ -38,6 +38,9 @@ tls-tests:
 reports:
 	./gradlew koverMergedHtmlReport
 
+dokka:
+	./gradlew :dokkaGeneratePublicationHtml
+
 tsconfig:
 	java -jar ./config/jars/tscfg-1.2.5.jar --spec config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
