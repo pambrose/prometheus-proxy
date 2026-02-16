@@ -41,6 +41,12 @@ reports:
 dokka:
 	./gradlew :dokkaGeneratePublicationHtml
 
+gh-dokka:
+	gh workflow run dokka.yml
+
+gh-status:
+	gh run list --workflow=dokka.yml
+
 tsconfig:
 	java -jar ./config/jars/tscfg-1.2.5.jar --spec config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 

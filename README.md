@@ -24,6 +24,7 @@ behind a firewall and preserves the native pull-based model architecture.
 - [Configuration Options](#-configuration-options)
 - [Security & TLS](#-security--tls)
 - [Troubleshooting](#-troubleshooting)
+- [API Documentation](#-api-documentation)
 - [License](#-license)
 
 ## 🏗️ Architecture
@@ -553,6 +554,11 @@ java -jar prometheus-agent.jar --trust_all_x509 --config myconfig.conf
 - Increase `max_concurrent_clients` for high-throughput scenarios
 - Tune HTTP client cache settings
 - Consider running multiple agents for load distribution
+
+## 📖 API Documentation
+
+KDoc API documentation is published
+at [pambrose.github.io/prometheus-proxy](https://pambrose.github.io/prometheus-proxy/).
 
 ## 📄 License
 
