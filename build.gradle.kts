@@ -283,6 +283,10 @@ fun Project.configureDokka() {
       includes.from("docs/packages.md")
     }
 
+    pluginsConfiguration.html {
+      homepageLink.set("https://github.com/pambrose/prometheus-proxy")
+    }
+
     dokkaSourceSets.main {
       documentedVisibilities(
         org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier.Public,
