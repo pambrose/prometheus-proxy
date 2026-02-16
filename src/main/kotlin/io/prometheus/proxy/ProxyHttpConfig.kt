@@ -76,13 +76,13 @@ internal object ProxyHttpConfig {
     }
   }
 
-  internal fun CallLoggingConfig.configureCallLogging() {
+  fun CallLoggingConfig.configureCallLogging() {
     level = Level.INFO
     filter { call -> call.request.path().startsWith("/") }
     format { call -> getFormattedLog(call) }
   }
 
-  internal fun getFormattedLog(call: ApplicationCall) =
+  fun getFormattedLog(call: ApplicationCall) =
     call.run {
       when (val status = response.status()) {
         HttpStatusCode.Found -> {
@@ -96,7 +96,7 @@ internal object ProxyHttpConfig {
       }
     }
 
-  internal fun CompressionConfig.configureCompression() {
+  fun CompressionConfig.configureCompression() {
     gzip {
       priority = 10.0
       minimumSize(1024)
@@ -107,7 +107,7 @@ internal object ProxyHttpConfig {
     }
   }
 
-  internal fun StatusPagesConfig.configureStatusPages() {
+  fun StatusPagesConfig.configureStatusPages() {
     // Catch all
     exception<Throwable> { call, cause ->
       logger.warn(cause) { "Throwable caught: ${cause.simpleClassName}" }

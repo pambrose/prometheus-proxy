@@ -57,7 +57,8 @@ class ProxyHttpConfigTest : StringSpec() {
   // ==================== Helper Methods ====================
 
   private fun callGetFormattedLog(call: ApplicationCall): String {
-    val method = ProxyHttpConfig::class.java.getDeclaredMethod("getFormattedLog", ApplicationCall::class.java)
+    val methodName = "getFormattedLog"
+    val method = ProxyHttpConfig::class.java.getDeclaredMethod(methodName, ApplicationCall::class.java)
     method.isAccessible = true
     return method.invoke(ProxyHttpConfig, call) as String
   }
