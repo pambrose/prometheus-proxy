@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.github.pambrose.common.util.zip
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -26,8 +27,6 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -156,7 +155,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       try {
         val port = server.engine.resolvedConnectors().first().port
         delay(100.milliseconds) // Allow CIO engine to fully initialize
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/discovery")
         response.status shouldBe HttpStatusCode.OK
@@ -186,7 +185,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       try {
         val port = server.engine.resolvedConnectors().first().port
         delay(100.milliseconds) // Allow CIO engine to fully initialize
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/discovery")
         response.status shouldBe HttpStatusCode.OK
@@ -757,7 +756,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/metrics")
         response.status shouldBe HttpStatusCode.ServiceUnavailable
@@ -780,7 +779,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/favicon.ico")
         response.status shouldBe HttpStatusCode.NotFound
@@ -803,7 +802,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/unknown-metrics")
         response.status shouldBe HttpStatusCode.NotFound
@@ -829,7 +828,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/blitz-test")
         response.status shouldBe HttpStatusCode.OK
@@ -856,7 +855,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-metrics")
         response.status shouldBe HttpStatusCode.NotFound
@@ -885,7 +884,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-sd")
         response.status shouldBe HttpStatusCode.OK
@@ -1300,7 +1299,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         // With SD disabled, /discovery is handled by get("/*") as an unknown path
         val response = client.get("http://localhost:$port/discovery")
