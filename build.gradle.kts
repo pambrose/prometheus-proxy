@@ -54,7 +54,7 @@ dependencies {
   implementation(platform(libs.ktor.bom))
   implementation(libs.bundles.ktor)
 
-  implementation(platform(libs.common.utils.bom))
+//  implementation(platform(libs.common.utils.bom))
   implementation(libs.bundles.common.utils)
 
   implementation(libs.protobuf.kotlin)
@@ -95,6 +95,7 @@ configureDokka()
 configureVersions()
 configureCoverage()
 configureSecrets()
+configureCache()
 
 fun Project.configureKotlin() {
   tasks.withType<JavaCompile> {
@@ -103,10 +104,6 @@ fun Project.configureKotlin() {
 
   tasks.named("build") {
     mustRunAfter("clean")
-  }
-
-  configurations.all {
-    resolutionStrategy.cacheChangingModulesFor(0, "seconds")
   }
 
   idea {
@@ -356,3 +353,10 @@ fun Project.configureCoverage() {
     }
   }
 }
+
+fun Project.configureCache() {
+  configurations.all {
+    resolutionStrategy.cacheChangingModulesFor(0, "seconds")
+  }
+}
+
