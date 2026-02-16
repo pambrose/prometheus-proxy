@@ -51,12 +51,14 @@ internal object ProxyHttpConfig {
   fun Application.configureKtorServer(
     proxy: Proxy,
     isTestMode: Boolean,
-  ) {
+  ) = configureKtorServer(!isTestMode && proxy.options.configVals.proxy.http.requestLoggingEnabled)
+
+  fun Application.configureKtorServer(isLoggingEnabled: Boolean = true) {
     install(DefaultHeaders) {
       header("X-Engine", "Ktor")
     }
 
-    if (!isTestMode && proxy.options.configVals.proxy.http.requestLoggingEnabled)
+    if (isLoggingEnabled)
       install(CallLogging) {
         configureCallLogging()
       }
@@ -74,13 +76,13 @@ internal object ProxyHttpConfig {
     }
   }
 
-  private fun CallLoggingConfig.configureCallLogging() {
+  internal fun CallLoggingConfig.configureCallLogging() {
     level = Level.INFO
     filter { call -> call.request.path().startsWith("/") }
     format { call -> getFormattedLog(call) }
   }
 
-  private fun getFormattedLog(call: ApplicationCall) =
+  internal fun getFormattedLog(call: ApplicationCall) =
     call.run {
       when (val status = response.status()) {
         HttpStatusCode.Found -> {
@@ -94,7 +96,7 @@ internal object ProxyHttpConfig {
       }
     }
 
-  private fun CompressionConfig.configureCompression() {
+  internal fun CompressionConfig.configureCompression() {
     gzip {
       priority = 10.0
       minimumSize(1024)
@@ -105,7 +107,7 @@ internal object ProxyHttpConfig {
     }
   }
 
-  private fun StatusPagesConfig.configureStatusPages() {
+  internal fun StatusPagesConfig.configureStatusPages() {
     // Catch all
     exception<Throwable> { call, cause ->
       logger.warn(cause) { "Throwable caught: ${cause.simpleClassName}" }

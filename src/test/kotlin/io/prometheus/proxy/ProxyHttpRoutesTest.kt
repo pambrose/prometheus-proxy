@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
+import com.github.pambrose.common.util.ensureLeadingSlash
 import com.github.pambrose.common.util.zip
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -43,7 +44,6 @@ import io.mockk.slot
 import io.mockk.spyk
 import io.prometheus.Proxy
 import io.prometheus.common.ScrapeResults
-import io.prometheus.proxy.ProxyHttpRoutes.ensureLeadingSlash
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
