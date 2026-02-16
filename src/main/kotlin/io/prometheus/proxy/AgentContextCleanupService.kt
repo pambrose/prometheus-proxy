@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,26 +14,40 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
 import com.github.pambrose.common.concurrent.GenericExecutionThreadService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
-import io.prometheus.common.Utils.lambda
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Background service that periodically evicts stale agent contexts.
+ *
+ * Runs a loop that checks for agents whose last activity exceeds
+ * `maxAgentInactivitySecs`. Stale agents are removed from the path map and context
+ * manager, and their in-flight scrape requests are failed. A TOCTOU re-check guards
+ * against evicting agents that sent a heartbeat between the scan and the eviction.
+ *
+ * @param proxy the parent [Proxy] instance
+ * @param configVals internal proxy configuration (inactivity timeout, check interval)
+ * @param initBlock optional initialization block run after listener registration
+ * @see AgentContextManager
+ * @see io.prometheus.Proxy
+ */
 internal class AgentContextCleanupService(
   private val proxy: Proxy,
   private val configVals: ConfigVals.Proxy2.Internal2,
-  initBlock: (AgentContextCleanupService.() -> Unit) = lambda {},
+  initBlock: (AgentContextCleanupService.() -> Unit) = {},
 ) : GenericExecutionThreadService() {
+  private val shutdownLatch = CountDownLatch(1)
+
   init {
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
     initBlock(this)
@@ -41,22 +55,32 @@ internal class AgentContextCleanupService(
 
   override fun run() {
     val maxAgentInactivityTime = configVals.maxAgentInactivitySecs.seconds
-    val pauseTime = configVals.staleAgentCheckPauseSecs.seconds
+    val pauseTimeSecs = configVals.staleAgentCheckPauseSecs.seconds
     while (isRunning) {
-      proxy.agentContextManager.agentContextMap
-        .forEach { (agentId, agentContext) ->
-          val inactiveTime = agentContext.inactivityDuration
-          if (inactiveTime > maxAgentInactivityTime) {
-            logger.info {
-              val id = agentContext.agentId
-              "Evicting agentId $id after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
-            }
-            proxy.removeAgentContext(agentId, "Eviction")
-            proxy.metrics { agentEvictionCount.inc() }
+      val agentsToEvict = proxy.agentContextManager.findStaleAgents(maxAgentInactivityTime)
+
+      agentsToEvict.forEach { (agentId, agentContext) ->
+        // Re-check inactivity to avoid a TOCTOU race: the agent may have sent a
+        // heartbeat between the findStaleAgents snapshot and this eviction attempt.
+        val inactiveTime = agentContext.inactivityDuration
+        if (inactiveTime > maxAgentInactivityTime) {
+          logger.info {
+            "Evicting agentId $agentId after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
+          }
+          proxy.removeAgentContext(agentId, "Eviction")
+          proxy.metrics { agentEvictionCount.inc() }
+        } else {
+          logger.debug {
+            "Skipping eviction for agentId $agentId: activity detected since stale check ($inactiveTime)"
           }
         }
-      sleep(pauseTime)
+      }
+      shutdownLatch.await(pauseTimeSecs.inWholeMilliseconds, TimeUnit.MILLISECONDS)
     }
+  }
+
+  override fun triggerShutdown() {
+    shutdownLatch.countDown()
   }
 
   override fun toString() =
@@ -66,6 +90,6 @@ internal class AgentContextCleanupService(
     }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

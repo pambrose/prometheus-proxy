@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import com.github.pambrose.common.dsl.PrometheusDsl.gauge
 import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
-import io.prometheus.common.Utils.lambda
 
 internal class AgentMetrics(
   agent: Agent,
@@ -68,7 +67,7 @@ internal class AgentMetrics(
       "Agent scrape backlog size",
       labelNames = listOf(LAUNCH_ID),
       labelValues = listOf(agent.launchId),
-      data = lambda { agent.scrapeRequestBacklogSize.load().toDouble() },
+      data = { agent.scrapeRequestBacklogSize.load().toDouble() },
     )
 
     SamplerGaugeCollector(
@@ -76,7 +75,7 @@ internal class AgentMetrics(
       "Agent client cache size",
       labelNames = listOf(LAUNCH_ID),
       labelValues = listOf(agent.launchId),
-      data = lambda { agent.agentHttpService.httpClientCache.currentCacheSize().toDouble() },
+      data = { agent.agentHttpService.httpClientCache.currentCacheSize().toDouble() },
     )
   }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 package io.prometheus.agent
 
 import com.beust.jcommander.Parameter
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.ConfigVals
@@ -41,6 +41,8 @@ import io.prometheus.common.EnvVars.PROXY_HOSTNAME
 import io.prometheus.common.EnvVars.SCRAPE_MAX_RETRIES
 import io.prometheus.common.EnvVars.SCRAPE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.TRUST_ALL_X509_CERTIFICATES
+import io.prometheus.common.EnvVars.UNARY_DEADLINE_SECS
+import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.setLogLevel
 import kotlin.time.Duration.Companion.seconds
 
@@ -79,7 +81,7 @@ class AgentOptions(
     private set
 
   @Parameter(names = ["--chunk"], description = "Threshold for chunking content to Proxy and buffer size (KBs)")
-  var chunkContentSizeKbs = -1
+  var chunkContentSizeBytes = -1
     private set
 
   @Parameter(names = ["--gzip"], description = "Minimum size for content to be gzipped (bytes)")
@@ -96,6 +98,13 @@ class AgentOptions(
 
   @Parameter(names = ["--client_timeout_secs"], description = "HTTP client timeout (seconds)")
   var httpClientTimeoutSecs = -1
+    private set
+
+  @Parameter(
+    names = ["--max_content_length_mbytes"],
+    description = "Maximum allowed size of scrape response (megabytes)",
+  )
+  var maxContentLengthMBytes = -1
     private set
 
   @Parameter(names = ["--max_cache_size"], description = "Maximum number of HTTP clients to cache")
@@ -124,99 +133,127 @@ class AgentOptions(
   var keepAliveWithoutCalls = false
     private set
 
+  @Parameter(names = ["--unary_deadline_secs"], description = "gRPC Unary deadline (seconds)")
+  var unaryDeadlineSecs = -1
+    private set
+
   init {
     parseOptions()
   }
 
   override fun assignConfigVals() {
-    configVals.agent
-      .also { agentConfigVals ->
-        if (proxyHostname.isEmpty()) {
-          val configHostname = agentConfigVals.proxy.hostname
-          val str = if (":" in configHostname)
-            configHostname
-          else
-            "$configHostname:${agentConfigVals.proxy.port}"
-          proxyHostname = PROXY_HOSTNAME.getEnv(str)
-        }
-        logger.info { "proxyHostname: $proxyHostname" }
+    val agentConfigVals = configVals.agent
 
-        if (agentName.isEmpty())
-          agentName = AGENT_NAME.getEnv(agentConfigVals.name)
-        logger.info { "agentName: $agentName" }
+    if (proxyHostname.isEmpty()) {
+      val configHostname = agentConfigVals.proxy.hostname
+      val defaultPort = agentConfigVals.proxy.port
+      val parsed = parseHostPort(configHostname, defaultPort)
+      val str = "${parsed.host}:${parsed.port}"
+      proxyHostname = PROXY_HOSTNAME.getEnv(str)
+    }
+    logger.info { "proxyHostname: $proxyHostname" }
 
-        if (!consolidated)
-          consolidated = CONSOLIDATED.getEnv(agentConfigVals.consolidated)
-        logger.info { "consolidated: $consolidated" }
+    if (agentName.isEmpty())
+      agentName = AGENT_NAME.getEnv(agentConfigVals.name)
+    logger.info { "agentName: $agentName" }
 
-        if (scrapeTimeoutSecs == -1)
-          scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
-        logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+    consolidated =
+      resolveBooleanOption(consolidated, CONSOLIDATED, agentConfigVals.consolidated, "-o", "--consolidated")
+    logger.info { "consolidated: $consolidated" }
 
-        if (scrapeMaxRetries == -1)
-          scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
-        logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
+    if (scrapeTimeoutSecs == -1)
+      scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
+    logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
 
-        if (chunkContentSizeKbs == -1)
-          chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
-        // Multiply the value time KB
-        chunkContentSizeKbs *= 1024
-        logger.info { "chunkContentSizeKbs: $chunkContentSizeKbs" }
+    if (scrapeMaxRetries == -1)
+      scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
+    logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
 
-        if (minGzipSizeBytes == -1)
-          minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agentConfigVals.minGzipSizeBytes)
-        logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
+    if (chunkContentSizeBytes == -1)
+      chunkContentSizeBytes = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
+    require(chunkContentSizeBytes > 0) { "chunkContentSizeKbs must be > 0: ($chunkContentSizeBytes)" }
+    // Convert KB value to bytes with overflow protection
+    val chunkSizeAsBytes = chunkContentSizeBytes.toLong() * 1024
+    require(chunkSizeAsBytes <= Int.MAX_VALUE) {
+      "chunkContentSizeKbs value $chunkContentSizeBytes is too large (max: ${Int.MAX_VALUE / 1024})"
+    }
+    chunkContentSizeBytes = chunkSizeAsBytes.toInt()
+    logger.info { "chunkContentSizeBytes: $chunkContentSizeBytes" }
 
-        if (overrideAuthority.isEmpty())
-          overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agentConfigVals.tls.overrideAuthority)
-        logger.info { "overrideAuthority: $overrideAuthority" }
+    if (minGzipSizeBytes == -1)
+      minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agentConfigVals.minGzipSizeBytes)
+    logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
 
-        assignHttpClientConfigVals(agentConfigVals)
+    if (overrideAuthority.isEmpty())
+      overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agentConfigVals.tls.overrideAuthority)
+    logger.info { "overrideAuthority: $overrideAuthority" }
 
-        if (!keepAliveWithoutCalls)
-          keepAliveWithoutCalls = KEEPALIVE_WITHOUT_CALLS.getEnv(agentConfigVals.grpc.keepAliveWithoutCalls)
-        logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
+    assignHttpClientConfigVals(agentConfigVals)
 
-        with(agentConfigVals) {
-          assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
-          assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
-          assignAdminEnabled(admin.enabled)
-          assignAdminPort(admin.port)
-          assignMetricsEnabled(metrics.enabled)
-          assignMetricsPort(metrics.port)
-          assignTransportFilterDisabled(transportFilterDisabled)
-          assignDebugEnabled(admin.debugEnabled)
+    keepAliveWithoutCalls =
+      resolveBooleanOption(
+        keepAliveWithoutCalls,
+        KEEPALIVE_WITHOUT_CALLS,
+        agentConfigVals.grpc.keepAliveWithoutCalls,
+        "--keepalive_without_calls",
+      )
+    logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
 
-          assignCertChainFilePath(tls.certChainFilePath)
-          assignPrivateKeyFilePath(tls.privateKeyFilePath)
-          assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
+    if (unaryDeadlineSecs == -1)
+      unaryDeadlineSecs = UNARY_DEADLINE_SECS.getEnv(agentConfigVals.grpc.unaryDeadlineSecs)
+    logger.info { "grpc.unaryDeadlineSecs: $unaryDeadlineSecs" }
 
-          logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
-          logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
+    agentConfigVals.apply {
+      assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
+      assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
+      assignAdminEnabled(admin.enabled)
+      assignAdminPort(admin.port)
+      assignMetricsEnabled(metrics.enabled)
+      assignMetricsPort(metrics.port)
+      assignTransportFilterDisabled(transportFilterDisabled)
+      assignDebugEnabled(admin.debugEnabled)
 
-          val pauseVal = internal.heartbeatCheckPauseMillis
-          logger.info { "agent.internal.heartbeatCheckPauseMillis: $pauseVal" }
+      assignCertChainFilePath(tls.certChainFilePath)
+      assignPrivateKeyFilePath(tls.privateKeyFilePath)
+      assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
+      validateTlsConfig()
 
-          val inactivityVal = internal.heartbeatMaxInactivitySecs
-          logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
-        }
+      logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+      logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
 
-        if (logLevel.isEmpty())
-          logLevel = AGENT_LOG_LEVEL.getEnv(agentConfigVals.logLevel)
-        if (logLevel.isNotEmpty()) {
-          logger.info { "agent.logLevel: $logLevel" }
-          setLogLevel("agent", logLevel)
-        } else {
-          logger.info { "agent.logLevel: info" }
-        }
-      }
+      val pauseVal = internal.heartbeatCheckPauseMillis
+      logger.info { "agent.internal.heartbeatCheckPauseMillis: $pauseVal" }
+
+      val inactivityVal = internal.heartbeatMaxInactivitySecs
+      logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
+    }
+
+    if (logLevel.isEmpty())
+      logLevel = AGENT_LOG_LEVEL.getEnv(agentConfigVals.logLevel)
+    if (logLevel.isNotEmpty()) {
+      logger.info { "agent.logLevel: $logLevel" }
+      setLogLevel("agent", logLevel)
+    } else {
+      logger.info { "agent.logLevel: info" }
+    }
   }
 
   private fun assignHttpClientConfigVals(agentConfigVals: ConfigVals.Agent) {
-    with(agentConfigVals.http) {
-      if (!trustAllX509Certificates)
-        trustAllX509Certificates = TRUST_ALL_X509_CERTIFICATES.getEnv(enableTrustAllX509Certificates)
+    agentConfigVals.http.apply {
+      trustAllX509Certificates =
+        resolveBooleanOption(
+          trustAllX509Certificates,
+          TRUST_ALL_X509_CERTIFICATES,
+          enableTrustAllX509Certificates,
+          "--trust_all_x509",
+        )
       logger.info { "http.trustAllX509Certificates: $trustAllX509Certificates" }
+      if (trustAllX509Certificates) {
+        logger.warn {
+          "X.509 certificate verification is disabled -- ALL certificates will be trusted. " +
+            "Do not use this in production."
+        }
+      }
 
       if (maxConcurrentHttpClients == -1)
         maxConcurrentHttpClients = MAX_CONCURRENT_CLIENTS.getEnv(maxConcurrentClients)
@@ -228,31 +265,36 @@ class AgentOptions(
       require(httpClientTimeoutSecs > 0) { "http.clientTimeoutSecs must be > 0" }
       logger.info { "http.clientTimeoutSecs: $httpClientTimeoutSecs" }
 
+      if (this@AgentOptions.maxContentLengthMBytes == -1)
+        this@AgentOptions.maxContentLengthMBytes = agentConfigVals.http.maxContentLengthMBytes
+      require(this@AgentOptions.maxContentLengthMBytes > 0) { "http.maxContentLengthMBytes must be > 0" }
+      logger.info { "http.maxContentLengthMBytes: ${this@AgentOptions.maxContentLengthMBytes}" }
+
       if (maxCacheSize == -1)
         maxCacheSize = MAX_CLIENT_CACHE_SIZE.getEnv(clientCache.maxSize)
-      require(maxCacheSize > 1) { "http.clientCache.maxSize must be > 1: ($maxCacheSize)" }
+      require(maxCacheSize > 0) { "http.clientCache.maxSize must be > 0: ($maxCacheSize)" }
       logger.info { "http.clientCache.maxSize: $maxCacheSize" }
 
       if (maxCacheAgeMins == -1)
         maxCacheAgeMins = MAX_CLIENT_CACHE_AGE_MINS.getEnv(clientCache.maxAgeMins)
-      require(maxCacheAgeMins > 1) { "http.clientCache.maxCacheAgeMins must be > 1: ($maxCacheAgeMins)" }
+      require(maxCacheAgeMins > 0) { "http.clientCache.maxCacheAgeMins must be > 0: ($maxCacheAgeMins)" }
       logger.info { "http.clientCache.maxCacheAgeMins: $maxCacheAgeMins" }
 
       if (maxCacheIdleMins == -1)
         maxCacheIdleMins = MAX_CLIENT_CACHE_IDLE_MINS.getEnv(clientCache.maxIdleMins)
-      require(maxCacheIdleMins > 1) { "http.clientCache.maxCacheIdleMins must be > 1: ($maxCacheIdleMins)" }
+      require(maxCacheIdleMins > 0) { "http.clientCache.maxCacheIdleMins must be > 0: ($maxCacheIdleMins)" }
       logger.info { "http.clientCache.maxCacheIdleMins: $maxCacheIdleMins" }
 
       if (cacheCleanupIntervalMins == -1)
         cacheCleanupIntervalMins = CLIENT_CACHE_CLEANUP_INTERVAL_MINS.getEnv(clientCache.cleanupIntervalMins)
-      require(cacheCleanupIntervalMins > 1) {
-        "http.clientCache.cleanupIntervalMins must be > 1: ($cacheCleanupIntervalMins)"
+      require(cacheCleanupIntervalMins > 0) {
+        "http.clientCache.cleanupIntervalMins must be > 0: ($cacheCleanupIntervalMins)"
       }
       logger.info { "http.clientCache.cleanupIntervalMins: $cacheCleanupIntervalMins" }
     }
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import com.github.pambrose.common.dsl.KtorDsl.httpClient
 import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.github.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -43,43 +43,41 @@ import io.ktor.server.routing.routing
 import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.harness.support.HarnessConstants.HTTP_SERVER_COUNT
-import io.prometheus.harness.support.HarnessConstants.MAX_DELAY_MILLIS
-import io.prometheus.harness.support.HarnessConstants.MIN_DELAY_MILLIS
-import io.prometheus.harness.support.HarnessConstants.PARALLEL_QUERY_COUNT
-import io.prometheus.harness.support.HarnessConstants.PATH_COUNT
-import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
-import io.prometheus.harness.support.HarnessConstants.SEQUENTIAL_QUERY_COUNT
+import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
+import io.prometheus.harness.HarnessConstants.MAX_DELAY_MILLIS
+import io.prometheus.harness.HarnessConstants.MIN_DELAY_MILLIS
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.newSingleThreadContext
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withTimeout
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-class ProxyCallTestArgs(
+data class ProxyCallTestArgs(
   val agent: Agent,
-  val httpServerCount: Int = HTTP_SERVER_COUNT,
-  val pathCount: Int = PATH_COUNT,
-  val sequentialQueryCount: Int = SEQUENTIAL_QUERY_COUNT,
-  val parallelQueryCount: Int = PARALLEL_QUERY_COUNT,
+  val proxyPort: Int,
+  val httpServerCount: Int = HARNESS_CONFIG.httpServerCount,
+  val pathCount: Int = HARNESS_CONFIG.pathCount,
+  val sequentialQueryCount: Int = HARNESS_CONFIG.sequentialQueryCount,
+  val parallelQueryCount: Int = HARNESS_CONFIG.parallelQueryCount,
   val startPort: Int = 9600,
   val caller: String,
 )
 
 internal object HarnessTests {
-  private val logger = KotlinLogging.logger {}
-  private val contentMap = mutableMapOf<Int, String>()
+  private val logger = logger {}
+  private val contentMap = java.util.concurrent.ConcurrentHashMap<Int, String>()
 
   suspend fun timeoutTest(
     pathManager: AgentPathManager,
     caller: String,
+    proxyPort: Int,
     agentPort: Int = 9900,
     agentPath: String = "agent-timeout",
     proxyPath: String = "proxy-timeout",
@@ -97,28 +95,28 @@ internal object HarnessTests {
         }
       }
 
-    coroutineScope {
-      launch(Dispatchers.Default + exceptionHandler(logger)) {
-        logger.info { "Starting httpServer" }
-        httpServer.start()
-        delay(5.seconds)
+    logger.info { "Starting httpServer" }
+    httpServer.start()
+
+    // Give http server a chance to start
+    // delay(2.seconds)
+
+    try {
+      pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
+
+      blockingGet("$proxyPort/$proxyPath".withPrefix()) { response ->
+        response.status shouldBe HttpStatusCode.RequestTimeout
       }
-    }
 
-    delay(2.seconds) // Give http server a chance to start
-    pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
-
-    blockingGet("$PROXY_PORT/$proxyPath".withPrefix()) { response ->
-      response.status shouldBe HttpStatusCode.RequestTimeout
-    }
-
-    pathManager.unregisterPath("/$proxyPath")
-
-    coroutineScope {
-      launch(Dispatchers.Default + exceptionHandler(logger)) {
-        logger.info { "Stopping httpServer" }
-        httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
-        delay(5.seconds)
+      pathManager.unregisterPath("/$proxyPath")
+    } finally {
+      coroutineScope {
+        launch(Dispatchers.IO + exceptionHandler(logger)) {
+          delay(5.seconds)
+          logger.info { "Stopping httpServer" }
+          httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
+          // delay(5.seconds)
+        }
       }
     }
   }
@@ -168,7 +166,7 @@ internal object HarnessTests {
 
     coroutineScope {
       httpServers.forEach { wrapper ->
-        launch(Dispatchers.Default + exceptionHandler(logger)) {
+        launch(Dispatchers.IO + exceptionHandler(logger)) {
           logger.info { "Starting httpServer listening on ${wrapper.port}" }
           wrapper.server.start()
           delay(5.seconds)
@@ -192,13 +190,13 @@ internal object HarnessTests {
     logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
     newSingleThreadContext("test-single")
       .use { dispatcher ->
-        withTimeoutOrNull(1.minutes.inWholeMilliseconds) {
+        withTimeout(1.minutes) {
           httpClient { client ->
             val counter = AtomicInt(0)
             repeat(args.sequentialQueryCount) { cnt ->
               val job =
                 launch(dispatcher + exceptionHandler(logger)) {
-                  callRandomProxyPath(client, pathMap, "Sequential $cnt")
+                  callRandomProxyPath(client, args.proxyPort, pathMap, "Sequential $cnt")
                   counter += 1
                 }
 
@@ -215,14 +213,14 @@ internal object HarnessTests {
     logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
     newFixedThreadPoolContext(5, "test-multi")
       .use { dispatcher ->
-        withTimeoutOrNull(1.minutes.inWholeMilliseconds) {
+        withTimeout(1.minutes) {
           httpClient { client ->
             val counter = AtomicInt(0)
             val jobs =
               List(args.parallelQueryCount) { cnt ->
                 launch(dispatcher + exceptionHandler(logger)) {
                   delay((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random().milliseconds)
-                  callRandomProxyPath(client, pathMap, "Parallel $cnt")
+                  callRandomProxyPath(client, args.proxyPort, pathMap, "Parallel $cnt")
                   counter += 1
                 }
               }
@@ -256,7 +254,8 @@ internal object HarnessTests {
     logger.info { "Shutting down ${httpServers.size} httpServers" }
     coroutineScope {
       httpServers.forEach { httpServer ->
-        launch(Dispatchers.Default + exceptionHandler(logger)) {
+        launch(Dispatchers.IO + exceptionHandler(logger)) {
+          delay(5.seconds)
           logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
           httpServer.server.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
           delay(5.seconds)
@@ -268,6 +267,7 @@ internal object HarnessTests {
 
   private suspend fun callRandomProxyPath(
     httpClient: HttpClient,
+    proxyPort: Int,
     pathMap: Map<Int, Int>,
     msg: String,
   ) {
@@ -279,7 +279,7 @@ internal object HarnessTests {
     httpIndex.shouldNotBeNull()
 
     withHttpClient(httpClient) {
-      get("$PROXY_PORT/proxy-$index".withPrefix()) { response ->
+      get("$proxyPort/proxy-$index".withPrefix()) { response ->
         val body = response.bodyAsText()
         body shouldBe contentMap[httpIndex]
         response.status shouldBe HttpStatusCode.OK

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,32 +19,34 @@
 package io.prometheus.harness
 
 import com.github.pambrose.common.util.simpleClassName
-import io.prometheus.common.Utils.lambda
+import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
+import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
+import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
+import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.AbstractHarnessTests
-import io.prometheus.harness.support.HarnessConstants.CONCURRENT_CLIENTS
-import io.prometheus.harness.support.HarnessConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.harness.support.HarnessConstants.DEFAULT_TIMEOUT
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
 
 class TlsNoMutualAuthTest :
   AbstractHarnessTests(
-    args = ProxyCallTestArgs(
-      agent = agent,
-      startPort = 10200,
-      caller = simpleClassName,
-    ),
+    argsProvider = {
+      ProxyCallTestArgs(
+        agent = agent,
+        proxyPort = PROXY_PORT,
+        startPort = 10200,
+        caller = simpleClassName,
+      )
+    },
   ) {
-  companion object : HarnessSetup() {
-    @JvmStatic
-    @BeforeAll
-    fun setUp() =
+  companion object : HarnessSetup()
+
+  init {
+    beforeSpec {
       setupProxyAndAgent(
-        proxySetup = lambda {
+        proxyPort = PROXY_PORT,
+        proxySetup = {
           startProxy(
             serverName = "nomutualauth",
             args = listOf(
@@ -57,12 +59,12 @@ class TlsNoMutualAuthTest :
             ),
           )
         },
-        agentSetup = lambda {
+        agentSetup = {
           startAgent(
             serverName = "nomutualauth",
-            scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
-            maxConcurrentClients = CONCURRENT_CLIENTS,
+            scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
+            chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
+            maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
             args = listOf(
               "--proxy",
               "localhost:50440",
@@ -74,9 +76,10 @@ class TlsNoMutualAuthTest :
           )
         },
       )
+    }
 
-    @JvmStatic
-    @AfterAll
-    fun takeDown() = takeDownProxyAndAgent()
+    afterSpec {
+      takeDownProxyAndAgent()
+    }
   }
 }

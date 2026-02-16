@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,18 +29,27 @@ object SslSettings {
   fun getKeyStore(
     fileName: String,
     password: String,
+  ): KeyStore = getKeyStore(fileName, password.toCharArray())
+
+  internal fun getKeyStore(
+    fileName: String,
+    password: CharArray,
   ): KeyStore =
     KeyStore.getInstance(KeyStore.getDefaultType())
       .apply {
-        val keyStoreFile = FileInputStream(fileName)
-        val keyStorePassword = password.toCharArray()
-        load(keyStoreFile, keyStorePassword)
+        try {
+          FileInputStream(fileName).use { keyStoreFile ->
+            load(keyStoreFile, password)
+          }
+        } finally {
+          password.fill('\u0000')
+        }
       }
 
   fun getTrustManagerFactory(
     fileName: String,
     password: String,
-  ): TrustManagerFactory? =
+  ): TrustManagerFactory =
     TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
       .apply {
         init(getKeyStore(fileName, password))
@@ -49,15 +58,17 @@ object SslSettings {
   fun getSslContext(
     fileName: String,
     password: String,
-  ): SSLContext? =
+  ): SSLContext =
     SSLContext.getInstance("TLS")
       .apply {
-        init(null, getTrustManagerFactory(fileName, password)?.trustManagers, null)
+        init(null, getTrustManagerFactory(fileName, password).trustManagers, null)
       }
 
   fun getTrustManager(
     fileName: String,
     password: String,
   ): X509TrustManager =
-    getTrustManagerFactory(fileName, password)?.trustManagers?.first { it is X509TrustManager } as X509TrustManager
+    getTrustManagerFactory(fileName, password).trustManagers
+      .firstOrNull { it is X509TrustManager } as? X509TrustManager
+      ?: error("No X509TrustManager found in trust store: $fileName")
 }

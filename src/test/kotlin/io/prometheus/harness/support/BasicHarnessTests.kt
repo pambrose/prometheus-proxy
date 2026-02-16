@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,13 @@
 package io.prometheus.harness.support
 
 import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
 import io.prometheus.agent.AgentPathManager
+import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -31,24 +32,31 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
 internal object BasicHarnessTests {
-  private val logger = KotlinLogging.logger {}
+  private val logger = logger {}
 
-  fun missingPathTest(caller: String) {
+  fun missingPathTest(
+    proxyPort: Int,
+    caller: String,
+  ) {
     logger.debug { "Calling missingPathTest() from $caller" }
-    blockingGet("${HarnessConstants.PROXY_PORT}/".withPrefix()) { response ->
+    blockingGet("$proxyPort/".withPrefix()) { response ->
       response.status shouldBe HttpStatusCode.NotFound
     }
   }
 
-  fun invalidPathTest(caller: String) {
+  fun invalidPathTest(
+    proxyPort: Int,
+    caller: String,
+  ) {
     logger.debug { "Calling invalidPathTest() from $caller" }
-    blockingGet("${HarnessConstants.PROXY_PORT}/invalid_path".withPrefix()) { response ->
+    blockingGet("$proxyPort/invalid_path".withPrefix()) { response ->
       response.status shouldBe HttpStatusCode.NotFound
     }
   }
 
   suspend fun addRemovePathsTest(
     pathManager: AgentPathManager,
+    proxyPort: Int,
     caller: String,
   ) {
     logger.debug { "Calling addRemovePathsTest() from $caller" }
@@ -57,10 +65,10 @@ internal object BasicHarnessTests {
     val originalSize = pathManager.pathMapSize()
 
     var cnt = 0
-    repeat(HarnessConstants.REPS) { i ->
+    repeat(HARNESS_CONFIG.addRemoveReps) { i ->
       val path = "test-$i"
       pathManager.let { manager ->
-        manager.registerPath(path, "${HarnessConstants.PROXY_PORT}/$path".withPrefix())
+        manager.registerPath(path, "$proxyPort/$path".withPrefix())
         cnt++
         manager.pathMapSize() shouldBe originalSize + cnt
         manager.unregisterPath(path)
@@ -72,20 +80,23 @@ internal object BasicHarnessTests {
 
   suspend fun invalidAgentUrlTest(
     pathManager: AgentPathManager,
+    proxyPort: Int,
     caller: String,
     badPath: String = "badPath",
   ) {
     logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
-    blockingGet("${HarnessConstants.PROXY_PORT}/$badPath".withPrefix()) { response ->
-      response.status shouldBe HttpStatusCode.NotFound
+    blockingGet("$proxyPort/$badPath".withPrefix()) { response ->
+      // Invalid agent URL causes IOException, which should return ServiceUnavailable (503)
+      response.status shouldBe HttpStatusCode.ServiceUnavailable
     }
     pathManager.unregisterPath(badPath)
   }
 
   suspend fun threadedAddRemovePathsTest(
     pathManager: AgentPathManager,
+    proxyPort: Int,
     caller: String,
   ) {
     logger.debug { "Calling threadedAddRemovePathsTest() from $caller" }
@@ -94,13 +105,13 @@ internal object BasicHarnessTests {
     // Take into account pre-existing paths already registered
     val originalSize = pathManager.pathMapSize()
 
-    withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
+    withTimeoutOrNull(30.seconds) {
       val mutex = Mutex()
       val jobs =
-        List(HarnessConstants.REPS) { i ->
-          launch(Dispatchers.Default + exceptionHandler(logger)) {
-            val path = "test-$i}"
-            val url = "${HarnessConstants.PROXY_PORT}/$path".withPrefix()
+        List(HARNESS_CONFIG.addRemoveReps) { i ->
+          launch(Dispatchers.IO + exceptionHandler(logger)) {
+            val path = "test-$i"
+            val url = "$proxyPort/$path".withPrefix()
             mutex.withLock { paths += path }
             pathManager.registerPath(path, url)
           }
@@ -112,13 +123,13 @@ internal object BasicHarnessTests {
       }
     }.shouldNotBeNull()
 
-    paths.size shouldBe HarnessConstants.REPS
-    pathManager.pathMapSize() shouldBe (originalSize + HarnessConstants.REPS)
+    paths.size shouldBe HARNESS_CONFIG.addRemoveReps
+    pathManager.pathMapSize() shouldBe (originalSize + HARNESS_CONFIG.addRemoveReps)
 
-    withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
+    withTimeoutOrNull(30.seconds) {
       val jobs =
         List(paths.size) {
-          launch(Dispatchers.Default + exceptionHandler(logger)) {
+          launch(Dispatchers.IO + exceptionHandler(logger)) {
             pathManager.unregisterPath(paths[it])
           }
         }

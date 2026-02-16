@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package io.prometheus.common
+@file:Suppress("ktlint:standard:filename")
 
-@Suppress("unused")
-object TypeAliases
+package io.prometheus.common
 
 internal typealias ScrapeRequestAction = suspend () -> ScrapeResults

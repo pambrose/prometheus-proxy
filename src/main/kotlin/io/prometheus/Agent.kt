@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,21 @@
 
 package io.prometheus
 
+import com.codahale.metrics.health.HealthCheck
 import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.github.pambrose.common.service.GenericService
 import com.github.pambrose.common.servlet.LambdaServlet
 import com.github.pambrose.common.time.format
-import com.github.pambrose.common.util.MetricsUtils.newBacklogHealthCheck
 import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
 import com.github.pambrose.common.util.hostInfo
 import com.github.pambrose.common.util.randomId
+import com.github.pambrose.common.util.runCatchingCancellable
 import com.github.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
@@ -48,14 +50,12 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.getVersionDesc
-import io.prometheus.common.Utils.lambda
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlin.concurrent.atomics.AtomicInt
@@ -160,7 +160,7 @@ class Agent(
   adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.agent.admin),
   metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.agent.metrics),
   zipkinConfig = newZipkinConfig(options.configVals.agent.internal.zipkin),
-  versionBlock = lambda { getVersionDesc(true) },
+  versionBlock = { getVersionDesc(true) },
   isTestMode = testMode,
 ) {
   private val clock = Monotonic
@@ -173,6 +173,22 @@ class Agent(
 
   internal val agentName = options.agentName.ifBlank { "Unnamed-${hostInfo.hostName}" }
   internal val scrapeRequestBacklogSize = AtomicInt(0)
+
+  /**
+   * Atomically decrements scrapeRequestBacklogSize by [delta], clamping at zero.
+   *
+   * During disconnect, both connectionContext.close() (which drains buffered channel items)
+   * and individual scrape coroutine finally blocks can race to decrement the counter for
+   * overlapping items. This CAS loop prevents the counter from going negative.
+   */
+  internal fun decrementBacklog(delta: Int) {
+    while (true) {
+      val current = scrapeRequestBacklogSize.load()
+      val next = maxOf(current - delta, 0)
+      if (scrapeRequestBacklogSize.compareAndSet(current, next)) return
+    }
+  }
+
   internal val pathManager = AgentPathManager(this)
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
@@ -229,6 +245,9 @@ class Agent(
 
       // Reset values for each connection attempt
       pathManager.clear()
+      // Note: scrapeRequestBacklogSize is reset here to ensure a clean state for the new connection.
+      // It is safe because the coroutineScope below (and in previous calls) guarantees that all
+      // child scrape coroutines from any previous connection have completed before we reach this point.
       scrapeRequestBacklogSize.store(0)
       lastMsgSentMark = clock.markNow()
 
@@ -236,51 +255,80 @@ class Agent(
         grpcService.registerAgent(initialConnectionLatch)
         pathManager.registerPaths()
 
-        val connectionContext = AgentConnectionContext()
+        // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
+        val connectionContext = AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * 2)
 
         coroutineScope {
+          // Ends on disconnect from server
           launch(Dispatchers.IO) {
-            runCatching {
+            runCatchingCancellable {
               grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
-                Status.fromThrowable(e).apply { logger.error(e) { "readRequestsFromProxy(): ${exceptionDetails(e)}" } }
+                Status.fromThrowable(e)
+                  .apply { logger.error(e) { "readRequestsFromProxy(): ${exceptionDetails(e)}" } }
+            }
+          }.apply {
+            invokeOnCompletion {
+              val drained = connectionContext.close()
+              if (drained > 0) decrementBacklog(drained)
             }
           }
 
+          // Ends on !isRunning || !connectionContext.connected (which is connectionContext.closed())
           launch(Dispatchers.IO) {
-            runCatching {
+            runCatchingCancellable {
               startHeartBeat(connectionContext)
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
-                Status.fromThrowable(e).apply { logger.error(e) { "startHeartBeat(): ${exceptionDetails(e)}" } }
+                Status.fromThrowable(e)
+                  .apply { logger.error(e) { "startHeartBeat(): ${exceptionDetails(e)}" } }
+            }
+          }.apply {
+            invokeOnCompletion {
+              val drained = connectionContext.close()
+              if (drained > 0) decrementBacklog(drained)
             }
           }
 
-          // This exceptionHandler is not necessary
+          // Ends on disconnect from server
           launch(Dispatchers.IO) {
-            runCatching {
+            runCatchingCancellable {
               grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
+              logger.info { "writeResponsesToProxyUntilDisconnected() completed" }
             }.onFailure { e ->
               if (grpcService.agent.isRunning)
                 Status.fromThrowable(e)
                   .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): ${exceptionDetails(e)}" } }
             }
+          }.apply {
+            invokeOnCompletion {
+              val drained = connectionContext.close()
+              if (drained > 0) decrementBacklog(drained)
+            }
           }
 
+          // Ends on disconnect from server
           launch(Dispatchers.IO) {
-            runCatching {
+            runCatchingCancellable {
               val max = options.maxConcurrentHttpClients
               logger.info { "Starting scrape request processing with maxConcurrentClients: $max" }
               // Limits the number of concurrent scrapes below
               val semaphore = Semaphore(max)
 
-              // This for stmt is terminated by connectionContext.close()
-              for (scrapeRequestAction in connectionContext.scrapeRequestsChannel) {
-                semaphore.withPermit {
-                  // The url fetch occurs here during scrapeRequestAction.invoke()
-                  val scrapeResponse = scrapeRequestAction.invoke()
-                  connectionContext.scrapeResultsChannel.send(scrapeResponse)
+              for (scrapeRequestAction in connectionContext.scrapeRequestActions()) {
+                // Acquisition must happen before launch to provide backpressure to the channel
+                // and avoid creating unbounded waiting coroutines (Bug #1).
+                semaphore.acquire()
+                launch {
+                  try {
+                    // The url fetch occurs here during scrapeRequestAction.invoke()
+                    val scrapeResponse = scrapeRequestAction.invoke()
+                    connectionContext.sendScrapeResults(scrapeResponse)
+                  } finally {
+                    semaphore.release()
+                    decrementBacklog(1)
+                  }
                 }
               }
             }.onFailure { e ->
@@ -288,34 +336,55 @@ class Agent(
                 Status.fromThrowable(e)
                   .apply { logger.error(e) { "scrapeResultsChannel.send(): ${exceptionDetails(e)}" } }
             }
+          }.apply {
+            invokeOnCompletion {
+              val drained = connectionContext.close()
+              if (drained > 0) decrementBacklog(drained)
+            }
           }
         }
+        logger.info { "connectToProxy() completed" }
       }
     }
 
     while (isRunning) {
       try {
-        runCatching {
+        runCatchingCancellable {
           runBlocking {
             connectToProxy()
+            logger.info { "Disconnected from proxy at $proxyHost" }
           }
-        }.onFailure { e ->
-          when (e) {
-            is RequestFailureException ->
-              logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
-
-            is StatusRuntimeException ->
-              logger.info { "Disconnected from proxy at $proxyHost" }
-
-            is StatusException ->
-              logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
-            // Catch anything else to avoid exiting retry loop
-            else ->
-              logger.warn { "Throwable caught ${e.simpleClassName} ${e.message}" }
-          }
-        }
+        }.onFailure { e -> handleConnectionFailure(e) }
       } finally {
         logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
+      }
+    }
+  }
+
+  internal fun handleConnectionFailure(e: Throwable) {
+    when (e) {
+      is RequestFailureException -> {
+        logger.info { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
+      }
+
+      is StatusRuntimeException -> {
+        logger.info { "Disconnected from proxy at $proxyHost" }
+      }
+
+      is StatusException -> {
+        logger.warn { "Cannot connect to proxy at $proxyHost ${e.simpleClassName} ${e.message}" }
+      }
+
+      // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.)
+      // so the agent terminates instead of running in a corrupted state.
+      is Error -> {
+        logger.error(e) { "Fatal JVM error ${e.simpleClassName}: ${e.message}" }
+        throw e
+      }
+
+      // Catch anything else to avoid exiting the retry loop
+      else -> {
+        logger.warn(e) { "Throwable caught ${e.simpleClassName} ${e.message}" }
       }
     }
   }
@@ -331,22 +400,30 @@ class Agent(
     super.registerHealthChecks()
     healthCheckRegistry.register(
       "scrape_request_backlog_check",
-      newBacklogHealthCheck(
-        backlogSize = scrapeRequestBacklogSize.load(),
-        size = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize,
-      ),
+      healthCheck {
+        val currentBacklog = scrapeRequestBacklogSize.load()
+        val threshold = agentConfigVals.internal.scrapeRequestBacklogUnhealthySize
+        if (currentBacklog >= threshold)
+          HealthCheck.Result.unhealthy("Scrape request backlog size $currentBacklog >= threshold $threshold")
+        else
+          HealthCheck.Result.healthy()
+      },
     )
     healthCheckRegistry.register(
       "http_client_cache_size_check",
-      newBacklogHealthCheck(
-        backlogSize = agentHttpService.httpClientCache.getCacheStats().totalEntries,
-        size = options.maxCacheSize + 1,
-      ),
+      healthCheck {
+        val currentSize = agentHttpService.httpClientCache.currentCacheSize()
+        val threshold = options.maxCacheSize + 1
+        if (currentSize >= threshold)
+          HealthCheck.Result.unhealthy("HTTP client cache size $currentSize >= threshold $threshold")
+        else
+          HealthCheck.Result.healthy()
+      },
     )
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) {
-    with(agentConfigVals.internal) {
+    agentConfigVals.internal.apply {
       if (heartbeatEnabled) {
         val heartbeatPauseTime = heartbeatCheckPauseMillis.milliseconds
         val maxInactivityTime = heartbeatMaxInactivitySecs.seconds
@@ -418,6 +495,7 @@ class Agent(
 
   override fun shutDown() {
     grpcService.shutDown()
+    runBlocking { agentHttpService.close() }
     super.shutDown()
   }
 
@@ -431,11 +509,11 @@ class Agent(
     }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
 
     @JvmStatic
     fun main(args: Array<String>) {
-      startSyncAgent(args, true)
+      startSyncAgent(args, exitOnMissingConfig = true)
     }
 
     @JvmStatic

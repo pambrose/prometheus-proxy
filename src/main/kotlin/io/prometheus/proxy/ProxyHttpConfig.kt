@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.util.simpleClassName
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -27,6 +27,7 @@ import io.ktor.http.withCharset
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.install
+import io.ktor.server.http.HttpRequestLifecycle
 import io.ktor.server.logging.toLogString
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.calllogging.CallLoggingConfig
@@ -45,7 +46,7 @@ import io.prometheus.Proxy
 import org.slf4j.event.Level
 
 internal object ProxyHttpConfig {
-  private val logger = KotlinLogging.logger {}
+  private val logger = logger {}
 
   fun Application.configureKtorServer(
     proxy: Proxy,
@@ -67,6 +68,10 @@ internal object ProxyHttpConfig {
     install(StatusPages) {
       configureStatusPages()
     }
+
+    install(HttpRequestLifecycle) {
+      cancelCallOnClose = true
+    }
   }
 
   private fun CallLoggingConfig.configureCallLogging() {
@@ -76,32 +81,35 @@ internal object ProxyHttpConfig {
   }
 
   private fun getFormattedLog(call: ApplicationCall) =
-    with(call) {
+    call.run {
       when (val status = response.status()) {
         HttpStatusCode.Found -> {
           val logMsg = request.toLogString()
           "$status: $logMsg -> ${response.headers[HttpHeaders.Location]} - ${request.origin.remoteHost}"
         }
 
-        else -> "$status: ${request.toLogString()} - ${request.origin.remoteHost}"
+        else -> {
+          "$status: ${request.toLogString()} - ${request.origin.remoteHost}"
+        }
       }
     }
 
   private fun CompressionConfig.configureCompression() {
     gzip {
-      priority = 1.0
+      priority = 10.0
+      minimumSize(1024)
     }
     deflate {
-      priority = 10.0
-      minimumSize(1024) // condition
+      priority = 1.0
+      minimumSize(1024)
     }
   }
 
   private fun StatusPagesConfig.configureStatusPages() {
     // Catch all
     exception<Throwable> { call, cause ->
-      logger.warn(cause) { " Throwable caught: ${cause.simpleClassName}" }
-      call.respond(NotFound)
+      logger.warn(cause) { "Throwable caught: ${cause.simpleClassName}" }
+      call.respond(HttpStatusCode.InternalServerError)
     }
 
     status(NotFound) { call, cause ->

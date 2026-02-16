@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,6 @@ package io.prometheus.common
 
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
-import com.beust.jcommander.IParameterValidator
-import com.beust.jcommander.JCommander
 import com.github.pambrose.common.util.Version.Companion.versionDesc
 import com.github.pambrose.common.util.simpleClassName
 import io.grpc.Status
@@ -30,35 +28,30 @@ import kotlinx.serialization.json.Json
 import org.slf4j.Logger.ROOT_LOGGER_NAME
 import org.slf4j.LoggerFactory
 import java.net.URLDecoder
-import java.util.*
-import kotlin.system.exitProcess
 import kotlin.text.Charsets.UTF_8
 
 object Utils {
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
-  internal class VersionValidator : IParameterValidator {
-    override fun validate(
-      name: String,
-      value: String,
-    ) {
-      val console = JCommander().console
-      console.println(getVersionDesc(false))
-      exitProcess(0)
-    }
-  }
-
-  // This eliminates an extra set of paren in when blocks and if/else stmts
-  fun <T> lambda(block: T) = block
-
-  fun Boolean.ifTrue(block: () -> Unit) {
-    if (this) block()
-  }
-
-  fun String.toLowercase() = this.lowercase(Locale.getDefault())
-
   fun decodeParams(encodedQueryParams: String): String =
-    if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8.name())}" else ""
+    if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8)}" else ""
+
+  fun sanitizeUrl(url: String): String = url.replace(Regex("(://)[^@/?#]+@"), "$1***@")
+
+  fun appendQueryParams(
+    baseUrl: String,
+    encodedQueryParams: String,
+  ): String {
+    if (encodedQueryParams.isBlank()) return baseUrl
+    val decodedParams = URLDecoder.decode(encodedQueryParams, UTF_8)
+    val separator =
+      when {
+        '?' !in baseUrl -> "?"
+        baseUrl.endsWith("?") || baseUrl.endsWith("&") -> ""
+        else -> "&"
+      }
+    return "$baseUrl$separator$decodedParams"
+  }
 
   internal fun String.defaultEmptyJsonObject() = ifEmpty { "{}" }
 
@@ -69,7 +62,8 @@ object Utils {
     logLevel: String,
   ) {
     val level =
-      when (logLevel.toLowercase()) {
+      when (logLevel.lowercase()) {
+        "all" -> Level.ALL
         "trace" -> Level.TRACE
         "debug" -> Level.DEBUG
         "info" -> Level.INFO
@@ -78,9 +72,75 @@ object Utils {
         "off" -> Level.OFF
         else -> throw IllegalArgumentException("Invalid $context log level: $logLevel")
       }
-    val rootLogger = LoggerFactory.getLogger(ROOT_LOGGER_NAME) as Logger
+    val rootLogger = LoggerFactory.getLogger(ROOT_LOGGER_NAME) as? Logger
+      ?: run {
+        LoggerFactory.getLogger(ROOT_LOGGER_NAME)
+          .warn("Cannot set log level: SLF4J binding is not Logback")
+        return
+      }
     rootLogger.level = level
   }
 
   fun Status.exceptionDetails(e: Throwable) = "$code $description ${e.simpleClassName} - ${e.message}"
+
+  data class HostPort(
+    val host: String,
+    val port: Int,
+  )
+
+  private fun parsePort(
+    portStr: String,
+    hostPort: String,
+  ): Int {
+    val port =
+      portStr.toIntOrNull()
+        ?: throw IllegalArgumentException("Invalid port in '$hostPort': '$portStr' is not a valid integer")
+    require(port in 0..65535) { "Port out of range in '$hostPort': $port (must be 0-65535)" }
+    return port
+  }
+
+  fun parseHostPort(
+    hostPort: String,
+    defaultPort: Int,
+  ): HostPort {
+    require(hostPort.isNotBlank()) { "Host/port string must not be blank" }
+    return when {
+      // Bracketed IPv6: [::1]:50051 or [::1]
+      hostPort.startsWith("[") -> {
+        val closeBracket = hostPort.indexOf(']')
+        when {
+          closeBracket == -1 -> {
+            throw IllegalArgumentException("Malformed IPv6 address in '$hostPort': missing closing bracket")
+          }
+
+          closeBracket + 1 < hostPort.length && hostPort[closeBracket + 1] == ':' -> {
+            HostPort(
+              hostPort.substring(1, closeBracket),
+              parsePort(hostPort.substring(closeBracket + 2), hostPort),
+            )
+          }
+
+          else -> {
+            HostPort(hostPort.substring(1, closeBracket), defaultPort)
+          }
+        }
+      }
+
+      // No colon: plain hostname
+      ':' !in hostPort -> {
+        HostPort(hostPort, defaultPort)
+      }
+
+      // Multiple colons without brackets: unbracketed IPv6 (no port)
+      hostPort.indexOf(':') != hostPort.lastIndexOf(':') -> {
+        HostPort(hostPort, defaultPort)
+      }
+
+      // Single colon: host:port
+      else -> {
+        val colonIndex = hostPort.indexOf(':')
+        HostPort(hostPort.substring(0, colonIndex), parsePort(hostPort.substring(colonIndex + 1), hostPort))
+      }
+    }
+  }
 }

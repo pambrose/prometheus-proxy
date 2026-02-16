@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,8 @@ package io.prometheus.common
 import com.github.pambrose.common.util.EMPTY_BYTE_ARRAY
 import com.github.pambrose.common.util.simpleClassName
 import com.google.protobuf.ByteString
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.plugins.HttpRequestTimeoutException
-import io.ktor.http.HttpStatusCode.Companion.NotFound
 import io.ktor.http.HttpStatusCode.Companion.RequestTimeout
 import io.ktor.http.HttpStatusCode.Companion.ServiceUnavailable
 import io.ktor.network.sockets.SocketTimeoutException
@@ -34,30 +33,20 @@ import io.prometheus.grpc.scrapeResponse
 import kotlinx.coroutines.TimeoutCancellationException
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
-import kotlin.concurrent.atomics.AtomicReference
 
 internal class ScrapeResults(
   val srAgentId: String,
   val srScrapeId: Long,
-  var srValidResponse: Boolean = false,
-  var srStatusCode: Int = NotFound.value,
-  var srContentType: String = "",
-  var srZipped: Boolean = false,
-  var srContentAsText: String = "",
-  var srContentAsZipped: ByteArray = EMPTY_BYTE_ARRAY,
-  var srFailureReason: String = "",
-  var srUrl: String = "",
+  val srValidResponse: Boolean = false,
+  val srStatusCode: Int = ServiceUnavailable.value,
+  val srContentType: String = "",
+  val srZipped: Boolean = false,
+  val srContentAsText: String = "",
+  val srContentAsZipped: ByteArray = EMPTY_BYTE_ARRAY,
+  val srFailureReason: String = "",
+  val srUrl: String = "",
+  val scrapeCounterMsg: String = "",
 ) {
-  val scrapeCounterMsg = AtomicReference("")
-
-  fun setDebugInfo(
-    url: String,
-    failureReason: String = "",
-  ) {
-    srUrl = url
-    srFailureReason = failureReason
-  }
-
   fun toScrapeResponse() =
     scrapeResponse {
       agentId = srAgentId
@@ -84,11 +73,12 @@ internal class ScrapeResults(
         headerFailureReason = srFailureReason
         headerUrl = srUrl
         headerContentType = srContentType
+        headerZipped = srZipped
       }
     }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
 
     fun ScrapeResponse.toScrapeResults() =
       ScrapeResults(
@@ -98,32 +88,27 @@ internal class ScrapeResults(
         srStatusCode = statusCode,
         srContentType = contentType,
         srZipped = zipped,
+        srContentAsText = if (!zipped) contentAsText else "",
+        srContentAsZipped = if (zipped) contentAsZipped.toByteArray() else EMPTY_BYTE_ARRAY,
         srFailureReason = failureReason,
         srUrl = url,
-      ).also { results ->
-        if (zipped)
-          results.srContentAsZipped = contentAsZipped.toByteArray()
-        else
-          results.srContentAsText = contentAsText
-      }
+      )
 
     fun errorCode(
       e: Throwable,
       url: String,
-    ): Int =
-      when (e) {
-        is TimeoutCancellationException,
-        is HttpConnectTimeoutException,
-        is SocketTimeoutException,
-        is HttpRequestTimeoutException,
-          -> {
-          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
-          RequestTimeout.value
-        }
+    ): Int {
+      // Walk the cause chain to detect wrapped timeout exceptions.
+      // Ktor sometimes wraps HttpRequestTimeoutException in other exceptions.
+      if (hasTimeoutCause(e)) {
+        logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+        return RequestTimeout.value
+      }
 
+      return when (e) {
         is IOException -> {
           logger.warn { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
-          NotFound.value
+          ServiceUnavailable.value
         }
 
         else -> {
@@ -131,5 +116,21 @@ internal class ScrapeResults(
           ServiceUnavailable.value
         }
       }
+    }
+
+    private fun hasTimeoutCause(e: Throwable): Boolean {
+      var current: Throwable? = e
+      while (current != null) {
+        when (current) {
+          is TimeoutCancellationException,
+          is HttpConnectTimeoutException,
+          is SocketTimeoutException,
+          is HttpRequestTimeoutException,
+            -> return true
+        }
+        current = current.cause
+      }
+      return false
+    }
   }
 }

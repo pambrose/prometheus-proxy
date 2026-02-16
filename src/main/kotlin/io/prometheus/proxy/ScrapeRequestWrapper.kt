@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +18,14 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.github.pambrose.common.util.isNotNull
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.fetchAndIncrement
 import kotlin.time.Duration
@@ -44,6 +43,7 @@ internal class ScrapeRequestWrapper(
   private val clock = Monotonic
   private val createTimeMark = clock.markNow()
   private val completeChannel = Channel<Boolean>()
+  private val completed = AtomicBoolean(false)
   private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
 
   val scrapeRequest =
@@ -58,7 +58,8 @@ internal class ScrapeRequestWrapper(
       authHeader = authHeaderVal
     }
 
-  var scrapeResults: ScrapeResults by nonNullableReference()
+  @Volatile
+  var scrapeResults: ScrapeResults? = null
 
   val scrapeId: Long
     get() = scrapeRequest.scrapeId
@@ -66,20 +67,24 @@ internal class ScrapeRequestWrapper(
   fun ageDuration() = createTimeMark.elapsedNow()
 
   fun markComplete() {
-    requestTimer?.observeDuration()
+    if (completed.compareAndSet(false, true)) {
+      requestTimer?.observeDuration()
+      // Required
+      closeChannel()
+    }
+  }
+
+  fun closeChannel() {
     completeChannel.close()
   }
 
-  suspend fun suspendUntilComplete(waitMillis: Duration) =
-    withTimeoutOrNull(waitMillis.inWholeMilliseconds) {
-      // completeChannel will eventually close and never get a value, or timeout
-      runCatching {
-        completeChannel.receive()
-        true
-      }.getOrElse {
-        true
-      }
-    }.isNotNull()
+  suspend fun awaitCompleted(timeout: Duration): Boolean {
+    withTimeoutOrNull(timeout) {
+      // Suspends until the completeChannel is closed by markComplete() or closeChannel(), or times out
+      completeChannel.receiveCatching()
+    }
+    return scrapeResults != null
+  }
 
   override fun toString() =
     toStringElements {

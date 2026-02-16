@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,19 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
+import com.github.pambrose.common.util.runCatchingCancellable
 import com.google.protobuf.Empty
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Status
+import io.grpc.StatusException
 import io.prometheus.Proxy
-import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
-import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
-import io.prometheus.common.Utils.toLowercase
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.ChunkedScrapeResponse.ChunkOneOfCase
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.PathMapSizeRequest
 import io.prometheus.grpc.ProxyServiceGrpcKt
@@ -48,21 +44,34 @@ import io.prometheus.grpc.pathMapSizeResponse
 import io.prometheus.grpc.registerAgentResponse
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import java.util.concurrent.CancellationException
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.fetchAndIncrement
 
+/**
+ * Server-side implementation of the `ProxyService` gRPC service.
+ *
+ * Handles all gRPC RPCs defined in `proxy_service.proto`: agent connection and registration,
+ * path registration/unregistration, heartbeat processing, and bidirectional scrape request/response
+ * streaming (including chunked transfers for large payloads). Validates agent identity on every
+ * call and delegates state management to [AgentContextManager], [ProxyPathManager], and
+ * [ScrapeRequestManager].
+ *
+ * @param proxy the parent [Proxy] instance
+ * @see ProxyGrpcService
+ * @see AgentContextManager
+ * @see ScrapeRequestManager
+ */
 internal class ProxyServiceImpl(
   private val proxy: Proxy,
 ) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
   override suspend fun connectAgent(request: Empty): Empty {
     if (proxy.options.transportFilterDisabled) {
-      "Agent (false) and Proxy (true) do not have matching transportFilterDisabled config values".also { msg ->
-        logger.error { msg }
-        throw RequestFailureException(msg)
-      }
+      val msg = "Agent (false) and Proxy (true) do not have matching transportFilterDisabled config values"
+      logger.error { msg }
+      throw StatusException(Status.FAILED_PRECONDITION.withDescription(msg))
     }
 
     proxy.metrics { connectCount.inc() }
@@ -71,19 +80,17 @@ internal class ProxyServiceImpl(
 
   override suspend fun connectAgentWithTransportFilterDisabled(request: Empty): AgentInfo {
     if (!proxy.options.transportFilterDisabled) {
-      "Agent (true) and Proxy (false) do not have matching transportFilterDisabled config values"
-        .also { msg ->
-          logger.error { msg }
-          throw RequestFailureException(msg)
-        }
+      val msg = "Agent (true) and Proxy (false) do not have matching transportFilterDisabled config values"
+      logger.error { msg }
+      throw StatusException(Status.FAILED_PRECONDITION.withDescription(msg))
     }
 
     proxy.metrics { connectCount.inc() }
     val agentContext = AgentContext(UNKNOWN_ADDRESS)
-    proxy.agentContextManager.addAgentContext(agentContext)
     return agentInfo {
-      require(agentContext.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
       agentId = agentContext.agentId
+    }.also {
+      proxy.agentContextManager.addAgentContext(agentContext)
     }
   }
 
@@ -101,24 +108,33 @@ internal class ProxyServiceImpl(
     return registerAgentResponse {
       valid = isValid
       agentId = request.agentId
-      reason = "Invalid agentId: ${request.agentId} (registerAgent)"
+      if (!isValid) {
+        reason = "Invalid agentId: ${request.agentId} (registerAgent)"
+      }
     }
   }
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
     var isValid = false
+    var failureReason = ""
 
     proxy.agentContextManager.getAgentContext(request.agentId)
       ?.apply {
-        isValid = true
-        proxy.pathManager.addPath(request.path, request.labels, this)
+        val addPathResult = proxy.pathManager.addPath(request.path, request.labels, this)
+        isValid = addPathResult == null
+        if (!isValid) failureReason = addPathResult!!
         markActivityTime(false)
-      } ?: logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
+      } ?: run {
+      failureReason = "Invalid agentId: ${request.agentId} (registerPath)"
+      logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
+    }
 
     return registerPathResponse {
       pathId = if (isValid) PATH_ID_GENERATOR.fetchAndIncrement() else -1
       valid = isValid
-      reason = "Invalid agentId: ${request.agentId} (registerPath)"
+      if (!isValid) {
+        reason = failureReason
+      }
       pathCount = proxy.pathManager.pathMapSize
     }
   }
@@ -126,7 +142,7 @@ internal class ProxyServiceImpl(
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {
     val agentId = request.agentId
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-    return if (agentContext.isNull()) {
+    return if (agentContext == null) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
       unregisterPathResponse {
         valid = false
@@ -149,26 +165,46 @@ internal class ProxyServiceImpl(
         agentContext?.markActivityTime(false)
           ?: logger.error { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
         heartBeatResponse {
-          valid = agentContext.isNotNull()
-          reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
+          valid = agentContext != null
+          if (!valid)
+            reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
         }
       }
 
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> =
     flow {
-      proxy.agentContextManager.getAgentContext(request.agentId)
-        ?.also { agentContext ->
-          while (proxy.isRunning && agentContext.isValid()) {
-            agentContext.readScrapeRequest()?.apply { emit(scrapeRequest) }
-          }
+      val agentId = request.agentId
+      try {
+        val agentContext = proxy.agentContextManager.getAgentContext(agentId)
+          ?: throw StatusException(
+            Status.NOT_FOUND.withDescription(
+              "No AgentContext found for agentId: $agentId",
+            ),
+          )
+        while (proxy.isRunning && agentContext.isValid()) {
+          agentContext.readScrapeRequest()?.apply { emit(scrapeRequest) }
         }
+      } finally {
+        // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to
+        // detect agent disconnect and clean up. Handle cleanup here on stream termination.
+        if (proxy.options.transportFilterDisabled) {
+          proxy.removeAgentContext(agentId, "Stream terminated (transport filter disabled)")
+        }
+      }
     }
 
+  @Suppress("TooGenericExceptionCaught")
   override suspend fun writeResponsesToProxy(requests: Flow<ScrapeResponse>): Empty {
-    runCatching {
+    runCatchingCancellable {
       requests.collect { response ->
-        val scrapeResults = response.toScrapeResults()
-        proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
+        try {
+          val scrapeResults = response.toScrapeResults()
+          proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
+        } catch (e: CancellationException) {
+          throw e
+        } catch (e: Exception) {
+          logger.error(e) { "Error processing scrape response for scrapeId: ${response.scrapeId}" }
+        }
       }
     }.onFailure { throwable ->
       if (proxy.isRunning)
@@ -182,43 +218,76 @@ internal class ProxyServiceImpl(
   }
 
   override suspend fun writeChunkedResponsesToProxy(requests: Flow<ChunkedScrapeResponse>): Empty {
-    runCatching {
+    val activeScrapeIds = mutableSetOf<Long>()
+    runCatchingCancellable {
       requests.collect { response ->
-        val ooc = response.chunkOneOfCase
-        val chunkedContextMap = proxy.agentContextManager.chunkedContextMap
-        when (ooc.name.toLowercase()) {
-          "header" -> {
+        val contextManager = proxy.agentContextManager
+        when (response.chunkOneOfCase) {
+          ChunkOneOfCase.HEADER -> {
             val scrapeId = response.header.headerScrapeId
-            logger.debug { "Reading header for scrapeId: $scrapeId}" }
-            chunkedContextMap[scrapeId] = ChunkedContext(response)
+            if (proxy.scrapeRequestManager.containsScrapeRequest(scrapeId)) {
+              logger.debug { "Reading header for scrapeId: $scrapeId" }
+              val maxZippedSize = proxy.proxyConfigVals.internal.maxZippedContentSizeMBytes * 1024L * 1024L
+              contextManager.putChunkedContext(scrapeId, ChunkedContext(response, maxZippedSize))
+              activeScrapeIds += scrapeId
+            } else {
+              logger.warn { "Received chunked header for unknown scrapeId: $scrapeId" }
+            }
           }
 
-          "chunk" -> {
+          ChunkOneOfCase.CHUNK -> {
             response.chunk
               .apply {
                 logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
-                val context = chunkedContextMap[chunkScrapeId]
-                check(context.isNotNull()) { "Missing chunked context with scrapeId: $chunkScrapeId" }
-                context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
+                val context = contextManager.getChunkedContext(chunkScrapeId)
+                if (context == null) {
+                  logger.warn { "Missing chunked context for chunk with scrapeId: $chunkScrapeId, skipping" }
+                } else {
+                  try {
+                    context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
+                  } catch (e: ChunkValidationException) {
+                    logger.error(e) { "Chunk validation failed for scrapeId: $chunkScrapeId, discarding context" }
+                    contextManager.removeChunkedContext(chunkScrapeId)
+                    activeScrapeIds -= chunkScrapeId
+                    proxy.scrapeRequestManager.failScrapeRequest(
+                      chunkScrapeId,
+                      "Chunk validation failed: ${e.message}",
+                    )
+                  }
+                }
               }
           }
 
-          "summary" -> {
+          ChunkOneOfCase.SUMMARY -> {
             response.summary
               .apply {
-                val context = chunkedContextMap.remove(summaryScrapeId)
-                check(context.isNotNull()) { "Missing chunked context with scrapeId: $summaryScrapeId" }
-                logger.debug {
-                  val ccnt = context.totalChunkCount
-                  val bcnt = context.totalByteCount
-                  "Reading summary chunkCount: $ccnt byteCount: $bcnt for scrapeId: $summaryScrapeId"
+                val context = contextManager.removeChunkedContext(summaryScrapeId)
+                activeScrapeIds -= summaryScrapeId
+                if (context == null) {
+                  logger.warn { "Missing chunked context for summary with scrapeId: $summaryScrapeId, skipping" }
+                } else {
+                  logger.debug {
+                    val ccnt = context.totalChunkCount
+                    val bcnt = context.totalByteCount
+                    "Reading summary chunkCount: $ccnt byteCount: $bcnt for scrapeId: $summaryScrapeId"
+                  }
+                  try {
+                    val scrapeResults = context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
+                    proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
+                  } catch (e: ChunkValidationException) {
+                    logger.error(e) { "Summary validation failed for scrapeId: $summaryScrapeId" }
+                    proxy.scrapeRequestManager.failScrapeRequest(
+                      summaryScrapeId,
+                      "Summary validation failed: ${e.message}",
+                    )
+                  }
                 }
-                context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
-                proxy.scrapeRequestManager.assignScrapeResults(context.scrapeResults)
               }
           }
 
-          else -> error("Invalid field name in writeChunkedResponsesToProxy()")
+          ChunkOneOfCase.CHUNKONEOF_NOT_SET, null -> {
+            logger.warn { "Received chunked response with no field set, skipping" }
+          }
         }
       }
     }.onFailure { throwable ->
@@ -229,11 +298,28 @@ internal class ProxyServiceImpl(
               logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
           }
     }
+
+    // Clean up any in-progress chunked contexts that were not completed with a summary
+    // (e.g., due to stream cancellation or agent disconnect mid-transfer)
+    if (activeScrapeIds.isNotEmpty()) {
+      val contextManager = proxy.agentContextManager
+      activeScrapeIds.forEach { scrapeId ->
+        contextManager.removeChunkedContext(scrapeId)
+          ?.also {
+            logger.warn { "Cleaned up orphaned ChunkedContext for scrapeId: $scrapeId" }
+            proxy.scrapeRequestManager.failScrapeRequest(
+              scrapeId,
+              "Chunked transfer abandoned: stream terminated before summary received",
+            )
+          }
+      }
+    }
+
     return EMPTY_INSTANCE
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
     private val PATH_ID_GENERATOR = AtomicLong(0L)
     internal const val UNKNOWN_ADDRESS = "Unknown"
   }

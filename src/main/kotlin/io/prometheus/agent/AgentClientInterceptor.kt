@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 package io.prometheus.agent
 
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.CallOptions
 import io.grpc.Channel
 import io.grpc.ClientCall
@@ -27,9 +27,11 @@ import io.grpc.ForwardingClientCall
 import io.grpc.ForwardingClientCallListener
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor
+import io.grpc.Status
+import io.grpc.StatusRuntimeException
 import io.prometheus.Agent
+import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
-import io.prometheus.proxy.ProxyServerInterceptor.Companion.META_AGENT_ID_KEY
 
 internal class AgentClientInterceptor(
   private val agent: Agent,
@@ -38,10 +40,9 @@ internal class AgentClientInterceptor(
     method: MethodDescriptor<ReqT, RespT>,
     callOptions: CallOptions,
     next: Channel,
-  ): ClientCall<ReqT, RespT> =
-    object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-      agent.grpcService.channel.newCall(method, callOptions),
-    ) {
+  ): ClientCall<ReqT, RespT> {
+    val delegate = next.newCall(method, callOptions)
+    return object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(delegate) {
       override fun start(
         responseListener: Listener<RespT>,
         metadata: Metadata,
@@ -50,13 +51,23 @@ internal class AgentClientInterceptor(
           object : ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
             override fun onHeaders(headers: Metadata) {
               // Grab agent_id from headers if not already assigned
-              if (agent.agentId.isEmpty()) {
-                headers.get(META_AGENT_ID_KEY)
-                  ?.also { agentId ->
-                    agent.agentId = agentId
-                    check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
-                    logger.info { "Assigned agentId: $agentId to $agent" }
-                  } ?: logger.error { "Headers missing AGENT_ID key" }
+              synchronized(agent) {
+                if (agent.agentId.isEmpty()) {
+                  headers.get(META_AGENT_ID_KEY)
+                    ?.also { agentId ->
+                      agent.agentId = agentId
+                      check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+                      logger.info { "Assigned agentId: $agentId to $agent" }
+                    } ?: run {
+                    // Cancel the call instead of throwing from the listener callback.
+                    // Throwing from onHeaders violates the gRPC ClientCall.Listener contract
+                    // and can cause undefined transport behavior.
+                    val msg = "Headers missing AGENT_ID key"
+                    logger.error { msg }
+                    delegate.cancel(msg, StatusRuntimeException(Status.INTERNAL.withDescription(msg)))
+                    return
+                  }
+                }
               }
 
               super.onHeaders(headers)
@@ -66,8 +77,9 @@ internal class AgentClientInterceptor(
         )
       }
     }
+  }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

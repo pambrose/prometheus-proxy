@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +14,41 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.isNull
-import com.google.common.collect.Maps.newConcurrentMap
-import io.github.oshai.kotlinlogging.KotlinLogging
-import java.util.concurrent.ConcurrentMap
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration
 
+/**
+ * Registry for connected agents and in-flight chunked scrape contexts.
+ *
+ * Manages two concurrent maps: one mapping agent IDs to their [AgentContext] instances,
+ * and another mapping scrape IDs to [ChunkedContext] instances for chunked transfers.
+ * Provides lookup, addition, removal, stale-agent detection, and bulk invalidation of
+ * agent contexts.
+ *
+ * @param isTestMode when true, suppresses verbose logging during tests
+ * @see AgentContext
+ * @see ChunkedContext
+ * @see AgentContextCleanupService
+ */
 internal class AgentContextManager(
   private val isTestMode: Boolean,
 ) {
   // Map agent_id to AgentContext
-  val agentContextMap: ConcurrentMap<String, AgentContext> = newConcurrentMap()
+  private val agentContextMap = ConcurrentHashMap<String, AgentContext>()
   val agentContextSize: Int get() = agentContextMap.size
 
   // Map scrape_id to ChunkedContext
-  val chunkedContextMap: ConcurrentMap<Long, ChunkedContext> = newConcurrentMap()
+  private val chunkedContextMap = ConcurrentHashMap<Long, ChunkedContext>()
   val chunkedContextSize: Int get() = chunkedContextMap.size
 
   val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.sumOf { it.scrapeRequestBacklogSize }
+
+  val agentContextEntries: Set<Map.Entry<String, AgentContext>> get() = agentContextMap.entries
+
+  val chunkedContextMapView: Map<Long, ChunkedContext> get() = chunkedContextMap
 
   fun addAgentContext(agentContext: AgentContext): AgentContext? {
     logger.info { "Registering agentId: ${agentContext.agentId}" }
@@ -43,23 +57,51 @@ internal class AgentContextManager(
 
   fun getAgentContext(agentId: String) = agentContextMap[agentId]
 
+  internal fun putAgentContext(
+    agentId: String,
+    context: AgentContext,
+  ) {
+    agentContextMap[agentId] = context
+  }
+
+  fun putChunkedContext(
+    scrapeId: Long,
+    context: ChunkedContext,
+  ) {
+    chunkedContextMap[scrapeId] = context
+  }
+
+  fun getChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMap[scrapeId]
+
+  fun removeChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMap.remove(scrapeId)
+
+  fun findStaleAgents(maxInactivity: Duration): List<Pair<String, AgentContext>> =
+    agentContextMap
+      .filter { (_, agentContext) -> agentContext.inactivityDuration > maxInactivity }
+      .map { (agentId, agentContext) -> agentId to agentContext }
+
+  fun invalidateAllAgentContexts() {
+    agentContextMap.values.forEach { agentContext ->
+      agentContext.invalidate()
+    }
+  }
+
   fun removeFromContextManager(
     agentId: String,
     reason: String,
-  ): AgentContext? =
-    agentContextMap.remove(agentId)
-      .let { agentContext ->
-        if (agentContext.isNull()) {
-          logger.warn { "Missing AgentContext for agentId: $agentId ($reason)" }
-        } else {
-          if (!isTestMode)
-            logger.info { "Removed $agentContext for agentId: $agentId ($reason)" }
-          agentContext.invalidate()
-        }
-        agentContext
-      }
+  ): AgentContext? {
+    val agentContext = agentContextMap.remove(agentId)
+    if (agentContext == null) {
+      logger.debug { "AgentContext already removed for agentId: $agentId ($reason)" }
+    } else {
+      if (!isTestMode)
+        logger.info { "Removed $agentContext for agentId: $agentId ($reason)" }
+      agentContext.invalidate()
+    }
+    return agentContext
+  }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

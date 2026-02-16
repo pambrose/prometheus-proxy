@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,33 +26,64 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
-import io.prometheus.common.Utils.lambda
+import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
+import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
+import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
+import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.AbstractHarnessTests
-import io.prometheus.harness.support.HarnessConstants.CONCURRENT_CLIENTS
-import io.prometheus.harness.support.HarnessConstants.DEFAULT_CHUNK_SIZE
-import io.prometheus.harness.support.HarnessConstants.DEFAULT_TIMEOUT
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 class NettyTestWithAdminMetricsTest :
   AbstractHarnessTests(
-    args = ProxyCallTestArgs(
-      agent = agent,
-      startPort = 10300,
-      caller = simpleClassName,
-    ),
+    argsProvider = {
+      ProxyCallTestArgs(
+        agent = agent,
+        proxyPort = PROXY_PORT,
+        startPort = 10300,
+        caller = simpleClassName,
+      )
+    },
   ) {
-  @Test
-  fun adminDebugCallsTest() {
-    runBlocking {
+  companion object : HarnessSetup()
+
+  init {
+    beforeSpec {
+      setupProxyAndAgent(
+        proxyPort = PROXY_PORT,
+        proxySetup = {
+          startProxy(
+            adminEnabled = true,
+            debugEnabled = true,
+            metricsEnabled = true,
+          )
+        },
+        agentSetup = {
+          startAgent(
+            adminEnabled = true,
+            debugEnabled = true,
+            metricsEnabled = true,
+            scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
+            chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
+            maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
+          )
+        },
+        actions = {
+          // Wait long enough to trigger heartbeat for code coverage
+          sleep(15.seconds)
+        },
+      )
+    }
+
+    afterSpec {
+      takeDownProxyAndAgent()
+    }
+
+    "should return debug info from admin endpoints" {
       withHttpClient {
         get("8093/debug".withPrefix()) { response ->
           val body = response.bodyAsText()
@@ -69,38 +100,5 @@ class NettyTestWithAdminMetricsTest :
         }
       }
     }
-  }
-
-  companion object : HarnessSetup() {
-    @JvmStatic
-    @BeforeAll
-    fun setUp() =
-      setupProxyAndAgent(
-        proxySetup = lambda {
-          startProxy(
-            adminEnabled = true,
-            debugEnabled = true,
-            metricsEnabled = true,
-          )
-        },
-        agentSetup = lambda {
-          startAgent(
-            adminEnabled = true,
-            debugEnabled = true,
-            metricsEnabled = true,
-            scrapeTimeoutSecs = DEFAULT_TIMEOUT,
-            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE,
-            maxConcurrentClients = CONCURRENT_CLIENTS,
-          )
-        },
-        actions = lambda {
-          // Wait long enough to trigger heartbeat for code coverage
-          sleep(15.seconds)
-        },
-      )
-
-    @JvmStatic
-    @AfterAll
-    fun takeDown() = takeDownProxyAndAgent()
   }
 }

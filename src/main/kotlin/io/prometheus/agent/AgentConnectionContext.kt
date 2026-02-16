@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +14,81 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.agent
 
 import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
-import io.ktor.utils.io.core.Closeable
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 
-internal class AgentConnectionContext : Closeable {
+/**
+ * Bidirectional channel pair for a single agent-to-proxy connection.
+ *
+ * Holds two coroutine channels: one for inbound scrape request actions (bounded by
+ * [backlogCapacity]) and one for outbound scrape results (unbounded). Manages the
+ * connection's disconnected state and provides a [close] method that drains pending
+ * requests and closes both channels so waiting coroutines are notified.
+ *
+ * @param backlogCapacity maximum number of buffered scrape request actions
+ * @see AgentGrpcService
+ * @see io.prometheus.Agent
+ */
+internal class AgentConnectionContext(
+  val backlogCapacity: Int = 128,
+) {
   private var disconnected by atomicBoolean(false)
-  val scrapeRequestsChannel = Channel<ScrapeRequestAction>(UNLIMITED)
-  val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED)
+  private val scrapeRequestActionsChannel = Channel<ScrapeRequestAction>(backlogCapacity)
+  private val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED)
+  private val closeLock = Any()
 
-  override fun close() {
-    disconnected = true
-    scrapeRequestsChannel.cancel()
-    scrapeResultsChannel.cancel()
+  fun scrapeRequestActions() = scrapeRequestActionsChannel
+
+  fun scrapeResults() = scrapeResultsChannel
+
+  suspend fun sendScrapeRequestAction(scrapeRequestAction: ScrapeRequestAction) {
+    scrapeRequestActionsChannel.send(scrapeRequestAction)
+  }
+
+  fun sendScrapeResults(scrapeResults: ScrapeResults) {
+    // Use trySend() instead of send() to avoid ClosedSendChannelException when the
+    // connection is closed while in-flight scrape coroutines are still completing.
+    // For an UNLIMITED channel, trySend() always succeeds immediately if open.
+    // If the channel is closed (disconnect), we log a warning instead of throwing,
+    // which prevents the exception from cancelling sibling scrape coroutines.
+    val result = scrapeResultsChannel.trySend(scrapeResults)
+    if (result.isClosed) {
+      logger.warn { "Scrape result for scrapeId ${scrapeResults.srScrapeId} dropped: connection closed" }
+    }
+  }
+
+  fun close(): Int {
+    synchronized(closeLock) {
+      return if (!disconnected) {
+        disconnected = true
+        // Close (not cancel) and drain the scrape request actions channel so that
+        // callers can adjust scrapeRequestBacklogSize by the drained count.
+        scrapeRequestActionsChannel.close()
+        var drained = 0
+        while (scrapeRequestActionsChannel.tryReceive().isSuccess) {
+          drained++
+        }
+        // Use close() instead of cancel() so buffered results can still be drained
+        // by the consumer. cancel() discards all buffered items, causing the proxy
+        // to time out waiting for results that were already computed.
+        scrapeResultsChannel.close()
+        logger.info { "AgentConnectionContext closed (drained $drained pending scrape requests)" }
+        drained
+      } else {
+        0
+      }
+    }
   }
 
   val connected get() = !disconnected
+
+  companion object {
+    private val logger = logger {}
+  }
 }

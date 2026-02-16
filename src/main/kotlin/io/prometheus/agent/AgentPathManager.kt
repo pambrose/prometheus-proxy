@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,33 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.agent
 
-import com.github.pambrose.common.util.isNotNull
-import com.github.pambrose.common.util.isNull
-import com.google.common.collect.Maps.newConcurrentMap
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Manages the agent's path registration lifecycle with the proxy.
+ *
+ * Loads path configurations from the agent's HOCON config, registers each path with
+ * the proxy via gRPC, and maintains a local map of path to [PathContext] (URL, labels,
+ * path ID). Supports dynamic registration and unregistration at runtime.
+ *
+ * @param agent the parent [Agent] instance
+ * @see AgentGrpcService
+ * @see io.prometheus.Agent
+ */
 internal class AgentPathManager(
   private val agent: Agent,
 ) {
   private val agentConfigVals = agent.configVals.agent
-  private val pathContextMap = newConcurrentMap<String, PathContext>()
+  private val pathContextMap = ConcurrentHashMap<String, PathContext>()
+  private val pathMutex = Mutex()
 
   operator fun get(path: String): PathContext? = pathContextMap[path]
 
@@ -57,7 +67,7 @@ internal class AgentPathManager(
       val path = it[PATH]
       val url = it[URL]
       val labels = it[LABELS]
-      if (path.isNotNull() && url.isNotNull() && labels.isNotNull())
+      if (path != null && url != null && labels != null)
         registerPath(path, url, labels)
       else
         logger.error { "Null path/url/labels value: $path/$url/$labels" }
@@ -71,23 +81,28 @@ internal class AgentPathManager(
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
     require(url.isNotEmpty()) { "Empty URL" }
 
-    val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
+    val path = pathVal.removePrefix("/")
     val labelsJson = labels.defaultEmptyJsonObject()
     val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
-    if (!agent.isTestMode)
-      logger.info { "Registered $url as /$path with labels $labelsJson" }
-    pathContextMap[path] = PathContext(pathId, path, url, labelsJson)
+    pathMutex.withLock {
+      if (!agent.isTestMode)
+        logger.info { "Registered $url as /$path with labels $labelsJson" }
+      pathContextMap[path] = PathContext(pathId, path, url, labelsJson)
+    }
   }
 
   suspend fun unregisterPath(pathVal: String) {
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
 
-    val path = if (pathVal.startsWith("/")) pathVal.substring(1) else pathVal
+    val path = pathVal.removePrefix("/")
     agent.grpcService.unregisterPathOnProxy(path)
-    val pathContext = pathContextMap.remove(path)
-    when {
-      pathContext.isNull() -> logger.info { "No path value /$path found in pathContextMap when unregistering" }
-      !agent.isTestMode -> logger.info { "Unregistered /$path for ${pathContext.url}" }
+    pathMutex.withLock {
+      val pathContext = pathContextMap.remove(path)
+      if (pathContext == null) {
+        logger.info { "No path value /$path found in pathContextMap when unregistering" }
+      } else if (!agent.isTestMode) {
+        logger.info { "Unregistered /$path for ${pathContext.url}" }
+      }
     }
   }
 
@@ -99,7 +114,7 @@ internal class AgentPathManager(
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
     private const val NAME = "name"
     private const val PATH = "path"
     private const val URL = "url"

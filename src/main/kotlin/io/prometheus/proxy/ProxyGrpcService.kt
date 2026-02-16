@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
 package io.prometheus.proxy
 
@@ -31,7 +29,7 @@ import com.github.pambrose.common.utils.TlsUtils.buildServerTlsContext
 import com.github.pambrose.common.utils.shutdownGracefully
 import com.github.pambrose.common.utils.shutdownWithJvm
 import com.google.common.util.concurrent.MoreExecutors
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Server
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
@@ -40,6 +38,19 @@ import io.prometheus.Proxy
 import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Manages the gRPC server lifecycle for the proxy.
+ *
+ * Configures and runs the gRPC server that agents connect to for scrape request streaming.
+ * Handles TLS setup, server interceptors, transport filters, keepalive settings, and
+ * optional Zipkin tracing. Supports both Netty (network) and in-process transports.
+ *
+ * @param proxy the parent [Proxy] instance
+ * @param port the gRPC listen port (-1 for in-process mode)
+ * @param inProcessName the in-process server name (empty for Netty mode)
+ * @see ProxyServiceImpl
+ * @see io.prometheus.Proxy
+ */
 internal class ProxyGrpcService(
   private val proxy: Proxy,
   private val port: Int = -1,
@@ -53,7 +64,7 @@ internal class ProxyGrpcService(
   init {
     val options = proxy.options
     val tlsContext =
-      if (options.certChainFilePath.isNotEmpty() || options.privateKeyFilePath.isNotEmpty())
+      if (options.isTlsEnabled)
         buildServerTlsContext(
           certChainFilePath = options.certChainFilePath,
           privateKeyFilePath = options.privateKeyFilePath,
@@ -147,6 +158,6 @@ internal class ProxyGrpcService(
     }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

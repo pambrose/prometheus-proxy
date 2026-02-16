@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,14 +18,13 @@
 
 package io.prometheus.harness.support
 
-import com.github.pambrose.common.util.getBanner
 import io.github.oshai.kotlinlogging.KLogger
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
-import io.prometheus.common.Utils.getVersionDesc
-import io.prometheus.harness.support.HarnessConstants.PROXY_PORT
+import io.prometheus.harness.HarnessConstants.CONFIG_ARG
+import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.serialization.KSerializer
@@ -64,7 +63,7 @@ object CustomEnumSerializer : KSerializer<MyEnum> {
 }
 
 object TestUtils {
-  private val logger = KotlinLogging.logger {}
+  private val logger = logger {}
 
   @JvmStatic
   fun main(args: Array<String>) {
@@ -78,15 +77,15 @@ object TestUtils {
     metricsEnabled: Boolean = false,
     args: List<String> = emptyList(),
   ): Proxy {
-    logger.apply {
-      info { getBanner("banners/proxy.txt", logger) }
-      info { getVersionDesc(false) }
-    }
+//    logger.apply {
+//      info { getBanner("banners/proxy.txt", logger) }
+//      info { getVersionDesc(false) }
+//    }
 
     val proxyOptions = ProxyOptions(
       mutableListOf<String>()
         .apply {
-          addAll(HarnessConstants.CONFIG_ARG)
+          addAll(CONFIG_ARG)
           addAll(args)
           add("-Dproxy.admin.enabled=$adminEnabled")
           add("-Dproxy.admin.debugEnabled=$debugEnabled")
@@ -95,7 +94,7 @@ object TestUtils {
     )
     return Proxy(
       options = proxyOptions,
-      proxyHttpPort = PROXY_PORT,
+      proxyPort = PROXY_PORT,
       inProcessServerName = serverName,
       testMode = true,
     ) { startSync() }
@@ -107,27 +106,27 @@ object TestUtils {
     debugEnabled: Boolean = false,
     metricsEnabled: Boolean = false,
     scrapeTimeoutSecs: Int = -1,
-    chunkContentSizeKbs: Int = -1,
+    chunkContentSizeBytes: Int = -1,
     maxConcurrentClients: Int = -1,
     args: List<String> = emptyList(),
   ): Agent {
-    logger.apply {
-      info { getBanner("banners/agent.txt", logger) }
-      info { getVersionDesc(false) }
-    }
+//    logger.apply {
+//      info { getBanner("banners/agent.txt", logger) }
+//      info { getVersionDesc(false) }
+//    }
 
     val agentOptions = AgentOptions(
       args = mutableListOf<String>()
         .apply {
-          addAll(HarnessConstants.CONFIG_ARG)
+          addAll(CONFIG_ARG)
           addAll(args)
           add("-Dagent.admin.enabled=$adminEnabled")
           add("-Dagent.admin.debugEnabled=$debugEnabled")
           add("-Dagent.metrics.enabled=$metricsEnabled")
           if (scrapeTimeoutSecs != -1)
             add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
-          if (chunkContentSizeKbs != -1)
-            add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
+          if (chunkContentSizeBytes != -1)
+            add("-Dagent.chunkContentSizeBytes=$chunkContentSizeBytes")
           if (maxConcurrentClients != -1)
             add("-Dagent.http.maxConcurrentClients=$maxConcurrentClients")
         },

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,11 +25,9 @@ import com.github.pambrose.common.time.format
 import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.github.pambrose.common.util.Version
 import com.github.pambrose.common.util.getBanner
-import com.github.pambrose.common.util.isNotNull
 import com.github.pambrose.common.util.simpleClassName
-import com.google.common.base.Joiner
 import com.google.common.collect.EvictingQueue
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
@@ -37,7 +35,6 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Utils.getVersionDesc
-import io.prometheus.common.Utils.lambda
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
@@ -135,7 +132,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * - Load balancers can distribute Prometheus requests across proxies
  *
  * @param options Configuration options for the proxy, typically loaded from command line or config files
- * @param proxyHttpPort Port for the HTTP service that Prometheus scrapes. Defaults to value in options.
+ * @param proxyPort Port for the HTTP service that Prometheus scrapes. Defaults to value in options.
  * @param inProcessServerName Optional in-process server name for testing scenarios. When specified,
  *                           the proxy will create an in-process gRPC server instead of a network server.
  * @param testMode Whether to run in test mode. Test mode may disable certain features or use
@@ -154,7 +151,7 @@ import kotlin.time.Duration.Companion.milliseconds
 )
 class Proxy(
   val options: ProxyOptions,
-  proxyHttpPort: Int = options.proxyHttpPort,
+  proxyPort: Int = options.proxyPort,
   inProcessServerName: String = "",
   testMode: Boolean = false,
   initBlock: (Proxy.() -> Unit)? = null,
@@ -163,10 +160,10 @@ class Proxy(
   adminConfig = newAdminConfig(options.adminEnabled, options.adminPort, options.configVals.proxy.admin),
   metricsConfig = newMetricsConfig(options.metricsEnabled, options.metricsPort, options.configVals.proxy.metrics),
   zipkinConfig = newZipkinConfig(options.configVals.proxy.internal.zipkin),
-  versionBlock = lambda { getVersionDesc(true) },
+  versionBlock = { getVersionDesc(true) },
   isTestMode = testMode,
 ) {
-  private val httpService = ProxyHttpService(this, proxyHttpPort, isTestMode)
+  private val httpService = ProxyHttpService(this, proxyPort, isTestMode)
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
   private val grpcService =
     if (inProcessServerName.isEmpty())
@@ -209,11 +206,17 @@ class Proxy(
         addServlet(
           DEBUG,
           LambdaServlet {
+            val recentReqsText =
+              synchronized(recentReqs) {
+                if (recentReqs.isNotEmpty())
+                  "\n${recentReqs.size} most recent requests:\n" + recentReqs.reversed().joinToString("\n")
+                else
+                  ""
+              }
             listOf(
               toPlainText(),
               pathManager.toPlainText(),
-              if (recentReqs.isNotEmpty()) "\n${recentReqs.size} most recent requests:" else "",
-              recentReqs.reversed().joinToString("\n"),
+              recentReqsText,
             ).joinToString("\n")
           },
         )
@@ -231,16 +234,29 @@ class Proxy(
     grpcService.startSync()
     httpService.startSync()
 
-    if (proxyConfigVals.internal.staleAgentCheckEnabled)
+    // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to detect
+    // agent disconnects. The stale agent cleanup service is the only mechanism to clean up
+    // leaked AgentContexts (e.g., agents that called connectAgentWithTransportFilterDisabled
+    // but crashed before opening a readRequestsFromProxy stream). Force-enable it.
+    if (proxyConfigVals.internal.staleAgentCheckEnabled) {
       agentCleanupService.startSync()
-    else
+    } else if (options.transportFilterDisabled) {
+      logger.warn { "Forcing agent eviction thread on: transportFilterDisabled requires stale agent cleanup" }
+      agentCleanupService.startSync()
+    } else {
       logger.info { "Agent eviction thread not started" }
+    }
   }
 
   override fun shutDown() {
+    // Fail in-flight scrape requests BEFORE invalidating agent contexts so that
+    // HTTP handlers waiting on awaitCompleted() receive the informative "Proxy is shutting down"
+    // error message rather than a generic "missing_results" from the agent context drain.
+    scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
+    agentContextManager.invalidateAllAgentContexts()
     grpcService.stopSync()
     httpService.stopSync()
-    if (proxyConfigVals.internal.staleAgentCheckEnabled)
+    if (proxyConfigVals.internal.staleAgentCheckEnabled || options.transportFilterDisabled)
       agentCleanupService.stopSync()
     super.shutDown()
   }
@@ -261,21 +277,21 @@ class Proxy(
         register(
           "chunking_map_check",
           newMapHealthCheck(
-            agentContextManager.chunkedContextMap,
+            agentContextManager.chunkedContextMapView,
             proxyConfigVals.internal.chunkContextMapUnhealthySize,
           ),
         )
         register(
           "scrape_response_map_check",
           newMapHealthCheck(
-            scrapeRequestManager.scrapeRequestMap,
+            scrapeRequestManager.scrapeRequestMapView,
             proxyConfigVals.internal.scrapeRequestMapUnhealthySize,
           ),
         )
         register(
           "agent_scrape_request_backlog",
           healthCheck {
-            agentContextManager.agentContextMap.entries
+            agentContextManager.agentContextEntries
               .filter {
                 it.value.scrapeRequestBacklogSize >= proxyConfigVals.internal.scrapeRequestBacklogUnhealthySize
               }
@@ -286,7 +302,7 @@ class Proxy(
                 if (vals.isEmpty()) {
                   HealthCheck.Result.healthy()
                 } else {
-                  val s = Joiner.on(", ").join(vals)
+                  val s = vals.joinToString(", ")
                   HealthCheck.Result.unhealthy("Large agent scrape request backlog: $s")
                 }
               }
@@ -315,6 +331,7 @@ class Proxy(
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
     pathManager.removeFromPathManager(agentId, reason)
+    scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason")
     return agentContextManager.removeFromContextManager(agentId, reason)
   }
 
@@ -396,30 +413,25 @@ class Proxy(
    */
   fun buildServiceDiscoveryJson(): JsonArray =
     buildJsonArray {
-      pathManager.allPaths.forEach { path ->
+      pathManager.allPathContextInfos().forEach { (path, agentContextInfo) ->
         addJsonObject {
           putJsonArray("targets") {
             add(JsonPrimitive(options.sdTargetPrefix))
           }
           putJsonObject("labels") {
-            put("__metrics_path__", JsonPrimitive(path))
+            val pathWithSlash = if (path.startsWith("/")) path else "/$path"
+            put("__metrics_path__", JsonPrimitive(pathWithSlash))
 
-            val agentContextInfo = pathManager.getAgentContextInfo(path)
+            val agentContexts = agentContextInfo.agentContexts
+            put("agentName", JsonPrimitive(agentContexts.joinToString { it.agentName }))
+            put("hostName", JsonPrimitive(agentContexts.joinToString { it.hostName }))
 
-            if (agentContextInfo.isNotNull()) {
-              val agentContexts = agentContextInfo.agentContexts
-              put("agentName", JsonPrimitive(agentContexts.joinToString { it.agentName }))
-              put("hostName", JsonPrimitive(agentContexts.joinToString { it.hostName }))
-
-              val labels = agentContextInfo.labels
-              runCatching {
-                val json = labels.toJsonElement()
-                json.jsonObject.forEach { (k, v) -> put(k, v) }
-              }.onFailure { e ->
-                logger.warn { "Invalid JSON in labels value: $labels - ${e.simpleClassName}: ${e.message}" }
-              }
-            } else {
-              logger.warn { "No agent context info for path: $path" }
+            val labels = agentContextInfo.labels
+            runCatching {
+              val json = labels.toJsonElement()
+              json.jsonObject.forEach { (k, v) -> put(k, v) }
+            }.onFailure { e ->
+              logger.warn { "Invalid JSON in labels value: $labels - ${e.simpleClassName}: ${e.message}" }
             }
           }
         }
@@ -434,7 +446,7 @@ class Proxy(
     }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
 
     @JvmStatic
     fun main(args: Array<String>) {

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 package io.prometheus.proxy
 
 import com.beust.jcommander.Parameter
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.AGENT_PORT
@@ -44,7 +44,7 @@ class ProxyOptions(
   constructor(args: List<String>) : this(args.toTypedArray())
 
   @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
-  var proxyHttpPort = -1
+  var proxyPort = -1
     private set
 
   @Parameter(names = ["-a", "--agent_port"], description = "gRPC listen port for Agents")
@@ -99,34 +99,38 @@ class ProxyOptions(
   override fun assignConfigVals() {
     configVals.proxy
       .also { proxyConfigVals ->
-        if (proxyHttpPort == -1)
-          proxyHttpPort = PROXY_PORT.getEnv(proxyConfigVals.http.port)
-        logger.info { "proxyHttpPort: $proxyHttpPort" }
+        if (proxyPort == -1)
+          proxyPort = PROXY_PORT.getEnv(proxyConfigVals.http.port)
+        logger.info { "proxyPort: $proxyPort" }
 
         if (proxyAgentPort == -1)
           proxyAgentPort = AGENT_PORT.getEnv(proxyConfigVals.agent.port)
         logger.info { "proxyAgentPort: $proxyAgentPort" }
 
-        if (!sdEnabled)
-          sdEnabled = SD_ENABLED.getEnv(proxyConfigVals.service.discovery.enabled)
+        sdEnabled =
+          resolveBooleanOption(sdEnabled, SD_ENABLED, proxyConfigVals.service.discovery.enabled, "--sd_enabled")
         logger.info { "sdEnabled: $sdEnabled" }
 
         if (sdPath.isEmpty())
           sdPath = SD_PATH.getEnv(proxyConfigVals.service.discovery.path)
         if (sdEnabled)
           require(sdPath.isNotEmpty()) { "sdPath is empty" }
-        else
-          logger.info { "sdPath: $sdPath" }
+        logger.info { "sdPath: $sdPath" }
 
         if (sdTargetPrefix.isEmpty())
           sdTargetPrefix = SD_TARGET_PREFIX.getEnv(proxyConfigVals.service.discovery.targetPrefix)
         if (sdEnabled)
           require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
-        else
-          logger.info { "sdTargetPrefix: $sdTargetPrefix" }
+        logger.info { "sdTargetPrefix: $sdTargetPrefix" }
 
-        if (!reflectionDisabled)
-          reflectionDisabled = REFLECTION_DISABLED.getEnv(proxyConfigVals.reflectionDisabled)
+        reflectionDisabled =
+          resolveBooleanOption(
+            reflectionDisabled,
+            REFLECTION_DISABLED,
+            proxyConfigVals.reflectionDisabled,
+            "--ref-disabled",
+            "--ref_disabled",
+          )
         logger.info { "reflectionDisabled: $reflectionDisabled" }
 
         if (handshakeTimeoutSecs == -1L)
@@ -134,9 +138,13 @@ class ProxyOptions(
         val hsTimeout = if (handshakeTimeoutSecs == -1L) "default (120)" else handshakeTimeoutSecs
         logger.info { "grpc.handshakeTimeoutSecs: $hsTimeout" }
 
-        if (!permitKeepAliveWithoutCalls)
-          permitKeepAliveWithoutCalls =
-            PERMIT_KEEPALIVE_WITHOUT_CALLS.getEnv(proxyConfigVals.grpc.permitKeepAliveWithoutCalls)
+        permitKeepAliveWithoutCalls =
+          resolveBooleanOption(
+            permitKeepAliveWithoutCalls,
+            PERMIT_KEEPALIVE_WITHOUT_CALLS,
+            proxyConfigVals.grpc.permitKeepAliveWithoutCalls,
+            "--permit_keepalive_without_calls",
+          )
         logger.info { "grpc.permitKeepAliveWithoutCalls: $permitKeepAliveWithoutCalls" }
 
         if (permitKeepAliveTimeSecs == -1L)
@@ -160,7 +168,7 @@ class ProxyOptions(
         val graceVal = if (maxConnectionAgeGraceSecs == -1L) "default (INT_MAX)" else maxConnectionAgeGraceSecs
         logger.info { "grpc.maxConnectionAgeGraceSecs: $graceVal" }
 
-        with(proxyConfigVals) {
+        proxyConfigVals.apply {
           assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
           assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
           assignAdminEnabled(admin.enabled)
@@ -173,10 +181,12 @@ class ProxyOptions(
           assignCertChainFilePath(tls.certChainFilePath)
           assignPrivateKeyFilePath(tls.privateKeyFilePath)
           assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
+          validateTlsConfig()
 
           logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
           logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }
           logger.info { "internal.maxAgentInactivitySecs: ${internal.maxAgentInactivitySecs}" }
+          logger.info { "internal.maxUnzippedContentSizeMBytes: ${internal.maxUnzippedContentSizeMBytes}" }
         }
 
         if (logLevel.isEmpty())
@@ -191,6 +201,6 @@ class ProxyOptions(
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,38 +17,36 @@
 package io.prometheus.harness.support
 
 import com.github.pambrose.common.util.simpleClassName
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlin.properties.Delegates
+import java.net.ServerSocket
+import kotlin.properties.Delegates.notNull
 import kotlin.time.Duration.Companion.seconds
 
 open class HarnessSetup {
-  private val logger = KotlinLogging.logger {}
-  protected var proxy: Proxy by Delegates.notNull()
-  protected var agent: Agent by Delegates.notNull()
+  private val logger = logger {}
+  protected var proxy: Proxy by notNull()
+  protected var agent: Agent by notNull()
 
   protected fun setupProxyAndAgent(
+    proxyPort: Int,
     proxySetup: () -> Proxy,
     agentSetup: () -> Agent,
-    actions: () -> Unit = Utils.lambda {},
+    actions: () -> Unit = {},
   ) {
     CollectorRegistry.defaultRegistry.clear()
 
-    runBlocking {
-      launch(Dispatchers.IO + exceptionHandler(logger)) {
-        proxy = proxySetup.invoke()
-      }
+    // Wait for the proxy port to be available (previous test may not have fully released it)
+    waitForPortAvailable(proxyPort)
 
-      launch(Dispatchers.IO + exceptionHandler(logger)) {
-        agent = agentSetup.invoke().apply { awaitInitialConnection(10.seconds) }
-      }
-    }
+    // Start the proxy first and then allow the agent to connect
+    proxy = proxySetup.invoke()
+    agent = agentSetup.invoke().apply { awaitInitialConnection(10.seconds) }
 
     actions.invoke()
 
@@ -64,5 +62,20 @@ open class HarnessSetup {
     }
 
     logger.info { "Stopped ${proxy.simpleClassName} and ${agent.simpleClassName}" }
+  }
+
+  private fun waitForPortAvailable(
+    port: Int,
+    maxAttempts: Int = 50,
+    delayMs: Long = 200,
+  ) {
+    repeat(maxAttempts) {
+      try {
+        ServerSocket(port).use { return }
+      } catch (_: Exception) {
+        Thread.sleep(delayMs)
+      }
+    }
+    logger.warn { "Port $port may not be available after ${maxAttempts * delayMs}ms" }
   }
 }

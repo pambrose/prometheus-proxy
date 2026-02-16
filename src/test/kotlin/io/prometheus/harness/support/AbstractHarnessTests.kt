@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,33 +17,60 @@
 package io.prometheus.harness.support
 
 import com.github.pambrose.common.util.simpleClassName
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
+import io.kotest.core.spec.style.StringSpec
 
 abstract class AbstractHarnessTests(
-  private val args: ProxyCallTestArgs,
-) {
-  @Test
-  fun proxyCallTest() = runBlocking { HarnessTests.proxyCallTest(args) }
+  private val argsProvider: () -> ProxyCallTestArgs,
+) : StringSpec() {
+  init {
+    "should scrape metrics through proxy" {
+      HarnessTests.proxyCallTest(argsProvider())
+    }
 
-  @Test
-  fun missingPathTest() = BasicHarnessTests.missingPathTest(simpleClassName)
+    "should return not found for missing path" {
+      BasicHarnessTests.missingPathTest(
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
 
-  @Test
-  fun invalidPathTest() = BasicHarnessTests.invalidPathTest(simpleClassName)
+    "should return not found for invalid path" {
+      BasicHarnessTests.invalidPathTest(
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
 
-  @Test
-  fun addRemovePathsTest() =
-    runBlocking { BasicHarnessTests.addRemovePathsTest(args.agent.pathManager, simpleClassName) }
+    "should add and remove paths correctly" {
+      BasicHarnessTests.addRemovePathsTest(
+        argsProvider().agent.pathManager,
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
 
-  @Test
-  fun threadedAddRemovePathsTest() =
-    runBlocking { BasicHarnessTests.threadedAddRemovePathsTest(args.agent.pathManager, simpleClassName) }
+    "should add and remove paths correctly under concurrent access" {
+      BasicHarnessTests.threadedAddRemovePathsTest(
+        argsProvider().agent.pathManager,
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
 
-  @Test
-  fun invalidAgentUrlTest() =
-    runBlocking { BasicHarnessTests.invalidAgentUrlTest(args.agent.pathManager, simpleClassName) }
+    "should handle invalid agent URL gracefully" {
+      BasicHarnessTests.invalidAgentUrlTest(
+        argsProvider().agent.pathManager,
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
 
-  @Test
-  fun timeoutTest() = runBlocking { HarnessTests.timeoutTest(args.agent.pathManager, simpleClassName) }
+    "should timeout when scrape exceeds deadline" {
+      HarnessTests.timeoutTest(
+        argsProvider().agent.pathManager,
+        simpleClassName,
+        argsProvider().proxyPort,
+      )
+    }
+  }
 }

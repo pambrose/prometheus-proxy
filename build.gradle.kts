@@ -17,13 +17,14 @@ plugins {
   alias(libs.plugins.buildconfig)
   alias(libs.plugins.kover)
   alias(libs.plugins.detekt)
+  alias(libs.plugins.dokka)
   // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
   // id("jacoco")
   // id("com.github.kt3k.coveralls") version "2.12.0"
 }
 
 group = "io.prometheus"
-version = "2.4.0"
+version = "3.0.0"
 
 buildConfig {
   packageName("io.prometheus")
@@ -79,6 +80,7 @@ dependencies {
   implementation(libs.slf4j.jul)
 
   testImplementation(libs.kotest)
+  testImplementation(libs.mockk)
   testImplementation(kotlin("test"))
 }
 
@@ -89,6 +91,10 @@ configurePublishing()
 configureTesting()
 configureKotlinter()
 configureDetekt()
+configureDokka()
+configureVersions()
+configureCoverage()
+configureSecrets()
 
 fun Project.configureKotlin() {
   tasks.withType<JavaCompile> {
@@ -112,6 +118,10 @@ fun Project.configureKotlin() {
 
   kotlin {
     jvmToolchain(17)
+
+    compilerOptions {
+      freeCompilerArgs.add("-Xreturn-value-checker=check")
+    }
 
     sourceSets.all {
       listOf(
@@ -259,7 +269,86 @@ fun Project.configureDetekt() {
   detekt {
     buildUponDefaultConfig = true
     allRules = false
-    config.setFrom("$projectDir/config/detekt/detekt.yml")
-    baseline = file("$projectDir/config/detekt/baseline.xml")
+    config.setFrom("$projectDir/etc/detekt/detekt.yml")
+    baseline = file("$projectDir/etc/detekt/baseline.xml")
+  }
+}
+
+fun Project.configureDokka() {
+  dokka {
+    moduleName.set("Prometheus Proxy")
+
+    dokkaPublications.html {
+      outputDirectory.set(layout.buildDirectory.dir("dokka/html"))
+      includes.from("docs/packages.md")
+    }
+
+    dokkaSourceSets.main {
+      documentedVisibilities(
+        org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier.Public,
+        org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier.Internal,
+      )
+
+      perPackageOption {
+        matchingRegex.set("io\\.prometheus\\.grpc.*")
+        suppress.set(true)
+      }
+
+      sourceLink {
+        localDirectory.set(file("src/main/kotlin"))
+        remoteUrl("https://github.com/pambrose/prometheus-proxy/tree/master/src/main/kotlin")
+        remoteLineSuffix.set("#L")
+      }
+    }
+  }
+}
+
+fun Project.configureVersions() {
+  fun isNonStable(version: String): Boolean {
+    // val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.uppercase().contains(it) }
+    val betaKeyword = listOf("-RC", "-BETA", "-ALPHA", "-M").any { version.uppercase().contains(it) }
+    // val regex = "^[0-9,.v-]+(-r)?$".toRegex()
+    val isStable = !betaKeyword // (stableKeyword || regex.matches(version)) && !betaKeyword
+    return !isStable
+  }
+
+  tasks.withType<com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask> {
+    rejectVersionIf {
+      isNonStable(candidate.version)
+    }
+  }
+}
+
+fun Project.configureSecrets() {
+  val secretsFile = file("secrets/secrets.env")
+  if (secretsFile.exists()) {
+    val envVars =
+      secretsFile.readLines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && !it.startsWith("#") }
+        .mapNotNull { line ->
+          val idx = line.indexOf('=')
+          if (idx > 0) line.substring(0, idx) to line.substring(idx + 1) else null
+        }
+        .toMap()
+
+    tasks.withType<JavaExec> { environment(envVars) }
+    tasks.withType<Test> { environment(envVars) }
+  }
+}
+
+fun Project.configureCoverage() {
+  kover {
+    reports {
+      filters {
+        excludes {
+          // Exclude the whole package from report statistics
+          classes(
+            "io.prometheus.grpc.*",
+            "io.prometheus.grpc.**",
+          )
+        }
+      }
+    }
   }
 }

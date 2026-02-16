@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package io.prometheus.proxy
 
-import io.github.oshai.kotlinlogging.KLogger
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders
@@ -28,88 +28,80 @@ import io.ktor.server.response.respondText
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.MISSING_PATH_MSG
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPInputStream
 
 object ProxyUtils {
+  private val logger = logger {}
+
+  fun ByteArray.unzip(maxSize: Long): String {
+    if (isEmpty()) return ""
+    GZIPInputStream(ByteArrayInputStream(this)).use { gzis ->
+      ByteArrayOutputStream().use { baos ->
+        val buffer = ByteArray(1024)
+        var totalBytes = 0L
+        while (true) {
+          val len = gzis.read(buffer)
+          if (len <= 0) break
+          totalBytes += len
+          if (totalBytes > maxSize) {
+            val msg = "Unzipped content size exceeds limit of $maxSize bytes"
+            logger.error { msg }
+            throw ZipBombException(msg)
+          }
+          baos.write(buffer, 0, len)
+        }
+        return baos.toString(Charsets.UTF_8.name())
+      }
+    }
+  }
+
+  class ZipBombException(
+    message: String,
+  ) : RuntimeException(message)
+
   fun invalidAgentContextResponse(
     path: String,
     proxy: Proxy,
-    logger: KLogger,
-    responseResults: ResponseResults,
-  ) {
-    updateResponse(
-      message = "Invalid AgentContext for /$path",
-      proxy = proxy,
-      logger = logger,
-      logLevel = KLogger::error,
-      responseResults = responseResults,
-      updateMsg = "invalid_agent_context",
+  ): ResponseResults {
+    val message = "Invalid AgentContext for /$path"
+    proxy.logActivity(message)
+    logger.error { message }
+    return ResponseResults(
       statusCode = HttpStatusCode.NotFound,
+      updateMsgs = listOf("invalid_agent_context"),
     )
   }
 
   fun invalidPathResponse(
     path: String,
     proxy: Proxy,
-    logger: KLogger,
-    responseResults: ResponseResults,
-  ) {
-    updateResponse(
-      message = "Invalid path request /$path",
-      proxy = proxy,
-      logger = logger,
-      logLevel = KLogger::error,
-      responseResults = responseResults,
-      updateMsg = "invalid_path",
+  ): ResponseResults {
+    val message = "Invalid path request /$path"
+    proxy.logActivity(message)
+    logger.error { message }
+    return ResponseResults(
       statusCode = HttpStatusCode.NotFound,
+      updateMsgs = listOf("invalid_path"),
     )
   }
 
-  fun emptyPathResponse(
-    proxy: Proxy,
-    logger: KLogger,
-    responseResults: ResponseResults,
-  ) {
-    updateResponse(
-      message = MISSING_PATH_MSG,
-      proxy = proxy,
-      logger = logger,
-      logLevel = KLogger::info,
-      responseResults = responseResults,
-      updateMsg = "missing_path",
+  fun emptyPathResponse(proxy: Proxy): ResponseResults {
+    proxy.logActivity(MISSING_PATH_MSG)
+    logger.info { MISSING_PATH_MSG }
+    return ResponseResults(
       statusCode = HttpStatusCode.NotFound,
+      updateMsgs = listOf("missing_path"),
     )
   }
 
-  fun proxyNotRunningResponse(
-    logger: KLogger,
-    responseResults: ResponseResults,
-  ) {
-    updateResponse(
-      message = "Proxy stopped",
-      proxy = null,
-      logger = logger,
-      logLevel = KLogger::error,
-      responseResults = responseResults,
-      updateMsg = "proxy_stopped",
+  fun proxyNotRunningResponse(): ResponseResults {
+    logger.error { "Proxy stopped" }
+    return ResponseResults(
       statusCode = HttpStatusCode.ServiceUnavailable,
+      updateMsgs = listOf("proxy_stopped"),
     )
-  }
-
-  private fun updateResponse(
-    message: String,
-    proxy: Proxy?,
-    logger: KLogger,
-    logLevel: (KLogger, () -> String) -> Unit,
-    responseResults: ResponseResults,
-    updateMsg: String,
-    statusCode: HttpStatusCode,
-  ) {
-    proxy?.logActivity(message)
-    logLevel(logger) { message }
-    responseResults.apply {
-      this.updateMsg = updateMsg
-      this.statusCode = statusCode
-    }
   }
 
   fun incrementScrapeRequestCount(
@@ -125,7 +117,6 @@ object ProxyUtils {
     status: HttpStatusCode = HttpStatusCode.OK,
   ) {
     response.header(HttpHeaders.CacheControl, CACHE_CONTROL_VALUE)
-    response.status(status)
     respondText(text, contentType, status)
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,32 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
-
 package io.prometheus.proxy
 
-import com.google.common.collect.Maps.newConcurrentMap
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ScrapeResults
-import java.util.concurrent.ConcurrentMap
+import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Tracks in-flight scrape requests and assigns results when responses arrive.
+ *
+ * Maintains a concurrent map of scrape ID to [ScrapeRequestWrapper]. When a scrape
+ * response (or chunked summary) arrives, the corresponding wrapper is located, populated
+ * with [ScrapeResults][io.prometheus.common.ScrapeResults], and marked complete so the
+ * waiting HTTP handler can return. Also supports failing individual or bulk requests
+ * (e.g., on agent disconnect or chunk validation failure).
+ *
+ * @see ScrapeRequestWrapper
+ * @see ProxyServiceImpl
+ */
 internal class ScrapeRequestManager {
-  // Map scrape_id to agent_id
-  val scrapeRequestMap: ConcurrentMap<Long, ScrapeRequestWrapper> = newConcurrentMap()
+  // Map scrape_id to ScrapeRequestWrapper
+  private val scrapeRequestMap = ConcurrentHashMap<Long, ScrapeRequestWrapper>()
+
+  val scrapeRequestMapView: Map<Long, ScrapeRequestWrapper> get() = scrapeRequestMap
+
+  fun containsScrapeRequest(scrapeId: Long): Boolean = scrapeRequestMap.containsKey(scrapeId)
 
   val scrapeMapSize: Int
     get() = scrapeRequestMap.size
@@ -43,7 +57,37 @@ internal class ScrapeRequestManager {
         wrapper.scrapeResults = scrapeResults
         wrapper.markComplete()
         wrapper.agentContext.markActivityTime(true)
-      } ?: logger.error { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
+      } ?: logger.warn { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId (likely timed out)" }
+  }
+
+  fun failScrapeRequest(
+    scrapeId: Long,
+    failureReason: String,
+  ) {
+    scrapeRequestMap[scrapeId]
+      ?.also { wrapper ->
+        wrapper.scrapeResults = ScrapeResults(
+          srAgentId = wrapper.agentContext.agentId,
+          srScrapeId = scrapeId,
+          srStatusCode = HttpStatusCode.BadGateway.value,
+          srFailureReason = failureReason,
+        )
+        wrapper.markComplete()
+        wrapper.agentContext.markActivityTime(true)
+      } ?: logger.warn { "failScrapeRequest() missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
+  }
+
+  fun failAllScrapeRequests(
+    agentId: String,
+    failureReason: String,
+  ) {
+    scrapeRequestMap.values
+      .filter { it.agentContext.agentId == agentId }
+      .forEach { failScrapeRequest(it.scrapeId, failureReason) }
+  }
+
+  fun failAllInFlightScrapeRequests(failureReason: String) {
+    scrapeRequestMap.values.forEach { failScrapeRequest(it.scrapeId, failureReason) }
   }
 
   fun removeFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {
@@ -52,6 +96,6 @@ internal class ScrapeRequestManager {
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

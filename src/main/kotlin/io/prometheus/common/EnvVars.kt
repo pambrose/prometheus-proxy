@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,6 +57,8 @@ enum class EnvVars {
   CLIENT_CACHE_CLEANUP_INTERVAL_MINS,
 
   KEEPALIVE_WITHOUT_CALLS,
+  UNARY_DEADLINE_SECS,
+
   AGENT_LOG_LEVEL,
 
   // Common
@@ -78,9 +80,36 @@ enum class EnvVars {
 
   fun getEnv(defaultVal: String) = getenv(name) ?: defaultVal
 
-  fun getEnv(defaultVal: Boolean) = getenv(name)?.toBoolean() ?: defaultVal
+  fun getEnv(defaultVal: Boolean): Boolean {
+    val value = getenv(name) ?: return defaultVal
+    return parseBooleanStrict(name, value)
+  }
 
-  fun getEnv(defaultVal: Int) = getenv(name)?.toInt() ?: defaultVal
+  fun getEnv(defaultVal: Int): Int {
+    val value = getenv(name) ?: return defaultVal
+    return value.toIntOrNull()
+      ?: throw IllegalArgumentException("Environment variable $name has invalid integer value: '$value'")
+  }
 
-  fun getEnv(defaultVal: Long) = getenv(name)?.toLong() ?: defaultVal
+  fun getEnv(defaultVal: Long): Long {
+    val value = getenv(name) ?: return defaultVal
+    return value.toLongOrNull()
+      ?: throw IllegalArgumentException("Environment variable $name has invalid long value: '$value'")
+  }
+
+  companion object {
+    internal fun parseBooleanStrict(
+      envName: String,
+      value: String,
+    ): Boolean =
+      when (value.lowercase()) {
+        "true" -> true
+
+        "false" -> false
+
+        else -> throw IllegalArgumentException(
+          "Environment variable $envName has invalid boolean value: '$value' (expected 'true' or 'false')",
+        )
+      }
+  }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +14,39 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction", "UnstableApiUsage")
+@file:Suppress("UnstableApiUsage")
 
 package io.prometheus.proxy
 
 import com.github.pambrose.common.concurrent.GenericIdleService
 import com.github.pambrose.common.concurrent.genericServiceListener
 import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.github.pambrose.common.util.sleep
 import com.google.common.util.concurrent.MoreExecutors
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine.Configuration
 import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.routing.routing
 import io.prometheus.Proxy
-import io.prometheus.common.Utils.lambda
 import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
-import io.prometheus.proxy.ProxyHttpRoutes.configureHttpRoutes
+import io.prometheus.proxy.ProxyHttpRoutes.handleRequests
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit.SECONDS
 
+/**
+ * HTTP server that serves Prometheus scrape requests.
+ *
+ * Runs a Ktor CIO embedded server on a configurable port. Incoming HTTP GET requests are
+ * routed by [ProxyHttpRoutes] to the appropriate agent via gRPC, and the scraped metrics
+ * are returned to Prometheus. Also serves the optional service discovery endpoint.
+ *
+ * @param proxy the parent [Proxy] instance
+ * @param httpPort the HTTP listen port for Prometheus scrape requests
+ * @param isTestMode when true, suppresses verbose logging during tests
+ * @see ProxyHttpRoutes
+ * @see io.prometheus.Proxy
+ */
 internal class ProxyHttpService(
   private val proxy: Proxy,
   val httpPort: Int,
@@ -46,7 +58,7 @@ internal class ProxyHttpService(
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
   private fun getConfig(httpPort: Int): Configuration.() -> Unit =
-    lambda {
+    {
       connector {
         host = "0.0.0.0"
         port = httpPort
@@ -57,7 +69,15 @@ internal class ProxyHttpService(
   private val httpServer =
     embeddedServer(factory = CIO, configure = getConfig(httpPort)) {
       configureKtorServer(proxy, isTestMode)
-      configureHttpRoutes(proxy)
+
+      routing {
+        handleRequests(proxy)
+      }
+
+//      EmbeddedServer.monitor.subscribe(ApplicationStarted) {
+//        // This runs when Ktor signals the application has started
+//        println("Ktor application started")
+//      }
     }
 
   init {
@@ -72,12 +92,12 @@ internal class ProxyHttpService(
     if (proxy.isZipkinEnabled)
       tracing.close()
     httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
-    sleep(2.seconds)
+    // sleep(2.seconds)
   }
 
   override fun toString() = toStringElements { add("port", httpPort) }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
   }
 }

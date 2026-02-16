@@ -1,4 +1,4 @@
-VERSION=2.4.0
+VERSION=3.0.0
 
 default: versioncheck
 
@@ -12,7 +12,10 @@ stubs:
 	./gradlew generateProto
 
 build: clean stubs
-	./gradlew build -xtest
+	./gradlew build -x test
+
+refresh:
+	./gradlew --refresh-dependencies dependencyUpdates
 
 jars:
 	./gradlew agentJar proxyJar
@@ -20,11 +23,26 @@ jars:
 tests:
 	./gradlew --rerun-tasks check
 
+nh-tests:
+	./gradlew test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
+
+ip-tests:
+	./gradlew test --tests "io.prometheus.harness.InProcess*"
+
+netty-tests:
+	./gradlew test --tests "io.prometheus.harness.Netty*"
+
+tls-tests:
+	./gradlew test --tests "io.prometheus.harness.Tls*"
+
 reports:
 	./gradlew koverMergedHtmlReport
 
+dokka:
+	./gradlew :dokkaGeneratePublicationHtml
+
 tsconfig:
-	java -jar ./etc/jars/tscfg-1.2.4.jar --spec etc/config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
+	java -jar ./config/jars/tscfg-1.2.5.jar --spec config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
 distro: build jars
 
@@ -35,10 +53,10 @@ IMAGE_PREFIX := pambrose/prometheus
 docker-push:
 	# prepare multiarch
 	docker buildx use buildx 2>/dev/null || docker buildx create --use --name=buildx
-#	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:latest -t ${IMAGE_PREFIX}-proxy:${VERSION} .
-#	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:latest -t ${IMAGE_PREFIX}-agent:${VERSION} .
-	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:${VERSION} .
-	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:${VERSION} .
+	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:latest -t ${IMAGE_PREFIX}-proxy:${VERSION} .
+	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:latest -t ${IMAGE_PREFIX}-agent:${VERSION} .
+#	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:${VERSION} .
+#	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:${VERSION} .
 
 release: distro docker-push
 
@@ -67,8 +85,5 @@ lint:
 versioncheck:
 	./gradlew dependencyUpdates
 
-refresh:
-	./gradlew --refresh-dependencies
-
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=9.0.0 --distribution-type=bin
+	./gradlew wrapper --gradle-version=9.2.0 --distribution-type=bin

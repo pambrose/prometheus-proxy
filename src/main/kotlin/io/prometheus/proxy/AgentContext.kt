@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+@file:Suppress("TooGenericExceptionCaught")
 
 package io.prometheus.proxy
 
@@ -24,21 +24,32 @@ import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
-import kotlin.concurrent.atomics.AtomicInt
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
-import kotlin.concurrent.atomics.minusAssign
-import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
 
+/**
+ * Represents a single connected agent on the proxy side.
+ *
+ * Each agent connection creates an [AgentContext] that holds the agent's identity (ID, name,
+ * hostname), validity state, activity timestamps, and a queue of pending scrape requests.
+ * The proxy writes scrape requests into the queue and the gRPC streaming RPC drains them.
+ * When the agent disconnects or is evicted, the context is invalidated and all pending
+ * requests are drained and closed.
+ *
+ * @param remoteAddr the remote address of the connected agent
+ * @see AgentContextManager
+ * @see ProxyPathManager
+ */
 internal class AgentContext(
   private val remoteAddr: String,
 ) {
   val agentId = AGENT_ID_GENERATOR.incrementAndFetch().toString()
 
-  private val scrapeRequestChannel = Channel<ScrapeRequestWrapper>(UNLIMITED)
-  private val channelBacklogSize = AtomicInt(0)
+  private val scrapeRequestQueue = ConcurrentLinkedQueue<ScrapeRequestWrapper>()
+  private val scrapeRequestNotifier = Channel<Unit>(UNLIMITED)
 
   private val clock = Monotonic
   private var lastActivityTimeMark: TimeMark by nonNullableReference(clock.markNow())
@@ -63,7 +74,7 @@ internal class AgentContext(
     get() = lastActivityTimeMark.elapsedNow()
 
   val scrapeRequestBacklogSize: Int
-    get() = channelBacklogSize.load()
+    get() = scrapeRequestQueue.size
 
   init {
     markActivityTime(true)
@@ -77,30 +88,42 @@ internal class AgentContext(
   }
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
-    scrapeRequestChannel.send(scrapeRequest)
-    channelBacklogSize += 1
+    scrapeRequestQueue.add(scrapeRequest)
+    try {
+      scrapeRequestNotifier.send(Unit)
+    } catch (e: Exception) {
+      scrapeRequestQueue.remove(scrapeRequest)
+      throw e
+    }
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
-    scrapeRequestChannel.receiveCatching().getOrNull()
-      ?.apply {
-        channelBacklogSize -= 1
-      }
+    scrapeRequestNotifier.receiveCatching().getOrNull()?.let {
+      scrapeRequestQueue.poll()
+    }
 
-  fun isValid() = valid && !scrapeRequestChannel.isClosedForReceive
+  fun isValid() = valid && !scrapeRequestNotifier.isClosedForReceive
 
   fun isNotValid() = !isValid()
 
   fun invalidate() {
     valid = false
-    scrapeRequestChannel.close()
+    scrapeRequestNotifier.close()
+    // Drain any buffered scrape requests and close their completion channels
+    // so HTTP handlers waiting on awaitCompleted() are notified immediately
+    // instead of waiting for the full scrape timeout to expire.
+    while (true) {
+      val wrapper = scrapeRequestQueue.poll() ?: break
+      wrapper.closeChannel()
+    }
   }
 
   fun markActivityTime(isRequest: Boolean) {
-    lastActivityTimeMark = clock.markNow()
+    val now = clock.markNow()
+    lastActivityTimeMark = now
 
     if (isRequest)
-      lastRequestTimeMark = clock.markNow()
+      lastRequestTimeMark = now
   }
 
   override fun toString() =

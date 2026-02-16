@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,14 @@ import com.beust.jcommander.DynamicParameter
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
+import com.github.pambrose.common.util.runCatchingCancellable
 import com.github.pambrose.common.util.simpleClassName
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
 import io.prometheus.common.EnvVars.CERT_CHAIN_FILE_PATH
@@ -40,12 +41,9 @@ import io.prometheus.common.EnvVars.METRICS_PORT
 import io.prometheus.common.EnvVars.PRIVATE_KEY_FILE_PATH
 import io.prometheus.common.EnvVars.TRANSPORT_FILTER_DISABLED
 import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
-import io.prometheus.common.Utils.VersionValidator
-import io.prometheus.common.Utils.toLowercase
 import java.io.File
 import java.io.FileNotFoundException
-import java.net.URL
-import kotlin.properties.Delegates.notNull
+import java.net.URI
 import kotlin.system.exitProcess
 
 // @Parameters(separators = "=")
@@ -107,11 +105,7 @@ abstract class BaseOptions protected constructor(
   var logLevel = ""
     protected set
 
-  @Parameter(
-    names = ["-v", "--version"],
-    description = "Print version info and exit",
-    validateWith = [VersionValidator::class],
-  )
+  @Parameter(names = ["-v", "--version"], description = "Print version info and exit")
   private var version = false
 
   @Parameter(names = ["-u", "--usage"], help = true)
@@ -121,14 +115,51 @@ abstract class BaseOptions protected constructor(
   var dynamicParams = mutableMapOf<String, String>()
     private set
 
-  private var config: Config by notNull()
+  private var cliArgs: Array<String> = emptyArray()
 
-  var configVals: ConfigVals by notNull()
+  private lateinit var config: Config
+
+  lateinit var configVals: ConfigVals
     private set
+
+  val isTlsEnabled: Boolean
+    get() = certChainFilePath.isNotEmpty() && privateKeyFilePath.isNotEmpty()
+
+  private fun isFlagInArgs(vararg names: String): Boolean =
+    cliArgs.any { arg -> names.any { name -> arg.equals(name, ignoreCase = true) } }
+
+  protected fun resolveBooleanOption(
+    cliValue: Boolean,
+    envVar: EnvVars,
+    configDefault: Boolean,
+  ): Boolean = resolveBoolean(cliValue, envVar.name, System.getenv(envVar.name), configDefault)
+
+  protected fun resolveBooleanOption(
+    cliValue: Boolean,
+    envVar: EnvVars,
+    configDefault: Boolean,
+    vararg cliNames: String,
+  ): Boolean {
+    val cliExplicitlySet = isFlagInArgs(*cliNames)
+    return resolveBoolean(cliValue, cliExplicitlySet, envVar.name, System.getenv(envVar.name), configDefault)
+  }
+
+  protected fun validateTlsConfig() {
+    val hasCert = certChainFilePath.isNotEmpty()
+    val hasKey = privateKeyFilePath.isNotEmpty()
+    require(hasCert == hasKey) {
+      if (hasCert)
+        "Incomplete TLS configuration: certificate chain file is set but private key file is missing (use --key)"
+      else
+        "Incomplete TLS configuration: private key file is set but certificate chain file is missing (use --cert)"
+    }
+  }
 
   protected abstract fun assignConfigVals()
 
   protected fun parseOptions() {
+    cliArgs = args
+
     fun parseArgs(args: Array<String>?) {
       try {
         val jcom =
@@ -141,6 +172,11 @@ abstract class BaseOptions protected constructor(
 
         if (usage) {
           jcom.usage()
+          exitProcess(0)
+        }
+
+        if (version) {
+          jcom.console.println(Utils.getVersionDesc(false))
           exitProcess(0)
         }
       } catch (e: ParameterException) {
@@ -158,20 +194,21 @@ abstract class BaseOptions protected constructor(
   protected fun assignKeepAliveTimeSecs(defaultVal: Long) {
     if (keepAliveTimeSecs == -1L)
       keepAliveTimeSecs = KEEPALIVE_TIME_SECS.getEnv(defaultVal)
-    logger.info { "grpc.keepAliveTimeSecs: ${if (keepAliveTimeSecs == -1L) "default (7200)" else keepAliveTimeSecs}" }
+    logger.info {
+      "grpc.keepAliveTimeSecs: ${if (keepAliveTimeSecs == -1L) "unset (gRPC default)" else keepAliveTimeSecs}"
+    }
   }
 
   protected fun assignKeepAliveTimeoutSecs(defaultVal: Long) {
     if (keepAliveTimeoutSecs == -1L)
       keepAliveTimeoutSecs = KEEPALIVE_TIMEOUT_SECS.getEnv(defaultVal)
     logger.info {
-      "grpc.keepAliveTimeoutSecs: ${if (keepAliveTimeoutSecs == -1L) "default (20)" else keepAliveTimeoutSecs}"
+      "grpc.keepAliveTimeoutSecs: ${if (keepAliveTimeoutSecs == -1L) "unset (gRPC default)" else keepAliveTimeoutSecs}"
     }
   }
 
   protected fun assignAdminEnabled(defaultVal: Boolean) {
-    if (!adminEnabled)
-      adminEnabled = ADMIN_ENABLED.getEnv(defaultVal)
+    adminEnabled = resolveBooleanOption(adminEnabled, ADMIN_ENABLED, defaultVal, "-r", "--admin")
     logger.info { "adminEnabled: $adminEnabled" }
   }
 
@@ -182,14 +219,12 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignMetricsEnabled(defaultVal: Boolean) {
-    if (!metricsEnabled)
-      metricsEnabled = METRICS_ENABLED.getEnv(defaultVal)
+    metricsEnabled = resolveBooleanOption(metricsEnabled, METRICS_ENABLED, defaultVal, "-e", "--metrics")
     logger.info { "metricsEnabled: $metricsEnabled" }
   }
 
   protected fun assignDebugEnabled(defaultVal: Boolean) {
-    if (!debugEnabled)
-      debugEnabled = DEBUG_ENABLED.getEnv(defaultVal)
+    debugEnabled = resolveBooleanOption(debugEnabled, DEBUG_ENABLED, defaultVal, "-b", "--debug")
     logger.info { "debugEnabled: $debugEnabled" }
   }
 
@@ -200,8 +235,14 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignTransportFilterDisabled(defaultVal: Boolean) {
-    if (!transportFilterDisabled)
-      transportFilterDisabled = TRANSPORT_FILTER_DISABLED.getEnv(defaultVal)
+    transportFilterDisabled =
+      resolveBooleanOption(
+        transportFilterDisabled,
+        TRANSPORT_FILTER_DISABLED,
+        defaultVal,
+        "--tf-disabled",
+        "--tf_disabled",
+      )
     logger.info { "transportFilterDisabled: $transportFilterDisabled" }
   }
 
@@ -236,24 +277,23 @@ abstract class BaseOptions protected constructor(
         exitOnMissingConfig,
       )
         .resolve(ConfigResolveOptions.defaults())
-        .resolve()
+    // .resolve() Unnecessary
 
     dynamicParams
       .forEach { (k, v) ->
         // Strip quotes
-        val qval = if (v.startsWith("\"") && v.endsWith("\"")) v.substring(1, v.length - 1) else v
+        val qval = v.removeSurrounding("\"")
         val prop = "$k=$qval"
-        System.setProperty(k, prop)
         val newConfig = ConfigFactory.parseString(prop, PROPS)
         config = newConfig.withFallback(config).resolve()
       }
   }
 
-  private fun String.isUrlPrefix() = toLowercase().startsWith(HTTP_PREFIX) || toLowercase().startsWith(HTTPS_PREFIX)
+  private fun String.isUrlPrefix() = lowercase().startsWith(HTTP_PREFIX) || lowercase().startsWith(HTTPS_PREFIX)
 
-  private fun String.isJsonSuffix() = toLowercase().endsWith(".json") || toLowercase().endsWith(".jsn")
+  private fun String.isJsonSuffix() = lowercase().endsWith(".json") || lowercase().endsWith(".jsn")
 
-  private fun String.isPropertiesSuffix() = toLowercase().endsWith(".properties") || toLowercase().endsWith(".props")
+  private fun String.isPropertiesSuffix() = lowercase().endsWith(".properties") || lowercase().endsWith(".props")
 
   private fun getConfigSyntax(configName: String) =
     when {
@@ -272,17 +312,17 @@ abstract class BaseOptions protected constructor(
     when {
       configName.isBlank() -> {
         if (exitOnMissingConfig) {
-          logger.error { $$"A configuration file or url must be specified with --config or $$$envConfig" }
+          logger.error { "A configuration file or url must be specified with --config or \$$envConfig" }
           exitProcess(1)
         }
         return fallback
       }
 
-      configName.isUrlPrefix() ->
-        runCatching {
+      configName.isUrlPrefix() -> {
+        runCatchingCancellable {
           val configSyntax = getConfigSyntax(configName)
           return ConfigFactory
-            .parseURL(URL(configName), configParseOptions.setSyntax(configSyntax))
+            .parseURL(URI(configName).toURL(), configParseOptions.setSyntax(configSyntax))
             .withFallback(fallback)
         }.onFailure { e ->
           if (e.cause is FileNotFoundException)
@@ -290,9 +330,10 @@ abstract class BaseOptions protected constructor(
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
+      }
 
-      else ->
-        runCatching {
+      else -> {
+        runCatchingCancellable {
           return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
         }.onFailure { e ->
           if (e.cause is FileNotFoundException)
@@ -300,16 +341,41 @@ abstract class BaseOptions protected constructor(
           else
             logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
         }
+      }
     }
 
     exitProcess(1)
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
+    private val logger = logger {}
     private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
     const val DEBUG = "debug"
     const val HTTP_PREFIX = "http://"
     const val HTTPS_PREFIX = "https://"
+
+    // Priority: CLI (if explicitly set) > env > config
+    internal fun resolveBoolean(
+      cliValue: Boolean,
+      cliExplicitlySet: Boolean,
+      envVarName: String,
+      envVarValue: String?,
+      configDefault: Boolean,
+    ): Boolean =
+      when {
+        cliExplicitlySet -> cliValue
+        envVarValue != null -> EnvVars.parseBooleanStrict(envVarName, envVarValue)
+        else -> configDefault
+      }
+
+    // Legacy overload: assumes CLI was explicitly set when cliValue is true.
+    // With JCommander arity-0 booleans, this is correct for the enable case.
+    // Use the overload with cliExplicitlySet for proper disable-from-CLI support.
+    internal fun resolveBoolean(
+      cliValue: Boolean,
+      envVarName: String,
+      envVarValue: String?,
+      configDefault: Boolean,
+    ): Boolean = resolveBoolean(cliValue, cliValue, envVarName, envVarValue, configDefault)
   }
 }

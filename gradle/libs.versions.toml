@@ -1,35 +1,37 @@
 [versions]
 # Plugins
-config = "5.6.8"
+config = "6.0.7"
 detekt = "1.23.8"
-kotlinter = "5.2.0"
-kotlin = "2.2.20"
-kover = "0.9.1"
-protobuf = "0.9.5"
+dokka = "2.1.0"
+kotlinter = "5.4.2"
+kotlin = "2.3.10"
+kover = "0.9.7"
+protobuf = "0.9.6"
 shadow = "8.3.7"
-versions = "0.52.0"
+versions = "0.53.0"
 
 # Libraries
 annotation = "1.3.2"
 datetime = "0.7.1-0.6.x-compat"
-dropwizard = "4.2.36"
-gengrpc = "1.4.3"
-grpc = "1.75.0"
-jcommander = "2.0"
+dropwizard = "4.2.38"
+gengrpc = "1.5.0"
+grpc = "1.79.0"
+jcommander = "3.0"
 jetty = "10.0.26"
-kotest = "6.0.3"
-ktor = "3.2.3"
-logback = "1.5.18"
-logging = "7.0.13"
-# Keep in sync with grpc
-tcnative = "2.0.73.Final"
+kotest = "6.1.3"
+ktor = "3.4.0"
+logback = "1.5.31"
+logging = "7.0.14"
+mockk = "1.14.9"
 prometheus = "0.16.0"
 # Keep in sync with grpc
-protoc = "4.32.0"
-serialization = "1.9.0"
-slf4j = "2.0.13"
-typesafe = "1.4.4"
-utils = "2.4.5"
+protoc = "4.33.5"
+serialization = "1.10.0"
+slf4j = "2.0.17"
+# Keep in sync with grpc
+tcnative = "2.0.74.Final"
+typesafe = "1.4.5"
+utils = "2.5.3"
 zipkin = "6.3.0"
 
 [libraries]
@@ -101,6 +103,7 @@ slf4j-jul = { module = "org.slf4j:jul-to-slf4j", version.ref = "slf4j" }
 
 # Testing
 kotest = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
@@ -112,6 +115,7 @@ shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "config" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 
 [bundles]
 ktor = [

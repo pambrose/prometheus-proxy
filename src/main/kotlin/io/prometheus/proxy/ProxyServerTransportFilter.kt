@@ -1,5 +1,5 @@
 /*
- * Copyright © 2024 Paul Ambrose (pambrose@mac.com)
+ * Copyright © 2026 Paul Ambrose (pambrose@mac.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,11 @@
 package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.GrpcDsl.attributes
-import com.github.pambrose.common.util.isNotNull
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
+import io.prometheus.common.GrpcConstants.AGENT_ID
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 
 internal class ProxyServerTransportFilter(
@@ -43,17 +43,16 @@ internal class ProxyServerTransportFilter(
   override fun transportTerminated(attributes: Attributes) {
     attributes.get(AGENT_ID_KEY)?.also { agentId ->
       val context = proxy.removeAgentContext(agentId, "Termination")
-      if (context.isNotNull())
+      if (context != null)
         logger.info { "Disconnected from $context" }
       else
-        logger.error { "Disconnected with invalid agentId: $agentId" }
+        logger.info { "Agent $agentId already removed before transport terminated" }
     } ?: logger.error { "Missing agentId in transportTerminated()" }
     super.transportTerminated(attributes)
   }
 
   companion object {
-    private val logger = KotlinLogging.logger {}
-    internal const val AGENT_ID = "agent-id"
+    private val logger = logger {}
     private const val REMOTE_ADDR = "remote-addr"
     internal val AGENT_ID_KEY: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
     private val REMOTE_ADDR_KEY: Attributes.Key<String> = Attributes.Key.create(REMOTE_ADDR)
