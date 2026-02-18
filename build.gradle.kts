@@ -11,13 +11,18 @@ plugins {
   alias(libs.plugins.kotlin.jvm)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.protobuf)   // Keep in sync with grpc
-  alias(libs.plugins.kotlinter)
-  alias(libs.plugins.versions)
   alias(libs.plugins.shadow)
   alias(libs.plugins.buildconfig)
   alias(libs.plugins.kover)
   alias(libs.plugins.detekt)
   alias(libs.plugins.dokka)
+  alias(libs.plugins.pambrose.envvar)
+  alias(libs.plugins.pambrose.stable.versions)
+  alias(libs.plugins.pambrose.kotlinter)
+  alias(libs.plugins.pambrose.repos)
+  alias(libs.plugins.pambrose.snapshot)
+  alias(libs.plugins.pambrose.testing)
+
   // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
   // id("jacoco")
   // id("com.github.kt3k.coveralls") version "2.12.0"
@@ -88,14 +93,14 @@ configureKotlin()
 configureGrpc()
 configureJars()
 configurePublishing()
-configureTesting()
+//configureTesting()
 configureKotlinter()
 configureDetekt()
 configureDokka()
-configureVersions()
+//configureVersions()
 configureCoverage()
-configureSecrets()
-configureCache()
+//configureSecrets()
+//configureCache()
 
 fun Project.configureKotlin() {
   tasks.withType<JavaCompile> {
