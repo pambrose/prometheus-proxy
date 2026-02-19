@@ -89,7 +89,7 @@ lint:
 	./gradlew lintKotlinTest
 
 versioncheck:
-	./gradlew dependencyUpdates
+	./gradlew dependencyUpdates --no-configuration-cache
 
 upgrade-wrapper:
 	./gradlew wrapper --gradle-version=9.2.0 --distribution-type=bin

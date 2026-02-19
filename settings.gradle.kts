@@ -17,10 +17,10 @@ plugins {
   id("org.gradle.toolchains.foojay-resolver-convention").version("1.0.0")
 }
 
-rootProject.name = "prometheus-proxy"
-
 dependencyResolutionManagement {
   repositories {
     mavenCentral()
   }
 }
+
+rootProject.name = "prometheus-proxy"

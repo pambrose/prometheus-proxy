@@ -93,14 +93,10 @@ configureKotlin()
 configureGrpc()
 configureJars()
 configurePublishing()
-//configureTesting()
 configureKotlinter()
 configureDetekt()
 configureDokka()
-//configureVersions()
 configureCoverage()
-//configureSecrets()
-//configureCache()
 
 fun Project.configureKotlin() {
   tasks.withType<JavaCompile> {
