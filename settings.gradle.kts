@@ -2,7 +2,7 @@ pluginManagement {
   resolutionStrategy {
     eachPlugin {
       if (requested.id.namespace == "com.pambrose") {
-        useModule("com.github.pambrose:gradle-plugins:${requested.version}")
+        useModule("com.github.pambrose:pambrose-gradle-plugins:${requested.version}")
       }
     }
   }

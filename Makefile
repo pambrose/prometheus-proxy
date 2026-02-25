@@ -14,6 +14,9 @@ stubs:
 build: clean stubs
 	./gradlew build -x test
 
+tibuild: clean stubs
+	./gradlew tiTree build -x test
+
 refresh:
 	./gradlew --refresh-dependencies dependencyUpdates
 

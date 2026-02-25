@@ -22,7 +22,7 @@ plugins {
   alias(libs.plugins.pambrose.repos)
   alias(libs.plugins.pambrose.snapshot)
   alias(libs.plugins.pambrose.testing)
-
+  alias(libs.plugins.taskinfo) apply false
   // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
   // id("jacoco")
   // id("com.github.kt3k.coveralls") version "2.12.0"
@@ -137,6 +137,11 @@ fun Project.configureKotlin() {
   }
 }
 
+// Apply taskinfo only when not running inside IntelliJ sync
+if (!providers.systemProperty("idea.sync.active").isPresent) {
+  apply(plugin = libs.plugins.taskinfo.get().pluginId)
+}
+
 fun Project.configureGrpc() {
   tasks.compileKotlin {
     dependsOn(":generateProto")
@@ -189,18 +194,6 @@ fun Project.configureJars() {
       attributes("Main-Class" to "io.prometheus.Proxy")
     }
     from(zipTree(tasks.shadowJar.get().archiveFile))
-  }
-}
-
-fun Project.configureTesting() {
-  tasks.test {
-    useJUnitPlatform()
-
-    testLogging {
-      events("passed", "skipped", "failed", "standardOut", "standardError")
-      exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-      showStandardStreams = true
-    }
   }
 }
 
@@ -305,40 +298,6 @@ fun Project.configureDokka() {
   }
 }
 
-fun Project.configureVersions() {
-  fun isNonStable(version: String): Boolean {
-    // val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.uppercase().contains(it) }
-    val betaKeyword = listOf("-RC", "-BETA", "-ALPHA", "-M").any { version.uppercase().contains(it) }
-    // val regex = "^[0-9,.v-]+(-r)?$".toRegex()
-    val isStable = !betaKeyword // (stableKeyword || regex.matches(version)) && !betaKeyword
-    return !isStable
-  }
-
-  tasks.withType<com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask> {
-    rejectVersionIf {
-      isNonStable(candidate.version)
-    }
-  }
-}
-
-fun Project.configureSecrets() {
-  val secretsFile = file("secrets/secrets.env")
-  if (secretsFile.exists()) {
-    val envVars =
-      secretsFile.readLines()
-        .map { it.trim() }
-        .filter { it.isNotEmpty() && !it.startsWith("#") }
-        .mapNotNull { line ->
-          val idx = line.indexOf('=')
-          if (idx > 0) line.substring(0, idx) to line.substring(idx + 1) else null
-        }
-        .toMap()
-
-    tasks.withType<JavaExec> { environment(envVars) }
-    tasks.withType<Test> { environment(envVars) }
-  }
-}
-
 fun Project.configureCoverage() {
   kover {
     reports {
@@ -352,12 +311,6 @@ fun Project.configureCoverage() {
         }
       }
     }
-  }
-}
-
-fun Project.configureCache() {
-  configurations.all {
-    resolutionStrategy.cacheChangingModulesFor(0, "seconds")
   }
 }
 

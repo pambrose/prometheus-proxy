@@ -562,7 +562,7 @@ at [pambrose.github.io/prometheus-proxy](https://pambrose.github.io/prometheus-p
 
 ## 📄 License
 
-This project is licensed under the Apache License 2.0 - see [License.txt](License.txt) for details.
+This project is licensed under the Apache License 2.0 - see [License.txt](LICENSE.txt) for details.
 
 ## Related Links
 
