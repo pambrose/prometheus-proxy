@@ -32,7 +32,7 @@ slf4j = "2.0.17"
 # Keep in sync with grpc
 tcnative = "2.0.74.Final"
 typesafe = "1.4.6"
-utils = "2.5.4-SNAPSHOT"
+utils = "2.6.0"
 zipkin = "6.3.0"
 
 [libraries]
@@ -123,7 +123,6 @@ taskinfo = { id = "org.barfuin.gradle.taskinfo", version.ref = "taskinfo" }
 pambrose-envvar = { id = "com.pambrose.envvar", version.ref = "gradle-plugins" }
 pambrose-stable-versions = { id = "com.pambrose.stable-versions", version.ref = "gradle-plugins" }
 pambrose-kotlinter = { id = "com.pambrose.kotlinter", version.ref = "gradle-plugins" }
-pambrose-repos = { id = "com.pambrose.repos", version.ref = "gradle-plugins" }
 pambrose-snapshot = { id = "com.pambrose.snapshot", version.ref = "gradle-plugins" }
 pambrose-testing = { id = "com.pambrose.testing", version.ref = "gradle-plugins" }
 

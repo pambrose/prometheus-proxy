@@ -19,7 +19,6 @@ plugins {
   alias(libs.plugins.pambrose.envvar)
   alias(libs.plugins.pambrose.stable.versions)
   alias(libs.plugins.pambrose.kotlinter)
-  alias(libs.plugins.pambrose.repos)
   alias(libs.plugins.pambrose.snapshot)
   alias(libs.plugins.pambrose.testing)
   alias(libs.plugins.taskinfo) apply false
@@ -38,12 +37,6 @@ buildConfig {
   val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
   buildConfigField("String", "APP_RELEASE_DATE", "\"${LocalDate.now().format(formatter)}\"")
   buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
-}
-
-repositories {
-  google()
-  mavenCentral()
-  maven { url = uri("https://jitpack.io") }
 }
 
 dependencies {
