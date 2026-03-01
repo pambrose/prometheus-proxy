@@ -3,6 +3,9 @@
 [![Kotlin](https://img.shields.io/badge/%20language-Kotlin-red.svg)](https://kotlinlang.org/)
 [![ktlint](https://img.shields.io/badge/ktlint%20code--style-%E2%9D%A4-FF4081)](https://pinterest.github.io/ktlint/)
 
+![prometheus-agent Stats](https://dockerhub-readme-stats.vercel.app/api?image=pambrose/prometheus-agent&label=Docker%20Stats&hide=stars)
+![prometheus-proxy Stats](https://dockerhub-readme-stats.vercel.app/api?image=pambrose/prometheus-proxy&label=Docker%20Stats&hide=stars)
+
 # Prometheus Proxy
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for
