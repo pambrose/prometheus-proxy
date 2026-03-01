@@ -52,3 +52,7 @@ secrets/
 ### Node.js ###
 node_modules
 dist
+
+test.conf
+config/test.env
+src/test/resources/test*.conf
