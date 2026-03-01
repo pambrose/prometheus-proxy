@@ -1,0 +1,174 @@
+# Prometheus Proxy
+
+> Prometheus Proxy enables Prometheus to scrape metrics from endpoints behind firewalls while preserving the native pull-based model. It uses a persistent gRPC connection initiated from inside the firewall, so only outbound access is needed from the agent side.
+
+The system has two components: a **proxy** that runs alongside Prometheus (outside the firewall) and an **agent** that runs alongside monitored services (inside the firewall). Prometheus scrapes the proxy as if it were the real endpoint; the proxy forwards the request to the agent over gRPC; the agent scrapes the actual metrics endpoint and returns the response.
+
+## Links
+
+- [GitHub Repository](https://github.com/pambrose/prometheus-proxy)
+- [README](https://github.com/pambrose/prometheus-proxy/blob/master/README.md)
+- [API Documentation (KDoc)](https://pambrose.github.io/prometheus-proxy/)
+- [CLI Options & Environment Variables](https://github.com/pambrose/prometheus-proxy/blob/master/docs/cli-args.md)
+- [Docker Images: pambrose/prometheus-proxy](https://hub.docker.com/r/pambrose/prometheus-proxy)
+- [Docker Images: pambrose/prometheus-agent](https://hub.docker.com/r/pambrose/prometheus-agent)
+- [JitPack (Maven/Gradle dependency)](https://jitpack.io/#pambrose/prometheus-proxy)
+
+## Architecture
+
+```
+Prometheus --> Proxy HTTP (:8080) --> AgentContext lookup --> ScrapeRequest via gRPC stream
+    --> Agent scrapes actual endpoint --> ScrapeResponse via gRPC stream --> Proxy --> Prometheus
+```
+
+### Proxy (runs outside firewall)
+
+- HTTP server on port 8080: serves proxied metrics to Prometheus
+- gRPC server on port 50051: accepts persistent agent connections
+- `ProxyGrpcService` accepts agent connections
+- `ProxyHttpService` / `ProxyHttpRoutes` handle HTTP scrape requests from Prometheus
+- `ProxyPathManager` maps URL paths to agent contexts
+- `AgentContextManager` tracks connected agents
+- `ScrapeRequestManager` manages scrape request lifecycle with timeouts
+- `ProxyServiceImpl` implements the gRPC `ProxyService`
+
+### Agent (runs inside firewall)
+
+- Connects outbound to proxy via gRPC (no inbound ports needed)
+- `AgentGrpcService` manages the gRPC connection and streams
+- `AgentHttpService` scrapes actual metrics endpoints using Ktor HTTP client
+- `AgentPathManager` manages path registrations
+- `HttpClientCache` caches HTTP clients keyed by auth credentials (TTL/idle eviction)
+
+### gRPC Service (proxy_service.proto)
+
+Key RPCs:
+- `registerAgent` / `registerPath` / `unregisterPath` - agent registration lifecycle
+- `readRequestsFromProxy` - server-streaming: proxy sends scrape requests to agent
+- `writeResponsesToProxy` - client-streaming: agent sends scrape responses back
+- `writeChunkedResponsesToProxy` - client-streaming: chunked responses for large payloads (>32KB default)
+- `sendHeartBeat` - keepalive during inactivity (default 5s)
+
+### Key Mechanisms
+
+- **Chunking**: Large metric payloads are split into `ChunkedScrapeResponse` messages to stay within gRPC limits (configurable via `chunkContentSizeKbs`, default 32KB)
+- **Stale agent cleanup**: `AgentContextCleanupService` evicts inactive agents after `maxAgentInactivitySecs` (default 60s)
+- **Consolidated mode**: Multiple agents can register the same path for redundancy
+- **Auth forwarding**: Proxy forwards `Authorization` headers (basic auth / bearer token) from Prometheus scrape configs to agents over gRPC
+- **Embedded agent**: Agents can run inside other JVM apps via `startAsyncAgent()`
+
+## Quick Start
+
+Requirements: Java 17+
+
+### CLI
+
+```bash
+# Start proxy
+java -jar prometheus-proxy.jar
+
+# Start agent (pointing to proxy)
+java -jar prometheus-agent.jar --proxy mymachine.local --config myapps.conf
+```
+
+### Docker
+
+```bash
+# Start proxy
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:3.0.0
+
+# Start agent
+docker run --rm \
+  --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+  pambrose/prometheus-agent:3.0.0
+```
+
+## Configuration
+
+Uses Typesafe Config (HOCON). Precedence: CLI args > environment variables > config file values.
+
+### Agent Path Configuration (HOCON)
+
+```hocon
+agent {
+  pathConfigs: [
+    {
+      name: "App1 metrics"
+      path: app1_metrics
+      url: "http://app1.local:9100/metrics"
+      labels: "{\"key1\": \"value1\"}"
+    }
+  ]
+}
+```
+
+### Common Proxy Options
+
+| Option | Env Var | Default | Description |
+|--------|---------|---------|-------------|
+| `--port, -p` | `PROXY_PORT` | 8080 | Proxy listen port |
+| `--agent_port, -a` | `AGENT_PORT` | 50051 | gRPC listen port for agents |
+| `--config, -c` | `PROXY_CONFIG` | | Config file or URL |
+| `--admin, -r` | `ADMIN_ENABLED` | false | Enable admin endpoints |
+| `--metrics, -e` | `METRICS_ENABLED` | false | Enable internal metrics |
+| `--sd_enabled` | `SD_ENABLED` | false | Service discovery endpoint |
+| `--cert, -t` | `CERT_CHAIN_FILE_PATH` | | TLS certificate chain |
+| `--key, -k` | `PRIVATE_KEY_FILE_PATH` | | TLS private key |
+| `--trust, -s` | `TRUST_CERT_COLLECTION_FILE_PATH` | | TLS trust certificates |
+
+### Common Agent Options
+
+| Option | Env Var | Default | Description |
+|--------|---------|---------|-------------|
+| `--proxy, -p` | `PROXY_HOSTNAME` | localhost | Proxy hostname |
+| `--config, -c` | `AGENT_CONFIG` | | Config file or URL (required) |
+| `--name, -n` | `AGENT_NAME` | | Agent name |
+| `--consolidated, -o` | `CONSOLIDATED` | false | Multiple agents per path |
+| `--timeout` | `SCRAPE_TIMEOUT_SECS` | 15 | Scrape timeout (seconds) |
+| `--chunk` | `CHUNK_CONTENT_SIZE_KBS` | 32 | Chunking threshold (KB) |
+| `--trust_all_x509` | `TRUST_ALL_X509_CERTIFICATES` | false | Disable SSL verification |
+| `--max_concurrent_clients` | `MAX_CONCURRENT_CLIENTS` | 1 | Concurrent HTTP clients |
+
+## TLS
+
+TLS without mutual auth requires:
+- Proxy: `certChainFilePath`, `privateKeyFilePath`
+- Agent: `trustCertCollectionFilePath`
+
+TLS with mutual auth additionally requires:
+- Proxy: `trustCertCollectionFilePath`
+- Agent: `certChainFilePath`, `privateKeyFilePath`
+
+## Building from Source
+
+```bash
+git clone https://github.com/pambrose/prometheus-proxy.git
+cd prometheus-proxy
+./gradlew build          # Build with tests
+./gradlew shadowJar      # Build fat JARs
+./gradlew agentJar proxyJar  # Named JARs in build/libs/
+```
+
+## Tech Stack
+
+- **Language**: Kotlin (JVM 17+)
+- **Build**: Gradle with Kotlin DSL
+- **gRPC**: protobuf + grpc-java + grpc-kotlin
+- **HTTP Server**: Ktor (Netty engine)
+- **HTTP Client**: Ktor CIO client
+- **Configuration**: Typesafe Config (HOCON)
+- **Metrics**: Prometheus Java SimpleClient
+- **Testing**: Kotest + JUnit 5 + MockK
+- **Code Quality**: kotlinter + detekt
+
+## Example Configurations
+
+- Basic setup: `examples/simple.conf`
+- Multiple apps: `examples/myapps.conf`
+- TLS (no mutual auth): `examples/tls-no-mutual-auth.conf`
+- TLS (with mutual auth): `examples/tls-with-mutual-auth.conf`
+- Prometheus federation: `examples/federate.conf`
+
+## License
+
+Apache License 2.0

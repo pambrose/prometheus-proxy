@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.util.ensureLeadingSlash
 import com.github.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
@@ -87,8 +88,6 @@ object ProxyHttpRoutes {
       logger.info { "Not adding ${proxy.options.sdPath.ensureLeadingSlash()} service discovery endpoint" }
     }
   }
-
-  internal fun String.ensureLeadingSlash() = if (startsWith("/")) this else "/$this"
 
   private fun Routing.handleClientRequests(proxy: Proxy) {
     get("/*") {

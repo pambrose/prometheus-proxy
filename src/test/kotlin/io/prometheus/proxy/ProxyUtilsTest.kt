@@ -18,11 +18,10 @@
 
 package io.prometheus.proxy
 
+import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -160,7 +159,7 @@ class ProxyUtilsTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-respond")
         response.status shouldBe HttpStatusCode.OK
@@ -186,7 +185,7 @@ class ProxyUtilsTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-json")
         response.status shouldBe HttpStatusCode.OK
@@ -209,7 +208,7 @@ class ProxyUtilsTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-error")
         response.status shouldBe HttpStatusCode.ServiceUnavailable
@@ -232,7 +231,7 @@ class ProxyUtilsTest : StringSpec() {
 
       try {
         val port = server.engine.resolvedConnectors().first().port
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-bug14")
         response.status shouldBe HttpStatusCode.NotFound

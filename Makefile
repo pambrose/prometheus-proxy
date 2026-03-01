@@ -1,4 +1,4 @@
-VERSION=3.0.0
+VERSION=$(shell grep '^version\s*=' build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
 
 default: versioncheck
 
@@ -13,6 +13,9 @@ stubs:
 
 build: clean stubs
 	./gradlew build -x test
+
+tibuild: clean stubs
+	./gradlew tiTree build -x test
 
 refresh:
 	./gradlew --refresh-dependencies dependencyUpdates
@@ -89,7 +92,7 @@ lint:
 	./gradlew lintKotlinTest
 
 versioncheck:
-	./gradlew dependencyUpdates
+	./gradlew dependencyUpdates --no-configuration-cache
 
 upgrade-wrapper:
 	./gradlew wrapper --gradle-version=9.2.0 --distribution-type=bin

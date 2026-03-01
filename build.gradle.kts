@@ -11,13 +11,18 @@ plugins {
   alias(libs.plugins.kotlin.jvm)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.protobuf)   // Keep in sync with grpc
-  alias(libs.plugins.kotlinter)
-  alias(libs.plugins.versions)
   alias(libs.plugins.shadow)
   alias(libs.plugins.buildconfig)
   alias(libs.plugins.kover)
   alias(libs.plugins.detekt)
   alias(libs.plugins.dokka)
+  alias(libs.plugins.pambrose.envvar)
+  alias(libs.plugins.pambrose.stable.versions)
+  alias(libs.plugins.pambrose.kotlinter)
+  alias(libs.plugins.pambrose.repos)
+  alias(libs.plugins.pambrose.snapshot)
+  alias(libs.plugins.pambrose.testing)
+  alias(libs.plugins.taskinfo) apply false
   // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
   // id("jacoco")
   // id("com.github.kt3k.coveralls") version "2.12.0"
@@ -54,7 +59,7 @@ dependencies {
   implementation(platform(libs.ktor.bom))
   implementation(libs.bundles.ktor)
 
-  implementation(platform(libs.common.utils.bom))
+//  implementation(platform(libs.common.utils.bom))
   implementation(libs.bundles.common.utils)
 
   implementation(libs.protobuf.kotlin)
@@ -88,13 +93,10 @@ configureKotlin()
 configureGrpc()
 configureJars()
 configurePublishing()
-configureTesting()
 configureKotlinter()
 configureDetekt()
 configureDokka()
-configureVersions()
 configureCoverage()
-configureSecrets()
 
 fun Project.configureKotlin() {
   tasks.withType<JavaCompile> {
@@ -103,10 +105,6 @@ fun Project.configureKotlin() {
 
   tasks.named("build") {
     mustRunAfter("clean")
-  }
-
-  configurations.all {
-    resolutionStrategy.cacheChangingModulesFor(0, "seconds")
   }
 
   idea {
@@ -137,6 +135,11 @@ fun Project.configureKotlin() {
       }
     }
   }
+}
+
+// Apply taskinfo only when not running inside IntelliJ sync
+if (!providers.systemProperty("idea.sync.active").isPresent) {
+  apply(plugin = libs.plugins.taskinfo.get().pluginId)
 }
 
 fun Project.configureGrpc() {
@@ -191,18 +194,6 @@ fun Project.configureJars() {
       attributes("Main-Class" to "io.prometheus.Proxy")
     }
     from(zipTree(tasks.shadowJar.get().archiveFile))
-  }
-}
-
-fun Project.configureTesting() {
-  tasks.test {
-    useJUnitPlatform()
-
-    testLogging {
-      events("passed", "skipped", "failed", "standardOut", "standardError")
-      exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-      showStandardStreams = true
-    }
   }
 }
 
@@ -307,40 +298,6 @@ fun Project.configureDokka() {
   }
 }
 
-fun Project.configureVersions() {
-  fun isNonStable(version: String): Boolean {
-    // val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.uppercase().contains(it) }
-    val betaKeyword = listOf("-RC", "-BETA", "-ALPHA", "-M").any { version.uppercase().contains(it) }
-    // val regex = "^[0-9,.v-]+(-r)?$".toRegex()
-    val isStable = !betaKeyword // (stableKeyword || regex.matches(version)) && !betaKeyword
-    return !isStable
-  }
-
-  tasks.withType<com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask> {
-    rejectVersionIf {
-      isNonStable(candidate.version)
-    }
-  }
-}
-
-fun Project.configureSecrets() {
-  val secretsFile = file("secrets/secrets.env")
-  if (secretsFile.exists()) {
-    val envVars =
-      secretsFile.readLines()
-        .map { it.trim() }
-        .filter { it.isNotEmpty() && !it.startsWith("#") }
-        .mapNotNull { line ->
-          val idx = line.indexOf('=')
-          if (idx > 0) line.substring(0, idx) to line.substring(idx + 1) else null
-        }
-        .toMap()
-
-    tasks.withType<JavaExec> { environment(envVars) }
-    tasks.withType<Test> { environment(envVars) }
-  }
-}
-
 fun Project.configureCoverage() {
   kover {
     reports {
@@ -356,3 +313,4 @@ fun Project.configureCoverage() {
     }
   }
 }
+

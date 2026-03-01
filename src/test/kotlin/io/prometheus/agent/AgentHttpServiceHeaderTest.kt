@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.google.common.net.HttpHeaders.ACCEPT
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -58,7 +59,7 @@ class AgentHttpServiceHeaderTest : StringSpec() {
         val port = server.engine.resolvedConnectors().first().port
 
         // Create a client WITHOUT defaultRequest Accept header (the fix pattern)
-        val client = HttpClient(CIO) { expectSuccess = false }
+        val client = newHttpClient()
 
         // Request 1: openmetrics Accept
         client.get("http://localhost:$port/metrics") {
