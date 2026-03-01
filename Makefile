@@ -1,4 +1,4 @@
-VERSION=3.0.0
+VERSION=$(shell grep '^version\s*=' build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
 
 default: versioncheck
 
