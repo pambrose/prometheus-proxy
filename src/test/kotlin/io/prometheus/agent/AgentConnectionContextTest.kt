@@ -258,7 +258,7 @@ class AgentConnectionContextTest : StringSpec() {
 
       coroutineScope {
         // Launch several "scrape" coroutines that will try to send results
-        (1..5).map { i ->
+        (1..5).forEach { i ->
           launch(Dispatchers.IO) {
             try {
               // Simulate scrape work

@@ -616,7 +616,7 @@ class ProxyPathManagerTest : StringSpec() {
 
       // Force-cast and mutate the returned list (simulates a caller bypassing compile-time safety)
       @Suppress("UNCHECKED_CAST")
-      (info.agentContexts as MutableList<AgentContext>).clear()
+      (info.agentContexts).clear()
       info.agentContexts.shouldHaveSize(0)
 
       // Internal state should be unaffected
