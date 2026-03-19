@@ -1,4 +1,51 @@
-# Release Notes — Prometheus Proxy 3.0.0
+# Release Notes — Prometheus Proxy
+
+---
+
+## 3.0.3
+
+### Dependency Updates
+
+| Dependency     | Old    | New    |
+|----------------|--------|--------|
+| Kotlin         | 2.3.10 | 2.3.20 |
+| Gradle wrapper | 9.2.0  | 9.4.0  |
+| gRPC           | 1.79.0 | 1.80.0 |
+| Kotest         | 6.1.3  | 6.1.7  |
+| Protoc         | 4.33.5 | 4.34.0 |
+| utils          | 2.5.3  | 2.6.3  |
+| gradle-plugins | 1.0.8  | 1.0.10 |
+| config plugin  | 6.0.7  | 6.0.9  |
+
+### Build & Tooling
+
+- Extract JitPack URLs into reusable Makefile variables (`JITPACK_BUILD_URL`, `JITPACK_API_URL`)
+- Enable Gradle configuration caching and daemon
+- Use `forEach` instead of `map` in coroutine launches for clarity in `AgentConnectionContextTest`
+
+### Documentation & Cleanup
+
+- Remove outdated GEMINI.md, AGENTS.md, and OpenSpec instructions
+- Remove legacy documentation and workflows
+- Clean up CLAUDE.md
+
+---
+
+## 3.0.1
+
+### Build & Tooling
+
+- Add homepage link to plugins configuration in build.gradle.kts
+- Update dependency management and plugin versions in build.gradle.kts and settings.gradle.kts
+- Update .gitignore to include test configuration files
+
+### Documentation
+
+- Add GitHub workflow commands and API documentation section to README
+
+---
+
+## 3.0.0
 
 **Version bump: 2.4.0 → 3.0.0**
 
