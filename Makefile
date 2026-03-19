@@ -59,6 +59,9 @@ distro: build jars
 PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x
 IMAGE_PREFIX := pambrose/prometheus
 
+JITPACK_BUILD_URL := https://jitpack.io/com/github/pambrose/prometheus-proxy/${VERSION}
+JITPACK_API_URL := https://jitpack.io/api/builds/com.github.pambrose/prometheus-proxy/${VERSION}
+
 docker-push:
 	# prepare multiarch
 	docker buildx use buildx 2>/dev/null || docker buildx create --use --name=buildx
@@ -91,8 +94,19 @@ lint:
 	./gradlew lintKotlinMain
 	./gradlew lintKotlinTest
 
+trigger-jitpack:
+	until curl -s "${JITPACK_BUILD_URL}/build.log" | grep -qv "not found"; do \
+		echo "Waiting for JitPack..."; \
+		sleep 10; \
+	done
+	echo "JitPack build complete for version ${VERSION}"
+
+view-jitpack:
+	curl -s "${JITPACK_BUILD_URL}/build.log"
+	curl -s "${JITPACK_API_URL}" | jq
+
 versioncheck:
 	./gradlew dependencyUpdates --no-configuration-cache
 
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=9.2.0 --distribution-type=bin
+	./gradlew wrapper --gradle-version=9.4.0 --distribution-type=bin
