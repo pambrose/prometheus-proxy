@@ -42,7 +42,7 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.client.Summary
+import io.prometheus.client.Histogram
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
@@ -391,7 +391,7 @@ class Agent(
 
   internal val proxyHost get() = "${grpcService.agentHostName}:${grpcService.agentPort}"
 
-  internal fun startTimer(agent: Agent): Summary.Timer? =
+  internal fun startTimer(agent: Agent): Histogram.Timer? =
     metrics.scrapeRequestLatency.labels(agent.launchId, agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"

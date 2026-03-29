@@ -20,9 +20,9 @@ package io.prometheus.proxy
 
 import com.github.pambrose.common.dsl.PrometheusDsl.counter
 import com.github.pambrose.common.dsl.PrometheusDsl.gauge
-import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Proxy
+import io.prometheus.client.Histogram
 
 internal class ProxyMetrics(
   proxy: Proxy,
@@ -52,10 +52,39 @@ internal class ProxyMetrics(
       help("Proxy heartbeat count")
     }
 
-  val scrapeRequestLatency =
-    summary {
-      name("proxy_scrape_request_latency_seconds")
-      help("Proxy scrape request latency in seconds")
+  val scrapeRequestLatency: Histogram =
+    Histogram.build()
+      .name("proxy_scrape_request_latency_seconds")
+      .help("Proxy scrape request latency in seconds")
+      .labelNames("path")
+      .buckets(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0)
+      .register()
+
+  val scrapeResponseBytes: Histogram =
+    Histogram.build()
+      .name("proxy_scrape_response_bytes")
+      .help("Proxy scrape response size in bytes")
+      .labelNames("path", "encoding")
+      .buckets(1_024.0, 10_240.0, 102_400.0, 512_000.0, 1_048_576.0, 5_242_880.0, 10_485_760.0)
+      .register()
+
+  val chunkValidationFailures =
+    counter {
+      name("proxy_chunk_validation_failures_total")
+      help("Proxy chunk validation failures")
+      labelNames("stage")
+    }
+
+  val chunkedTransfersAbandoned =
+    counter {
+      name("proxy_chunked_transfers_abandoned_total")
+      help("Proxy chunked transfers abandoned mid-transfer")
+    }
+
+  val agentDisplacementCount =
+    counter {
+      name("proxy_agent_displacement_total")
+      help("Proxy agent path displacement events")
     }
 
   init {

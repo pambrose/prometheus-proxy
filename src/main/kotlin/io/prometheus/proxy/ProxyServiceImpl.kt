@@ -253,6 +253,7 @@ internal class ProxyServiceImpl(
                       chunkScrapeId,
                       "Chunk validation failed: ${e.message}",
                     )
+                    proxy.metrics { chunkValidationFailures.labels("chunk").inc() }
                   }
                 }
               }
@@ -280,6 +281,7 @@ internal class ProxyServiceImpl(
                       summaryScrapeId,
                       "Summary validation failed: ${e.message}",
                     )
+                    proxy.metrics { chunkValidationFailures.labels("summary").inc() }
                   }
                 }
               }
@@ -311,6 +313,7 @@ internal class ProxyServiceImpl(
               scrapeId,
               "Chunked transfer abandoned: stream terminated before summary received",
             )
+            proxy.metrics { chunkedTransfersAbandoned.inc() }
           }
       }
     }

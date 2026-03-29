@@ -44,7 +44,8 @@ internal class ScrapeRequestWrapper(
   private val createTimeMark = clock.markNow()
   private val completeChannel = Channel<Boolean>()
   private val completed = AtomicBoolean(false)
-  private val requestTimer = if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.startTimer() else null
+  private val requestTimer =
+    if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.labels(pathVal).startTimer() else null
 
   val scrapeRequest =
     scrapeRequest {

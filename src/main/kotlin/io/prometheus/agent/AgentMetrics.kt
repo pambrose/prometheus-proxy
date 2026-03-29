@@ -20,9 +20,9 @@ package io.prometheus.agent
 
 import com.github.pambrose.common.dsl.PrometheusDsl.counter
 import com.github.pambrose.common.dsl.PrometheusDsl.gauge
-import com.github.pambrose.common.dsl.PrometheusDsl.summary
 import com.github.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
+import io.prometheus.client.Histogram
 
 internal class AgentMetrics(
   agent: Agent,
@@ -48,12 +48,13 @@ internal class AgentMetrics(
       labelNames(LAUNCH_ID, TYPE)
     }
 
-  val scrapeRequestLatency =
-    summary {
-      name("agent_scrape_request_latency_seconds")
-      help("Agent scrape request latency in seconds")
-      labelNames(LAUNCH_ID, AGENT_NAME)
-    }
+  val scrapeRequestLatency: Histogram =
+    Histogram.build()
+      .name("agent_scrape_request_latency_seconds")
+      .help("Agent scrape request latency in seconds")
+      .labelNames(LAUNCH_ID, AGENT_NAME)
+      .buckets(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0)
+      .register()
 
   init {
     gauge {

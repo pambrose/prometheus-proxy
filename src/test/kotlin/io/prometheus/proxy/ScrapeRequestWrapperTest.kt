@@ -186,8 +186,14 @@ class ScrapeRequestWrapperTest : StringSpec() {
     "markComplete with metrics enabled should observe duration" {
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.isMetricsEnabled } returns true
+      val mockHistogram = mockk<io.prometheus.client.Histogram>(relaxed = true)
+      val mockChild = mockk<io.prometheus.client.Histogram.Child>(relaxed = true)
+      val mockTimer = mockk<io.prometheus.client.Histogram.Timer>(relaxed = true)
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
       every { mockProxy.metrics } returns mockMetrics
+      every { mockMetrics.scrapeRequestLatency } returns mockHistogram
+      every { mockHistogram.labels(any()) } returns mockChild
+      every { mockChild.startTimer() } returns mockTimer
 
       val wrapper = createWrapper(proxy = mockProxy)
 
@@ -281,12 +287,14 @@ class ScrapeRequestWrapperTest : StringSpec() {
     "Bug #15: markComplete with metrics should only observeDuration once" {
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.isMetricsEnabled } returns true
-      val mockSummary = mockk<io.prometheus.client.Summary>(relaxed = true)
-      val mockTimer = mockk<io.prometheus.client.Summary.Timer>(relaxed = true)
+      val mockHistogram = mockk<io.prometheus.client.Histogram>(relaxed = true)
+      val mockChild = mockk<io.prometheus.client.Histogram.Child>(relaxed = true)
+      val mockTimer = mockk<io.prometheus.client.Histogram.Timer>(relaxed = true)
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
       every { mockProxy.metrics } returns mockMetrics
-      every { mockMetrics.scrapeRequestLatency } returns mockSummary
-      every { mockSummary.startTimer() } returns mockTimer
+      every { mockMetrics.scrapeRequestLatency } returns mockHistogram
+      every { mockHistogram.labels(any()) } returns mockChild
+      every { mockChild.startTimer() } returns mockTimer
 
       val wrapper = ScrapeRequestWrapper(
         agentContext = createAgentContext(),
