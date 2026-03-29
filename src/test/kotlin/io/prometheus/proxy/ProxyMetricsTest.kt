@@ -194,12 +194,12 @@ class ProxyMetricsTest : StringSpec() {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
-      metrics.chunkValidationFailures.labels("chunk").inc()
-      metrics.chunkValidationFailures.labels("summary").inc()
-      metrics.chunkValidationFailures.labels("summary").inc()
+      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_CHUNK).inc()
+      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).inc()
+      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).inc()
 
-      metrics.chunkValidationFailures.labels("chunk").get() shouldBe 1.0
-      metrics.chunkValidationFailures.labels("summary").get() shouldBe 2.0
+      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_CHUNK).get() shouldBe 1.0
+      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).get() shouldBe 2.0
     }
 
     "chunkedTransfersAbandoned should increment" {

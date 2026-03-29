@@ -123,4 +123,11 @@ internal class ProxyMetrics(
       data = { proxy.agentContextManager.totalAgentScrapeRequestBacklogSize.toDouble() },
     )
   }
+
+  companion object {
+    const val STAGE_CHUNK = "chunk"
+    const val STAGE_SUMMARY = "summary"
+    const val ENCODING_GZIPPED = "gzipped"
+    const val ENCODING_PLAIN = "plain"
+  }
 }

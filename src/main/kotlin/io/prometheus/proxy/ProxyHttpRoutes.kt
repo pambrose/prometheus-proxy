@@ -326,8 +326,8 @@ object ProxyHttpRoutes {
             }
 
           proxy.metrics {
-            val encoding = if (srZipped) "gzipped" else "plain"
-            scrapeResponseBytes.labels(path, encoding).observe(contentText.length.toDouble())
+            val encoding = if (srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN
+            scrapeResponseBytes.labels(path, encoding).observe(contentText.toByteArray().size.toDouble())
           }
 
           ScrapeRequestResponse(

@@ -253,7 +253,7 @@ internal class ProxyServiceImpl(
                       chunkScrapeId,
                       "Chunk validation failed: ${e.message}",
                     )
-                    proxy.metrics { chunkValidationFailures.labels("chunk").inc() }
+                    proxy.metrics { chunkValidationFailures.labels(ProxyMetrics.STAGE_CHUNK).inc() }
                   }
                 }
               }
@@ -281,7 +281,7 @@ internal class ProxyServiceImpl(
                       summaryScrapeId,
                       "Summary validation failed: ${e.message}",
                     )
-                    proxy.metrics { chunkValidationFailures.labels("summary").inc() }
+                    proxy.metrics { chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).inc() }
                   }
                 }
               }
