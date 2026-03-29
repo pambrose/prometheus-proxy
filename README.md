@@ -129,12 +129,12 @@ If you prefer to build the project from source:
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:3.0.3
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:3.0.4
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:3.0.3
+  pambrose/prometheus-agent:3.0.4
 ```
 
 ## 📋 Configuration Examples
@@ -212,8 +212,8 @@ scrape_configs:
 The docker images support multiple architectures (amd64, arm64, s390x):
 
 ```bash
-docker pull pambrose/prometheus-proxy:3.0.3
-docker pull pambrose/prometheus-agent:3.0.3
+docker pull pambrose/prometheus-proxy:3.0.4
+docker pull pambrose/prometheus-agent:3.0.4
 ```
 
 ### Production Docker Setup
@@ -226,7 +226,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
         --restart unless-stopped \
-        pambrose/prometheus-proxy:3.0.3
+        pambrose/prometheus-proxy:3.0.4
 ```
 
 Start an agent container with:
@@ -236,7 +236,7 @@ Start an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         --restart unless-stopped \
-        pambrose/prometheus-agent:3.0.3
+        pambrose/prometheus-agent:3.0.4
 ```
 
 Or use docker-compose: see `etc/compose/proxy.yml` for a working example.
@@ -257,7 +257,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:3.0.3
+    pambrose/prometheus-agent:3.0.4
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -481,7 +481,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:3.0.3
+    pambrose/prometheus-proxy:3.0.4
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -489,7 +489,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:3.0.3
+    pambrose/prometheus-agent:3.0.4
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the

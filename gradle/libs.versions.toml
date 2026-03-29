@@ -2,10 +2,10 @@
 # Plugins
 config = "6.0.9"
 detekt = "1.23.8"
-dokka = "2.1.0"
+dokka = "2.2.0"
 gradle-plugins = "1.0.10"
 kotlin = "2.3.20"
-kover = "0.9.7"
+kover = "0.9.8"
 protobuf = "0.9.6"
 shadow = "8.3.7"
 taskinfo = "3.0.1"
@@ -19,21 +19,21 @@ grpc = "1.80.0"
 jakartaServlet = "6.1.0"
 jcommander = "3.0"
 jetty = "11.0.26"
-kotest = "6.1.7"
-ktor = "3.4.1"
+kotest = "6.1.9"
+ktor = "3.4.2"
 logback = "1.5.32"
 logging = "8.0.01"
 mockk = "1.14.9"
 prometheus = "0.16.0"
 # Keep in sync with grpc
-protoc = "4.34.0"
+protoc = "4.34.1"
 serialization = "1.10.0"
 slf4j = "2.0.17"
 # Keep in sync with grpc
 tcnative = "2.0.74.Final"
 typesafe = "1.4.6"
 utils = "2.6.3"
-zipkin = "6.3.0"
+zipkin = "6.3.1"
 
 [libraries]
 # Kotlin
