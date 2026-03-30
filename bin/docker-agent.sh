@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VERSION=$(grep '^version = ' "$SCRIPT_DIR/../build.gradle.kts" | sed 's/version = "\(.*\)"/\1/')
