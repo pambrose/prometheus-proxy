@@ -32,7 +32,7 @@ slf4j = "2.0.17"
 # Keep in sync with grpc
 tcnative = "2.0.74.Final"
 typesafe = "1.4.6"
-utils = "2.6.3"
+utils = "2.6.4"
 zipkin = "6.3.1"
 
 [libraries]
