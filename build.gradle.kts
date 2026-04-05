@@ -32,7 +32,6 @@ plugins {
 version = findProperty("overrideVersion")?.toString() ?: "3.1.0"
 group = "com.pambrose"
 
-
 buildConfig {
   packageName("io.prometheus")
   buildConfigField("String", "APP_NAME", "\"${project.name}\"")
@@ -47,22 +46,14 @@ repositories {
   mavenCentral()
 }
 
-
 dependencies {
-  implementation(platform(libs.kotlin.bom))
   implementation(libs.kotlin.reflect)
-
   implementation(libs.kotlinx.serialization)
   implementation(libs.kotlinx.datetime)
 
-  implementation(platform(libs.grpc.bom))
   implementation(libs.bundles.grpc)
-
-  implementation(platform(libs.ktor.bom))
   implementation(libs.bundles.ktor)
-
   implementation(libs.bundles.common.utils)
-
   implementation(libs.protobuf.kotlin)
   implementation(libs.grpc.kotlin.stub)
 
@@ -70,15 +61,11 @@ dependencies {
   implementation(libs.netty.tcnative)
 
   implementation(libs.jetty.servlet)
-
   implementation(libs.annotation.api)
   implementation(libs.jcommander)
   implementation(libs.typesafe.config)
-
   implementation(libs.prometheus.simpleclient)
-
   implementation(libs.dropwizard.metrics)
-
   implementation(libs.zipkin.brave)
 
   implementation(libs.kotlin.logging)
@@ -88,6 +75,11 @@ dependencies {
   testImplementation(libs.kotest)
   testImplementation(libs.mockk)
   testImplementation(kotlin("test"))
+}
+
+// Apply taskinfo only when not running inside IntelliJ sync
+if (!providers.systemProperty("idea.sync.active").isPresent) {
+  apply(plugin = libs.plugins.taskinfo.get().pluginId)
 }
 
 configureKotlin()
@@ -136,11 +128,6 @@ fun Project.configureKotlin() {
       }
     }
   }
-}
-
-// Apply taskinfo only when not running inside IntelliJ sync
-if (!providers.systemProperty("idea.sync.active").isPresent) {
-  apply(plugin = libs.plugins.taskinfo.get().pluginId)
 }
 
 fun Project.configureGrpc() {
