@@ -18,7 +18,7 @@
 
 package io.prometheus.misc
 
-import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import com.pambrose.common.dsl.KtorDsl.blockingGet
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe

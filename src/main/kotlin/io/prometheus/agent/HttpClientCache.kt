@@ -16,7 +16,7 @@
 
 package io.prometheus.agent
 
-import com.github.pambrose.common.util.runCatchingCancellable
+import com.pambrose.common.util.runCatchingCancellable
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope

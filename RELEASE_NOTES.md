@@ -2,7 +2,68 @@
 
 ---
 
-## 3.0.0
+## 3.1.0
+
+### Highlights
+
+- **Maven Central publishing** — Now published as `com.pambrose:prometheus-proxy` on Maven Central. JitPack is no longer used.
+- **Documentation site** — Full Zensical-powered documentation site deployed to GitHub Pages with guides, code examples, and architecture diagrams.
+- **Metrics overhaul** — New proxy and agent metrics, latency converted from summaries to histograms, rebuilt Grafana dashboards.
+
+### Breaking Changes
+
+- **Maven coordinates changed** from JitPack (`com.github.pambrose.prometheus-proxy`) to Maven Central (`com.pambrose:prometheus-proxy`). Update your `build.gradle.kts` or `pom.xml`.
+
+### New Features
+
+- Zensical documentation site with 13 pages covering architecture, getting started, configuration, security/TLS, Docker, embedded agent, service discovery, monitoring, CLI reference, and advanced topics
+- Code example snippets in `src/test/kotlin/website/*.txt` imported into docs via pymdownx.snippets
+- Documentation automatically built and deployed to GitHub Pages via CI
+
+### Metrics & Observability
+
+- New proxy counters: `proxy_chunk_validation_failures_total`, `proxy_chunked_transfers_abandoned_total`, `proxy_agent_displacement_total`
+- New proxy histogram: `proxy_scrape_response_bytes` (with `path` and `encoding` labels)
+- New agent gauges: `agent_client_cache_size`, `agent_scrape_backlog_size`
+- Converted proxy and agent latency metrics from summaries to histograms (enables `histogram_quantile` aggregation)
+- Rebuilt Grafana dashboards for new metric schema
+- Added complete metrics reference with PromQL examples (`docs/metrics-and-grafana.md`)
+
+### Bug Fixes
+
+- Fix flaky `HttpClientCacheTest` by ensuring deterministic LRU eviction order
+- Fix scrape response bytes metric to observe correct unzipped size
+
+### Build & Tooling
+
+- Migrate publishing from JitPack to Maven Central using vanniktech maven-publish plugin
+- Replace manual `maven-publish` + sources/javadoc JAR tasks with `mavenPublishing` DSL
+- Remove JitPack plugin resolution strategy from `settings.gradle.kts`
+- Remove `jitpack.yml`
+- Add GPG signing for Maven Central (skipped when no key is provided)
+- Add `overrideVersion` property support for snapshot publishing
+- Use portable bash shebang (`#!/usr/bin/env bash`) in `bin/` scripts
+- Extract Docker image version from `build.gradle.kts` in `bin/` scripts
+- Remove `.superset` config files and legacy files
+
+### Dependency Updates
+
+| Dependency     | Old    | New    |
+|----------------|--------|--------|
+| utils          | 2.6.3  | 2.7.1  |
+| Kotest         | 6.1.7  | 6.1.10 |
+| Ktor           | 3.4.0  | 3.4.2  |
+| Logback        | 1.5.31 | 1.5.32 |
+| Protoc         | 4.34.0 | 4.34.1 |
+| Dropwizard     | 4.2.38 | 4.2.38 |
+| gradle-plugins | 1.0.10 | 1.0.12 |
+| Dokka          | (new)  | 2.2.0  |
+| maven-publish  | (new)  | 0.36.0 |
+| Kover          | 0.9.7  | 0.9.8  |
+
+---
+
+## 3.0.3
 
 ### Dependency Updates
 

@@ -18,7 +18,7 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults

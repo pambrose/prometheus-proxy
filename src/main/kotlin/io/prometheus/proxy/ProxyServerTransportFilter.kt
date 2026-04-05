@@ -18,7 +18,7 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.dsl.GrpcDsl.attributes
+import com.pambrose.common.dsl.GrpcDsl.attributes
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Attributes
 import io.grpc.ServerTransportFilter

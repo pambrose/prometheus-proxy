@@ -58,3 +58,11 @@ dist
 test.conf
 config/test.env
 src/test/resources/test*.conf
+
+### Python ###
+.venv/
+__pycache__/
+
+### Zensical build output ###
+website/**/site/
+website/**/.cache/

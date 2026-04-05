@@ -1,0 +1,115 @@
+; --8<-- [start:enable-metrics-proxy]
+proxy {
+  metrics {
+    enabled = true
+    port = 8082
+    path = "metrics"
+  }
+
+  admin {
+    enabled = true
+    port = 8092
+  }
+}
+; --8<-- [end:enable-metrics-proxy]
+
+; --8<-- [start:enable-metrics-agent]
+agent {
+  metrics {
+    enabled = true
+    port = 8083
+    path = "metrics"
+  }
+
+  admin {
+    enabled = true
+    port = 8093
+  }
+}
+; --8<-- [end:enable-metrics-agent]
+
+; --8<-- [start:jvm-metrics-config]
+proxy.metrics {
+  enabled = true
+
+  // Optional JVM metrics
+  standardExportsEnabled = true
+  memoryPoolsExportsEnabled = true
+  garbageCollectorExportsEnabled = true
+  threadExportsEnabled = true
+  classLoadingExportsEnabled = false
+  versionInfoExportsEnabled = false
+
+  // Optional gRPC metrics
+  grpc {
+    metricsEnabled = true
+    allMetricsReported = false    // true = include expensive metrics
+  }
+}
+; --8<-- [end:jvm-metrics-config]
+
+; --8<-- [start:promql-success-rate]
+# Scrape success rate (last 5 minutes):
+sum(rate(proxy_scrape_requests{type="success"}[5m]))
+  / sum(rate(proxy_scrape_requests[5m])) * 100
+; --8<-- [end:promql-success-rate]
+
+; --8<-- [start:promql-p99-latency]
+# P99 scrape latency:
+histogram_quantile(0.99,
+  sum by (le) (rate(proxy_scrape_request_latency_seconds_bucket[5m]))
+)
+; --8<-- [end:promql-p99-latency]
+
+; --8<-- [start:promql-p99-per-path]
+# P99 latency per path:
+histogram_quantile(0.99,
+  sum by (le, path) (rate(proxy_scrape_request_latency_seconds_bucket[5m]))
+)
+; --8<-- [end:promql-p99-per-path]
+
+; --8<-- [start:promql-error-rate]
+# Error rate by type:
+sum by (type) (rate(proxy_scrape_requests{type!="success"}[5m]))
+; --8<-- [end:promql-error-rate]
+
+; --8<-- [start:promql-agent-latency]
+# Agent scrape latency by agent name:
+histogram_quantile(0.99,
+  sum by (le, agent_name) (rate(agent_scrape_request_latency_seconds_bucket[5m]))
+)
+; --8<-- [end:promql-agent-latency]
+
+; --8<-- [start:grafana-import]
+Importing Grafana dashboards:
+
+1. In Grafana, go to Dashboards > Import
+2. Upload the JSON file or paste its contents
+3. Select your Prometheus datasource when prompted
+
+Dashboard files in the repository:
+  grafana/prometheus-proxy.json   - Proxy health, throughput, latency, errors
+  grafana/prometheus-agents.json  - Agent health, scrape activity, per-agent latency
+
+Requirements:
+  - Grafana 10.0 or later
+  - A Prometheus datasource scraping both proxy and agent metrics endpoints
+; --8<-- [end:grafana-import]
+
+; --8<-- [start:admin-endpoints]
+Admin endpoints (when admin is enabled):
+
+Proxy (default port 8092):
+  GET /ping         - Returns "pong" (liveness check)
+  GET /healthcheck  - Returns health status JSON
+  GET /version      - Returns version info
+  GET /threaddump   - Returns JVM thread dump
+  GET /debug        - Returns proxy debug info (if debug enabled)
+
+Agent (default port 8093):
+  GET /ping         - Returns "pong" (liveness check)
+  GET /healthcheck  - Returns health status JSON
+  GET /version      - Returns version info
+  GET /threaddump   - Returns JVM thread dump
+  GET /debug        - Returns agent debug info (if debug enabled)
+; --8<-- [end:admin-endpoints]

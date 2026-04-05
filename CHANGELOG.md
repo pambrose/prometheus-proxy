@@ -4,6 +4,69 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [3.1.0] - 2026-04-04
+
+### Breaking Changes
+
+- **Maven coordinates changed**: Published to Maven Central as `com.pambrose:prometheus-proxy` (was `io.prometheus` on JitPack)
+- JitPack is no longer used; all dependencies resolve from Maven Central
+
+### New Features
+
+- Add Zensical documentation site with comprehensive guides, code examples, and architecture diagrams
+- Publish documentation to GitHub Pages via CI
+
+### Build & Tooling
+
+- Migrate publishing from JitPack to Maven Central using vanniktech maven-publish plugin
+- Replace manual `maven-publish` + sources/javadoc JAR tasks with `mavenPublishing` DSL
+- Remove JitPack plugin resolution strategy from `settings.gradle.kts`
+- Remove `jitpack.yml`
+- Add GPG signing for Maven Central (skipped when no key is provided)
+- Add `google()` repository to build script
+- Add `overrideVersion` property support for snapshot publishing
+- Import `VisibilityModifier` directly instead of using fully qualified name in Dokka config
+
+### Documentation
+
+- Add full Zensical documentation site in `website/prometheus-proxy/` with 13 pages covering architecture, getting started, configuration, security/TLS, Docker, embedded agent, service discovery, monitoring, CLI reference, and advanced topics
+- Add code example snippets in `src/test/kotlin/website/*.txt` imported via pymdownx.snippets
+- Update `zensical.toml`: dark mode default, navigation tabs, snippet base paths, Mermaid support, GitHub social link
+- Fix GitHub Actions docs workflow to use correct `working-directory` and artifact path
+- Update `README.md` with Maven Central badge, documentation site link, and dependency coordinates
+- Update `CLAUDE.md` with documentation site and publishing sections
+- Update `llms.txt` with Maven Central link and documentation site reference
+
+### Dependencies
+
+- Bump utils to 2.7.1
+- Bump Kotest to 6.1.10, Ktor to 3.4.2, Logback to 1.5.32
+- Bump gradle-plugins to 1.0.12, Protoc to 4.34.1, Dropwizard to 4.2.38
+- Bump Dokka to 2.2.0, maven-publish plugin to 0.36.0, Kover to 0.9.8
+
+### Metrics & Observability
+
+- Add new proxy metrics: `proxy_chunk_validation_failures_total`, `proxy_chunked_transfers_abandoned_total`, `proxy_agent_displacement_total`, `proxy_scrape_response_bytes`
+- Convert proxy and agent latency metrics from summaries to histograms
+- Add new agent metrics: `agent_client_cache_size`, `agent_scrape_backlog_size`
+- Add `path` and `encoding` labels to proxy response metrics
+- Rebuild Grafana dashboards for new metric schema
+- Add `docs/metrics-and-grafana.md` with complete metrics reference and PromQL examples
+
+### Bug Fixes
+
+- Fix flaky `HttpClientCacheTest` by ensuring deterministic LRU eviction order
+- Fix scrape response bytes metric to observe correct unzipped size
+
+### Misc
+
+- Use portable bash shebang (`#!/usr/bin/env bash`) in `bin/` scripts
+- Extract Docker image version from `build.gradle.kts` in `bin/` scripts
+- Remove `.superset` config files
+- Remove legacy files and clean up `.gitignore`
+
+---
+
 ## [3.0.3] - 2026-03-18
 
 ### Dependencies

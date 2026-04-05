@@ -1,0 +1,115 @@
+# ============================================================================
+# Prometheus Proxy Documentation - Zensical Configuration
+# ============================================================================
+
+[project]
+
+site_name = "Prometheus Proxy"
+site_description = "Enable Prometheus to scrape metrics endpoints behind firewalls"
+site_author = "Paul Ambrose"
+
+#site_url = "https://pambrose.github.io/prometheus-proxy/"
+
+copyright = """
+Copyright &copy; 2026 Paul Ambrose
+"""
+
+nav = [
+  { "Overview" = [
+    { "Home" = "index.md" },
+    { "Architecture" = "architecture.md" },
+  ]},
+  { "Getting Started" = [
+    { "Quick Start" = "getting-started.md" },
+    { "Docker" = "docker.md" },
+  ]},
+  { "Configuration" = [
+    { "Overview" = "configuration/index.md" },
+    { "Agent" = "configuration/agent.md" },
+    { "Proxy" = "configuration/proxy.md" },
+    { "CLI Reference" = "cli-reference.md" },
+  ]},
+  { "Security" = [
+    { "Overview" = "security/index.md" },
+    { "TLS Setup" = "security/tls.md" },
+  ]},
+  { "Features" = [
+    { "Service Discovery" = "service-discovery.md" },
+    { "Embedded Agent" = "embedded-agent.md" },
+    { "Monitoring" = "monitoring.md" },
+  ]},
+  { "Advanced" = [
+    { "Advanced Topics" = "advanced.md" },
+  ]},
+]
+
+# ----------------------------------------------------------------------------
+# Theme configuration
+# ----------------------------------------------------------------------------
+[project.theme]
+
+language = "en"
+
+features = [
+    "announce.dismiss",
+    "content.code.annotate",
+    "content.code.copy",
+    "content.code.select",
+    "content.footnote.tooltips",
+    "content.tabs.link",
+    "content.tooltips",
+    "navigation.footer",
+    "navigation.indexes",
+    "navigation.instant",
+    "navigation.instant.prefetch",
+    "navigation.path",
+    "navigation.sections",
+    "navigation.tabs",
+    "navigation.tabs.sticky",
+    "navigation.top",
+    "navigation.tracking",
+    "search.highlight",
+]
+
+# Dark mode first = default
+[[project.theme.palette]]
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+# ----------------------------------------------------------------------------
+# Social links
+# ----------------------------------------------------------------------------
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/pambrose/prometheus-proxy"
+
+# ----------------------------------------------------------------------------
+# Markdown extensions
+# ----------------------------------------------------------------------------
+
+# pymdownx.snippets - import code from external files
+[project.markdown_extensions.pymdownx.snippets]
+base_path = ["../../src/test/kotlin/website", "../.."]
+check_paths = true
+
+# pymdownx.superfences - fenced code blocks with Mermaid support (Mermaid is built-in)
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+
+# pymdownx.tabbed - content tabs
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
+
+# pymdownx.highlight - syntax highlighting
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true

@@ -18,9 +18,9 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.dsl.PrometheusDsl.counter
-import com.github.pambrose.common.dsl.PrometheusDsl.gauge
-import com.github.pambrose.common.metrics.SamplerGaugeCollector
+import com.pambrose.common.dsl.PrometheusDsl.counter
+import com.pambrose.common.dsl.PrometheusDsl.gauge
+import com.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Proxy
 import io.prometheus.client.Histogram
 

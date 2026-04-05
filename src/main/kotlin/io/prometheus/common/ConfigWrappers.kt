@@ -18,9 +18,9 @@
 
 package io.prometheus.common
 
-import com.github.pambrose.common.service.AdminConfig
-import com.github.pambrose.common.service.MetricsConfig
-import com.github.pambrose.common.service.ZipkinConfig
+import com.pambrose.common.service.AdminConfig
+import com.pambrose.common.service.MetricsConfig
+import com.pambrose.common.service.ZipkinConfig
 
 @Suppress("unused")
 internal object ConfigWrappers {

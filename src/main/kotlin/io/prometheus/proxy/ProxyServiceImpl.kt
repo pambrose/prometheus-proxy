@@ -16,7 +16,7 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.runCatchingCancellable
+import com.pambrose.common.util.runCatchingCancellable
 import com.google.protobuf.Empty
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Status

@@ -20,8 +20,8 @@ package io.prometheus.common
 
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
-import com.github.pambrose.common.util.Version.Companion.versionDesc
-import com.github.pambrose.common.util.simpleClassName
+import com.pambrose.common.util.Version.Companion.versionDesc
+import com.pambrose.common.util.simpleClassName
 import io.grpc.Status
 import io.prometheus.Proxy
 import kotlinx.serialization.json.Json

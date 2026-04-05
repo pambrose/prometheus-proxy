@@ -18,16 +18,16 @@ package io.prometheus.proxy
 
 import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
-import com.github.pambrose.common.concurrent.GenericIdleService
-import com.github.pambrose.common.concurrent.genericServiceListener
-import com.github.pambrose.common.dsl.GrpcDsl.server
-import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
-import com.github.pambrose.common.utils.TlsContext
-import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
-import com.github.pambrose.common.utils.TlsUtils.buildServerTlsContext
-import com.github.pambrose.common.utils.shutdownGracefully
-import com.github.pambrose.common.utils.shutdownWithJvm
+import com.pambrose.common.concurrent.GenericIdleService
+import com.pambrose.common.concurrent.genericServiceListener
+import com.pambrose.common.dsl.GrpcDsl.server
+import com.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.pambrose.common.utils.TlsContext
+import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
+import com.pambrose.common.utils.TlsUtils.buildServerTlsContext
+import com.pambrose.common.utils.shutdownGracefully
+import com.pambrose.common.utils.shutdownWithJvm
 import com.google.common.util.concurrent.MoreExecutors
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Server

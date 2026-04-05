@@ -19,13 +19,13 @@
 package io.prometheus.agent
 
 import brave.grpc.GrpcTracing
-import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
-import com.github.pambrose.common.dsl.GrpcDsl.channel
-import com.github.pambrose.common.util.runCatchingCancellable
-import com.github.pambrose.common.util.simpleClassName
-import com.github.pambrose.common.utils.TlsContext
-import com.github.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
-import com.github.pambrose.common.utils.TlsUtils.buildClientTlsContext
+import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
+import com.pambrose.common.dsl.GrpcDsl.channel
+import com.pambrose.common.util.runCatchingCancellable
+import com.pambrose.common.util.simpleClassName
+import com.pambrose.common.utils.TlsContext
+import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
+import com.pambrose.common.utils.TlsUtils.buildClientTlsContext
 import com.google.protobuf.ByteString.copyFrom
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.ClientInterceptor

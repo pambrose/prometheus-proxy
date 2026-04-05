@@ -6,13 +6,14 @@ The system has two components: a **proxy** that runs alongside Prometheus (outsi
 
 ## Links
 
+- [Documentation](https://pambrose.github.io/prometheus-proxy/docs/)
 - [GitHub Repository](https://github.com/pambrose/prometheus-proxy)
 - [README](https://github.com/pambrose/prometheus-proxy/blob/master/README.md)
-- [API Documentation (KDoc)](https://pambrose.github.io/prometheus-proxy/)
+- [KDoc API Reference](https://pambrose.github.io/prometheus-proxy/)
 - [CLI Options & Environment Variables](https://github.com/pambrose/prometheus-proxy/blob/master/docs/cli-args.md)
+- [Maven Central](https://central.sonatype.com/artifact/com.pambrose/prometheus-proxy)
 - [Docker Images: pambrose/prometheus-proxy](https://hub.docker.com/r/pambrose/prometheus-proxy)
 - [Docker Images: pambrose/prometheus-agent](https://hub.docker.com/r/pambrose/prometheus-agent)
-- [JitPack (Maven/Gradle dependency)](https://jitpack.io/#pambrose/prometheus-proxy)
 
 ## Architecture
 
@@ -75,12 +76,12 @@ java -jar prometheus-agent.jar --proxy mymachine.local --config myapps.conf
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:3.0.4
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:3.1.0
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:3.0.4
+  pambrose/prometheus-agent:3.1.0
 ```
 
 ## Configuration
@@ -160,6 +161,21 @@ cd prometheus-proxy
 - **Metrics**: Prometheus Java SimpleClient
 - **Testing**: Kotest + JUnit 5 + MockK
 - **Code Quality**: kotlinter + detekt
+
+## Maven Central
+
+Published as `com.pambrose:prometheus-proxy`:
+
+```kotlin
+// build.gradle.kts
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation("com.pambrose:prometheus-proxy:3.1.0")
+}
+```
 
 ## Example Configurations
 

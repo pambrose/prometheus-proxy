@@ -18,11 +18,11 @@
 
 package io.prometheus.harness.support
 
-import com.github.pambrose.common.dsl.KtorDsl.blockingGet
-import com.github.pambrose.common.dsl.KtorDsl.get
-import com.github.pambrose.common.dsl.KtorDsl.httpClient
-import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
-import com.github.pambrose.common.util.random
+import com.pambrose.common.dsl.KtorDsl.blockingGet
+import com.pambrose.common.dsl.KtorDsl.get
+import com.pambrose.common.dsl.KtorDsl.httpClient
+import com.pambrose.common.dsl.KtorDsl.withHttpClient
+import com.pambrose.common.util.random
 import com.google.common.collect.Maps.newConcurrentMap
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.matchers.nulls.shouldBeNull

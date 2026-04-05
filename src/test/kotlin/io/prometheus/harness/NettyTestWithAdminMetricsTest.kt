@@ -18,10 +18,10 @@
 
 package io.prometheus.harness
 
-import com.github.pambrose.common.dsl.KtorDsl.get
-import com.github.pambrose.common.dsl.KtorDsl.withHttpClient
-import com.github.pambrose.common.util.simpleClassName
-import com.github.pambrose.common.util.sleep
+import com.pambrose.common.dsl.KtorDsl.get
+import com.pambrose.common.dsl.KtorDsl.withHttpClient
+import com.pambrose.common.util.simpleClassName
+import com.pambrose.common.util.sleep
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.ktor.client.statement.bodyAsText

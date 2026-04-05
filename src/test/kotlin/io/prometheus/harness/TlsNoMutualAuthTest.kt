@@ -18,7 +18,7 @@
 
 package io.prometheus.harness
 
-import com.github.pambrose.common.util.simpleClassName
+import com.pambrose.common.util.simpleClassName
 import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
 import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
 import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG

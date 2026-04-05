@@ -18,8 +18,8 @@
 
 package io.prometheus.common
 
-import com.github.pambrose.common.util.EMPTY_BYTE_ARRAY
-import com.github.pambrose.common.util.simpleClassName
+import com.pambrose.common.util.EMPTY_BYTE_ARRAY
+import com.pambrose.common.util.simpleClassName
 import com.google.protobuf.ByteString
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.plugins.HttpRequestTimeoutException
