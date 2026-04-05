@@ -12,10 +12,10 @@ stubs:
 	./gradlew generateProto
 
 build: clean stubs
-	./gradlew build -x test
+	./gradlew build -xtest
 
 tibuild: clean stubs
-	./gradlew tiTree build -x test
+	./gradlew tiTree build -xtest
 
 refresh:
 	./gradlew --refresh-dependencies dependencyUpdates
