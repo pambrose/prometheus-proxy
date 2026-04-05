@@ -10,13 +10,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew clean build -x test
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew clean build -xtest
 #      - run: ./gradlew test --tests "io.prometheus.agent.*"
 #      - run: ./gradlew test --tests "io.prometheus.proxy.*"
 #      - run: ./gradlew test --tests "io.prometheus.common.*"
