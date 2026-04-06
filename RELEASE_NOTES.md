@@ -17,7 +17,9 @@
 ### New Features
 
 - Zensical documentation site with 13 pages covering architecture, getting started, configuration, security/TLS, Docker, embedded agent, service discovery, monitoring, CLI reference, and advanced topics
-- Code example snippets in `src/test/kotlin/website/*.txt` imported into docs via pymdownx.snippets
+- Extract Java/Kotlin code examples into compilable source files so API changes are caught by the compiler
+- Add mkdocs-material theme support with grid card layouts, material icons, admonitions, and collapsible details
+- Add KDocs nav entry linking to Dokka API docs, plus API Reference section on index page
 - Documentation automatically built and deployed to GitHub Pages via CI
 
 ### Metrics & Observability
