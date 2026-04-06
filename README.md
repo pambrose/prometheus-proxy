@@ -15,7 +15,7 @@
 collecting metrics. The pull model is problematic when a firewall separates a Prometheus server and its metrics
 endpoints.
 
-[Prometheus Proxy](https://github.com/pambrose/prometheus-proxy) enables Prometheus to scrape metrics endpoints running
+[Prometheus Proxy](https://pambrose.github.io/prometheus-proxy/) enables Prometheus to scrape metrics endpoints running
 behind a firewall and preserves the native pull-based model architecture.
 
 ## Table of Contents
