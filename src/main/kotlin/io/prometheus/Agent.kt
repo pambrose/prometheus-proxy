@@ -17,6 +17,7 @@
 package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
+import com.google.common.util.concurrent.RateLimiter
 import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.pambrose.common.dsl.MetricsDsl.healthCheck
@@ -29,7 +30,6 @@ import com.pambrose.common.util.hostInfo
 import com.pambrose.common.util.randomId
 import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
-import com.google.common.util.concurrent.RateLimiter
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Status
 import io.grpc.StatusException
@@ -499,6 +499,12 @@ class Agent(
     super.shutDown()
   }
 
+  // This is called from EmbeddedAgentInfo to allow external callers to shutdown
+  // the agent without needing access to the full Agent instance.
+  fun stop() {
+    shutDown()
+  }
+
   override fun toString() =
     toStringElements {
       add("agentId", agentId)
@@ -541,7 +547,7 @@ class Agent(
           info { getVersionDesc() }
         }
       val agent = Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
-      return EmbeddedAgentInfo(agent.launchId, agent.agentName)
+      return EmbeddedAgentInfo(agent)
     }
   }
 }

@@ -20,55 +20,39 @@ package io.prometheus.agent
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.shouldNotBe
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import io.prometheus.Agent
 
 class EmbeddedAgentInfoTest : StringSpec() {
   init {
-    "should store launchId and agentName" {
-      val info = EmbeddedAgentInfo(launchId = "launch-123", agentName = "test-agent")
+    "should expose launchId from agent" {
+      val agent = mockk<Agent>()
+      every { agent.launchId } returns "launch-123"
+      every { agent.agentName } returns "test-agent"
+
+      val info = EmbeddedAgentInfo(agent)
 
       info.launchId shouldBe "launch-123"
+    }
+
+    "should expose agentName from agent" {
+      val agent = mockk<Agent>()
+      every { agent.agentName } returns "test-agent"
+
+      val info = EmbeddedAgentInfo(agent)
+
       info.agentName shouldBe "test-agent"
     }
 
-    "should handle empty values" {
-      val info = EmbeddedAgentInfo(launchId = "", agentName = "")
+    "shutdown should call agent stop" {
+      val agent = mockk<Agent>(relaxed = true)
 
-      info.launchId shouldBe ""
-      info.agentName shouldBe ""
-    }
+      val info = EmbeddedAgentInfo(agent)
+      info.shutdown()
 
-    "equals should compare by field values" {
-      val info1 = EmbeddedAgentInfo(launchId = "launch-1", agentName = "agent-1")
-      val info2 = EmbeddedAgentInfo(launchId = "launch-1", agentName = "agent-1")
-      val info3 = EmbeddedAgentInfo(launchId = "launch-2", agentName = "agent-1")
-
-      info1 shouldBe info2
-      info1 shouldNotBe info3
-    }
-
-    "hashCode should be consistent with equals" {
-      val info1 = EmbeddedAgentInfo(launchId = "launch-1", agentName = "agent-1")
-      val info2 = EmbeddedAgentInfo(launchId = "launch-1", agentName = "agent-1")
-
-      info1.hashCode() shouldBe info2.hashCode()
-    }
-
-    "copy should create independent instance" {
-      val original = EmbeddedAgentInfo(launchId = "launch-1", agentName = "agent-1")
-      val copied = original.copy(agentName = "agent-2")
-
-      original.agentName shouldBe "agent-1"
-      copied.agentName shouldBe "agent-2"
-      copied.launchId shouldBe "launch-1"
-    }
-
-    "toString should include field values" {
-      val info = EmbeddedAgentInfo(launchId = "launch-123", agentName = "my-agent")
-      val str = info.toString()
-
-      str.contains("launch-123") shouldBe true
-      str.contains("my-agent") shouldBe true
+      verify { agent.stop() }
     }
   }
 }

@@ -32,13 +32,13 @@ instead of running a separate agent process.
 === "Java"
 
     ```java
-    --8<-- "EmbeddedAgentExamples.txt:embedded-java"
+    --8<-- "EmbeddedAgentJavaExample.java:embedded-java"
     ```
 
 === "Kotlin"
 
     ```kotlin
-    --8<-- "EmbeddedAgentExamples.txt:embedded-kotlin"
+    --8<-- "EmbeddedAgentKotlinExample.kt:embedded-kotlin"
     ```
 
 ## Agent Configuration
