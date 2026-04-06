@@ -31,7 +31,13 @@ All notable changes to this project are documented in this file.
 
 - Add full Zensical documentation site in `website/prometheus-proxy/` with 13 pages covering architecture, getting started, configuration, security/TLS, Docker, embedded agent, service discovery, monitoring, CLI reference, and advanced topics
 - Add code example snippets in `src/test/kotlin/website/*.txt` imported via pymdownx.snippets
+- Extract Java/Kotlin code examples into compilable source files (`EmbeddedAgentJavaExample.java`, `EmbeddedAgentKotlinExample.kt`) so API changes are caught by the compiler
+- Add mkdocs-material dependency to CI workflow and Makefile for material theme support
+- Add KDocs nav entry with `material/book-open-page-variant` icon linking to Dokka API docs
+- Add API Reference section and grid card layouts for Next Steps on index, getting-started, and configuration pages
+- Add markdown extensions: `admonition`, `pymdownx.details`, `attr_list`, `md_in_html`, `pymdownx.emoji` with material icon support
 - Update `zensical.toml`: dark mode default, navigation tabs, snippet base paths, Mermaid support, GitHub social link
+- Fix KDocs nav redirect 404 by renaming `kdocs.md` to `api.md` to avoid path conflict with Dokka output
 - Fix GitHub Actions docs workflow to use correct `working-directory` and artifact path
 - Update `README.md` with Maven Central badge, documentation site link, and dependency coordinates
 - Update `CLAUDE.md` with documentation site and publishing sections
