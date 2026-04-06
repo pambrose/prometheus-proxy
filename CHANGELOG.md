@@ -8,7 +8,7 @@ All notable changes to this project are documented in this file.
 
 ### Breaking Changes
 
-- **Maven coordinates changed**: Published to Maven Central as `com.pambrose:prometheus-proxy` (was `io.prometheus` on JitPack)
+- **Maven coordinates changed**: Published to Maven Central as `com.pambrose:prometheus-proxy`
 - JitPack is no longer used; all dependencies resolve from Maven Central
 
 ### New Features
