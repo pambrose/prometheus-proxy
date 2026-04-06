@@ -16,7 +16,7 @@
 
 package io.prometheus.agent
 
-import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
+import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults

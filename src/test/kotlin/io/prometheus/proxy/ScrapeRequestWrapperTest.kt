@@ -41,6 +41,25 @@ class ScrapeRequestWrapperTest : StringSpec() {
     return mockProxy
   }
 
+  private data class MetricsEnabledMocks(
+    val proxy: Proxy,
+    val timer: io.prometheus.client.Histogram.Timer,
+  )
+
+  private fun createMetricsEnabledMockProxy(): MetricsEnabledMocks {
+    val mockProxy = mockk<Proxy>(relaxed = true)
+    every { mockProxy.isMetricsEnabled } returns true
+    val mockHistogram = mockk<io.prometheus.client.Histogram>(relaxed = true)
+    val mockChild = mockk<io.prometheus.client.Histogram.Child>(relaxed = true)
+    val mockTimer = mockk<io.prometheus.client.Histogram.Timer>(relaxed = true)
+    val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
+    every { mockProxy.metrics } returns mockMetrics
+    every { mockMetrics.scrapeRequestLatency } returns mockHistogram
+    every { mockHistogram.labels(any()) } returns mockChild
+    every { mockChild.startTimer() } returns mockTimer
+    return MetricsEnabledMocks(mockProxy, mockTimer)
+  }
+
   private fun createAgentContext(): AgentContext = AgentContext("test-remote-addr")
 
   private fun createWrapper(
@@ -184,10 +203,7 @@ class ScrapeRequestWrapperTest : StringSpec() {
     // ==================== markComplete with Metrics Tests ====================
 
     "markComplete with metrics enabled should observe duration" {
-      val mockProxy = mockk<Proxy>(relaxed = true)
-      every { mockProxy.isMetricsEnabled } returns true
-      val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
-      every { mockProxy.metrics } returns mockMetrics
+      val (mockProxy, _) = createMetricsEnabledMockProxy()
 
       val wrapper = createWrapper(proxy = mockProxy)
 
@@ -279,14 +295,7 @@ class ScrapeRequestWrapperTest : StringSpec() {
     // called once.
 
     "Bug #15: markComplete with metrics should only observeDuration once" {
-      val mockProxy = mockk<Proxy>(relaxed = true)
-      every { mockProxy.isMetricsEnabled } returns true
-      val mockSummary = mockk<io.prometheus.client.Summary>(relaxed = true)
-      val mockTimer = mockk<io.prometheus.client.Summary.Timer>(relaxed = true)
-      val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
-      every { mockProxy.metrics } returns mockMetrics
-      every { mockMetrics.scrapeRequestLatency } returns mockSummary
-      every { mockSummary.startTimer() } returns mockTimer
+      val (mockProxy, mockTimer) = createMetricsEnabledMockProxy()
 
       val wrapper = ScrapeRequestWrapper(
         agentContext = createAgentContext(),

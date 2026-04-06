@@ -18,7 +18,7 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
+import com.pambrose.common.dsl.KtorDsl.newHttpClient
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain

@@ -17,18 +17,18 @@
 package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
-import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
-import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
-import com.github.pambrose.common.service.GenericService
-import com.github.pambrose.common.servlet.LambdaServlet
-import com.github.pambrose.common.time.format
-import com.github.pambrose.common.util.Version
-import com.github.pambrose.common.util.getBanner
-import com.github.pambrose.common.util.hostInfo
-import com.github.pambrose.common.util.randomId
-import com.github.pambrose.common.util.runCatchingCancellable
-import com.github.pambrose.common.util.simpleClassName
+import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.pambrose.common.service.GenericService
+import com.pambrose.common.servlet.LambdaServlet
+import com.pambrose.common.time.format
+import com.pambrose.common.util.Version
+import com.pambrose.common.util.getBanner
+import com.pambrose.common.util.hostInfo
+import com.pambrose.common.util.randomId
+import com.pambrose.common.util.runCatchingCancellable
+import com.pambrose.common.util.simpleClassName
 import com.google.common.util.concurrent.RateLimiter
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Status
@@ -42,7 +42,7 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.client.Summary
+import io.prometheus.client.Histogram
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
@@ -391,7 +391,7 @@ class Agent(
 
   internal val proxyHost get() = "${grpcService.agentHostName}:${grpcService.agentPort}"
 
-  internal fun startTimer(agent: Agent): Summary.Timer? =
+  internal fun startTimer(agent: Agent): Histogram.Timer? =
     metrics.scrapeRequestLatency.labels(agent.launchId, agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"

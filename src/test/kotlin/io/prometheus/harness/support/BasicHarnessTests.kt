@@ -16,7 +16,7 @@
 
 package io.prometheus.harness.support
 
-import com.github.pambrose.common.dsl.KtorDsl.blockingGet
+import com.pambrose.common.dsl.KtorDsl.blockingGet
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull

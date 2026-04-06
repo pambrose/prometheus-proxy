@@ -1,0 +1,73 @@
+; --8<-- [start:basic-scrape-config]
+scrape_configs:
+  - job_name: 'my-app'
+    metrics_path: '/my_app_metrics'
+    static_configs:
+      - targets: ['proxy-host.example.com:8080']
+; --8<-- [end:basic-scrape-config]
+
+; --8<-- [start:multi-target-scrape]
+scrape_configs:
+  - job_name: 'app1'
+    metrics_path: '/app1_metrics'
+    static_configs:
+      - targets: ['proxy-host.example.com:8080']
+
+  - job_name: 'app2'
+    metrics_path: '/app2_metrics'
+    static_configs:
+      - targets: ['proxy-host.example.com:8080']
+
+  - job_name: 'app3'
+    metrics_path: '/app3_metrics'
+    static_configs:
+      - targets: ['proxy-host.example.com:8080']
+; --8<-- [end:multi-target-scrape]
+
+; --8<-- [start:auth-scrape-config]
+scrape_configs:
+  # Bearer token authentication
+  - job_name: 'app1'
+    metrics_path: '/app1_metrics'
+    bearer_token: 'eyJhbGciOiJIUzI1NiIs...'
+    static_configs:
+      - targets: ['proxy-host.example.com:8080']
+
+  # Basic auth
+  - job_name: 'app2'
+    metrics_path: '/app2_metrics'
+    basic_auth:
+      username: 'user'
+      password: 's3cr3t'
+    static_configs:
+      - targets: ['proxy-host.example.com:8080']
+
+  # No auth
+  - job_name: 'app3'
+    metrics_path: '/app3_metrics'
+    static_configs:
+      - targets: ['proxy-host.example.com:8080']
+; --8<-- [end:auth-scrape-config]
+
+; --8<-- [start:sd-scrape-config]
+scrape_configs:
+  - job_name: 'prometheus-proxy-sd'
+    http_sd_configs:
+      - url: 'http://proxy-host.example.com:8080/discovery'
+        refresh_interval: 30s
+; --8<-- [end:sd-scrape-config]
+
+; --8<-- [start:metrics-scrape-config]
+scrape_configs:
+  # Scrape proxy internal metrics
+  - job_name: 'prometheus-proxy'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['proxy-host.example.com:8082']
+
+  # Scrape agent internal metrics
+  - job_name: 'prometheus-agent'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['agent-host.example.com:8083']
+; --8<-- [end:metrics-scrape-config]

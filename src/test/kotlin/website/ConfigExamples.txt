@@ -1,0 +1,182 @@
+; --8<-- [start:path-config-basic]
+agent {
+  proxy.hostname = "proxy-host.example.com"
+
+  pathConfigs: [
+    {
+      name: "My App metrics"
+      path: my_app_metrics
+      url: "http://localhost:9100/metrics"
+    }
+  ]
+}
+; --8<-- [end:path-config-basic]
+
+; --8<-- [start:path-config-multi]
+agent {
+  pathConfigs: [
+    {
+      name: "App1 metrics"
+      path: app1_metrics
+      url: "http://app1.local:9100/metrics"
+    },
+    {
+      name: "App2 metrics"
+      path: app2_metrics
+      url: "http://app2.local:9100/metrics"
+    },
+    {
+      name: "App3 metrics"
+      path: app3_metrics
+      url: "http://app3.local:9100/metrics"
+    }
+  ]
+}
+; --8<-- [end:path-config-multi]
+
+; --8<-- [start:path-config-with-labels]
+agent {
+  pathConfigs: [
+    {
+      name: "Production API"
+      path: prod_api_metrics
+      labels: "{\"env\": \"production\", \"team\": \"backend\"}"
+      url: "http://api.internal:9100/metrics"
+    },
+    {
+      name: "Staging API"
+      path: staging_api_metrics
+      labels: "{\"env\": \"staging\", \"team\": \"backend\"}"
+      url: "http://api.staging:9100/metrics"
+    }
+  ]
+}
+; --8<-- [end:path-config-with-labels]
+
+; --8<-- [start:proxy-http-config]
+proxy {
+  http {
+    port = 8080                       // Listen port for Prometheus scrapes
+    maxThreads = -1                   // -1 uses default
+    minThreads = -1                   // -1 uses default
+    idleTimeoutSecs = 45             // HTTP idle timeout
+    requestLoggingEnabled = true      // Log every proxy metrics request
+  }
+}
+; --8<-- [end:proxy-http-config]
+
+; --8<-- [start:proxy-grpc-config]
+proxy {
+  agent.port = 50051                  // gRPC listen port for agent connections
+
+  grpc {
+    keepAliveTimeSecs = 7200          // Interval between PING frames
+    keepAliveTimeoutSecs = 20         // Timeout for PING acknowledgment
+    permitKeepAliveWithoutCalls = false
+    maxConnectionIdleSecs = -1        // -1 = unlimited
+    maxConnectionAgeSecs = -1         // -1 = unlimited
+  }
+}
+; --8<-- [end:proxy-grpc-config]
+
+; --8<-- [start:agent-http-config]
+agent {
+  http {
+    maxConcurrentClients = 5          // Parallel scrape limit
+    clientTimeoutSecs = 30            // HTTP client timeout
+    maxContentLengthMBytes = 10       // Max response size in MB
+    enableTrustAllX509Certificates = false
+  }
+}
+; --8<-- [end:agent-http-config]
+
+; --8<-- [start:agent-cache-config]
+agent {
+  http.clientCache {
+    maxSize = 100                     // Maximum cached HTTP clients
+    maxAgeMins = 30                   // Maximum age of cached clients
+    maxIdleMins = 10                  // Idle time before eviction
+    cleanupIntervalMins = 5           // Cleanup run interval
+  }
+}
+; --8<-- [end:agent-cache-config]
+
+; --8<-- [start:precedence-example]
+Configuration precedence (highest to lowest):
+
+1. CLI options:       --port 9090
+2. System properties: -Dproxy.http.port=9090
+3. Environment vars:  PROXY_PORT=9090
+4. Config file:       proxy.http.port = 9090
+5. Default values:    8080
+; --8<-- [end:precedence-example]
+
+; --8<-- [start:env-var-reference]
+Common environment variables:
+
+Proxy:
+  PROXY_CONFIG             - Config file path or URL
+  PROXY_PORT               - HTTP listen port (default: 8080)
+  AGENT_PORT               - gRPC listen port (default: 50051)
+  ADMIN_ENABLED            - Enable admin endpoints
+  METRICS_ENABLED          - Enable metrics collection
+  SD_ENABLED               - Enable service discovery
+
+Agent:
+  AGENT_CONFIG             - Config file path or URL (required)
+  PROXY_HOSTNAME           - Proxy hostname
+  AGENT_NAME               - Agent name for metrics
+  ADMIN_ENABLED            - Enable admin endpoints
+  METRICS_ENABLED          - Enable metrics collection
+  MAX_CONCURRENT_CLIENTS   - Parallel scrape limit
+; --8<-- [end:env-var-reference]
+
+; --8<-- [start:config-from-url]
+# Load configuration from a URL:
+java -jar prometheus-agent.jar \
+  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf
+
+# Or from a local file:
+java -jar prometheus-agent.jar --config /etc/prometheus-proxy/agent.conf
+; --8<-- [end:config-from-url]
+
+; --8<-- [start:agent-scrape-config]
+agent {
+  scrapeTimeoutSecs = 15              // Total scrape timeout including retries
+  scrapeMaxRetries = 0                // 0 disables retries
+  chunkContentSizeKbs = 32            // Chunking threshold in KB
+  minGzipSizeBytes = 512              // Minimum size for gzip compression
+}
+; --8<-- [end:agent-scrape-config]
+
+; --8<-- [start:consolidated-mode]
+agent {
+  consolidated = true                 // Allow multiple agents per path
+
+  proxy.hostname = "proxy-host.example.com"
+
+  pathConfigs: [
+    {
+      name: "Shared metrics"
+      path: shared_metrics
+      url: "http://localhost:9100/metrics"
+    }
+  ]
+}
+; --8<-- [end:consolidated-mode]
+
+; --8<-- [start:log-level-config]
+# Set log level in config file:
+proxy.logLevel = "debug"
+agent.logLevel = "debug"
+
+# Or via CLI:
+# java -jar prometheus-proxy.jar --log_level debug
+# java -jar prometheus-agent.jar --log_level debug
+
+# Or via environment variable:
+# PROXY_LOG_LEVEL=debug
+# AGENT_LOG_LEVEL=debug
+
+# Available levels: all, trace, debug, info, warn, error, off
+; --8<-- [end:log-level-config]

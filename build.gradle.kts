@@ -1,4 +1,7 @@
 import com.google.protobuf.gradle.id
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.SourcesJar
+import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
 import org.jmailen.gradle.kotlinter.tasks.FormatTask
 import org.jmailen.gradle.kotlinter.tasks.LintTask
 import java.time.LocalDate
@@ -7,7 +10,6 @@ import java.time.format.DateTimeFormatter
 plugins {
   idea
   java
-  `maven-publish`
   alias(libs.plugins.kotlin.jvm)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.protobuf)   // Keep in sync with grpc
@@ -15,20 +17,20 @@ plugins {
   alias(libs.plugins.buildconfig)
   alias(libs.plugins.kover)
   alias(libs.plugins.detekt)
-  alias(libs.plugins.dokka)
   alias(libs.plugins.pambrose.envvar)
   alias(libs.plugins.pambrose.stable.versions)
   alias(libs.plugins.pambrose.kotlinter)
-  alias(libs.plugins.pambrose.snapshot)
   alias(libs.plugins.pambrose.testing)
+  alias(libs.plugins.dokka)
+  alias(libs.plugins.maven.publish)
   alias(libs.plugins.taskinfo) apply false
   // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
   // id("jacoco")
   // id("com.github.kt3k.coveralls") version "2.12.0"
 }
 
-group = "io.prometheus"
-version = "3.0.3"
+version = findProperty("overrideVersion")?.toString() ?: "3.1.0"
+group = "com.pambrose"
 
 buildConfig {
   packageName("io.prometheus")
@@ -39,22 +41,19 @@ buildConfig {
   buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
 }
 
-dependencies {
-  implementation(platform(libs.kotlin.bom))
-  implementation(libs.kotlin.reflect)
+repositories {
+  google()
+  mavenCentral()
+}
 
+dependencies {
+  implementation(libs.kotlin.reflect)
   implementation(libs.kotlinx.serialization)
   implementation(libs.kotlinx.datetime)
 
-  implementation(platform(libs.grpc.bom))
   implementation(libs.bundles.grpc)
-
-  implementation(platform(libs.ktor.bom))
   implementation(libs.bundles.ktor)
-
-//  implementation(platform(libs.common.utils.bom))
   implementation(libs.bundles.common.utils)
-
   implementation(libs.protobuf.kotlin)
   implementation(libs.grpc.kotlin.stub)
 
@@ -62,15 +61,11 @@ dependencies {
   implementation(libs.netty.tcnative)
 
   implementation(libs.jetty.servlet)
-
   implementation(libs.annotation.api)
   implementation(libs.jcommander)
   implementation(libs.typesafe.config)
-
   implementation(libs.prometheus.simpleclient)
-
   implementation(libs.dropwizard.metrics)
-
   implementation(libs.zipkin.brave)
 
   implementation(libs.kotlin.logging)
@@ -92,6 +87,11 @@ configureDokka()
 configureCoverage()
 
 fun Project.configureKotlin() {
+  // Apply taskinfo only when not running inside IntelliJ sync
+  if (!providers.systemProperty("idea.sync.active").isPresent) {
+    apply(plugin = libs.plugins.taskinfo.get().pluginId)
+  }
+
   tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
   }
@@ -128,11 +128,6 @@ fun Project.configureKotlin() {
       }
     }
   }
-}
-
-// Apply taskinfo only when not running inside IntelliJ sync
-if (!providers.systemProperty("idea.sync.active").isPresent) {
-  apply(plugin = libs.plugins.taskinfo.get().pluginId)
 }
 
 fun Project.configureGrpc() {
@@ -191,45 +186,54 @@ fun Project.configureJars() {
 }
 
 fun Project.configurePublishing() {
-  publishing {
-    publications {
-      create<MavenPublication>("mavenJava") {
-        from(components["java"])
-        versionMapping {
-          usage("java-api") {
-            fromResolutionOf("runtimeClasspath")
-          }
-          usage("java-runtime") {
-            fromResolutionResult()
-          }
-        }
-      }
+  dokka {
+    moduleName.set("prometheus-proxy")
+    pluginsConfiguration.html {
+      homepageLink.set("https://github.com/pambrose/prometheus-proxy")
+      footerMessage.set("prometheus-proxy")
     }
   }
 
-  tasks.named<Jar>("jar") {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+  mavenPublishing {
+    configure(
+      com.vanniktech.maven.publish.KotlinJvm(
+        javadocJar = JavadocJar.Dokka("dokkaGeneratePublicationHtml"),
+        sourcesJar = SourcesJar.Sources(),
+      ),
+    )
+    coordinates("com.pambrose", "prometheus-proxy", version.toString())
+
+    pom {
+      name.set("prometheus-proxy")
+      description.set("Dynamic Line-Specific GitHub Permalinks")
+      url.set("https://github.com/pambrose/prometheus-proxy")
+      licenses {
+        license {
+          name.set("Apache License 2.0")
+          url.set("https://www.apache.org/licenses/LICENSE-2.0")
+        }
+      }
+      developers {
+        developer {
+          id.set("pambrose")
+          name.set("Paul Ambrose")
+          email.set("paul@pambrose.com")
+        }
+      }
+      scm {
+        connection.set("scm:git:git://github.com/pambrose/prometheus-proxy.git")
+        developerConnection.set("scm:git:ssh://github.com/pambrose/prometheus-proxy.git")
+        url.set("https://github.com/pambrose/prometheus-proxy")
+      }
+    }
+
+    publishToMavenCentral(automaticRelease = true)
+    signAllPublications()
   }
 
-  val sourcesJar by tasks.registering(Jar::class) {
-    dependsOn(tasks.classes)
-    archiveClassifier.set("sources")
-    from(sourceSets.main.get().allSource)
-  }
-
-  val javadocJar by tasks.registering(Jar::class) {
-    dependsOn(tasks.javadoc)
-    archiveClassifier.set("javadoc")
-    from(tasks.javadoc.get().destinationDir)
-  }
-
-  artifacts {
-    archives(sourcesJar)
-    //archives(javadocJar)
-  }
-
-  java {
-    withSourcesJar()
+  // Skip signing when no GPG key is provided (e.g., local publishing)
+  tasks.withType<Sign>().configureEach {
+    isEnabled = project.findProperty("signingInMemoryKey") != null
   }
 }
 
@@ -272,10 +276,7 @@ fun Project.configureDokka() {
     }
 
     dokkaSourceSets.main {
-      documentedVisibilities(
-        org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier.Public,
-        org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier.Internal,
-      )
+      documentedVisibilities(VisibilityModifier.Public, VisibilityModifier.Internal)
 
       perPackageOption {
         matchingRegex.set("io\\.prometheus\\.grpc.*")
@@ -306,4 +307,3 @@ fun Project.configureCoverage() {
     }
   }
 }
-

@@ -21,10 +21,10 @@
 
 package io.prometheus.agent
 
-import com.github.pambrose.common.dsl.KtorDsl.get
-import com.github.pambrose.common.util.EMPTY_BYTE_ARRAY
-import com.github.pambrose.common.util.simpleClassName
-import com.github.pambrose.common.util.zip
+import com.pambrose.common.dsl.KtorDsl.get
+import com.pambrose.common.util.EMPTY_BYTE_ARRAY
+import com.pambrose.common.util.simpleClassName
+import com.pambrose.common.util.zip
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import io.github.oshai.kotlinlogging.KotlinLogging.logger

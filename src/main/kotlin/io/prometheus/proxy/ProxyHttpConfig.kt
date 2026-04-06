@@ -16,7 +16,7 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.simpleClassName
+import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders

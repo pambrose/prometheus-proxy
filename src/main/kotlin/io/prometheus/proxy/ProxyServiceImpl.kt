@@ -16,7 +16,7 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.runCatchingCancellable
+import com.pambrose.common.util.runCatchingCancellable
 import com.google.protobuf.Empty
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Status
@@ -253,6 +253,7 @@ internal class ProxyServiceImpl(
                       chunkScrapeId,
                       "Chunk validation failed: ${e.message}",
                     )
+                    proxy.metrics { chunkValidationFailures.labels(ProxyMetrics.STAGE_CHUNK).inc() }
                   }
                 }
               }
@@ -280,6 +281,7 @@ internal class ProxyServiceImpl(
                       summaryScrapeId,
                       "Summary validation failed: ${e.message}",
                     )
+                    proxy.metrics { chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).inc() }
                   }
                 }
               }
@@ -311,6 +313,7 @@ internal class ProxyServiceImpl(
               scrapeId,
               "Chunked transfer abandoned: stream terminated before summary received",
             )
+            proxy.metrics { chunkedTransfersAbandoned.inc() }
           }
       }
     }

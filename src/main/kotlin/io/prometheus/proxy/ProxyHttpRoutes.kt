@@ -16,8 +16,8 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.util.ensureLeadingSlash
-import com.github.pambrose.common.util.simpleClassName
+import com.pambrose.common.util.ensureLeadingSlash
+import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
 import io.ktor.http.ContentType.Text
@@ -324,6 +324,11 @@ object ProxyHttpRoutes {
                 fetchDuration = scrapeRequest.ageDuration(),
               )
             }
+
+          proxy.metrics {
+            val encoding = if (srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN
+            scrapeResponseBytes.labels(path, encoding).observe(contentText.toByteArray().size.toDouble())
+          }
 
           ScrapeRequestResponse(
             statusCode = statusCode,

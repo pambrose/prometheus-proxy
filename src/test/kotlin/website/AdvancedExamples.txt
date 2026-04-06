@@ -1,0 +1,111 @@
+; --8<-- [start:nginx-cli]
+When using Nginx as a reverse proxy, disable the transport filter
+on both Proxy and Agent:
+
+java -jar prometheus-proxy.jar --tf_disabled
+java -jar prometheus-agent.jar --tf_disabled --config myconfig.conf
+
+Or via environment variable:
+TRANSPORT_FILTER_DISABLED=true
+
+Or via config:
+proxy.transportFilterDisabled = true
+agent.transportFilterDisabled = true
+; --8<-- [end:nginx-cli]
+
+; --8<-- [start:federation-config]
+agent {
+  pathConfigs: [
+    {
+      name: "Federated Prometheus"
+      path: federated_metrics
+      url: "http://prometheus-server:9090/federate?match[]={__name__=~\"job:.*\"}"
+    }
+  ]
+}
+; --8<-- [end:federation-config]
+
+; --8<-- [start:grpc-reflection-list]
+# List available gRPC services:
+grpcurl -plaintext localhost:50051 list
+
+# Output:
+#   ProxyService
+#   grpc.health.v1.Health
+#   grpc.reflection.v1alpha.ServerReflection
+; --8<-- [end:grpc-reflection-list]
+
+; --8<-- [start:grpc-reflection-describe]
+# Describe the ProxyService:
+grpcurl -plaintext localhost:50051 describe ProxyService
+
+# Note: If using TLS, omit the -plaintext flag and provide cert flags.
+
+# Disable reflection:
+java -jar prometheus-proxy.jar --ref_disabled
+; --8<-- [end:grpc-reflection-describe]
+
+; --8<-- [start:performance-tuning-cli]
+# Increase concurrent scraping capacity:
+java -jar prometheus-agent.jar \
+  --max_concurrent_clients 10 \
+  --client_timeout_secs 30 \
+  --chunk 64 \
+  --config myconfig.conf
+
+# Tune HTTP client cache:
+java -jar prometheus-agent.jar \
+  --max_cache_size 200 \
+  --max_cache_age_mins 60 \
+  --max_cache_idle_mins 20 \
+  --config myconfig.conf
+; --8<-- [end:performance-tuning-cli]
+
+; --8<-- [start:performance-tuning-config]
+agent {
+  http {
+    maxConcurrentClients = 10         // Parallel scrape limit
+    clientTimeoutSecs = 30            // HTTP client timeout
+
+    clientCache {
+      maxSize = 200                   // More cached clients
+      maxAgeMins = 60                 // Longer cache lifetime
+      maxIdleMins = 20               // Longer idle tolerance
+      cleanupIntervalMins = 10        // Less frequent cleanup
+    }
+  }
+
+  chunkContentSizeKbs = 64            // Larger chunks for big payloads
+  minGzipSizeBytes = 256              // Compress more aggressively
+  scrapeTimeoutSecs = 30              // More time for slow targets
+}
+; --8<-- [end:performance-tuning-config]
+
+; --8<-- [start:stale-agent-config]
+proxy.internal {
+  staleAgentCheckEnabled = true
+  maxAgentInactivitySecs = 60         // Evict after 60s of inactivity
+  staleAgentCheckPauseSecs = 10       // Check every 10s
+
+  scrapeRequestTimeoutSecs = 90       // Timeout for scrape requests
+}
+; --8<-- [end:stale-agent-config]
+
+; --8<-- [start:grpc-keepalive-config]
+// Proxy gRPC keepalive settings:
+proxy.grpc {
+  keepAliveTimeSecs = 7200            // Interval between PING frames
+  keepAliveTimeoutSecs = 20           // Timeout for PING ack
+  permitKeepAliveWithoutCalls = false
+  permitKeepAliveTimeSecs = 300       // Min interval between client PINGs
+  maxConnectionIdleSecs = -1          // -1 = unlimited
+  maxConnectionAgeSecs = -1           // -1 = unlimited
+}
+
+// Agent gRPC keepalive settings:
+agent.grpc {
+  keepAliveTimeSecs = -1              // -1 = use server default
+  keepAliveTimeoutSecs = 20
+  keepAliveWithoutCalls = false
+}
+; --8<-- [end:grpc-keepalive-config]

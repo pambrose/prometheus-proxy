@@ -18,7 +18,7 @@
 
 package io.prometheus.agent
 
-import com.github.pambrose.common.dsl.KtorDsl.newHttpClient
+import com.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.google.common.net.HttpHeaders.ACCEPT
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
