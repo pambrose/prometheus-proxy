@@ -90,10 +90,44 @@ See the [Quick Start Guide](getting-started.md) for detailed instructions.
 | **Federation** | Scrape existing Prometheus instances via `/federate` endpoint |
 | **Kubernetes** | Monitor services across clusters or namespaces |
 
-## Learn More
+## API Reference
 
-- [Architecture](architecture.md) -- detailed component and protocol descriptions
-- [Configuration](configuration/index.md) -- HOCON config format and options
-- [Security & TLS](security/index.md) -- TLS setup and auth header forwarding
-- [Monitoring](monitoring.md) -- built-in metrics and Grafana dashboards
-- [KDoc API Reference](kdocs/) -- generated API documentation
+Full API documentation (KDocs) is available at [KDocs](kdocs/).
+
+## Next Steps
+
+<div class="grid cards" markdown>
+
+-   :material-sitemap:{ .lg .middle } __Architecture__
+
+    ---
+
+    Understand the proxy/agent components, gRPC protocol, and request flow
+
+    [:octicons-arrow-right-24: Architecture](architecture.md)
+
+-   :material-cog:{ .lg .middle } __Configuration__
+
+    ---
+
+    Configure the application with HOCON and environment variables
+
+    [:octicons-arrow-right-24: Configuration](configuration/index.md)
+
+-   :material-shield-lock:{ .lg .middle } __Security & TLS__
+
+    ---
+
+    Set up TLS encryption and mutual authentication
+
+    [:octicons-arrow-right-24: Security](security/index.md)
+
+-   :material-chart-line:{ .lg .middle } __Monitoring__
+
+    ---
+
+    Built-in metrics and Grafana dashboards
+
+    [:octicons-arrow-right-24: Monitoring](monitoring.md)
+
+</div>

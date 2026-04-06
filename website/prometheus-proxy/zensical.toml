@@ -99,9 +99,26 @@ link = "https://github.com/pambrose/prometheus-proxy"
 # Markdown extensions
 # ----------------------------------------------------------------------------
 
+# attr_list - add HTML attributes to Markdown elements
+[project.markdown_extensions.attr_list]
+
+# md_in_html - render Markdown inside HTML blocks (needed for grid cards)
+[project.markdown_extensions.md_in_html]
+
+# admonition - callout blocks (!!!)
+[project.markdown_extensions.admonition]
+
+# pymdownx.details - collapsible admonitions (???)
+[project.markdown_extensions.pymdownx.details]
+
+# pymdownx.emoji - inline icons (:material-*:, :octicons-*:, :fontawesome-*:)
+[project.markdown_extensions.pymdownx.emoji]
+emoji_index = "material.extensions.emoji.twemoji"
+emoji_generator = "material.extensions.emoji.to_svg"
+
 # pymdownx.snippets - import code from external files
 [project.markdown_extensions.pymdownx.snippets]
-base_path = ["../../src/test/kotlin/website", "../.."]
+base_path = ["../../src/test/kotlin/website", "../../src/test/java/website", "../.."]
 check_paths = true
 
 # pymdownx.superfences - fenced code blocks with Mermaid support (Mermaid is built-in)

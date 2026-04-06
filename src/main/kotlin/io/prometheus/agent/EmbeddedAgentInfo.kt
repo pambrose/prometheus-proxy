@@ -16,7 +16,15 @@
 
 package io.prometheus.agent
 
+import io.prometheus.Agent
+
 data class EmbeddedAgentInfo(
-  val launchId: String,
-  val agentName: String,
-)
+  private val agent: Agent,
+) {
+  val launchId: String get() = agent.launchId
+  val agentName: String get() = agent.agentName
+
+  fun shutdown() {
+    agent.stop()
+  }
+}

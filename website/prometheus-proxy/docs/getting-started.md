@@ -173,7 +173,38 @@ When Prometheus scrape configs include `basic_auth` or `bearer_token`, the proxy
 
 ## Next Steps
 
-- [Agent Configuration](configuration/agent.md) -- all agent settings
-- [Proxy Configuration](configuration/proxy.md) -- all proxy settings
-- [Docker Usage](docker.md) -- production Docker setups
-- [Security & TLS](security/index.md) -- secure the proxy-agent connection
+<div class="grid cards" markdown>
+
+-   :material-robot:{ .lg .middle } __Agent Configuration__
+
+    ---
+
+    All agent settings including path configs, HTTP client, and scrape options
+
+    [:octicons-arrow-right-24: Agent Configuration](configuration/agent.md)
+
+-   :material-server:{ .lg .middle } __Proxy Configuration__
+
+    ---
+
+    All proxy settings including HTTP service, gRPC, and service discovery
+
+    [:octicons-arrow-right-24: Proxy Configuration](configuration/proxy.md)
+
+-   :material-docker:{ .lg .middle } __Docker Usage__
+
+    ---
+
+    Production Docker setups and docker-compose examples
+
+    [:octicons-arrow-right-24: Docker](docker.md)
+
+-   :material-shield-lock:{ .lg .middle } __Security & TLS__
+
+    ---
+
+    Secure the proxy-agent connection with TLS and mutual authentication
+
+    [:octicons-arrow-right-24: Security](security/index.md)
+
+</div>
