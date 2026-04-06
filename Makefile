@@ -95,7 +95,7 @@ clean-docs:
 	rm -rf website/prometheus-proxy/.cache
 
 site: clean-docs
-	cd website/prometheus-proxy && uv run zensical serve
+	cd website/prometheus-proxy && uv run --with mkdocs-material zensical serve
 
 publish-local:
 	./gradlew publishToMavenLocal
