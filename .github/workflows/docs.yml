@@ -1,0 +1,51 @@
+name: Documentation
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/configure-pages@v5
+      - uses: actions/checkout@v5
+
+      # Build Zensical documentation site
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - run: pip install zensical
+      - run: zensical build --clean
+        working-directory: website/prometheus-proxy
+
+      # Build KDoc API documentation
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew dokkaGeneratePublicationHtml
+
+      # Copy KDocs into the Zensical site output
+      - run: cp -r build/dokka/html website/prometheus-proxy/site/kdocs
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: website/prometheus-proxy/site
+      - uses: actions/deploy-pages@v4
+        id: deployment

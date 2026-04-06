@@ -18,8 +18,8 @@
 
 package io.prometheus.agent
 
-import com.github.pambrose.common.util.runCatchingCancellable
-import com.github.pambrose.common.util.zip
+import com.pambrose.common.util.runCatchingCancellable
+import com.pambrose.common.util.zip
 import io.grpc.Metadata
 import io.grpc.Status
 import io.grpc.StatusRuntimeException

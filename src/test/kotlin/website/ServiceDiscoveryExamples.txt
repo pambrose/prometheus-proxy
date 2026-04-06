@@ -1,0 +1,57 @@
+; --8<-- [start:sd-enable-cli]
+# Enable service discovery via CLI:
+java -jar prometheus-proxy.jar \
+  --sd_enabled \
+  --sd_path discovery \
+  --sd_target_prefix http://proxy-host.example.com:8080/
+; --8<-- [end:sd-enable-cli]
+
+; --8<-- [start:sd-enable-config]
+proxy {
+  service.discovery {
+    enabled = true
+    path = "discovery"
+    targetPrefix = "http://proxy-host.example.com:8080/"
+  }
+}
+; --8<-- [end:sd-enable-config]
+
+; --8<-- [start:sd-json-response]
+[
+  {
+    "targets": ["proxy-host.example.com:8080"],
+    "labels": {
+      "__metrics_path__": "/app1_metrics",
+      "agentName": "agent-01",
+      "hostName": "internal.host.com",
+      "env": "production",
+      "team": "backend"
+    }
+  },
+  {
+    "targets": ["proxy-host.example.com:8080"],
+    "labels": {
+      "__metrics_path__": "/app2_metrics",
+      "agentName": "agent-01",
+      "hostName": "internal.host.com",
+      "env": "staging",
+      "team": "backend"
+    }
+  }
+]
+; --8<-- [end:sd-json-response]
+
+; --8<-- [start:sd-prometheus-config]
+scrape_configs:
+  - job_name: 'prometheus-proxy-sd'
+    http_sd_configs:
+      - url: 'http://proxy-host.example.com:8080/discovery'
+        refresh_interval: 30s
+; --8<-- [end:sd-prometheus-config]
+
+; --8<-- [start:sd-env-vars]
+# Enable service discovery via environment variables:
+SD_ENABLED=true
+SD_PATH=discovery
+SD_TARGET_PREFIX=http://proxy-host.example.com:8080/
+; --8<-- [end:sd-env-vars]

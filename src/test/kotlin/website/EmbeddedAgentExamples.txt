@@ -1,0 +1,71 @@
+; --8<-- [start:embedded-java]
+import io.prometheus.Agent;
+import io.prometheus.agent.EmbeddedAgentInfo;
+
+public class MyApp {
+  public static void main(String[] args) {
+    // Start the agent in the background
+    EmbeddedAgentInfo agentInfo =
+      Agent.startAsyncAgent("agent-config.conf", true);
+
+    System.out.println("Agent started: " + agentInfo.getAgentName());
+
+    // Your application code runs here...
+    // The agent runs in background threads
+  }
+}
+; --8<-- [end:embedded-java]
+
+; --8<-- [start:embedded-kotlin]
+import io.prometheus.Agent
+
+fun main() {
+  // Start the agent in the background
+  val agentInfo = Agent.startAsyncAgent(
+    configFilename = "agent-config.conf",
+    exitOnMissingConfig = true,
+  )
+
+  println("Agent started: ${agentInfo.agentName}")
+
+  // Your application code runs here...
+  // The agent runs in background coroutines
+}
+; --8<-- [end:embedded-kotlin]
+
+; --8<-- [start:gradle-dependency]
+// build.gradle.kts
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation("com.pambrose:prometheus-proxy:3.1.0")
+}
+; --8<-- [end:gradle-dependency]
+
+; --8<-- [start:maven-dependency]
+<!-- pom.xml -->
+<dependencies>
+  <dependency>
+    <groupId>com.pambrose</groupId>
+    <artifactId>prometheus-proxy</artifactId>
+    <version>3.1.0</version>
+  </dependency>
+</dependencies>
+; --8<-- [end:maven-dependency]
+
+; --8<-- [start:embedded-agent-config]
+// Minimal config for an embedded agent:
+agent {
+  proxy.hostname = "proxy-host.example.com"
+
+  pathConfigs: [
+    {
+      name: "My App metrics"
+      path: my_app_metrics
+      url: "http://localhost:9100/metrics"
+    }
+  ]
+}
+; --8<-- [end:embedded-agent-config]

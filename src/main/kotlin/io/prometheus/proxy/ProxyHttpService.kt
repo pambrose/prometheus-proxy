@@ -18,9 +18,9 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.concurrent.GenericIdleService
-import com.github.pambrose.common.concurrent.genericServiceListener
-import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.pambrose.common.concurrent.GenericIdleService
+import com.pambrose.common.concurrent.genericServiceListener
+import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.google.common.util.concurrent.MoreExecutors
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.server.cio.CIO

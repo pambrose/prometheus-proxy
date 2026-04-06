@@ -1,0 +1,106 @@
+; --8<-- [start:tls-no-mutual-proxy-cli]
+# Proxy with TLS (no mutual authentication):
+java -jar prometheus-proxy.jar \
+  --cert /path/to/server.crt \
+  --key /path/to/server.key
+; --8<-- [end:tls-no-mutual-proxy-cli]
+
+; --8<-- [start:tls-no-mutual-agent-cli]
+# Agent with TLS (no mutual authentication):
+java -jar prometheus-agent.jar \
+  --config myconfig.conf \
+  --trust /path/to/ca.crt
+; --8<-- [end:tls-no-mutual-agent-cli]
+
+; --8<-- [start:tls-mutual-proxy-cli]
+# Proxy with mutual TLS:
+java -jar prometheus-proxy.jar \
+  --cert /path/to/server.crt \
+  --key /path/to/server.key \
+  --trust /path/to/ca.crt
+; --8<-- [end:tls-mutual-proxy-cli]
+
+; --8<-- [start:tls-mutual-agent-cli]
+# Agent with mutual TLS:
+java -jar prometheus-agent.jar \
+  --config myconfig.conf \
+  --cert /path/to/client.crt \
+  --key /path/to/client.key \
+  --trust /path/to/ca.crt
+; --8<-- [end:tls-mutual-agent-cli]
+
+; --8<-- [start:tls-no-mutual-conf]
+proxy {
+  agent.port = 50440
+
+  tls {
+    certChainFilePath = "certs/server.pem"
+    privateKeyFilePath = "certs/server.key"
+  }
+}
+
+agent {
+  proxy {
+    hostname = "proxy-host.example.com"
+    port = 50440
+  }
+
+  tls {
+    trustCertCollectionFilePath = "certs/ca.pem"
+  }
+}
+; --8<-- [end:tls-no-mutual-conf]
+
+; --8<-- [start:tls-mutual-conf]
+proxy {
+  agent.port = 50440
+
+  tls {
+    certChainFilePath = "certs/server.pem"
+    privateKeyFilePath = "certs/server.key"
+    trustCertCollectionFilePath = "certs/ca.pem"
+  }
+}
+
+agent {
+  proxy {
+    hostname = "proxy-host.example.com"
+    port = 50440
+  }
+
+  tls {
+    certChainFilePath = "certs/client.pem"
+    privateKeyFilePath = "certs/client.key"
+    trustCertCollectionFilePath = "certs/ca.pem"
+  }
+}
+; --8<-- [end:tls-mutual-conf]
+
+; --8<-- [start:trust-all-x509]
+Disable SSL verification for HTTPS endpoints (development only!):
+
+Via CLI:
+java -jar prometheus-agent.jar --trust_all_x509 --config myconfig.conf
+
+Via environment variable:
+TRUST_ALL_X509_CERTIFICATES=true
+
+Via config file:
+agent.http.enableTrustAllX509Certificates = true
+; --8<-- [end:trust-all-x509]
+
+; --8<-- [start:auth-header-tls]
+When Prometheus scrape configs include basic_auth or bearer_token,
+the proxy forwards the Authorization header to the agent over gRPC.
+
+Without TLS, credentials are transmitted in plaintext!
+
+Protect forwarded credentials with TLS:
+java -jar prometheus-proxy.jar \
+  --cert /path/to/server.crt \
+  --key /path/to/server.key
+
+java -jar prometheus-agent.jar \
+  --config myconfig.conf \
+  --trust /path/to/ca.crt
+; --8<-- [end:auth-header-tls]

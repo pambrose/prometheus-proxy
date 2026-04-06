@@ -16,7 +16,7 @@
 
 package io.prometheus.harness.support
 
-import com.github.pambrose.common.util.simpleClassName
+import com.pambrose.common.util.simpleClassName
 import io.kotest.core.spec.style.StringSpec
 
 abstract class AbstractHarnessTests(

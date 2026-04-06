@@ -82,13 +82,43 @@ class ProxyMetricsTest : StringSpec() {
       metrics.heartbeatCount.shouldNotBeNull()
     }
 
-    // ==================== Summary Initialization Tests ====================
+    // ==================== Histogram Initialization Tests ====================
 
-    "scrapeRequestLatency summary should be initialized" {
+    "scrapeRequestLatency histogram should be initialized" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
       metrics.scrapeRequestLatency.shouldNotBeNull()
+    }
+
+    "scrapeResponseBytes histogram should be initialized" {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
+
+      metrics.scrapeResponseBytes.shouldNotBeNull()
+    }
+
+    // ==================== New Counter Initialization Tests ====================
+
+    "chunkValidationFailures counter should be initialized" {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
+
+      metrics.chunkValidationFailures.shouldNotBeNull()
+    }
+
+    "chunkedTransfersAbandoned counter should be initialized" {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
+
+      metrics.chunkedTransfersAbandoned.shouldNotBeNull()
+    }
+
+    "agentDisplacementCount counter should be initialized" {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
+
+      metrics.agentDisplacementCount.shouldNotBeNull()
     }
 
     // ==================== Counter Operations Tests ====================
@@ -133,19 +163,63 @@ class ProxyMetricsTest : StringSpec() {
       metrics.heartbeatCount.get() shouldBe initialValue + 1
     }
 
-    // ==================== Summary Operations Tests ====================
+    // ==================== Histogram Operations Tests ====================
 
-    "scrapeRequestLatency should record observations" {
+    "scrapeRequestLatency should record observations with path label" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
-      // Record some latency observations
-      metrics.scrapeRequestLatency.observe(0.1)
-      metrics.scrapeRequestLatency.observe(0.2)
-      metrics.scrapeRequestLatency.observe(0.3)
+      metrics.scrapeRequestLatency.labels("test-path").observe(0.1)
+      metrics.scrapeRequestLatency.labels("test-path").observe(0.2)
+      metrics.scrapeRequestLatency.labels("test-path").observe(0.3)
 
-      // Summary should have recorded the observations
-      metrics.scrapeRequestLatency.get().count shouldBe 3
+      val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
+      val latencyMetric = samples.find { it.name == "proxy_scrape_request_latency_seconds" }
+      latencyMetric.shouldNotBeNull()
+    }
+
+    "scrapeResponseBytes should record observations with labels" {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
+
+      metrics.scrapeResponseBytes.labels("test-path", "plain").observe(1024.0)
+      metrics.scrapeResponseBytes.labels("test-path", "gzipped").observe(512.0)
+
+      val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
+      val bytesMetric = samples.find { it.name == "proxy_scrape_response_bytes" }
+      bytesMetric.shouldNotBeNull()
+    }
+
+    "chunkValidationFailures should increment with stage labels" {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
+
+      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_CHUNK).inc()
+      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).inc()
+      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).inc()
+
+      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_CHUNK).get() shouldBe 1.0
+      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).get() shouldBe 2.0
+    }
+
+    "chunkedTransfersAbandoned should increment" {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
+
+      val initialValue = metrics.chunkedTransfersAbandoned.get()
+      metrics.chunkedTransfersAbandoned.inc()
+
+      metrics.chunkedTransfersAbandoned.get() shouldBe initialValue + 1
+    }
+
+    "agentDisplacementCount should increment" {
+      val proxy = createMockProxy()
+      val metrics = ProxyMetrics(proxy)
+
+      val initialValue = metrics.agentDisplacementCount.get()
+      metrics.agentDisplacementCount.inc()
+
+      metrics.agentDisplacementCount.get() shouldBe initialValue + 1
     }
 
     // ==================== Label Tests ====================

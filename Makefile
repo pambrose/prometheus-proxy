@@ -12,10 +12,10 @@ stubs:
 	./gradlew generateProto
 
 build: clean stubs
-	./gradlew build -x test
+	./gradlew build -xtest
 
 tibuild: clean stubs
-	./gradlew tiTree build -x test
+	./gradlew tiTree build -xtest
 
 refresh:
 	./gradlew --refresh-dependencies dependencyUpdates
@@ -41,14 +41,11 @@ tls-tests:
 reports:
 	./gradlew koverMergedHtmlReport
 
-dokka:
-	./gradlew :dokkaGeneratePublicationHtml
-
-gh-dokka:
-	gh workflow run dokka.yml
+gh-docs:
+	gh workflow run docs.yml
 
 gh-status:
-	gh run list --workflow=dokka.yml
+	gh run list --workflow=docs.yml
 
 tsconfig:
 	java -jar ./config/jars/tscfg-1.2.5.jar --spec config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
@@ -58,9 +55,6 @@ distro: build jars
 #PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x,linux/ppc64le
 PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x
 IMAGE_PREFIX := pambrose/prometheus
-
-JITPACK_BUILD_URL := https://jitpack.io/com/github/pambrose/prometheus-proxy/${VERSION}
-JITPACK_API_URL := https://jitpack.io/api/builds/com.github.pambrose/prometheus-proxy/${VERSION}
 
 docker-push:
 	# prepare multiarch
@@ -81,9 +75,6 @@ report-coverage:
 sonar:
 	./mvnw sonar:sonar -Dsonar.host.url=http://localhost:9000
 
-site:
-	./mvnw site
-
 tree:
 	./gradlew -q dependencies
 
@@ -91,22 +82,36 @@ depends:
 	./gradlew dependencies
 
 lint:
-	./gradlew lintKotlinMain
-	./gradlew lintKotlinTest
-
-trigger-jitpack:
-	until curl -s "${JITPACK_BUILD_URL}/build.log" | grep -qv "not found"; do \
-		echo "Waiting for JitPack..."; \
-		sleep 10; \
-	done
-	echo "JitPack build complete for version ${VERSION}"
-
-view-jitpack:
-	curl -s "${JITPACK_BUILD_URL}/build.log"
-	curl -s "${JITPACK_API_URL}" | jq
+	./gradlew lintKotlinMain lintKotlinTest
 
 versioncheck:
 	./gradlew dependencyUpdates --no-configuration-cache
 
+kdocs:
+	./gradlew dokkaGeneratePublicationHtml
+
+clean-docs:
+	rm -rf website/prometheus-proxy/site
+	rm -rf website/prometheus-proxy/.cache
+
+site: clean-docs
+	cd website/prometheus-proxy && uv run zensical serve
+
+publish-local:
+	./gradlew publishToMavenLocal
+
+publish-local-snapshot:
+	./gradlew -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenLocal
+
+GPG_ENV = \
+	ORG_GRADLE_PROJECT_signingInMemoryKey="$$(gpg --armor --export-secret-keys $$GPG_SIGNING_KEY_ID)" \
+	ORG_GRADLE_PROJECT_signingInMemoryKeyPassword=$$(security find-generic-password -a "gpg-signing" -s "gradle-signing-password" -w)
+
+publish-snapshot:
+	$(GPG_ENV) ./gradlew -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenCentral
+
+publish-maven-central:
+	$(GPG_ENV) ./gradlew publishAndReleaseToMavenCentral
+
 upgrade-wrapper:
-	./gradlew wrapper --gradle-version=9.4.0 --distribution-type=bin
+	./gradlew wrapper --gradle-version=9.4.1 --distribution-type=bin

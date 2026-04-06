@@ -18,9 +18,9 @@
 
 package io.prometheus.proxy
 
-import com.github.pambrose.common.delegate.AtomicDelegates.atomicBoolean
-import com.github.pambrose.common.delegate.AtomicDelegates.nonNullableReference
-import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
+import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
+import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED

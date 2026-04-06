@@ -1,0 +1,39 @@
+; --8<-- [start:cli-proxy-start]
+# Start the proxy (runs outside the firewall alongside Prometheus):
+java -jar prometheus-proxy.jar
+; --8<-- [end:cli-proxy-start]
+
+; --8<-- [start:cli-agent-start]
+# Start the agent (runs inside the firewall with your services):
+java -jar prometheus-agent.jar \
+  -Dagent.proxy.hostname=proxy-host.example.com \
+  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
+; --8<-- [end:cli-agent-start]
+
+; --8<-- [start:cli-agent-with-proxy-flag]
+# Or use the --proxy shorthand:
+java -jar prometheus-agent.jar \
+  --proxy proxy-host.example.com \
+  --config myapps.conf
+; --8<-- [end:cli-agent-with-proxy-flag]
+
+; --8<-- [start:build-jars]
+# Clone and build the fat JARs:
+git clone https://github.com/pambrose/prometheus-proxy.git
+cd prometheus-proxy
+./gradlew shadowJar
+
+# JARs are generated in build/libs/:
+#   build/libs/prometheus-proxy.jar
+#   build/libs/prometheus-agent.jar
+; --8<-- [end:build-jars]
+
+; --8<-- [start:verify-curl]
+# Verify metrics are flowing through the proxy:
+curl -s http://proxy-host.example.com:8080/app1_metrics | head
+; --8<-- [end:verify-curl]
+
+; --8<-- [start:verify-sd]
+# If service discovery is enabled, check registered targets:
+curl -s http://proxy-host.example.com:8080/discovery | jq '.'
+; --8<-- [end:verify-sd]

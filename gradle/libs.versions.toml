@@ -2,10 +2,11 @@
 # Plugins
 config = "6.0.9"
 detekt = "1.23.8"
-dokka = "2.1.0"
-gradle-plugins = "1.0.10"
+gradle-plugins = "1.0.12"
+dokka = "2.2.0"
+maven-publish = "0.36.0"
 kotlin = "2.3.20"
-kover = "0.9.7"
+kover = "0.9.8"
 protobuf = "0.9.6"
 shadow = "8.3.7"
 taskinfo = "3.0.1"
@@ -19,51 +20,48 @@ grpc = "1.80.0"
 jakartaServlet = "6.1.0"
 jcommander = "3.0"
 jetty = "11.0.26"
-kotest = "6.1.7"
-ktor = "3.4.1"
+kotest = "6.1.11"
+ktor = "3.4.2"
 logback = "1.5.32"
 logging = "8.0.01"
 mockk = "1.14.9"
 prometheus = "0.16.0"
 # Keep in sync with grpc
-protoc = "4.34.0"
+protoc = "4.34.1"
 serialization = "1.10.0"
 slf4j = "2.0.17"
 # Keep in sync with grpc
 tcnative = "2.0.74.Final"
 typesafe = "1.4.6"
-utils = "2.6.3"
-zipkin = "6.3.0"
+utils = "2.7.1"
+zipkin = "6.3.1"
 
 [libraries]
 # Kotlin
-kotlin-bom = { module = "org.jetbrains.kotlin:kotlin-bom", version.ref = "kotlin" }
-kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
 
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
 kotlinx-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
 # gRPC
-grpc-bom = { module = "io.grpc:grpc-bom", version.ref = "grpc" }
-grpc-netty = { module = "io.grpc:grpc-netty-shaded" }
-grpc-protobuf = { module = "io.grpc:grpc-protobuf" }
-grpc-stub = { module = "io.grpc:grpc-stub" }
-grpc-services = { module = "io.grpc:grpc-services" }
+grpc-netty = { module = "io.grpc:grpc-netty-shaded", version.ref = "grpc" }
+grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
+grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
+grpc-services = { module = "io.grpc:grpc-services", version.ref = "grpc" }
 
 grpc-kotlin-stub = { module = "io.grpc:grpc-kotlin-stub", version.ref = "gengrpc" }
 netty-tcnative = { module = "io.netty:netty-tcnative-boringssl-static", version.ref = "tcnative" }
 
 # Common Utils
-#common-utils-bom = { module = "com.github.pambrose.common-utils:common-utils-bom", version.ref = "utils" }
-common-utils-core = { module = "com.github.pambrose.common-utils:core-utils", version.ref = "utils" }
-common-utils-dropwizard = { module = "com.github.pambrose.common-utils:dropwizard-utils", version.ref = "utils" }
-common-utils-guava = { module = "com.github.pambrose.common-utils:guava-utils", version.ref = "utils" }
-common-utils-grpc = { module = "com.github.pambrose.common-utils:grpc-utils", version.ref = "utils" }
-common-utils-jetty = { module = "com.github.pambrose.common-utils:jetty-utils", version.ref = "utils" }
-common-utils-ktor-client = { module = "com.github.pambrose.common-utils:ktor-client-utils", version.ref = "utils" }
-common-utils-prometheus = { module = "com.github.pambrose.common-utils:prometheus-utils", version.ref = "utils" }
-common-utils-service = { module = "com.github.pambrose.common-utils:service-utils", version.ref = "utils" }
-common-utils-zipkin = { module = "com.github.pambrose.common-utils:zipkin-utils", version.ref = "utils" }
+common-utils-core = { module = "com.pambrose.common-utils:core-utils", version.ref = "utils" }
+common-utils-dropwizard = { module = "com.pambrose.common-utils:dropwizard-utils", version.ref = "utils" }
+common-utils-guava = { module = "com.pambrose.common-utils:guava-utils", version.ref = "utils" }
+common-utils-grpc = { module = "com.pambrose.common-utils:grpc-utils", version.ref = "utils" }
+common-utils-jetty = { module = "com.pambrose.common-utils:jetty-utils", version.ref = "utils" }
+common-utils-ktor-client = { module = "com.pambrose.common-utils:ktor-client-utils", version.ref = "utils" }
+common-utils-prometheus = { module = "com.pambrose.common-utils:prometheus-utils", version.ref = "utils" }
+common-utils-service = { module = "com.pambrose.common-utils:service-utils", version.ref = "utils" }
+common-utils-zipkin = { module = "com.pambrose.common-utils:zipkin-utils", version.ref = "utils" }
 
 # Jakarta Servlet
 jakarta-servlet-api = { module = "jakarta.servlet:jakarta.servlet-api", version.ref = "jakartaServlet" }
@@ -80,16 +78,15 @@ typesafe-config = { module = "com.typesafe:config", version.ref = "typesafe" }
 prometheus-simpleclient = { module = "io.prometheus:simpleclient", version.ref = "prometheus" }
 
 # Ktor
-ktor-bom = { module = "io.ktor:ktor-bom", version.ref = "ktor" }
-ktor-client = { module = "io.ktor:ktor-client" }
-ktor-client-cio = { module = "io.ktor:ktor-client-cio" }
-ktor-client-auth = { module = "io.ktor:ktor-client-auth" }
-ktor-network = { module = "io.ktor:ktor-network" }
-ktor-network-tls = { module = "io.ktor:ktor-network-tls" }
-ktor-server = { module = "io.ktor:ktor-server" }
-ktor-server-cio = { module = "io.ktor:ktor-server-cio" }
-ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging" }
-ktor-server-compression = { module = "io.ktor:ktor-server-compression" }
+ktor-client = { module = "io.ktor:ktor-client", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor" }
+ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
+ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
+ktor-server = { module = "io.ktor:ktor-server", version.ref = "ktor" }
+ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
+ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging", version.ref = "ktor" }
+ktor-server-compression = { module = "io.ktor:ktor-server-compression", version.ref = "ktor" }
 
 # Dropwizard
 dropwizard-metrics = { module = "io.dropwizard.metrics:metrics-healthchecks", version.ref = "dropwizard" }
@@ -117,13 +114,13 @@ shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "config" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
-dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 taskinfo = { id = "org.barfuin.gradle.taskinfo", version.ref = "taskinfo" }
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }
 
 pambrose-envvar = { id = "com.pambrose.envvar", version.ref = "gradle-plugins" }
 pambrose-stable-versions = { id = "com.pambrose.stable-versions", version.ref = "gradle-plugins" }
 pambrose-kotlinter = { id = "com.pambrose.kotlinter", version.ref = "gradle-plugins" }
-pambrose-snapshot = { id = "com.pambrose.snapshot", version.ref = "gradle-plugins" }
 pambrose-testing = { id = "com.pambrose.testing", version.ref = "gradle-plugins" }
 
 [bundles]

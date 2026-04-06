@@ -1,0 +1,121 @@
+; --8<-- [start:docker-proxy-basic]
+# Start a proxy container:
+docker run --rm -p 8080:8080 -p 50051:50051 \
+  pambrose/prometheus-proxy:3.1.0
+; --8<-- [end:docker-proxy-basic]
+
+; --8<-- [start:docker-agent-basic]
+# Start an agent with a remote config:
+docker run --rm \
+  --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
+  pambrose/prometheus-agent:3.1.0
+; --8<-- [end:docker-agent-basic]
+
+; --8<-- [start:docker-proxy-production]
+# Production proxy with admin and metrics enabled:
+docker run --rm \
+  -p 8080:8080 \
+  -p 50051:50051 \
+  -p 8082:8082 \
+  -p 8092:8092 \
+  --env ADMIN_ENABLED=true \
+  --env METRICS_ENABLED=true \
+  --restart unless-stopped \
+  pambrose/prometheus-proxy:3.1.0
+; --8<-- [end:docker-proxy-production]
+
+; --8<-- [start:docker-agent-local-config]
+# Agent with a local config file (bind mount):
+docker run --rm \
+  -p 8083:8083 \
+  -p 8093:8093 \
+  --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
+  --env AGENT_CONFIG=prom-agent.conf \
+  pambrose/prometheus-agent:3.1.0
+; --8<-- [end:docker-agent-local-config]
+
+; --8<-- [start:docker-compose-full]
+version: '3.8'
+
+services:
+  proxy:
+    image: pambrose/prometheus-proxy:3.1.0
+    ports:
+      - "8080:8080"    # HTTP scrape port
+      - "50051:50051"  # gRPC agent port
+      - "8082:8082"    # Metrics port
+      - "8092:8092"    # Admin port
+    environment:
+      - ADMIN_ENABLED=true
+      - METRICS_ENABLED=true
+      - SD_ENABLED=true
+      - SD_TARGET_PREFIX=http://proxy:8080/
+    restart: unless-stopped
+
+  agent:
+    image: pambrose/prometheus-agent:3.1.0
+    ports:
+      - "8083:8083"    # Metrics port
+      - "8093:8093"    # Admin port
+    environment:
+      - PROXY_HOSTNAME=proxy
+      - ADMIN_ENABLED=true
+      - METRICS_ENABLED=true
+      - AGENT_CONFIG=agent.conf
+    volumes:
+      - ./agent.conf:/app/agent.conf:ro
+    depends_on:
+      - proxy
+    restart: unless-stopped
+; --8<-- [end:docker-compose-full]
+
+; --8<-- [start:docker-tls]
+# Proxy with TLS (no mutual auth):
+docker run --rm \
+  -p 8080:8080 \
+  -p 50440:50440 \
+  -p 8082:8082 \
+  -p 8092:8092 \
+  --mount type=bind,source="$(pwd)"/certs,target=/app/certs \
+  --mount type=bind,source="$(pwd)"/tls.conf,target=/app/tls.conf \
+  --env PROXY_CONFIG=tls.conf \
+  --env ADMIN_ENABLED=true \
+  --env METRICS_ENABLED=true \
+  pambrose/prometheus-proxy:3.1.0
+
+# Agent with TLS (no mutual auth):
+docker run --rm \
+  -p 8083:8083 \
+  -p 8093:8093 \
+  --mount type=bind,source="$(pwd)"/certs,target=/app/certs \
+  --mount type=bind,source="$(pwd)"/tls.conf,target=/app/tls.conf \
+  --env AGENT_CONFIG=tls.conf \
+  --env PROXY_HOSTNAME=proxy-host:50440 \
+  pambrose/prometheus-agent:3.1.0
+; --8<-- [end:docker-tls]
+
+; --8<-- [start:docker-env-vars]
+Common environment variables for Docker:
+
+Proxy:
+  PROXY_CONFIG            - Config file path or URL
+  PROXY_PORT              - HTTP listen port (default: 8080)
+  AGENT_PORT              - gRPC listen port (default: 50051)
+  ADMIN_ENABLED           - Enable admin endpoints (default: false)
+  ADMIN_PORT              - Admin port (default: 8092)
+  METRICS_ENABLED         - Enable metrics (default: false)
+  METRICS_PORT            - Metrics port (default: 8082)
+  SD_ENABLED              - Enable service discovery (default: false)
+  SD_PATH                 - SD endpoint path (default: "discovery")
+  SD_TARGET_PREFIX        - SD target prefix
+
+Agent:
+  AGENT_CONFIG            - Config file path or URL (required)
+  PROXY_HOSTNAME          - Proxy hostname (can include :port)
+  AGENT_NAME              - Agent name
+  ADMIN_ENABLED           - Enable admin endpoints (default: false)
+  ADMIN_PORT              - Admin port (default: 8093)
+  METRICS_ENABLED         - Enable metrics (default: false)
+  METRICS_PORT            - Metrics port (default: 8083)
+  MAX_CONCURRENT_CLIENTS  - Parallel scrape limit (default: 1)
+; --8<-- [end:docker-env-vars]

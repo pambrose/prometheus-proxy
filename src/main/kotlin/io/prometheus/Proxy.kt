@@ -17,15 +17,15 @@
 package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
-import com.github.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.github.pambrose.common.dsl.MetricsDsl.healthCheck
-import com.github.pambrose.common.service.GenericService
-import com.github.pambrose.common.servlet.LambdaServlet
-import com.github.pambrose.common.time.format
-import com.github.pambrose.common.util.MetricsUtils.newMapHealthCheck
-import com.github.pambrose.common.util.Version
-import com.github.pambrose.common.util.getBanner
-import com.github.pambrose.common.util.simpleClassName
+import com.pambrose.common.dsl.GuavaDsl.toStringElements
+import com.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.pambrose.common.service.GenericService
+import com.pambrose.common.servlet.LambdaServlet
+import com.pambrose.common.time.format
+import com.pambrose.common.util.MetricsUtils.newMapHealthCheck
+import com.pambrose.common.util.Version
+import com.pambrose.common.util.getBanner
+import com.pambrose.common.util.simpleClassName
 import com.google.common.collect.EvictingQueue
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.BaseOptions.Companion.DEBUG

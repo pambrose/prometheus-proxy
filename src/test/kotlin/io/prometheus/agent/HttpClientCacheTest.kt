@@ -450,6 +450,9 @@ class HttpClientCacheTest : StringSpec() {
       val entry = cache.getOrCreateClient(key) { createMockHttpClient() }
       cache.currentCacheSize() shouldBe 1
 
+      // Ensure key1 has the oldest timestamp so it's the LRU eviction target
+      delay(2.milliseconds)
+
       // Now evict it (triggers markForClose) by filling cache past capacity
       for (i in 2..6) {
         val k = ClientKey("user$i", "pass$i")

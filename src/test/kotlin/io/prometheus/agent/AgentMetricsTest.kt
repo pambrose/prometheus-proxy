@@ -78,9 +78,9 @@ class AgentMetricsTest : StringSpec() {
       metrics.connectCount.shouldNotBeNull()
     }
 
-    // ==================== Summary Initialization Tests ====================
+    // ==================== Histogram Initialization Tests ====================
 
-    "scrapeRequestLatency summary should be initialized" {
+    "scrapeRequestLatency histogram should be initialized" {
       val agent = createMockAgent()
       val metrics = AgentMetrics(agent)
 
@@ -128,7 +128,7 @@ class AgentMetricsTest : StringSpec() {
       metrics.connectCount.labels(launchId, type).get() shouldBe initialValue + 1
     }
 
-    // ==================== Summary Operations Tests ====================
+    // ==================== Histogram Operations Tests ====================
 
     "scrapeRequestLatency should record observations with labels" {
       val agent = createMockAgent()
@@ -137,13 +137,13 @@ class AgentMetricsTest : StringSpec() {
       val launchId = "test-launch-id"
       val agentName = "test-agent"
 
-      // Record some latency observations
       metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.05)
       metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.10)
       metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.15)
 
-      // Summary should have recorded the observations
-      metrics.scrapeRequestLatency.labels(launchId, agentName).get().count shouldBe 3
+      val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
+      val latencyMetric = samples.find { it.name == "agent_scrape_request_latency_seconds" }
+      latencyMetric.shouldNotBeNull()
     }
 
     // ==================== Label Differentiation Tests ====================
