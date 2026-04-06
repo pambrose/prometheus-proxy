@@ -43,7 +43,7 @@ nav = [
   { "Advanced" = [
     { "Advanced Topics" = "advanced.md" },
   ]},
-  { "KDocs" = "kdocs.md" },
+  { "KDocs" = "api.md" },
 ]
 
 # ----------------------------------------------------------------------------
