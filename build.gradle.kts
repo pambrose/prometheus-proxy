@@ -42,7 +42,7 @@ buildConfig {
 }
 
 repositories {
-  google()
+  // mavenLocal()
   mavenCentral()
 }
 
@@ -80,10 +80,10 @@ dependencies {
 configureKotlin()
 configureGrpc()
 configureJars()
+configureDokka()
 configurePublishing()
 configureKotlinter()
 configureDetekt()
-configureDokka()
 configureCoverage()
 
 fun Project.configureKotlin() {
@@ -185,15 +185,41 @@ fun Project.configureJars() {
   }
 }
 
-fun Project.configurePublishing() {
+fun Project.configureDokka() {
   dokka {
-    moduleName.set("prometheus-proxy")
+    moduleName.set("Prometheus Proxy")
+
+    dokkaPublications.html {
+      outputDirectory.set(layout.buildDirectory.dir("dokka/html"))
+      includes.from("docs/packages.md")
+    }
+
     pluginsConfiguration.html {
       homepageLink.set("https://github.com/pambrose/prometheus-proxy")
-      footerMessage.set("prometheus-proxy")
+      footerMessage.set("Prometheus Proxy")
+    }
+
+    dokkaSourceSets.main {
+      documentedVisibilities(VisibilityModifier.Public)
+
+      perPackageOption {
+        matchingRegex.set("io\\.prometheus\\.grpc.*")
+        suppress.set(true)
+      }
+
+      suppressedFiles.from("src/main/java/io/prometheus/common/ConfigVals.java")
+      suppressedFiles.from("src/main/kotlin/io/prometheus/common/BaseOptions.kt")
+
+      sourceLink {
+        localDirectory.set(file("src/main/kotlin"))
+        remoteUrl("https://github.com/pambrose/prometheus-proxy/tree/master/src/main/kotlin")
+        remoteLineSuffix.set("#L")
+      }
     }
   }
+}
 
+fun Project.configurePublishing() {
   mavenPublishing {
     configure(
       com.vanniktech.maven.publish.KotlinJvm(
@@ -205,7 +231,7 @@ fun Project.configurePublishing() {
 
     pom {
       name.set("prometheus-proxy")
-      description.set("Dynamic Line-Specific GitHub Permalinks")
+      description.set("Enables Prometheus to scrape metrics from endpoints behind a firewall via a proxy/agent pair connected over gRPC.")
       url.set("https://github.com/pambrose/prometheus-proxy")
       licenses {
         license {
@@ -259,36 +285,6 @@ fun Project.configureDetekt() {
     allRules = false
     config.setFrom("$projectDir/etc/detekt/detekt.yml")
     baseline = file("$projectDir/etc/detekt/baseline.xml")
-  }
-}
-
-fun Project.configureDokka() {
-  dokka {
-    moduleName.set("Prometheus Proxy")
-
-    dokkaPublications.html {
-      outputDirectory.set(layout.buildDirectory.dir("dokka/html"))
-      includes.from("docs/packages.md")
-    }
-
-    pluginsConfiguration.html {
-      homepageLink.set("https://github.com/pambrose/prometheus-proxy")
-    }
-
-    dokkaSourceSets.main {
-      documentedVisibilities(VisibilityModifier.Public, VisibilityModifier.Internal)
-
-      perPackageOption {
-        matchingRegex.set("io\\.prometheus\\.grpc.*")
-        suppress.set(true)
-      }
-
-      sourceLink {
-        localDirectory.set(file("src/main/kotlin"))
-        remoteUrl("https://github.com/pambrose/prometheus-proxy/tree/master/src/main/kotlin")
-        remoteLineSuffix.set("#L")
-      }
-    }
   }
 }
 
