@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory
 import java.net.URLDecoder
 import kotlin.text.Charsets.UTF_8
 
-object Utils {
+internal object Utils {
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
   fun decodeParams(encodedQueryParams: String): String =
