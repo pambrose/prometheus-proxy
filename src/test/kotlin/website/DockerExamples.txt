@@ -1,14 +1,14 @@
 ; --8<-- [start:docker-proxy-basic]
 # Start a proxy container:
 docker run --rm -p 8080:8080 -p 50051:50051 \
-  pambrose/prometheus-proxy:3.1.0
+  pambrose/prometheus-proxy:3.1.1
 ; --8<-- [end:docker-proxy-basic]
 
 ; --8<-- [start:docker-agent-basic]
 # Start an agent with a remote config:
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:3.1.0
+  pambrose/prometheus-agent:3.1.1
 ; --8<-- [end:docker-agent-basic]
 
 ; --8<-- [start:docker-proxy-production]
@@ -21,7 +21,7 @@ docker run --rm \
   --env ADMIN_ENABLED=true \
   --env METRICS_ENABLED=true \
   --restart unless-stopped \
-  pambrose/prometheus-proxy:3.1.0
+  pambrose/prometheus-proxy:3.1.1
 ; --8<-- [end:docker-proxy-production]
 
 ; --8<-- [start:docker-agent-local-config]
@@ -31,7 +31,7 @@ docker run --rm \
   -p 8093:8093 \
   --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
   --env AGENT_CONFIG=prom-agent.conf \
-  pambrose/prometheus-agent:3.1.0
+  pambrose/prometheus-agent:3.1.1
 ; --8<-- [end:docker-agent-local-config]
 
 ; --8<-- [start:docker-compose-full]
@@ -39,7 +39,7 @@ version: '3.8'
 
 services:
   proxy:
-    image: pambrose/prometheus-proxy:3.1.0
+    image: pambrose/prometheus-proxy:3.1.1
     ports:
       - "8080:8080"    # HTTP scrape port
       - "50051:50051"  # gRPC agent port
@@ -53,7 +53,7 @@ services:
     restart: unless-stopped
 
   agent:
-    image: pambrose/prometheus-agent:3.1.0
+    image: pambrose/prometheus-agent:3.1.1
     ports:
       - "8083:8083"    # Metrics port
       - "8093:8093"    # Admin port
@@ -81,7 +81,7 @@ docker run --rm \
   --env PROXY_CONFIG=tls.conf \
   --env ADMIN_ENABLED=true \
   --env METRICS_ENABLED=true \
-  pambrose/prometheus-proxy:3.1.0
+  pambrose/prometheus-proxy:3.1.1
 
 # Agent with TLS (no mutual auth):
 docker run --rm \
@@ -91,7 +91,7 @@ docker run --rm \
   --mount type=bind,source="$(pwd)"/tls.conf,target=/app/tls.conf \
   --env AGENT_CONFIG=tls.conf \
   --env PROXY_HOSTNAME=proxy-host:50440 \
-  pambrose/prometheus-agent:3.1.0
+  pambrose/prometheus-agent:3.1.1
 ; --8<-- [end:docker-tls]
 
 ; --8<-- [start:docker-env-vars]

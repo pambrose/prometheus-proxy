@@ -24,12 +24,9 @@ plugins {
   alias(libs.plugins.dokka)
   alias(libs.plugins.maven.publish)
   alias(libs.plugins.taskinfo) apply false
-  // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
-  // id("jacoco")
-  // id("com.github.kt3k.coveralls") version "2.12.0"
 }
 
-version = findProperty("overrideVersion")?.toString() ?: "3.1.0"
+version = findProperty("overrideVersion")?.toString() ?: "3.1.1"
 group = "com.pambrose"
 
 buildConfig {
@@ -37,13 +34,10 @@ buildConfig {
   buildConfigField("String", "APP_NAME", "\"${project.name}\"")
   buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
   val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
-  buildConfigField("String", "APP_RELEASE_DATE", "\"${LocalDate.now().format(formatter)}\"")
-  buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
-}
-
-repositories {
-  // mavenLocal()
-  mavenCentral()
+  val releaseDate = (findProperty("overrideReleaseDate") as String?) ?: LocalDate.now().format(formatter)
+  val buildTime = (findProperty("overrideBuildTime") as String?)?.toLong() ?: System.currentTimeMillis()
+  buildConfigField("String", "APP_RELEASE_DATE", "\"$releaseDate\"")
+  buildConfigField("long", "BUILD_TIME", "${buildTime}L")
 }
 
 dependencies {

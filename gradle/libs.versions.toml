@@ -2,10 +2,10 @@
 # Plugins
 config = "6.0.9"
 detekt = "1.23.8"
-gradle-plugins = "1.0.13"
+gradle-plugins = "1.0.14"
 dokka = "2.2.0"
 maven-publish = "0.36.0"
-kotlin = "2.3.20"
+kotlin = "2.3.21"
 kover = "0.9.8"
 protobuf = "0.10.0"
 shadow = "8.3.7"
@@ -31,9 +31,9 @@ protoc = "4.34.1"
 serialization = "1.11.0"
 slf4j = "2.0.17"
 # Keep in sync with grpc
-tcnative = "2.0.76.Final"
+tcnative = "2.0.77.Final"
 typesafe = "1.4.6"
-utils = "2.8.0"
+utils = "2.8.1"
 zipkin = "6.3.1"
 
 [libraries]

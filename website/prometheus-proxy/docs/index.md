@@ -70,12 +70,12 @@ Get running in under a minute:
     ```bash
     # Start the proxy
     docker run --rm -p 8080:8080 -p 50051:50051 \
-      pambrose/prometheus-proxy:3.1.0
+      pambrose/prometheus-proxy:3.1.1
 
     # Start the agent
     docker run --rm \
       --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-      pambrose/prometheus-agent:3.1.0
+      pambrose/prometheus-agent:3.1.1
     ```
 
 See the [Quick Start Guide](getting-started.md) for detailed instructions.
