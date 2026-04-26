@@ -29,13 +29,14 @@ plugins {
 version = findProperty("overrideVersion")?.toString() ?: "3.1.1"
 group = "com.pambrose"
 
+val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
+val releaseDate = (findProperty("overrideReleaseDate") as String?) ?: LocalDate.now().format(formatter)
+val buildTime = (findProperty("overrideBuildTime") as String?)?.toLong() ?: System.currentTimeMillis()
+
 buildConfig {
   packageName("io.prometheus")
   buildConfigField("String", "APP_NAME", "\"${project.name}\"")
   buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
-  val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
-  val releaseDate = (findProperty("overrideReleaseDate") as String?) ?: LocalDate.now().format(formatter)
-  val buildTime = (findProperty("overrideBuildTime") as String?)?.toLong() ?: System.currentTimeMillis()
   buildConfigField("String", "APP_RELEASE_DATE", "\"$releaseDate\"")
   buildConfigField("long", "BUILD_TIME", "${buildTime}L")
 }
