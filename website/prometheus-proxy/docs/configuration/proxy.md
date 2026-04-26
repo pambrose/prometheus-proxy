@@ -53,13 +53,13 @@ proxy {
 
 When enabled, the following endpoints are available:
 
-| Endpoint | Description |
-|:---------|:------------|
-| `GET /ping` | Returns "pong" (liveness check) |
-| `GET /healthcheck` | Returns health status JSON |
-| `GET /version` | Returns version information |
-| `GET /threaddump` | Returns JVM thread dump |
-| `GET /debug` | Proxy debug info (requires `debugEnabled = true`) |
+| Endpoint           | Description                                       |
+|:-------------------|:--------------------------------------------------|
+| `GET /ping`        | Returns "pong" (liveness check)                   |
+| `GET /healthcheck` | Returns health status JSON                        |
+| `GET /version`     | Returns version information                       |
+| `GET /threaddump`  | Returns JVM thread dump                           |
+| `GET /debug`       | Proxy debug info (requires `debugEnabled = true`) |
 
 ## Metrics
 
@@ -79,12 +79,12 @@ Configure agent cleanup and scrape request management:
 --8<-- "AdvancedExamples.txt:stale-agent-config"
 ```
 
-| Setting | Default | Description |
-|:--------|:--------|:------------|
-| `staleAgentCheckEnabled` | true | Enable periodic stale agent cleanup |
-| `maxAgentInactivitySecs` | 60 | Seconds of inactivity before agent is evicted |
-| `staleAgentCheckPauseSecs` | 10 | Interval between cleanup checks |
-| `scrapeRequestTimeoutSecs` | 90 | Timeout for individual scrape requests |
+| Setting                    | Default | Description                                   |
+|:---------------------------|:--------|:----------------------------------------------|
+| `staleAgentCheckEnabled`   | true    | Enable periodic stale agent cleanup           |
+| `maxAgentInactivitySecs`   | 60      | Seconds of inactivity before agent is evicted |
+| `staleAgentCheckPauseSecs` | 10      | Interval between cleanup checks               |
+| `scrapeRequestTimeoutSecs` | 90      | Timeout for individual scrape requests        |
 
 ## Content Size Limits
 

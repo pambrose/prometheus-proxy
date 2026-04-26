@@ -1,3 +1,4 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.google.protobuf.gradle.id
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.SourcesJar
@@ -9,7 +10,6 @@ import java.time.format.DateTimeFormatter
 
 plugins {
   idea
-  java
   alias(libs.plugins.kotlin.jvm)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.protobuf)   // Keep in sync with grpc
@@ -24,12 +24,9 @@ plugins {
   alias(libs.plugins.dokka)
   alias(libs.plugins.maven.publish)
   alias(libs.plugins.taskinfo) apply false
-  // Turn these off until jacoco fixes their kotlin 1.5.0 SMAP issue
-  // id("jacoco")
-  // id("com.github.kt3k.coveralls") version "2.12.0"
 }
 
-version = findProperty("overrideVersion")?.toString() ?: "3.1.0"
+version = findProperty("overrideVersion")?.toString() ?: "3.1.1"
 group = "com.pambrose"
 
 buildConfig {
@@ -37,13 +34,10 @@ buildConfig {
   buildConfigField("String", "APP_NAME", "\"${project.name}\"")
   buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
   val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
-  buildConfigField("String", "APP_RELEASE_DATE", "\"${LocalDate.now().format(formatter)}\"")
-  buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
-}
-
-repositories {
-  google()
-  mavenCentral()
+  val releaseDate = (findProperty("overrideReleaseDate") as String?) ?: LocalDate.now().format(formatter)
+  val buildTime = (findProperty("overrideBuildTime") as String?)?.toLong() ?: System.currentTimeMillis()
+  buildConfigField("String", "APP_RELEASE_DATE", "\"$releaseDate\"")
+  buildConfigField("long", "BUILD_TIME", "${buildTime}L")
 }
 
 dependencies {
@@ -80,10 +74,10 @@ dependencies {
 configureKotlin()
 configureGrpc()
 configureJars()
+configureDokka()
 configurePublishing()
 configureKotlinter()
 configureDetekt()
-configureDokka()
 configureCoverage()
 
 fun Project.configureKotlin() {
@@ -132,7 +126,7 @@ fun Project.configureKotlin() {
 
 fun Project.configureGrpc() {
   tasks.compileKotlin {
-    dependsOn(":generateProto")
+    dependsOn(tasks.named("generateProto"))
   }
 
   protobuf {
@@ -161,39 +155,70 @@ fun Project.configureGrpc() {
 }
 
 fun Project.configureJars() {
-  // Required for multiple uberjar targets
+  // Disable the default shadowJar; we publish the standard Maven jar and
+  // ship the two named fat jars below.
   tasks.shadowJar {
-    mergeServiceFiles()
+    enabled = false
   }
 
-  val agentJar by tasks.registering(Jar::class) {
-    dependsOn(tasks.shadowJar)
+  val mainOutput = sourceSets.main.get().output
+  val runtimeClasspath = configurations.runtimeClasspath
+
+  val agentJar by tasks.registering(ShadowJar::class) {
     archiveFileName.set("prometheus-agent.jar")
-    manifest {
-      attributes("Main-Class" to "io.prometheus.Agent")
-    }
-    from(zipTree(tasks.shadowJar.get().archiveFile))
+    manifest { attributes("Main-Class" to "io.prometheus.Agent") }
+    mergeServiceFiles()
+    from(mainOutput)
+    configurations = listOf(runtimeClasspath.get())
   }
 
-  val proxyJar by tasks.registering(Jar::class) {
-    dependsOn(tasks.shadowJar)
+  val proxyJar by tasks.registering(ShadowJar::class) {
     archiveFileName.set("prometheus-proxy.jar")
-    manifest {
-      attributes("Main-Class" to "io.prometheus.Proxy")
+    manifest { attributes("Main-Class" to "io.prometheus.Proxy") }
+    mergeServiceFiles()
+    from(mainOutput)
+    configurations = listOf(runtimeClasspath.get())
+  }
+
+  tasks.named("assemble") {
+    dependsOn(agentJar, proxyJar)
+  }
+}
+
+fun Project.configureDokka() {
+  dokka {
+    moduleName.set("Prometheus Proxy")
+
+    dokkaPublications.html {
+      outputDirectory.set(layout.buildDirectory.dir("dokka/html"))
+      includes.from("docs/packages.md")
     }
-    from(zipTree(tasks.shadowJar.get().archiveFile))
+
+    pluginsConfiguration.html {
+      homepageLink.set("https://github.com/pambrose/prometheus-proxy")
+      footerMessage.set("Prometheus Proxy")
+    }
+
+    dokkaSourceSets.main {
+      documentedVisibilities(VisibilityModifier.Public)
+
+      perPackageOption {
+        matchingRegex.set("io\\.prometheus\\.grpc.*")
+        suppress.set(true)
+      }
+
+      suppressedFiles.from("src/main/java/io/prometheus/common/ConfigVals.java")
+
+      sourceLink {
+        localDirectory.set(file("src/main/kotlin"))
+        remoteUrl("https://github.com/pambrose/prometheus-proxy/tree/master/src/main/kotlin")
+        remoteLineSuffix.set("#L")
+      }
+    }
   }
 }
 
 fun Project.configurePublishing() {
-  dokka {
-    moduleName.set("prometheus-proxy")
-    pluginsConfiguration.html {
-      homepageLink.set("https://github.com/pambrose/prometheus-proxy")
-      footerMessage.set("prometheus-proxy")
-    }
-  }
-
   mavenPublishing {
     configure(
       com.vanniktech.maven.publish.KotlinJvm(
@@ -201,11 +226,10 @@ fun Project.configurePublishing() {
         sourcesJar = SourcesJar.Sources(),
       ),
     )
-    coordinates("com.pambrose", "prometheus-proxy", version.toString())
 
     pom {
       name.set("prometheus-proxy")
-      description.set("Dynamic Line-Specific GitHub Permalinks")
+      description.set("Enables Prometheus to scrape metrics from endpoints behind a firewall via a proxy/agent pair connected over gRPC.")
       url.set("https://github.com/pambrose/prometheus-proxy")
       licenses {
         license {
@@ -228,12 +252,10 @@ fun Project.configurePublishing() {
     }
 
     publishToMavenCentral(automaticRelease = true)
-    signAllPublications()
-  }
-
-  // Skip signing when no GPG key is provided (e.g., local publishing)
-  tasks.withType<Sign>().configureEach {
-    isEnabled = project.findProperty("signingInMemoryKey") != null
+    // Skip signing when no GPG key is provided (e.g., local publishing)
+    if (project.findProperty("signingInMemoryKey") != null) {
+      signAllPublications()
+    }
   }
 }
 
@@ -259,36 +281,6 @@ fun Project.configureDetekt() {
     allRules = false
     config.setFrom("$projectDir/etc/detekt/detekt.yml")
     baseline = file("$projectDir/etc/detekt/baseline.xml")
-  }
-}
-
-fun Project.configureDokka() {
-  dokka {
-    moduleName.set("Prometheus Proxy")
-
-    dokkaPublications.html {
-      outputDirectory.set(layout.buildDirectory.dir("dokka/html"))
-      includes.from("docs/packages.md")
-    }
-
-    pluginsConfiguration.html {
-      homepageLink.set("https://github.com/pambrose/prometheus-proxy")
-    }
-
-    dokkaSourceSets.main {
-      documentedVisibilities(VisibilityModifier.Public, VisibilityModifier.Internal)
-
-      perPackageOption {
-        matchingRegex.set("io\\.prometheus\\.grpc.*")
-        suppress.set(true)
-      }
-
-      sourceLink {
-        localDirectory.set(file("src/main/kotlin"))
-        remoteUrl("https://github.com/pambrose/prometheus-proxy/tree/master/src/main/kotlin")
-        remoteLineSuffix.set("#L")
-      }
-    }
   }
 }
 

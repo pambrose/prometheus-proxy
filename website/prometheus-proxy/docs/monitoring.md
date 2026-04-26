@@ -54,38 +54,38 @@ The same options are available under `agent.metrics`.
 
 ### Counters
 
-| Metric | Labels | Description |
-|:-------|:-------|:------------|
-| `proxy_scrape_requests` | `type` | Scrape request outcomes (see below) |
-| `proxy_connect_count` | -- | Agent connection count |
-| `proxy_eviction_count` | -- | Stale agent evictions |
-| `proxy_heartbeat_count` | -- | Heartbeats received from agents |
-| `proxy_chunk_validation_failures_total` | `stage` | Chunk integrity failures (`chunk` or `summary`) |
-| `proxy_chunked_transfers_abandoned_total` | -- | Chunked transfers abandoned mid-stream |
-| `proxy_agent_displacement_total` | -- | Path registrations that displaced another agent |
+| Metric                                    | Labels  | Description                                     |
+|:------------------------------------------|:--------|:------------------------------------------------|
+| `proxy_scrape_requests`                   | `type`  | Scrape request outcomes (see below)             |
+| `proxy_connect_count`                     | --      | Agent connection count                          |
+| `proxy_eviction_count`                    | --      | Stale agent evictions                           |
+| `proxy_heartbeat_count`                   | --      | Heartbeats received from agents                 |
+| `proxy_chunk_validation_failures_total`   | `stage` | Chunk integrity failures (`chunk` or `summary`) |
+| `proxy_chunked_transfers_abandoned_total` | --      | Chunked transfers abandoned mid-stream          |
+| `proxy_agent_displacement_total`          | --      | Path registrations that displaced another agent |
 
 **`proxy_scrape_requests` type labels:**
 
-| Value | Meaning |
-|:------|:--------|
-| `success` | Scrape completed successfully |
-| `timed_out` | Agent did not respond within timeout |
-| `no_agents` | No agents registered for the requested path |
-| `invalid_path` | Requested path is empty or unrecognized |
-| `agent_disconnected` | Agent stream closed before response was received |
-| `missing_results` | Internal error: results object was null |
-| `path_not_found` | Agent returned a non-200 status for the target |
-| `payload_too_large` | Unzipped content exceeded size limit |
-| `invalid_gzip` | Gzip decompression failed |
-| `proxy_not_running` | Proxy is shutting down |
-| `invalid_agent_context` | All agents for the path are in an invalid state |
+| Value                   | Meaning                                          |
+|:------------------------|:-------------------------------------------------|
+| `success`               | Scrape completed successfully                    |
+| `timed_out`             | Agent did not respond within timeout             |
+| `no_agents`             | No agents registered for the requested path      |
+| `invalid_path`          | Requested path is empty or unrecognized          |
+| `agent_disconnected`    | Agent stream closed before response was received |
+| `missing_results`       | Internal error: results object was null          |
+| `path_not_found`        | Agent returned a non-200 status for the target   |
+| `payload_too_large`     | Unzipped content exceeded size limit             |
+| `invalid_gzip`          | Gzip decompression failed                        |
+| `proxy_not_running`     | Proxy is shutting down                           |
+| `invalid_agent_context` | All agents for the path are in an invalid state  |
 
 ### Histograms
 
-| Metric | Labels | Description |
-|:-------|:-------|:------------|
-| `proxy_scrape_request_latency_seconds` | `path` | End-to-end scrape latency |
-| `proxy_scrape_response_bytes` | `path`, `encoding` | Response payload size after decompression |
+| Metric                                 | Labels             | Description                               |
+|:---------------------------------------|:-------------------|:------------------------------------------|
+| `proxy_scrape_request_latency_seconds` | `path`             | End-to-end scrape latency                 |
+| `proxy_scrape_response_bytes`          | `path`, `encoding` | Response payload size after decompression |
 
 Latency buckets: 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s
 
@@ -93,13 +93,13 @@ Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 
 ### Gauges
 
-| Metric | Description |
-|:-------|:------------|
-| `proxy_start_time_seconds` | Proxy start time (Unix epoch) |
-| `proxy_agent_map_size` | Number of connected agents |
-| `proxy_path_map_size` | Number of registered scrape paths |
-| `proxy_scrape_map_size` | Number of in-flight scrape requests |
-| `proxy_chunk_context_map_size` | Number of in-flight chunked transfers |
+| Metric                                | Description                                    |
+|:--------------------------------------|:-----------------------------------------------|
+| `proxy_start_time_seconds`            | Proxy start time (Unix epoch)                  |
+| `proxy_agent_map_size`                | Number of connected agents                     |
+| `proxy_path_map_size`                 | Number of registered scrape paths              |
+| `proxy_scrape_map_size`               | Number of in-flight scrape requests            |
+| `proxy_chunk_context_map_size`        | Number of in-flight chunked transfers          |
 | `proxy_cumulative_agent_backlog_size` | Total queued scrape requests across all agents |
 
 ---
@@ -108,27 +108,27 @@ Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 
 ### Counters
 
-| Metric | Labels | Description |
-|:-------|:-------|:------------|
-| `agent_scrape_request_count` | `launch_id`, `type` | Scrape requests processed |
-| `agent_scrape_result_count` | `launch_id`, `type` | Results sent (`non-gzipped`, `gzipped`, `chunked`) |
-| `agent_connect_count` | `launch_id`, `type` | Connection attempts (`success`, `failure`) |
+| Metric                       | Labels              | Description                                        |
+|:-----------------------------|:--------------------|:---------------------------------------------------|
+| `agent_scrape_request_count` | `launch_id`, `type` | Scrape requests processed                          |
+| `agent_scrape_result_count`  | `launch_id`, `type` | Results sent (`non-gzipped`, `gzipped`, `chunked`) |
+| `agent_connect_count`        | `launch_id`, `type` | Connection attempts (`success`, `failure`)         |
 
 The `launch_id` label uniquely identifies each agent process lifetime.
 
 ### Histograms
 
-| Metric | Labels | Description |
-|:-------|:-------|:------------|
+| Metric                                 | Labels                    | Description                        |
+|:---------------------------------------|:--------------------------|:-----------------------------------|
 | `agent_scrape_request_latency_seconds` | `launch_id`, `agent_name` | Time to fetch from target endpoint |
 
 ### Gauges
 
-| Metric | Labels | Description |
-|:-------|:-------|:------------|
-| `agent_start_time_seconds` | `launch_id` | Agent start time (Unix epoch) |
+| Metric                      | Labels      | Description                    |
+|:----------------------------|:------------|:-------------------------------|
+| `agent_start_time_seconds`  | `launch_id` | Agent start time (Unix epoch)  |
 | `agent_scrape_backlog_size` | `launch_id` | Pending scrape requests queued |
-| `agent_client_cache_size` | `launch_id` | Number of cached HTTP clients |
+| `agent_client_cache_size`   | `launch_id` | Number of cached HTTP clients  |
 
 ---
 
@@ -217,23 +217,23 @@ java -jar prometheus-agent.jar --admin
 
 Key panels to monitor:
 
-| Section | What to Watch |
-|:--------|:-------------|
-| **Overview** | Success rate dropping below 99%, error count spikes |
-| **Throughput** | Sudden changes in request volume or error ratio |
-| **Latency** | P99 creeping up indicates slow targets or network issues |
-| **Payload** | Unexpectedly large responses, gzip vs plain distribution |
-| **Internal State** | Growing backlog means agents can't keep up |
-| **Errors** | Which error types dominate, frequent evictions |
+| Section            | What to Watch                                            |
+|:-------------------|:---------------------------------------------------------|
+| **Overview**       | Success rate dropping below 99%, error count spikes      |
+| **Throughput**     | Sudden changes in request volume or error ratio          |
+| **Latency**        | P99 creeping up indicates slow targets or network issues |
+| **Payload**        | Unexpectedly large responses, gzip vs plain distribution |
+| **Internal State** | Growing backlog means agents can't keep up               |
+| **Errors**         | Which error types dominate, frequent evictions           |
 
 ### Agents Dashboard
 
 Key panels to monitor:
 
-| Section | What to Watch |
-|:--------|:-------------|
-| **Overview** | Unexpected agent count changes |
-| **Connections** | Failure spikes indicate proxy or network issues |
-| **Scrape Activity** | Imbalanced load across agents |
-| **Latency** | Per-agent latency outliers point to slow targets |
-| **Internals** | Growing backlog means the agent is falling behind |
+| Section             | What to Watch                                     |
+|:--------------------|:--------------------------------------------------|
+| **Overview**        | Unexpected agent count changes                    |
+| **Connections**     | Failure spikes indicate proxy or network issues   |
+| **Scrape Activity** | Imbalanced load across agents                     |
+| **Latency**         | Per-agent latency outliers point to slow targets  |
+| **Internals**       | Growing backlog means the agent is falling behind |

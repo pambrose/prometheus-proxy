@@ -38,6 +38,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.milliseconds
 
 class AgentPathManagerTest : StringSpec() {
   private fun createMockAgent(): Agent {
@@ -395,7 +396,7 @@ class AgentPathManagerTest : StringSpec() {
       coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } coAnswers {
         val current = concurrentCalls.incrementAndGet()
         maxConcurrent.updateAndGet { max -> maxOf(max, current) }
-        delay(100) // Simulate slow gRPC call
+        delay(100.milliseconds) // Simulate slow gRPC call
         concurrentCalls.decrementAndGet()
         registerPathResponse {
           valid = true

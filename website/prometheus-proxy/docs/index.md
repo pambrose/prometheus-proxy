@@ -70,25 +70,25 @@ Get running in under a minute:
     ```bash
     # Start the proxy
     docker run --rm -p 8080:8080 -p 50051:50051 \
-      pambrose/prometheus-proxy:3.1.0
+      pambrose/prometheus-proxy:3.1.1
 
     # Start the agent
     docker run --rm \
       --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-      pambrose/prometheus-agent:3.1.0
+      pambrose/prometheus-agent:3.1.1
     ```
 
 See the [Quick Start Guide](getting-started.md) for detailed instructions.
 
 ## Common Use Cases
 
-| Scenario | Description |
-|:---------|:------------|
-| **Enterprise environments** | Scrape metrics across corporate firewall boundaries |
-| **Multi-cloud deployments** | Bridge different network segments |
-| **Secure environments** | Monitor internal services without opening inbound ports |
-| **Federation** | Scrape existing Prometheus instances via `/federate` endpoint |
-| **Kubernetes** | Monitor services across clusters or namespaces |
+| Scenario                    | Description                                                   |
+|:----------------------------|:--------------------------------------------------------------|
+| **Enterprise environments** | Scrape metrics across corporate firewall boundaries           |
+| **Multi-cloud deployments** | Bridge different network segments                             |
+| **Secure environments**     | Monitor internal services without opening inbound ports       |
+| **Federation**              | Scrape existing Prometheus instances via `/federate` endpoint |
+| **Kubernetes**              | Monitor services across clusters or namespaces                |
 
 ## API Reference
 
@@ -98,36 +98,36 @@ Full API documentation (KDocs) is available at [KDocs](kdocs/).
 
 <div class="grid cards" markdown>
 
--   :material-sitemap:{ .lg .middle } __Architecture__
+- :material-sitemap:{ .lg .middle } __Architecture__
 
-    ---
+  ---
 
-    Understand the proxy/agent components, gRPC protocol, and request flow
+  Understand the proxy/agent components, gRPC protocol, and request flow
 
-    [:octicons-arrow-right-24: Architecture](architecture.md)
+  [:octicons-arrow-right-24: Architecture](architecture.md)
 
--   :material-cog:{ .lg .middle } __Configuration__
+- :material-cog:{ .lg .middle } __Configuration__
 
-    ---
+  ---
 
-    Configure the application with HOCON and environment variables
+  Configure the application with HOCON and environment variables
 
-    [:octicons-arrow-right-24: Configuration](configuration/index.md)
+  [:octicons-arrow-right-24: Configuration](configuration/index.md)
 
--   :material-shield-lock:{ .lg .middle } __Security & TLS__
+- :material-shield-lock:{ .lg .middle } __Security & TLS__
 
-    ---
+  ---
 
-    Set up TLS encryption and mutual authentication
+  Set up TLS encryption and mutual authentication
 
-    [:octicons-arrow-right-24: Security](security/index.md)
+  [:octicons-arrow-right-24: Security](security/index.md)
 
--   :material-chart-line:{ .lg .middle } __Monitoring__
+- :material-chart-line:{ .lg .middle } __Monitoring__
 
-    ---
+  ---
 
-    Built-in metrics and Grafana dashboards
+  Built-in metrics and Grafana dashboards
 
-    [:octicons-arrow-right-24: Monitoring](monitoring.md)
+  [:octicons-arrow-right-24: Monitoring](monitoring.md)
 
 </div>

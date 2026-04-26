@@ -16,7 +16,7 @@
 
 package io.prometheus.proxy
 
-object ProxyConstants {
+internal object ProxyConstants {
   const val MISSING_PATH_MSG = "Request missing path"
   const val CACHE_CONTROL_VALUE = "must-revalidate,no-store"
   const val FAVICON_FILENAME = "favicon.ico"

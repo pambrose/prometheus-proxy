@@ -9,8 +9,10 @@ The system has two components: a **proxy** that runs alongside Prometheus (outsi
 - [Documentation](https://pambrose.github.io/prometheus-proxy/)
 - [GitHub Repository](https://github.com/pambrose/prometheus-proxy)
 - [README](https://github.com/pambrose/prometheus-proxy/blob/master/README.md)
+- [Changelog](https://github.com/pambrose/prometheus-proxy/blob/master/CHANGELOG.md)
+- [Release Notes](https://github.com/pambrose/prometheus-proxy/blob/master/RELEASE_NOTES.md)
 - [KDoc API Reference](https://pambrose.github.io/prometheus-proxy/kdocs/)
-- [CLI Options & Environment Variables](https://github.com/pambrose/prometheus-proxy/blob/master/docs/cli-args.md)
+- [CLI Reference](https://pambrose.github.io/prometheus-proxy/cli-reference/)
 - [Maven Central](https://central.sonatype.com/artifact/com.pambrose/prometheus-proxy)
 - [Docker Images: pambrose/prometheus-proxy](https://hub.docker.com/r/pambrose/prometheus-proxy)
 - [Docker Images: pambrose/prometheus-agent](https://hub.docker.com/r/pambrose/prometheus-agent)
@@ -56,7 +58,16 @@ Key RPCs:
 - **Stale agent cleanup**: `AgentContextCleanupService` evicts inactive agents after `maxAgentInactivitySecs` (default 60s)
 - **Consolidated mode**: Multiple agents can register the same path for redundancy
 - **Auth forwarding**: Proxy forwards `Authorization` headers (basic auth / bearer token) from Prometheus scrape configs to agents over gRPC
-- **Embedded agent**: Agents can run inside other JVM apps via `startAsyncAgent()`
+- **Embedded agent**: Agents can run inside other JVM apps via `Agent.startAsyncAgent()`, returning an `EmbeddedAgentInfo` lifecycle handle
+
+### Public API Surface
+
+These are the only types intended for external consumption (everything else is `internal`):
+
+- `io.prometheus.Agent` and `io.prometheus.Proxy` (entry points)
+- `io.prometheus.agent.AgentOptions`, `io.prometheus.proxy.ProxyOptions`, `io.prometheus.common.BaseOptions` (config/CLI parsing)
+- `io.prometheus.agent.EmbeddedAgentInfo` (returned by `Agent.startAsyncAgent`)
+- `io.prometheus.common.EnvVars` (typed env-var enum)
 
 ## Quick Start
 
@@ -76,12 +87,12 @@ java -jar prometheus-agent.jar --proxy mymachine.local --config myapps.conf
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:3.1.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:3.1.1
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:3.1.0
+  pambrose/prometheus-agent:3.1.1
 ```
 
 ## Configuration
@@ -145,10 +156,13 @@ TLS with mutual auth additionally requires:
 ```bash
 git clone https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy
-./gradlew build          # Build with tests
-./gradlew shadowJar      # Build fat JARs
-./gradlew agentJar proxyJar  # Named JARs in build/libs/
+./gradlew build                              # Build with tests
+./gradlew agentJar proxyJar                  # Named fat JARs in build/libs/
+./gradlew build -PoverrideVersion=X.Y.Z      # Build with a custom version
+./gradlew build -PuseMavenLocal=true         # Resolve from ~/.m2 in addition to Maven Central
 ```
+
+`agentJar` and `proxyJar` are dedicated `ShadowJar` tasks; the default `shadowJar` task is disabled to avoid producing a third redundant fat jar. Repository declarations are centralized in `settings.gradle.kts` (`FAIL_ON_PROJECT_REPOS`).
 
 ## Tech Stack
 
@@ -173,7 +187,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:3.1.0")
+  implementation("com.pambrose:prometheus-proxy:3.1.1")
 }
 ```
 

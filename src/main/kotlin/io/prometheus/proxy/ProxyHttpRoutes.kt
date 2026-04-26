@@ -61,7 +61,7 @@ import kotlin.time.Duration.Companion.seconds
  * @see ProxyPathManager
  * @see AgentContext
  */
-object ProxyHttpRoutes {
+internal object ProxyHttpRoutes {
   private val logger = logger {}
   private val format = Json { prettyPrint = true }
   private val authHeaderWithoutTlsWarned = AtomicBoolean(false)
@@ -370,7 +370,7 @@ object ProxyHttpRoutes {
   }
 }
 
-data class ScrapeRequestResponse(
+internal data class ScrapeRequestResponse(
   val statusCode: HttpStatusCode,
   val updateMsg: String,
   val contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
@@ -380,7 +380,7 @@ data class ScrapeRequestResponse(
   val fetchDuration: Duration,
 )
 
-data class ResponseResults(
+internal data class ResponseResults(
   val statusCode: HttpStatusCode = HttpStatusCode.OK,
   val contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
   val contentText: String = "",

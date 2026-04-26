@@ -55,16 +55,16 @@ sequenceDiagram
 The communication between Proxy and Agent uses a bidirectional gRPC protocol defined in
 `proxy_service.proto`. Key RPCs:
 
-| RPC | Type | Description |
-|:----|:-----|:------------|
-| `connectAgent` | Unary | Agent announces its presence |
-| `registerAgent` | Unary | Register agent identity and metadata |
-| `registerPath` | Unary | Register a scrape path with optional labels |
-| `unregisterPath` | Unary | Remove a previously registered path |
-| `readRequestsFromProxy` | Server-streaming | Proxy sends scrape requests to agent |
-| `writeResponsesToProxy` | Client-streaming | Agent sends scrape responses back |
+| RPC                            | Type             | Description                                      |
+|:-------------------------------|:-----------------|:-------------------------------------------------|
+| `connectAgent`                 | Unary            | Agent announces its presence                     |
+| `registerAgent`                | Unary            | Register agent identity and metadata             |
+| `registerPath`                 | Unary            | Register a scrape path with optional labels      |
+| `unregisterPath`               | Unary            | Remove a previously registered path              |
+| `readRequestsFromProxy`        | Server-streaming | Proxy sends scrape requests to agent             |
+| `writeResponsesToProxy`        | Client-streaming | Agent sends scrape responses back                |
 | `writeChunkedResponsesToProxy` | Client-streaming | Agent sends chunked responses for large payloads |
-| `sendHeartBeat` | Unary | Keep-alive during periods of inactivity |
+| `sendHeartBeat`                | Unary            | Keep-alive during periods of inactivity          |
 
 ## Chunking
 

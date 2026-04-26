@@ -12,7 +12,10 @@ stubs:
 	./gradlew generateProto
 
 build: clean stubs
-	./gradlew build -xtest
+	./gradlew build -PreleaseDate=2026-04-25 -xtest
+
+local-build: clean stubs
+	./gradlew build -PuseMavenLocal=true -PreleaseDate=2026-04-25 -xtest
 
 tibuild: clean stubs
 	./gradlew tiTree build -xtest
@@ -52,8 +55,8 @@ tsconfig:
 
 distro: build jars
 
-#PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x,linux/ppc64le
-PLATFORMS := linux/amd64,linux/arm64/v8,linux/s390x
+PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
+#PLATFORMS := linux/amd64,linux/arm64,linux/s390x
 IMAGE_PREFIX := pambrose/prometheus
 
 docker-push:

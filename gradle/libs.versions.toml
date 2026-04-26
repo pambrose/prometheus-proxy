@@ -2,14 +2,14 @@
 # Plugins
 config = "6.0.9"
 detekt = "1.23.8"
-gradle-plugins = "1.0.12"
+gradle-plugins = "1.0.14"
 dokka = "2.2.0"
 maven-publish = "0.36.0"
-kotlin = "2.3.20"
+kotlin = "2.3.21"
 kover = "0.9.8"
-protobuf = "0.9.6"
+protobuf = "0.10.0"
 shadow = "8.3.7"
-taskinfo = "3.0.1"
+taskinfo = "3.0.2"
 
 # Libraries
 annotation = "1.3.2"
@@ -21,19 +21,19 @@ jakartaServlet = "6.1.0"
 jcommander = "3.0"
 jetty = "11.0.26"
 kotest = "6.1.11"
-ktor = "3.4.2"
+ktor = "3.4.3"
 logback = "1.5.32"
 logging = "8.0.01"
 mockk = "1.14.9"
 prometheus = "0.16.0"
 # Keep in sync with grpc
 protoc = "4.34.1"
-serialization = "1.10.0"
+serialization = "1.11.0"
 slf4j = "2.0.17"
 # Keep in sync with grpc
-tcnative = "2.0.74.Final"
+tcnative = "2.0.77.Final"
 typesafe = "1.4.6"
-utils = "2.7.1"
+utils = "2.8.1"
 zipkin = "6.3.1"
 
 [libraries]
@@ -151,7 +151,6 @@ common-utils = [
   "common-utils-jetty",
   "common-utils-ktor-client",
   "common-utils-prometheus",
-  "common-utils-jetty",
   "common-utils-service",
   "common-utils-zipkin"
 ]

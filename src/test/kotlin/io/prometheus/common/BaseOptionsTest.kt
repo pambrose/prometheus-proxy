@@ -277,10 +277,10 @@ class BaseOptionsTest : StringSpec() {
       try {
         val confFile = File(tempDir, "test-subst.conf")
         confFile.writeText(
-          """
+          $$"""
           proxy {
             http.port = 8888
-            admin.port = ${"$"}{proxy.http.port}
+            admin.port = ${proxy.http.port}
           }
           """.trimIndent(),
         )
@@ -333,9 +333,9 @@ class BaseOptionsTest : StringSpec() {
     // verifies the interpolation produces the expected output.
     "readConfig error message should include literal dollar sign before env var name" {
       val envConfig = "AGENT_CONFIG"
-      val message = "A configuration file or url must be specified with --config or \$$envConfig"
+      val message = $$"A configuration file or url must be specified with --config or $$$envConfig"
 
-      message shouldBe "A configuration file or url must be specified with --config or \$AGENT_CONFIG"
+      message shouldBe $$"A configuration file or url must be specified with --config or $AGENT_CONFIG"
     }
 
     // ==================== ConfigVals Tests ====================

@@ -55,20 +55,20 @@ The embedded agent uses the same HOCON configuration as the standalone agent:
 
 Starts the agent in background threads/coroutines.
 
-| Parameter | Type | Description |
-|:----------|:-----|:------------|
-| `configFilename` | `String` | Path to the HOCON config file |
+| Parameter             | Type      | Description                              |
+|:----------------------|:----------|:-----------------------------------------|
+| `configFilename`      | `String`  | Path to the HOCON config file            |
 | `exitOnMissingConfig` | `Boolean` | Exit the JVM if config file is not found |
-| `logBanner` | `Boolean` | Log the startup banner (default: `true`) |
+| `logBanner`           | `Boolean` | Log the startup banner (default: `true`) |
 
 **Returns:** `EmbeddedAgentInfo`
 
 ### `EmbeddedAgentInfo`
 
-| Property | Type | Description |
-|:---------|:-----|:------------|
-| `launchId` | `String` | Unique ID for this agent launch |
-| `agentName` | `String` | Name of the agent |
+| Property    | Type     | Description                     |
+|:------------|:---------|:--------------------------------|
+| `launchId`  | `String` | Unique ID for this agent launch |
+| `agentName` | `String` | Name of the agent               |
 
 ## How It Works
 

@@ -31,8 +31,8 @@ icon: lucide/play
     Multi-platform images (amd64, arm64, s390x) are available on Docker Hub:
 
     ```bash
-    docker pull pambrose/prometheus-proxy:3.1.0
-    docker pull pambrose/prometheus-agent:3.1.0
+    docker pull pambrose/prometheus-proxy:3.1.1
+    docker pull pambrose/prometheus-agent:3.1.1
     ```
 
 ## Start the Proxy
@@ -54,7 +54,7 @@ The proxy runs outside the firewall alongside your Prometheus server.
 
     ```bash
     docker run --rm -p 8080:8080 -p 50051:50051 \
-      pambrose/prometheus-proxy:3.1.0
+      pambrose/prometheus-proxy:3.1.1
     ```
 
 ## Start the Agent
@@ -108,7 +108,7 @@ Each entry in `pathConfigs` maps:
       --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
       --env AGENT_CONFIG=agent.conf \
       --env PROXY_HOSTNAME=proxy-host.example.com \
-      pambrose/prometheus-agent:3.1.0
+      pambrose/prometheus-agent:3.1.1
     ```
 
 === "Remote Config"

@@ -517,11 +517,35 @@ class Agent(
   companion object {
     private val logger = logger {}
 
+    /**
+     * JVM entry point for the standalone Agent process.
+     *
+     * Equivalent to calling [startSyncAgent] with `exitOnMissingConfig = true`, meaning the process
+     * terminates with a non-zero exit code if no config file or URL is provided via `--config`/`-c` or
+     * the `AGENT_CONFIG` environment variable. Used as the `Main-Class` of `prometheus-agent.jar`.
+     *
+     * @param args Raw command-line arguments forwarded to [AgentOptions] for parsing.
+     */
     @JvmStatic
     fun main(args: Array<String>) {
       startSyncAgent(args, exitOnMissingConfig = true)
     }
 
+    /**
+     * Starts an Agent in the calling thread and blocks until shutdown.
+     *
+     * Logs the agent banner and version, parses [args] into an [AgentOptions], constructs an [Agent], and
+     * immediately calls `startSync()` from the constructor's `initBlock`. Control returns to the caller only
+     * after the Agent terminates (e.g. process signal, fatal error, or explicit [stop]).
+     *
+     * Use this from `main()` or any code that wants to run the Agent as the foreground task. For embedded
+     * usage inside another running JVM, use [startAsyncAgent] instead.
+     *
+     * @param args Raw command-line arguments forwarded to [AgentOptions] for parsing.
+     * @param exitOnMissingConfig When `true`, the process exits with a non-zero status if no config file/URL
+     *   is supplied. When `false`, the Agent falls back to the built-in reference config (mostly useful in
+     *   tests where defaults are sufficient).
+     */
     @JvmStatic
     fun startSyncAgent(
       args: Array<String>,
@@ -534,6 +558,23 @@ class Agent(
       Agent(options = AgentOptions(args, exitOnMissingConfig)) { startSync() }
     }
 
+    /**
+     * Starts an Agent on a background thread and returns immediately, suitable for embedding inside another
+     * JVM application.
+     *
+     * Unlike [startSyncAgent], this does not block — the Agent's lifecycle is owned by the caller via the
+     * returned [EmbeddedAgentInfo], which exposes the agent's `launchId` and `agentName` and a `stop()` method
+     * for graceful shutdown.
+     *
+     * @param configFilename Path or URL to the HOCON config file. Forwarded to the
+     *   [AgentOptions] config-filename constructor so it follows the same resolution rules as the
+     *   `--config` CLI flag.
+     * @param exitOnMissingConfig When `true`, terminates the calling process if the config cannot be located.
+     *   For embedded usage where the host application should handle config errors itself, pass `false`.
+     * @param logBanner When `true` (default), logs the Agent ASCII banner and version on startup. Pass `false`
+     *   to suppress banner output when embedding inside an app that owns its own logging surface.
+     * @return An [EmbeddedAgentInfo] handle for inspecting and shutting down the launched Agent.
+     */
     @Suppress("unused")
     @JvmStatic
     fun startAsyncAgent(

@@ -17,6 +17,7 @@
 package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
+import com.google.common.collect.EvictingQueue
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.pambrose.common.service.GenericService
@@ -26,7 +27,6 @@ import com.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.pambrose.common.util.Version
 import com.pambrose.common.util.getBanner
 import com.pambrose.common.util.simpleClassName
-import com.google.common.collect.EvictingQueue
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
@@ -448,6 +448,22 @@ class Proxy(
   companion object {
     private val logger = logger {}
 
+    /**
+     * JVM entry point for the standalone Proxy process.
+     *
+     * Logs the Proxy ASCII banner and version, parses [args] into a [ProxyOptions], constructs a [Proxy],
+     * and immediately calls `startSync()` from the constructor's `initBlock`. Control returns to the JVM only
+     * after the Proxy terminates (e.g. process signal, fatal error, or explicit shutdown).
+     *
+     * Used as the `Main-Class` of `prometheus-proxy.jar`. Unlike [Agent.main], the Proxy always loads its
+     * built-in reference config when no `--config`/`PROXY_CONFIG` is supplied, so there is no
+     * `exitOnMissingConfig` flag to plumb through here.
+     *
+     * For embedded use inside another JVM (mirroring [Agent.startAsyncAgent]), construct a [Proxy] directly
+     * and call `startAsync()` rather than using this method.
+     *
+     * @param args Raw command-line arguments forwarded to [ProxyOptions] for parsing.
+     */
     @JvmStatic
     fun main(args: Array<String>) {
       logger.apply {

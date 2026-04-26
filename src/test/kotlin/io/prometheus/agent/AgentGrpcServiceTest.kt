@@ -1151,14 +1151,14 @@ class AgentGrpcServiceTest : StringSpec() {
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // Read grpcStarted via the delegate field
-      val delegateField = service.javaClass.getDeclaredField("grpcStarted\$delegate")
+      val delegateField = service.javaClass.getDeclaredField($$"grpcStarted$delegate")
       delegateField.isAccessible = true
       val delegate = delegateField.get(service)
 
       // The delegate wraps an AtomicBoolean in a field named "atomicVal"
       val atomicValField = delegate.javaClass.getDeclaredField("atomicVal")
       atomicValField.isAccessible = true
-      val atomicBool = atomicValField.get(delegate) as java.util.concurrent.atomic.AtomicBoolean
+      val atomicBool = atomicValField.get(delegate) as AtomicBoolean
 
       // After successful construction, grpcStarted should be true
       atomicBool.get().shouldBeTrue()

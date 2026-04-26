@@ -5,7 +5,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:3.1.0")
+  implementation("com.pambrose:prometheus-proxy:3.1.1")
 }
 // --8<-- [end:gradle-dependency]
 
@@ -15,7 +15,7 @@ dependencies {
   <dependency>
     <groupId>com.pambrose</groupId>
     <artifactId>prometheus-proxy</artifactId>
-    <version>3.1.0</version>
+    <version>3.1.1</version>
   </dependency>
 </dependencies>
 <!-- --8<-- [end:maven-dependency] -->
