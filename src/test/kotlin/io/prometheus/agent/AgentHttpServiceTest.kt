@@ -46,7 +46,11 @@ import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import java.net.InetSocketAddress
+import java.net.Socket
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource.Monotonic
 import kotlin.time.measureTime
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -168,9 +172,20 @@ class AgentHttpServiceTest : StringSpec() {
   private suspend fun startServerAndGetPort(server: EmbeddedServer<*, *>): Int {
     server.start(wait = false)
     val port = server.engine.resolvedConnectors().first().port
-    // Allow the CIO server engine to fully start accepting connections
-    delay(100.milliseconds)
-    return port
+
+    // Poll the bound port until it accepts a TCP connection. Replaces a fixed
+    // delay() that occasionally was not long enough on a busy machine, leaving
+    // the client to hit "connection refused" and fail the scrape.
+    val deadline = Monotonic.markNow() + 5.seconds
+    while (Monotonic.markNow() < deadline) {
+      try {
+        Socket().use { it.connect(InetSocketAddress("localhost", port), 200) }
+        return port
+      } catch (_: java.io.IOException) {
+        delay(20.milliseconds)
+      }
+    }
+    error("Embedded server on port $port did not start accepting connections within 5s")
   }
 
   init {
