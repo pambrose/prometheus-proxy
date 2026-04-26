@@ -12,10 +12,10 @@ stubs:
 	./gradlew generateProto
 
 build: clean stubs
-	./gradlew build -PreleaseDate=2026-04-25 -xtest
+	./gradlew build -PreleaseDate=04/25/2026 -xtest
 
 local-build: clean stubs
-	./gradlew build -PuseMavenLocal=true -PreleaseDate=2026-04-25 -xtest
+	./gradlew build -PuseMavenLocal=true -PreleaseDate=04/25/2026 -xtest
 
 tibuild: clean stubs
 	./gradlew tiTree build -xtest
