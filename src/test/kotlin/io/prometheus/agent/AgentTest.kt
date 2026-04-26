@@ -21,6 +21,7 @@ package io.prometheus.agent
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
+import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -33,6 +34,7 @@ import io.kotest.matchers.string.shouldNotBeEmpty
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -461,8 +463,12 @@ class AgentTest : StringSpec() {
         val activeCoroutines = AtomicInt(0)
         val waitingActions = Channel<suspend () -> Unit>(Channel.UNLIMITED)
         val processedCount = AtomicInt(0)
+        // Each action blocks on this gate so the active count is deterministic
+        // until we explicitly release it — no reliance on delay() timing windows.
+        val gate = CompletableDeferred<Unit>()
 
-        // This test simulates the loop in Agent.kt:294
+        // Mirrors the loop in Agent.connectToProxy: acquire the semaphore BEFORE
+        // launching the child coroutine to provide backpressure to the channel.
         val job = launch(Dispatchers.Default) {
           for (action in waitingActions) {
             semaphore.acquire() // This is the fix for Bug #1
@@ -479,23 +485,26 @@ class AgentTest : StringSpec() {
           }
         }
 
-        // Flood the channel with many actions
+        // Flood the channel with many actions, each suspended on the gate.
+        // Without the fix, all `floodSize` coroutines would launch immediately
+        // and activeCoroutines would reach `floodSize`; with the fix, only
+        // `maxConcurrency` coroutines may proceed past the increment.
         val floodSize = 100
         repeat(floodSize) {
-          waitingActions.send {
-            delay(10.milliseconds)
-          }
+          waitingActions.send { gate.await() }
         }
 
-        // Wait a bit for processing to start
-        delay(50.milliseconds)
+        // Wait until the active count settles at the expected ceiling, with a
+        // generous timeout to absorb scheduler jitter under CI load.
+        eventually(2.seconds) {
+          activeCoroutines.load() shouldBe maxConcurrency
+        }
 
-        // Without the fix, activeCoroutines would be floodSize (all launched immediately)
-        // With the fix, activeCoroutines should be <= maxConcurrency
+        // Sanity: still bounded after settling.
         activeCoroutines.load() shouldBeGreaterThanOrEqual 0
-        activeCoroutines.load() shouldBe maxConcurrency // Exactly maxConcurrency should be active
 
-        // Clean up
+        // Release the gate, drain the channel, and verify every action ran.
+        gate.complete(Unit)
         waitingActions.close()
         job.join()
         processedCount.load() shouldBe floodSize
