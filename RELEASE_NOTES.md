@@ -2,6 +2,50 @@
 
 ---
 
+## 3.1.1
+
+_Released 2026-04-25_
+
+### Highlights
+
+- **Documented public API** — Every `@Parameter` field on `BaseOptions` / `AgentOptions` / `ProxyOptions`, every value of `EnvVars`, the `Agent` and `Proxy` companion entry points, and `EmbeddedAgentInfo` now ship with full KDoc covering resolution precedence (CLI → env → config → default), sentinel values, and validation rules.
+- **Reproducible builds** — `BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` accept `-PoverrideReleaseDate` / `-PoverrideBuildTime` Gradle properties so CI can produce bit-identical artifacts.
+- **Cleaner build script** — Centralized repositories in `settings.gradle.kts`, dropped the redundant fat-jar rewrap, removed the redundant `java` plugin alias, and aligned `dependsOn` calls on `tasks.named()`.
+
+### New Features
+
+- `-PoverrideReleaseDate` and `-PoverrideBuildTime` properties for reproducible builds
+
+### Build & Tooling
+
+- Centralize repository declarations in `settings.gradle.kts` via `dependencyResolutionManagement(FAIL_ON_PROJECT_REPOS)`; `mavenLocal()` is opt-in with `-PuseMavenLocal=true`
+- Replace the `agentJar`/`proxyJar` zipTree-rewrap with two `ShadowJar` tasks (configuration-cache safe; one fewer redundant fat jar on disk)
+- Drop the redundant `java` plugin (applied transitively by `kotlin.jvm`)
+- Switch `compileKotlin.dependsOn(":generateProto")` to `tasks.named("generateProto")` for type-safe task references
+- Mark the internal `Utils` object as `internal`
+- Add Claude Code GitHub workflow
+
+### Documentation
+
+- Full KDoc on the public API surface — `BaseOptions`, `AgentOptions`, `ProxyOptions`, `EnvVars`, `Agent.Companion`, `Proxy.Companion`, `EmbeddedAgentInfo` — with resolution precedence, sentinel-value, and validation notes
+- Trim `docs/packages.md` to the genuinely-public types so Dokka has no dangling cross-references; internal plumbing (HTTP routing, gRPC services, agent registries, etc.) is documented in source but intentionally omitted from the published site
+- Refresh metrics-and-grafana reference and the Zensical website docs
+
+### Dependency Updates
+
+| Dependency     | Old          | New          |
+|----------------|--------------|--------------|
+| Kotlin         | 2.3.20       | 2.3.21       |
+| Ktor           | 3.4.2        | 3.4.3        |
+| serialization  | 1.10.0       | 1.11.0       |
+| tcnative       | 2.0.74.Final | 2.0.77.Final |
+| utils          | 2.7.1        | 2.8.1        |
+| gradle-plugins | 1.0.12       | 1.0.14       |
+| protobuf       | 0.9.6        | 0.10.0       |
+| taskinfo       | 3.0.1        | 3.0.2        |
+
+---
+
 ## 3.1.0
 
 ### Highlights

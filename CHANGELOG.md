@@ -4,6 +4,42 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [3.1.1] - 2026-04-25
+
+### New Features
+
+- Add `-PoverrideReleaseDate` and `-PoverrideBuildTime` Gradle properties for reproducible builds (`BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` now accept overrides instead of always reading the local clock)
+
+### Build & Tooling
+
+- Centralize repository declarations in `settings.gradle.kts` via `dependencyResolutionManagement(FAIL_ON_PROJECT_REPOS)`; opt into `mavenLocal()` with `-PuseMavenLocal=true`
+- Replace the `agentJar` / `proxyJar` zipTree-rewrap pattern with two `ShadowJar` tasks for configuration-cache safety on Gradle 9.x and one fewer redundant fat jar
+- Drop the redundant `java` plugin (already applied transitively by `kotlin.jvm`)
+- Use `tasks.named("generateProto")` instead of the `:generateProto` path string
+- Mark internal `Utils` object as `internal` so it no longer leaks into the public API surface
+- Add Claude Code GitHub workflow
+
+### Documentation
+
+- Add KDoc to every `@Parameter` field on `BaseOptions`, `AgentOptions`, and `ProxyOptions`, every value of the `EnvVars` enum, the `Agent` and `Proxy` companion entry points, and `EmbeddedAgentInfo` — the supported public API now has full Dokka coverage with resolution-precedence, sentinel-value, and validation notes
+- Trim `docs/packages.md` to advertise only the genuinely-public surface (`Agent`, `Proxy`, `AgentOptions`, `ProxyOptions`, `BaseOptions`, `EnvVars`, `EmbeddedAgentInfo`); remove dangling cross-references to internal types
+- Refresh website docs and metrics-and-grafana reference
+
+### Dependency Updates
+
+| Dependency     | Old    | New    |
+|----------------|--------|--------|
+| Kotlin         | 2.3.20 | 2.3.21 |
+| Ktor           | 3.4.2  | 3.4.3  |
+| serialization  | 1.10.0 | 1.11.0 |
+| tcnative       | 2.0.74.Final | 2.0.77.Final |
+| utils          | 2.7.1  | 2.8.1  |
+| gradle-plugins | 1.0.12 | 1.0.14 |
+| protobuf       | 0.9.6  | 0.10.0 |
+| taskinfo       | 3.0.1  | 3.0.2  |
+
+---
+
 ## [3.1.0] - 2026-04-04
 
 ### Breaking Changes

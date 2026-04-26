@@ -68,10 +68,22 @@ Prometheus → Proxy HTTP (:8080) → AgentContext lookup → ScrapeRequest via 
    - `HttpClientCache` — caches HTTP clients keyed by auth credentials (TTL/idle eviction)
 
 3. **Common (`io.prometheus.common/`)** — shared between proxy and agent
-   - `BaseOptions` — CLI argument parsing and config loading
+   - `BaseOptions` — CLI argument parsing and config loading (parent of `AgentOptions` / `ProxyOptions`)
    - `ConfigVals` — type-safe config wrapper (auto-generated from HOCON via tscfg; see `make tsconfig`)
    - `ScrapeResults` — scrape response data model
    - `EnvVars` — environment variable mappings
+
+### Public API Surface (Dokka)
+
+Only these types are part of the supported, documented public API. Everything else is `internal`:
+
+- `io.prometheus.Agent` (entry point + companion `main` / `startSyncAgent` / `startAsyncAgent`)
+- `io.prometheus.Proxy` (entry point + companion `main`)
+- `io.prometheus.agent.AgentOptions` / `io.prometheus.proxy.ProxyOptions` / `io.prometheus.common.BaseOptions`
+- `io.prometheus.agent.EmbeddedAgentInfo` (handle returned by `Agent.startAsyncAgent`)
+- `io.prometheus.common.EnvVars`
+
+When promoting a type from `internal` to `public`, also add a cross-reference to it in `docs/packages.md` (the Dokka `includes.from` file). When demoting, remove the link to avoid dangling references in the generated site.
 
 ### gRPC Service Definition
 
@@ -92,9 +104,20 @@ Defined in `src/main/proto/proxy_service.proto`. Key RPCs:
 
 ## Configuration
 
-Uses Typesafe Config (HOCON). Precedence: CLI args → env vars → config file. Reference schema: `config/config.conf`. Example configs in `examples/`.
+Uses Typesafe Config (HOCON). Precedence: CLI args → env vars → config file → built-in defaults. Reference schema: `config/config.conf`. Example configs in `examples/`.
 
 The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`make tsconfig`).
+
+## Reproducible Builds
+
+`BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` default to the local clock at build time, but can be overridden:
+
+```bash
+./gradlew build -PoverrideReleaseDate=04/25/2026 -PoverrideBuildTime=1745558400000
+./gradlew build -PoverrideVersion=3.1.2-SNAPSHOT
+```
+
+Use these for CI snapshot publishing and bit-identical artifact reproduction.
 
 ## Testing
 
@@ -126,6 +149,8 @@ Snippets use dual `base_path` in zensical.toml: first resolves `.txt` files from
 ## Publishing
 
 Published to Maven Central as `com.pambrose:prometheus-proxy`. No JitPack.
+
+Repository declarations are centralized in `settings.gradle.kts` via `dependencyResolutionManagement(FAIL_ON_PROJECT_REPOS)`. Opt into `mavenLocal()` for local snapshot testing with `-PuseMavenLocal=true`.
 
 ## Code Style
 
