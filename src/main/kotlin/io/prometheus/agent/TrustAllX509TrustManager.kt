@@ -21,7 +21,7 @@ import javax.net.ssl.X509TrustManager
 
 // https://stackoverflow.com/questions/66490928/how-can-i-disable-ktor-client-ssl-verification
 
-object TrustAllX509TrustManager : X509TrustManager {
+internal object TrustAllX509TrustManager : X509TrustManager {
   private val EMPTY_CERTIFICATES: Array<X509Certificate?> = arrayOfNulls(0)
 
   override fun getAcceptedIssuers(): Array<X509Certificate?> = EMPTY_CERTIFICATES

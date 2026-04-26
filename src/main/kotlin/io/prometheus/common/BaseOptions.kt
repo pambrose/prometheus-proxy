@@ -30,6 +30,7 @@ import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
 import io.prometheus.common.EnvVars.CERT_CHAIN_FILE_PATH
@@ -53,64 +54,142 @@ abstract class BaseOptions protected constructor(
   private val envConfig: String,
   private val exitOnMissingConfig: Boolean = false,
 ) {
+  /**
+   * Path or URL to the HOCON config file. Accepts a local filesystem path, an `http://`/`https://` URL, or a
+   * `.json`/`.properties` file (syntax inferred from the extension).
+   * Empty falls back to the env var named by the subclass-specific `envConfig` parameter
+   * (`PROXY_CONFIG` for the Proxy, `AGENT_CONFIG` for the Agent).
+   */
   @Parameter(names = ["-c", "--conf", "--config"], description = "Configuration file or url")
   private var configSource = ""
 
+  /**
+   * Enables the admin servlets (`/ping`, `/version`, `/healthcheck`, `/threaddump`) on this process.
+   * Resolved from CLI → [ADMIN_ENABLED] env var → `<role>.admin.enabled` config (default `false`).
+   */
   @Parameter(names = ["-r", "--admin"], description = "Admin servlets enabled")
   var adminEnabled = false
     private set
 
+  /**
+   * Listen port for this process's admin servlets.
+   * `-1` means "fall back to [ADMIN_PORT] env var, then `<role>.admin.port` config (Proxy default `8092`,
+   * Agent default `8093`)".
+   */
   @Parameter(names = ["-i", "--admin_port"], description = "Admin servlets port")
   var adminPort: Int = -1
     private set
 
+  /**
+   * Enables this process's Prometheus metrics endpoint.
+   * Resolved from CLI → [METRICS_ENABLED] env var → `<role>.metrics.enabled` config (default `false`).
+   */
   @Parameter(names = ["-e", "--metrics"], description = "Metrics enabled")
   var metricsEnabled = false
     private set
 
+  /**
+   * Listen port for this process's Prometheus metrics endpoint.
+   * `-1` means "fall back to [METRICS_PORT] env var, then `<role>.metrics.port` config (Proxy default `8082`,
+   * Agent default `8083`)".
+   */
   @Parameter(names = ["-m", "--metrics_port"], description = "Metrics listen port")
   var metricsPort = -1
     private set
 
+  /**
+   * Enables the `/debug` admin servlet on this process — exposes recent activity / scrape-request introspection.
+   * Distinct from [DEBUG] (the servlet path constant). Resolved from CLI → [DEBUG_ENABLED] env var →
+   * `<role>.admin.debugEnabled` config (default `false`).
+   */
   @Parameter(names = ["-b", "--debug"], description = "Debug option enabled")
   var debugEnabled = false
     private set
 
-  // Use both options here to avoid breaking people with the typo fix
+  /**
+   * Disables the gRPC transport filter that records remote-peer information per call. Set when running behind
+   * an L7 reverse proxy (e.g. nginx) that already strips this information.
+   *
+   * Both `--tf-disabled` (current) and `--tf_disabled` (legacy typo) are accepted to preserve backwards
+   * compatibility for existing deployments.
+   */
   @Parameter(names = ["--tf-disabled", "--tf_disabled"], description = "Transport filter disabled")
   var transportFilterDisabled = false
     private set
 
+  /**
+   * Filesystem path to the TLS certificate chain (PEM). Must be paired with [privateKeyFilePath]; supplying
+   * one without the other is rejected by [validateTlsConfig]. Empty disables TLS on this side and exposes
+   * plaintext gRPC. See also [isTlsEnabled].
+   */
   @Parameter(names = ["-t", "--cert"], description = "Certificate chain file path")
   var certChainFilePath = ""
     private set
 
+  /**
+   * Filesystem path to the TLS private key (PEM) matching [certChainFilePath]. Must be paired with the cert
+   * file; supplying one without the other is rejected by [validateTlsConfig]. Empty disables TLS on this side.
+   */
   @Parameter(names = ["-k", "--key"], description = "Private key file path")
   var privateKeyFilePath = ""
     private set
 
+  /**
+   * Filesystem path to the trust-store certificate collection (PEM) used to validate the peer's certificate.
+   * Required for mTLS; for one-way TLS the JDK default trust store is used when this is empty.
+   */
   @Parameter(names = ["-s", "--trust"], description = "Trust certificate collection file path")
   var trustCertCollectionFilePath = ""
     private set
 
+  /**
+   * gRPC keepalive ping interval, in seconds — how often this side sends a keepalive ping on an idle channel.
+   * `-1L` means "fall back to [KEEPALIVE_TIME_SECS] env var, then `<role>.grpc.keepAliveTimeSecs` config;
+   * `-1L` after resolution leaves the gRPC default in place".
+   */
   @Parameter(names = ["--keepalive_time_secs"], description = "gRPC KeepAlive time (secs)")
   var keepAliveTimeSecs = -1L
     private set
 
+  /**
+   * gRPC keepalive ping timeout, in seconds — how long this side waits for a keepalive ack before considering
+   * the connection dead.
+   * `-1L` means "fall back to [KEEPALIVE_TIMEOUT_SECS] env var, then `<role>.grpc.keepAliveTimeoutSecs` config;
+   * `-1L` after resolution leaves the gRPC default in place".
+   */
   @Parameter(names = ["--keepalive_timeout_secs"], description = "gRPC KeepAlive timeout (secs)")
   var keepAliveTimeoutSecs = -1L
     private set
 
+  /**
+   * Logback log level for this process: one of `all`, `trace`, `debug`, `info`, `warn`, `error`, `off`.
+   * Empty falls back to the role-specific env var ([io.prometheus.common.EnvVars.PROXY_LOG_LEVEL] or
+   * [io.prometheus.common.EnvVars.AGENT_LOG_LEVEL]) and then `<role>.logLevel` config; if still empty,
+   * the level configured in `logback.xml` is used.
+   *
+   * Settable by subclasses (e.g. [io.prometheus.proxy.ProxyOptions], [io.prometheus.agent.AgentOptions])
+   * during [assignConfigVals].
+   */
   @Parameter(names = ["--log_level"], description = "Log level")
   var logLevel = ""
     protected set
 
+  /** When set, prints `name version (build-date)` to stdout and exits with code `0`. Not retained as state. */
   @Parameter(names = ["-v", "--version"], description = "Print version info and exit")
   private var version = false
 
+  /**
+   * When set, JCommander prints the auto-generated usage banner to stdout and the process exits with code `0`.
+   * Marked `help = true` so JCommander does not enforce required-parameter checks when this flag is present.
+   */
   @Parameter(names = ["-u", "--usage"], help = true)
   private var usage = false
 
+  /**
+   * Dynamic HOCON property overrides accepted as `-Dkey=value` (multiple `-D` flags allowed). Each pair is
+   * merged into the resolved config with highest precedence over the loaded config file, and any surrounding
+   * double-quotes on the value are stripped. Useful for one-off overrides that don't have a dedicated flag.
+   */
   @DynamicParameter(names = ["-D"], description = "Dynamic property assignment")
   var dynamicParams = mutableMapOf<String, String>()
     private set
@@ -312,7 +391,7 @@ abstract class BaseOptions protected constructor(
     when {
       configName.isBlank() -> {
         if (exitOnMissingConfig) {
-          logger.error { "A configuration file or url must be specified with --config or \$$envConfig" }
+          logger.error { $$"A configuration file or url must be specified with --config or $$$envConfig" }
           exitProcess(1)
         }
         return fallback
@@ -347,7 +426,7 @@ abstract class BaseOptions protected constructor(
     exitProcess(1)
   }
 
-  companion object {
+  internal companion object {
     private val logger = logger {}
     private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
     const val DEBUG = "debug"

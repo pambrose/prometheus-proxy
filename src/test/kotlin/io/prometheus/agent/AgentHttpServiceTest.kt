@@ -46,6 +46,7 @@ import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.measureTime
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -168,7 +169,7 @@ class AgentHttpServiceTest : StringSpec() {
     server.start(wait = false)
     val port = server.engine.resolvedConnectors().first().port
     // Allow the CIO server engine to fully start accepting connections
-    delay(100)
+    delay(100.milliseconds)
     return port
   }
 
@@ -669,7 +670,7 @@ class AgentHttpServiceTest : StringSpec() {
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
-            delay(5000) // Delay longer than timeout
+            delay(5000.milliseconds) // Delay longer than timeout
             call.respondText("too late")
           }
         }

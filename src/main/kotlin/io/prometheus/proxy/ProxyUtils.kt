@@ -32,7 +32,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPInputStream
 
-object ProxyUtils {
+internal object ProxyUtils {
   private val logger = logger {}
 
   fun ByteArray.unzip(maxSize: Long): String {

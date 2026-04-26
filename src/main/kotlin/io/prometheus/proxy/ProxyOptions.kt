@@ -43,51 +43,105 @@ class ProxyOptions(
 ) : BaseOptions(Proxy::class.java.simpleName, args, PROXY_CONFIG.name) {
   constructor(args: List<String>) : this(args.toTypedArray())
 
+  /**
+   * TCP port the Proxy serves proxied scrape requests on (the port Prometheus connects to).
+   * `-1` means "fall back to [PROXY_PORT] env var, then `proxy.http.port` from config (default `8080`)".
+   */
   @Parameter(names = ["-p", "--port"], description = "Proxy listen port")
   var proxyPort = -1
     private set
 
+  /**
+   * TCP port the Proxy listens on for incoming gRPC connections from agents.
+   * `-1` means "fall back to [AGENT_PORT] env var, then `proxy.agent.port` from config (default `50051`)".
+   */
   @Parameter(names = ["-a", "--agent_port"], description = "gRPC listen port for Agents")
   var proxyAgentPort = -1
     private set
 
+  /**
+   * Enables the Prometheus HTTP service-discovery endpoint on the Proxy.
+   * When `true`, the Proxy serves a discovery document listing currently registered agent paths
+   * at [sdPath]. Resolved from CLI → [SD_ENABLED] env var → `proxy.service.discovery.enabled` config.
+   */
   @Parameter(names = ["--sd_enabled"], description = "Service discovery endpoint enabled")
   var sdEnabled = false
     private set
 
+  /**
+   * HTTP path (relative to the Proxy HTTP port) at which the service-discovery document is served.
+   * Required and validated to be non-empty when [sdEnabled] is `true`.
+   */
   @Parameter(names = ["--sd_path"], description = "Service discovery endpoint path")
   var sdPath = ""
     private set
 
+  /**
+   * Base URL used to build per-target entries in the service-discovery document
+   * (e.g. `http://proxy.example.com:8080/`).
+   * Required and validated to be non-empty when [sdEnabled] is `true`.
+   */
   @Parameter(names = ["--sd_target_prefix"], description = "Service discovery target prefix")
   var sdTargetPrefix = ""
     private set
 
-  // Use both options here to avoid breaking people with the typo fix
+  /**
+   * Disables the gRPC server reflection service on the Proxy.
+   *
+   * Both `--ref-disabled` (current) and `--ref_disabled` (legacy typo) are accepted to preserve
+   * backwards compatibility for existing deployments.
+   */
   @Parameter(names = ["--ref-disabled", "--ref_disabled"], description = "gRPC Reflection disabled")
   var reflectionDisabled = false
     private set
 
+  /**
+   * gRPC handshake timeout for the Proxy server, in seconds.
+   * `-1L` means "use the gRPC default (120s)".
+   */
   @Parameter(names = ["--handshake_timeout_secs"], description = "gRPC Handshake timeout (secs)")
   var handshakeTimeoutSecs = -1L
     private set
 
+  /**
+   * If `true`, the Proxy permits gRPC keepalive pings from agents even when no RPCs are in-flight.
+   * Pair with [permitKeepAliveTimeSecs] to control the minimum allowed ping interval.
+   */
   @Parameter(names = ["--permit_keepalive_without_calls"], description = "Permit gRPC KeepAlive without calls")
   var permitKeepAliveWithoutCalls = false
     private set
 
+  /**
+   * Minimum interval, in seconds, that the Proxy will accept gRPC keepalive pings from agents.
+   * Pings arriving more frequently than this are treated as a protocol violation by gRPC.
+   * `-1L` means "use the gRPC default (300s)".
+   */
   @Parameter(names = ["--permit_keepalive_time_secs"], description = "Permit gRPC KeepAlive time (secs)")
   var permitKeepAliveTimeSecs = -1L
     private set
 
+  /**
+   * gRPC server `MAX_CONNECTION_IDLE` in seconds — connections idle longer than this are closed.
+   * `-1L` means "use the gRPC default (`INT_MAX`, effectively no idle timeout)".
+   */
   @Parameter(names = ["--max_connection_idle_secs"], description = "Max gRPC connection idle (secs)")
   var maxConnectionIdleSecs = -1L
     private set
 
+  /**
+   * gRPC server `MAX_CONNECTION_AGE` in seconds — connections older than this are gracefully closed,
+   * forcing reconnect (useful for load-balancer rebalancing).
+   * `-1L` means "use the gRPC default (`INT_MAX`, effectively no age limit)".
+   */
   @Parameter(names = ["--max_connection_age_secs"], description = "Max gRPC connection age (secs)")
   var maxConnectionAgeSecs = -1L
     private set
 
+  /**
+   * Grace period, in seconds, after [maxConnectionAgeSecs] is reached before the Proxy forcibly
+   * closes the connection. Allows in-flight RPCs to complete cleanly.
+   * `-1L` means "use the gRPC default (`INT_MAX`)".
+   */
   @Parameter(names = ["--max_connection_age_grace_secs"], description = "Max gRPC connection age grace (secs)")
   var maxConnectionAgeGraceSecs = -1L
     private set
@@ -200,7 +254,7 @@ class ProxyOptions(
       }
   }
 
-  companion object {
+  internal companion object {
     private val logger = logger {}
   }
 }

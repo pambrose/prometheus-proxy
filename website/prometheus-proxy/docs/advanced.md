@@ -96,14 +96,14 @@ Increase the number of parallel scrapes for high-throughput scenarios:
 
 ### Key Tuning Parameters
 
-| Parameter | Default | Guidance |
-|:----------|:--------|:---------|
-| `maxConcurrentClients` | 1 | Increase for many endpoints or slow targets |
-| `clientTimeoutSecs` | 90 | Lower for fast-failing scrapes |
-| `chunkContentSizeKbs` | 32 | Increase for large payloads to reduce chunk count |
-| `minGzipSizeBytes` | 512 | Lower to compress more aggressively |
-| `scrapeTimeoutSecs` | 15 | Increase for slow targets |
-| `clientCache.maxSize` | 100 | Increase if many unique auth credentials are used |
+| Parameter              | Default | Guidance                                          |
+|:-----------------------|:--------|:--------------------------------------------------|
+| `maxConcurrentClients` | 1       | Increase for many endpoints or slow targets       |
+| `clientTimeoutSecs`    | 90      | Lower for fast-failing scrapes                    |
+| `chunkContentSizeKbs`  | 32      | Increase for large payloads to reduce chunk count |
+| `minGzipSizeBytes`     | 512     | Lower to compress more aggressively               |
+| `scrapeTimeoutSecs`    | 15      | Increase for slow targets                         |
+| `clientCache.maxSize`  | 100     | Increase if many unique auth credentials are used |
 
 ## gRPC Keepalive Tuning
 

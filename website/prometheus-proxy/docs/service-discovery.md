@@ -47,13 +47,13 @@ The endpoint returns a JSON array in the format expected by Prometheus HTTP SD:
 
 Each entry contains:
 
-| Field | Description |
-|:------|:------------|
-| `targets` | Array containing the proxy endpoint (from `targetPrefix`) |
-| `labels.__metrics_path__` | The path to scrape on the proxy |
-| `labels.agentName` | Name(s) of agent(s) serving this path |
-| `labels.hostName` | Hostname(s) of agent(s) serving this path |
-| `labels.*` | Custom labels from agent `pathConfigs` |
+| Field                     | Description                                               |
+|:--------------------------|:----------------------------------------------------------|
+| `targets`                 | Array containing the proxy endpoint (from `targetPrefix`) |
+| `labels.__metrics_path__` | The path to scrape on the proxy                           |
+| `labels.agentName`        | Name(s) of agent(s) serving this path                     |
+| `labels.hostName`         | Hostname(s) of agent(s) serving this path                 |
+| `labels.*`                | Custom labels from agent `pathConfigs`                    |
 
 ## Prometheus Configuration
 

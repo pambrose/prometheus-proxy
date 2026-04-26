@@ -1,3 +1,4 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.google.protobuf.gradle.id
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.SourcesJar
@@ -9,7 +10,6 @@ import java.time.format.DateTimeFormatter
 
 plugins {
   idea
-  java
   alias(libs.plugins.kotlin.jvm)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.protobuf)   // Keep in sync with grpc
@@ -126,7 +126,7 @@ fun Project.configureKotlin() {
 
 fun Project.configureGrpc() {
   tasks.compileKotlin {
-    dependsOn(":generateProto")
+    dependsOn(tasks.named("generateProto"))
   }
 
   protobuf {
@@ -155,27 +155,33 @@ fun Project.configureGrpc() {
 }
 
 fun Project.configureJars() {
-  // Required for multiple uberjar targets
+  // Disable the default shadowJar; we publish the standard Maven jar and
+  // ship the two named fat jars below.
   tasks.shadowJar {
-    mergeServiceFiles()
+    enabled = false
   }
 
-  val agentJar by tasks.registering(Jar::class) {
-    dependsOn(tasks.shadowJar)
+  val mainOutput = sourceSets.main.get().output
+  val runtimeClasspath = configurations.runtimeClasspath
+
+  val agentJar by tasks.registering(ShadowJar::class) {
     archiveFileName.set("prometheus-agent.jar")
-    manifest {
-      attributes("Main-Class" to "io.prometheus.Agent")
-    }
-    from(zipTree(tasks.shadowJar.get().archiveFile))
+    manifest { attributes("Main-Class" to "io.prometheus.Agent") }
+    mergeServiceFiles()
+    from(mainOutput)
+    configurations = listOf(runtimeClasspath.get())
   }
 
-  val proxyJar by tasks.registering(Jar::class) {
-    dependsOn(tasks.shadowJar)
+  val proxyJar by tasks.registering(ShadowJar::class) {
     archiveFileName.set("prometheus-proxy.jar")
-    manifest {
-      attributes("Main-Class" to "io.prometheus.Proxy")
-    }
-    from(zipTree(tasks.shadowJar.get().archiveFile))
+    manifest { attributes("Main-Class" to "io.prometheus.Proxy") }
+    mergeServiceFiles()
+    from(mainOutput)
+    configurations = listOf(runtimeClasspath.get())
+  }
+
+  tasks.named("assemble") {
+    dependsOn(agentJar, proxyJar)
   }
 }
 
@@ -202,7 +208,6 @@ fun Project.configureDokka() {
       }
 
       suppressedFiles.from("src/main/java/io/prometheus/common/ConfigVals.java")
-      suppressedFiles.from("src/main/kotlin/io/prometheus/common/BaseOptions.kt")
 
       sourceLink {
         localDirectory.set(file("src/main/kotlin"))
@@ -221,7 +226,6 @@ fun Project.configurePublishing() {
         sourcesJar = SourcesJar.Sources(),
       ),
     )
-    coordinates("com.pambrose", "prometheus-proxy", version.toString())
 
     pom {
       name.set("prometheus-proxy")
@@ -248,12 +252,10 @@ fun Project.configurePublishing() {
     }
 
     publishToMavenCentral(automaticRelease = true)
-    signAllPublications()
-  }
-
-  // Skip signing when no GPG key is provided (e.g., local publishing)
-  tasks.withType<Sign>().configureEach {
-    isEnabled = project.findProperty("signingInMemoryKey") != null
+    // Skip signing when no GPG key is provided (e.g., local publishing)
+    if (project.findProperty("signingInMemoryKey") != null) {
+      signAllPublications()
+    }
   }
 }
 

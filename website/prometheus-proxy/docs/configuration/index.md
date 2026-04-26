@@ -15,11 +15,11 @@ configuration. Values are evaluated in this precedence order (highest first):
 
 Typesafe Config supports three formats:
 
-| Format | Extension | Description |
-|:-------|:----------|:------------|
-| **HOCON** | `.conf` | Human-friendly JSON superset (recommended) |
-| **JSON** | `.json` | Standard JSON format |
-| **Properties** | `.properties` | Java properties format |
+| Format         | Extension     | Description                                |
+|:---------------|:--------------|:-------------------------------------------|
+| **HOCON**      | `.conf`       | Human-friendly JSON superset (recommended) |
+| **JSON**       | `.json`       | Standard JSON format                       |
+| **Properties** | `.properties` | Java properties format                     |
 
 ## Loading Configuration
 
@@ -97,28 +97,28 @@ For the complete configuration schema, see the reference file:
 
 <div class="grid cards" markdown>
 
--   :material-robot:{ .lg .middle } __Agent Configuration__
+- :material-robot:{ .lg .middle } __Agent Configuration__
 
-    ---
+  ---
 
-    Path configs, HTTP client, and scrape settings
+  Path configs, HTTP client, and scrape settings
 
-    [:octicons-arrow-right-24: Agent Configuration](agent.md)
+  [:octicons-arrow-right-24: Agent Configuration](agent.md)
 
--   :material-server:{ .lg .middle } __Proxy Configuration__
+- :material-server:{ .lg .middle } __Proxy Configuration__
 
-    ---
+  ---
 
-    HTTP service, gRPC, and service discovery settings
+  HTTP service, gRPC, and service discovery settings
 
-    [:octicons-arrow-right-24: Proxy Configuration](proxy.md)
+  [:octicons-arrow-right-24: Proxy Configuration](proxy.md)
 
--   :material-console:{ .lg .middle } __CLI Reference__
+- :material-console:{ .lg .middle } __CLI Reference__
 
-    ---
+  ---
 
-    All CLI options and environment variables
+  All CLI options and environment variables
 
-    [:octicons-arrow-right-24: CLI Reference](../cli-reference.md)
+  [:octicons-arrow-right-24: CLI Reference](../cli-reference.md)
 
 </div>

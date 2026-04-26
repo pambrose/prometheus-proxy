@@ -146,13 +146,13 @@ class HttpClientCacheTest : StringSpec() {
           val key = ClientKey("user$i", "pass$i")
           val entry = lruCache.getOrCreateClient(key) { createMockHttpClient() }
           entries.add(entry)
-          delay(2) // Ensure each entry gets a distinct timestamp
+          delay(2.milliseconds) // Ensure each entry gets a distinct timestamp
         }
 
         lruCache.currentCacheSize() shouldBe 5
 
         // Access user1 to make it most recently used (now has newest timestamp)
-        delay(2)
+        delay(2.milliseconds)
         val firstKey = ClientKey("user1", "pass1")
         val firstEntry = lruCache.getOrCreateClient(firstKey) { createMockHttpClient() }
         firstEntry.client shouldBe entries[0].client

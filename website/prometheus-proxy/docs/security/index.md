@@ -18,11 +18,11 @@ Prometheus Proxy is designed to be firewall-friendly:
 Agents connect to the proxy using [gRPC](https://grpc.io), which supports TLS with or without
 mutual authentication.
 
-| Mode | Proxy Needs | Agent Needs |
-|:-----|:------------|:------------|
-| **No TLS** | Nothing | Nothing |
-| **TLS (server only)** | Server cert + key | CA cert (trust store) |
-| **Mutual TLS** | Server cert + key + CA cert | Client cert + key + CA cert |
+| Mode                  | Proxy Needs                 | Agent Needs                 |
+|:----------------------|:----------------------------|:----------------------------|
+| **No TLS**            | Nothing                     | Nothing                     |
+| **TLS (server only)** | Server cert + key           | CA cert (trust store)       |
+| **Mutual TLS**        | Server cert + key + CA cert | Client cert + key + CA cert |
 
 See [TLS Setup](tls.md) for detailed configuration instructions.
 

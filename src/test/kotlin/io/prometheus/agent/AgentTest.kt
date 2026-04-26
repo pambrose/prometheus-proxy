@@ -38,7 +38,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
@@ -359,13 +358,10 @@ class AgentTest : StringSpec() {
       val agent = createTestAgent()
       agent.scrapeRequestBacklogSize.store(50)
 
-      runBlocking {
-        // Launch 100 coroutines each decrementing by 1 — only 50 should succeed
-        coroutineScope {
-          repeat(100) {
-            launch(Dispatchers.IO) {
-              agent.decrementBacklog(1)
-            }
+      coroutineScope {
+        repeat(100) {
+          launch(Dispatchers.IO) {
+            agent.decrementBacklog(1)
           }
         }
       }
@@ -459,7 +455,7 @@ class AgentTest : StringSpec() {
     // ==================== Bug #1: Bounded Coroutine Creation Tests ====================
 
     "Bug #1: semaphore.acquire() before launch should limit waiting coroutines" {
-      runBlocking {
+      run {
         val maxConcurrency = 2
         val semaphore = kotlinx.coroutines.sync.Semaphore(maxConcurrency)
         val activeCoroutines = AtomicInt(0)

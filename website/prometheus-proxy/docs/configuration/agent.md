@@ -32,12 +32,12 @@ Labels are included in service discovery responses and can be used for filtering
 
 Each path config entry has these fields:
 
-| Field | Required | Description |
-|:------|:---------|:------------|
-| `name` | Yes | Human-readable endpoint name (for logs and debugging) |
-| `path` | Yes | URL path on the proxy that Prometheus will scrape |
-| `url` | Yes | Actual metrics endpoint the agent fetches from |
-| `labels` | No | JSON string of labels for service discovery (default: `"{}"`) |
+| Field    | Required | Description                                                   |
+|:---------|:---------|:--------------------------------------------------------------|
+| `name`   | Yes      | Human-readable endpoint name (for logs and debugging)         |
+| `path`   | Yes      | URL path on the proxy that Prometheus will scrape             |
+| `url`    | Yes      | Actual metrics endpoint the agent fetches from                |
+| `labels` | No       | JSON string of labels for service discovery (default: `"{}"`) |
 
 ## Proxy Connection
 
@@ -79,12 +79,12 @@ scenarios). Configure cache behavior:
 --8<-- "ConfigExamples.txt:agent-scrape-config"
 ```
 
-| Setting | Default | Description |
-|:--------|:--------|:------------|
-| `scrapeTimeoutSecs` | 15 | Total time allowed for a scrape including retries |
-| `scrapeMaxRetries` | 0 | Maximum retries; 0 disables retries |
-| `chunkContentSizeKbs` | 32 | Responses larger than this are chunked |
-| `minGzipSizeBytes` | 512 | Responses larger than this are gzip-compressed |
+| Setting               | Default | Description                                       |
+|:----------------------|:--------|:--------------------------------------------------|
+| `scrapeTimeoutSecs`   | 15      | Total time allowed for a scrape including retries |
+| `scrapeMaxRetries`    | 0       | Maximum retries; 0 disables retries               |
+| `chunkContentSizeKbs` | 32      | Responses larger than this are chunked            |
+| `minGzipSizeBytes`    | 512     | Responses larger than this are gzip-compressed    |
 
 ## Consolidated Mode
 

@@ -21,7 +21,6 @@ package io.prometheus.agent
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.prometheus.Agent
-import kotlinx.coroutines.runBlocking
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
 
@@ -57,19 +56,17 @@ class AgentBacklogDriftTest : StringSpec() {
       // Second one fails
       try {
         agent.scrapeRequestBacklogSize += 1
-        runBlocking {
-          try {
-            connectionContext.sendScrapeRequestAction {
-              io.prometheus.common.ScrapeResults(
-                srScrapeId = 0,
-                srAgentId = "",
-                srStatusCode = 200,
-              )
-            }
-          } catch (e: Exception) {
-            agent.scrapeRequestBacklogSize -= 1
-            throw e
+        try {
+          connectionContext.sendScrapeRequestAction {
+            io.prometheus.common.ScrapeResults(
+              srScrapeId = 0,
+              srAgentId = "",
+              srStatusCode = 200,
+            )
           }
+        } catch (e: Exception) {
+          agent.scrapeRequestBacklogSize -= 1
+          throw e
         }
       } catch (e: Exception) {
         // Expected (ClosedSendChannelException or similar)

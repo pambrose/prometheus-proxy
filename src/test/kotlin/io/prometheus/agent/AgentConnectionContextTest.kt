@@ -36,6 +36,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.milliseconds
 
 class AgentConnectionContextTest : StringSpec() {
   init {
@@ -262,7 +263,7 @@ class AgentConnectionContextTest : StringSpec() {
           launch(Dispatchers.IO) {
             try {
               // Simulate scrape work
-              delay(50)
+              delay(50.milliseconds)
               context.sendScrapeResults(
                 ScrapeResults(srAgentId = "agent-1", srScrapeId = i.toLong(), srValidResponse = true),
               )
@@ -274,7 +275,7 @@ class AgentConnectionContextTest : StringSpec() {
         }
 
         // Close the context while scrapes are in-flight
-        delay(10)
+        delay(10.milliseconds)
         context.close()
       }
 
@@ -323,7 +324,7 @@ class AgentConnectionContextTest : StringSpec() {
           launch(Dispatchers.IO) {
             backlogSize.incrementAndGet()
             try {
-              delay(20)
+              delay(20.milliseconds)
               context.sendScrapeResults(
                 ScrapeResults(srAgentId = "agent-1", srScrapeId = i.toLong(), srValidResponse = true),
               )
@@ -334,7 +335,7 @@ class AgentConnectionContextTest : StringSpec() {
         }
 
         // Close mid-flight
-        delay(5)
+        delay(5.milliseconds)
         context.close()
       }
 

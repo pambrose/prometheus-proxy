@@ -19,7 +19,6 @@
 package io.prometheus.harness.support
 
 import io.github.oshai.kotlinlogging.KLogger
-import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
@@ -63,7 +62,7 @@ object CustomEnumSerializer : KSerializer<MyEnum> {
 }
 
 object TestUtils {
-  private val logger = logger {}
+//  private val logger = logger {}
 
   @JvmStatic
   fun main(args: Array<String>) {

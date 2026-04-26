@@ -33,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
+import kotlin.time.Duration.Companion.milliseconds
 
 class ScrapeResultsTest : StringSpec() {
   init {
@@ -263,9 +264,9 @@ class ScrapeResultsTest : StringSpec() {
     "errorCode should return RequestTimeout for TimeoutCancellationException" {
       // TimeoutCancellationException constructor is internal, so we generate it via withTimeout
       val exception = try {
-        withTimeout(1) {
+        withTimeout(1.milliseconds) {
           // Use delay instead of Thread.sleep to properly suspend and timeout
-          delay(1000)
+          delay(1000.milliseconds)
         }
         null
       } catch (e: Exception) {

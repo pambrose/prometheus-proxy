@@ -10,17 +10,17 @@ icon: lucide/lock
 
 Server-side TLS authenticates the proxy to the agent:
 
-| Component | Required Files |
-|:----------|:---------------|
+| Component | Required Files                                                       |
+|:----------|:---------------------------------------------------------------------|
 | **Proxy** | `certChainFilePath` (server cert), `privateKeyFilePath` (server key) |
-| **Agent** | `trustCertCollectionFilePath` (CA cert) |
+| **Agent** | `trustCertCollectionFilePath` (CA cert)                              |
 
 ### TLS With Mutual Authentication
 
 Both sides authenticate each other:
 
-| Component | Required Files |
-|:----------|:---------------|
+| Component | Required Files                                                           |
+|:----------|:-------------------------------------------------------------------------|
 | **Proxy** | `certChainFilePath`, `privateKeyFilePath`, `trustCertCollectionFilePath` |
 | **Agent** | `certChainFilePath`, `privateKeyFilePath`, `trustCertCollectionFilePath` |
 
@@ -108,9 +108,9 @@ java -jar prometheus-agent.jar --override expected.hostname.com --config agent.c
 
 The repository includes complete TLS configuration examples:
 
-| File | Description |
-|:-----|:------------|
-| [`examples/tls-no-mutual-auth.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/tls-no-mutual-auth.conf) | Server-side TLS only |
+| File                                                                                                                                | Description               |
+|:------------------------------------------------------------------------------------------------------------------------------------|:--------------------------|
+| [`examples/tls-no-mutual-auth.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/tls-no-mutual-auth.conf)     | Server-side TLS only      |
 | [`examples/tls-with-mutual-auth.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/tls-with-mutual-auth.conf) | Mutual TLS authentication |
 
 ## Setting Up TLS
