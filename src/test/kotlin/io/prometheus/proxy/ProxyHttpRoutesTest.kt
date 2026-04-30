@@ -33,6 +33,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.withCharset
+import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.response.respondText
@@ -47,8 +48,12 @@ import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.net.InetSocketAddress
+import java.net.Socket
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource.Monotonic
 import io.ktor.server.cio.CIO as ServerCIO
 
 // Bug #12: The service discovery endpoint was registered using the raw sdPath config value,
@@ -120,6 +125,25 @@ class ProxyHttpRoutesTest : StringSpec() {
     return proxy
   }
 
+  private suspend fun startServerAndGetPort(server: EmbeddedServer<*, *>): Int {
+    server.start(wait = false)
+    val port = server.engine.resolvedConnectors().first().port
+
+    // Poll the bound port until it accepts a TCP connection. A fixed delay
+    // is unreliable on a busy machine — clients can land in the gap between
+    // bind() and accept() and hit "Connection reset", failing the test.
+    val deadline = Monotonic.markNow() + 5.seconds
+    while (Monotonic.markNow() < deadline) {
+      try {
+        Socket().use { it.connect(InetSocketAddress("localhost", port), 200) }
+        return port
+      } catch (_: java.io.IOException) {
+        delay(20.milliseconds)
+      }
+    }
+    error("Embedded server on port $port did not start accepting connections within 5s")
+  }
+
   init {
     "ensureLeadingSlash should add slash when missing" {
       "discovery".ensureLeadingSlash() shouldBe "/discovery"
@@ -150,11 +174,10 @@ class ProxyHttpRoutesTest : StringSpec() {
             call.respondText("found")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
-        delay(100.milliseconds) // Allow CIO engine to fully initialize
+        val port = startServerAndGetPort(server)
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/discovery")
@@ -180,11 +203,10 @@ class ProxyHttpRoutesTest : StringSpec() {
             call.respondText("found")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
-        delay(100.milliseconds) // Allow CIO engine to fully initialize
+        val port = startServerAndGetPort(server)
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/discovery")
@@ -752,10 +774,10 @@ class ProxyHttpRoutesTest : StringSpec() {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/metrics")
@@ -775,10 +797,10 @@ class ProxyHttpRoutesTest : StringSpec() {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/favicon.ico")
@@ -798,10 +820,10 @@ class ProxyHttpRoutesTest : StringSpec() {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/unknown-metrics")
@@ -824,10 +846,10 @@ class ProxyHttpRoutesTest : StringSpec() {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/blitz-test")
@@ -851,10 +873,10 @@ class ProxyHttpRoutesTest : StringSpec() {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-metrics")
@@ -880,10 +902,10 @@ class ProxyHttpRoutesTest : StringSpec() {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-sd")
@@ -1295,10 +1317,10 @@ class ProxyHttpRoutesTest : StringSpec() {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
         val client = newHttpClient()
 
         // With SD disabled, /discovery is handled by get("/*") as an unknown path
