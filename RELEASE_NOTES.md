@@ -4,17 +4,28 @@
 
 ## 3.1.1
 
-_Released 2026-04-25_
+_Released 2026-04-30_
 
 ### Highlights
 
 - **Documented public API** — Every `@Parameter` field on `BaseOptions` / `AgentOptions` / `ProxyOptions`, every value of `EnvVars`, the `Agent` and `Proxy` companion entry points, and `EmbeddedAgentInfo` now ship with full KDoc covering resolution precedence (CLI → env → config → default), sentinel values, and validation rules.
 - **Reproducible builds** — `BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` accept `-PoverrideReleaseDate` / `-PoverrideBuildTime` Gradle properties so CI can produce bit-identical artifacts.
+- **Flaky test fixes** — Replaced timing-based probes in `AgentTest` and `AgentHttpServiceTest` with deterministic
+  readiness gates, eliminating two long-standing CI flakes.
 - **Cleaner build script** — Centralized repositories in `settings.gradle.kts`, dropped the redundant fat-jar rewrap, removed the redundant `java` plugin alias, and aligned `dependsOn` calls on `tasks.named()`.
 
 ### New Features
 
 - `-PoverrideReleaseDate` and `-PoverrideBuildTime` properties for reproducible builds
+
+### Bug Fixes
+
+- Fix flaky `AgentTest` "Bug #1" coroutine backpressure test — sample point could land between batches and observe 0
+  active coroutines. Replaced the timing-based probe with a deterministic `CompletableDeferred` gate that pins the
+  active count at exactly `maxConcurrency`, with Kotest `eventually()` to absorb scheduler jitter on busy CI hosts
+- Fix flaky `AgentHttpServiceTest` — the fixed 100 ms post-`server.start` delay was insufficient on busy machines,
+  causing "connection refused" failures with `expected:<true> but was:<false>`. Replaced with an active TCP-connect
+  probe (20 ms poll, 5 s deadline)
 
 ### Build & Tooling
 
@@ -23,6 +34,12 @@ _Released 2026-04-25_
 - Drop the redundant `java` plugin (applied transitively by `kotlin.jvm`)
 - Switch `compileKotlin.dependsOn(":generateProto")` to `tasks.named("generateProto")` for type-safe task references
 - Mark the internal `Utils` object as `internal`
+- Hoist `formatter`, `releaseDate`, and `buildTime` out of the `buildConfig {}` block to top-level `val`s for reuse
+  elsewhere in the script
+- Centralize test server readiness in a shared `startServerAndGetPort` helper
+- Add `check-gpg-env` Makefile target for GPG signing validation
+- Fix the date format passed by the `build` and `local-build` Makefile targets to match the `MM/dd/yyyy` pattern parsed
+  by `build.gradle.kts`
 - Add Claude Code GitHub workflow
 
 ### Documentation
@@ -36,6 +53,7 @@ _Released 2026-04-25_
 | Dependency     | Old          | New          |
 |----------------|--------------|--------------|
 | Kotlin         | 2.3.20       | 2.3.21       |
+| Gradle wrapper | 9.4.1        | 9.5.0        |
 | Ktor           | 3.4.2        | 3.4.3        |
 | serialization  | 1.10.0       | 1.11.0       |
 | tcnative       | 2.0.74.Final | 2.0.77.Final |

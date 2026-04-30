@@ -4,11 +4,18 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [3.1.1] - 2026-04-25
+## [3.1.1] - 2026-04-30
 
 ### New Features
 
 - Add `-PoverrideReleaseDate` and `-PoverrideBuildTime` Gradle properties for reproducible builds (`BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` now accept overrides instead of always reading the local clock)
+
+### Bug Fixes
+
+- Fix flaky `AgentTest` "Bug #1" coroutine backpressure test by replacing the timing-based probe with a deterministic
+  `CompletableDeferred` gate plus Kotest `eventually()` for scheduler jitter
+- Fix flaky `AgentHttpServiceTest` by replacing a fixed 100 ms post-`server.start` sleep with an active TCP-connect
+  readiness probe (20 ms poll, 5 s deadline)
 
 ### Build & Tooling
 
@@ -17,6 +24,12 @@ All notable changes to this project are documented in this file.
 - Drop the redundant `java` plugin (already applied transitively by `kotlin.jvm`)
 - Use `tasks.named("generateProto")` instead of the `:generateProto` path string
 - Mark internal `Utils` object as `internal` so it no longer leaks into the public API surface
+- Hoist `formatter`, `releaseDate`, and `buildTime` out of the `buildConfig {}` block to top-level `val`s for reuse
+  elsewhere in the script
+- Centralize test server readiness in a shared `startServerAndGetPort` helper
+- Add `check-gpg-env` Makefile target for GPG signing validation
+- Fix the date format passed by the `build` and `local-build` Makefile targets to match the `MM/dd/yyyy` pattern parsed
+  by `build.gradle.kts`
 - Add Claude Code GitHub workflow
 
 ### Documentation
@@ -27,16 +40,17 @@ All notable changes to this project are documented in this file.
 
 ### Dependency Updates
 
-| Dependency     | Old    | New    |
-|----------------|--------|--------|
-| Kotlin         | 2.3.20 | 2.3.21 |
-| Ktor           | 3.4.2  | 3.4.3  |
-| serialization  | 1.10.0 | 1.11.0 |
+| Dependency     | Old          | New          |
+|----------------|--------------|--------------|
+| Kotlin         | 2.3.20       | 2.3.21       |
+| Gradle wrapper | 9.4.1        | 9.5.0        |
+| Ktor           | 3.4.2        | 3.4.3        |
+| serialization  | 1.10.0       | 1.11.0       |
 | tcnative       | 2.0.74.Final | 2.0.77.Final |
-| utils          | 2.7.1  | 2.8.1  |
-| gradle-plugins | 1.0.12 | 1.0.14 |
-| protobuf       | 0.9.6  | 0.10.0 |
-| taskinfo       | 3.0.1  | 3.0.2  |
+| utils          | 2.7.1        | 2.8.1        |
+| gradle-plugins | 1.0.12       | 1.0.14       |
+| protobuf       | 0.9.6        | 0.10.0       |
+| taskinfo       | 3.0.1        | 3.0.2        |
 
 ---
 
