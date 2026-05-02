@@ -26,6 +26,9 @@ jobs:
       - name: Lint
         run: ./gradlew lintKotlinMain lintKotlinTest
 
+      # HARNESS_CONFIG is read by HarnessConstants in the forked test JVM, so it only takes effect
+      # on this `test` step. The kover report tasks below consume the .exec files produced here
+      # and do not re-run tests, so they don't need the env var.
       - name: Run tests
         env:
           HARNESS_CONFIG: MINI

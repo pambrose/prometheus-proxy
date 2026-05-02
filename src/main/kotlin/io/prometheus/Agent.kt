@@ -166,6 +166,7 @@ class Agent(
   private val clock = Monotonic
   internal val agentHttpService = AgentHttpService(this)
   private val initialConnectionLatch = CountDownLatch(1)
+  private val initialPathsRegisteredLatch = CountDownLatch(1)
 
   // Prime the limiter
   private val reconnectLimiter: RateLimiter
@@ -254,6 +255,9 @@ class Agent(
       if (grpcService.connectAgent(configVals.agent.transportFilterDisabled)) {
         grpcService.registerAgent(initialConnectionLatch)
         pathManager.registerPaths()
+        // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores
+        // subsequent countDowns, so only the first successful connect cycle matters.
+        initialPathsRegisteredLatch.countDown()
 
         // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
         val connectionContext = AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * 2)
@@ -479,6 +483,9 @@ class Agent(
    */
   internal fun awaitInitialConnection(timeout: Duration) =
     initialConnectionLatch.await(timeout.inWholeMilliseconds, MILLISECONDS)
+
+  internal fun awaitInitialPathsRegistered(timeout: Duration) =
+    initialPathsRegisteredLatch.await(timeout.inWholeMilliseconds, MILLISECONDS)
 
   /**
    * Executes metrics operations if metrics collection is enabled.
