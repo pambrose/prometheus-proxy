@@ -1,0 +1,30 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        informational: false
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
+        informational: true
+
+ignore:
+  - "src/main/java/io/prometheus/grpc/**"
+  - "src/main/java/io/prometheus/common/ConfigVals.java"
+  - "**/BuildConfig.kt"
+  - "build/generated/**"
+  - "src/test/**"
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
+
+flags:
+  unittests:
+    paths:
+      - src/main/
+    carryforward: true

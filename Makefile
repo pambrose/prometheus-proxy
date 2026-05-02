@@ -1,7 +1,8 @@
 VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
 
 .PHONY: default stop clean stubs build local-build tibuild refresh jars \
-        tests nh-tests ip-tests netty-tests tls-tests reports gh-docs \
+        tests nh-tests ip-tests netty-tests tls-tests coverage \
+        coverage-xml coverage-log coverage-verify reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint \
         versioncheck kdocs clean-docs site publish-local \
         publish-local-snapshot check-gpg-env publish-snapshot \
@@ -36,6 +37,9 @@ jars: stubs
 tests:
 	./gradlew --rerun-tasks check
 
+mini-tests:
+	./gradlew --rerun-tasks check -PharnessConfig=MINI
+
 nh-tests:
 	./gradlew test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
 
@@ -48,8 +52,20 @@ netty-tests:
 tls-tests:
 	./gradlew test --tests "io.prometheus.harness.Tls*"
 
-reports:
-	./gradlew koverMergedHtmlReport
+coverage:
+	./gradlew koverHtmlReport
+
+coverage-xml:
+	./gradlew koverXmlReport
+
+coverage-log:
+	./gradlew koverLog
+
+coverage-verify:
+	./gradlew koverVerify
+
+# Backwards-compatible alias for the previous `make reports` invocation.
+reports: coverage
 
 gh-docs:
 	gh workflow run docs.yml

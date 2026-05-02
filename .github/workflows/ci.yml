@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,9 +19,38 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v5
-      - run: ./gradlew clean build -xtest
-      - run: ./gradlew lintKotlinMain lintKotlinTest
-#      - run: ./gradlew test --tests "io.prometheus.agent.*"
-#      - run: ./gradlew test --tests "io.prometheus.proxy.*"
-#      - run: ./gradlew test --tests "io.prometheus.common.*"
-#      - run: ./gradlew test --tests "io.prometheus.misc.*"
+
+      - name: Compile (no tests)
+        run: ./gradlew clean build -xtest
+
+      - name: Lint
+        run: ./gradlew lintKotlinMain lintKotlinTest
+
+      - name: Run tests
+        env:
+          HARNESS_CONFIG: MINI
+        run: ./gradlew test
+
+      - name: Generate coverage report
+        if: always()
+        run: ./gradlew koverXmlReport koverLog
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            build/reports/tests/
+            build/test-results/
+          retention-days: 7
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build/reports/kover/report.xml
+          flags: unittests
+          name: prometheus-proxy
+          fail_ci_if_error: false
