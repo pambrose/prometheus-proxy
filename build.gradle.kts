@@ -128,7 +128,20 @@ fun Project.configureKotlin() {
 
 fun Project.configureTesting() {
   tasks.withType<Test>().configureEach {
-    providers.gradleProperty("harnessConfig").orNull?.let { environment("HARNESS_CONFIG", it) }
+    val harnessConfig =
+      providers.gradleProperty("harnessConfig").orNull
+        ?: System.getenv("HARNESS_CONFIG")
+    harnessConfig?.let { environment("HARNESS_CONFIG", it) }
+
+    // Scale the test JVM heap to the harness load. LARGE+ generates multi-MB scrape payloads
+    // and runs them through 2000+ sequential calls; the default 512m heap OOMs in bodyAsText().
+    maxHeapSize =
+      when (harnessConfig?.uppercase()) {
+        "XLARGE2" -> "8g"
+        "XLARGE1" -> "4g"
+        "LARGE" -> "2g"
+        else -> "1g"
+      }
 
     testLogging {
       showStandardStreams = false

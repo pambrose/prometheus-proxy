@@ -173,19 +173,31 @@ class AgentHttpServiceTest : StringSpec() {
     server.start(wait = false)
     val port = server.engine.resolvedConnectors().first().port
 
-    // Poll the bound port until it accepts a TCP connection. Replaces a fixed
-    // delay() that occasionally was not long enough on a busy machine, leaving
-    // the client to hit "connection refused" and fail the scrape.
+    // Poll until the server actually answers a complete HTTP exchange. A bare TCP-connect
+    // probe isn't enough: CIO's listening socket can accept and immediately close while
+    // the routing pipeline is still being installed, which makes the next real request
+    // race the install and come back with srValidResponse=false. Probing a path that
+    // won't match any registered route yields 404 once routing is live, which is the
+    // signal we want.
     val deadline = Monotonic.markNow() + 5.seconds
     while (Monotonic.markNow() < deadline) {
       try {
-        Socket().use { it.connect(InetSocketAddress("localhost", port), 200) }
-        return port
+        Socket().use { sock ->
+          sock.connect(InetSocketAddress("localhost", port), 200)
+          sock.soTimeout = 200
+          sock.getOutputStream().apply {
+            write("GET /__readiness__ HTTP/1.0\r\nHost: localhost\r\n\r\n".toByteArray())
+            flush()
+          }
+          val reply = sock.getInputStream().readNBytes(12).decodeToString()
+          if (reply.startsWith("HTTP/")) return port
+        }
       } catch (_: java.io.IOException) {
-        delay(20.milliseconds)
+        // not ready yet
       }
+      delay(20.milliseconds)
     }
-    error("Embedded server on port $port did not start accepting connections within 5s")
+    error("Embedded server on port $port did not start serving HTTP within 5s")
   }
 
   init {

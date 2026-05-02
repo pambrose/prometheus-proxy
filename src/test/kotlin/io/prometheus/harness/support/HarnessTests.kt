@@ -56,7 +56,6 @@ import kotlinx.coroutines.withTimeout
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 data class ProxyCallTestArgs(
@@ -66,6 +65,7 @@ data class ProxyCallTestArgs(
   val pathCount: Int = HARNESS_CONFIG.pathCount,
   val sequentialQueryCount: Int = HARNESS_CONFIG.sequentialQueryCount,
   val parallelQueryCount: Int = HARNESS_CONFIG.parallelQueryCount,
+  val proxyCallTimeoutSecs: Int = HARNESS_CONFIG.proxyCallTimeoutSecs,
   val startPort: Int = 9600,
   val caller: String,
 )
@@ -186,11 +186,13 @@ internal object HarnessTests {
 
     args.agent.grpcService.pathMapSize() shouldBe originalSize + args.pathCount
 
+    val proxyCallTimeout = args.proxyCallTimeoutSecs.seconds
+
     // Call the proxy sequentially
-    logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times" }
+    logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times (timeout=$proxyCallTimeout)" }
     newSingleThreadContext("test-single")
       .use { dispatcher ->
-        withTimeout(1.minutes) {
+        withTimeout(proxyCallTimeout) {
           httpClient { client ->
             val counter = AtomicInt(0)
             repeat(args.sequentialQueryCount) { cnt ->
@@ -210,10 +212,10 @@ internal object HarnessTests {
       }
 
     // Call the proxy in parallel
-    logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times" }
+    logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times (timeout=$proxyCallTimeout)" }
     newFixedThreadPoolContext(5, "test-multi")
       .use { dispatcher ->
-        withTimeout(1.minutes) {
+        withTimeout(proxyCallTimeout) {
           httpClient { client ->
             val counter = AtomicInt(0)
             val jobs =

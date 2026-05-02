@@ -23,6 +23,7 @@ enum class HarnessConfig(
   val parallelQueryCount: Int,
   val concurrentClients: Int,
   val addRemoveReps: Int,
+  val proxyCallTimeoutSecs: Int,
 ) {
   MINI(
     httpServerCount = 1,
@@ -31,6 +32,7 @@ enum class HarnessConfig(
     parallelQueryCount = 1,
     concurrentClients = 1,
     addRemoveReps = 1,
+    proxyCallTimeoutSecs = 30,
   ),
   SMALL(
     httpServerCount = 3,
@@ -39,6 +41,7 @@ enum class HarnessConfig(
     parallelQueryCount = 2,
     concurrentClients = 5,
     addRemoveReps = 5,
+    proxyCallTimeoutSecs = 30,
   ),
   MEDIUM(
     httpServerCount = 5,
@@ -47,6 +50,7 @@ enum class HarnessConfig(
     parallelQueryCount = 10,
     concurrentClients = 100,
     addRemoveReps = 1000,
+    proxyCallTimeoutSecs = 60,
   ),
   LARGE(
     httpServerCount = 10,
@@ -55,6 +59,7 @@ enum class HarnessConfig(
     parallelQueryCount = 20,
     concurrentClients = 200,
     addRemoveReps = 3000,
+    proxyCallTimeoutSecs = 120,
   ),
   XLARGE1(
     httpServerCount = 20,
@@ -63,6 +68,7 @@ enum class HarnessConfig(
     parallelQueryCount = 30,
     concurrentClients = 300,
     addRemoveReps = 5000,
+    proxyCallTimeoutSecs = 240,
   ),
   XLARGE2(
     httpServerCount = 40,
@@ -71,5 +77,6 @@ enum class HarnessConfig(
     parallelQueryCount = 50,
     concurrentClients = 500,
     addRemoveReps = 10000,
+    proxyCallTimeoutSecs = 480,
   ),
 }
