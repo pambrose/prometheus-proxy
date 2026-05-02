@@ -12,6 +12,12 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Set HARNESS_CONFIG at the job level so every Gradle invocation observes the same value.
+    # The build script propagates this into the `test` task's environment, making it part of
+    # the task inputs; if it varied between steps Gradle would consider `:test` out-of-date and
+    # re-run the suite under the default (MEDIUM) config when koverXmlReport executes.
+    env:
+      HARNESS_CONFIG: MINI
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -26,17 +32,10 @@ jobs:
       - name: Lint
         run: ./gradlew lintKotlinMain lintKotlinTest
 
-      # HARNESS_CONFIG is read by HarnessConstants in the forked test JVM, so it only takes effect
-      # on this `test` step. The kover report tasks below consume the .exec files produced here
-      # and do not re-run tests, so they don't need the env var.
-      - name: Run tests
-        env:
-          HARNESS_CONFIG: MINI
-        run: ./gradlew test
-
-      - name: Generate coverage report
-        if: always()
-        run: ./gradlew koverXmlReport koverLog
+      # --continue lets the kover report tasks run even if some tests fail, preserving the
+      # prior behavior where coverage was still uploaded on test failure.
+      - name: Run tests and generate coverage report
+        run: ./gradlew --continue test koverXmlReport koverLog
 
       - name: Upload test reports on failure
         if: failure()
