@@ -1,4 +1,11 @@
-VERSION=$(shell grep '^version\s*=' build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
+
+.PHONY: default stop clean stubs build local-build tibuild refresh jars \
+        tests nh-tests ip-tests netty-tests tls-tests reports gh-docs \
+        gh-status tsconfig distro docker-push release tree depends lint \
+        versioncheck kdocs clean-docs site publish-local \
+        publish-local-snapshot check-gpg-env publish-snapshot \
+        publish-maven-central upgrade-wrapper
 
 default: versioncheck
 
@@ -12,18 +19,18 @@ stubs:
 	./gradlew generateProto
 
 build: clean stubs
-	./gradlew build -PreleaseDate=04/25/2026 -xtest
+	./gradlew build -xtest
 
 local-build: clean stubs
-	./gradlew build -PuseMavenLocal=true -PreleaseDate=04/25/2026 -xtest
+	./gradlew build -PuseMavenLocal=true
 
 tibuild: clean stubs
 	./gradlew tiTree build -xtest
 
 refresh:
-	./gradlew --refresh-dependencies dependencyUpdates
+	./gradlew --refresh-dependencies
 
-jars:
+jars: stubs
 	./gradlew agentJar proxyJar
 
 tests:
@@ -53,10 +60,10 @@ gh-status:
 tsconfig:
 	java -jar ./config/jars/tscfg-1.2.5.jar --spec config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
-distro: build jars
+distro: build
+	$(MAKE) jars
 
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
-#PLATFORMS := linux/amd64,linux/arm64,linux/s390x
 IMAGE_PREFIX := pambrose/prometheus
 
 docker-push:
@@ -64,19 +71,8 @@ docker-push:
 	docker buildx use buildx 2>/dev/null || docker buildx create --use --name=buildx
 	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:latest -t ${IMAGE_PREFIX}-proxy:${VERSION} .
 	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:latest -t ${IMAGE_PREFIX}-agent:${VERSION} .
-#	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:${VERSION} .
-#	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:${VERSION} .
 
 release: distro docker-push
-
-build-coverage:
-	./mvnw clean org.jacoco:jacoco-maven-plugin:prepare-agent package  jacoco:report
-
-report-coverage:
-	./mvnw -DrepoToken=${COVERALLS_TOKEN} clean package test jacoco:report coveralls:report
-
-sonar:
-	./mvnw sonar:sonar -Dsonar.host.url=http://localhost:9000
 
 tree:
 	./gradlew -q dependencies
@@ -108,7 +104,8 @@ publish-local-snapshot:
 
 GPG_ENV = \
 	ORG_GRADLE_PROJECT_signingInMemoryKey="$$(gpg --armor --export-secret-keys $$GPG_SIGNING_KEY_ID)" \
-	ORG_GRADLE_PROJECT_signingInMemoryKeyPassword=$$(security find-generic-password -a "gpg-signing" -s "gradle-signing-password" -w)
+	ORG_GRADLE_PROJECT_signingInMemoryKeyId="$$GPG_SIGNING_KEY_ID" \
+	ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="$$(security find-generic-password -a "gpg-signing" -s "gradle-signing-password" -w)"
 
 check-gpg-env:
 	@if [ -z "$$GPG_SIGNING_KEY_ID" ]; then \
@@ -117,8 +114,8 @@ check-gpg-env:
 	@if ! gpg --list-secret-keys "$$GPG_SIGNING_KEY_ID" >/dev/null 2>&1; then \
 		echo "Error: no GPG secret key found for GPG_SIGNING_KEY_ID=$$GPG_SIGNING_KEY_ID" >&2; exit 1; \
 	fi
-	@if ! security find-generic-password -a "gpg-signing" -s "gradle-signing-password" -w >/dev/null 2>&1; then \
-		echo "Error: keychain entry 'gradle-signing-password' (account 'gpg-signing') not found" >&2; exit 1; \
+	@if [ -z "$$(security find-generic-password -a 'gpg-signing' -s 'gradle-signing-password' -w 2>/dev/null)" ]; then \
+		echo "Error: keychain entry 'gradle-signing-password' (account 'gpg-signing') is missing or empty" >&2; exit 1; \
 	fi
 
 publish-snapshot: check-gpg-env

@@ -110,14 +110,14 @@ The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`mak
 
 ## Reproducible Builds
 
-`BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` default to the local clock at build time, but can be overridden:
+`group`, `version`, and `releaseDate` live in `gradle.properties` (single source of truth). `build.gradle.kts` reads them via `providers.gradleProperty(...)`; `BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` default to those values (or the local clock for `buildTime`) and can be overridden on the command line:
 
 ```bash
-./gradlew build -PoverrideReleaseDate=04/25/2026 -PoverrideBuildTime=1745558400000
+./gradlew build -PreleaseDate=04/25/2026 -PbuildTime=1745558400000
 ./gradlew build -PoverrideVersion=3.1.2-SNAPSHOT
 ```
 
-Use these for CI snapshot publishing and bit-identical artifact reproduction.
+Use these for CI snapshot publishing and bit-identical artifact reproduction. `-PoverrideVersion` keeps its `override` prefix because it intentionally only applies when supplied (so the `gradle.properties` default is never accidentally cleared); `-PreleaseDate` / `-PbuildTime` map directly to the underlying property names.
 
 ## Testing
 
@@ -151,6 +151,10 @@ Snippets use dual `base_path` in zensical.toml: first resolves `.txt` files from
 Published to Maven Central as `com.pambrose:prometheus-proxy`. No JitPack.
 
 Repository declarations are centralized in `settings.gradle.kts` via `dependencyResolutionManagement(FAIL_ON_PROJECT_REPOS)`. Opt into `mavenLocal()` for local snapshot testing with `-PuseMavenLocal=true`.
+
+Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) require GPG environment variables and a keychain password entry; `make check-gpg-env` validates them up-front.
+
+When bumping the version, update `version` in `gradle.properties` and the `3.1.2` literals in `README.md` and `llms.txt` (Docker tag examples + Maven Central dependency block). The release flow itself is documented in `docs/RELEASE.md`.
 
 ## Code Style
 
