@@ -76,7 +76,7 @@ tasks.withType<Test>().configureEach {
   (findProperty("harnessConfig") as String?)?.let { environment("HARNESS_CONFIG", it) }
 
   testLogging {
-    showStandardStreams = true
+    showStandardStreams = false
   }
 }
 
