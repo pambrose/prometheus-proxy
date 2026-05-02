@@ -154,7 +154,7 @@ Repository declarations are centralized in `settings.gradle.kts` via `dependency
 
 Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) require GPG environment variables and a keychain password entry; `make check-gpg-env` validates them up-front.
 
-When bumping the version, update `version` in `gradle.properties` and the `3.1.1` literals in `README.md` and `llms.txt` (Docker tag examples + Maven Central dependency block). The release flow itself is documented in `docs/RELEASE.md`.
+When bumping the version, update `version` in `gradle.properties` and the `3.1.2` literals in `README.md` and `llms.txt` (Docker tag examples + Maven Central dependency block). The release flow itself is documented in `docs/RELEASE.md`.
 
 ## Code Style
 
