@@ -72,15 +72,8 @@ dependencies {
   testImplementation(kotlin("test"))
 }
 
-tasks.withType<Test>().configureEach {
-  (findProperty("harnessConfig") as String?)?.let { environment("HARNESS_CONFIG", it) }
-
-  testLogging {
-    showStandardStreams = false
-  }
-}
-
 configureKotlin()
+configureTesting()
 configureGrpc()
 configureJars()
 configureDokka()
@@ -129,6 +122,16 @@ fun Project.configureKotlin() {
       ).forEach {
         languageSettings.optIn(it)
       }
+    }
+  }
+}
+
+fun Project.configureTesting() {
+  tasks.withType<Test>().configureEach {
+    providers.gradleProperty("harnessConfig").orNull?.let { environment("HARNESS_CONFIG", it) }
+
+    testLogging {
+      showStandardStreams = false
     }
   }
 }
