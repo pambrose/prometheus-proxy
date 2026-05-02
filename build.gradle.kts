@@ -30,8 +30,8 @@ plugins {
 providers.gradleProperty("overrideVersion").orNull?.let { version = it }
 
 val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
-val releaseDate = (findProperty("overrideReleaseDate") as String?) ?: LocalDate.now().format(formatter)
-val buildTime = (findProperty("overrideBuildTime") as String?)?.toLong() ?: System.currentTimeMillis()
+val releaseDate = providers.gradleProperty("releaseDate").orNull ?: LocalDate.now().format(formatter)
+val buildTime = providers.gradleProperty("buildTime").orNull?.toLong() ?: System.currentTimeMillis()
 
 buildConfig {
   packageName("io.prometheus")

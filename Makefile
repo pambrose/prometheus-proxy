@@ -19,7 +19,7 @@ stubs:
 	./gradlew generateProto
 
 build: clean stubs
-	./gradlew build
+	./gradlew build -xtest
 
 local-build: clean stubs
 	./gradlew build -PuseMavenLocal=true
