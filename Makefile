@@ -1,4 +1,4 @@
-VERSION=$(shell grep '^version\s*=' build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
 
 default: versioncheck
 
@@ -56,7 +56,6 @@ tsconfig:
 distro: build jars
 
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
-#PLATFORMS := linux/amd64,linux/arm64,linux/s390x
 IMAGE_PREFIX := pambrose/prometheus
 
 docker-push:

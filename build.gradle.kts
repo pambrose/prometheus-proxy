@@ -26,8 +26,8 @@ plugins {
   alias(libs.plugins.taskinfo) apply false
 }
 
-version = findProperty("overrideVersion")?.toString() ?: "3.1.1"
-group = "com.pambrose"
+// Version and group are defined in gradle.properties; also update version refs in README.md and website/srcref/docs/{api,getting-started}.md
+providers.gradleProperty("overrideVersion").orNull?.let { version = it }
 
 val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
 val releaseDate = (findProperty("overrideReleaseDate") as String?) ?: LocalDate.now().format(formatter)
