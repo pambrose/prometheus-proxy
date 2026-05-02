@@ -121,8 +121,10 @@ If you prefer to build the project from source:
 
 2. Build the fat JARs:
    ```bash
-   ./gradlew shadowJar
+   ./gradlew agentJar proxyJar
    ```
+
+   `agentJar` and `proxyJar` are dedicated `ShadowJar` tasks; the default `shadowJar` task is disabled so it cannot produce a third redundant fat jar.
 
 3. The JARs will be available in `build/libs/`:
   - `build/libs/prometheus-proxy.jar`
