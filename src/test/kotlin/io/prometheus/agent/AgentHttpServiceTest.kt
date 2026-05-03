@@ -33,6 +33,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.header
 import io.ktor.server.response.respondText
+import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.mockk.coEvery
@@ -1111,6 +1112,184 @@ class AgentHttpServiceTest : StringSpec() {
         } else {
           throw e // Rethrow real cancellations
         }
+      }
+    }
+
+    // ==================== Max Content Length Tests ====================
+
+    "fetchScrapeUrl returns 413 when Content-Length header exceeds max" {
+      // respondText sets a real Content-Length header. With maxContentLengthMBytes=0,
+      // any positive Content-Length trips the pre-read guard before the body is fetched.
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText("ok")
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+
+        val mockAgent = createMockAgentWithPaths()
+        val options = mockAgent.options
+        every { options.maxContentLengthMBytes } returns 0
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 200L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe HttpStatusCode.PayloadTooLarge.value
+        results.srValidResponse.shouldBeFalse()
+        // Debug disabled: URL and reason are blanked out.
+        results.srUrl shouldBe ""
+        results.srFailureReason shouldBe ""
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "fetchScrapeUrl populates debug fields on 413 from Content-Length when debug enabled" {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText("ok")
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+
+        val mockAgent = createMockAgentWithPaths()
+        val options = mockAgent.options
+        every { options.maxContentLengthMBytes } returns 0
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 201L
+          path = "metrics"
+          accept = ""
+          debugEnabled = true
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe HttpStatusCode.PayloadTooLarge.value
+        results.srUrl shouldContain "/metrics"
+        results.srFailureReason shouldContain "exceeds maximum allowed size"
+        results.srFailureReason shouldContain "Content length"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "fetchScrapeUrl returns 413 when body bytes exceed max with chunked encoding" {
+      // respondTextWriter uses chunked transfer-encoding (no Content-Length header),
+      // so the first guard is skipped and the post-read body-size guard fires instead.
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondTextWriter {
+              write("a".repeat(2048))
+            }
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+
+        val mockAgent = createMockAgentWithPaths()
+        val options = mockAgent.options
+        every { options.maxContentLengthMBytes } returns 0
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 202L
+          path = "metrics"
+          accept = ""
+          debugEnabled = true
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe HttpStatusCode.PayloadTooLarge.value
+        results.srValidResponse.shouldBeFalse()
+        results.srFailureReason shouldContain "Content size"
+        results.srFailureReason shouldContain "exceeds maximum allowed size"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "fetchScrapeUrl 413 from chunked body has empty url and reason when debug disabled" {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondTextWriter {
+              write("a".repeat(2048))
+            }
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+
+        val mockAgent = createMockAgentWithPaths()
+        val options = mockAgent.options
+        every { options.maxContentLengthMBytes } returns 0
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 203L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe HttpStatusCode.PayloadTooLarge.value
+        results.srUrl shouldBe ""
+        results.srFailureReason shouldBe ""
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
       }
     }
   }
