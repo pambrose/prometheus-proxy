@@ -1,6 +1,6 @@
 VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
 
-.PHONY: default stop clean stubs build local-build tibuild refresh jars \
+.PHONY: default stop clean stubs build tibuild refresh jars \
         tests nh-tests ip-tests netty-tests tls-tests coverage \
         coverage-xml coverage-log coverage-verify reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint \
@@ -21,9 +21,6 @@ stubs:
 
 build: clean stubs
 	./gradlew build -xtest
-
-local-build: clean stubs
-	./gradlew build -PuseMavenLocal=true
 
 tibuild: clean stubs
 	./gradlew tiTree build -xtest

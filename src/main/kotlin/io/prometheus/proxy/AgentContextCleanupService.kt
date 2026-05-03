@@ -20,11 +20,11 @@ import com.pambrose.common.concurrent.GenericExecutionThreadService
 import com.pambrose.common.concurrent.genericServiceListener
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.google.common.util.concurrent.MoreExecutors
+import com.pambrose.common.concurrent.await
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -75,7 +75,7 @@ internal class AgentContextCleanupService(
           }
         }
       }
-      shutdownLatch.await(pauseTimeSecs.inWholeMilliseconds, TimeUnit.MILLISECONDS)
+      shutdownLatch.await(pauseTimeSecs)
     }
   }
 

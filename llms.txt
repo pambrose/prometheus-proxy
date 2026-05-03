@@ -161,7 +161,6 @@ cd prometheus-proxy
 ./gradlew build -PoverrideVersion=X.Y.Z      # Build with a custom version
 ./gradlew build -PreleaseDate=04/25/2026     # Override embedded release date
 ./gradlew build -PbuildTime=1745558400000    # Override embedded build time (ms epoch)
-./gradlew build -PuseMavenLocal=true         # Resolve from ~/.m2 in addition to Maven Central
 ```
 
 `group`, `version`, and `releaseDate` live in `gradle.properties` (single source of truth) and are read by `build.gradle.kts` via `providers.gradleProperty(...)`. `agentJar` and `proxyJar` are dedicated `ShadowJar` tasks; the default `shadowJar` task is disabled to avoid producing a third redundant fat jar. Repository declarations are centralized in `settings.gradle.kts` (`FAIL_ON_PROJECT_REPOS`).

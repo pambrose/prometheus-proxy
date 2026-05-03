@@ -2,9 +2,6 @@ pluginManagement {
   repositories {
     gradlePluginPortal()
     mavenCentral()
-    if (providers.gradleProperty("useMavenLocal").orNull == "true") {
-      mavenLocal()
-    }
   }
 }
 
@@ -16,9 +13,6 @@ dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
     mavenCentral()
-    if (providers.gradleProperty("useMavenLocal").orNull == "true") {
-      mavenLocal()
-    }
   }
 }
 

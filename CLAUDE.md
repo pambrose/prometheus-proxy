@@ -155,7 +155,7 @@ Snippets use dual `base_path` in zensical.toml: first resolves `.txt` files from
 
 Published to Maven Central as `com.pambrose:prometheus-proxy`. No JitPack.
 
-Repository declarations are centralized in `settings.gradle.kts` via `dependencyResolutionManagement(FAIL_ON_PROJECT_REPOS)`. Opt into `mavenLocal()` for local snapshot testing with `-PuseMavenLocal=true`.
+Repository declarations are centralized in `settings.gradle.kts` via `dependencyResolutionManagement(FAIL_ON_PROJECT_REPOS)` and resolve solely from Maven Central.
 
 Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) require GPG environment variables and a keychain password entry; `make check-gpg-env` validates them up-front.
 

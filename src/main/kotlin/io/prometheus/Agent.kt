@@ -18,6 +18,7 @@ package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.util.concurrent.RateLimiter
+import com.pambrose.common.concurrent.await
 import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.pambrose.common.dsl.MetricsDsl.healthCheck
@@ -481,11 +482,9 @@ class Agent(
    * @param timeout Maximum time to wait for initial connection
    * @return true if connection was established within the timeout, false otherwise
    */
-  internal fun awaitInitialConnection(timeout: Duration) =
-    initialConnectionLatch.await(timeout.inWholeMilliseconds, MILLISECONDS)
+  internal fun awaitInitialConnection(timeout: Duration) = initialConnectionLatch.await(timeout)
 
-  internal fun awaitInitialPathsRegistered(timeout: Duration) =
-    initialPathsRegisteredLatch.await(timeout.inWholeMilliseconds, MILLISECONDS)
+  internal fun awaitInitialPathsRegistered(timeout: Duration) = initialPathsRegisteredLatch.await(timeout)
 
   /**
    * Executes metrics operations if metrics collection is enabled.

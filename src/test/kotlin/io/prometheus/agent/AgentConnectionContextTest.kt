@@ -23,6 +23,7 @@
 
 package io.prometheus.agent
 
+import com.pambrose.common.concurrent.await
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -37,6 +38,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class AgentConnectionContextTest : StringSpec() {
   init {
@@ -86,7 +88,7 @@ class AgentConnectionContextTest : StringSpec() {
       }
 
       // If close() deadlocked, this would time out
-      completedLatch.await(5, TimeUnit.SECONDS).shouldBeTrue()
+      completedLatch.await(5.seconds).shouldBeTrue()
       context.connected.shouldBeFalse()
     }
 
@@ -108,7 +110,7 @@ class AgentConnectionContextTest : StringSpec() {
         }
 
       startLatch.countDown()
-      val completed = doneLatch.await(5, TimeUnit.SECONDS)
+      val completed = doneLatch.await(5.seconds)
       threads.forEach { it.join(1000) }
 
       completed.shouldBeTrue()
