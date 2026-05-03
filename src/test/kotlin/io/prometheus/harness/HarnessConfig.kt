@@ -36,11 +36,11 @@ enum class HarnessConfig(
   ),
   SMALL(
     httpServerCount = 3,
-    pathCount = 10,
-    sequentialQueryCount = 5,
-    parallelQueryCount = 2,
-    concurrentClients = 5,
-    addRemoveReps = 5,
+    pathCount = 25,
+    sequentialQueryCount = 500,
+    parallelQueryCount = 5,
+    concurrentClients = 50,
+    addRemoveReps = 500,
     proxyCallTimeoutSecs = 30,
   ),
   MEDIUM(

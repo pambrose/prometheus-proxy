@@ -74,6 +74,29 @@ internal object HarnessTests {
   private val logger = logger {}
   private val contentMap = java.util.concurrent.ConcurrentHashMap<Int, String>()
 
+  private val SERVER_STOP_GRACE_MS = 250.milliseconds.inWholeMilliseconds
+  private val SERVER_STOP_TIMEOUT_MS = 1.seconds.inWholeMilliseconds
+
+  // Poll the loopback port until it accepts a TCP connection. CIO's embeddedServer.start()
+  // returns before the listener is bound; without this probe the first scrape can race startup.
+  private suspend fun awaitPortReady(
+    port: Int,
+    timeout: kotlin.time.Duration = 5.seconds,
+  ) {
+    val deadline = System.currentTimeMillis() + timeout.inWholeMilliseconds
+    while (System.currentTimeMillis() < deadline) {
+      try {
+        java.net.Socket().use { socket ->
+          socket.connect(java.net.InetSocketAddress("localhost", port), 250)
+          return
+        }
+      } catch (_: Exception) {
+        delay(25.milliseconds)
+      }
+    }
+    logger.warn { "Port $port not ready after $timeout" }
+  }
+
   suspend fun timeoutTest(
     pathManager: AgentPathManager,
     caller: String,
@@ -98,8 +121,7 @@ internal object HarnessTests {
     logger.info { "Starting httpServer" }
     httpServer.start()
 
-    // Give http server a chance to start
-    // delay(2.seconds)
+    awaitPortReady(agentPort)
 
     try {
       pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
@@ -110,14 +132,8 @@ internal object HarnessTests {
 
       pathManager.unregisterPath("/$proxyPath")
     } finally {
-      coroutineScope {
-        launch(Dispatchers.IO + exceptionHandler(logger)) {
-          delay(5.seconds)
-          logger.info { "Stopping httpServer" }
-          httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
-          // delay(5.seconds)
-        }
-      }
+      logger.info { "Stopping httpServer" }
+      httpServer.stop(SERVER_STOP_GRACE_MS, SERVER_STOP_TIMEOUT_MS)
     }
   }
 
@@ -169,7 +185,7 @@ internal object HarnessTests {
         launch(Dispatchers.IO + exceptionHandler(logger)) {
           logger.info { "Starting httpServer listening on ${wrapper.port}" }
           wrapper.server.start()
-          delay(5.seconds)
+          awaitPortReady(wrapper.port)
         }
       }
     }
@@ -257,10 +273,8 @@ internal object HarnessTests {
     coroutineScope {
       httpServers.forEach { httpServer ->
         launch(Dispatchers.IO + exceptionHandler(logger)) {
-          delay(5.seconds)
           logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
-          httpServer.server.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
-          delay(5.seconds)
+          httpServer.server.stop(SERVER_STOP_GRACE_MS, SERVER_STOP_TIMEOUT_MS)
         }
       }
     }

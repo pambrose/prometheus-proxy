@@ -28,13 +28,48 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.http.HttpHeaders
+import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.delay
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.*
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource.Monotonic
 import io.ktor.server.cio.CIO as ServerCIO
+
+private suspend fun startServerAndGetPort(server: EmbeddedServer<*, *>): Int {
+  server.start(wait = false)
+  val port = server.engine.resolvedConnectors().first().port
+
+  // Poll until the server answers a complete HTTP exchange. CIO's listening socket can
+  // accept and immediately close while the routing pipeline is still being installed,
+  // which makes the next real request race the install and surface as EOFException.
+  val deadline = Monotonic.markNow() + 5.seconds
+  while (Monotonic.markNow() < deadline) {
+    try {
+      Socket().use { sock ->
+        sock.connect(InetSocketAddress("localhost", port), 200)
+        sock.soTimeout = 200
+        sock.getOutputStream().apply {
+          write("GET /__readiness__ HTTP/1.0\r\nHost: localhost\r\n\r\n".toByteArray())
+          flush()
+        }
+        val reply = sock.getInputStream().readNBytes(12).decodeToString()
+        if (reply.startsWith("HTTP/")) return port
+      }
+    } catch (_: java.io.IOException) {
+      // not ready yet
+    }
+    delay(20.milliseconds)
+  }
+  error("Embedded server on port $port did not start serving HTTP within 5s")
+}
 
 // Bug #11: The Accept header was set in the HttpClient's defaultRequest block when the client
 // was created. Since HttpClient instances are cached and reused, a stale Accept header from
@@ -53,10 +88,10 @@ class AgentHttpServiceHeaderTest : StringSpec() {
             call.respondText("test_metric 1")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         // Create a client WITHOUT defaultRequest Accept header (the fix pattern)
         val client = newHttpClient()
@@ -92,10 +127,10 @@ class AgentHttpServiceHeaderTest : StringSpec() {
             call.respondText("test_metric 1")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = startServerAndGetPort(server)
 
         // Create a client WITH defaultRequest Accept header (the OLD buggy pattern)
         val staleClient = HttpClient(CIO) {
