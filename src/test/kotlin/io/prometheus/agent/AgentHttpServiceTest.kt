@@ -30,7 +30,6 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.header
 import io.ktor.server.response.respondText
@@ -44,13 +43,10 @@ import io.prometheus.Agent
 import io.prometheus.common.ConfigVals
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
+import io.prometheus.common.startAndAwaitReady
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import java.net.InetSocketAddress
-import java.net.Socket
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.TimeSource.Monotonic
 import kotlin.time.measureTime
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -167,25 +163,6 @@ class AgentHttpServiceTest : StringSpec() {
     every { mockAgent.pathManager } returns pathManager
 
     return mockAgent
-  }
-
-  private suspend fun startServerAndGetPort(server: EmbeddedServer<*, *>): Int {
-    server.start(wait = false)
-    val port = server.engine.resolvedConnectors().first().port
-
-    // Poll the bound port until it accepts a TCP connection. Replaces a fixed
-    // delay() that occasionally was not long enough on a busy machine, leaving
-    // the client to hit "connection refused" and fail the scrape.
-    val deadline = Monotonic.markNow() + 5.seconds
-    while (Monotonic.markNow() < deadline) {
-      try {
-        Socket().use { it.connect(InetSocketAddress("localhost", port), 200) }
-        return port
-      } catch (_: java.io.IOException) {
-        delay(20.milliseconds)
-      }
-    }
-    error("Embedded server on port $port did not start accepting connections within 5s")
   }
 
   init {
@@ -311,7 +288,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -375,7 +352,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -440,7 +417,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -482,7 +459,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -524,7 +501,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         // Set low gzip threshold so content gets zipped
@@ -567,7 +544,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         // minGzipSizeBytes is already 1_000_000 from createMockAgentWithPaths
@@ -611,7 +588,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -651,7 +628,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -692,7 +669,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         // Set a very short timeout
@@ -736,7 +713,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         val service = AgentHttpService(mockAgent)
@@ -779,7 +756,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
         val mockAgent = createMockAgentWithRetries(3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -812,7 +789,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
         val mockAgent = createMockAgentWithRetries(3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -845,7 +822,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
         val mockAgent = createMockAgentWithRetries(3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -878,7 +855,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
         val mockAgent = createMockAgentWithRetries(2)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -913,7 +890,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
         val mockAgent = createMockAgentWithRetries(2)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -947,7 +924,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
         val mockAgent = createMockAgentWithRetries(3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
@@ -994,7 +971,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithPaths()
         // Set threshold between char count (200) and byte count (600)
@@ -1067,7 +1044,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       try {
-        val port = startServerAndGetPort(server)
+        val port = server.startAndAwaitReady()
 
         val mockAgent = createMockAgentWithRetries(10)
         // Set a short scrape timeout of 3 seconds

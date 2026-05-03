@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import com.pambrose.common.concurrent.await
 import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.zip
 import io.grpc.Metadata
@@ -515,7 +516,7 @@ class AgentGrpcServiceTest : StringSpec() {
       // Both threads should complete well within 10 seconds.
       // Before the fix, each resetGrpcStubs iteration could block shutDown
       // for up to 5s (awaitTermination) with the redundant nested lock.
-      completedWithinTimeout.set(latch.await(10, java.util.concurrent.TimeUnit.SECONDS))
+      completedWithinTimeout.set(latch.await(10.seconds))
 
       completedWithinTimeout.get().shouldBeTrue()
 
@@ -545,7 +546,7 @@ class AgentGrpcServiceTest : StringSpec() {
       }
 
       thread.start()
-      completedWithinTimeout.set(latch.await(10, java.util.concurrent.TimeUnit.SECONDS))
+      completedWithinTimeout.set(latch.await(10.seconds))
 
       completedWithinTimeout.get().shouldBeTrue()
       service.channel.isTerminated.shouldBeFalse()
@@ -572,7 +573,7 @@ class AgentGrpcServiceTest : StringSpec() {
 
       threads.forEach { it.start() }
 
-      val completed = latch.await(15, java.util.concurrent.TimeUnit.SECONDS)
+      val completed = latch.await(15.seconds)
       completed.shouldBeTrue()
 
       // After all concurrent resets, channel should still be usable

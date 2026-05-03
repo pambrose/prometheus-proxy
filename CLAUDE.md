@@ -15,7 +15,9 @@ Gradle with Kotlin DSL. Java 17+ required. All commands from project root.
 ./gradlew --rerun-tasks check            # Force rerun all checks (lint + tests)
 ./gradlew agentJar proxyJar              # Generate standalone JARs
 ./gradlew generateProto                  # Regenerate protobuf stubs
-./gradlew koverMergedHtmlReport          # Code coverage report
+./gradlew koverHtmlReport                # HTML coverage report (build/reports/kover/html/)
+./gradlew koverXmlReport                 # XML coverage report (CI / Codacy / Coveralls)
+./gradlew koverLog                       # Print coverage % to console
 ```
 
 ### Code Quality
@@ -37,6 +39,9 @@ make nh-tests     # Unit tests only (agent, proxy, common, misc — no harness)
 make ip-tests     # In-process integration tests only
 make netty-tests  # Netty integration tests only
 make tls-tests    # TLS integration tests only
+make coverage     # Run tests + generate HTML coverage report
+make coverage-xml # XML coverage report (for Codacy/Coveralls/etc.)
+make coverage-log # Print coverage % to console
 make tsconfig     # Regenerate ConfigVals from config/config.conf via tscfg
 ```
 
@@ -122,7 +127,7 @@ Use these for CI snapshot publishing and bit-identical artifact reproduction. `-
 ## Testing
 
 - **Framework**: Kotest with JUnit 5 runner, MockK for mocking
-- **Coverage**: Kover (`./gradlew koverMergedHtmlReport`)
+- **Coverage**: kotlinx-kover. HTML report: `./gradlew koverHtmlReport`. XML report (CI): `./gradlew koverXmlReport`. Console summary: `./gradlew koverLog` (also runs after `koverXmlReport` / `koverVerify` via `onCheck = true`). Generated gRPC stubs, `BuildConfig`, and `ConfigVals` are excluded from report statistics (configured in `build.gradle.kts` `configureCoverage()`).
 
 ### Test Structure
 
@@ -150,7 +155,7 @@ Snippets use dual `base_path` in zensical.toml: first resolves `.txt` files from
 
 Published to Maven Central as `com.pambrose:prometheus-proxy`. No JitPack.
 
-Repository declarations are centralized in `settings.gradle.kts` via `dependencyResolutionManagement(FAIL_ON_PROJECT_REPOS)`. Opt into `mavenLocal()` for local snapshot testing with `-PuseMavenLocal=true`.
+Repository declarations are centralized in `settings.gradle.kts` via `dependencyResolutionManagement(FAIL_ON_PROJECT_REPOS)` and resolve solely from Maven Central.
 
 Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) require GPG environment variables and a keychain password entry; `make check-gpg-env` validates them up-front.
 

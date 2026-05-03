@@ -48,6 +48,7 @@ import io.ktor.server.routing.routing
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.common.startAndAwaitReady
 import io.ktor.server.cio.CIO as ServerCIO
 
 // Tests for ProxyHttpConfig which configures Ktor server plugins for the proxy HTTP service.
@@ -151,10 +152,10 @@ class ProxyHttpConfigTest : StringSpec() {
         routing {
           get("/large") { call.respondText(largeContent) }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/large") {
@@ -179,10 +180,10 @@ class ProxyHttpConfigTest : StringSpec() {
         routing {
           get("/small") { call.respondText("tiny") }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/small") {
@@ -210,10 +211,10 @@ class ProxyHttpConfigTest : StringSpec() {
         routing {
           get("/small") { call.respondText("tiny") }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/small") {
@@ -249,10 +250,10 @@ class ProxyHttpConfigTest : StringSpec() {
         routing {
           // No routes - all requests should 404
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/nonexistent")
@@ -278,10 +279,10 @@ class ProxyHttpConfigTest : StringSpec() {
             throw IllegalStateException("Test exception")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/throw")
@@ -408,10 +409,10 @@ class ProxyHttpConfigTest : StringSpec() {
         routing {
           get("/test") { call.respondText("hello") }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test")
@@ -431,10 +432,10 @@ class ProxyHttpConfigTest : StringSpec() {
         val app = this
         with(ProxyHttpConfig) { app.configureKtorServer(proxy, isTestMode = true) }
         routing { }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/nonexistent")
@@ -457,10 +458,10 @@ class ProxyHttpConfigTest : StringSpec() {
         routing {
           get("/throw") { throw IllegalStateException("Test error") }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/throw")

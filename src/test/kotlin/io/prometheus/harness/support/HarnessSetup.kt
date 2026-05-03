@@ -46,7 +46,12 @@ open class HarnessSetup {
 
     // Start the proxy first and then allow the agent to connect
     proxy = proxySetup.invoke()
-    agent = agentSetup.invoke().apply { awaitInitialConnection(10.seconds) }
+    agent = agentSetup.invoke().apply {
+      awaitInitialConnection(10.seconds)
+      // Wait for any config-driven paths (from harness.conf etc.) to finish registering before
+      // the test samples pathMapSize(); otherwise the registration races the test on slow CI.
+      awaitInitialPathsRegistered(10.seconds)
+    }
 
     actions.invoke()
 

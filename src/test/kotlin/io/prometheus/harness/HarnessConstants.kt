@@ -46,11 +46,13 @@ object HarnessConstants {
   const val DEFAULT_SCRAPE_TIMEOUT_SECS = 3
   const val DEFAULT_CHUNK_SIZE_BYTES = 5
 
-  private const val TRAVIS_FILE = "config/test-configs/travis.conf"
+  private const val HARNESS_CONFIG_FILE = "config/test-configs/harness.conf"
   private const val JUNIT_FILE = "config/test-configs/junit-test.conf"
   private const val GH_PREFIX = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/"
 
-  val CONFIG_ARG = listOf("--config", "${if (File(TRAVIS_FILE).exists()) "" else GH_PREFIX}$TRAVIS_FILE")
+  private fun localOrGitHub(path: String): String = if (File(path).exists()) path else "$GH_PREFIX$path"
 
-  val OPTIONS_CONFIG = "${if (File(JUNIT_FILE).exists()) "" else GH_PREFIX}$JUNIT_FILE"
+  val CONFIG_ARG = listOf("--config", localOrGitHub(HARNESS_CONFIG_FILE))
+
+  val OPTIONS_CONFIG = localOrGitHub(JUNIT_FILE)
 }

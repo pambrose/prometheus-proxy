@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import com.pambrose.common.concurrent.await
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -41,7 +42,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -417,7 +417,7 @@ class HttpClientCacheTest : StringSpec() {
       closeThread.start()
 
       // If close() deadlocked (old bug), this would time out
-      latch.await(5, TimeUnit.SECONDS).shouldBeTrue()
+      latch.await(5.seconds).shouldBeTrue()
       fastCleanupCache.currentCacheSize() shouldBe 0
     }
 
@@ -489,7 +489,7 @@ class HttpClientCacheTest : StringSpec() {
         val closeCanProceed = CountDownLatch(1)
         every { slowClient.close() } answers {
           closeStarted.complete(Unit)
-          closeCanProceed.await(10, TimeUnit.SECONDS)
+          closeCanProceed.await(10.seconds)
         }
 
         // Get the entry with the slow client, then mark it for eviction

@@ -33,6 +33,7 @@ import io.ktor.server.request.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.prometheus.common.startAndAwaitReady
 import java.util.*
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -53,10 +54,10 @@ class AgentHttpServiceHeaderTest : StringSpec() {
             call.respondText("test_metric 1")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
 
         // Create a client WITHOUT defaultRequest Accept header (the fix pattern)
         val client = newHttpClient()
@@ -92,10 +93,10 @@ class AgentHttpServiceHeaderTest : StringSpec() {
             call.respondText("test_metric 1")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
 
         // Create a client WITH defaultRequest Accept header (the OLD buggy pattern)
         val staleClient = HttpClient(CIO) {

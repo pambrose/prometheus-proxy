@@ -18,6 +18,7 @@ package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.util.concurrent.RateLimiter
+import com.pambrose.common.concurrent.await
 import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.pambrose.common.dsl.MetricsDsl.healthCheck
@@ -57,7 +58,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.math.roundToInt
 import kotlin.time.Duration
@@ -166,6 +166,7 @@ class Agent(
   private val clock = Monotonic
   internal val agentHttpService = AgentHttpService(this)
   private val initialConnectionLatch = CountDownLatch(1)
+  private val initialPathsRegisteredLatch = CountDownLatch(1)
 
   // Prime the limiter
   private val reconnectLimiter: RateLimiter
@@ -254,6 +255,9 @@ class Agent(
       if (grpcService.connectAgent(configVals.agent.transportFilterDisabled)) {
         grpcService.registerAgent(initialConnectionLatch)
         pathManager.registerPaths()
+        // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores
+        // subsequent countDowns, so only the first successful connect cycle matters.
+        initialPathsRegisteredLatch.countDown()
 
         // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
         val connectionContext = AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * 2)
@@ -477,8 +481,9 @@ class Agent(
    * @param timeout Maximum time to wait for initial connection
    * @return true if connection was established within the timeout, false otherwise
    */
-  internal fun awaitInitialConnection(timeout: Duration) =
-    initialConnectionLatch.await(timeout.inWholeMilliseconds, MILLISECONDS)
+  internal fun awaitInitialConnection(timeout: Duration) = initialConnectionLatch.await(timeout)
+
+  internal fun awaitInitialPathsRegistered(timeout: Duration) = initialPathsRegisteredLatch.await(timeout)
 
   /**
    * Executes metrics operations if metrics collection is enabled.
