@@ -222,7 +222,7 @@ Each integration test class runs a standard suite defined in `AbstractHarnessTes
 - **BasicHarnessTests** — Reusable test implementations (missing path, invalid path, add/remove paths, etc.)
 - **HarnessTests** — Core integration logic: `proxyCallTest()` (sequential, parallel, concurrent queries) and
   `timeoutTest()`
-- **HarnessConfig** — Enum defining test scale configs (MINI, SMALL, MEDIUM, LARGE, XLARGE1, XLARGE2)
+- **HarnessConfig** — Enum defining test scale configs (MINI, SMALL, MEDIUM, LARGE, XLARGE, XXLARGE)
 - **HarnessConstants** — Test constants (ports, delays, config paths)
 
 ## Testing Patterns
@@ -258,7 +258,7 @@ fun `test async operation`(): Unit = runBlocking {
 
 ### Harness Test Scaling
 
-Integration tests scale via `HarnessConfig` (MINI to XLARGE2), which controls the number of agents, paths, and
+Integration tests scale via `HarnessConfig` (MINI to XXLARGE), which controls the number of agents, paths, and
 iterations used in integration tests.
 
 ### Bug Regression Tests
