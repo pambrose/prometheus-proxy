@@ -140,8 +140,8 @@ fun Project.configureTesting() {
     // and runs them through 2000+ sequential calls; the default 512m heap OOMs in bodyAsText().
     maxHeapSize =
       when (harnessConfig?.uppercase()) {
-        "XLARGE2" -> "8g"
-        "XLARGE1" -> "4g"
+        "XXLARGE" -> "8g"
+        "XLARGE" -> "4g"
         "LARGE" -> "2g"
         else -> "1g"
       }

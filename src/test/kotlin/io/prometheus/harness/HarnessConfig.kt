@@ -61,7 +61,7 @@ enum class HarnessConfig(
     addRemoveReps = 3000,
     proxyCallTimeoutSecs = 120,
   ),
-  XLARGE1(
+  XLARGE(
     httpServerCount = 20,
     pathCount = 250,
     sequentialQueryCount = 5000,
@@ -70,7 +70,7 @@ enum class HarnessConfig(
     addRemoveReps = 5000,
     proxyCallTimeoutSecs = 240,
   ),
-  XLARGE2(
+  XXLARGE(
     httpServerCount = 40,
     pathCount = 500,
     sequentialQueryCount = 10000,
