@@ -307,8 +307,8 @@ fun Project.configureDetekt() {
   detekt {
     buildUponDefaultConfig = true
     allRules = false
-    config.setFrom("$projectDir/etc/detekt/detekt.yml")
-    baseline = file("$projectDir/etc/detekt/baseline.xml")
+    config.setFrom("$projectDir/config/detekt/detekt.yml")
+    baseline = file("$projectDir/config/detekt/baseline.xml")
   }
 }
 

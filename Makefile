@@ -1,9 +1,9 @@
 VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
 
-.PHONY: default stop clean stubs build tibuild refresh jars \
+.PHONY: default stop clean clean-all stubs build tibuild refresh jars \
         tests nh-tests ip-tests netty-tests tls-tests coverage \
         coverage-xml coverage-log coverage-verify reports gh-docs \
-        gh-status tsconfig distro docker-push release tree depends lint \
+        gh-status tsconfig distro docker-push release tree depends lint detekt-baseline \
         versioncheck kdocs clean-docs site publish-local \
         publish-local-snapshot check-gpg-env publish-snapshot \
         publish-maven-central upgrade-wrapper
@@ -16,6 +16,9 @@ stop:
 clean:
 	./gradlew clean
 
+clean-all: clean clean-docs
+	rm -rf .gradle
+
 stubs:
 	./gradlew generateProto
 
@@ -24,6 +27,12 @@ build: clean stubs
 
 tibuild: clean stubs
 	./gradlew tiTree build -xtest
+
+lint:
+	./gradlew lintKotlinMain lintKotlinTest detekt
+
+detekt-baseline:
+	./gradlew detektBaseline
 
 refresh:
 	./gradlew --refresh-dependencies
@@ -49,7 +58,9 @@ netty-tests:
 tls-tests:
 	./gradlew test --tests "io.prometheus.harness.Tls*"
 
-coverage:
+coverage: coverage-html coverage-xml
+
+coverage-html:
 	./gradlew koverHtmlReport
 
 coverage-xml:
@@ -60,6 +71,25 @@ coverage-log:
 
 coverage-verify:
 	./gradlew koverVerify
+
+coverage-open: coverage-html
+	open build/reports/kover/html/index.html
+
+coverage-packages: coverage-xml
+	@python3 -c "import xml.etree.ElementTree as ET; \
+r = ET.parse('build/reports/kover/report.xml').getroot(); \
+pkgs = []; \
+[pkgs.append((p.get('name'), int(c.get('covered')), int(c.get('missed')))) \
+ for p in r.findall('package') for c in p.findall('counter') if c.get('type') == 'INSTRUCTION']; \
+pkgs.sort(key=lambda x: -x[2]); \
+print(f\"{'package':<55} {'cov%':>6} {'covered':>9} {'missed':>9} {'total':>9}\"); \
+[print(f'{n:<55} {(c/(c+m)*100 if c+m else 0):6.1f} {c:9d} {m:9d} {c+m:9d}') for n,c,m in pkgs]; \
+tc=sum(p[1] for p in pkgs); tm=sum(p[2] for p in pkgs); \
+print(f'\nOVERALL: {tc/(tc+tm)*100:.2f}% ({tc}/{tc+tm} instructions, {tm} missed)')"
+
+coverage-clean:
+	./gradlew cleanAllTests
+	rm -rf build/reports/kover build/kover
 
 # Backwards-compatible alias for the previous `make reports` invocation.
 reports: coverage
@@ -92,9 +122,6 @@ tree:
 
 depends:
 	./gradlew dependencies
-
-lint:
-	./gradlew lintKotlinMain lintKotlinTest
 
 versioncheck:
 	./gradlew dependencyUpdates --no-configuration-cache

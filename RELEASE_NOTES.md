@@ -2,6 +2,18 @@
 
 ---
 
+## 3.1.2
+
+_Unreleased_
+
+### Build & Tooling
+
+- Move detekt configuration from `etc/detekt/` to `config/detekt/` (the standard detekt convention); `build.gradle.kts` and `CLAUDE.md` updated accordingly
+- Add `detekt` to the `lint` Makefile target so `make lint` now runs `lintKotlinMain`, `lintKotlinTest`, and `detekt` together
+- Add `detekt-baseline` Makefile target (`./gradlew detektBaseline`) for grandfathering existing findings when tightening rules
+
+---
+
 ## 3.1.1
 
 _Released 2026-04-30_

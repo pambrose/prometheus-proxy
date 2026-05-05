@@ -165,5 +165,5 @@ When bumping the version, update `version` in `gradle.properties` and the `3.1.2
 
 - 2-space indentation for Kotlin, tabs for Makefiles
 - Max line length: 120 characters
-- Kotlinter + detekt enforce style (see `etc/detekt/detekt.yml`)
+- Kotlinter + detekt enforce style (see `config/detekt/detekt.yml`)
 - Mimic existing code patterns in nearby files
