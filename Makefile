@@ -1,9 +1,9 @@
 VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
 
-.PHONY: default stop clean stubs build tibuild refresh jars \
+.PHONY: default stop clean clean-all stubs build tibuild refresh jars \
         tests nh-tests ip-tests netty-tests tls-tests coverage \
         coverage-xml coverage-log coverage-verify reports gh-docs \
-        gh-status tsconfig distro docker-push release tree depends lint \
+        gh-status tsconfig distro docker-push release tree depends lint detekt-baseline \
         versioncheck kdocs clean-docs site publish-local \
         publish-local-snapshot check-gpg-env publish-snapshot \
         publish-maven-central upgrade-wrapper
@@ -16,6 +16,9 @@ stop:
 clean:
 	./gradlew clean
 
+clean-all: clean clean-docs
+	rm -rf .gradle
+
 stubs:
 	./gradlew generateProto
 
@@ -24,6 +27,12 @@ build: clean stubs
 
 tibuild: clean stubs
 	./gradlew tiTree build -xtest
+
+lint:
+	./gradlew lintKotlinMain lintKotlinTest detekt
+
+detekt-baseline:
+	./gradlew detektBaseline
 
 refresh:
 	./gradlew --refresh-dependencies
@@ -92,9 +101,6 @@ tree:
 
 depends:
 	./gradlew dependencies
-
-lint:
-	./gradlew lintKotlinMain lintKotlinTest
 
 versioncheck:
 	./gradlew dependencyUpdates --no-configuration-cache

@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [3.1.2] - Unreleased
+
+### Build & Tooling
+
+- Move detekt configuration from `etc/detekt/` to `config/detekt/` (standard detekt convention)
+- Add `detekt` to the `lint` Makefile target so `make lint` runs `lintKotlinMain`, `lintKotlinTest`, and `detekt`
+- Add `detekt-baseline` Makefile target wrapping `./gradlew detektBaseline`
+
+---
+
 ## [3.1.1] - 2026-04-30
 
 ### New Features
