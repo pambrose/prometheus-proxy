@@ -1,4 +1,8 @@
 [versions]
+# Toolchain
+gradle-wrapper = "9.5.0"
+jvm = "17"
+
 # Plugins
 config = "6.0.9"
 detekt = "1.23.8"
@@ -106,23 +110,6 @@ slf4j-jul = { module = "org.slf4j:jul-to-slf4j", version.ref = "slf4j" }
 kotest = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 
-[plugins]
-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-protobuf = { id = "com.google.protobuf", version.ref = "protobuf" }
-shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
-buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "config" }
-kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
-detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
-taskinfo = { id = "org.barfuin.gradle.taskinfo", version.ref = "taskinfo" }
-dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
-maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }
-
-pambrose-envvar = { id = "com.pambrose.envvar", version.ref = "gradle-plugins" }
-pambrose-stable-versions = { id = "com.pambrose.stable-versions", version.ref = "gradle-plugins" }
-pambrose-kotlinter = { id = "com.pambrose.kotlinter", version.ref = "gradle-plugins" }
-pambrose-testing = { id = "com.pambrose.testing", version.ref = "gradle-plugins" }
-
 [bundles]
 ktor = [
   "ktor-client",
@@ -154,3 +141,20 @@ common-utils = [
   "common-utils-service",
   "common-utils-zipkin"
 ]
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+protobuf = { id = "com.google.protobuf", version.ref = "protobuf" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "config" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+taskinfo = { id = "org.barfuin.gradle.taskinfo", version.ref = "taskinfo" }
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }
+
+pambrose-envvar = { id = "com.pambrose.envvar", version.ref = "gradle-plugins" }
+pambrose-stable-versions = { id = "com.pambrose.stable-versions", version.ref = "gradle-plugins" }
+pambrose-kotlinter = { id = "com.pambrose.kotlinter", version.ref = "gradle-plugins" }
+pambrose-testing = { id = "com.pambrose.testing", version.ref = "gradle-plugins" }
