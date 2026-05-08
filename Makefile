@@ -1,4 +1,5 @@
 VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
+GRADLE_VERSION=$(shell awk -F\" '/^gradle-wrapper[[:space:]]*=/ {print $$2; exit}' gradle/libs.versions.toml)
 
 .PHONY: default stop clean clean-all stubs build tibuild refresh jars \
         tests nh-tests ip-tests netty-tests tls-tests coverage \
@@ -165,4 +166,4 @@ publish-maven-central: check-gpg-env
 	$(GPG_ENV) ./gradlew publishAndReleaseToMavenCentral
 
 upgrade-wrapper:
-	./gradlew wrapper
+	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
