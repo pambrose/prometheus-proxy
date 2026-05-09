@@ -36,6 +36,7 @@ serialization = "1.11.0"
 slf4j = "2.0.17"
 # Keep in sync with grpc
 tcnative = "2.0.77.Final"
+testcontainers = "2.0.5"
 typesafe = "1.4.7"
 utils = "2.8.2"
 zipkin = "6.3.1"
@@ -109,6 +110,7 @@ slf4j-jul = { module = "org.slf4j:jul-to-slf4j", version.ref = "slf4j" }
 # Testing
 kotest = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 
 [bundles]
 ktor = [

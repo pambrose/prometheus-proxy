@@ -6,11 +6,45 @@
 
 _Unreleased_
 
+### Highlights
+
+- **Testcontainers smoke test** — A new `ContainersSmokeTest` builds the proxy and agent Docker images from `etc/docker/*.df`, runs them alongside an nginx metrics stub and a real Prometheus container, and verifies the full `Prometheus → proxy → agent → endpoint` scrape path end-to-end. Surfaces packaging/image regressions that the in-JVM harness can't catch.
+- **Shadow JAR fix** — Re-register grpc-core's `DnsNameResolverProvider` and `PickFirstLoadBalancerProvider` in the agent and proxy fat JARs. Shadow 9.4.1's `mergeServiceFiles()` was silently dropping them when grpc-netty-shaded provided same-named service files, which made the gRPC client default to the `unix` scheme on any non-IP hostname (`Address types of NameResolver 'unix' for 'unix:///host:port' not supported by transport`). Anyone running the published agent/proxy JAR against a hostname-addressed proxy could have hit this.
+
+### Bug Fixes
+
+- Fix gRPC `NameResolverProvider` and `LoadBalancerProvider` services dropped from the shaded `agentJar`/`proxyJar`; static service files under `src/shadow/resources/META-INF/services/` re-register `DnsNameResolverProvider` (so `forAddress(host, port)` resolves via DNS) and `PickFirstLoadBalancerProvider` (the default load balancer)
+- Fix flaky `ProxyHttpRoutesTest > handleClientRequests should return ServiceUnavailable when proxy is not running` — the TCP-connect probe in `startServerAndGetPort` only confirmed the kernel's SYN/ACK handshake, not Ktor's user-space accept loop. Replaced with an HTTP-level readiness probe that retries on `IOException`/`ClosedByteChannelException` for up to 5 s
+
+### New Features
+
+- New `ContainersSmokeTest` (`io.prometheus.containers`) — Testcontainers-based end-to-end test, gated on `RUN_CONTAINER_TESTS=true`. Default `./gradlew test` runs see a single SKIPPED placeholder
+- New `make container-tests` target — auto-detects Docker Desktop's active context (`docker context inspect`) and exports `DOCKER_HOST` so Testcontainers finds non-default sockets on macOS
+- New `.github/workflows/container-tests.yml` — runs the smoke test on push to master, on `workflow_dispatch`, and on PRs that touch packaging-relevant paths (`etc/docker/**`, `build.gradle.kts`, `gradle/libs.versions.toml`, `src/shadow/**`, the test sources/resources, and the workflow file)
+- New `make help` target with auto-extracted descriptions from `## …` annotations on each target
+
 ### Build & Tooling
 
 - Move detekt configuration from `etc/detekt/` to `config/detekt/` (the standard detekt convention); `build.gradle.kts` and `CLAUDE.md` updated accordingly
 - Add `detekt` to the `lint` Makefile target so `make lint` now runs `lintKotlinMain`, `lintKotlinTest`, and `detekt` together
 - Add `detekt-baseline` Makefile target (`./gradlew detektBaseline`) for grandfathering existing findings when tightening rules
+- DRY the agent/proxy ShadowJar registrations behind a `ShadowJar.configureFatJar(archiveName, mainClass)` helper; switch `configurations = listOf(runtimeClasspath.get())` to `configurations.add(runtimeClasspath)` so the configuration stays a provider until shadow resolves it
+- Refuse `make docker-push` when `VERSION` matches `*SNAPSHOT*` / `*-rc*` / `*-beta*` / `*-alpha*` so a pre-release can't clobber the public `:latest` tag
+- Validate `VERSION` and `GRADLE_VERSION` are detected at the top of the Makefile (fail fast with a clear `$(error)` instead of silently issuing commands with empty version arguments)
+- Add `TSCFG_VERSION` variable so the tscfg jar version isn't duplicated inline; centralize `PLATFORMS` and `IMAGE_PREFIX` next to the existing `VERSION` block
+- Standardize on `$(VAR)` everywhere in the Makefile (was a mix of `$(VAR)` and `${VAR}`)
+- Replace `distro: build $(MAKE) jars` with a plain `distro: build jars` prerequisite list (no recursive sub-make)
+- Externalize the inline coverage-packages python script to `scripts/coverage_packages.py` (typed, error-on-missing-report)
+- Annotate every Make target with a `## description` and add a `make help` target that awk-extracts them
+- Document the double `./gradlew wrapper` invocation in `upgrade-wrapper` as Gradle's documented two-run upgrade procedure
+- Fill in missing `.PHONY` entries for `mini-tests` and the `coverage-*` family
+- Move the Testcontainers smoke test out of `io.prometheus.harness` into a dedicated `io.prometheus.containers` package so the make target is a clean wildcard rather than a `Containers*` prefix match
+
+### Dependency Updates
+
+| Dependency      | Old | New   |
+|-----------------|-----|-------|
+| testcontainers  | —   | 2.0.5 |
 
 ---
 

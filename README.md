@@ -30,7 +30,7 @@ behind a firewall and preserves the native pull-based model architecture.
 - [Configuration Options](#-configuration-options)
 - [Security & TLS](#-security--tls)
 - [Troubleshooting](#-troubleshooting)
-- [API Documentation](#-api-documentation)
+- [Documentation](#-documentation)
 - [License](#-license)
 
 ## 🏗️ Architecture

@@ -352,7 +352,10 @@ internal object ProxyHttpRoutes {
   ): ScrapeRequestWrapper {
     val authHeader = request.header(HttpHeaders.Authorization).orEmpty()
 
-    if (authHeader.isNotEmpty() && !proxy.options.isTlsEnabled && authHeaderWithoutTlsWarned.compareAndSet(false, true))
+    if (authHeader.isNotEmpty() &&
+      !proxy.options.isTlsEnabled &&
+      authHeaderWithoutTlsWarned.compareAndSet(expectedValue = false, newValue = true)
+    )
       logger.warn {
         "Authorization header is being forwarded to agent over a non-TLS gRPC connection. " +
           "Credentials may be exposed in transit. Configure TLS (--cert, --key) to secure the proxy-agent channel."

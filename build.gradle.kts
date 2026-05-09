@@ -79,6 +79,7 @@ dependencies {
 
   testImplementation(libs.kotest)
   testImplementation(libs.mockk)
+  testImplementation(libs.testcontainers)
   testImplementation(kotlin("test"))
 }
 
@@ -204,20 +205,29 @@ fun Project.configureJars() {
   val mainOutput = sourceSets.main.get().output
   val runtimeClasspath = configurations.runtimeClasspath
 
-  val agentJar by tasks.registering(ShadowJar::class) {
-    archiveFileName.set("prometheus-agent.jar")
-    manifest { attributes("Main-Class" to "io.prometheus.Agent") }
+  // shadow 9.4.1's mergeServiceFiles() silently drops entries when multiple JARs ship a
+  // same-named META-INF/services file (its append() transformer is broken the same way),
+  // so without intervention the fat JAR loses grpc-core's DnsNameResolverProvider and
+  // PickFirstLoadBalancerProvider and the gRPC client defaults to the `unix` scheme on
+  // any non-IP hostname. Static service files under src/shadow/resources re-register the
+  // missing providers; kept out of src/main/resources so the published Maven jar is clean.
+  val shadowResources = file("src/shadow/resources")
+
+  fun ShadowJar.configureFatJar(archiveName: String, mainClass: String) {
+    archiveFileName.set(archiveName)
+    manifest { attributes("Main-Class" to mainClass) }
     mergeServiceFiles()
     from(mainOutput)
-    configurations = listOf(runtimeClasspath.get())
+    from(shadowResources)
+    configurations.add(runtimeClasspath)
+  }
+
+  val agentJar by tasks.registering(ShadowJar::class) {
+    configureFatJar("prometheus-agent.jar", "io.prometheus.Agent")
   }
 
   val proxyJar by tasks.registering(ShadowJar::class) {
-    archiveFileName.set("prometheus-proxy.jar")
-    manifest { attributes("Main-Class" to "io.prometheus.Proxy") }
-    mergeServiceFiles()
-    from(mainOutput)
-    configurations = listOf(runtimeClasspath.get())
+    configureFatJar("prometheus-proxy.jar", "io.prometheus.Proxy")
   }
 
   tasks.named("assemble") {

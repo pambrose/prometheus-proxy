@@ -6,11 +6,41 @@ All notable changes to this project are documented in this file.
 
 ## [3.1.2] - Unreleased
 
+### New Features
+
+- Add `ContainersSmokeTest` (`io.prometheus.containers`) — Testcontainers-based end-to-end smoke test that builds the proxy/agent Docker images and verifies a Prometheus → proxy → agent → endpoint scrape, gated on `RUN_CONTAINER_TESTS=true`
+- Add `make container-tests` target with Docker context auto-detection so Testcontainers finds Docker Desktop's non-default socket on macOS
+- Add `.github/workflows/container-tests.yml` to run the smoke test on push to master, on `workflow_dispatch`, and on PRs touching packaging files
+- Add `make help` target listing every Make target with an auto-extracted description
+
+### Bug Fixes
+
+- Fix `DnsNameResolverProvider` and `PickFirstLoadBalancerProvider` missing from the shaded `agentJar`/`proxyJar` (shadow 9.4.1 silently drops same-named `META-INF/services` entries when both grpc-core and grpc-netty-shaded contribute one). Without the DNS provider, gRPC defaulted to the `unix` scheme on any non-IP hostname. Static service files under `src/shadow/resources/` re-register both providers
+- Fix flaky `ProxyHttpRoutesTest` test that occasionally hit `Connection reset` — the existing TCP-connect probe only confirmed kernel-level SYN/ACK; replaced with an HTTP-level readiness probe that retries on `IOException`/`ClosedByteChannelException`
+
 ### Build & Tooling
 
 - Move detekt configuration from `etc/detekt/` to `config/detekt/` (standard detekt convention)
 - Add `detekt` to the `lint` Makefile target so `make lint` runs `lintKotlinMain`, `lintKotlinTest`, and `detekt`
 - Add `detekt-baseline` Makefile target wrapping `./gradlew detektBaseline`
+- DRY the agent/proxy ShadowJar tasks behind a `configureFatJar(archiveName, mainClass)` helper; use `configurations.add(runtimeClasspath)` so the configuration stays a provider
+- Refuse `make docker-push` when `VERSION` matches `*SNAPSHOT*` / `*-rc*` / `*-beta*` / `*-alpha*`
+- Fail-fast `$(error)` guards on `VERSION` and `GRADLE_VERSION` if either can't be parsed
+- Add `TSCFG_VERSION` variable so the tscfg jar version isn't duplicated inline
+- Centralize `PLATFORMS`, `IMAGE_PREFIX`, `TSCFG_VERSION` at the top of the Makefile
+- Standardize on `$(VAR)` form everywhere in the Makefile
+- Replace `distro: build $(MAKE) jars` with `distro: build jars` (drop the recursive sub-make)
+- Externalize the inline coverage-packages python to `scripts/coverage_packages.py`
+- Annotate every Make target with `## descriptions` and add `make help`
+- Document the double `./gradlew wrapper` invocation in `upgrade-wrapper`
+- Add missing `.PHONY` entries for `mini-tests` and the `coverage-*` family
+- Move `ContainersSmokeTest` from `io.prometheus.harness` to a dedicated `io.prometheus.containers` package
+
+### Dependency Updates
+
+| Dependency      | Old | New   |
+|-----------------|-----|-------|
+| testcontainers  | —   | 2.0.5 |
 
 ---
 

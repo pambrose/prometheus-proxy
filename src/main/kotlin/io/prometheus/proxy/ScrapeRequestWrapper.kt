@@ -68,7 +68,7 @@ internal class ScrapeRequestWrapper(
   fun ageDuration() = createTimeMark.elapsedNow()
 
   fun markComplete() {
-    if (completed.compareAndSet(false, true)) {
+    if (completed.compareAndSet(expectedValue = false, newValue = true)) {
       requestTimer?.observeDuration()
       // Required
       closeChannel()

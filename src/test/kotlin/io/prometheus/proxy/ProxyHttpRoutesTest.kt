@@ -39,6 +39,7 @@ import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.ktor.utils.io.ClosedByteChannelException
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -48,8 +49,6 @@ import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.net.InetSocketAddress
-import java.net.Socket
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -129,19 +128,24 @@ class ProxyHttpRoutesTest : StringSpec() {
     server.start(wait = false)
     val port = server.engine.resolvedConnectors().first().port
 
-    // Poll the bound port until it accepts a TCP connection. A fixed delay
-    // is unreliable on a busy machine — clients can land in the gap between
-    // bind() and accept() and hit "Connection reset", failing the test.
+    // A bound TCP port doesn't mean Ktor's accept loop is wired up — the kernel
+    // can complete the SYN/ACK handshake before user-space accept() runs, and
+    // the very next real request lands as a "Connection reset". Probe with an
+    // actual HTTP exchange and retry on transient channel/connect failures.
     val deadline = Monotonic.markNow() + 5.seconds
-    while (Monotonic.markNow() < deadline) {
-      try {
-        Socket().use { it.connect(InetSocketAddress("localhost", port), 200) }
-        return port
-      } catch (_: java.io.IOException) {
-        delay(20.milliseconds)
+    newHttpClient().use { probeClient ->
+      while (Monotonic.markNow() < deadline) {
+        try {
+          probeClient.get("http://localhost:$port/__readiness_probe__")
+          return port
+        } catch (_: java.io.IOException) {
+          delay(20.milliseconds)
+        } catch (_: ClosedByteChannelException) {
+          delay(20.milliseconds)
+        }
       }
     }
-    error("Embedded server on port $port did not start accepting connections within 5s")
+    error("Embedded server on port $port did not start accepting requests within 5s")
   }
 
   init {
@@ -424,10 +428,10 @@ class ProxyHttpRoutesTest : StringSpec() {
       atomicBoolean.store(false)
 
       // First compareAndSet should succeed (false -> true)
-      atomicBoolean.compareAndSet(false, true) shouldBe true
+      atomicBoolean.compareAndSet(expectedValue = false, newValue = true) shouldBe true
 
       // Second compareAndSet should fail (already true)
-      atomicBoolean.compareAndSet(false, true) shouldBe false
+      atomicBoolean.compareAndSet(expectedValue = false, newValue = true) shouldBe false
 
       // Reset for other tests
       atomicBoolean.store(false)
