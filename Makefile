@@ -1,6 +1,7 @@
-.PHONY: default stop clean clean-all stubs build tibuild refresh jars \
-        tests nh-tests ip-tests netty-tests tls-tests container-tests coverage \
-        coverage-xml coverage-log coverage-verify reports gh-docs \
+.PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
+        tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests \
+        coverage coverage-html coverage-xml coverage-log coverage-verify \
+        coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint detekt-baseline \
         versioncheck kdocs clean-docs site publish-local \
         publish-local-snapshot check-gpg-env publish-snapshot \
@@ -18,57 +19,64 @@ ifeq ($(strip $(GRADLE_VERSION)),)
 $(error Could not determine gradle version from gradle/libs.versions.toml)
 endif
 
+TSCFG_VERSION := 1.2.5
+PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
+IMAGE_PREFIX := pambrose/prometheus
+
 default: versioncheck
 
-stop:
+help:  ## Show this help message
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z][a-zA-Z0-9_-]*:.*?## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+stop:  ## Stop the running Gradle daemon
 	./gradlew --stop
 
-clean:
+clean:  ## Remove Gradle build outputs
 	./gradlew clean
 
-clean-all: clean clean-docs
+clean-all: clean clean-docs  ## clean + remove .gradle cache and docs site
 	rm -rf .gradle
 
-stubs:
+stubs:  ## Regenerate gRPC/protobuf stubs
 	./gradlew generateProto
 
-build: clean stubs
+build: clean stubs  ## Clean build without tests
 	./gradlew build -xtest
 
-tibuild: clean stubs
+tibuild: clean stubs  ## Build with taskinfo task tree
 	./gradlew tiTree build -xtest
 
-lint:
+lint:  ## Run kotlinter and detekt
 	./gradlew lintKotlinMain lintKotlinTest detekt
 
-detekt-baseline:
+detekt-baseline:  ## Refresh detekt baseline
 	./gradlew detektBaseline
 
-refresh:
+refresh:  ## Refresh dependencies
 	./gradlew --refresh-dependencies
 
-jars: stubs
+jars: stubs  ## Build the prometheus-{agent,proxy} fat jars
 	./gradlew agentJar proxyJar
 
-tests:
+tests:  ## Run all tests (forces re-execution)
 	./gradlew --rerun-tasks check
 
-mini-tests:
+mini-tests:  ## Run all tests with the MINI harness profile
 	./gradlew --rerun-tasks check -PharnessConfig=MINI
 
-nh-tests:
+nh-tests:  ## Run only the non-harness unit tests
 	./gradlew test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
 
-ip-tests:
+ip-tests:  ## Run in-process harness tests
 	./gradlew test --tests "io.prometheus.harness.InProcess*"
 
-netty-tests:
+netty-tests:  ## Run Netty harness tests
 	./gradlew test --tests "io.prometheus.harness.Netty*"
 
-tls-tests:
+tls-tests:  ## Run TLS harness tests
 	./gradlew test --tests "io.prometheus.harness.Tls*"
 
-container-tests: jars
+container-tests: jars  ## Run the Testcontainers smoke test (needs Docker)
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
 	if [ -z "$$DOCKER_HOST" ]; then \
 		echo "Error: could not detect active Docker context. Is Docker running?" >&2; exit 1; \
@@ -76,88 +84,79 @@ container-tests: jars
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true ./gradlew test --tests "io.prometheus.containers.*"
 
-coverage: coverage-html coverage-xml
+coverage: coverage-html coverage-xml  ## Generate HTML and XML coverage reports
 
-coverage-html:
+coverage-html:  ## Generate HTML coverage report
 	./gradlew koverHtmlReport
 
-coverage-xml:
+coverage-xml:  ## Generate XML coverage report
 	./gradlew koverXmlReport
 
-coverage-log:
+coverage-log:  ## Print coverage % to console
 	./gradlew koverLog
 
-coverage-verify:
+coverage-verify:  ## Run kover coverage threshold verification
 	./gradlew koverVerify
 
-coverage-open: coverage-html
+coverage-open: coverage-html  ## Open the HTML coverage report
 	open build/reports/kover/html/index.html
 
-coverage-packages: coverage-xml
-	@python3 -c "import xml.etree.ElementTree as ET; \
-r = ET.parse('build/reports/kover/report.xml').getroot(); \
-pkgs = []; \
-[pkgs.append((p.get('name'), int(c.get('covered')), int(c.get('missed')))) \
- for p in r.findall('package') for c in p.findall('counter') if c.get('type') == 'INSTRUCTION']; \
-pkgs.sort(key=lambda x: -x[2]); \
-print(f\"{'package':<55} {'cov%':>6} {'covered':>9} {'missed':>9} {'total':>9}\"); \
-[print(f'{n:<55} {(c/(c+m)*100 if c+m else 0):6.1f} {c:9d} {m:9d} {c+m:9d}') for n,c,m in pkgs]; \
-tc=sum(p[1] for p in pkgs); tm=sum(p[2] for p in pkgs); \
-print(f'\nOVERALL: {tc/(tc+tm)*100:.2f}% ({tc}/{tc+tm} instructions, {tm} missed)')"
+coverage-packages: coverage-xml  ## Print per-package coverage from the XML report
+	@python3 scripts/coverage_packages.py
 
-coverage-clean:
+coverage-clean:  ## Remove coverage reports
 	./gradlew cleanAllTests
 	rm -rf build/reports/kover build/kover
 
 # Backwards-compatible alias for the previous `make reports` invocation.
-reports: coverage
+reports: coverage  ## Alias for `coverage`
 
-gh-docs:
+gh-docs:  ## Trigger the docs.yml GitHub Actions workflow
 	gh workflow run docs.yml
 
-gh-status:
+gh-status:  ## Show recent docs.yml workflow runs
 	gh run list --workflow=docs.yml
 
-tsconfig:
-	java -jar ./config/jars/tscfg-1.2.5.jar --spec config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
+tsconfig:  ## Regenerate ConfigVals from config/config.conf via tscfg
+	java -jar ./config/jars/tscfg-$(TSCFG_VERSION).jar --spec config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
-distro: build
-	$(MAKE) jars
+distro: build jars  ## Clean build + jars
 
-PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
-IMAGE_PREFIX := pambrose/prometheus
-
-docker-push:
+docker-push:  ## Build and push multi-arch agent/proxy images
+	@case "$(VERSION)" in \
+		*SNAPSHOT*|*-rc*|*-beta*|*-alpha*) \
+			echo "Refusing to push pre-release version $(VERSION) as :latest" >&2; exit 1;; \
+	esac
 	# prepare multiarch
 	docker buildx use buildx 2>/dev/null || docker buildx create --use --name=buildx
-	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/proxy.df --push -t ${IMAGE_PREFIX}-proxy:latest -t ${IMAGE_PREFIX}-proxy:${VERSION} .
-	docker buildx build --platform ${PLATFORMS} -f ./etc/docker/agent.df --push -t ${IMAGE_PREFIX}-agent:latest -t ${IMAGE_PREFIX}-agent:${VERSION} .
+	docker buildx build --platform $(PLATFORMS) -f ./etc/docker/proxy.df --push -t $(IMAGE_PREFIX)-proxy:latest -t $(IMAGE_PREFIX)-proxy:$(VERSION) .
+	docker buildx build --platform $(PLATFORMS) -f ./etc/docker/agent.df --push -t $(IMAGE_PREFIX)-agent:latest -t $(IMAGE_PREFIX)-agent:$(VERSION) .
 
-release: distro docker-push
+release: distro docker-push  ## Build distro and push docker images
 
-tree:
+tree:  ## Print Gradle dependency tree (quiet)
 	./gradlew -q dependencies
 
-depends:
+depends:  ## Print Gradle dependency report
 	./gradlew dependencies
 
-versioncheck:
+versioncheck:  ## Check for newer dependency versions
 	./gradlew dependencyUpdates --no-configuration-cache
 
-kdocs:
+kdocs:  ## Generate Dokka HTML site
 	./gradlew dokkaGeneratePublicationHtml
 
-clean-docs:
+clean-docs:  ## Remove zensical site cache
 	rm -rf website/prometheus-proxy/site
 	rm -rf website/prometheus-proxy/.cache
 
-site: clean-docs
+site: clean-docs  ## Serve the docs site locally with zensical
 	cd website/prometheus-proxy && uv run --with mkdocs-material zensical serve
 
-publish-local:
+publish-local:  ## Publish artifacts to the local Maven repository
 	./gradlew publishToMavenLocal
 
-publish-local-snapshot:
+publish-local-snapshot:  ## Publish a -SNAPSHOT artifact to the local Maven repository
 	./gradlew -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenLocal
 
 GPG_ENV = \
@@ -165,7 +164,7 @@ GPG_ENV = \
 	ORG_GRADLE_PROJECT_signingInMemoryKeyId="$$GPG_SIGNING_KEY_ID" \
 	ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="$$(security find-generic-password -a "gpg-signing" -s "gradle-signing-password" -w)"
 
-check-gpg-env:
+check-gpg-env:  ## Validate GPG signing environment variables
 	@if [ -z "$$GPG_SIGNING_KEY_ID" ]; then \
 		echo "Error: GPG_SIGNING_KEY_ID is not set" >&2; exit 1; \
 	fi
@@ -176,12 +175,15 @@ check-gpg-env:
 		echo "Error: keychain entry 'gradle-signing-password' (account 'gpg-signing') is missing or empty" >&2; exit 1; \
 	fi
 
-publish-snapshot: check-gpg-env
+publish-snapshot: check-gpg-env  ## Publish a -SNAPSHOT artifact to Maven Central
 	$(GPG_ENV) ./gradlew -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenCentral
 
-publish-maven-central: check-gpg-env
+publish-maven-central: check-gpg-env  ## Publish a release artifact to Maven Central
 	$(GPG_ENV) ./gradlew publishAndReleaseToMavenCentral
 
-upgrade-wrapper:
+upgrade-wrapper:  ## Upgrade the Gradle wrapper to the catalog version
+	# Gradle's documented upgrade procedure: the first run rewrites
+	# gradle-wrapper.properties using the *old* wrapper jar; the second run
+	# regenerates the wrapper itself with the new version.
 	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
 	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
