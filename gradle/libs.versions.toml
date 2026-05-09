@@ -5,7 +5,7 @@ jvm = "17"
 
 # Plugins
 config = "6.0.9"
-detekt = "1.23.8"
+detekt = "2.0.0-alpha.3"
 gradle-plugins = "1.0.14"
 dokka = "2.2.0"
 maven-publish = "0.36.0"
@@ -17,7 +17,7 @@ taskinfo = "3.0.2"
 
 # Libraries
 annotation = "1.3.2"
-datetime = "0.7.1-0.6.x-compat"
+datetime = "0.7.1"
 dropwizard = "4.2.38"
 gengrpc = "1.5.0"
 grpc = "1.81.0"
@@ -151,7 +151,7 @@ protobuf = { id = "com.google.protobuf", version.ref = "protobuf" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "config" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
-detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }
 taskinfo = { id = "org.barfuin.gradle.taskinfo", version.ref = "taskinfo" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }
