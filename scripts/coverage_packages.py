@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 # Print per-package Kover coverage from build/reports/kover/report.xml.
 # Used by `make coverage-packages`.
+#
+# B405/B314: We deliberately use the stdlib xml.etree.ElementTree here. The
+# input is build/reports/kover/report.xml — produced by Kover on this build,
+# never user-supplied — so XXE / entity-bomb attacks aren't a real threat
+# model. defusedxml would just add a dependency for no security gain.
 
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405
 import sys
 
 
 def main() -> int:
     report_path = "build/reports/kover/report.xml"
     try:
-        root = ET.parse(report_path).getroot()
+        root = ET.parse(report_path).getroot()  # nosec B314
     except FileNotFoundError:
         print(f"Coverage report not found at {report_path}; run `make coverage-xml` first.", file=sys.stderr)
         return 1
