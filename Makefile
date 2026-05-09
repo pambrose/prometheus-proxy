@@ -1,6 +1,3 @@
-VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
-GRADLE_VERSION=$(shell awk -F\" '/^gradle-wrapper[[:space:]]*=/ {print $$2; exit}' gradle/libs.versions.toml)
-
 .PHONY: default stop clean clean-all stubs build tibuild refresh jars \
         tests nh-tests ip-tests netty-tests tls-tests container-tests coverage \
         coverage-xml coverage-log coverage-verify reports gh-docs \
@@ -8,6 +5,18 @@ GRADLE_VERSION=$(shell awk -F\" '/^gradle-wrapper[[:space:]]*=/ {print $$2; exit
         versioncheck kdocs clean-docs site publish-local \
         publish-local-snapshot check-gpg-env publish-snapshot \
         publish-maven-central upgrade-wrapper
+
+VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
+
+ifeq ($(strip $(VERSION)),)
+$(error Could not determine project version from gradle.properties)
+endif
+
+GRADLE_VERSION=$(shell awk -F\" '/^gradle-wrapper[[:space:]]*=/ {print $$2; exit}' gradle/libs.versions.toml)
+
+ifeq ($(strip $(GRADLE_VERSION)),)
+$(error Could not determine gradle version from gradle/libs.versions.toml)
+endif
 
 default: versioncheck
 
@@ -174,4 +183,5 @@ publish-maven-central: check-gpg-env
 	$(GPG_ENV) ./gradlew publishAndReleaseToMavenCentral
 
 upgrade-wrapper:
+	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
 	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
