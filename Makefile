@@ -65,7 +65,7 @@ container-tests: jars
 		echo "Error: could not detect active Docker context. Is Docker running?" >&2; exit 1; \
 	fi; \
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
-	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true ./gradlew test --tests "io.prometheus.harness.Containers*"
+	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true ./gradlew test --tests "io.prometheus.containers.*"
 
 coverage: coverage-html coverage-xml
 
