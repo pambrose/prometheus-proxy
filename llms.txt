@@ -165,6 +165,8 @@ cd prometheus-proxy
 
 `group`, `version`, and `releaseDate` live in `gradle.properties` (single source of truth) and are read by `build.gradle.kts` via `providers.gradleProperty(...)`. `agentJar` and `proxyJar` are dedicated `ShadowJar` tasks; the default `shadowJar` task is disabled to avoid producing a third redundant fat jar. Repository declarations are centralized in `settings.gradle.kts` (`FAIL_ON_PROJECT_REPOS`).
 
+The fat JARs include `src/shadow/resources/META-INF/services/io.grpc.NameResolverProvider` and `io.grpc.LoadBalancerProvider` so DNS / PickFirst providers stay registered — shadow 9.4.1 silently drops one of the two same-named files when both `grpc-core` and `grpc-netty-shaded` contribute, and without DNS the gRPC client defaults to `unix:///host:port` on any non-IP hostname.
+
 ## Tech Stack
 
 - **Language**: Kotlin (JVM 17+)
@@ -174,7 +176,7 @@ cd prometheus-proxy
 - **HTTP Client**: Ktor CIO client
 - **Configuration**: Typesafe Config (HOCON)
 - **Metrics**: Prometheus Java SimpleClient
-- **Testing**: Kotest + JUnit 5 + MockK
+- **Testing**: Kotest + JUnit 5 + MockK; Testcontainers smoke test for Docker image regressions
 - **Code Quality**: kotlinter + detekt
 
 ## Maven Central

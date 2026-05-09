@@ -34,16 +34,17 @@ Always run lint and build before completing tasks:
 ### Useful Make Targets
 
 ```bash
-make tests        # Rerun all checks (lint + tests)
-make nh-tests     # Unit tests only (agent, proxy, common, misc — no harness)
-make ip-tests     # In-process integration tests only
-make netty-tests  # Netty integration tests only
-make tls-tests    # TLS integration tests only
-make container-tests # Testcontainers smoke test (proxy + agent + nginx + Prometheus); requires Docker, gated on RUN_CONTAINER_TESTS=true
-make coverage     # Run tests + generate HTML coverage report
-make coverage-xml # XML coverage report (for Codacy/Coveralls/etc.)
-make coverage-log # Print coverage % to console
-make tsconfig     # Regenerate ConfigVals from config/config.conf via tscfg
+make help            # List all targets with descriptions (auto-extracted from `## …` annotations)
+make tests           # Rerun all checks (lint + tests)
+make nh-tests        # Unit tests only (agent, proxy, common, misc — no harness)
+make ip-tests        # In-process integration tests only
+make netty-tests     # Netty integration tests only
+make tls-tests       # TLS integration tests only
+make container-tests # Testcontainers smoke test (proxy + agent + nginx + Prometheus); needs Docker
+make coverage        # Run tests + generate HTML coverage report
+make coverage-xml    # XML coverage report (for Codacy/Coveralls/etc.)
+make coverage-log    # Print coverage % to console
+make tsconfig        # Regenerate ConfigVals from config/config.conf via tscfg
 ```
 
 ## Architecture
@@ -138,6 +139,9 @@ Integration tests in `src/test/kotlin/io/prometheus/harness/`:
 - `TlsNoMutualAuthTest` / `TlsWithMutualAuthTest` — TLS communication tests
 - `support/HarnessSetup.kt` — base class that sets up proxy+agent in test mode
 
+Container tests in `src/test/kotlin/io/prometheus/containers/`:
+- `ContainersSmokeTest` — Testcontainers-based end-to-end test that builds the proxy and agent images from `etc/docker/*.df`, stands them up alongside an `nginx:alpine` metrics stub and a `prom/prometheus` container, and verifies the full Prometheus → proxy → agent → endpoint scrape path. Requires Docker; gated on `RUN_CONTAINER_TESTS=true` (set automatically by `make container-tests`). Default `./gradlew test` registers a single placeholder marked SKIPPED.
+
 Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`.
 
 ## Documentation Site
@@ -151,6 +155,12 @@ Documentation is built with [Zensical](https://zensical.org) (static site genera
 - **CI deploy**: `.github/workflows/docs.yml` (builds and deploys to GitHub Pages)
 
 Snippets use dual `base_path` in zensical.toml: first resolves `.txt` files from `src/test/kotlin/website/`, second resolves project-root files like `examples/*.conf`.
+
+## Shadow JAR Workaround
+
+The `agentJar` and `proxyJar` ShadowJar tasks include `src/shadow/resources/META-INF/services/` to re-register `io.grpc.NameResolverProvider` (DNS + UDS) and `io.grpc.LoadBalancerProvider` (PickFirst + HealthCheckingRoundRobin). Shadow 9.4.1's `mergeServiceFiles()` (and its `append()` transformer) silently drop entries when grpc-core and grpc-netty-shaded both ship a same-named service file, leaving the fat JAR without a DNS resolver — the gRPC client then defaults to the `unix` scheme on any non-IP hostname. The static files keep the providers registered without affecting the published Maven jar (they're under `src/shadow/`, not `src/main/`).
+
+If gRPC versions change provider class names or add new providers, update those files to match.
 
 ## Publishing
 
