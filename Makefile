@@ -2,7 +2,7 @@ VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); pr
 GRADLE_VERSION=$(shell awk -F\" '/^gradle-wrapper[[:space:]]*=/ {print $$2; exit}' gradle/libs.versions.toml)
 
 .PHONY: default stop clean clean-all stubs build tibuild refresh jars \
-        tests nh-tests ip-tests netty-tests tls-tests coverage \
+        tests nh-tests ip-tests netty-tests tls-tests container-tests coverage \
         coverage-xml coverage-log coverage-verify reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint detekt-baseline \
         versioncheck kdocs clean-docs site publish-local \
@@ -58,6 +58,14 @@ netty-tests:
 
 tls-tests:
 	./gradlew test --tests "io.prometheus.harness.Tls*"
+
+container-tests: jars
+	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
+	if [ -z "$$DOCKER_HOST" ]; then \
+		echo "Error: could not detect active Docker context. Is Docker running?" >&2; exit 1; \
+	fi; \
+	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
+	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true ./gradlew test --tests "io.prometheus.harness.Containers*"
 
 coverage: coverage-html coverage-xml
 

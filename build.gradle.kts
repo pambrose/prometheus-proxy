@@ -79,6 +79,7 @@ dependencies {
 
   testImplementation(libs.kotest)
   testImplementation(libs.mockk)
+  testImplementation(libs.testcontainers)
   testImplementation(kotlin("test"))
 }
 
@@ -204,11 +205,19 @@ fun Project.configureJars() {
   val mainOutput = sourceSets.main.get().output
   val runtimeClasspath = configurations.runtimeClasspath
 
+  // Workaround: shadow 9.4.1's mergeServiceFiles() drops grpc-core's META-INF/services entries
+  // when grpc-netty-shaded provides a same-name file, leaving the fat JAR without the DNS
+  // NameResolver and PickFirst LoadBalancer providers — gRPC then defaults to the `unix` scheme.
+  // Re-injecting the service files from src/shadow/resources keeps both providers registered.
+  // Kept out of src/main/resources so the published Maven jar is unaffected.
+  val shadowResources = file("src/shadow/resources")
+
   val agentJar by tasks.registering(ShadowJar::class) {
     archiveFileName.set("prometheus-agent.jar")
     manifest { attributes("Main-Class" to "io.prometheus.Agent") }
     mergeServiceFiles()
     from(mainOutput)
+    from(shadowResources)
     configurations = listOf(runtimeClasspath.get())
   }
 
@@ -217,6 +226,7 @@ fun Project.configureJars() {
     manifest { attributes("Main-Class" to "io.prometheus.Proxy") }
     mergeServiceFiles()
     from(mainOutput)
+    from(shadowResources)
     configurations = listOf(runtimeClasspath.get())
   }
 

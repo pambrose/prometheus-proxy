@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+scrape_configs:
+  - job_name: 'proxy'
+    metrics_path: /test_metrics
+    fallback_scrape_protocol: PrometheusText0.0.4
+    static_configs:
+      - targets: ['proxy-host:8080']

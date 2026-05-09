@@ -39,6 +39,7 @@ make nh-tests     # Unit tests only (agent, proxy, common, misc — no harness)
 make ip-tests     # In-process integration tests only
 make netty-tests  # Netty integration tests only
 make tls-tests    # TLS integration tests only
+make container-tests # Testcontainers smoke test (proxy + agent + nginx + Prometheus); requires Docker, gated on RUN_CONTAINER_TESTS=true
 make coverage     # Run tests + generate HTML coverage report
 make coverage-xml # XML coverage report (for Codacy/Coveralls/etc.)
 make coverage-log # Print coverage % to console

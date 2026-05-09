@@ -30,6 +30,7 @@ logback = "1.5.32"
 logging = "8.0.02"
 mockk = "1.14.9"
 prometheus = "0.16.0"
+testcontainers = "2.0.5"
 # Keep in sync with grpc
 protoc = "4.34.1"
 serialization = "1.11.0"
@@ -109,6 +110,7 @@ slf4j-jul = { module = "org.slf4j:jul-to-slf4j", version.ref = "slf4j" }
 # Testing
 kotest = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 
 [bundles]
 ktor = [
