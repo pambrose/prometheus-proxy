@@ -39,6 +39,7 @@ import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.ktor.utils.io.ClosedByteChannelException
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -139,7 +140,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           return port
         } catch (_: java.io.IOException) {
           delay(20.milliseconds)
-        } catch (_: io.ktor.utils.io.ClosedByteChannelException) {
+        } catch (_: ClosedByteChannelException) {
           delay(20.milliseconds)
         }
       }
@@ -427,10 +428,10 @@ class ProxyHttpRoutesTest : StringSpec() {
       atomicBoolean.store(false)
 
       // First compareAndSet should succeed (false -> true)
-      atomicBoolean.compareAndSet(false, true) shouldBe true
+      atomicBoolean.compareAndSet(expectedValue = false, newValue = true) shouldBe true
 
       // Second compareAndSet should fail (already true)
-      atomicBoolean.compareAndSet(false, true) shouldBe false
+      atomicBoolean.compareAndSet(expectedValue = false, newValue = true) shouldBe false
 
       // Reset for other tests
       atomicBoolean.store(false)
