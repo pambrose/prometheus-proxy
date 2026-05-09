@@ -205,29 +205,29 @@ fun Project.configureJars() {
   val mainOutput = sourceSets.main.get().output
   val runtimeClasspath = configurations.runtimeClasspath
 
-  // Workaround: shadow 9.4.1's mergeServiceFiles() drops grpc-core's META-INF/services entries
-  // when grpc-netty-shaded provides a same-name file, leaving the fat JAR without the DNS
-  // NameResolver and PickFirst LoadBalancer providers — gRPC then defaults to the `unix` scheme.
-  // Re-injecting the service files from src/shadow/resources keeps both providers registered.
-  // Kept out of src/main/resources so the published Maven jar is unaffected.
+  // shadow 9.4.1's mergeServiceFiles() silently drops entries when multiple JARs ship a
+  // same-named META-INF/services file (its append() transformer is broken the same way),
+  // so without intervention the fat JAR loses grpc-core's DnsNameResolverProvider and
+  // PickFirstLoadBalancerProvider and the gRPC client defaults to the `unix` scheme on
+  // any non-IP hostname. Static service files under src/shadow/resources re-register the
+  // missing providers; kept out of src/main/resources so the published Maven jar is clean.
   val shadowResources = file("src/shadow/resources")
 
-  val agentJar by tasks.registering(ShadowJar::class) {
-    archiveFileName.set("prometheus-agent.jar")
-    manifest { attributes("Main-Class" to "io.prometheus.Agent") }
+  fun ShadowJar.configureFatJar(archiveName: String, mainClass: String) {
+    archiveFileName.set(archiveName)
+    manifest { attributes("Main-Class" to mainClass) }
     mergeServiceFiles()
     from(mainOutput)
     from(shadowResources)
-    configurations = listOf(runtimeClasspath.get())
+    configurations.add(runtimeClasspath)
+  }
+
+  val agentJar by tasks.registering(ShadowJar::class) {
+    configureFatJar("prometheus-agent.jar", "io.prometheus.Agent")
   }
 
   val proxyJar by tasks.registering(ShadowJar::class) {
-    archiveFileName.set("prometheus-proxy.jar")
-    manifest { attributes("Main-Class" to "io.prometheus.Proxy") }
-    mergeServiceFiles()
-    from(mainOutput)
-    from(shadowResources)
-    configurations = listOf(runtimeClasspath.get())
+    configureFatJar("prometheus-proxy.jar", "io.prometheus.Proxy")
   }
 
   tasks.named("assemble") {
