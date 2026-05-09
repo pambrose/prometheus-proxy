@@ -260,7 +260,7 @@ internal object HarnessTests {
       try {
         args.agent.pathManager.unregisterPath("proxy-${path.key}")
         counter += 1
-      } catch (e: RequestFailureException) {
+      } catch (_: RequestFailureException) {
         errorCnt += 1
       }
     }

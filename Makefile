@@ -2,7 +2,7 @@
         tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
-        gh-status tsconfig distro docker-push release tree depends lint detekt-baseline \
+        gh-status tsconfig distro docker-push release tree depends lint detekt detekt-baseline \
         versioncheck kdocs clean-docs site publish-local \
         publish-local-snapshot check-gpg-env publish-snapshot \
         publish-maven-central upgrade-wrapper
@@ -23,6 +23,11 @@ TSCFG_VERSION := 1.2.5
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
 IMAGE_PREFIX := pambrose/prometheus
 
+GPG_ENV = \
+	ORG_GRADLE_PROJECT_signingInMemoryKey="$$(gpg --armor --export-secret-keys "$$GPG_SIGNING_KEY_ID")" \
+	ORG_GRADLE_PROJECT_signingInMemoryKeyId="$$GPG_SIGNING_KEY_ID" \
+	ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="$$(security find-generic-password -a "gpg-signing" -s "gradle-signing-password" -w)"
+
 default: versioncheck
 
 help:  ## Show this help message
@@ -40,14 +45,19 @@ clean-all: clean clean-docs  ## clean + remove .gradle cache and docs site
 stubs:  ## Regenerate gRPC/protobuf stubs
 	./gradlew generateProto
 
-build: clean stubs  ## Clean build without tests
-	./gradlew build -xtest
+build:  ## Clean build without tests
+	./gradlew clean generateProto build -xtest
 
-tibuild: clean stubs  ## Build with taskinfo task tree
-	./gradlew tiTree build -xtest
+# `ti*` tasks are contributed by the org.barfuin.gradle.taskinfo plugin;
+# `tiTree` prints the task graph for the requested build invocation.
+tibuild:  ## Build with taskinfo task tree
+	./gradlew clean generateProto tiTree build -xtest
 
-lint:  ## Run kotlinter and detekt
-	./gradlew lintKotlinMain lintKotlinTest detekt
+lint: detekt ## Run kotlinter and detekt
+	./gradlew lintKotlinMain lintKotlinTest
+
+detekt:  ## Run detekt static analysis
+	./gradlew detekt
 
 detekt-baseline:  ## Refresh detekt baseline
 	./gradlew detektBaseline
@@ -158,11 +168,6 @@ publish-local:  ## Publish artifacts to the local Maven repository
 
 publish-local-snapshot:  ## Publish a -SNAPSHOT artifact to the local Maven repository
 	./gradlew -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenLocal
-
-GPG_ENV = \
-	ORG_GRADLE_PROJECT_signingInMemoryKey="$$(gpg --armor --export-secret-keys $$GPG_SIGNING_KEY_ID)" \
-	ORG_GRADLE_PROJECT_signingInMemoryKeyId="$$GPG_SIGNING_KEY_ID" \
-	ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="$$(security find-generic-password -a "gpg-signing" -s "gradle-signing-password" -w)"
 
 check-gpg-env:  ## Validate GPG signing environment variables
 	@if [ -z "$$GPG_SIGNING_KEY_ID" ]; then \
