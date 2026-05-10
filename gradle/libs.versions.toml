@@ -21,7 +21,6 @@ datetime = "0.7.1"
 dropwizard = "4.2.38"
 gengrpc = "1.5.0"
 grpc = "1.81.0"
-jakartaServlet = "6.1.0"
 jcommander = "3.0"
 jetty = "11.0.26"
 kotest = "6.1.11"
@@ -67,9 +66,6 @@ common-utils-ktor-client = { module = "com.pambrose.common-utils:ktor-client-uti
 common-utils-prometheus = { module = "com.pambrose.common-utils:prometheus-utils", version.ref = "utils" }
 common-utils-service = { module = "com.pambrose.common-utils:service-utils", version.ref = "utils" }
 common-utils-zipkin = { module = "com.pambrose.common-utils:zipkin-utils", version.ref = "utils" }
-
-# Jakarta Servlet
-jakarta-servlet-api = { module = "jakarta.servlet:jakarta.servlet-api", version.ref = "jakartaServlet" }
 
 # Jetty
 jetty-servlet = { module = "org.eclipse.jetty:jetty-servlet", version.ref = "jetty" }

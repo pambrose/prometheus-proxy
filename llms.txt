@@ -159,11 +159,9 @@ cd prometheus-proxy
 ./gradlew build                              # Build with tests
 ./gradlew agentJar proxyJar                  # Named fat JARs in build/libs/
 ./gradlew build -PoverrideVersion=X.Y.Z      # Build with a custom version
-./gradlew build -PreleaseDate=04/25/2026     # Override embedded release date
-./gradlew build -PbuildTime=1745558400000    # Override embedded build time (ms epoch)
 ```
 
-`group`, `version`, and `releaseDate` live in `gradle.properties` (single source of truth) and are read by `build.gradle.kts` via `providers.gradleProperty(...)`. `agentJar` and `proxyJar` are dedicated `ShadowJar` tasks; the default `shadowJar` task is disabled to avoid producing a third redundant fat jar. Repository declarations are centralized in `settings.gradle.kts` (`FAIL_ON_PROJECT_REPOS`).
+`group` and `version` live in `gradle.properties` (single source of truth) and are read by `build.gradle.kts` via `providers.gradleProperty(...)`. `BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` are populated each build via `ValueSource`, so they reflect the actual build time and are not overridable. `agentJar` and `proxyJar` are dedicated `ShadowJar` tasks; the default `shadowJar` task is disabled to avoid producing a third redundant fat jar. Repository declarations are centralized in `settings.gradle.kts` (`FAIL_ON_PROJECT_REPOS`).
 
 The fat JARs include `src/shadow/resources/META-INF/services/io.grpc.NameResolverProvider` and `io.grpc.LoadBalancerProvider` so DNS / PickFirst providers stay registered — shadow 9.4.1 silently drops one of the two same-named files when both `grpc-core` and `grpc-netty-shaded` contribute, and without DNS the gRPC client defaults to `unix:///host:port` on any non-IP hostname.
 

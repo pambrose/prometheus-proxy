@@ -5,6 +5,8 @@ import com.vanniktech.maven.publish.KotlinJvm
 import com.vanniktech.maven.publish.SourcesJar
 import kotlinx.kover.gradle.plugin.dsl.AggregationType
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
+import org.gradle.api.provider.ValueSource
+import org.gradle.api.provider.ValueSourceParameters
 import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
 import org.jmailen.gradle.kotlinter.tasks.FormatTask
 import org.jmailen.gradle.kotlinter.tasks.LintTask
@@ -29,12 +31,22 @@ plugins {
   alias(libs.plugins.taskinfo) apply false
 }
 
-// Version and group are defined in gradle.properties; also update version refs in README.md and website/srcref/docs/{api,getting-started}.md
+// Version and group are defined in gradle.properties; also update version refs in README.md and llms.txt
 providers.gradleProperty("overrideVersion").orNull?.let { version = it }
 
-val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
-val releaseDate: String = providers.gradleProperty("releaseDate").orNull ?: LocalDate.now().format(formatter)
-val buildTime: Long = providers.gradleProperty("buildTime").orNull?.toLong() ?: System.currentTimeMillis()
+// ValueSources are read fresh on each build (configuration-cache-safe), so APP_RELEASE_DATE and
+// BUILD_TIME reflect the actual build time rather than a frozen configuration-cache value.
+abstract class CurrentDateValueSource : ValueSource<String, ValueSourceParameters.None> {
+  override fun obtain(): String =
+    LocalDate.now().format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
+}
+
+abstract class CurrentTimeValueSource : ValueSource<Long, ValueSourceParameters.None> {
+  override fun obtain(): Long = System.currentTimeMillis()
+}
+
+val releaseDate = providers.of(CurrentDateValueSource::class) {}
+val buildTime = providers.of(CurrentTimeValueSource::class) {}
 
 val basePackage = "io.prometheus"
 val displayName = "Prometheus Proxy"
@@ -47,8 +59,8 @@ buildConfig {
   packageName(basePackage)
   buildConfigField("String", "APP_NAME", "\"${project.name}\"")
   buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
-  buildConfigField("String", "APP_RELEASE_DATE", "\"$releaseDate\"")
-  buildConfigField("long", "BUILD_TIME", "${buildTime}L")
+  buildConfigField("String", "APP_RELEASE_DATE", releaseDate.map { "\"$it\"" })
+  buildConfigField("long", "BUILD_TIME", buildTime.map { "${it}L" })
 }
 
 dependencies {
