@@ -44,7 +44,7 @@ tibuild:  ## Build with taskinfo task tree
 	./gradlew clean generateProto tiTree build -xtest
 
 lint:  ## Run kotlinter and detekt
-	./gradlew lintKotlinMain lintKotlinTest detekt
+	./gradlew lintKotlin detekt
 
 detekt:  ## Run detekt static analysis
 	./gradlew detekt
