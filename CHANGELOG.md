@@ -20,6 +20,7 @@ All notable changes to this project are documented in this file.
 
 ### Build & Tooling
 
+- Replace the `-PreleaseDate` / `-PbuildTime` Gradle property overrides with `ValueSource`-backed providers so `BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` are read fresh on each build instead of being frozen by the configuration cache. The override flags are removed; release artifacts are no longer byte-for-byte reproducible
 - Move detekt configuration from `etc/detekt/` to `config/detekt/` (standard detekt convention)
 - Add `detekt` to the `lint` Makefile target so `make lint` runs `lintKotlinMain`, `lintKotlinTest`, and `detekt`
 - Add `detekt-baseline` Makefile target wrapping `./gradlew detektBaseline`

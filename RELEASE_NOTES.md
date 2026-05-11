@@ -10,6 +10,7 @@ _Unreleased_
 
 - **Testcontainers smoke test** — A new `ContainersSmokeTest` builds the proxy and agent Docker images from `etc/docker/*.df`, runs them alongside an nginx metrics stub and a real Prometheus container, and verifies the full `Prometheus → proxy → agent → endpoint` scrape path end-to-end. Surfaces packaging/image regressions that the in-JVM harness can't catch.
 - **Shadow JAR fix** — Re-register grpc-core's `DnsNameResolverProvider` and `PickFirstLoadBalancerProvider` in the agent and proxy fat JARs. Shadow 9.4.1's `mergeServiceFiles()` was silently dropping them when grpc-netty-shaded provided same-named service files, which made the gRPC client default to the `unix` scheme on any non-IP hostname (`Address types of NameResolver 'unix' for 'unix:///host:port' not supported by transport`). Anyone running the published agent/proxy JAR against a hostname-addressed proxy could have hit this.
+- **Live `BUILD_TIME` / `APP_RELEASE_DATE`** — Switched these `BuildConfig` fields to `ValueSource`-backed providers so they refresh each build instead of being frozen by Gradle's configuration cache. The 3.1.1 `-PreleaseDate` / `-PbuildTime` overrides have been removed; release artifacts are no longer byte-for-byte reproducible.
 
 ### Bug Fixes
 
@@ -25,6 +26,7 @@ _Unreleased_
 
 ### Build & Tooling
 
+- Replace the `-PreleaseDate` / `-PbuildTime` Gradle property overrides with `ValueSource`-backed providers so `BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` are read fresh on each build rather than being frozen by Gradle's configuration cache. The override flags introduced in 3.1.1 are removed; release artifacts are no longer byte-for-byte reproducible
 - Move detekt configuration from `etc/detekt/` to `config/detekt/` (the standard detekt convention); `build.gradle.kts` and `CLAUDE.md` updated accordingly
 - Add `detekt` to the `lint` Makefile target so `make lint` now runs `lintKotlinMain`, `lintKotlinTest`, and `detekt` together
 - Add `detekt-baseline` Makefile target (`./gradlew detektBaseline`) for grandfathering existing findings when tightening rules

@@ -115,16 +115,17 @@ Uses Typesafe Config (HOCON). Precedence: CLI args → env vars → config file 
 
 The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`make tsconfig`).
 
-## Reproducible Builds
+## Build Version
 
-`group`, `version`, and `releaseDate` live in `gradle.properties` (single source of truth). `build.gradle.kts` reads them via `providers.gradleProperty(...)`; `BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` default to those values (or the local clock for `buildTime`) and can be overridden on the command line:
+`group` and `version` live in `gradle.properties` (single source of truth). The version can be overridden on the command line for CI snapshot publishing:
 
 ```bash
-./gradlew build -PreleaseDate=04/25/2026 -PbuildTime=1745558400000
 ./gradlew build -PoverrideVersion=3.1.2-SNAPSHOT
 ```
 
-Use these for CI snapshot publishing and bit-identical artifact reproduction. `-PoverrideVersion` keeps its `override` prefix because it intentionally only applies when supplied (so the `gradle.properties` default is never accidentally cleared); `-PreleaseDate` / `-PbuildTime` map directly to the underlying property names.
+`-PoverrideVersion` keeps its `override` prefix because it intentionally only applies when supplied (so the `gradle.properties` default is never accidentally cleared).
+
+`BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` are populated each build via `ValueSource`, so they reflect the actual build time and are not overridable. As a side effect, the configuration cache invalidates and `BuildConfig` regenerates on every build; release artifacts are therefore not byte-for-byte reproducible.
 
 ## Testing
 
