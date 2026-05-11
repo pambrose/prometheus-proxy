@@ -165,10 +165,10 @@ publish-snapshot: _require-version _check-gpg-env  ## Publish a -SNAPSHOT artifa
 publish-maven-central: _require-version _check-gpg-env  ## Publish a release artifact to Maven Central
 	$(GPG_ENV) ./gradlew publishAndReleaseToMavenCentral
 
+# Gradle's documented upgrade procedure: the first run rewrites
+# gradle-wrapper.properties using the *old* wrapper jar; the second run
+# regenerates the wrapper itself with the new version.
 upgrade-wrapper: _require-gradle-version  ## Upgrade the Gradle wrapper to the catalog version
-	# Gradle's documented upgrade procedure: the first run rewrites
-	# gradle-wrapper.properties using the *old* wrapper jar; the second run
-	# regenerates the wrapper itself with the new version.
 	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
 	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
 
