@@ -3,21 +3,11 @@
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint detekt detekt-baseline \
-        versioncheck kdocs clean-docs site publish-local \
-        publish-local-snapshot check-gpg-env publish-snapshot \
-        publish-maven-central upgrade-wrapper
+        versioncheck kdocs clean-docs site publish-local publish-local-snapshot publish-snapshot publish-maven-central \
+        upgrade-wrapper _check-gpg-env _require-version _require-gradle-version
 
 VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
-
-ifeq ($(strip $(VERSION)),)
-$(error Could not determine project version from gradle.properties)
-endif
-
 GRADLE_VERSION=$(shell awk -F\" '/^gradle-wrapper[[:space:]]*=/ {print $$2; exit}' gradle/libs.versions.toml)
-
-ifeq ($(strip $(GRADLE_VERSION)),)
-$(error Could not determine gradle version from gradle/libs.versions.toml)
-endif
 
 TSCFG_VERSION := 1.2.5
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
@@ -53,8 +43,8 @@ build:  ## Clean build without tests
 tibuild:  ## Build with taskinfo task tree
 	./gradlew clean generateProto tiTree build -xtest
 
-lint: detekt ## Run kotlinter and detekt
-	./gradlew lintKotlinMain lintKotlinTest
+lint:  ## Run kotlinter and detekt
+	./gradlew lintKotlinMain lintKotlinTest detekt
 
 detekt:  ## Run detekt static analysis
 	./gradlew detekt
@@ -163,32 +153,38 @@ clean-docs:  ## Remove zensical site cache
 site: clean-docs  ## Serve the docs site locally with zensical
 	cd website/prometheus-proxy && uv run --with mkdocs-material zensical serve
 
-publish-local:  ## Publish artifacts to the local Maven repository
+publish-local: _require-version  ## Publish artifacts to the local Maven repository
 	./gradlew publishToMavenLocal
 
-publish-local-snapshot:  ## Publish a -SNAPSHOT artifact to the local Maven repository
+publish-local-snapshot: _require-version  ## Publish a -SNAPSHOT artifact to the local Maven repository
 	./gradlew -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenLocal
 
-check-gpg-env:  ## Validate GPG signing environment variables
-	@if [ -z "$$GPG_SIGNING_KEY_ID" ]; then \
-		echo "Error: GPG_SIGNING_KEY_ID is not set" >&2; exit 1; \
-	fi
-	@if ! gpg --list-secret-keys "$$GPG_SIGNING_KEY_ID" >/dev/null 2>&1; then \
-		echo "Error: no GPG secret key found for GPG_SIGNING_KEY_ID=$$GPG_SIGNING_KEY_ID" >&2; exit 1; \
-	fi
-	@if [ -z "$$(security find-generic-password -a 'gpg-signing' -s 'gradle-signing-password' -w 2>/dev/null)" ]; then \
-		echo "Error: keychain entry 'gradle-signing-password' (account 'gpg-signing') is missing or empty" >&2; exit 1; \
-	fi
-
-publish-snapshot: check-gpg-env  ## Publish a -SNAPSHOT artifact to Maven Central
+publish-snapshot: _require-version _check-gpg-env  ## Publish a -SNAPSHOT artifact to Maven Central
 	$(GPG_ENV) ./gradlew -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenCentral
 
-publish-maven-central: check-gpg-env  ## Publish a release artifact to Maven Central
+publish-maven-central: _require-version _check-gpg-env  ## Publish a release artifact to Maven Central
 	$(GPG_ENV) ./gradlew publishAndReleaseToMavenCentral
 
-upgrade-wrapper:  ## Upgrade the Gradle wrapper to the catalog version
+upgrade-wrapper: _require-gradle-version  ## Upgrade the Gradle wrapper to the catalog version
 	# Gradle's documented upgrade procedure: the first run rewrites
 	# gradle-wrapper.properties using the *old* wrapper jar; the second run
 	# regenerates the wrapper itself with the new version.
 	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
 	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
+
+_check-gpg-env:
+	@if [ -z "$$GPG_SIGNING_KEY_ID" ]; then \
+		echo "ERROR: GPG_SIGNING_KEY_ID is not set" >&2; exit 1; \
+	fi
+	@if ! gpg --list-secret-keys "$$GPG_SIGNING_KEY_ID" >/dev/null 2>&1; then \
+		echo "ERROR: no GPG secret key found for GPG_SIGNING_KEY_ID=$$GPG_SIGNING_KEY_ID" >&2; exit 1; \
+	fi
+	@if [ -z "$$(security find-generic-password -a 'gpg-signing' -s 'gradle-signing-password' -w 2>/dev/null)" ]; then \
+		echo "ERROR: keychain entry 'gradle-signing-password' (account 'gpg-signing') is missing or empty" >&2; exit 1; \
+	fi
+
+_require-version:
+	@[ -n "$(VERSION)" ] || { echo "ERROR: Could not determine project version from gradle.properties" >&2; exit 1; }
+
+_require-gradle-version:
+	@[ -n "$(GRADLE_VERSION)" ] || { echo "ERROR: Could not determine gradle version from gradle/libs.versions.toml" >&2; exit 1; }
