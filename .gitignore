@@ -13,6 +13,7 @@ build/
 .idea/AugmentWebviewStateStore.xml
 .idea/compiler.xml
 .idea/libraries/
+.idea/misc.xml
 *.iws
 *.iml
 *.ipr
