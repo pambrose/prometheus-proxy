@@ -1,6 +1,6 @@
 [versions]
 # Toolchain
-gradle-wrapper = "9.5.0"
+gradle-wrapper = "9.5.1"
 jvm = "17"
 
 # Kotlin
@@ -28,7 +28,7 @@ protoc = "4.34.1"
 tcnative = "2.0.77.Final"
 
 # Ktor
-ktor = "3.4.3"
+ktor = "3.5.0"
 
 # Jetty
 jetty = "11.0.26"
@@ -43,10 +43,10 @@ zipkin = "6.3.1"
 # Logging
 logging = "8.0.02"
 logback = "1.5.32"
-slf4j = "2.0.17"
+slf4j = "2.0.18"
 
 # Config / CLI
-typesafe = "1.4.7"
+typesafe = "1.4.8"
 jcommander = "3.0"
 
 # Common Utils

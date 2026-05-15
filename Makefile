@@ -6,8 +6,8 @@
         versioncheck kdocs clean-docs site publish-local publish-local-snapshot publish-snapshot publish-maven-central \
         upgrade-wrapper _check-gpg-env _require-version _require-gradle-version
 
-VERSION=$(shell awk -F= '/^version[[:space:]]*=/ {gsub(/[[:space:]]/,"",$$2); print $$2; exit}' gradle.properties)
-GRADLE_VERSION=$(shell awk -F\" '/^gradle-wrapper[[:space:]]*=/ {print $$2; exit}' gradle/libs.versions.toml)
+VERSION := $(shell sed -n 's/^version=\(.*\)/\1/p' gradle.properties)
+GRADLE_VERSION := $(shell sed -n 's/^gradle = "\(.*\)"/\1/p' gradle/libs.versions.toml)
 
 TSCFG_VERSION := 1.2.5
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
@@ -20,8 +20,10 @@ GPG_ENV = \
 
 default: versioncheck
 
-help:  ## Show this help message
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z][a-zA-Z0-9_-]*:.*?## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+help:  ## Show this help (list of targets)
+	@awk 'BEGIN {FS = ":.*?## "; printf "Usage: make <target>\n\nTargets:\n"} \
+		/^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}' \
+		$(MAKEFILE_LIST)
 
 stop:  ## Stop the running Gradle daemon
 	./gradlew --stop
