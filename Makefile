@@ -22,8 +22,7 @@ default: versioncheck
 
 help:  ## Show this help (list of targets)
 	@awk 'BEGIN {FS = ":.*?## "; printf "Usage: make <target>\n\nTargets:\n"} \
-		/^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}' \
-		$(MAKEFILE_LIST)
+		/^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 stop:  ## Stop the running Gradle daemon
 	./gradlew --stop
@@ -38,12 +37,12 @@ stubs:  ## Regenerate gRPC/protobuf stubs
 	./gradlew generateProto
 
 build:  ## Clean build without tests
-	./gradlew clean generateProto build -xtest
+	./gradlew clean generateProto build -x test
 
 # `ti*` tasks are contributed by the org.barfuin.gradle.taskinfo plugin;
 # `tiTree` prints the task graph for the requested build invocation.
 tibuild:  ## Build with taskinfo task tree
-	./gradlew clean generateProto tiTree build -xtest
+	./gradlew clean generateProto tiTree build -x test
 
 lint:  ## Run kotlinter and detekt
 	./gradlew lintKotlin detekt
