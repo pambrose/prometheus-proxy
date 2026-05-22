@@ -4,8 +4,8 @@ gradle-wrapper = "9.5.1"
 jvm = "17"
 
 # Kotlin
-kotlin = "2.3.21"
-datetime = "0.7.1"
+kotlin = "2.4.0-RC"
+datetime = "0.7.1-0.6.x-compat"
 serialization = "1.11.0"
 
 # Build plugins
@@ -41,7 +41,7 @@ dropwizard = "4.2.38"
 zipkin = "6.3.1"
 
 # Logging
-logging = "8.0.02"
+logging = "8.0.03"
 logback = "1.5.32"
 slf4j = "2.0.18"
 

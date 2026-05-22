@@ -3,11 +3,11 @@
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint detekt detekt-baseline \
-        versioncheck kdocs clean-docs site publish-local publish-local-snapshot publish-snapshot publish-maven-central \
+        versions kdocs clean-site check-site upgrade-site site publish-local publish-local-snapshot publish-snapshot publish-maven-central \
         upgrade-wrapper _check-gpg-env _require-version _require-gradle-version
 
 VERSION := $(shell sed -n 's/^version=\(.*\)/\1/p' gradle.properties)
-GRADLE_VERSION := $(shell sed -n 's/^gradle = "\(.*\)"/\1/p' gradle/libs.versions.toml)
+GRADLE_VERSION := $(shell sed -n 's/^gradle-wrapper = "\(.*\)"/\1/p' gradle/libs.versions.toml)
 
 TSCFG_VERSION := 1.2.5
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
@@ -18,7 +18,7 @@ GPG_ENV = \
 	ORG_GRADLE_PROJECT_signingInMemoryKeyId="$$GPG_SIGNING_KEY_ID" \
 	ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="$$(security find-generic-password -a "gpg-signing" -s "gradle-signing-password" -w)"
 
-default: versioncheck
+default: help
 
 help:  ## Show this help (list of targets)
 	@awk 'BEGIN {FS = ":.*?## "; printf "Usage: make <target>\n\nTargets:\n"} \
@@ -30,7 +30,7 @@ stop:  ## Stop the running Gradle daemon
 clean:  ## Remove Gradle build outputs
 	./gradlew clean
 
-clean-all: clean clean-docs  ## clean + remove .gradle cache and docs site
+clean-all: clean clean-site  ## clean + remove .gradle cache and docs site
 	rm -rf .gradle
 
 stubs:  ## Regenerate gRPC/protobuf stubs
@@ -105,8 +105,8 @@ coverage-open: coverage-html  ## Open the HTML coverage report
 coverage-packages: coverage-xml  ## Print per-package coverage from the XML report
 	@python3 scripts/coverage_packages.py
 
-coverage-clean:  ## Remove coverage reports
-	./gradlew cleanAllTests
+coverage-clean:  ## Remove coverage reports and test outputs
+	./gradlew cleanTest
 	rm -rf build/reports/kover build/kover
 
 # Backwards-compatible alias for the previous `make reports` invocation.
@@ -141,17 +141,23 @@ tree:  ## Print Gradle dependency tree (quiet)
 depends:  ## Print Gradle dependency report
 	./gradlew dependencies
 
-versioncheck:  ## Check for newer dependency versions
+versions:  ## Check for newer dependency versions
 	./gradlew dependencyUpdates --no-configuration-cache
 
 kdocs:  ## Generate Dokka HTML site
 	./gradlew dokkaGeneratePublicationHtml
 
-clean-docs:  ## Remove zensical site cache
+check-site:  ## Check for outdated website dependencies
+	cd website/prometheus-proxy && env -u VIRTUAL_ENV uv lock --upgrade --dry-run
+
+upgrade-site:  ## Upgrade the website dependencies
+	cd website/prometheus-proxy && env -u VIRTUAL_ENV uv lock --upgrade
+
+clean-site:  ## Remove generated zensical site and cache
 	rm -rf website/prometheus-proxy/site
 	rm -rf website/prometheus-proxy/.cache
 
-site: clean-docs  ## Serve the docs site locally with zensical
+site: clean-site  ## Serve the docs site locally with zensical
 	cd website/prometheus-proxy && uv run --with mkdocs-material zensical serve
 
 publish-local: _require-version  ## Publish artifacts to the local Maven repository
