@@ -148,10 +148,10 @@ kdocs:  ## Generate Dokka HTML site
 	./gradlew dokkaGeneratePublicationHtml
 
 check-site:  ## Check for outdated website dependencies
-	cd website/prometheus-proxy && env -u VIRTUAL_ENV uv lock --upgrade --dry-run
+	cd website && env -u VIRTUAL_ENV uv lock --upgrade --dry-run
 
 upgrade-site:  ## Upgrade the website dependencies
-	cd website/prometheus-proxy && env -u VIRTUAL_ENV uv lock --upgrade
+	cd website && env -u VIRTUAL_ENV uv lock --upgrade
 
 clean-site:  ## Remove generated zensical site and cache
 	rm -rf website/prometheus-proxy/site

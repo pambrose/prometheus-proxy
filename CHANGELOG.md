@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [3.1.2] - Unreleased
+## [3.2.0] - Unreleased
 
 ### New Features
 

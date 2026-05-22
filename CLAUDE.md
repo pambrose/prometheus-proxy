@@ -120,7 +120,7 @@ The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`mak
 `group` and `version` live in `gradle.properties` (single source of truth). The version can be overridden on the command line for CI snapshot publishing:
 
 ```bash
-./gradlew build -PoverrideVersion=3.1.2-SNAPSHOT
+./gradlew build -PoverrideVersion=3.2.0-SNAPSHOT
 ```
 
 `-PoverrideVersion` keeps its `override` prefix because it intentionally only applies when supplied (so the `gradle.properties` default is never accidentally cleared).
@@ -171,7 +171,7 @@ Repository declarations are centralized in `settings.gradle.kts` via `dependency
 
 Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) require GPG environment variables and a keychain password entry; `make check-gpg-env` validates them up-front.
 
-When bumping the version, update `version` in `gradle.properties` and the `3.1.2` literals in `README.md` and `llms.txt` (Docker tag examples + Maven Central dependency block). The release flow itself is documented in `docs/RELEASE.md`.
+When bumping the version, update `version` in `gradle.properties` and the `3.2.0` literals in `README.md` and `llms.txt` (Docker tag examples + Maven Central dependency block). The release flow itself is documented in `docs/RELEASE.md`.
 
 ## Code Style
 
