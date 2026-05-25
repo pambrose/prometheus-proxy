@@ -12,6 +12,8 @@ GRADLE_VERSION := $(shell sed -n 's/^gradle-wrapper = "\(.*\)"/\1/p' gradle/libs
 TSCFG_VERSION := 1.2.5
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
 IMAGE_PREFIX := pambrose/prometheus
+WEBSITE_DIR := website
+SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 
 GPG_ENV = \
 	ORG_GRADLE_PROJECT_signingInMemoryKey="$$(gpg --armor --export-secret-keys "$$GPG_SIGNING_KEY_ID")" \
@@ -142,23 +144,23 @@ depends:  ## Print Gradle dependency report
 	./gradlew dependencies
 
 versions:  ## Check for newer dependency versions
-	./gradlew dependencyUpdates --no-configuration-cache
+	./gradlew dependencyUpdates --no-configuration-cache --no-parallel
 
 kdocs:  ## Generate Dokka HTML site
 	./gradlew dokkaGeneratePublicationHtml
 
 check-site:  ## Check for outdated website dependencies
-	cd website && env -u VIRTUAL_ENV uv lock --upgrade --dry-run
+	cd $(WEBSITE_DIR) && env -u VIRTUAL_ENV uv lock --upgrade --dry-run
 
 upgrade-site:  ## Upgrade the website dependencies
-	cd website && env -u VIRTUAL_ENV uv lock --upgrade
+	cd $(WEBSITE_DIR) && env -u VIRTUAL_ENV uv lock --upgrade
 
 clean-site:  ## Remove generated zensical site and cache
-	rm -rf website/prometheus-proxy/site
-	rm -rf website/prometheus-proxy/.cache
+	rm -rf $(SITE_DIR)/site
+	rm -rf $(SITE_DIR)/.cache
 
 site: clean-site  ## Serve the docs site locally with zensical
-	cd website/prometheus-proxy && uv run --with mkdocs-material zensical serve
+	cd $(SITE_DIR) && uv run --with mkdocs-material zensical serve
 
 publish-local: _require-version  ## Publish artifacts to the local Maven repository
 	./gradlew publishToMavenLocal
