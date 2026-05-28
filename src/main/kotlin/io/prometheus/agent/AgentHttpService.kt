@@ -242,7 +242,9 @@ internal class AgentHttpService(
         // If internal.cioTimeoutSecs is set to a non-default and httpClientTimeoutSecs is set to the default, then use
         // internal.cioTimeoutSecs value. Otherwise, use httpClientTimeoutSecs.
         val timeoutSecs =
-          if (agent.configVals.agent.internal.cioTimeoutSecs != 90 && agent.options.httpClientTimeoutSecs == 90)
+          if (agent.configVals.agent.internal.cioTimeoutSecs != DEFAULT_HTTP_TIMEOUT_SECS &&
+            agent.options.httpClientTimeoutSecs == DEFAULT_HTTP_TIMEOUT_SECS
+          )
             agent.configVals.agent.internal.cioTimeoutSecs
           else
             agent.options.httpClientTimeoutSecs
@@ -293,6 +295,13 @@ internal class AgentHttpService(
 
   companion object {
     private val logger = logger {}
+
+    // Factory default (in seconds) shared by both http.clientTimeoutSecs and the deprecated
+    // internal.cioTimeoutSecs in config/config.conf. Used to detect whether the deprecated
+    // cioTimeoutSecs was explicitly overridden while clientTimeoutSecs was left at its default.
+    // MUST stay in sync with the defaults in config/config.conf.
+    private const val DEFAULT_HTTP_TIMEOUT_SECS = 90
+
     private const val INVALID_PATH_MSG = "invalid_path"
     private const val SUCCESS_MSG = "success"
     private const val UNSUCCESSFUL_MSG = "unsuccessful"
