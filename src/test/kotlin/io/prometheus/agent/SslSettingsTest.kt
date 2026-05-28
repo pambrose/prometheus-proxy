@@ -53,20 +53,12 @@ class SslSettingsTest : StringSpec() {
     // block so it is cleared on both success and failure paths.
 
     "getKeyStore should zero password char array after successful load" {
-      // Create a temporary keystore to test the success path
-      val storePassword = "test-password"
-      val tmpFile = File.createTempFile("test-keystore", ".jks")
-      tmpFile.deleteOnExit()
-      KeyStore.getInstance(KeyStore.getDefaultType()).apply {
-        load(null, null)
-        FileOutputStream(tmpFile).use { store(it, storePassword.toCharArray()) }
-      }
-
+      val (path, storePassword) = createTempKeyStore()
       val password = storePassword.toCharArray()
-      SslSettings.getKeyStore(tmpFile.absolutePath, password)
+
+      SslSettings.getKeyStore(path, password)
 
       password.all { it == '\u0000' }.shouldBeTrue()
-      tmpFile.delete()
     }
 
     "getKeyStore should zero password char array even when file does not exist" {
@@ -104,6 +96,31 @@ class SslSettingsTest : StringSpec() {
       }
     }
 
+    // ==================== Success Path Tests ====================
+    // These exercise the success branches of getTrustManagerFactory/getSslContext/
+    // getTrustManager against a real (empty) keystore. The prior tests only covered the
+    // FileNotFoundException paths, leaving the success bodies uncovered.
+
+    "getTrustManagerFactory should return initialized factory for valid keystore" {
+      val (path, password) = createTempKeyStore()
+      val factory = SslSettings.getTrustManagerFactory(path, password)
+      factory.shouldNotBeNull()
+      factory.trustManagers.isNotEmpty() shouldBe true
+    }
+
+    "getSslContext should return a TLS context for valid keystore" {
+      val (path, password) = createTempKeyStore()
+      val sslContext = SslSettings.getSslContext(path, password)
+      sslContext.shouldNotBeNull()
+      sslContext.protocol shouldBe "TLS"
+    }
+
+    "getTrustManager should return an X509TrustManager for valid keystore" {
+      val (path, password) = createTempKeyStore()
+      val trustManager = SslSettings.getTrustManager(path, password)
+      trustManager.shouldBeInstanceOf<X509TrustManager>()
+    }
+
     // ==================== Type Verification Tests ====================
     // These tests verify the return types of the methods when they succeed
 
@@ -135,5 +152,17 @@ class SslSettingsTest : StringSpec() {
       trustManagers.isNotEmpty() shouldBe true
       trustManagers[0].shouldBeInstanceOf<X509TrustManager>()
     }
+  }
+
+  // Creates an empty keystore in a temp file and returns its path and password.
+  private fun createTempKeyStore(): Pair<String, String> {
+    val password = "test-password"
+    val tmpFile = File.createTempFile("ssl-settings-test", ".jks")
+    tmpFile.deleteOnExit()
+    KeyStore.getInstance(KeyStore.getDefaultType()).apply {
+      load(null, null)
+      FileOutputStream(tmpFile).use { store(it, password.toCharArray()) }
+    }
+    return tmpFile.absolutePath to password
   }
 }

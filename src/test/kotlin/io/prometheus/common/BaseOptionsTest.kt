@@ -27,12 +27,17 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.BaseOptions.Companion.resolveBoolean
 import io.prometheus.proxy.ProxyOptions
 import java.io.File
 import java.net.URI
 import kotlin.io.path.createTempDirectory
+import io.ktor.server.cio.CIO as ServerCIO
 
 class BaseOptionsTest : StringSpec() {
   init {
@@ -265,6 +270,19 @@ class BaseOptionsTest : StringSpec() {
       }
     }
 
+    // ==================== Config File Loading over HTTP (URL branch) ====================
+    // The file-based tests above go through ConfigFactory.parseFileAnySyntax, which skips
+    // the URL branch of readConfig() and getConfigSyntax(). These serve a config over HTTP
+    // to exercise the URL branch and the JSON/CONF syntax detection.
+
+    "should load conf config from http url" {
+      verifyHttpConfigLoads("config.conf", "proxy { http.port = 4444 }", expectedPort = 4444)
+    }
+
+    "should load json config from http url" {
+      verifyHttpConfigLoads("config.json", """{ "proxy": { "http": { "port": 3333 } } }""", expectedPort = 3333)
+    }
+
     "dynamic params should strip surrounding quotes" {
       val options = ProxyOptions(listOf("-Dproxy.http.port=\"5555\""))
       options.proxyPort shouldBe 5555
@@ -495,6 +513,29 @@ class BaseOptionsTest : StringSpec() {
         envVarValue = "true",
         configDefault = true,
       ).shouldBeFalse()
+    }
+  }
+
+  // Serves the given config body over HTTP at /<fileName> and asserts the loaded proxy port.
+  // Exercises the URL branch of readConfig() and the suffix-based syntax detection.
+  private suspend fun verifyHttpConfigLoads(
+    fileName: String,
+    body: String,
+    expectedPort: Int,
+  ) {
+    val server = embeddedServer(ServerCIO, port = 0) {
+      routing {
+        get("/$fileName") {
+          call.respondText(body)
+        }
+      }
+    }
+    try {
+      val port = server.startAndAwaitReady()
+      val options = ProxyOptions(listOf("-c", "http://localhost:$port/$fileName"))
+      options.proxyPort shouldBe expectedPort
+    } finally {
+      server.stop(0, 0)
     }
   }
 }
