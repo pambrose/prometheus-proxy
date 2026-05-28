@@ -53,20 +53,12 @@ class SslSettingsTest : StringSpec() {
     // block so it is cleared on both success and failure paths.
 
     "getKeyStore should zero password char array after successful load" {
-      // Create a temporary keystore to test the success path
-      val storePassword = "test-password"
-      val tmpFile = File.createTempFile("test-keystore", ".jks")
-      tmpFile.deleteOnExit()
-      KeyStore.getInstance(KeyStore.getDefaultType()).apply {
-        load(null, null)
-        FileOutputStream(tmpFile).use { store(it, storePassword.toCharArray()) }
-      }
-
+      val (path, storePassword) = createTempKeyStore()
       val password = storePassword.toCharArray()
-      SslSettings.getKeyStore(tmpFile.absolutePath, password)
+
+      SslSettings.getKeyStore(path, password)
 
       password.all { it == '\u0000' }.shouldBeTrue()
-      tmpFile.delete()
     }
 
     "getKeyStore should zero password char array even when file does not exist" {
@@ -111,34 +103,22 @@ class SslSettingsTest : StringSpec() {
 
     "getTrustManagerFactory should return initialized factory for valid keystore" {
       val (path, password) = createTempKeyStore()
-      try {
-        val factory = SslSettings.getTrustManagerFactory(path, password)
-        factory.shouldNotBeNull()
-        factory.trustManagers.isNotEmpty() shouldBe true
-      } finally {
-        File(path).delete()
-      }
+      val factory = SslSettings.getTrustManagerFactory(path, password)
+      factory.shouldNotBeNull()
+      factory.trustManagers.isNotEmpty() shouldBe true
     }
 
     "getSslContext should return a TLS context for valid keystore" {
       val (path, password) = createTempKeyStore()
-      try {
-        val sslContext = SslSettings.getSslContext(path, password)
-        sslContext.shouldNotBeNull()
-        sslContext.protocol shouldBe "TLS"
-      } finally {
-        File(path).delete()
-      }
+      val sslContext = SslSettings.getSslContext(path, password)
+      sslContext.shouldNotBeNull()
+      sslContext.protocol shouldBe "TLS"
     }
 
     "getTrustManager should return an X509TrustManager for valid keystore" {
       val (path, password) = createTempKeyStore()
-      try {
-        val trustManager = SslSettings.getTrustManager(path, password)
-        trustManager.shouldBeInstanceOf<X509TrustManager>()
-      } finally {
-        File(path).delete()
-      }
+      val trustManager = SslSettings.getTrustManager(path, password)
+      trustManager.shouldBeInstanceOf<X509TrustManager>()
     }
 
     // ==================== Type Verification Tests ====================

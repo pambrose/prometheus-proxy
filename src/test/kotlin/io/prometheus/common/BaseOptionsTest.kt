@@ -276,37 +276,11 @@ class BaseOptionsTest : StringSpec() {
     // to exercise the URL branch and the JSON/CONF syntax detection.
 
     "should load conf config from http url" {
-      val server = embeddedServer(ServerCIO, port = 0) {
-        routing {
-          get("/config.conf") {
-            call.respondText("proxy { http.port = 4444 }")
-          }
-        }
-      }
-      try {
-        val port = server.startAndAwaitReady()
-        val options = ProxyOptions(listOf("-c", "http://localhost:$port/config.conf"))
-        options.proxyPort shouldBe 4444
-      } finally {
-        server.stop(0, 0)
-      }
+      verifyHttpConfigLoads("config.conf", "proxy { http.port = 4444 }", expectedPort = 4444)
     }
 
     "should load json config from http url" {
-      val server = embeddedServer(ServerCIO, port = 0) {
-        routing {
-          get("/config.json") {
-            call.respondText("""{ "proxy": { "http": { "port": 3333 } } }""")
-          }
-        }
-      }
-      try {
-        val port = server.startAndAwaitReady()
-        val options = ProxyOptions(listOf("-c", "http://localhost:$port/config.json"))
-        options.proxyPort shouldBe 3333
-      } finally {
-        server.stop(0, 0)
-      }
+      verifyHttpConfigLoads("config.json", """{ "proxy": { "http": { "port": 3333 } } }""", expectedPort = 3333)
     }
 
     "dynamic params should strip surrounding quotes" {
@@ -539,6 +513,29 @@ class BaseOptionsTest : StringSpec() {
         envVarValue = "true",
         configDefault = true,
       ).shouldBeFalse()
+    }
+  }
+
+  // Serves the given config body over HTTP at /<fileName> and asserts the loaded proxy port.
+  // Exercises the URL branch of readConfig() and the suffix-based syntax detection.
+  private suspend fun verifyHttpConfigLoads(
+    fileName: String,
+    body: String,
+    expectedPort: Int,
+  ) {
+    val server = embeddedServer(ServerCIO, port = 0) {
+      routing {
+        get("/$fileName") {
+          call.respondText(body)
+        }
+      }
+    }
+    try {
+      val port = server.startAndAwaitReady()
+      val options = ProxyOptions(listOf("-c", "http://localhost:$port/$fileName"))
+      options.proxyPort shouldBe expectedPort
+    } finally {
+      server.stop(0, 0)
     }
   }
 }
