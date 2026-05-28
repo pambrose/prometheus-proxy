@@ -33,7 +33,14 @@ import kotlin.time.TimeSource.Monotonic
 // while the routing pipeline is still being installed, surfacing as EOFException or empty
 // bodies on the next real request. Sending a real HTTP/1.0 line and waiting for the "HTTP/"
 // reply means routing is live before we hand back the port.
-suspend fun EmbeddedServer<*, *>.startAndAwaitReady(timeout: Duration = 5.seconds): Int {
+//
+// The deadline is generous because it is only a ceiling, not a wait: the loop returns the
+// instant the server responds, so a healthy server still returns in milliseconds. The extra
+// headroom absorbs CPU contention during a full test-suite run, where many embedded servers
+// and the gRPC harness compete for cores and a fresh CIO server can take several seconds to
+// start answering. A tighter default (5s) caused intermittent "did not start serving HTTP"
+// failures on whichever embedded-server test happened to run during a load spike.
+suspend fun EmbeddedServer<*, *>.startAndAwaitReady(timeout: Duration = 30.seconds): Int {
   start(wait = false)
   val port = engine.resolvedConnectors().first().port
   val deadline = Monotonic.markNow() + timeout
