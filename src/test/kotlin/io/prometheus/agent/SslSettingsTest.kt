@@ -104,6 +104,43 @@ class SslSettingsTest : StringSpec() {
       }
     }
 
+    // ==================== Success Path Tests ====================
+    // These exercise the success branches of getTrustManagerFactory/getSslContext/
+    // getTrustManager against a real (empty) keystore. The prior tests only covered the
+    // FileNotFoundException paths, leaving the success bodies uncovered.
+
+    "getTrustManagerFactory should return initialized factory for valid keystore" {
+      val (path, password) = createTempKeyStore()
+      try {
+        val factory = SslSettings.getTrustManagerFactory(path, password)
+        factory.shouldNotBeNull()
+        factory.trustManagers.isNotEmpty() shouldBe true
+      } finally {
+        File(path).delete()
+      }
+    }
+
+    "getSslContext should return a TLS context for valid keystore" {
+      val (path, password) = createTempKeyStore()
+      try {
+        val sslContext = SslSettings.getSslContext(path, password)
+        sslContext.shouldNotBeNull()
+        sslContext.protocol shouldBe "TLS"
+      } finally {
+        File(path).delete()
+      }
+    }
+
+    "getTrustManager should return an X509TrustManager for valid keystore" {
+      val (path, password) = createTempKeyStore()
+      try {
+        val trustManager = SslSettings.getTrustManager(path, password)
+        trustManager.shouldBeInstanceOf<X509TrustManager>()
+      } finally {
+        File(path).delete()
+      }
+    }
+
     // ==================== Type Verification Tests ====================
     // These tests verify the return types of the methods when they succeed
 
@@ -135,5 +172,17 @@ class SslSettingsTest : StringSpec() {
       trustManagers.isNotEmpty() shouldBe true
       trustManagers[0].shouldBeInstanceOf<X509TrustManager>()
     }
+  }
+
+  // Creates an empty keystore in a temp file and returns its path and password.
+  private fun createTempKeyStore(): Pair<String, String> {
+    val password = "test-password"
+    val tmpFile = File.createTempFile("ssl-settings-test", ".jks")
+    tmpFile.deleteOnExit()
+    KeyStore.getInstance(KeyStore.getDefaultType()).apply {
+      load(null, null)
+      FileOutputStream(tmpFile).use { store(it, password.toCharArray()) }
+    }
+    return tmpFile.absolutePath to password
   }
 }

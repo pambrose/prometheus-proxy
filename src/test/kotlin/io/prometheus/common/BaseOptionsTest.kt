@@ -27,12 +27,17 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.BaseOptions.Companion.resolveBoolean
 import io.prometheus.proxy.ProxyOptions
 import java.io.File
 import java.net.URI
 import kotlin.io.path.createTempDirectory
+import io.ktor.server.cio.CIO as ServerCIO
 
 class BaseOptionsTest : StringSpec() {
   init {
@@ -262,6 +267,45 @@ class BaseOptionsTest : StringSpec() {
         options.proxyPort shouldBe 6666
       } finally {
         tempDir.deleteRecursively()
+      }
+    }
+
+    // ==================== Config File Loading over HTTP (URL branch) ====================
+    // The file-based tests above go through ConfigFactory.parseFileAnySyntax, which skips
+    // the URL branch of readConfig() and getConfigSyntax(). These serve a config over HTTP
+    // to exercise the URL branch and the JSON/CONF syntax detection.
+
+    "should load conf config from http url" {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/config.conf") {
+            call.respondText("proxy { http.port = 4444 }")
+          }
+        }
+      }
+      try {
+        val port = server.startAndAwaitReady()
+        val options = ProxyOptions(listOf("-c", "http://localhost:$port/config.conf"))
+        options.proxyPort shouldBe 4444
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "should load json config from http url" {
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/config.json") {
+            call.respondText("""{ "proxy": { "http": { "port": 3333 } } }""")
+          }
+        }
+      }
+      try {
+        val port = server.startAndAwaitReady()
+        val options = ProxyOptions(listOf("-c", "http://localhost:$port/config.json"))
+        options.proxyPort shouldBe 3333
+      } finally {
+        server.stop(0, 0)
       }
     }
 
