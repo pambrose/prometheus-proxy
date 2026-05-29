@@ -1292,5 +1292,55 @@ class AgentHttpServiceTest : StringSpec() {
         server.stop(0, 0)
       }
     }
+
+    // ==================== Item 29: timeout resolution precedence ====================
+    // resolveTimeoutSecs honors the deprecated cioTimeoutSecs only when it was explicitly
+    // overridden (non-default) while httpClientTimeoutSecs was left at the default. Otherwise
+    // httpClientTimeoutSecs always wins.
+
+    "Item 29: cioTimeoutSecs wins when overridden and httpClientTimeoutSecs is at the default" {
+      AgentHttpService.resolveTimeoutSecs(cioTimeoutSecs = 30, httpClientTimeoutSecs = 90, default = 90) shouldBe 30
+    }
+
+    "Item 29: httpClientTimeoutSecs wins when it is overridden" {
+      AgentHttpService.resolveTimeoutSecs(cioTimeoutSecs = 30, httpClientTimeoutSecs = 120, default = 90) shouldBe 120
+    }
+
+    "Item 29: httpClientTimeoutSecs wins when both are at the default" {
+      AgentHttpService.resolveTimeoutSecs(cioTimeoutSecs = 90, httpClientTimeoutSecs = 90, default = 90) shouldBe 90
+    }
+
+    // ==================== Item 31: wrapped timeout detection ====================
+
+    // Item 31: a CancellationException whose cause is an HttpRequestTimeoutException (Ktor
+    // sometimes wraps the timeout) must be converted to a 408 via the cause-walk, not rethrown.
+    "Item 31: fetchScrapeUrl converts a wrapped-timeout CancellationException to 408" {
+      val mockAgent = createMockAgentWithPaths()
+      val service = AgentHttpService(mockAgent)
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:8080/metrics")
+
+      val request = scrapeRequest {
+        agentId = "agent-1"
+        scrapeId = 72L
+        path = "metrics"
+      }
+
+      val spiedService = spyk(service)
+      // No cause-accepting constructor exists on CancellationException, so set it via initCause.
+      coEvery {
+        spiedService.fetchContent(any<String>(), any())
+      } coAnswers {
+        throw CancellationException("wrapped timeout").apply {
+          initCause(io.ktor.client.plugins.HttpRequestTimeoutException("url", 1000L))
+        }
+      }
+
+      val results = spiedService.fetchScrapeUrl(request)
+
+      results.srStatusCode shouldBe 408
+      results.srValidResponse shouldBe false
+
+      service.close()
+    }
   }
 }

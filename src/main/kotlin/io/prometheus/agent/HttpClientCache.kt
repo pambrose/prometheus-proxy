@@ -63,6 +63,12 @@ internal class HttpClientCache(
   private val accessMutex = Mutex()
   private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+  // Set to true (under accessMutex) by close(). Once closed, getOrCreateClient() rejects new
+  // requests, preventing an in-flight scrape racing shutdown from creating and caching a fresh
+  // HttpClient into the now-dead cache (whose cleanup coroutine is cancelled) — which would leak
+  // that client until JVM exit. Especially relevant for embedded agents restarted in a host JVM.
+  private var closed = false
+
   // Clients removed via removeEntry() that are not in use and need to be closed.
   // Only accessed while holding accessMutex. Drained after releasing the mutex
   // so that potentially slow HttpClient.close() calls don't block other cache operations.
@@ -150,6 +156,7 @@ internal class HttpClientCache(
 
     val (entry, clientsToClose) =
       accessMutex.withLock {
+        check(!closed) { "HttpClientCache is closed" }
         val result = cache[cacheKey]?.let { existing ->
           if (isEntryValid(existing, now)) {
             existing.lastAccessedAt = now
@@ -287,6 +294,9 @@ internal class HttpClientCache(
       clientsToClose += drainPendingCloses()
       cache.clear()
       accessOrder.clear()
+      // Set the terminal flag in the same critical section that clears the map, so there is no
+      // window where getOrCreateClient() could repopulate the cache after this point.
+      closed = true
     }
     // Close clients outside the lock to avoid blocking
     clientsToClose.forEach { it.close() }

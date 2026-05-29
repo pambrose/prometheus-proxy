@@ -209,8 +209,14 @@ internal class AgentGrpcService(
       agent.metrics { connectCount.labels(agent.launchId, "success").inc() }
       true
     }.getOrElse { e ->
+      // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.) so they propagate to
+      // handleConnectionFailure() and terminate the agent instead of being collapsed into a
+      // routine "couldn't connect, will retry". Only transient connection failures return false.
+      if (e is Error)
+        throw e
       agent.metrics { connectCount.labels(agent.launchId, "failure").inc() }
-      logger.error {
+      // Pass the throwable so a stack trace is captured for diagnosis.
+      logger.error(e) {
         "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
       }
       false

@@ -155,10 +155,12 @@ class ProxyOptions(
       .also { proxyConfigVals ->
         if (proxyPort == -1)
           proxyPort = PROXY_PORT.getEnv(proxyConfigVals.http.port)
+        require(proxyPort in 1..65535) { "proxyPort must be in 1..65535: $proxyPort" }
         logger.info { "proxyPort: $proxyPort" }
 
         if (proxyAgentPort == -1)
           proxyAgentPort = AGENT_PORT.getEnv(proxyConfigVals.agent.port)
+        require(proxyAgentPort in 1..65535) { "proxyAgentPort must be in 1..65535: $proxyAgentPort" }
         logger.info { "proxyAgentPort: $proxyAgentPort" }
 
         sdEnabled =
@@ -189,6 +191,7 @@ class ProxyOptions(
 
         if (handshakeTimeoutSecs == -1L)
           handshakeTimeoutSecs = HANDSHAKE_TIMEOUT_SECS.getEnv(proxyConfigVals.grpc.handshakeTimeoutSecs)
+        requireGrpcTimeout(handshakeTimeoutSecs, "grpc.handshakeTimeoutSecs")
         val hsTimeout = if (handshakeTimeoutSecs == -1L) "default (120)" else handshakeTimeoutSecs
         logger.info { "grpc.handshakeTimeoutSecs: $hsTimeout" }
 
@@ -203,22 +206,26 @@ class ProxyOptions(
 
         if (permitKeepAliveTimeSecs == -1L)
           permitKeepAliveTimeSecs = PERMIT_KEEPALIVE_TIME_SECS.getEnv(proxyConfigVals.grpc.permitKeepAliveTimeSecs)
+        requireGrpcTimeout(permitKeepAliveTimeSecs, "grpc.permitKeepAliveTimeSecs")
         val kaTime = if (permitKeepAliveTimeSecs == -1L) "default (300)" else permitKeepAliveTimeSecs
         logger.info { "grpc.permitKeepAliveTimeSecs: $kaTime" }
 
         if (maxConnectionIdleSecs == -1L)
           maxConnectionIdleSecs = MAX_CONNECTION_IDLE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionIdleSecs)
+        requireGrpcTimeout(maxConnectionIdleSecs, "grpc.maxConnectionIdleSecs")
         val idleVal = if (maxConnectionIdleSecs == -1L) "default (INT_MAX)" else maxConnectionIdleSecs
         logger.info { "grpc.maxConnectionIdleSecs: $idleVal" }
 
         if (maxConnectionAgeSecs == -1L)
           maxConnectionAgeSecs = MAX_CONNECTION_AGE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeSecs)
+        requireGrpcTimeout(maxConnectionAgeSecs, "grpc.maxConnectionAgeSecs")
         val ageVal = if (maxConnectionAgeSecs == -1L) "default (INT_MAX)" else maxConnectionAgeSecs
         logger.info { "grpc.maxConnectionAgeSecs: $ageVal" }
 
         if (maxConnectionAgeGraceSecs == -1L)
           maxConnectionAgeGraceSecs =
             MAX_CONNECTION_AGE_GRACE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeGraceSecs)
+        requireGrpcTimeout(maxConnectionAgeGraceSecs, "grpc.maxConnectionAgeGraceSecs")
         val graceVal = if (maxConnectionAgeGraceSecs == -1L) "default (INT_MAX)" else maxConnectionAgeGraceSecs
         logger.info { "grpc.maxConnectionAgeGraceSecs: $graceVal" }
 
@@ -256,5 +263,13 @@ class ProxyOptions(
 
   internal companion object {
     private val logger = logger {}
+
+    // gRPC timeout fields use -1L as the "leave the gRPC default in place" sentinel (the
+    // `> -1L` guards in ProxyGrpcService rely on it). Any other non-positive value is invalid
+    // and would otherwise surface as an opaque gRPC builder exception at startup.
+    private fun requireGrpcTimeout(
+      value: Long,
+      name: String,
+    ) = require(value == -1L || value > 0L) { "$name must be -1 (default) or > 0: $value" }
   }
 }

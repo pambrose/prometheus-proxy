@@ -204,6 +204,13 @@ internal class ProxyServiceImpl(
           throw e
         } catch (e: Exception) {
           logger.error(e) { "Error processing scrape response for scrapeId: ${response.scrapeId}" }
+          // Fail the in-flight request immediately so the waiting HTTP handler returns a 502 now
+          // instead of blocking until scrapeRequestTimeoutSecs and reporting a misleading timeout.
+          // Mirrors the failScrapeRequest() handling in writeChunkedResponsesToProxy().
+          proxy.scrapeRequestManager.failScrapeRequest(
+            response.scrapeId,
+            "Error processing scrape response: ${e.message}",
+          )
         }
       }
     }.onFailure { throwable ->

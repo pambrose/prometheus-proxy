@@ -388,42 +388,52 @@ abstract class BaseOptions protected constructor(
     fallback: Config,
     exitOnMissingConfig: Boolean,
   ): Config {
-    when {
-      configName.isBlank() -> {
-        if (exitOnMissingConfig) {
-          logger.error { $$"A configuration file or url must be specified with --config or $$$envConfig" }
-          exitProcess(1)
+    // Captures the parse failure (if any) so the post-when handling can honor exitOnMissingConfig.
+    // The success paths return early from inside runCatchingCancellable.
+    val failureCause: Throwable? =
+      when {
+        configName.isBlank() -> {
+          if (exitOnMissingConfig) {
+            logger.error { $$"A configuration file or url must be specified with --config or $$$envConfig" }
+            exitProcess(1)
+          }
+          return fallback
         }
-        return fallback
+
+        configName.isUrlPrefix() -> {
+          runCatchingCancellable {
+            val configSyntax = getConfigSyntax(configName)
+            return ConfigFactory
+              .parseURL(URI(configName).toURL(), configParseOptions.setSyntax(configSyntax))
+              .withFallback(fallback)
+          }.exceptionOrNull()
+            ?.also { e ->
+              if (e.cause is FileNotFoundException)
+                logger.error { "Invalid config url: $configName" }
+              else
+                logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
+            }
+        }
+
+        else -> {
+          runCatchingCancellable {
+            return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
+          }.exceptionOrNull()
+            ?.also { e ->
+              if (e.cause is FileNotFoundException)
+                logger.error { "Invalid config filename: $configName" }
+              else
+                logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
+            }
+        }
       }
 
-      configName.isUrlPrefix() -> {
-        runCatchingCancellable {
-          val configSyntax = getConfigSyntax(configName)
-          return ConfigFactory
-            .parseURL(URI(configName).toURL(), configParseOptions.setSyntax(configSyntax))
-            .withFallback(fallback)
-        }.onFailure { e ->
-          if (e.cause is FileNotFoundException)
-            logger.error { "Invalid config url: $configName" }
-          else
-            logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
-        }
-      }
-
-      else -> {
-        runCatchingCancellable {
-          return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
-        }.onFailure { e ->
-          if (e.cause is FileNotFoundException)
-            logger.error { "Invalid config filename: $configName" }
-          else
-            logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
-        }
-      }
-    }
-
-    exitProcess(1)
+    // A parse failure reached here. In standalone mode terminate the process; in embedded mode
+    // (exitOnMissingConfig == false) throw so the host application can recover instead of dying.
+    if (exitOnMissingConfig)
+      exitProcess(1)
+    else
+      throw ConfigLoadException("Unable to load configuration from '$configName'", failureCause)
   }
 
   internal companion object {

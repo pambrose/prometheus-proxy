@@ -31,12 +31,47 @@ import java.net.URLDecoder
 import kotlin.text.Charsets.UTF_8
 
 internal object Utils {
+  private const val REDACTED = "***"
+
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
   fun decodeParams(encodedQueryParams: String): String =
     if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8)}" else ""
 
-  fun sanitizeUrl(url: String): String = url.replace(Regex("(://)[^@/?#]+@"), "$1***@")
+  /**
+   * Masks secrets in a URL before it is logged or echoed back to Prometheus.
+   *
+   * Redacts both the userinfo component (`user:pass@host` becomes `***@host`) and every
+   * query-parameter value (`?token=secret&job=x` becomes `?token=***&job=***`). Query values are
+   * redacted unconditionally rather than via a key allowlist, since custom secret parameter names
+   * (api_key, access_token, sig, …) cannot be enumerated in advance. The fragment is preserved.
+   */
+  fun sanitizeUrl(url: String): String {
+    val userRedacted = url.replace(Regex("(://)[^@/?#]+@"), "$1***@")
+    val queryStart = userRedacted.indexOf('?')
+    if (queryStart < 0) return userRedacted
+    val prefix = userRedacted.substring(0, queryStart + 1)
+    val afterQuery = userRedacted.substring(queryStart + 1)
+    val fragmentStart = afterQuery.indexOf('#')
+    val query = if (fragmentStart < 0) afterQuery else afterQuery.substring(0, fragmentStart)
+    val fragment = if (fragmentStart < 0) "" else afterQuery.substring(fragmentStart)
+    return prefix + redactQueryValues(query) + fragment
+  }
+
+  /**
+   * Masks the values of a bare URL-encoded query string (without a leading `?`), preserving the
+   * keys. Used when logging Prometheus-supplied query params that may carry credentials.
+   */
+  fun sanitizeQueryParams(encodedQueryParams: String): String =
+    if (encodedQueryParams.isBlank()) encodedQueryParams else redactQueryValues(encodedQueryParams)
+
+  private fun redactQueryValues(query: String): String =
+    query
+      .split("&")
+      .joinToString("&") { param ->
+        val eq = param.indexOf('=')
+        if (eq < 0) param else param.substring(0, eq + 1) + REDACTED
+      }
 
   fun appendQueryParams(
     baseUrl: String,

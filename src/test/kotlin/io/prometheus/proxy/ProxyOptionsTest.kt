@@ -18,10 +18,12 @@
 
 package io.prometheus.proxy
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 
 class ProxyOptionsTest : StringSpec() {
   init {
@@ -159,6 +161,38 @@ class ProxyOptionsTest : StringSpec() {
       options.maxConnectionAgeSecs shouldBe 1800L
       options.maxConnectionAgeGraceSecs shouldBe 30L
       options.permitKeepAliveWithoutCalls.shouldBeTrue()
+    }
+
+    // ==================== Item 27: Bounds Validation ====================
+    // ProxyOptions now fails fast on out-of-range ports and gRPC timeouts during construction,
+    // instead of surfacing opaque Ktor/gRPC builder exceptions later at server startup.
+
+    "proxyPort of 0 should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--port", "0")) }
+      exception.message shouldContain "proxyPort"
+    }
+
+    "proxyPort above 65535 should be rejected" {
+      shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--port", "70000")) }
+    }
+
+    "proxyAgentPort of 0 should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--agent_port", "0")) }
+      exception.message shouldContain "proxyAgentPort"
+    }
+
+    "a zero gRPC handshake timeout should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--handshake_timeout_secs", "0")) }
+      exception.message shouldContain "handshakeTimeoutSecs"
+    }
+
+    "a zero gRPC max-connection-idle timeout should be rejected" {
+      shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--max_connection_idle_secs", "0")) }
+    }
+
+    "the -1 sentinel should be accepted for gRPC timeouts" {
+      val options = ProxyOptions(listOf("--handshake_timeout_secs", "-1"))
+      options.handshakeTimeoutSecs shouldBe -1L
     }
 
     // ==================== Constructor Variants Tests ====================

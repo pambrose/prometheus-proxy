@@ -34,6 +34,7 @@ import io.ktor.server.routing.Routing
 import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
 import io.prometheus.Proxy
+import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
 import io.prometheus.proxy.ProxyUtils.incrementScrapeRequestCount
@@ -97,7 +98,8 @@ internal object ProxyHttpRoutes {
       val queryParams = call.request.queryParameters.formUrlEncode()
 
       logger.debug {
-        "Servicing request for path: $path${if (queryParams.isNotEmpty()) " with query params $queryParams" else ""}"
+        val safeParams = sanitizeQueryParams(queryParams)
+        "Servicing request for path: $path${if (queryParams.isNotEmpty()) " with query params $safeParams" else ""}"
       }
 
       val responseResults =
