@@ -48,30 +48,14 @@ internal class AgentPathManager(
 
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
-  private val pathConfigs =
+  private val pathConfigs: List<PathConfig> =
     agentConfigVals.pathConfigs
-      .map {
-        mapOf(
-          NAME to """"${it.name}"""",
-          PATH to it.path,
-          URL to it.url,
-          LABELS to it.labels,
-        )
-      }
+      .map { PathConfig(name = it.name, path = it.path, url = it.url, labels = it.labels) }
       .onEach {
-        logger.info { "Proxy path /${it[PATH]} will be assigned to ${it[URL]} with labels ${it[LABELS]}" }
+        logger.info { "Proxy path /${it.path} will be assigned to ${it.url} with labels ${it.labels}" }
       }
 
-  suspend fun registerPaths() =
-    pathConfigs.forEach {
-      val path = it[PATH]
-      val url = it[URL]
-      val labels = it[LABELS]
-      if (path != null && url != null && labels != null)
-        registerPath(path, url, labels)
-      else
-        logger.error { "Null path/url/labels value: $path/$url/$labels" }
-    }
+  suspend fun registerPaths() = pathConfigs.forEach { registerPath(it.path, it.url, it.labels) }
 
   suspend fun registerPath(
     pathVal: String,
@@ -107,18 +91,25 @@ internal class AgentPathManager(
   }
 
   fun toPlainText(): String {
-    val maxName = pathConfigs.maxOfOrNull { it[NAME].orEmpty().length } ?: 0
-    val maxPath = pathConfigs.maxOfOrNull { it[PATH].orEmpty().length } ?: 0
+    val maxName = pathConfigs.maxOfOrNull { it.quotedName.length } ?: 0
+    val maxPath = pathConfigs.maxOfOrNull { it.path.length } ?: 0
     return "Agent Path Configs:\n" + "Name".padEnd(maxName + 1) + "Path".padEnd(maxPath + 2) + "URL\n" +
-      pathConfigs.joinToString("\n") { c -> "${c[NAME]?.padEnd(maxName)} /${c[PATH]?.padEnd(maxPath)} ${c[URL]}" }
+      pathConfigs.joinToString("\n") { c -> "${c.quotedName.padEnd(maxName)} /${c.path.padEnd(maxPath)} ${c.url}" }
   }
 
   companion object {
     private val logger = logger {}
-    private const val NAME = "name"
-    private const val PATH = "path"
-    private const val URL = "url"
-    private const val LABELS = "labels"
+  }
+
+  // Strongly-typed view of a single `agent.pathConfigs` entry, replacing the prior magic-string map.
+  private data class PathConfig(
+    val name: String,
+    val path: String,
+    val url: String,
+    val labels: String,
+  ) {
+    // Name wrapped in double-quotes for the toPlainText() display, preserving the original format.
+    val quotedName: String get() = "\"$name\""
   }
 
   data class PathContext(
