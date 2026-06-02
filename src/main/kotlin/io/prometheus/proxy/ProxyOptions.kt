@@ -36,7 +36,6 @@ import io.prometheus.common.EnvVars.REFLECTION_DISABLED
 import io.prometheus.common.EnvVars.SD_ENABLED
 import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
-import io.prometheus.common.Utils.setLogLevel
 
 class ProxyOptions(
   args: Array<String>,
@@ -230,19 +229,19 @@ class ProxyOptions(
         logger.info { "grpc.maxConnectionAgeGraceSecs: $graceVal" }
 
         proxyConfigVals.apply {
-          assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
-          assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
-          assignAdminEnabled(admin.enabled)
-          assignAdminPort(admin.port)
-          assignMetricsEnabled(metrics.enabled)
-          assignMetricsPort(metrics.port)
-          assignTransportFilterDisabled(transportFilterDisabled)
-          assignDebugEnabled(admin.debugEnabled)
-
-          assignCertChainFilePath(tls.certChainFilePath)
-          assignPrivateKeyFilePath(tls.privateKeyFilePath)
-          assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
-          validateTlsConfig()
+          assignCommonOptions(
+            keepAliveTimeSecs = grpc.keepAliveTimeSecs,
+            keepAliveTimeoutSecs = grpc.keepAliveTimeoutSecs,
+            adminEnabled = admin.enabled,
+            adminPort = admin.port,
+            metricsEnabled = metrics.enabled,
+            metricsPort = metrics.port,
+            transportFilterDisabled = transportFilterDisabled,
+            debugEnabled = admin.debugEnabled,
+            certChainFilePath = tls.certChainFilePath,
+            privateKeyFilePath = tls.privateKeyFilePath,
+            trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
+          )
 
           logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
           logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }
@@ -250,14 +249,7 @@ class ProxyOptions(
           logger.info { "internal.maxUnzippedContentSizeMBytes: ${internal.maxUnzippedContentSizeMBytes}" }
         }
 
-        if (logLevel.isEmpty())
-          logLevel = PROXY_LOG_LEVEL.getEnv(proxyConfigVals.logLevel)
-        if (logLevel.isNotEmpty()) {
-          logger.info { "proxy.logLevel: $logLevel" }
-          setLogLevel("proxy", logLevel)
-        } else {
-          logger.info { "proxy.logLevel: info" }
-        }
+        assignLogLevel("proxy", PROXY_LOG_LEVEL, proxyConfigVals.logLevel)
       }
   }
 

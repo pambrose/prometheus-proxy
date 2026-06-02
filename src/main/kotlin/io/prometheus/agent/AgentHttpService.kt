@@ -248,8 +248,9 @@ internal class AgentHttpService(
         requestTimeout = timeoutSecs.seconds.inWholeMilliseconds
 
         if (agent.options.trustAllX509Certificates) {
+          // Note: this disables certificate validation for EVERY HTTPS scrape target this agent
+          // talks to, not just a specific one (the setting is process-global, all-or-nothing).
           https {
-            // trustManager = SslSettings.getTrustManager()
             trustManager = TrustAllX509TrustManager
           }
         }

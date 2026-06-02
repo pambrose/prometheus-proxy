@@ -69,6 +69,13 @@ class AgentOptionsTest : StringSpec() {
       options.chunkContentSizeBytes shouldBe 32 * 1024
     }
 
+    // Item 16: --chunk now binds the KB-unit input field; chunkContentSizeBytes is derived once.
+    "chunkContentSizeKbs should hold the raw --chunk input and chunkContentSizeBytes its KB*1024 value" {
+      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--chunk", "64"), false)
+      options.chunkContentSizeKbs shouldBe 64
+      options.chunkContentSizeBytes shouldBe 64 * 1024
+    }
+
     "minGzipSizeBytes should be settable via command line" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--gzip", "2048"), false)
       options.minGzipSizeBytes shouldBe 2048

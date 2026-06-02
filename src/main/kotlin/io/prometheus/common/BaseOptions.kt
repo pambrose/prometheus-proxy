@@ -343,6 +343,59 @@ abstract class BaseOptions protected constructor(
     logger.info { "trustCertCollectionFilePath: $trustCertCollectionFilePath" }
   }
 
+  /**
+   * Resolves the options common to both Proxy and Agent in a single, shared order, ending with
+   * [validateTlsConfig]. Each argument is the role-specific config default; the underlying `assign*`
+   * helpers apply CLI > env > config precedence. Centralizing this avoids the two subclasses drifting
+   * out of sync when a common option is added or reordered.
+   */
+  @Suppress("LongParameterList")
+  protected fun assignCommonOptions(
+    keepAliveTimeSecs: Long,
+    keepAliveTimeoutSecs: Long,
+    adminEnabled: Boolean,
+    adminPort: Int,
+    metricsEnabled: Boolean,
+    metricsPort: Int,
+    transportFilterDisabled: Boolean,
+    debugEnabled: Boolean,
+    certChainFilePath: String,
+    privateKeyFilePath: String,
+    trustCertCollectionFilePath: String,
+  ) {
+    assignKeepAliveTimeSecs(keepAliveTimeSecs)
+    assignKeepAliveTimeoutSecs(keepAliveTimeoutSecs)
+    assignAdminEnabled(adminEnabled)
+    assignAdminPort(adminPort)
+    assignMetricsEnabled(metricsEnabled)
+    assignMetricsPort(metricsPort)
+    assignTransportFilterDisabled(transportFilterDisabled)
+    assignDebugEnabled(debugEnabled)
+    assignCertChainFilePath(certChainFilePath)
+    assignPrivateKeyFilePath(privateKeyFilePath)
+    assignTrustCertCollectionFilePath(trustCertCollectionFilePath)
+    validateTlsConfig()
+  }
+
+  /**
+   * Resolves [logLevel] from CLI > [envVar] > [configDefault] and applies it. When the resolved value is
+   * empty the level from `logback.xml` is left in place. [role] is used only for log/exception text.
+   */
+  protected fun assignLogLevel(
+    role: String,
+    envVar: EnvVars,
+    configDefault: String,
+  ) {
+    if (logLevel.isEmpty())
+      logLevel = envVar.getEnv(configDefault)
+    if (logLevel.isNotEmpty()) {
+      logger.info { "$role.logLevel: $logLevel" }
+      Utils.setLogLevel(role, logLevel)
+    } else {
+      logger.info { "$role.logLevel: info" }
+    }
+  }
+
   private fun readConfig(
     envConfig: String,
     exitOnMissingConfig: Boolean,

@@ -37,6 +37,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
+import io.prometheus.proxy.ProxyUtils.DecodedContent
 import io.prometheus.proxy.ProxyUtils.incrementScrapeRequestCount
 import io.prometheus.proxy.ProxyUtils.respondWith
 import io.prometheus.proxy.ProxyUtils.unzip
@@ -304,9 +305,12 @@ internal object ProxyHttpRoutes {
       else
         scrapeResults.run {
           val maxSize = proxy.proxyConfigVals.internal.maxUnzippedContentSizeMBytes * 1024L * 1024L
-          val contentText =
+          val decoded =
             try {
-              if (srZipped) srContentAsZipped.unzip(maxSize) else srContentAsText
+              if (srZipped)
+                srContentAsZipped.unzip(maxSize)
+              else
+                DecodedContent(srContentAsText, srContentAsText.toByteArray().size.toLong())
             } catch (e: ProxyUtils.ZipBombException) {
               return ScrapeRequestResponse(
                 statusCode = HttpStatusCode.PayloadTooLarge,
@@ -328,14 +332,16 @@ internal object ProxyHttpRoutes {
             }
 
           proxy.metrics {
+            // Observe the byte count already computed during unzip (gzipped) or the small plain
+            // payload's length, instead of re-encoding the decoded text just to measure it.
             val encoding = if (srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN
-            scrapeResponseBytes.labels(path, encoding).observe(contentText.toByteArray().size.toDouble())
+            scrapeResponseBytes.labels(path, encoding).observe(decoded.byteCount.toDouble())
           }
 
           ScrapeRequestResponse(
             statusCode = statusCode,
             contentType = contentType,
-            contentText = contentText,
+            contentText = decoded.text,
             failureReason = srFailureReason,
             url = srUrl,
             updateMsg = "success",

@@ -35,8 +35,17 @@ import java.util.zip.GZIPInputStream
 internal object ProxyUtils {
   private val logger = logger {}
 
-  fun ByteArray.unzip(maxSize: Long): String {
-    if (isEmpty()) return ""
+  /** Decoded scrape content plus its UTF-8 byte length, already counted during decompression. */
+  data class DecodedContent(
+    val text: String,
+    val byteCount: Long,
+  )
+
+  // Decompress and return both the text and its byte length. The byte count is the running total
+  // computed for the zip-bomb guard anyway, so callers can record the response-size metric without
+  // re-encoding the (potentially multi-MB) decoded String with a throwaway toByteArray() call.
+  fun ByteArray.unzip(maxSize: Long): DecodedContent {
+    if (isEmpty()) return DecodedContent("", 0L)
     GZIPInputStream(ByteArrayInputStream(this)).use { gzis ->
       ByteArrayOutputStream().use { baos ->
         val buffer = ByteArray(1024)
@@ -52,7 +61,7 @@ internal object ProxyUtils {
           }
           baos.write(buffer, 0, len)
         }
-        return baos.toString(Charsets.UTF_8.name())
+        return DecodedContent(baos.toString(Charsets.UTF_8.name()), totalBytes)
       }
     }
   }

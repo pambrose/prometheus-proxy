@@ -43,7 +43,6 @@ import io.prometheus.common.EnvVars.SCRAPE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.TRUST_ALL_X509_CERTIFICATES
 import io.prometheus.common.EnvVars.UNARY_DEADLINE_SECS
 import io.prometheus.common.Utils.parseHostPort
-import io.prometheus.common.Utils.setLogLevel
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(
@@ -107,14 +106,21 @@ class AgentOptions(
     private set
 
   /**
-   * Threshold above which a scrape response is split into chunked gRPC messages, expressed in **kilobytes**
-   * on input. After resolution, the field is converted in-place to **bytes** for runtime use; the
-   * `chunkContentSizeBytes` name reflects that final unit.
+   * Threshold (in **kilobytes**) above which a scrape response is split into chunked gRPC messages; also the
+   * chunk buffer size. This is the raw `--chunk` input value and keeps the unit of the config key/env var.
    *
    * `-1` means "fall back to [CHUNK_CONTENT_SIZE_KBS] env var, then `agent.chunkContentSizeKbs` (default `32` KB)".
-   * Validated `> 0` and that the resulting byte value fits in [Int].
+   * Validated `> 0`. The byte value used at runtime is the derived [chunkContentSizeBytes].
    */
   @Parameter(names = ["--chunk"], description = "Threshold for chunking content to Proxy and buffer size (KBs)")
+  var chunkContentSizeKbs = -1
+    private set
+
+  /**
+   * Chunking threshold and buffer size in **bytes**, derived once from [chunkContentSizeKbs] during option
+   * resolution (`chunkContentSizeKbs * 1024`). This is the value read at runtime by the gRPC client; it is
+   * `-1` until [chunkContentSizeKbs] has been resolved. Validated to fit in [Int].
+   */
   var chunkContentSizeBytes = -1
     private set
 
@@ -131,6 +137,9 @@ class AgentOptions(
    * scrape targets — no hostname or chain validation. Intended only for self-signed internal endpoints during
    * development; logs a warning at startup. Resolved from CLI → [TRUST_ALL_X509_CERTIFICATES] env var →
    * `agent.http.enableTrustAllX509Certificates` config.
+   *
+   * Scope is **process-global and all-or-nothing**: enabling it to reach one self-signed endpoint disables
+   * validation for *every* HTTPS target this agent scrapes. There is no per-target trust override.
    */
   @Parameter(names = ["--trust_all_x509"], description = "Disable SSL verification for https agent endpoints")
   var trustAllX509Certificates = false
@@ -257,13 +266,14 @@ class AgentOptions(
       scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
     logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
 
-    if (chunkContentSizeBytes == -1)
-      chunkContentSizeBytes = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
-    require(chunkContentSizeBytes > 0) { "chunkContentSizeKbs must be > 0: ($chunkContentSizeBytes)" }
-    // Convert KB value to bytes with overflow protection
-    val chunkSizeAsBytes = chunkContentSizeBytes.toLong() * 1024
+    if (chunkContentSizeKbs == -1)
+      chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
+    require(chunkContentSizeKbs > 0) { "chunkContentSizeKbs must be > 0: ($chunkContentSizeKbs)" }
+    logger.info { "chunkContentSizeKbs: $chunkContentSizeKbs" }
+    // Derive the byte value once, with overflow protection, into the runtime field.
+    val chunkSizeAsBytes = chunkContentSizeKbs.toLong() * 1024
     require(chunkSizeAsBytes <= Int.MAX_VALUE) {
-      "chunkContentSizeKbs value $chunkContentSizeBytes is too large (max: ${Int.MAX_VALUE / 1024})"
+      "chunkContentSizeKbs value $chunkContentSizeKbs is too large (max: ${Int.MAX_VALUE / 1024})"
     }
     chunkContentSizeBytes = chunkSizeAsBytes.toInt()
     logger.info { "chunkContentSizeBytes: $chunkContentSizeBytes" }
@@ -292,19 +302,19 @@ class AgentOptions(
     logger.info { "grpc.unaryDeadlineSecs: $unaryDeadlineSecs" }
 
     agentConfigVals.apply {
-      assignKeepAliveTimeSecs(grpc.keepAliveTimeSecs)
-      assignKeepAliveTimeoutSecs(grpc.keepAliveTimeoutSecs)
-      assignAdminEnabled(admin.enabled)
-      assignAdminPort(admin.port)
-      assignMetricsEnabled(metrics.enabled)
-      assignMetricsPort(metrics.port)
-      assignTransportFilterDisabled(transportFilterDisabled)
-      assignDebugEnabled(admin.debugEnabled)
-
-      assignCertChainFilePath(tls.certChainFilePath)
-      assignPrivateKeyFilePath(tls.privateKeyFilePath)
-      assignTrustCertCollectionFilePath(tls.trustCertCollectionFilePath)
-      validateTlsConfig()
+      assignCommonOptions(
+        keepAliveTimeSecs = grpc.keepAliveTimeSecs,
+        keepAliveTimeoutSecs = grpc.keepAliveTimeoutSecs,
+        adminEnabled = admin.enabled,
+        adminPort = admin.port,
+        metricsEnabled = metrics.enabled,
+        metricsPort = metrics.port,
+        transportFilterDisabled = transportFilterDisabled,
+        debugEnabled = admin.debugEnabled,
+        certChainFilePath = tls.certChainFilePath,
+        privateKeyFilePath = tls.privateKeyFilePath,
+        trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
+      )
 
       logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
       logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
@@ -316,14 +326,7 @@ class AgentOptions(
       logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
     }
 
-    if (logLevel.isEmpty())
-      logLevel = AGENT_LOG_LEVEL.getEnv(agentConfigVals.logLevel)
-    if (logLevel.isNotEmpty()) {
-      logger.info { "agent.logLevel: $logLevel" }
-      setLogLevel("agent", logLevel)
-    } else {
-      logger.info { "agent.logLevel: info" }
-    }
+    assignLogLevel("agent", AGENT_LOG_LEVEL, agentConfigVals.logLevel)
   }
 
   private fun assignHttpClientConfigVals(agentConfigVals: ConfigVals.Agent) {
