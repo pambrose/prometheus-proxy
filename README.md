@@ -533,7 +533,9 @@ To scrape HTTPS endpoints with a self-signed certificate:
 java -jar prometheus-agent.jar --trust_all_x509 --config myconfig.conf
 ```
 
-**⚠️ Security Note:** Only use `--trust_all_x509` in development/testing environments.
+**⚠️ Security Note:** Only use `--trust_all_x509` in development/testing environments. Its scope is
+process-global and all-or-nothing: enabling it to reach a single self-signed endpoint disables certificate
+validation for **every** HTTPS target the agent scrapes. There is no per-target trust override.
 
 ## 🔧 Troubleshooting
 

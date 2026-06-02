@@ -239,21 +239,18 @@ internal class AgentHttpService(
     HttpClient(CIO) {
       expectSuccess = false
       engine {
-        // If internal.cioTimeoutSecs is set to a non-default and httpClientTimeoutSecs is set to the default, then use
-        // internal.cioTimeoutSecs value. Otherwise, use httpClientTimeoutSecs.
         val timeoutSecs =
-          if (agent.configVals.agent.internal.cioTimeoutSecs != DEFAULT_HTTP_TIMEOUT_SECS &&
-            agent.options.httpClientTimeoutSecs == DEFAULT_HTTP_TIMEOUT_SECS
+          resolveTimeoutSecs(
+            cioTimeoutSecs = agent.configVals.agent.internal.cioTimeoutSecs,
+            httpClientTimeoutSecs = agent.options.httpClientTimeoutSecs,
           )
-            agent.configVals.agent.internal.cioTimeoutSecs
-          else
-            agent.options.httpClientTimeoutSecs
 
         requestTimeout = timeoutSecs.seconds.inWholeMilliseconds
 
         if (agent.options.trustAllX509Certificates) {
+          // Note: this disables certificate validation for EVERY HTTPS scrape target this agent
+          // talks to, not just a specific one (the setting is process-global, all-or-nothing).
           https {
-            // trustManager = SslSettings.getTrustManager()
             trustManager = TrustAllX509TrustManager
           }
         }
@@ -301,6 +298,23 @@ internal class AgentHttpService(
     // cioTimeoutSecs was explicitly overridden while clientTimeoutSecs was left at its default.
     // MUST stay in sync with the defaults in config/config.conf.
     private const val DEFAULT_HTTP_TIMEOUT_SECS = 90
+
+    /**
+     * Resolves the effective HTTP client request timeout.
+     *
+     * Honors the deprecated `internal.cioTimeoutSecs` only when it was explicitly overridden (set
+     * to a non-[default] value) while the replacement `http.clientTimeoutSecs` was left at its
+     * [default]. In every other case `http.clientTimeoutSecs` wins.
+     */
+    internal fun resolveTimeoutSecs(
+      cioTimeoutSecs: Int,
+      httpClientTimeoutSecs: Int,
+      default: Int = DEFAULT_HTTP_TIMEOUT_SECS,
+    ): Int =
+      if (cioTimeoutSecs != default && httpClientTimeoutSecs == default)
+        cioTimeoutSecs
+      else
+        httpClientTimeoutSecs
 
     private const val INVALID_PATH_MSG = "invalid_path"
     private const val SUCCESS_MSG = "success"

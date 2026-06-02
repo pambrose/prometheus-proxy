@@ -1296,5 +1296,55 @@ class ProxyServiceImplTest : StringSpec() {
 
       verify(exactly = 2) { scrapeRequestManager.assignScrapeResults(any()) }
     }
+
+    // Item 7: a per-response processing error must fail the in-flight request immediately so the
+    // waiting HTTP handler returns a 502 now, rather than blocking until scrapeRequestTimeoutSecs
+    // and reporting a misleading timeout. Mirrors writeChunkedResponsesToProxy's failScrapeRequest.
+    "Item 7: writeResponsesToProxy should fail the scrape request when processing throws" {
+      val proxy = createMockProxy()
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      every { scrapeRequestManager.assignScrapeResults(any()) } answers { error("Simulated processing failure") }
+
+      val response = scrapeResponse {
+        agentId = "agent-1"
+        scrapeId = 700L
+        validResponse = true
+        statusCode = 200
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeResponsesToProxy(flowOf(response))
+
+      result shouldBe EMPTY_INSTANCE
+      // The waiting HTTP handler is notified via failScrapeRequest for the failed scrapeId.
+      verify { scrapeRequestManager.failScrapeRequest(700L, match { it.contains("Error processing") }) }
+    }
+
+    // Item 30: a chunked HEADER for an unknown/stale scrapeId must be dropped, not turned into a
+    // ChunkedContext (which would leak the entry). The shared createMockProxy() stubs
+    // containsScrapeRequest=true, so override it to false to exercise the drop branch.
+    "Item 30: writeChunkedResponsesToProxy should drop header for unknown scrapeId" {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      val scrapeId = 800L
+      every { proxy.scrapeRequestManager.containsScrapeRequest(scrapeId) } returns false
+
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrapeId
+          headerAgentId = "agent-1"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val result = service.writeChunkedResponsesToProxy(flowOf(header))
+
+      result shouldBe EMPTY_INSTANCE
+      // No ChunkedContext should be created for an unknown scrapeId.
+      verify(exactly = 0) { contextManager.putChunkedContext(any(), any()) }
+    }
   }
 }

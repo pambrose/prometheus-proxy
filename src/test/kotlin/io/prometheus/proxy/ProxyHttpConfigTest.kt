@@ -34,6 +34,7 @@ import io.ktor.http.withCharset
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.plugins.calllogging.CallLoggingConfig
 import io.ktor.server.plugins.compression.CompressionConfig
 import io.ktor.server.plugins.compression.deflate
 import io.ktor.server.plugins.compression.gzip
@@ -49,6 +50,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
 import io.prometheus.common.startAndAwaitReady
+import org.slf4j.event.Level
 import io.ktor.server.cio.CIO as ServerCIO
 
 // Tests for ProxyHttpConfig which configures Ktor server plugins for the proxy HTTP service.
@@ -395,6 +397,20 @@ class ProxyHttpConfigTest : StringSpec() {
       // which is unusual in HTTP but the filter handles it defensively
       val path = "metrics"
       path.startsWith("/") shouldBe false
+    }
+
+    // Item 26: per-request call logging is emitted at DEBUG (not INFO) so that, at the default
+    // INFO root level, the continuous scrape-rate stream does not bury real WARN/ERROR events.
+    "Item 26: configureCallLogging should set the call-logging level to DEBUG" {
+      val config = CallLoggingConfig()
+      with(ProxyHttpConfig) { config.configureCallLogging() }
+
+      // CallLoggingConfig.level has no public getter, so read the backing field reflectively.
+      val field = CallLoggingConfig::class.java.getDeclaredField("level")
+      field.isAccessible = true
+      val level = field.get(config) as Level
+
+      level shouldBe Level.DEBUG
     }
 
     // ==================== configureKtorServer Integration Tests ====================

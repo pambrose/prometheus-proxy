@@ -204,6 +204,13 @@ internal class ProxyServiceImpl(
           throw e
         } catch (e: Exception) {
           logger.error(e) { "Error processing scrape response for scrapeId: ${response.scrapeId}" }
+          // Fail the in-flight request immediately so the waiting HTTP handler returns a 502 now
+          // instead of blocking until scrapeRequestTimeoutSecs and reporting a misleading timeout.
+          // Mirrors the failScrapeRequest() handling in writeChunkedResponsesToProxy().
+          proxy.scrapeRequestManager.failScrapeRequest(
+            response.scrapeId,
+            "Error processing scrape response: ${e.message}",
+          )
         }
       }
     }.onFailure { throwable ->
@@ -218,6 +225,11 @@ internal class ProxyServiceImpl(
   }
 
   override suspend fun writeChunkedResponsesToProxy(requests: Flow<ChunkedScrapeResponse>): Empty {
+    // activeScrapeIds is a plain (non-thread-safe) set, which is safe ONLY because grpc-kotlin
+    // confines a client-streaming RPC's collect{} and the post-collect cleanup to a single
+    // coroutine — there is no launch/async/flowOn here that would fan the body across threads.
+    // The genuinely shared chunkedContextMap is a ConcurrentHashMap. If this RPC is ever
+    // refactored to process chunks concurrently, switch this to a thread-safe/synchronized set.
     val activeScrapeIds = mutableSetOf<Long>()
     runCatchingCancellable {
       requests.collect { response ->

@@ -28,6 +28,8 @@ import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.grpc.chunkedScrapeResponse
+import io.prometheus.grpc.headerData
 import kotlinx.coroutines.async
 import kotlin.time.Duration.Companion.seconds
 
@@ -212,6 +214,46 @@ class AgentContextManagerTest : StringSpec() {
 
       manager.removeChunkedContext(1L)
       manager.chunkedContextSize shouldBe 1
+    }
+
+    // ==================== Item 6: per-agent chunked-context reclamation ====================
+
+    "removeChunkedContextsForAgent should remove only the given agent's chunked contexts" {
+      val manager = AgentContextManager(isTestMode = true)
+
+      fun chunkedContext(
+        scrapeIdVal: Long,
+        agentIdVal: String,
+      ) = ChunkedContext(
+        chunkedScrapeResponse {
+          header = headerData {
+            headerScrapeId = scrapeIdVal
+            headerAgentId = agentIdVal
+            headerValidResponse = true
+            headerStatusCode = 200
+            headerContentType = "text/plain"
+          }
+        },
+        1_000_000,
+      )
+
+      manager.putChunkedContext(1L, chunkedContext(1L, "agent-A"))
+      manager.putChunkedContext(2L, chunkedContext(2L, "agent-A"))
+      manager.putChunkedContext(3L, chunkedContext(3L, "agent-B"))
+      manager.chunkedContextSize shouldBe 3
+
+      val removed = manager.removeChunkedContextsForAgent("agent-A")
+
+      removed.sorted() shouldBe listOf(1L, 2L)
+      manager.chunkedContextSize shouldBe 1
+      manager.getChunkedContext(3L).shouldNotBeNull()
+      manager.getChunkedContext(1L).shouldBeNull()
+      manager.getChunkedContext(2L).shouldBeNull()
+    }
+
+    "removeChunkedContextsForAgent should return an empty list for an unknown agent" {
+      val manager = AgentContextManager(isTestMode = true)
+      manager.removeChunkedContextsForAgent("nobody") shouldBe emptyList()
     }
 
     // ==================== Non-Zero Backlog Aggregation ====================

@@ -75,6 +75,20 @@ internal class AgentContextManager(
 
   fun removeChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMap.remove(scrapeId)
 
+  /**
+   * Removes every in-flight [ChunkedContext] owned by [agentId] (e.g. when the agent disconnects or is
+   * evicted), reclaiming their buffered output streams immediately instead of waiting for each chunked
+   * stream's own orphan sweep. The corresponding scrape requests are failed separately by
+   * [ScrapeRequestManager.failAllScrapeRequests]; this only frees the chunk buffers.
+   *
+   * @return the scrape IDs that were removed
+   */
+  fun removeChunkedContextsForAgent(agentId: String): List<Long> {
+    val scrapeIds = chunkedContextMap.entries.filter { (_, context) -> context.agentId == agentId }.map { it.key }
+    scrapeIds.forEach { chunkedContextMap.remove(it) }
+    return scrapeIds
+  }
+
   fun findStaleAgents(maxInactivity: Duration): List<Pair<String, AgentContext>> =
     agentContextMap
       .filter { (_, agentContext) -> agentContext.inactivityDuration > maxInactivity }

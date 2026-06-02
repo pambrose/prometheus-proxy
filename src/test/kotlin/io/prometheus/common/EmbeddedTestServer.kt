@@ -32,34 +32,55 @@ import kotlin.time.TimeSource.Monotonic
 // TCP-connect probe isn't enough: CIO's listening socket can accept and immediately close
 // while the routing pipeline is still being installed, surfacing as EOFException or empty
 // bodies on the next real request. Sending a real HTTP/1.0 line and waiting for the "HTTP/"
-// reply means routing is live before we hand back the port.
+// reply means the request pipeline is live before we hand back the port.
 //
-// The deadline is generous because it is only a ceiling, not a wait: the loop returns the
-// instant the server responds, so a healthy server still returns in milliseconds. The extra
-// headroom absorbs CPU contention during a full test-suite run, where many embedded servers
-// and the gRPC harness compete for cores and a fresh CIO server can take several seconds to
-// start answering. A tighter default (5s) caused intermittent "did not start serving HTTP"
-// failures on whichever embedded-server test happened to run during a load spike.
-suspend fun EmbeddedServer<*, *>.startAndAwaitReady(timeout: Duration = 30.seconds): Int {
+// A *single* HTTP reply is still not enough under a full-suite load spike: there is a narrow
+// window where the engine answers one request and then briefly stalls or resets the next while
+// the application module finishes installing, so the first real scrape can land in that gap and
+// see a transient non-200 (e.g. a default 404 before the test's route is matchable). To close
+// that window we require [stableProbes] *consecutive* successful HTTP replies, each on a fresh
+// connection with a short gap; any failure resets the streak. This only ever delays the return
+// (never advances it), so it cannot make a healthy server look unready — it just refuses to hand
+// back the port until the server has answered cleanly several times in a row.
+//
+// The deadline is generous because it is only a ceiling, not a wait: a healthy server satisfies
+// the streak in tens of milliseconds. The extra headroom absorbs CPU contention during a full
+// test-suite run, where many embedded servers and the gRPC harness compete for cores and a fresh
+// CIO server can take several seconds to start answering.
+suspend fun EmbeddedServer<*, *>.startAndAwaitReady(
+  timeout: Duration = 30.seconds,
+  stableProbes: Int = 3,
+): Int {
   start(wait = false)
   val port = engine.resolvedConnectors().first().port
   val deadline = Monotonic.markNow() + timeout
+  var consecutive = 0
   while (Monotonic.markNow() < deadline) {
-    try {
-      Socket().use { sock ->
-        sock.connect(InetSocketAddress("localhost", port), 200)
-        sock.soTimeout = 200
-        sock.getOutputStream().apply {
-          write("GET /__readiness__ HTTP/1.0\r\nHost: localhost\r\n\r\n".toByteArray())
-          flush()
-        }
-        val reply = sock.getInputStream().readNBytes(12).decodeToString()
-        if (reply.startsWith("HTTP/")) return port
-      }
-    } catch (_: IOException) {
-      // not ready yet
+    if (probeServesHttp(port)) {
+      consecutive++
+      if (consecutive >= stableProbes) return port
+    } else {
+      consecutive = 0
     }
     delay(20.milliseconds)
   }
-  error("Embedded server on port $port did not start serving HTTP within $timeout")
+  error("Embedded server on port $port did not stably serve HTTP within $timeout")
 }
+
+// Single readiness probe: open a fresh connection, send a real HTTP/1.0 request line, and report
+// whether the server answers with an HTTP status line. Any connect/read failure (the accept-then-
+// close window, a reset, a read timeout) returns false so the caller's streak resets.
+private fun probeServesHttp(port: Int): Boolean =
+  try {
+    Socket().use { sock ->
+      sock.connect(InetSocketAddress("localhost", port), 200)
+      sock.soTimeout = 200
+      sock.getOutputStream().apply {
+        write("GET /__readiness__ HTTP/1.0\r\nHost: localhost\r\n\r\n".toByteArray())
+        flush()
+      }
+      sock.getInputStream().readNBytes(12).decodeToString().startsWith("HTTP/")
+    }
+  } catch (_: IOException) {
+    false
+  }

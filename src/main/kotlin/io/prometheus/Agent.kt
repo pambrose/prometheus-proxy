@@ -328,7 +328,10 @@ class Agent(
                   try {
                     // The url fetch occurs here during scrapeRequestAction.invoke()
                     val scrapeResponse = scrapeRequestAction.invoke()
-                    connectionContext.sendScrapeResults(scrapeResponse)
+                    // A false return means the result was dropped because the connection closed
+                    // mid-scrape; surface it as a metric so the loss is observable, not silent.
+                    if (!connectionContext.sendScrapeResults(scrapeResponse))
+                      metrics { scrapeResultCount.labels(launchId, "dropped").inc() }
                   } finally {
                     semaphore.release()
                     decrementBacklog(1)

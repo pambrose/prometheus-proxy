@@ -77,7 +77,10 @@ internal object ProxyHttpConfig {
   }
 
   fun CallLoggingConfig.configureCallLogging() {
-    level = Level.INFO
+    // Log per-request call lines at DEBUG, not INFO. A proxy fronting many targets is scraped every
+    // few seconds per path, so INFO here produces a continuous stream that buries real WARN/ERROR
+    // events at the default INFO root level. Operators can opt back in by lowering the root level.
+    level = Level.DEBUG
     filter { call -> call.request.path().startsWith("/") }
     format { call -> getFormattedLog(call) }
   }

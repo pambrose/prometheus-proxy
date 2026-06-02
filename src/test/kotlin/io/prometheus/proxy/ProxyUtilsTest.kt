@@ -19,6 +19,8 @@
 package io.prometheus.proxy
 
 import com.pambrose.common.dsl.KtorDsl.newHttpClient
+import com.pambrose.common.util.zip
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -34,6 +36,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyUtils.respondWith
+import io.prometheus.proxy.ProxyUtils.unzip
 import io.ktor.server.cio.CIO as ServerCIO
 
 class ProxyUtilsTest : StringSpec() {
@@ -242,6 +245,37 @@ class ProxyUtilsTest : StringSpec() {
       } finally {
         server.stop(0, 0)
       }
+    }
+
+    // ==================== Item 11: unzip returns decoded text + byte count ====================
+
+    "unzip should round-trip content and report its UTF-8 byte count" {
+      val original = "metric_value 42\n# EOF"
+      val decoded = original.zip().unzip(1_000_000)
+
+      decoded.text shouldBe original
+      decoded.byteCount shouldBe original.toByteArray().size.toLong()
+    }
+
+    "unzip should report the byte count for multi-byte UTF-8 content" {
+      // "世界" is 2 chars but 6 UTF-8 bytes; byteCount must reflect bytes, not char length.
+      val original = "世界"
+      val decoded = original.zip().unzip(1_000_000)
+
+      decoded.text shouldBe original
+      decoded.byteCount shouldBe 6L
+    }
+
+    "unzip should return empty text and zero byte count for empty input" {
+      val decoded = ByteArray(0).unzip(1_000_000)
+
+      decoded.text shouldBe ""
+      decoded.byteCount shouldBe 0L
+    }
+
+    "unzip should throw ZipBombException when the decoded size exceeds the limit" {
+      val zipped = "a".repeat(1000).zip()
+      shouldThrow<ProxyUtils.ZipBombException> { zipped.unzip(100) }
     }
   }
 }

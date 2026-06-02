@@ -32,6 +32,7 @@ import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.parseHostPort
+import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.setLogLevel
 import io.prometheus.common.Utils.toJsonElement
@@ -456,12 +457,12 @@ class UtilsTest : StringSpec() {
       sanitizeUrl("http://host:8080/metrics") shouldBe "http://host:8080/metrics"
     }
 
-    "sanitizeUrl should handle https URL with credentials" {
-      sanitizeUrl("https://user:pass@example.com/path?q=1") shouldBe "https://***@example.com/path?q=1"
+    "sanitizeUrl should redact both credentials and query values" {
+      sanitizeUrl("https://user:pass@example.com/path?q=1") shouldBe "https://***@example.com/path?q=***"
     }
 
-    "sanitizeUrl should not modify URL with @ in query string" {
-      sanitizeUrl("http://host/path?email=user@example.com") shouldBe "http://host/path?email=user@example.com"
+    "sanitizeUrl should redact query value even when value contains @" {
+      sanitizeUrl("http://host/path?email=user@example.com") shouldBe "http://host/path?email=***"
     }
 
     "sanitizeUrl should handle empty string" {
@@ -470,6 +471,47 @@ class UtilsTest : StringSpec() {
 
     "sanitizeUrl should handle URL without scheme" {
       sanitizeUrl("host:8080/metrics") shouldBe "host:8080/metrics"
+    }
+
+    // Item 1: query-string secrets (?token=…, ?api_key=…) must be redacted before logging/echoing.
+    "sanitizeUrl should redact a single query-parameter value" {
+      sanitizeUrl("http://host:8080/metrics?token=secret123") shouldBe "http://host:8080/metrics?token=***"
+    }
+
+    "sanitizeUrl should redact every query-parameter value while preserving keys" {
+      sanitizeUrl("https://host/m?api_key=abc&job=node&access_token=xyz") shouldBe
+        "https://host/m?api_key=***&job=***&access_token=***"
+    }
+
+    "sanitizeUrl should redact both userinfo and query values together" {
+      sanitizeUrl("http://admin:hunter2@host:8080/m?token=s3cr3t") shouldBe "http://***@host:8080/m?token=***"
+    }
+
+    "sanitizeUrl should preserve the fragment after redacting query values" {
+      sanitizeUrl("http://host/m?token=s#section") shouldBe "http://host/m?token=***#section"
+    }
+
+    "sanitizeUrl should leave a valueless query token untouched" {
+      sanitizeUrl("http://host/m?debug&token=s") shouldBe "http://host/m?debug&token=***"
+    }
+
+    "sanitizeUrl should not modify a URL with no query string" {
+      sanitizeUrl("http://host:8080/metrics") shouldBe "http://host:8080/metrics"
+    }
+
+    // ==================== sanitizeQueryParams Tests ====================
+
+    "sanitizeQueryParams should return blank input unchanged" {
+      sanitizeQueryParams("") shouldBe ""
+      sanitizeQueryParams("   ") shouldBe "   "
+    }
+
+    "sanitizeQueryParams should redact values while preserving keys" {
+      sanitizeQueryParams("token=abc&job=node") shouldBe "token=***&job=***"
+    }
+
+    "sanitizeQueryParams should leave a valueless key untouched" {
+      sanitizeQueryParams("debug&token=abc") shouldBe "debug&token=***"
     }
   }
 }

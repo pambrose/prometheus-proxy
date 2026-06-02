@@ -42,6 +42,9 @@ internal class ChunkedContext(
   private val baos = ByteArrayOutputStream()
   private val header = response.header
 
+  /** The agent that owns this in-flight transfer; used to reclaim contexts when that agent is removed. */
+  val agentId: String get() = header.headerAgentId
+
   var totalChunkCount = 0
     private set
   var totalByteCount = 0L

@@ -332,6 +332,13 @@ class Proxy(
 
     pathManager.removeFromPathManager(agentId, reason)
     scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason")
+    // Proactively reclaim any in-flight chunked-transfer buffers for this agent (the requests
+    // themselves were just failed above) rather than waiting for each stream's orphan sweep.
+    agentContextManager.removeChunkedContextsForAgent(agentId)
+      .also { reclaimed ->
+        if (reclaimed.isNotEmpty())
+          logger.info { "Reclaimed ${reclaimed.size} in-flight chunked context(s) for agentId: $agentId ($reason)" }
+      }
     return agentContextManager.removeFromContextManager(agentId, reason)
   }
 

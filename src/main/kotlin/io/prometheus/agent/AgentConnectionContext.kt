@@ -51,16 +51,24 @@ internal class AgentConnectionContext(
     scrapeRequestActionsChannel.send(scrapeRequestAction)
   }
 
-  fun sendScrapeResults(scrapeResults: ScrapeResults) {
-    // Use trySend() instead of send() to avoid ClosedSendChannelException when the
-    // connection is closed while in-flight scrape coroutines are still completing.
-    // For an UNLIMITED channel, trySend() always succeeds immediately if open.
-    // If the channel is closed (disconnect), we log a warning instead of throwing,
-    // which prevents the exception from cancelling sibling scrape coroutines.
+  /**
+   * Offers a computed [scrapeResults] to the outbound channel.
+   *
+   * Uses `trySend()` instead of `send()` to avoid `ClosedSendChannelException` when the connection
+   * is closed while in-flight scrape coroutines are still completing. For an UNLIMITED channel,
+   * `trySend()` succeeds immediately while the channel is open. If the channel is closed (a
+   * disconnect mid-scrape), the result is dropped with a warning rather than throwing, which would
+   * otherwise cancel sibling scrape coroutines.
+   *
+   * @return `true` if the result was accepted into the channel, `false` if it was dropped because
+   *   the connection had already closed. Callers can use the return value to record a metric.
+   */
+  fun sendScrapeResults(scrapeResults: ScrapeResults): Boolean {
     val result = scrapeResultsChannel.trySend(scrapeResults)
     if (result.isClosed) {
       logger.warn { "Scrape result for scrapeId ${scrapeResults.srScrapeId} dropped: connection closed" }
     }
+    return result.isSuccess
   }
 
   fun close(): Int {

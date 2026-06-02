@@ -19,12 +19,14 @@
 package io.prometheus.agent
 
 import com.pambrose.common.concurrent.await
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.mockk.every
@@ -69,6 +71,25 @@ class HttpClientCacheTest : StringSpec() {
 
     afterEach {
       cache.close()
+    }
+
+    // Item 4: once closed, the cache must reject new requests. Otherwise an in-flight scrape
+    // racing shutdown could create and cache a fresh HttpClient into the dead cache (whose cleanup
+    // coroutine is cancelled), leaking that client until JVM exit. The factory must not be invoked.
+    "getOrCreateClient should throw after close" {
+      cache.close()
+
+      var factoryInvoked = false
+      val exception =
+        shouldThrow<IllegalStateException> {
+          cache.getOrCreateClient(ClientKey(null, null)) {
+            factoryInvoked = true
+            createMockHttpClient()
+          }
+        }
+
+      exception.message shouldContain "closed"
+      factoryInvoked.shouldBeFalse()
     }
 
     "should cache and reuse clients for same key" {

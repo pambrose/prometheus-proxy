@@ -165,6 +165,20 @@ class AgentConnectionContextTest : StringSpec() {
       result.isClosed.shouldBeTrue()
     }
 
+    // Item 8: sendScrapeResults reports delivery (true) vs. drop-on-closed (false) so the caller
+    // can increment a "dropped" metric instead of silently losing a computed result.
+    "sendScrapeResults should return true when open and false after close" {
+      val context = AgentConnectionContext()
+      val result = ScrapeResults(srAgentId = "agent-1", srScrapeId = 1L, srValidResponse = true)
+
+      // While the connection is open, the result is accepted into the unbounded channel.
+      context.sendScrapeResults(result).shouldBeTrue()
+
+      // After close(), the channel is closed and a late result is dropped (reported as false).
+      context.close()
+      context.sendScrapeResults(result).shouldBeFalse()
+    }
+
     "backlogCapacity should be respected" {
       val capacity = 50
       val context = AgentConnectionContext(capacity)
