@@ -51,7 +51,9 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.getVersionDesc
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -263,90 +265,44 @@ class Agent(
         val connectionContext = AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * 2)
 
         coroutineScope {
-          // Ends on disconnect from server
-          launch(Dispatchers.IO) {
-            runCatchingCancellable {
-              grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
-            }.onFailure { e ->
-              if (grpcService.agent.isRunning)
-                Status.fromThrowable(e)
-                  .apply { logger.error(e) { "readRequestsFromProxy(): ${exceptionDetails(e)}" } }
-            }
-          }.apply {
-            invokeOnCompletion {
-              val drained = connectionContext.close()
-              if (drained > 0) decrementBacklog(drained)
-            }
+          // Each task runs for the connection's lifetime; on completion launchConnectionTask closes
+          // the shared connectionContext and adjusts the backlog. Ends on disconnect/shutdown.
+          launchConnectionTask(connectionContext, "readRequestsFromProxy") {
+            grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
           }
 
-          // Ends on !isRunning || !connectionContext.connected (which is connectionContext.closed())
-          launch(Dispatchers.IO) {
-            runCatchingCancellable {
-              startHeartBeat(connectionContext)
-            }.onFailure { e ->
-              if (grpcService.agent.isRunning)
-                Status.fromThrowable(e)
-                  .apply { logger.error(e) { "startHeartBeat(): ${exceptionDetails(e)}" } }
-            }
-          }.apply {
-            invokeOnCompletion {
-              val drained = connectionContext.close()
-              if (drained > 0) decrementBacklog(drained)
-            }
+          launchConnectionTask(connectionContext, "startHeartBeat") {
+            startHeartBeat(connectionContext)
           }
 
-          // Ends on disconnect from server
-          launch(Dispatchers.IO) {
-            runCatchingCancellable {
-              grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
-              logger.info { "writeResponsesToProxyUntilDisconnected() completed" }
-            }.onFailure { e ->
-              if (grpcService.agent.isRunning)
-                Status.fromThrowable(e)
-                  .apply { logger.error(e) { "writeResponsesToProxyUntilDisconnected(): ${exceptionDetails(e)}" } }
-            }
-          }.apply {
-            invokeOnCompletion {
-              val drained = connectionContext.close()
-              if (drained > 0) decrementBacklog(drained)
-            }
+          launchConnectionTask(connectionContext, "writeResponsesToProxyUntilDisconnected") {
+            grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
+            logger.info { "writeResponsesToProxyUntilDisconnected() completed" }
           }
 
-          // Ends on disconnect from server
-          launch(Dispatchers.IO) {
-            runCatchingCancellable {
-              val max = options.maxConcurrentHttpClients
-              logger.info { "Starting scrape request processing with maxConcurrentClients: $max" }
-              // Limits the number of concurrent scrapes below
-              val semaphore = Semaphore(max)
+          launchConnectionTask(connectionContext, "scrapeResultsChannel.send") {
+            val max = options.maxConcurrentHttpClients
+            logger.info { "Starting scrape request processing with maxConcurrentClients: $max" }
+            // Limits the number of concurrent scrapes below
+            val semaphore = Semaphore(max)
 
-              for (scrapeRequestAction in connectionContext.scrapeRequestActions()) {
-                // Acquisition must happen before launch to provide backpressure to the channel
-                // and avoid creating unbounded waiting coroutines (Bug #1).
-                semaphore.acquire()
-                launch {
-                  try {
-                    // The url fetch occurs here during scrapeRequestAction.invoke()
-                    val scrapeResponse = scrapeRequestAction.invoke()
-                    // A false return means the result was dropped because the connection closed
-                    // mid-scrape; surface it as a metric so the loss is observable, not silent.
-                    if (!connectionContext.sendScrapeResults(scrapeResponse))
-                      metrics { scrapeResultCount.labels(launchId, "dropped").inc() }
-                  } finally {
-                    semaphore.release()
-                    decrementBacklog(1)
-                  }
+            for (scrapeRequestAction in connectionContext.scrapeRequestActions()) {
+              // Acquisition must happen before launch to provide backpressure to the channel
+              // and avoid creating unbounded waiting coroutines (Bug #1).
+              semaphore.acquire()
+              launch {
+                try {
+                  // The url fetch occurs here during scrapeRequestAction.invoke()
+                  val scrapeResponse = scrapeRequestAction.invoke()
+                  // A false return means the result was dropped because the connection closed
+                  // mid-scrape; surface it as a metric so the loss is observable, not silent.
+                  if (!connectionContext.sendScrapeResults(scrapeResponse))
+                    metrics { scrapeResultCount.labels(launchId, "dropped").inc() }
+                } finally {
+                  semaphore.release()
+                  decrementBacklog(1)
                 }
               }
-            }.onFailure { e ->
-              if (grpcService.agent.isRunning)
-                Status.fromThrowable(e)
-                  .apply { logger.error(e) { "scrapeResultsChannel.send(): ${exceptionDetails(e)}" } }
-            }
-          }.apply {
-            invokeOnCompletion {
-              val drained = connectionContext.close()
-              if (drained > 0) decrementBacklog(drained)
             }
           }
         }
@@ -367,6 +323,31 @@ class Agent(
       }
     }
   }
+
+  /**
+   * Launches one connection-lifetime task on [Dispatchers.IO]: runs [block], logs any
+   * non-cancellation failure (only while the agent is still running) tagged with [name], and on
+   * completion closes the shared [connectionContext], decrementing the backlog by whatever it
+   * drained. [block] is a [CoroutineScope] extension so a task (e.g. scrape processing) can launch
+   * its own child coroutines against the task's scope.
+   */
+  private fun CoroutineScope.launchConnectionTask(
+    connectionContext: AgentConnectionContext,
+    name: String,
+    block: suspend CoroutineScope.() -> Unit,
+  ): Job =
+    launch(Dispatchers.IO) {
+      runCatchingCancellable { block() }
+        .onFailure { e ->
+          if (isRunning)
+            Status.fromThrowable(e).apply { logger.error(e) { "$name(): ${exceptionDetails(e)}" } }
+        }
+    }.apply {
+      invokeOnCompletion {
+        val drained = connectionContext.close()
+        if (drained > 0) decrementBacklog(drained)
+      }
+    }
 
   internal fun handleConnectionFailure(e: Throwable) {
     when (e) {
