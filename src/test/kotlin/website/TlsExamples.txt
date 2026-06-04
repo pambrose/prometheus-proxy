@@ -76,6 +76,24 @@ agent {
 }
 ; --8<-- [end:tls-mutual-conf]
 
+; --8<-- [start:https-truststore]
+Trust a custom or private CA for HTTPS scrape targets (validation stays enabled):
+
+Via CLI:
+java -jar prometheus-agent.jar \
+  --https_truststore /etc/agent/truststore.jks \
+  --https_truststore_password changeit \
+  --config myconfig.conf
+
+Via environment variables:
+HTTPS_TRUST_STORE_PATH=/etc/agent/truststore.jks
+HTTPS_TRUST_STORE_PASSWORD=changeit
+
+Via config file:
+agent.http.trustStorePath = "/etc/agent/truststore.jks"
+agent.http.trustStorePassword = "changeit"
+; --8<-- [end:https-truststore]
+
 ; --8<-- [start:trust-all-x509]
 Disable SSL verification for HTTPS endpoints (development only!):
 
