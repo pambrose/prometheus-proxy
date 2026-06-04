@@ -188,8 +188,8 @@ class EnvVarsTest : StringSpec() {
       }
     }
 
-    "EnvVars enum should have exactly 44 entries" {
-      EnvVars.entries.size shouldBe 44
+    "EnvVars enum should have exactly 46 entries" {
+      EnvVars.entries.size shouldBe 46
     }
 
     "EnvVars entries should contain all defined constants" {
@@ -219,6 +219,8 @@ class EnvVarsTest : StringSpec() {
         "CHUNK_CONTENT_SIZE_KBS",
         "MIN_GZIP_SIZE_BYTES",
         "TRUST_ALL_X509_CERTIFICATES",
+        "HTTPS_TRUST_STORE_PATH",
+        "HTTPS_TRUST_STORE_PASSWORD",
         "MAX_CONCURRENT_CLIENTS",
         "CLIENT_TIMEOUT_SECS",
         "MAX_CLIENT_CACHE_SIZE",
@@ -270,6 +272,8 @@ class EnvVarsTest : StringSpec() {
         "CHUNK_CONTENT_SIZE_KBS",
         "MIN_GZIP_SIZE_BYTES",
         "TRUST_ALL_X509_CERTIFICATES",
+        "HTTPS_TRUST_STORE_PATH",
+        "HTTPS_TRUST_STORE_PASSWORD",
         "MAX_CONCURRENT_CLIENTS",
         "CLIENT_TIMEOUT_SECS",
         "MAX_CLIENT_CACHE_SIZE",
@@ -376,6 +380,8 @@ class EnvVarsTest : StringSpec() {
         EnvVars.CHUNK_CONTENT_SIZE_KBS,
         EnvVars.MIN_GZIP_SIZE_BYTES,
         EnvVars.TRUST_ALL_X509_CERTIFICATES,
+        EnvVars.HTTPS_TRUST_STORE_PATH,
+        EnvVars.HTTPS_TRUST_STORE_PASSWORD,
         EnvVars.MAX_CONCURRENT_CLIENTS,
         EnvVars.CLIENT_TIMEOUT_SECS,
         EnvVars.UNARY_DEADLINE_SECS,

@@ -61,6 +61,8 @@ icon: lucide/terminal
 | `--gzip`                      | `MIN_GZIP_SIZE_BYTES`             | `agent.minGzipSizeBytes`                    | 1024    | Min size for gzip (bytes)          |
 | `--tf_disabled`               | `TRANSPORT_FILTER_DISABLED`       | `agent.transportFilterDisabled`             | false   | Disable transport filter           |
 | `--trust_all_x509`            | `TRUST_ALL_X509_CERTIFICATES`     | `agent.http.enableTrustAllX509Certificates` | false   | Disable SSL verification           |
+| `--https_truststore`          | `HTTPS_TRUST_STORE_PATH`          | `agent.http.trustStorePath`                 | ""      | Trust store for HTTPS targets      |
+| `--https_truststore_password` | `HTTPS_TRUST_STORE_PASSWORD`      | `agent.http.trustStorePassword`             | ""      | Password for the trust store       |
 | `--max_concurrent_clients`    | `MAX_CONCURRENT_CLIENTS`          | `agent.http.maxConcurrentClients`           | 1       | Max parallel scrapes               |
 | `--client_timeout_secs`       | `CLIENT_TIMEOUT_SECS`             | `agent.http.clientTimeoutSecs`              | 90      | HTTP client timeout (seconds)      |
 | `--max_content_length_mbytes` | `AGENT_MAX_CONTENT_LENGTH_MBYTES` | `agent.http.maxContentLengthMBytes`         | 10      | Max response size (MB)             |

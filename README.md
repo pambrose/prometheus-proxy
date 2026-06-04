@@ -524,18 +524,31 @@ The proxy logs a warning on the first request that includes an `Authorization` h
 
 ### Scraping HTTPS Endpoints
 
-Disable SSL verification for agent https endpoints with the `TRUST_ALL_X509_CERTIFICATES` environment var,
-the `--trust_all_x509` CLI option, or the `agent.http.enableTrustAllX509Certificates` property.
+For HTTPS scrape targets signed by a custom or private CA (e.g. an internal corporate CA), point the agent at
+a trust store that contains that CA so certificates are **still validated**:
 
-To scrape HTTPS endpoints with a self-signed certificate:
+```bash
+java -jar prometheus-agent.jar \
+  --https_truststore /etc/agent/truststore.jks \
+  --https_truststore_password changeit \
+  --config myconfig.conf
+```
+
+This is also configurable via the `HTTPS_TRUST_STORE_PATH` / `HTTPS_TRUST_STORE_PASSWORD` environment vars or
+the `agent.http.trustStorePath` / `agent.http.trustStorePassword` properties. An empty path uses the JDK
+default trust store. The trust store is process-wide — it applies to every HTTPS target the agent scrapes.
+
+As a last resort you can disable certificate verification entirely with the `TRUST_ALL_X509_CERTIFICATES`
+environment var, the `--trust_all_x509` CLI option, or the `agent.http.enableTrustAllX509Certificates`
+property:
 
 ```bash
 java -jar prometheus-agent.jar --trust_all_x509 --config myconfig.conf
 ```
 
 **⚠️ Security Note:** Only use `--trust_all_x509` in development/testing environments. Its scope is
-process-global and all-or-nothing: enabling it to reach a single self-signed endpoint disables certificate
-validation for **every** HTTPS target the agent scrapes. There is no per-target trust override.
+process-global and all-or-nothing: it disables certificate validation for **every** HTTPS target the agent
+scrapes, and it takes precedence over `--https_truststore`. Prefer a custom trust store whenever possible.
 
 ## 🔧 Troubleshooting
 

@@ -30,6 +30,8 @@ import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
 import io.prometheus.common.EnvVars.CLIENT_CACHE_CLEANUP_INTERVAL_MINS
 import io.prometheus.common.EnvVars.CLIENT_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.CONSOLIDATED
+import io.prometheus.common.EnvVars.HTTPS_TRUST_STORE_PASSWORD
+import io.prometheus.common.EnvVars.HTTPS_TRUST_STORE_PATH
 import io.prometheus.common.EnvVars.KEEPALIVE_WITHOUT_CALLS
 import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_AGE_MINS
 import io.prometheus.common.EnvVars.MAX_CLIENT_CACHE_IDLE_MINS
@@ -143,6 +145,24 @@ class AgentOptions(
    */
   @Parameter(names = ["--trust_all_x509"], description = "Disable SSL verification for https agent endpoints")
   var trustAllX509Certificates = false
+    private set
+
+  /**
+   * Path to a JKS/PKCS12 trust store used to verify HTTPS scrape targets signed by a custom or private CA
+   * (e.g. an internal corporate CA), without disabling validation entirely. Empty (default) uses the JDK
+   * default trust store. Ignored when [trustAllX509Certificates] is enabled. Resolved from CLI →
+   * [HTTPS_TRUST_STORE_PATH] env var → `agent.http.trustStorePath` config.
+   */
+  @Parameter(names = ["--https_truststore"], description = "Trust store (JKS/PKCS12) for HTTPS scrape targets")
+  var httpsTrustStorePath = ""
+    private set
+
+  /**
+   * Password for the trust store at [httpsTrustStorePath]. Empty if the store has no password. Resolved from
+   * CLI → [HTTPS_TRUST_STORE_PASSWORD] env var → `agent.http.trustStorePassword` config. Never logged.
+   */
+  @Parameter(names = ["--https_truststore_password"], description = "Password for --https_truststore")
+  var httpsTrustStorePassword = ""
     private set
 
   /**
@@ -345,6 +365,15 @@ class AgentOptions(
             "Do not use this in production."
         }
       }
+
+      if (httpsTrustStorePath.isEmpty())
+        httpsTrustStorePath = HTTPS_TRUST_STORE_PATH.getEnv(trustStorePath)
+      if (httpsTrustStorePassword.isEmpty())
+        httpsTrustStorePassword = HTTPS_TRUST_STORE_PASSWORD.getEnv(trustStorePassword)
+      // The path is safe to log; the password must never be logged.
+      logger.info { "http.trustStorePath: ${httpsTrustStorePath.ifEmpty { "(JDK default)" }}" }
+      if (trustAllX509Certificates && httpsTrustStorePath.isNotEmpty())
+        logger.warn { "http.trustStorePath is ignored because trustAllX509Certificates is enabled" }
 
       if (maxConcurrentHttpClients == -1)
         maxConcurrentHttpClients = MAX_CONCURRENT_CLIENTS.getEnv(maxConcurrentClients)
