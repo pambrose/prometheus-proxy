@@ -21,12 +21,12 @@
 
 package io.prometheus.agent
 
+import com.google.common.net.HttpHeaders.ACCEPT
+import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.pambrose.common.dsl.KtorDsl.get
 import com.pambrose.common.util.EMPTY_BYTE_ARRAY
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.util.zip
-import com.google.common.net.HttpHeaders.ACCEPT
-import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -197,7 +197,10 @@ internal class AgentHttpService(
       val contentType = response.headers[CONTENT_TYPE].orEmpty()
       val content = response.bodyAsText()
 
-      val contentByteSize = content.encodeToByteArray().size.toLong()
+      // Encode the body to UTF-8 bytes once and reuse it for both the size check and gzip
+      // compression. ByteArray.zip() avoids the second UTF-8 encode that String.zip() would do.
+      val contentBytes = content.encodeToByteArray()
+      val contentByteSize = contentBytes.size.toLong()
       if (contentByteSize > maxContentLength) {
         val msg = "Content size $contentByteSize bytes exceeds maximum allowed size $maxContentLength"
         logger.warn { msg }
@@ -219,7 +222,7 @@ internal class AgentHttpService(
         srContentType = contentType,
         srZipped = zipped,
         srContentAsText = if (!zipped) content else "",
-        srContentAsZipped = if (zipped) content.zip() else EMPTY_BYTE_ARRAY,
+        srContentAsZipped = if (zipped) contentBytes.zip() else EMPTY_BYTE_ARRAY,
         srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
         scrapeCounterMsg = SUCCESS_MSG,
       )
