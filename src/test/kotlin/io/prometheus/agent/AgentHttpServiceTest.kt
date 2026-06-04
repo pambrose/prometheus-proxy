@@ -435,7 +435,7 @@ class AgentHttpServiceTest : StringSpec() {
           path = "metrics"
           accept = ""
           debugEnabled = false
-          encodedQueryParams = "foo%3Dbar"
+          encodedQueryParams = "foo=bar"
           authHeader = ""
         }
 
@@ -477,7 +477,7 @@ class AgentHttpServiceTest : StringSpec() {
           path = "metrics"
           accept = ""
           debugEnabled = false
-          encodedQueryParams = "foo%3Dbar"
+          encodedQueryParams = "foo=bar"
           authHeader = ""
         }
 
