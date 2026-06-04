@@ -51,11 +51,6 @@ class ProxyDynamicConfigTest : StringSpec() {
       options.configVals.proxy.internal.scrapeRequestTimeoutSecs shouldBe 45
     }
 
-    "proxy.internal.scrapeRequestCheckMillis should be settable via -D" {
-      val options = ProxyOptions(listOf("-Dproxy.internal.scrapeRequestCheckMillis=250"))
-      options.configVals.proxy.internal.scrapeRequestCheckMillis shouldBe 250
-    }
-
     "proxy.internal.scrapeRequestBacklogUnhealthySize should be settable via -D" {
       val options = ProxyOptions(listOf("-Dproxy.internal.scrapeRequestBacklogUnhealthySize=50"))
       options.configVals.proxy.internal.scrapeRequestBacklogUnhealthySize shouldBe 50

@@ -90,8 +90,6 @@ class ConfigValsTest : StringSpec() {
       configVals.proxy.http.apply {
         port shouldBe 8080
         idleTimeoutSecs shouldBe 45
-        maxThreads shouldBe -1
-        minThreads shouldBe -1
         requestLoggingEnabled.shouldBeTrue()
       }
     }
@@ -105,7 +103,6 @@ class ConfigValsTest : StringSpec() {
         staleAgentCheckEnabled.shouldBeTrue()
         staleAgentCheckPauseSecs shouldBe 10
         maxAgentInactivitySecs shouldBe 60
-        scrapeRequestCheckMillis shouldBe 500
         scrapeRequestBacklogUnhealthySize shouldBe 25
         scrapeRequestMapUnhealthySize shouldBe 25
         chunkContextMapUnhealthySize shouldBe 25
