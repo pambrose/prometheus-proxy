@@ -85,6 +85,16 @@ internal class AgentHttpService(
       )
     }
 
+  // Resolved once on first use: the HTTPS-scrape trust manager is fixed for the agent's lifetime, so
+  // it must not be rebuilt (re-reading the trust store from disk) on every cached-client recreation.
+  private val httpsTrustManager: X509TrustManager? by lazy {
+    resolveHttpsTrustManager(
+      trustAllX509Certificates = agent.options.trustAllX509Certificates,
+      trustStorePath = agent.options.httpsTrustStorePath,
+      trustStorePassword = agent.options.httpsTrustStorePassword,
+    )
+  }
+
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
     return if (pathContext != null)
@@ -251,18 +261,10 @@ internal class AgentHttpService(
 
         requestTimeout = timeoutSecs.seconds.inWholeMilliseconds
 
-        // Select the trust manager for HTTPS scrape targets: trust-all (insecure, process-global,
-        // all-or-nothing) takes precedence; otherwise a configured custom JKS/PKCS12 trust store
-        // (e.g. a private CA); otherwise null -> the JDK default trust store.
-        resolveHttpsTrustManager(
-          trustAllX509Certificates = agent.options.trustAllX509Certificates,
-          trustStorePath = agent.options.httpsTrustStorePath,
-          trustStorePassword = agent.options.httpsTrustStorePassword,
-        )?.also { selectedTrustManager ->
-          https {
-            trustManager = selectedTrustManager
-          }
-        }
+        // Trust-all (insecure, all-or-nothing) takes precedence; otherwise a custom JKS/PKCS12 trust
+        // store (e.g. a private CA); otherwise the JDK default trust store. Resolved once — see the
+        // httpsTrustManager field — rather than re-read from disk on every client (re)creation.
+        httpsTrustManager?.also { https { trustManager = it } }
       }
 
       install(HttpTimeout)

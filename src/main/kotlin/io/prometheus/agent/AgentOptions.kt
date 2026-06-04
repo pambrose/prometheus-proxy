@@ -372,6 +372,8 @@ class AgentOptions(
         httpsTrustStorePassword = HTTPS_TRUST_STORE_PASSWORD.getEnv(trustStorePassword)
       // The path is safe to log; the password must never be logged.
       logger.info { "http.trustStorePath: ${httpsTrustStorePath.ifEmpty { "(JDK default)" }}" }
+      // The trust-all-shadows-trust-store precedence is enforced in
+      // AgentHttpService.resolveHttpsTrustManager; this only warns that the store won't take effect.
       if (trustAllX509Certificates && httpsTrustStorePath.isNotEmpty())
         logger.warn { "http.trustStorePath is ignored because trustAllX509Certificates is enabled" }
 
