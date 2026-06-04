@@ -69,10 +69,6 @@ internal object ProxyHttpRoutes {
   private val authHeaderWithoutTlsWarned = AtomicBoolean(false)
 
   fun Routing.handleRequests(proxy: Proxy) {
-    //      get("/__test__") {
-    //        delay(30.seconds)
-    //        call.respondWith("Test value", Plain, OK)
-    //      }
     handleServiceDiscoveryEndpoint(proxy)
     handleClientRequests(proxy)
   }
@@ -113,8 +109,6 @@ internal object ProxyHttpRoutes {
         }
 
       responseResults.updateMsgs.forEach { incrementScrapeRequestCount(proxy, it) }
-//      if (proxy.options.debugEnabled)
-//        logger.info { "CT check - handleClientRequests() contentType: ${responseResults.contentType}" }
       call.respondWith(responseResults.contentText, responseResults.contentType, responseResults.statusCode)
     }
   }
@@ -156,10 +150,6 @@ internal object ProxyHttpRoutes {
     val updateMsgs: List<String> = results.map { it.updateMsg }
     // Grab the contentType of the first OK in the list
     val okContentType: ContentType? = results.firstOrNull { it.statusCode == HttpStatusCode.OK }?.contentType
-//    if (proxy.options.debugEnabled) {
-//      logger.info { "CT check - processRequests() contentTypes: ${contentTypes.joinToString(", ")}" }
-//      logger.info { "CT check - processRequests() okContentType: $okContentType" }
-//    }
 
     return ResponseResults(
       statusCode = if (statusCodes.contains(HttpStatusCode.OK)) HttpStatusCode.OK else statusCodes[0],
@@ -281,11 +271,14 @@ internal object ProxyHttpRoutes {
 
       val contentType =
         runCatching {
-//          if (proxy.options.debugEnabled)
-//            logger.info { "CT check - submitScrapeRequest() contentType: ${scrapeResults.srContentType}" }
           ContentType.parse(scrapeResults.srContentType)
         }.getOrElse {
-          logger.debug { "Error parsing content type: ${scrapeResults.srContentType} -- ${it.simpleClassName}" }
+          // A malformed Content-Type from the target endpoint is a (minor) misconfiguration worth
+          // surfacing at warn; text/plain is the correct fallback for Prometheus exposition format.
+          logger.warn {
+            "Error parsing content type for /$path: '${scrapeResults.srContentType}' " +
+              "(${it.simpleClassName}); falling back to text/plain"
+          }
           Text.Plain.withCharset(Charsets.UTF_8)
         }
       logger.debug { "Content type: $contentType" }
