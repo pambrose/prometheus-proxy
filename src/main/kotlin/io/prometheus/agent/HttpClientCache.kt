@@ -28,7 +28,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.decrementAndFetch
@@ -135,11 +138,29 @@ internal class HttpClientCache(
     // Mask credentials to avoid logging sensitive data
     internal fun maskedKey() = if (hasAuth()) "***:***" else NO_AUTH
 
-    // Internal key for cache lookup (not logged)
-    internal fun cacheKey() = if (hasAuth()) "$username:$password" else NO_AUTH
+    // Cache-map key derived from a salted HMAC of the credentials rather than the raw
+    // "username:password". This keeps the plaintext password out of the long-lived map key (which
+    // would otherwise sit on the heap for the cache lifetime, up to maxAge). Residual exposure
+    // remains and is by design: this ClientKey instance and the built HttpClient still hold the raw
+    // credentials in memory — basic-auth requires them to issue requests — so this only removes the
+    // extra long-lived plaintext copy, not all of them.
+    internal fun cacheKey() = if (hasAuth()) credentialDigest("$username:$password") else NO_AUTH
 
     companion object {
       internal const val NO_AUTH = "__no_auth__"
+
+      private const val SALT_BYTES = 16
+      private const val HMAC_ALGORITHM = "HmacSHA256"
+
+      // Per-process random salt: the digest is stable within a run (so equal credentials map to the
+      // same cache entry) but is not a plain, precomputable hash of the credentials.
+      private val SALT: ByteArray = ByteArray(SALT_BYTES).also { SecureRandom().nextBytes(it) }
+
+      private fun credentialDigest(credentials: String): String =
+        Mac.getInstance(HMAC_ALGORITHM)
+          .apply { init(SecretKeySpec(SALT, HMAC_ALGORITHM)) }
+          .doFinal(credentials.toByteArray(Charsets.UTF_8))
+          .joinToString("") { "%02x".format(it.toInt() and 0xFF) }
     }
   }
 
@@ -234,8 +255,9 @@ internal class HttpClientCache(
   private fun evictLeastRecentlyUsed() {
     val lruKey = accessOrder.entries.minByOrNull { it.value }?.key
     if (lruKey != null) {
-      // Mask the key if it contains credentials (not NO_AUTH)
-      val logKey = if (lruKey != ClientKey.NO_AUTH && ":" in lruKey) "***:***" else lruKey
+      // The cache key for authenticated clients is a salted digest (non-sensitive), but mask it
+      // anyway so eviction logs never expose a per-credential identifier; NO_AUTH is left as-is.
+      val logKey = if (lruKey == ClientKey.NO_AUTH) lruKey else "***:***"
       logger.info { "Evicting LRU HTTP client for key: $logKey" }
       removeEntry(lruKey)
     }
