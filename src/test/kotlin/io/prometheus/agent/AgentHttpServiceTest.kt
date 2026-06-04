@@ -29,6 +29,7 @@ import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.http.HttpStatusCode
@@ -49,9 +50,6 @@ import io.prometheus.grpc.scrapeRequest
 import io.prometheus.common.startAndAwaitReady
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import java.io.File
-import java.io.FileOutputStream
-import java.security.KeyStore
 import javax.net.ssl.X509TrustManager
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.measureTime
@@ -1361,7 +1359,7 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "resolveHttpsTrustManager prefers trust-all over a configured trust store" {
-      val (path, password) = createTempTrustStore()
+      val (path, password) = createTempKeyStore("agent-https-truststore-test")
       AgentHttpService.resolveHttpsTrustManager(
         trustAllX509Certificates = true,
         trustStorePath = path,
@@ -1370,7 +1368,7 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "resolveHttpsTrustManager loads an X509TrustManager from a configured trust store" {
-      val (path, password) = createTempTrustStore()
+      val (path, password) = createTempKeyStore("agent-https-truststore-test")
       val tm =
         AgentHttpService.resolveHttpsTrustManager(
           trustAllX509Certificates = false,
@@ -1378,7 +1376,7 @@ class AgentHttpServiceTest : StringSpec() {
           trustStorePassword = password,
         )
       tm.shouldBeInstanceOf<X509TrustManager>()
-      (tm === TrustAllX509TrustManager) shouldBe false
+      tm shouldNotBe TrustAllX509TrustManager
     }
 
     "resolveHttpsTrustManager returns null for the JDK default (no trust-all, empty path)" {
@@ -1388,17 +1386,5 @@ class AgentHttpServiceTest : StringSpec() {
         trustStorePassword = "",
       ).shouldBeNull()
     }
-  }
-
-  // Creates an empty keystore in a temp file and returns its path and password.
-  private fun createTempTrustStore(): Pair<String, String> {
-    val password = "test-password"
-    val tmpFile = File.createTempFile("agent-https-truststore-test", ".jks")
-    tmpFile.deleteOnExit()
-    KeyStore.getInstance(KeyStore.getDefaultType()).apply {
-      load(null, null)
-      FileOutputStream(tmpFile).use { store(it, password.toCharArray()) }
-    }
-    return tmpFile.absolutePath to password
   }
 }
