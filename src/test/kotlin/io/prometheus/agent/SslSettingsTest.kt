@@ -24,9 +24,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
-import java.io.File
 import java.io.FileNotFoundException
-import java.io.FileOutputStream
 import java.security.KeyStore
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
@@ -152,17 +150,5 @@ class SslSettingsTest : StringSpec() {
       trustManagers.isNotEmpty() shouldBe true
       trustManagers[0].shouldBeInstanceOf<X509TrustManager>()
     }
-  }
-
-  // Creates an empty keystore in a temp file and returns its path and password.
-  private fun createTempKeyStore(): Pair<String, String> {
-    val password = "test-password"
-    val tmpFile = File.createTempFile("ssl-settings-test", ".jks")
-    tmpFile.deleteOnExit()
-    KeyStore.getInstance(KeyStore.getDefaultType()).apply {
-      load(null, null)
-      FileOutputStream(tmpFile).use { store(it, password.toCharArray()) }
-    }
-    return tmpFile.absolutePath to password
   }
 }
