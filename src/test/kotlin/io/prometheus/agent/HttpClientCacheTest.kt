@@ -27,6 +27,8 @@ import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldMatch
+import io.kotest.matchers.string.shouldNotContain
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.mockk.every
@@ -361,22 +363,35 @@ class HttpClientCacheTest : StringSpec() {
 
     "should handle client key toString correctly" {
       // toString() should mask credentials for security
-      val key1 = ClientKey("user", "pass")
-      key1.toString() shouldBe "***:***"
-      // cacheKey() returns actual value for internal use
-      key1.cacheKey() shouldBe "user:pass"
+      ClientKey("user", "pass").toString() shouldBe "***:***"
+      ClientKey(null, "pass").toString() shouldBe NO_AUTH
+      ClientKey("user", null).toString() shouldBe NO_AUTH
+      ClientKey(null, null).toString() shouldBe NO_AUTH
+    }
 
-      val key2 = ClientKey(null, "pass")
-      key2.toString() shouldBe NO_AUTH
-      key2.cacheKey() shouldBe NO_AUTH
+    // Item 25: the cache key must not embed the plaintext password. The raw "user:pass" string was
+    // previously used as the live ConcurrentHashMap key, leaving the password resident on the heap
+    // for the cache lifetime. cacheKey() now returns a salted HMAC digest of the credentials.
+    "cacheKey should be a salted digest that never exposes the plaintext credentials" {
+      val digest = ClientKey("user", "s3cr3t").cacheKey()
 
-      val key3 = ClientKey("user", null)
-      key3.toString() shouldBe NO_AUTH
-      key3.cacheKey() shouldBe NO_AUTH
+      // Never the raw credentials; neither component appears in the key
+      digest shouldNotBe "user:s3cr3t"
+      digest shouldNotContain "s3cr3t"
+      digest shouldNotContain "user"
+      // HMAC-SHA256 hex encoding: 64 lowercase hex characters
+      digest shouldMatch "[0-9a-f]{64}"
 
-      val key4 = ClientKey(null, null)
-      key4.toString() shouldBe NO_AUTH
-      key4.cacheKey() shouldBe NO_AUTH
+      // Stable within the process so equal credentials reuse the same cache entry, while distinct
+      // credentials (differing in either component) map to distinct entries.
+      ClientKey("user", "s3cr3t").cacheKey() shouldBe digest
+      ClientKey("user", "other").cacheKey() shouldNotBe digest
+      ClientKey("other", "s3cr3t").cacheKey() shouldNotBe digest
+
+      // No-auth keys are left as the sentinel
+      ClientKey(null, "pass").cacheKey() shouldBe NO_AUTH
+      ClientKey("user", null).cacheKey() shouldBe NO_AUTH
+      ClientKey(null, null).cacheKey() shouldBe NO_AUTH
     }
 
     "should handle cache entry lifecycle properly" {
