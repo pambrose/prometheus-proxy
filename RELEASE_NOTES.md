@@ -11,6 +11,7 @@ _Unreleased_
 - **Testcontainers smoke test** — A new `ContainersSmokeTest` builds the proxy and agent Docker images from `etc/docker/*.df`, runs them alongside an nginx metrics stub and a real Prometheus container, and verifies the full `Prometheus → proxy → agent → endpoint` scrape path end-to-end. Surfaces packaging/image regressions that the in-JVM harness can't catch.
 - **Shadow JAR fix** — Re-register grpc-core's `DnsNameResolverProvider` and `PickFirstLoadBalancerProvider` in the agent and proxy fat JARs. Shadow 9.4.1's `mergeServiceFiles()` was silently dropping them when grpc-netty-shaded provided same-named service files, which made the gRPC client default to the `unix` scheme on any non-IP hostname (`Address types of NameResolver 'unix' for 'unix:///host:port' not supported by transport`). Anyone running the published agent/proxy JAR against a hostname-addressed proxy could have hit this.
 - **Live `BUILD_TIME` / `APP_RELEASE_DATE`** — Switched these `BuildConfig` fields to `ValueSource`-backed providers so they refresh each build instead of being frozen by Gradle's configuration cache. The 3.1.1 `-PreleaseDate` / `-PbuildTime` overrides have been removed; release artifacts are no longer byte-for-byte reproducible.
+- **Per-CA HTTPS trust store for the agent** — The agent can now verify HTTPS scrape targets signed by a custom or private CA (e.g. an internal corporate CA) via `--https_truststore` / `--https_truststore_password`, without resorting to the all-or-nothing `--trust_all_x509`. This wires the previously-unused `SslSettings` into the scrape client. `--trust_all_x509` still takes precedence, and an empty path uses the JDK default trust store.
 
 ### Bug Fixes
 
@@ -19,6 +20,7 @@ _Unreleased_
 
 ### New Features
 
+- New `--https_truststore` / `--https_truststore_password` agent options (env `HTTPS_TRUST_STORE_PATH` / `HTTPS_TRUST_STORE_PASSWORD`; config `agent.http.trustStorePath` / `agent.http.trustStorePassword`) — verify HTTPS scrape targets against a custom/private CA without disabling validation. Resolved CLI > env > config; the password is never logged. `--trust_all_x509` takes precedence, and an empty path uses the JDK default trust store
 - New `ContainersSmokeTest` (`io.prometheus.containers`) — Testcontainers-based end-to-end test, gated on `RUN_CONTAINER_TESTS=true`. Default `./gradlew test` runs see a single SKIPPED placeholder
 - New `make container-tests` target — auto-detects Docker Desktop's active context (`docker context inspect`) and exports `DOCKER_HOST` so Testcontainers finds non-default sockets on macOS
 - New `.github/workflows/container-tests.yml` — runs the smoke test on push to master, on `workflow_dispatch`, and on PRs that touch packaging-relevant paths (`etc/docker/**`, `build.gradle.kts`, `gradle/libs.versions.toml`, `src/shadow/**`, the test sources/resources, and the workflow file)

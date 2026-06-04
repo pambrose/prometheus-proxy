@@ -139,6 +139,8 @@ agent {
 | `--timeout` | `SCRAPE_TIMEOUT_SECS` | 15 | Scrape timeout (seconds) |
 | `--chunk` | `CHUNK_CONTENT_SIZE_KBS` | 32 | Chunking threshold (KB) |
 | `--trust_all_x509` | `TRUST_ALL_X509_CERTIFICATES` | false | Disable SSL verification |
+| `--https_truststore` | `HTTPS_TRUST_STORE_PATH` | | Trust store (JKS/PKCS12) for HTTPS scrape targets |
+| `--https_truststore_password` | `HTTPS_TRUST_STORE_PASSWORD` | | Password for `--https_truststore` |
 | `--max_concurrent_clients` | `MAX_CONCURRENT_CLIENTS` | 1 | Concurrent HTTP clients |
 
 ## TLS
@@ -150,6 +152,10 @@ TLS without mutual auth requires:
 TLS with mutual auth additionally requires:
 - Proxy: `trustCertCollectionFilePath`
 - Agent: `certChainFilePath`, `privateKeyFilePath`
+
+Scraping HTTPS targets (agent → endpoint, separate from the agent ↔ proxy gRPC TLS above):
+- `agent.http.trustStorePath` (+ `trustStorePassword`) — trust a custom/private CA, validation stays on
+- `agent.http.enableTrustAllX509Certificates = true` — disable verification entirely (dev only; takes precedence)
 
 ## Building from Source
 

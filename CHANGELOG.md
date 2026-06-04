@@ -8,6 +8,7 @@ All notable changes to this project are documented in this file.
 
 ### New Features
 
+- Add a per-CA HTTPS trust store for the agent's scrape client: `--https_truststore` / `--https_truststore_password` (env `HTTPS_TRUST_STORE_PATH` / `HTTPS_TRUST_STORE_PASSWORD`; config `agent.http.trustStorePath` / `agent.http.trustStorePassword`) verify HTTPS targets against a custom/private CA without disabling validation. Resolved CLI > env > config; password never logged; `--trust_all_x509` takes precedence; an empty path uses the JDK default trust store
 - Add `ContainersSmokeTest` (`io.prometheus.containers`) — Testcontainers-based end-to-end smoke test that builds the proxy/agent Docker images and verifies a Prometheus → proxy → agent → endpoint scrape, gated on `RUN_CONTAINER_TESTS=true`
 - Add `make container-tests` target with Docker context auto-detection so Testcontainers finds Docker Desktop's non-default socket on macOS
 - Add `.github/workflows/container-tests.yml` to run the smoke test on push to master, on `workflow_dispatch`, and on PRs touching packaging files
