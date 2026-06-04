@@ -73,19 +73,26 @@ internal object Utils {
         if (eq < 0) param else param.substring(0, eq + 1) + REDACTED
       }
 
+  /**
+   * Appends an already-URL-encoded query string (as produced by Ktor's `formUrlEncode()`, i.e. raw
+   * `=`/`&` delimiters with percent-encoded keys/values) to [baseUrl].
+   *
+   * The encoded string is appended verbatim rather than URL-decoded first: decoding the whole blob
+   * would turn an encoded delimiter inside a value (e.g. `%26`, `%23`) into a real `&`/`#`, splitting
+   * one parameter into several or starting a fragment.
+   */
   fun appendQueryParams(
     baseUrl: String,
     encodedQueryParams: String,
   ): String {
     if (encodedQueryParams.isBlank()) return baseUrl
-    val decodedParams = URLDecoder.decode(encodedQueryParams, UTF_8)
     val separator =
       when {
         '?' !in baseUrl -> "?"
         baseUrl.endsWith("?") || baseUrl.endsWith("&") -> ""
         else -> "&"
       }
-    return "$baseUrl$separator$decodedParams"
+    return "$baseUrl$separator$encodedQueryParams"
   }
 
   internal fun String.defaultEmptyJsonObject() = ifEmpty { "{}" }

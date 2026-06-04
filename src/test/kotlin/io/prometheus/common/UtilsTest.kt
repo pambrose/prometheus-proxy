@@ -88,23 +88,35 @@ class UtilsTest : StringSpec() {
     }
 
     // ==================== appendQueryParams Tests ====================
+    // The input is an already-encoded query string (formUrlEncode output): raw =/& delimiters with
+    // percent-encoded keys/values. appendQueryParams appends it verbatim, preserving the encoding.
 
-    "appendQueryParams should append query params to base url without query" {
-      val url = appendQueryParams("http://localhost:8080/metrics", "foo%3Dbar%26baz%3Dqux")
+    "appendQueryParams should append an encoded query string to a base url without query" {
+      val url = appendQueryParams("http://localhost:8080/metrics", "foo=bar&baz=qux")
 
       url shouldBe "http://localhost:8080/metrics?foo=bar&baz=qux"
     }
 
-    "appendQueryParams should append query params to base url with existing query" {
-      val url = appendQueryParams("http://localhost:8080/metrics?existing=1", "foo%3Dbar")
+    "appendQueryParams should append to a base url with an existing query using &" {
+      val url = appendQueryParams("http://localhost:8080/metrics?existing=1", "foo=bar")
 
       url shouldBe "http://localhost:8080/metrics?existing=1&foo=bar"
     }
 
-    "appendQueryParams should handle base url ending with delimiter" {
-      val url = appendQueryParams("http://localhost:8080/metrics?", "foo%3Dbar")
+    "appendQueryParams should not add a separator when the base url already ends with ? or &" {
+      appendQueryParams("http://localhost:8080/metrics?", "foo=bar") shouldBe
+        "http://localhost:8080/metrics?foo=bar"
+    }
 
-      url shouldBe "http://localhost:8080/metrics?foo=bar"
+    "appendQueryParams should return the base url unchanged for blank params" {
+      appendQueryParams("http://localhost:8080/metrics", "") shouldBe "http://localhost:8080/metrics"
+    }
+
+    // The fix: an encoded delimiter inside a value must stay encoded, not be decoded into a real
+    // & (which would split one param into two) or # (which would start a URL fragment).
+    "appendQueryParams should preserve encoded delimiters inside a value" {
+      appendQueryParams("http://localhost:8080/metrics", "q=a%26b%23c") shouldBe
+        "http://localhost:8080/metrics?q=a%26b%23c"
     }
 
     // ==================== lowercase Tests ====================
