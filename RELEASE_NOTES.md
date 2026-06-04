@@ -28,6 +28,7 @@ _Unreleased_
 
 ### Build & Tooling
 
+- Remove three dead config keys: `proxy.http.maxThreads` / `proxy.http.minThreads` (orphaned since the 1.4.0 Ktor-server migration dropped the `threadPool(...)` call) and `proxy.internal.scrapeRequestCheckMillis` (orphaned since 3.0.0 replaced the timeout polling loop with `awaitCompleted`). No production code read them — setting them had no effect — so the keys and their generated `ConfigVals` fields have been removed
 - Replace the `-PreleaseDate` / `-PbuildTime` Gradle property overrides with `ValueSource`-backed providers so `BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` are read fresh on each build rather than being frozen by Gradle's configuration cache. The override flags introduced in 3.1.1 are removed; release artifacts are no longer byte-for-byte reproducible
 - Move detekt configuration from `etc/detekt/` to `config/detekt/` (the standard detekt convention); `build.gradle.kts` and `CLAUDE.md` updated accordingly
 - Add `detekt` to the `lint` Makefile target so `make lint` now runs `lintKotlinMain`, `lintKotlinTest`, and `detekt` together

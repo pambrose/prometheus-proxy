@@ -89,7 +89,6 @@ class ProxyHttpRoutesTest : StringSpec() {
 
   private fun createSpyProxyForSubmit(
     timeoutSecs: Int = 1,
-    checkMillis: Int = 50,
     args: List<String> = emptyList(),
   ): Proxy {
     val proxy = spyk(
@@ -97,7 +96,6 @@ class ProxyHttpRoutesTest : StringSpec() {
         options = ProxyOptions(
           listOf(
             "-Dproxy.internal.scrapeRequestTimeoutSecs=$timeoutSecs",
-            "-Dproxy.internal.scrapeRequestCheckMillis=$checkMillis",
           ) + args,
         ),
         inProcessServerName = "proxy-submit-test-${System.nanoTime()}",
@@ -459,7 +457,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "submitScrapeRequest should return timed_out when scrape request times out" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 1, checkMillis = 50)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 1)
       val agentContext = AgentContext("test-remote")
 
       val response = ProxyHttpRoutes.submitScrapeRequest(
@@ -475,7 +473,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "submitScrapeRequest should return timed_out when agent disconnects during scrape" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
 
       launch {
@@ -496,7 +494,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "submitScrapeRequest should return timed_out when proxy stops during scrape" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
 
       // Start with proxy running, then stop after a brief delay
@@ -521,7 +519,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "submitScrapeRequest should unblock immediately when agent is removed" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
       proxy.agentContextManager.addAgentContext(agentContext)
 
@@ -544,7 +542,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "submitScrapeRequest should unblock immediately when proxy is shut down" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
       proxy.agentContextManager.addAgentContext(agentContext)
 
@@ -568,7 +566,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "submitScrapeRequest should return success for valid non-zipped response" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
 
       launch {
@@ -600,7 +598,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "submitScrapeRequest should unzip zipped response content" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
       val originalContent = "metric_value 1.0\nmetric_value2 2.0"
 
@@ -633,7 +631,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "submitScrapeRequest should return BadGateway for invalid gzip content" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
 
       launch {
@@ -703,7 +701,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "submitScrapeRequest should fallback to plain text on content type parse error" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
 
       launch {
@@ -734,7 +732,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "submitScrapeRequest should return path_not_found for non-success status" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30, checkMillis = 50)
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
 
       launch {
