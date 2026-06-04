@@ -86,6 +86,8 @@ agent {
     clientTimeoutSecs = 30            // HTTP client timeout
     maxContentLengthMBytes = 10       // Max response size in MB
     enableTrustAllX509Certificates = false
+    trustStorePath = ""               // JKS/PKCS12 trust store for HTTPS targets (custom CA); empty = JDK default
+    trustStorePassword = ""           // Password for trustStorePath
   }
 }
 ; --8<-- [end:agent-http-config]

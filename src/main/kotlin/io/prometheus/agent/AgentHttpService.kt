@@ -54,6 +54,7 @@ import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.ScrapeRequest
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
+import javax.net.ssl.X509TrustManager
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -83,6 +84,16 @@ internal class AgentHttpService(
         cleanupInterval = options.cacheCleanupIntervalMins.minutes,
       )
     }
+
+  // Resolved once on first use: the HTTPS-scrape trust manager is fixed for the agent's lifetime, so
+  // it must not be rebuilt (re-reading the trust store from disk) on every cached-client recreation.
+  private val httpsTrustManager: X509TrustManager? by lazy {
+    resolveHttpsTrustManager(
+      trustAllX509Certificates = agent.options.trustAllX509Certificates,
+      trustStorePath = agent.options.httpsTrustStorePath,
+      trustStorePassword = agent.options.httpsTrustStorePassword,
+    )
+  }
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
@@ -250,13 +261,10 @@ internal class AgentHttpService(
 
         requestTimeout = timeoutSecs.seconds.inWholeMilliseconds
 
-        if (agent.options.trustAllX509Certificates) {
-          // Note: this disables certificate validation for EVERY HTTPS scrape target this agent
-          // talks to, not just a specific one (the setting is process-global, all-or-nothing).
-          https {
-            trustManager = TrustAllX509TrustManager
-          }
-        }
+        // Trust-all (insecure, all-or-nothing) takes precedence; otherwise a custom JKS/PKCS12 trust
+        // store (e.g. a private CA); otherwise the JDK default trust store. Resolved once — see the
+        // httpsTrustManager field — rather than re-read from disk on every client (re)creation.
+        httpsTrustManager?.also { https { trustManager = it } }
       }
 
       install(HttpTimeout)
@@ -318,6 +326,22 @@ internal class AgentHttpService(
         cioTimeoutSecs
       else
         httpClientTimeoutSecs
+
+    /**
+     * Selects the [X509TrustManager] for the HTTPS scrape client, or `null` to use the JDK default
+     * trust store. [trustAllX509Certificates] (insecure, all-or-nothing) takes precedence over a
+     * custom [trustStorePath]; an empty path with trust-all disabled yields `null`.
+     */
+    internal fun resolveHttpsTrustManager(
+      trustAllX509Certificates: Boolean,
+      trustStorePath: String,
+      trustStorePassword: String,
+    ): X509TrustManager? =
+      when {
+        trustAllX509Certificates -> TrustAllX509TrustManager
+        trustStorePath.isNotEmpty() -> SslSettings.getTrustManager(trustStorePath, trustStorePassword)
+        else -> null
+      }
 
     private const val INVALID_PATH_MSG = "invalid_path"
     private const val SUCCESS_MSG = "success"

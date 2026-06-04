@@ -93,6 +93,29 @@ class AgentOptionsTest : StringSpec() {
       options.trustAllX509Certificates.shouldBeTrue()
     }
 
+    "httpsTrustStorePath and password should default to empty" {
+      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      options.httpsTrustStorePath shouldBe ""
+      options.httpsTrustStorePassword shouldBe ""
+    }
+
+    "httpsTrustStorePath and password should be settable via command line" {
+      val args =
+        listOf(
+          "--name",
+          "test",
+          "--proxy",
+          "host",
+          "--https_truststore",
+          "/etc/agent/truststore.jks",
+          "--https_truststore_password",
+          "s3cr3t",
+        )
+      val options = AgentOptions(args, false)
+      options.httpsTrustStorePath shouldBe "/etc/agent/truststore.jks"
+      options.httpsTrustStorePassword shouldBe "s3cr3t"
+    }
+
     "maxConcurrentHttpClients should have positive default" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
       options.maxConcurrentHttpClients shouldBeGreaterThan 0

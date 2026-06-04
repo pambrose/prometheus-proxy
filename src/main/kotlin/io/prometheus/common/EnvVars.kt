@@ -116,6 +116,15 @@ enum class EnvVars {
    */
   TRUST_ALL_X509_CERTIFICATES,
 
+  /**
+   * Path to a JKS/PKCS12 trust store used to verify HTTPS scrape targets signed by a custom/private CA.
+   * Empty (default) uses the JDK default trust store. Ignored when [TRUST_ALL_X509_CERTIFICATES] is enabled.
+   */
+  HTTPS_TRUST_STORE_PATH,
+
+  /** Password for the trust store named by [HTTPS_TRUST_STORE_PATH]. Empty if the store has no password. */
+  HTTPS_TRUST_STORE_PASSWORD,
+
   /** Maximum number of concurrent HTTP scrape requests the Agent will issue. */
   MAX_CONCURRENT_CLIENTS,
 

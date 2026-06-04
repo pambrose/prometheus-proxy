@@ -50,8 +50,17 @@ header when fetching metrics from the target endpoint.
 
 ## Scraping HTTPS Endpoints
 
-If the agent needs to scrape HTTPS endpoints with self-signed certificates, you can disable
-SSL verification:
+For HTTPS scrape targets signed by a custom or private CA (e.g. an internal corporate CA),
+point the agent at a trust store containing that CA so certificates are **still validated**:
+
+```text
+--8<-- "TlsExamples.txt:https-truststore"
+```
+
+An empty path uses the JDK default trust store. The trust store is process-wide — it applies
+to every HTTPS target the agent scrapes, and it is ignored when `trust_all_x509` is enabled.
+
+As a last resort, you can disable SSL verification entirely:
 
 ```text
 --8<-- "TlsExamples.txt:trust-all-x509"
@@ -59,5 +68,7 @@ SSL verification:
 
 !!! warning "Development only"
 
-    Only use `trust_all_x509` in development or testing environments. In production,
-    configure proper TLS certificates for your metrics endpoints.
+    Only use `trust_all_x509` in development or testing environments: it disables certificate
+    validation for **every** HTTPS target and takes precedence over the trust store. In
+    production, configure a trust store (or properly trusted certificates) for your metrics
+    endpoints instead.

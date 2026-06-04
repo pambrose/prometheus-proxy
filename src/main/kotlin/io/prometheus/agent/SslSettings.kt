@@ -24,7 +24,6 @@ import javax.net.ssl.X509TrustManager
 
 // https://github.com/Hakky54/mutual-tls-ssl/blob/master/client/src/main/java/nl/altindag/client/service/KtorCIOHttpClientService.kt
 
-@Suppress("unused")
 internal object SslSettings {
   fun getKeyStore(
     fileName: String,
