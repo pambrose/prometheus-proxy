@@ -72,6 +72,8 @@ _Unreleased_
 - Document the double `./gradlew wrapper` invocation in `upgrade-wrapper` as Gradle's documented two-run upgrade procedure
 - Fill in missing `.PHONY` entries for `mini-tests` and the `coverage-*` family
 - Move the Testcontainers smoke test out of `io.prometheus.harness` into a dedicated `io.prometheus.containers` package so the make target is a clean wildcard rather than a `Containers*` prefix match
+- Switch the proxy/agent Docker images to the prebuilt `bellsoft/liberica-openjre-alpine:17` base instead of `alpine` + `apk add openjdk17-jre`. Builds no longer download the JRE from the Alpine mirror at build time (faster and not subject to intermittent mirror stalls), and the base is genuinely multi-arch (amd64 + arm64), so the images run on Apple Silicon — the `eclipse-temurin:17-jre-alpine` alternative was amd64-only. Still Alpine-based, so the existing busybox `adduser` step is unchanged
+- Run the test suite in CI and upload kover coverage to Codecov on each push and pull request
 
 ### Dependency Updates
 
