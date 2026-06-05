@@ -75,9 +75,13 @@ _Unreleased_
 
 ### Dependency Updates
 
-| Dependency      | Old | New   |
-|-----------------|-----|-------|
-| testcontainers  | —   | 2.0.5 |
+| Dependency            | Old           | New           |
+|-----------------------|---------------|---------------|
+| testcontainers        | —             | 2.0.5         |
+| Typesafe Config       | 1.4.8         | 1.4.9         |
+| protobuf / protoc     | 4.34.1        | 4.35.0        |
+| netty-tcnative        | 2.0.77.Final  | 2.0.78.Final  |
+| BuildConfig plugin    | 6.0.9         | 6.0.10        |
 
 ---
 
