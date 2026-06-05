@@ -95,16 +95,16 @@ internal class ProxyServiceImpl(
   }
 
   override suspend fun registerAgent(request: RegisterAgentRequest): RegisterAgentResponse {
-    var isValid = false
+    val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
+    if (agentContext == null) {
+      logger.error { "registerAgent() missing AgentContext agentId: ${request.agentId}" }
+    } else {
+      agentContext.assignProperties(request)
+      agentContext.markActivityTime(false)
+      logger.info { "Connected to $agentContext" }
+    }
 
-    proxy.agentContextManager.getAgentContext(request.agentId)
-      ?.apply {
-        isValid = true
-        assignProperties(request)
-        markActivityTime(false)
-        logger.info { "Connected to $this" }
-      } ?: logger.error { "registerAgent() missing AgentContext agentId: ${request.agentId}" }
-
+    val isValid = agentContext != null
     return registerAgentResponse {
       valid = isValid
       agentId = request.agentId
@@ -115,24 +115,23 @@ internal class ProxyServiceImpl(
   }
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
-    var isValid = false
-    var failureReason = ""
+    val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
+    // addPath() returns null on success or a failure message; failureReason is null iff valid.
+    val failureReason =
+      if (agentContext == null) {
+        logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
+        "Invalid agentId: ${request.agentId} (registerPath)"
+      } else {
+        proxy.pathManager.addPath(request.path, request.labels, agentContext)
+          .also { agentContext.markActivityTime(false) }
+      }
 
-    proxy.agentContextManager.getAgentContext(request.agentId)
-      ?.apply {
-        val addPathResult = proxy.pathManager.addPath(request.path, request.labels, this)
-        isValid = addPathResult == null
-        if (!isValid) failureReason = addPathResult!!
-        markActivityTime(false)
-      } ?: run {
-      failureReason = "Invalid agentId: ${request.agentId} (registerPath)"
-      logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
-    }
-
+    val isValid = failureReason == null
     return registerPathResponse {
       pathId = if (isValid) PATH_ID_GENERATOR.fetchAndIncrement() else -1
       valid = isValid
       if (!isValid) {
+        // Smart-cast to non-null: isValid == false implies failureReason != null.
         reason = failureReason
       }
       pathCount = proxy.pathManager.pathMapSize

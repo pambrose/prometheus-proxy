@@ -267,7 +267,6 @@ class ProxyTest : StringSpec() {
 
       val wrapper = ScrapeRequestWrapper(
         agentContext = agentContext,
-        proxy = proxy,
         pathVal = "metrics",
         encodedQueryParamsVal = "",
         authHeaderVal = "",
@@ -294,7 +293,6 @@ class ProxyTest : StringSpec() {
 
       val wrapper = ScrapeRequestWrapper(
         agentContext = agentContext,
-        proxy = proxy,
         pathVal = "metrics",
         encodedQueryParamsVal = "",
         authHeaderVal = "",

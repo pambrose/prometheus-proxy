@@ -325,13 +325,10 @@ class AgentContextManagerTest : StringSpec() {
     "invalidateAllAgentContexts should unblock awaitCompleted on buffered wrappers" {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("remote-addr")
-      val mockProxy = mockk<Proxy>(relaxed = true)
-      every { mockProxy.isMetricsEnabled } returns false
-
       manager.addAgentContext(context)
 
       // Create a real ScrapeRequestWrapper so awaitCompleted() works end-to-end
-      val wrapper = ScrapeRequestWrapper(context, mockProxy, "/metrics", "", "", null, false)
+      val wrapper = ScrapeRequestWrapper(context, "/metrics", "", "", null, false)
       context.writeScrapeRequest(wrapper)
 
       val startTime = System.currentTimeMillis()

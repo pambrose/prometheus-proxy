@@ -191,8 +191,7 @@ class ProxyOptions(
         if (handshakeTimeoutSecs == -1L)
           handshakeTimeoutSecs = HANDSHAKE_TIMEOUT_SECS.getEnv(proxyConfigVals.grpc.handshakeTimeoutSecs)
         requireGrpcTimeout(handshakeTimeoutSecs, "grpc.handshakeTimeoutSecs")
-        val hsTimeout = if (handshakeTimeoutSecs == -1L) "default (120)" else handshakeTimeoutSecs
-        logger.info { "grpc.handshakeTimeoutSecs: $hsTimeout" }
+        logger.info { "grpc.handshakeTimeoutSecs: ${handshakeTimeoutSecs.grpcDefaultLabel("120")}" }
 
         permitKeepAliveWithoutCalls =
           resolveBooleanOption(
@@ -206,27 +205,23 @@ class ProxyOptions(
         if (permitKeepAliveTimeSecs == -1L)
           permitKeepAliveTimeSecs = PERMIT_KEEPALIVE_TIME_SECS.getEnv(proxyConfigVals.grpc.permitKeepAliveTimeSecs)
         requireGrpcTimeout(permitKeepAliveTimeSecs, "grpc.permitKeepAliveTimeSecs")
-        val kaTime = if (permitKeepAliveTimeSecs == -1L) "default (300)" else permitKeepAliveTimeSecs
-        logger.info { "grpc.permitKeepAliveTimeSecs: $kaTime" }
+        logger.info { "grpc.permitKeepAliveTimeSecs: ${permitKeepAliveTimeSecs.grpcDefaultLabel("300")}" }
 
         if (maxConnectionIdleSecs == -1L)
           maxConnectionIdleSecs = MAX_CONNECTION_IDLE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionIdleSecs)
         requireGrpcTimeout(maxConnectionIdleSecs, "grpc.maxConnectionIdleSecs")
-        val idleVal = if (maxConnectionIdleSecs == -1L) "default (INT_MAX)" else maxConnectionIdleSecs
-        logger.info { "grpc.maxConnectionIdleSecs: $idleVal" }
+        logger.info { "grpc.maxConnectionIdleSecs: ${maxConnectionIdleSecs.grpcDefaultLabel("INT_MAX")}" }
 
         if (maxConnectionAgeSecs == -1L)
           maxConnectionAgeSecs = MAX_CONNECTION_AGE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeSecs)
         requireGrpcTimeout(maxConnectionAgeSecs, "grpc.maxConnectionAgeSecs")
-        val ageVal = if (maxConnectionAgeSecs == -1L) "default (INT_MAX)" else maxConnectionAgeSecs
-        logger.info { "grpc.maxConnectionAgeSecs: $ageVal" }
+        logger.info { "grpc.maxConnectionAgeSecs: ${maxConnectionAgeSecs.grpcDefaultLabel("INT_MAX")}" }
 
         if (maxConnectionAgeGraceSecs == -1L)
           maxConnectionAgeGraceSecs =
             MAX_CONNECTION_AGE_GRACE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeGraceSecs)
         requireGrpcTimeout(maxConnectionAgeGraceSecs, "grpc.maxConnectionAgeGraceSecs")
-        val graceVal = if (maxConnectionAgeGraceSecs == -1L) "default (INT_MAX)" else maxConnectionAgeGraceSecs
-        logger.info { "grpc.maxConnectionAgeGraceSecs: $graceVal" }
+        logger.info { "grpc.maxConnectionAgeGraceSecs: ${maxConnectionAgeGraceSecs.grpcDefaultLabel("INT_MAX")}" }
 
         proxyConfigVals.apply {
           assignCommonOptions(
@@ -243,6 +238,9 @@ class ProxyOptions(
             trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
           )
 
+          require(internal.scrapeRequestTimeoutSecs > 0) {
+            "internal.scrapeRequestTimeoutSecs must be > 0: ${internal.scrapeRequestTimeoutSecs}"
+          }
           logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
           logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }
           logger.info { "internal.maxAgentInactivitySecs: ${internal.maxAgentInactivitySecs}" }

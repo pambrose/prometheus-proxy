@@ -26,6 +26,7 @@ import com.pambrose.common.time.format
 import com.pambrose.common.util.MetricsUtils.newMapHealthCheck
 import com.pambrose.common.util.Version
 import com.pambrose.common.util.getBanner
+import com.pambrose.common.util.randomId
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.BaseOptions.Companion.DEBUG
@@ -179,6 +180,10 @@ class Proxy(
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
   internal val agentContextManager = AgentContextManager(isTestMode)
   internal val scrapeRequestManager = ScrapeRequestManager()
+
+  // Per-process id (mirrors Agent.launchId) so proxy metric series can be disambiguated across
+  // restarts — e.g. proxy_start_time_seconds is labeled with it.
+  internal val launchId = randomId(15)
 
   val proxyConfigVals: ConfigVals.Proxy2 get() = configVals.proxy
 

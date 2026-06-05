@@ -56,7 +56,7 @@ internal class ProxyMetrics(
     Histogram.build()
       .name("proxy_scrape_request_latency_seconds")
       .help("Proxy scrape request latency in seconds")
-      .labelNames("path")
+      .labelNames("path", "outcome")
       .buckets(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0)
       .register()
 
@@ -90,8 +90,9 @@ internal class ProxyMetrics(
   init {
     gauge {
       name("proxy_start_time_seconds")
+      labelNames(LAUNCH_ID)
       help("Proxy start time in seconds")
-    }.setToCurrentTime()
+    }.labels(proxy.launchId).setToCurrentTime()
 
     SamplerGaugeCollector(
       name = "proxy_agent_map_size",
@@ -125,6 +126,7 @@ internal class ProxyMetrics(
   }
 
   companion object {
+    private const val LAUNCH_ID = "launch_id"
     const val STAGE_CHUNK = "chunk"
     const val STAGE_SUMMARY = "summary"
     const val ENCODING_GZIPPED = "gzipped"

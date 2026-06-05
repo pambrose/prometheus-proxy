@@ -178,6 +178,21 @@ class ChunkedContextTest : StringSpec() {
       }
     }
 
+    // The size guard is `>` (not `>=`), so content totalling exactly maxZippedContentSize must be
+    // accepted. This locks in the boundary against an off-by-one regression.
+    "applyChunk should accept content exactly at maxZippedContentSize" {
+      val response = createHeaderResponse()
+      val data = "exactly10!".toByteArray() // 10 bytes
+      val context = ChunkedContext(response, data.size.toLong()) // limit == exactly the data size
+
+      val checksum = CRC32().apply { update(data) }.value
+
+      // Must not throw at the exact boundary.
+      context.applyChunk(data, data.size, 1, checksum)
+      val scrapeResults = context.applySummary(1, data.size, checksum)
+      scrapeResults.srContentAsZipped.size shouldBe data.size
+    }
+
     // ==================== applySummary Tests ====================
 
     "applySummary should verify chunk count" {
