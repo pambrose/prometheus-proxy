@@ -30,7 +30,6 @@ import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import io.prometheus.Proxy
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.async
 import kotlin.time.Duration.Companion.seconds

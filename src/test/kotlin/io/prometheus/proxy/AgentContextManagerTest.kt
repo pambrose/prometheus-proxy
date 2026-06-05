@@ -25,9 +25,7 @@ import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import io.mockk.every
 import io.mockk.mockk
-import io.prometheus.Proxy
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import kotlinx.coroutines.async
