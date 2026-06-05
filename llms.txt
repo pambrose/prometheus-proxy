@@ -68,6 +68,7 @@ These are the only types intended for external consumption (everything else is `
 - `io.prometheus.agent.AgentOptions`, `io.prometheus.proxy.ProxyOptions`, `io.prometheus.common.BaseOptions` (config/CLI parsing)
 - `io.prometheus.agent.EmbeddedAgentInfo` (returned by `Agent.startAsyncAgent`)
 - `io.prometheus.common.EnvVars` (typed env-var enum)
+- `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` on a config-load failure when `exitOnMissingConfig` is false, so embedded hosts catch it instead of the JVM exiting)
 
 ## Quick Start
 
