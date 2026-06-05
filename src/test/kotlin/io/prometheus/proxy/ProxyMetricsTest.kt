@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -165,17 +166,21 @@ class ProxyMetricsTest : StringSpec() {
 
     // ==================== Histogram Operations Tests ====================
 
-    "scrapeRequestLatency should record observations with path label" {
+    "scrapeRequestLatency should record observations with path and outcome labels" {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
-      metrics.scrapeRequestLatency.labels("test-path").observe(0.1)
-      metrics.scrapeRequestLatency.labels("test-path").observe(0.2)
-      metrics.scrapeRequestLatency.labels("test-path").observe(0.3)
+      // The histogram is labeled by (path, outcome) so latency can be broken down by result.
+      metrics.scrapeRequestLatency.labels("test-path", "success").observe(0.1)
+      metrics.scrapeRequestLatency.labels("test-path", "success").observe(0.2)
+      metrics.scrapeRequestLatency.labels("test-path", "timed_out").observe(0.3)
 
       val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
       val latencyMetric = samples.find { it.name == "proxy_scrape_request_latency_seconds" }
       latencyMetric.shouldNotBeNull()
+      val outcomes = latencyMetric.samples.mapNotNull { it.labelValues.getOrNull(1) }.toSet()
+      outcomes shouldContain "success"
+      outcomes shouldContain "timed_out"
     }
 
     "scrapeResponseBytes should record observations with labels" {

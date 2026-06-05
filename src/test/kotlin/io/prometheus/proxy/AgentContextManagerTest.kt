@@ -25,9 +25,7 @@ import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import io.mockk.every
 import io.mockk.mockk
-import io.prometheus.Proxy
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import kotlinx.coroutines.async
@@ -325,13 +323,10 @@ class AgentContextManagerTest : StringSpec() {
     "invalidateAllAgentContexts should unblock awaitCompleted on buffered wrappers" {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("remote-addr")
-      val mockProxy = mockk<Proxy>(relaxed = true)
-      every { mockProxy.isMetricsEnabled } returns false
-
       manager.addAgentContext(context)
 
       // Create a real ScrapeRequestWrapper so awaitCompleted() works end-to-end
-      val wrapper = ScrapeRequestWrapper(context, mockProxy, "/metrics", "", "", null, false)
+      val wrapper = ScrapeRequestWrapper(context, "/metrics", "", "", null, false)
       context.writeScrapeRequest(wrapper)
 
       val startTime = System.currentTimeMillis()

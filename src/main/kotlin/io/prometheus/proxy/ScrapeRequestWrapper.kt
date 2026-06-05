@@ -19,7 +19,6 @@
 package io.prometheus.proxy
 
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
-import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.scrapeRequest
@@ -33,7 +32,6 @@ import kotlin.time.TimeSource.Monotonic
 
 internal class ScrapeRequestWrapper(
   val agentContext: AgentContext,
-  proxy: Proxy,
   pathVal: String,
   encodedQueryParamsVal: String,
   authHeaderVal: String,
@@ -44,8 +42,6 @@ internal class ScrapeRequestWrapper(
   private val createTimeMark = clock.markNow()
   private val completeChannel = Channel<Boolean>()
   private val completed = AtomicBoolean(false)
-  private val requestTimer =
-    if (proxy.isMetricsEnabled) proxy.metrics.scrapeRequestLatency.labels(pathVal).startTimer() else null
 
   val scrapeRequest =
     scrapeRequest {
@@ -69,7 +65,6 @@ internal class ScrapeRequestWrapper(
 
   fun markComplete() {
     if (completed.compareAndSet(expectedValue = false, newValue = true)) {
-      requestTimer?.observeDuration()
       // Required
       closeChannel()
     }

@@ -127,11 +127,24 @@ internal class HttpClientCache(
     }
   }
 
+  // A basic-auth credential pair. Modeling username+password as a single non-nullable value object
+  // (rather than two independent nullables on ClientKey) makes the "both-or-neither" invariant
+  // unrepresentable to violate and removes the need for !! at the use sites.
+  data class Credentials(
+    val username: String,
+    val password: String,
+  )
+
   data class ClientKey(
-    val username: String?,
-    val password: String?,
+    val credentials: Credentials?,
   ) {
-    fun hasAuth() = username != null && password != null
+    // Convenience that enforces the both-or-neither auth gate in one place: credentials exist only
+    // when both username and password are present.
+    constructor(username: String?, password: String?) : this(
+      if (username != null && password != null) Credentials(username, password) else null,
+    )
+
+    fun hasAuth() = credentials != null
 
     override fun toString() = maskedKey()
 
@@ -144,7 +157,7 @@ internal class HttpClientCache(
     // remains and is by design: this ClientKey instance and the built HttpClient still hold the raw
     // credentials in memory — basic-auth requires them to issue requests — so this only removes the
     // extra long-lived plaintext copy, not all of them.
-    internal fun cacheKey() = if (hasAuth()) credentialDigest("$username:$password") else NO_AUTH
+    internal fun cacheKey() = credentials?.let { credentialDigest("${it.username}:${it.password}") } ?: NO_AUTH
 
     companion object {
       internal const val NO_AUTH = "__no_auth__"

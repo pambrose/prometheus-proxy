@@ -28,42 +28,15 @@ import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
-import io.prometheus.Proxy
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class ScrapeRequestWrapperTest : StringSpec() {
-  private fun createMockProxy(): Proxy {
-    val mockProxy = mockk<Proxy>(relaxed = true)
-    every { mockProxy.isMetricsEnabled } returns false
-    return mockProxy
-  }
-
-  private data class MetricsEnabledMocks(
-    val proxy: Proxy,
-    val timer: io.prometheus.client.Histogram.Timer,
-  )
-
-  private fun createMetricsEnabledMockProxy(): MetricsEnabledMocks {
-    val mockProxy = mockk<Proxy>(relaxed = true)
-    every { mockProxy.isMetricsEnabled } returns true
-    val mockHistogram = mockk<io.prometheus.client.Histogram>(relaxed = true)
-    val mockChild = mockk<io.prometheus.client.Histogram.Child>(relaxed = true)
-    val mockTimer = mockk<io.prometheus.client.Histogram.Timer>(relaxed = true)
-    val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
-    every { mockProxy.metrics } returns mockMetrics
-    every { mockMetrics.scrapeRequestLatency } returns mockHistogram
-    every { mockHistogram.labels(any()) } returns mockChild
-    every { mockChild.startTimer() } returns mockTimer
-    return MetricsEnabledMocks(mockProxy, mockTimer)
-  }
-
   private fun createAgentContext(): AgentContext = AgentContext("test-remote-addr")
 
   private fun createWrapper(
-    proxy: Proxy = createMockProxy(),
     agentContext: AgentContext = createAgentContext(),
     path: String = "/metrics",
     encodedQueryParams: String = "",
@@ -72,7 +45,6 @@ class ScrapeRequestWrapperTest : StringSpec() {
     debugEnabled: Boolean = false,
   ) = ScrapeRequestWrapper(
     agentContext = agentContext,
-    proxy = proxy,
     pathVal = path,
     encodedQueryParamsVal = encodedQueryParams,
     authHeaderVal = authHeader,
@@ -200,16 +172,7 @@ class ScrapeRequestWrapperTest : StringSpec() {
       str shouldContain "/test/path"
     }
 
-    // ==================== markComplete with Metrics Tests ====================
-
-    "markComplete with metrics enabled should observe duration" {
-      val (mockProxy, _) = createMetricsEnabledMockProxy()
-
-      val wrapper = createWrapper(proxy = mockProxy)
-
-      // Should not throw — observeDuration called on the timer
-      wrapper.markComplete()
-    }
+    // ==================== markComplete Tests ====================
 
     "markComplete without metrics should not throw" {
       val wrapper = createWrapper()
@@ -266,7 +229,6 @@ class ScrapeRequestWrapperTest : StringSpec() {
       shouldThrow<IllegalArgumentException> {
         ScrapeRequestWrapper(
           agentContext = mockContext,
-          proxy = createMockProxy(),
           pathVal = "/metrics",
           encodedQueryParamsVal = "",
           authHeaderVal = "",
@@ -289,31 +251,9 @@ class ScrapeRequestWrapperTest : StringSpec() {
 
     // ==================== Bug #15: markComplete double-call protection ====================
 
-    // Bug #15: Before the fix, calling markComplete() twice would invoke
-    // requestTimer?.observeDuration() twice, recording a duplicate latency observation
-    // and skewing metrics. The fix uses an AtomicBoolean so observeDuration is only
-    // called once.
-
-    "Bug #15: markComplete with metrics should only observeDuration once" {
-      val (mockProxy, mockTimer) = createMetricsEnabledMockProxy()
-
-      val wrapper = ScrapeRequestWrapper(
-        agentContext = createAgentContext(),
-        proxy = mockProxy,
-        pathVal = "/metrics",
-        encodedQueryParamsVal = "",
-        authHeaderVal = "",
-        acceptVal = null,
-        debugEnabledVal = false,
-      )
-
-      wrapper.markComplete()
-      wrapper.markComplete()
-      wrapper.markComplete()
-
-      // observeDuration should only be called once despite three markComplete calls
-      io.mockk.verify(exactly = 1) { mockTimer.observeDuration() }
-    }
+    // Bug #15: markComplete() uses an AtomicBoolean so the channel is closed exactly once even when
+    // called multiple times. (Latency is now observed once per response in the routing layer rather
+    // than inside markComplete, so repeated markComplete calls can no longer skew the metric.)
 
     "Bug #15: markComplete should close channel only once" {
       val wrapper = createWrapper()

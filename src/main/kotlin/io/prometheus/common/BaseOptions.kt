@@ -270,20 +270,20 @@ abstract class BaseOptions protected constructor(
     assignConfigVals()
   }
 
+  // Renders a gRPC timeout/keepalive field for logging: the resolved value, or "default (<descriptor>)"
+  // when the field is still at the -1L "leave the gRPC built-in default in place" sentinel.
+  protected fun Long.grpcDefaultLabel(default: String): Any = if (this == -1L) "default ($default)" else this
+
   protected fun assignKeepAliveTimeSecs(defaultVal: Long) {
     if (keepAliveTimeSecs == -1L)
       keepAliveTimeSecs = KEEPALIVE_TIME_SECS.getEnv(defaultVal)
-    logger.info {
-      "grpc.keepAliveTimeSecs: ${if (keepAliveTimeSecs == -1L) "unset (gRPC default)" else keepAliveTimeSecs}"
-    }
+    logger.info { "grpc.keepAliveTimeSecs: ${keepAliveTimeSecs.grpcDefaultLabel("gRPC default")}" }
   }
 
   protected fun assignKeepAliveTimeoutSecs(defaultVal: Long) {
     if (keepAliveTimeoutSecs == -1L)
       keepAliveTimeoutSecs = KEEPALIVE_TIMEOUT_SECS.getEnv(defaultVal)
-    logger.info {
-      "grpc.keepAliveTimeoutSecs: ${if (keepAliveTimeoutSecs == -1L) "unset (gRPC default)" else keepAliveTimeoutSecs}"
-    }
+    logger.info { "grpc.keepAliveTimeoutSecs: ${keepAliveTimeoutSecs.grpcDefaultLabel("gRPC default")}" }
   }
 
   protected fun assignAdminEnabled(defaultVal: Boolean) {

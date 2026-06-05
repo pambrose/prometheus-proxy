@@ -61,7 +61,7 @@ internal class AgentContext(
     private set
   var agentName: String by nonNullableReference("Unassigned")
     private set
-  var consolidated: Boolean by nonNullableReference(false)
+  var consolidated: Boolean by atomicBoolean(false)
     private set
 
   internal val desc: String

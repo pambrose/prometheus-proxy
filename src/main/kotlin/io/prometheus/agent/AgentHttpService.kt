@@ -285,12 +285,11 @@ internal class AgentHttpService(
       }
 
       // Setup authentication if username and password are specified
-      if (clientKey.hasAuth()) {
+      clientKey.credentials?.let { creds ->
         install(Auth) {
           basic {
             credentials {
-              // These are known to be non-null because of the hasAuth() check above
-              BasicAuthCredentials(clientKey.username!!, clientKey.password!!)
+              BasicAuthCredentials(creds.username, creds.password)
             }
           }
         }

@@ -50,6 +50,7 @@ import java.io.IOException
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.DurationUnit
 
 /**
  * HTTP routing logic for the proxy's Ktor server.
@@ -199,7 +200,16 @@ internal object ProxyHttpRoutes {
           async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request) }
         }
         .awaitAll()
-        .onEach { response -> logActivityForResponse(path, response, proxy) }
+        .onEach { response ->
+          logActivityForResponse(path, response, proxy)
+          // Record latency labeled with the request outcome. This single site covers every outcome
+          // — including the timeout and agent-disconnected early returns the old per-request timer
+          // missed — since each branch yields a ScrapeRequestResponse with updateMsg + fetchDuration.
+          proxy.metrics {
+            val elapsedSecs = response.fetchDuration.toDouble(DurationUnit.SECONDS)
+            scrapeRequestLatency.labels(path, response.updateMsg).observe(elapsedSecs)
+          }
+        }
     }
 
   private fun logActivityForResponse(
@@ -364,7 +374,6 @@ internal object ProxyHttpRoutes {
 
     return ScrapeRequestWrapper(
       agentContext = agentContext,
-      proxy = proxy,
       pathVal = path,
       encodedQueryParamsVal = encodedQueryParams,
       authHeaderVal = authHeader,
