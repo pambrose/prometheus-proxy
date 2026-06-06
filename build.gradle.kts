@@ -73,8 +73,9 @@ dependencies {
   implementation(libs.protobuf.kotlin)
   implementation(libs.grpc.kotlin.stub)
 
-  // Required
-  implementation(libs.netty.tcnative)
+  // Native BoringSSL/OpenSSL bindings Netty loads reflectively at runtime for TLS; no compile-time
+  // references, so runtimeOnly. Still bundled into the fat JARs via runtimeClasspath (see configureJars).
+  runtimeOnly(libs.netty.tcnative)
 
   implementation(libs.jetty.servlet)
   implementation(libs.annotation.api)
@@ -85,8 +86,8 @@ dependencies {
   implementation(libs.zipkin.brave)
 
   implementation(libs.kotlin.logging)
-  implementation(libs.logback.classic)
-  implementation(libs.slf4j.jul)
+  implementation(libs.logback.classic) // compile-time: Utils.setLogLevel uses Logback's Level/Logger
+  runtimeOnly(libs.slf4j.jul) // jul-to-slf4j bridge: installed at runtime, no compile-time references
 
   testImplementation(libs.kotest)
   testImplementation(libs.mockk)

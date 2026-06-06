@@ -286,6 +286,11 @@ agent. This approach eliminates the need for a separate agent process when your 
   agentInfo.close();
   ```
 
+If the configuration cannot be loaded (a parse error, an unreachable config URL, or a missing file), the embedded
+`startAsyncAgent` / `startSyncAgent` entry points throw `io.prometheus.common.ConfigLoadException` for your application
+to catch, rather than terminating the host JVM via `exitProcess`. Stand-alone agents (run from the CLI) still exit on a
+missing or unreadable config.
+
 ### Service Discovery
 
 Enable Prometheus service discovery support:

@@ -14,10 +14,37 @@ All notable changes to this project are documented in this file.
 - Add `.github/workflows/container-tests.yml` to run the smoke test on push to master, on `workflow_dispatch`, and on PRs touching packaging files
 - Add `make help` target listing every Make target with an auto-extracted description
 
+### Security
+
+- Redact query-parameter *values* (not just the `user:pass@` userinfo) everywhere a scrape URL is logged or echoed back to Prometheus, so secrets in `?token=…` / `?api_key=…` no longer leak at WARN
+- Derive the agent `HttpClientCache` key from a per-process salted HMAC-SHA256 digest instead of the plaintext `username:password`, keeping the password out of the long-lived cache key
+
+### Behavior Changes
+
+- Embedded agents (`startAsyncAgent`, `exitOnMissingConfig=false`) now throw the new public `io.prometheus.common.ConfigLoadException` on a config-load failure instead of calling `exitProcess(1)`; standalone agents and the proxy still exit
+- `connectAgent()` rethrows JVM `Error`s instead of swallowing them into retry-forever, and logs full stack traces on connection failures
+- `ProxyOptions` now validates `proxyPort` / `proxyAgentPort` (`1..65535`), gRPC timeouts (`-1` or `> 0`), and `internal.scrapeRequestTimeoutSecs` (`> 0`) at startup
+- Per-request call logging emits at DEBUG instead of INFO when `requestLoggingEnabled = true` (config default unchanged)
+- `HttpClientCache.close()` sets a terminal flag so a scrape racing shutdown can't create and cache a fresh client into the closed cache
+
+### Observability
+
+- Add an `outcome` label to `proxy_scrape_request_latency_seconds` and record latency for the timeout and agent-disconnected paths (previously unrecorded)
+- Label `proxy_start_time_seconds` with a per-process `launch_id`
+- Count a scrape result dropped on connection-close as `agent_scrape_result_count{type="dropped"}`
+- Log a malformed scrape-target `Content-Type` at WARN (was DEBUG)
+
 ### Bug Fixes
 
 - Fix `DnsNameResolverProvider` and `PickFirstLoadBalancerProvider` missing from the shaded `agentJar`/`proxyJar` (shadow 9.4.1 silently drops same-named `META-INF/services` entries when both grpc-core and grpc-netty-shaded contribute one). Without the DNS provider, gRPC defaulted to the `unix` scheme on any non-IP hostname. Static service files under `src/shadow/resources/` re-register both providers
 - Fix flaky `ProxyHttpRoutesTest` test that occasionally hit `Connection reset` — the existing TCP-connect probe only confirmed kernel-level SYN/ACK; replaced with an HTTP-level readiness probe that retries on `IOException`/`ClosedByteChannelException`
+- Fix `appendQueryParams` URL-decoding the encoded query blob before concatenation (an encoded `&` / `#` inside a value could expand into extra params or a fragment); it now appends the already-encoded string verbatim
+- Fix `writeResponsesToProxy` letting a per-response processing error block the HTTP handler until `scrapeRequestTimeoutSecs` (slow, misleading 503); it now fails that scrape request immediately
+
+### Code Quality
+
+- Code-review cleanup with no behavior change: extracted shared common-option assignment between `AgentOptions` / `ProxyOptions`, decomposed `Agent.run()`'s connection tasks behind one helper, collapsed the duplicated `ConfigWrappers` overloads, modeled basic-auth credentials as a `Credentials` value object, split the chunk-size field into a KB input plus derived bytes, replaced the stringly-typed path config with a typed `PathConfig`, and unified gRPC-default log formatting behind one helper
+- Added a mutual-TLS rejection test and coverage for timeout-override resolution, the unknown-`scrapeId` header drop, wrapped-timeout detection, and the chunk-size boundary; encode the gzipped response body once (was twice); removed the dead `SslSettings` scaffolding (now wired into the HTTPS trust store) and stale commented-out blocks
 
 ### Build & Tooling
 
@@ -38,12 +65,21 @@ All notable changes to this project are documented in this file.
 - Document the double `./gradlew wrapper` invocation in `upgrade-wrapper`
 - Add missing `.PHONY` entries for `mini-tests` and the `coverage-*` family
 - Move `ContainersSmokeTest` from `io.prometheus.harness` to a dedicated `io.prometheus.containers` package
+- Switch the proxy/agent Docker images to the prebuilt `bellsoft/liberica-openjre-alpine:17` base (no build-time `apk add openjdk17-jre`, so builds are faster and not subject to Alpine-mirror stalls; genuine amd64 + arm64 multi-arch so the images run on Apple Silicon, unlike the amd64-only `eclipse-temurin:17-jre-alpine`)
+- Run tests in CI and upload kover coverage to Codecov on each push and pull request
+- Scope `netty-tcnative` and `jul-to-slf4j` as `runtimeOnly` (no compile-time references; still bundled in the fat JARs via `runtimeClasspath`)
 
 ### Dependency Updates
 
-| Dependency      | Old | New   |
-|-----------------|-----|-------|
-| testcontainers  | —   | 2.0.5 |
+| Dependency          | Old   | New    |
+|---------------------|-------|--------|
+| testcontainers      | —     | 2.0.5  |
+| Typesafe Config     | 1.4.8 | 1.4.9  |
+| BuildConfig plugin  | 6.0.9 | 6.0.10 |
+
+Pin `protobuf`/`protoc` (4.34.1 → 3.25.3) and `netty-tcnative` (2.0.77.Final → 2.0.75.Final) **down** to
+the versions the gRPC 1.81.0 artifacts expect, keeping the generated stubs and native TLS binary-compatible
+with grpc-netty-shaded.
 
 ---
 
