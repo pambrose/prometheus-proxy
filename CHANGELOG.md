@@ -67,16 +67,19 @@ All notable changes to this project are documented in this file.
 - Move `ContainersSmokeTest` from `io.prometheus.harness` to a dedicated `io.prometheus.containers` package
 - Switch the proxy/agent Docker images to the prebuilt `bellsoft/liberica-openjre-alpine:17` base (no build-time `apk add openjdk17-jre`, so builds are faster and not subject to Alpine-mirror stalls; genuine amd64 + arm64 multi-arch so the images run on Apple Silicon, unlike the amd64-only `eclipse-temurin:17-jre-alpine`)
 - Run tests in CI and upload kover coverage to Codecov on each push and pull request
+- Scope `netty-tcnative` and `jul-to-slf4j` as `runtimeOnly` (no compile-time references; still bundled in the fat JARs via `runtimeClasspath`)
 
 ### Dependency Updates
 
-| Dependency            | Old           | New           |
-|-----------------------|---------------|---------------|
-| testcontainers        | —             | 2.0.5         |
-| Typesafe Config       | 1.4.8         | 1.4.9         |
-| protobuf / protoc     | 4.34.1        | 4.35.0        |
-| netty-tcnative        | 2.0.77.Final  | 2.0.78.Final  |
-| BuildConfig plugin    | 6.0.9         | 6.0.10        |
+| Dependency          | Old   | New    |
+|---------------------|-------|--------|
+| testcontainers      | —     | 2.0.5  |
+| Typesafe Config     | 1.4.8 | 1.4.9  |
+| BuildConfig plugin  | 6.0.9 | 6.0.10 |
+
+Pin `protobuf`/`protoc` (4.34.1 → 3.25.3) and `netty-tcnative` (2.0.77.Final → 2.0.75.Final) **down** to
+the versions the gRPC 1.81.0 artifacts expect, keeping the generated stubs and native TLS binary-compatible
+with grpc-netty-shaded.
 
 ---
 
