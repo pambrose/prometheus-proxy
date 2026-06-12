@@ -34,13 +34,13 @@ import io.kotest.matchers.string.shouldNotBeEmpty
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
+import io.prometheus.common.ConfigLoadException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
@@ -74,15 +74,21 @@ class AgentTest : StringSpec() {
     "awaitInitialConnection should return true after latch countdown" {
       val agent = createTestAgent()
 
-      // Access the private latch via reflection and count it down
-      val latchField = Agent::class.java.getDeclaredField("initialConnectionLatch")
-      latchField.isAccessible = true
-      val latch = latchField.get(agent) as CountDownLatch
-      latch.countDown()
+      agent.countDownInitialConnectionLatch()
 
       val result = agent.awaitInitialConnection(1.seconds)
 
       result.shouldBeTrue()
+    }
+
+    // Public-API contract: embedded hosts (exitOnMissingConfig = false) must be able to catch a
+    // config-load failure instead of the JVM exiting. Locks in that startAsyncAgent propagates it.
+    "startAsyncAgent throws ConfigLoadException for a missing config when exitOnMissingConfig is false" {
+      val exception =
+        shouldThrow<ConfigLoadException> {
+          Agent.startAsyncAgent("nonexistent.conf", exitOnMissingConfig = false, logBanner = false)
+        }
+      exception.message shouldContain "nonexistent.conf"
     }
 
     "awaitInitialConnection should return false immediately with zero timeout" {
