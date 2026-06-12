@@ -242,8 +242,21 @@ class ProxyOptions(
             "internal.scrapeRequestTimeoutSecs must be > 0: ${internal.scrapeRequestTimeoutSecs}"
           }
           logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
+
+          require(internal.staleAgentCheckPauseSecs > 0) {
+            "internal.staleAgentCheckPauseSecs must be > 0: ${internal.staleAgentCheckPauseSecs}"
+          }
           logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }
+
+          require(internal.maxAgentInactivitySecs > 0) {
+            "internal.maxAgentInactivitySecs must be > 0: ${internal.maxAgentInactivitySecs}"
+          }
           logger.info { "internal.maxAgentInactivitySecs: ${internal.maxAgentInactivitySecs}" }
+
+          // 0 is a valid (degenerate) "reject all content" limit, so only negatives are invalid here.
+          require(internal.maxUnzippedContentSizeMBytes >= 0) {
+            "internal.maxUnzippedContentSizeMBytes must be >= 0: ${internal.maxUnzippedContentSizeMBytes}"
+          }
           logger.info { "internal.maxUnzippedContentSizeMBytes: ${internal.maxUnzippedContentSizeMBytes}" }
         }
 
