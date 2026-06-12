@@ -277,12 +277,20 @@ abstract class BaseOptions protected constructor(
   protected fun assignKeepAliveTimeSecs(defaultVal: Long) {
     if (keepAliveTimeSecs == -1L)
       keepAliveTimeSecs = KEEPALIVE_TIME_SECS.getEnv(defaultVal)
+    // -1L keeps the gRPC built-in default; any other non-positive value would surface as an opaque
+    // gRPC builder exception at startup, so fail fast with a clear message instead.
+    require(keepAliveTimeSecs == -1L || keepAliveTimeSecs > 0L) {
+      "grpc.keepAliveTimeSecs must be -1 (default) or > 0: $keepAliveTimeSecs"
+    }
     logger.info { "grpc.keepAliveTimeSecs: ${keepAliveTimeSecs.grpcDefaultLabel("gRPC default")}" }
   }
 
   protected fun assignKeepAliveTimeoutSecs(defaultVal: Long) {
     if (keepAliveTimeoutSecs == -1L)
       keepAliveTimeoutSecs = KEEPALIVE_TIMEOUT_SECS.getEnv(defaultVal)
+    require(keepAliveTimeoutSecs == -1L || keepAliveTimeoutSecs > 0L) {
+      "grpc.keepAliveTimeoutSecs must be -1 (default) or > 0: $keepAliveTimeoutSecs"
+    }
     logger.info { "grpc.keepAliveTimeoutSecs: ${keepAliveTimeoutSecs.grpcDefaultLabel("gRPC default")}" }
   }
 

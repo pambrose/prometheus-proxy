@@ -195,6 +195,22 @@ class ProxyOptionsTest : StringSpec() {
       options.handshakeTimeoutSecs shouldBe -1L
     }
 
+    "a zero gRPC keepalive time should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--keepalive_time_secs", "0")) }
+      exception.message shouldContain "keepAliveTimeSecs"
+    }
+
+    "a zero gRPC keepalive timeout should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--keepalive_timeout_secs", "0")) }
+      exception.message shouldContain "keepAliveTimeoutSecs"
+    }
+
+    "the -1 sentinel should be accepted for gRPC keepalive timeouts" {
+      val options = ProxyOptions(listOf("--keepalive_time_secs", "-1", "--keepalive_timeout_secs", "-1"))
+      options.keepAliveTimeSecs shouldBe -1L
+      options.keepAliveTimeoutSecs shouldBe -1L
+    }
+
     // ==================== Constructor Variants Tests ====================
 
     "list constructor should work" {

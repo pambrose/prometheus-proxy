@@ -61,7 +61,7 @@ internal object ProxyUtils {
           }
           baos.write(buffer, 0, len)
         }
-        return DecodedContent(baos.toString(Charsets.UTF_8.name()), totalBytes)
+        return DecodedContent(baos.toString(Charsets.UTF_8), totalBytes)
       }
     }
   }

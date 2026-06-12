@@ -63,7 +63,6 @@ import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
@@ -378,7 +377,9 @@ internal class AgentGrpcService(
           val buffer = ByteArray(chunkContentSize)
           var readByteCount: Int
 
-          while (withContext(Dispatchers.IO) { bais.read(buffer) }.also { readByteCount = it } > 0) {
+          // bais is an in-memory ByteArrayInputStream, so read() never blocks; no Dispatchers.IO hop
+          // is needed (the enclosing coroutine already runs on IO).
+          while (bais.read(buffer).also { readByteCount = it } > 0) {
             totalChunkCount++
             totalByteCount += readByteCount
             checksum.update(buffer, 0, readByteCount)

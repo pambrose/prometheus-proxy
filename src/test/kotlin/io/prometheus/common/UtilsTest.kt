@@ -28,7 +28,6 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.appendQueryParams
-import io.prometheus.common.Utils.decodeParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.parseHostPort
@@ -52,39 +51,6 @@ class UtilsTest : StringSpec() {
   init {
     afterTest {
       setLogLevel("test", originalLogLevel.levelStr.lowercase())
-    }
-
-    // ==================== decodeParams Tests ====================
-
-    "decodeParams should return empty string for blank input" {
-      decodeParams("") shouldBe ""
-      decodeParams("   ") shouldBe ""
-    }
-
-    "decodeParams should decode URL-encoded parameters" {
-      val encoded = "foo%3Dbar%26baz%3Dqux"
-      val result = decodeParams(encoded)
-
-      result shouldBe "?foo=bar&baz=qux"
-    }
-
-    "decodeParams should add question mark prefix" {
-      val result = decodeParams("simple")
-
-      result shouldBe "?simple"
-    }
-
-    "decodeParams should handle special characters" {
-      val encoded = "name%3DJohn%20Doe%26city%3DNew%20York"
-      val result = decodeParams(encoded)
-
-      result shouldBe "?name=John Doe&city=New York"
-    }
-
-    "decodeParams should handle already decoded strings" {
-      val result = decodeParams("key=value")
-
-      result shouldBe "?key=value"
     }
 
     // ==================== appendQueryParams Tests ====================

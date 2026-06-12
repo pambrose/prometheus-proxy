@@ -319,7 +319,11 @@ class Agent(
           }
         }.onFailure { e -> handleConnectionFailure(e) }
       } finally {
-        logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
+        // Skip the rate-limiter wait once shutdown has flipped isRunning to false. acquire() is not
+        // interruptible, so blocking here would stall Agent.shutDown()/awaitTerminated() for up to
+        // reconnectPauseSecs; there is also no reconnect to pace when the agent is stopping.
+        if (isRunning)
+          logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
       }
     }
   }
