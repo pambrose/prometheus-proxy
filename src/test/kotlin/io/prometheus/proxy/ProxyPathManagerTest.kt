@@ -601,37 +601,13 @@ class ProxyPathManagerTest : StringSpec() {
       info2.agentContexts.shouldHaveSize(2)
     }
 
-    "getAgentContextInfo returned list mutation should not affect internal state" {
-      val proxy = createMockProxy()
-      val manager = ProxyPathManager(proxy, isTestMode = true)
-      val context1 = createMockAgentContext(consolidated = true)
-      val context2 = createMockAgentContext(consolidated = true)
+    // ==================== M1: agentContexts typed as immutable List ====================
 
-      manager.addPath("/metrics", """{"job":"test"}""", context1)
-      manager.addPath("/metrics", """{"job":"test"}""", context2)
-
-      val info = manager.getAgentContextInfo("/metrics")
-      info.shouldNotBeNull()
-      info.agentContexts.shouldHaveSize(2)
-
-      // Force-cast and mutate the returned list (simulates a caller bypassing compile-time safety)
-      @Suppress("UNCHECKED_CAST")
-      (info.agentContexts).clear()
-      info.agentContexts.shouldHaveSize(0)
-
-      // Internal state should be unaffected
-      val info2 = manager.getAgentContextInfo("/metrics")
-      info2.shouldNotBeNull()
-      info2.agentContexts.shouldHaveSize(2)
-    }
-
-    // ==================== M1: agentContexts typed as MutableList ====================
-
-    // M1: The agentContexts field in AgentContextInfo was typed as List<AgentContext> but
-    // was unsafely cast to MutableList at three call sites (addPath, removePath,
-    // removeFromPathManager). This relied on the implementation detail that the list was
-    // created with mutableListOf(). The fix changed the type to MutableList<AgentContext>
-    // to make the mutable usage explicit and eliminate the unsafe casts.
+    // M1: AgentContextInfo.agentContexts is an immutable List<AgentContext>. The three mutating
+    // call sites (addPath, removePath, removeFromPathManager) replace the pathMap entry with a
+    // copy() carrying a new list rather than mutating in place, so a data-class copy() can never
+    // share a still-mutating list with the stored entry. These tests exercise that the
+    // consolidated add/remove paths still behave correctly under that copy-on-write model.
     "consolidated addPath should not require unsafe cast to MutableList" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)

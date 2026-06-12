@@ -471,6 +471,10 @@ class Agent(
    */
   internal fun awaitInitialConnection(timeout: Duration) = initialConnectionLatch.await(timeout)
 
+  // Test hook: releases the initial-connection latch so tests can drive awaitInitialConnection()
+  // without reflecting into the private field.
+  internal fun countDownInitialConnectionLatch() = initialConnectionLatch.countDown()
+
   internal fun awaitInitialPathsRegistered(timeout: Duration) = initialPathsRegisteredLatch.await(timeout)
 
   /**

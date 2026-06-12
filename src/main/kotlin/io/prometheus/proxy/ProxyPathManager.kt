@@ -43,19 +43,18 @@ internal class ProxyPathManager(
   data class AgentContextInfo(
     val isConsolidated: Boolean,
     val labels: String,
-    val agentContexts: MutableList<AgentContext>,
+    // Immutable: mutations replace the pathMap entry with a copy() carrying a new list, so a
+    // data-class copy() can never share a still-mutating list with the stored entry.
+    val agentContexts: List<AgentContext>,
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
   }
 
   private val pathMap = HashMap<String, AgentContextInfo>()
 
-  fun getAgentContextInfo(path: String): AgentContextInfo? =
-    synchronized(pathMap) {
-      pathMap[path]?.let { info ->
-        AgentContextInfo(info.isConsolidated, info.labels, info.agentContexts.toMutableList())
-      }
-    }
+  // AgentContextInfo is deeply immutable and mutations replace the pathMap entry (never mutate in
+  // place), so returning the stored instance is already an effective snapshot — no defensive copy.
+  fun getAgentContextInfo(path: String): AgentContextInfo? = synchronized(pathMap) { pathMap[path] }
 
   val pathMapSize: Int
     get() = synchronized(pathMap) { pathMap.size }
@@ -63,12 +62,8 @@ internal class ProxyPathManager(
   val allPaths: List<String>
     get() = synchronized(pathMap) { pathMap.keys.toList() }
 
-  fun allPathContextInfos(): Map<String, AgentContextInfo> =
-    synchronized(pathMap) {
-      pathMap.map { (k, v) ->
-        k to AgentContextInfo(v.isConsolidated, v.labels, v.agentContexts.toMutableList())
-      }.toMap()
-    }
+  // Copy only the map to snapshot the key set under the lock; the immutable values can be shared.
+  fun allPathContextInfos(): Map<String, AgentContextInfo> = synchronized(pathMap) { pathMap.toMap() }
 
   /**
    * Adds a path to the path map for the given agent context.
@@ -86,14 +81,14 @@ internal class ProxyPathManager(
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
         if (agentInfo == null) {
-          pathMap[path] = AgentContextInfo(true, labels, mutableListOf(agentContext))
+          pathMap[path] = AgentContextInfo(true, labels, listOf(agentContext))
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated) {
             val reason = "Consolidated agent rejected for non-consolidated path /$path"
             logger.error { reason }
             return reason
           }
-          agentInfo.agentContexts += agentContext
+          pathMap[path] = agentInfo.copy(agentContexts = agentInfo.agentContexts + agentContext)
         }
       } else {
         if (agentInfo != null && agentInfo.isConsolidated) {
@@ -101,12 +96,12 @@ internal class ProxyPathManager(
           logger.error { reason }
           return reason
         }
-        val displacedContexts = agentInfo?.agentContexts?.toList() ?: emptyList()
+        val displacedContexts = agentInfo?.agentContexts ?: emptyList()
         if (agentInfo != null) {
           logger.info { "Overwriting path /$path for ${agentInfo.agentContexts.firstOrNull()}" }
           proxy.metrics { agentDisplacementCount.inc() }
         }
-        pathMap[path] = AgentContextInfo(false, labels, mutableListOf(agentContext))
+        pathMap[path] = AgentContextInfo(false, labels, listOf(agentContext))
 
         // Invalidate displaced agent contexts that have no other registered paths.
         // Even live agents are invalidated here — a displaced agent with zero paths
@@ -158,9 +153,10 @@ internal class ProxyPathManager(
       }
 
       if (agentInfo.isConsolidated && agentInfo.agentContexts.size > 1) {
-        agentInfo.agentContexts.remove(agentContext)
+        val updated = agentInfo.copy(agentContexts = agentInfo.agentContexts.filterNot { it.agentId == agentId })
+        pathMap[path] = updated
         if (!isTestMode)
-          logger.info { "Removed element of path /$path for $agentInfo" }
+          logger.info { "Removed element of path /$path for $updated" }
       } else {
         pathMap.remove(path)
         if (!isTestMode)
@@ -187,21 +183,26 @@ internal class ProxyPathManager(
       logger.info { "Removing paths for agentId: $agentId ($reason)" }
 
       synchronized(pathMap) {
-        // Collect keys to remove in a first pass to avoid modifying the map during iteration
+        // Collect map mutations in a first pass to avoid modifying the map during iteration.
         val keysToRemove = mutableListOf<String>()
+        val keysToUpdate = mutableMapOf<String, AgentContextInfo>()
         pathMap.forEach { (k, v) ->
           if (v.agentContexts.size == 1) {
             if (v.agentContexts[0].agentId == agentId)
               keysToRemove += k
           } else {
-            val removed = v.agentContexts.removeIf { it.agentId == agentId }
-            if (removed) {
+            val filtered = v.agentContexts.filterNot { it.agentId == agentId }
+            if (filtered.size != v.agentContexts.size) {
               logger.info { "Removed agentId $agentId from consolidated path /$k" }
-              if (v.agentContexts.isEmpty())
+              if (filtered.isEmpty())
                 keysToRemove += k
+              else
+                keysToUpdate[k] = v.copy(agentContexts = filtered)
             }
           }
         }
+
+        keysToUpdate.forEach { (k, v) -> pathMap[k] = v }
 
         keysToRemove.forEach { k ->
           pathMap.remove(k)
