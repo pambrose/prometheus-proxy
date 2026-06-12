@@ -52,12 +52,9 @@ internal class ProxyPathManager(
 
   private val pathMap = HashMap<String, AgentContextInfo>()
 
-  fun getAgentContextInfo(path: String): AgentContextInfo? =
-    synchronized(pathMap) {
-      pathMap[path]?.let { info ->
-        AgentContextInfo(info.isConsolidated, info.labels, info.agentContexts.toList())
-      }
-    }
+  // AgentContextInfo is deeply immutable and mutations replace the pathMap entry (never mutate in
+  // place), so returning the stored instance is already an effective snapshot — no defensive copy.
+  fun getAgentContextInfo(path: String): AgentContextInfo? = synchronized(pathMap) { pathMap[path] }
 
   val pathMapSize: Int
     get() = synchronized(pathMap) { pathMap.size }
@@ -65,12 +62,8 @@ internal class ProxyPathManager(
   val allPaths: List<String>
     get() = synchronized(pathMap) { pathMap.keys.toList() }
 
-  fun allPathContextInfos(): Map<String, AgentContextInfo> =
-    synchronized(pathMap) {
-      pathMap.map { (k, v) ->
-        k to AgentContextInfo(v.isConsolidated, v.labels, v.agentContexts.toList())
-      }.toMap()
-    }
+  // Copy only the map to snapshot the key set under the lock; the immutable values can be shared.
+  fun allPathContextInfos(): Map<String, AgentContextInfo> = synchronized(pathMap) { pathMap.toMap() }
 
   /**
    * Adds a path to the path map for the given agent context.
@@ -103,7 +96,7 @@ internal class ProxyPathManager(
           logger.error { reason }
           return reason
         }
-        val displacedContexts = agentInfo?.agentContexts?.toList() ?: emptyList()
+        val displacedContexts = agentInfo?.agentContexts ?: emptyList()
         if (agentInfo != null) {
           logger.info { "Overwriting path /$path for ${agentInfo.agentContexts.firstOrNull()}" }
           proxy.metrics { agentDisplacementCount.inc() }
