@@ -211,6 +211,36 @@ class ProxyOptionsTest : StringSpec() {
       options.keepAliveTimeoutSecs shouldBe -1L
     }
 
+    // These internal config values are positive durations/sizes; a 0/negative would otherwise
+    // surface as silent misbehavior (busy-loop, immediate eviction, all-content-rejected) rather
+    // than a clear startup error.
+
+    "a non-positive staleAgentCheckPauseSecs should be rejected" {
+      val exception =
+        shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("-Dproxy.internal.staleAgentCheckPauseSecs=0")) }
+      exception.message shouldContain "staleAgentCheckPauseSecs"
+    }
+
+    "a non-positive maxAgentInactivitySecs should be rejected" {
+      val exception =
+        shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("-Dproxy.internal.maxAgentInactivitySecs=0")) }
+      exception.message shouldContain "maxAgentInactivitySecs"
+    }
+
+    // 0 is a valid "reject all content" limit (used by the zip-bomb test), so only negatives reject.
+    "a negative maxUnzippedContentSizeMBytes should be rejected" {
+      val exception =
+        shouldThrow<IllegalArgumentException> {
+          ProxyOptions(listOf("-Dproxy.internal.maxUnzippedContentSizeMBytes=-1"))
+        }
+      exception.message shouldContain "maxUnzippedContentSizeMBytes"
+    }
+
+    "a zero maxUnzippedContentSizeMBytes should be accepted (reject-all limit)" {
+      val options = ProxyOptions(listOf("-Dproxy.internal.maxUnzippedContentSizeMBytes=0"))
+      options.configVals.proxy.internal.maxUnzippedContentSizeMBytes shouldBe 0
+    }
+
     // ==================== Constructor Variants Tests ====================
 
     "list constructor should work" {

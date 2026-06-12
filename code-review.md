@@ -387,6 +387,11 @@ A 114-line nested `connectToProxy()` launches four child coroutines, each repeat
 
 **Fix:** add fail-fast checks in `assignConfigVals()` after each value resolves: `require(proxyPort in 1..65535)`, same for `proxyAgentPort`, and `require(field == -1L || field > 0)` for each gRPC timeout (preserving the sentinel the `> -1L` guards rely on). No behavior change for valid configs.
 
+**Completed 2026-06-12 (remaining elements):** ports, gRPC timeouts, and the `keepAlive*` pair are
+guarded; `internal.scrapeRequestTimeoutSecs`, `staleAgentCheckPauseSecs`, and `maxAgentInactivitySecs`
+now `require(> 0)`, and `maxUnzippedContentSizeMBytes` `require(>= 0)` (0 is a valid "reject-all"
+limit used by the zip-bomb test, so only negatives are rejected). Rejection + accept tests added.
+
 ### Lower-value config/observability (low)
 
 - [x] **`scrapeRequestTimeoutSecs` bounds check** (`ProxyOptions.kt:241`):
