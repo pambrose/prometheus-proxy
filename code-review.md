@@ -8,6 +8,81 @@ The adversarial layer killed several scary-sounding-but-wrong findings, e.g. a c
 
 ---
 
+## 📋 Findings index
+
+At-a-glance status of every finding. ✅ = fixed/addressed · ⬜ = open or deliberately deferred.
+**28 of the 31 numbered items done; 3 deferred (13–15).** Details and PR references in the
+Resolution status section below; full write-ups further down.
+
+| # | Finding | Severity | Status |
+|---|---------|----------|--------|
+| 1 | Query-string secrets leak into agent logs at WARN | medium | ✅ |
+| 2 | `connectAgent()` swallows JVM `Error`s / retries fatal failures forever | medium | ✅ |
+| 3 | `readConfig()` `exitProcess(1)` ignores `exitOnMissingConfig` (embedded) | medium | ✅ |
+| 4 | Embedded shutdown can leak an `HttpClient`; `close()` lacks terminal flag | medium | ✅ |
+| 5 | `writeChunkedResponsesToProxy` single-coroutine invariant undocumented | low | ✅ |
+| 6 | Evicted agents don't proactively reclaim chunked contexts | low | ✅ |
+| 7 | `writeResponsesToProxy()` swallows per-response errors → slow 503 | medium | ✅ |
+| 8 | Dropped scrape results on connection-close are invisible (no metric) | medium | ✅ |
+| 9 | Content-type parse failure logged only at debug | low | ✅ |
+| 10 | Response body encoded to bytes twice (measure, then gzip) | medium | ✅ |
+| 11 | Full payload re-encoded just to record a metric size | medium | ✅ |
+| 12 | Per-chunk `withContext(IO)` over an in-memory stream | low | ✅ |
+| 13 | Per-chunk `chunkBytes.toByteArray()` copy on reassembly | low | ⬜ deferred |
+| 14 | Eager `contentAsZipped.toByteArray()` in `toScrapeResults` | low | ⬜ deferred |
+| 15 | `mergeContentTexts` / `distinct()` allocations | low | ⬜ deferred |
+| 16 | `chunkContentSizeBytes` shifts units (KB→bytes) in place | medium | ✅ |
+| 17 | Stringly-typed `List<Map<String,String>>` path configs | medium | ✅ |
+| 18 | Duplicated common-option assignment (Agent/Proxy options) | medium | ✅ |
+| 19 | Dead `SslSettings` object/test | low | ✅ (wired into per-CA trust store) |
+| 20 | Commented-out CT / `__test__` blocks | low | ✅ |
+| 21 | Six near-identical `ConfigWrappers` overloads | low | ✅ |
+| 22 | Decompose `Agent.run()`; factor drain-and-decrement handler | low | ✅ |
+| 23 | `trustAllX509Certificates` process-global all-or-nothing | medium | ✅ (per-CA trust store) |
+| 24 | Query params decoded-then-concatenated into the scrape URL | low | ✅ |
+| 25 | Basic-auth credentials stored as plaintext map keys | low | ✅ (salted HMAC) |
+| 26 | Per-request INFO call logging on by default | medium | ✅ |
+| 27 | `ProxyOptions` no bounds validation on ports/timeouts | medium | ✅ |
+| 28 | No negative-path mutual-TLS rejection test | medium | ✅ |
+| 29 | `cioTimeoutSecs` vs `httpClientTimeoutSecs` resolution untested | medium | ✅ |
+| 30 | "Unknown scrapeId" header-drop branch untested | medium | ✅ |
+| 31 | Wrapped/nested timeout detection partially untested | medium | ✅ |
+
+**Lower-value sub-bullets**
+
+| Group | Item | Status |
+|-------|------|--------|
+| Idioms | `consolidated` → `atomicBoolean(false)` | ✅ |
+| Idioms | `grpcDefaultLabel` extraction | ✅ |
+| Idioms | `isValid` computed val (not in `apply`) | ✅ |
+| Idioms | `ClientKey` → `Credentials` value object | ✅ |
+| Idioms | `ScrapeResults` 11-arg remodel | ⬜ deferred |
+| Config/obs | `scrapeRequestTimeoutSecs` bounds check | ✅ |
+| Config/obs | Dead config keys removed | ✅ |
+| Config/obs | Proxy scrape-failure-mode metric label | ⬜ open |
+| Config/obs | `launch_id` labeling on `ProxyMetrics` | ⬜ open |
+| Tests | ChunkedContext exact-boundary acceptance | ✅ |
+| Tests | `writeScrapeRequest`/`invalidate` race test | ⬜ won't-do |
+
+**New findings fixed after the original review (not numbered above)**
+
+| Finding | Status |
+|---------|--------|
+| Unbounded response-body buffering on the agent (OOM risk) | ✅ |
+| Agent shutdown stalled on the reconnect rate-limiter | ✅ |
+| Dead `Utils.decodeParams` removed | ✅ |
+| `keepAlive*` gRPC-timeout bounds check | ✅ |
+| `removeChunkedContextsForAgent` returned pre-removal snapshot | ✅ |
+| `ByteArrayOutputStream.toString(Charset)` overload | ✅ |
+| `TlsMutualAuthRejectionTest` teardown → `coroutineScope` | ✅ |
+| Redundant defensive list copies in `ProxyPathManager` (`/simplify`) | ✅ |
+
+**Still open (own PRs):** the High-severity unauthenticated agent-registration / path-hijacking
+finding (see `docs/security-agent-authentication.md`), gRPC-reflection-on-by-default, detekt alpha
+pin + CI/Docker hygiene, and the two observability items above.
+
+---
+
 ## ✅ Resolution status (updated 2026-06-12)
 
 The findings below were worked through across PRs #149–#163. As of 2026-06-11 the campaign is
