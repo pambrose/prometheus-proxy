@@ -302,13 +302,9 @@ class EnvVarsTest : StringSpec() {
       actualNames shouldBe expectedNames
     }
 
-    "getEnv Int and Long error messages should reference the env var name" {
-      // We can't easily set env vars in tests, but we can verify the error message format
-      // by checking that the getEnv methods exist and work with defaults
-      // The actual error path (invalid int/long) is tested by verifying the exception message format
-      // in the source code: "Environment variable $name has invalid integer value: '$value'"
-      // and "Environment variable $name has invalid long value: '$value'"
-      // Here we verify the happy path still works for all numeric types
+    "getEnv Int and Long return the default when the env var is unset" {
+      // System.getenv() can't be set in-process, so getEnv()'s default branch is exercised here and
+      // its parse-and-throw branch is covered directly via parseIntStrict / parseLongStrict below.
       val intResult = EnvVars.PROXY_PORT.getEnv(8080)
       val longResult = EnvVars.HANDSHAKE_TIMEOUT_SECS.getEnv(120L)
 
@@ -318,6 +314,74 @@ class EnvVarsTest : StringSpec() {
       if (System.getenv("HANDSHAKE_TIMEOUT_SECS") == null) {
         longResult shouldBe 120L
       }
+    }
+
+    // ==================== parseIntStrict validation ====================
+    // Covers the throw branch of getEnv(Int), which getEnv() reaches only when a real env var holds
+    // a non-numeric value — not settable in-process, so the extracted helper is tested directly.
+
+    "parseIntStrict should parse valid integers including boundaries and signs" {
+      EnvVars.parseIntStrict("TEST", "0") shouldBe 0
+      EnvVars.parseIntStrict("TEST", "8080") shouldBe 8080
+      EnvVars.parseIntStrict("TEST", "-1") shouldBe -1
+      EnvVars.parseIntStrict("TEST", "${Int.MAX_VALUE}") shouldBe Int.MAX_VALUE
+      EnvVars.parseIntStrict("TEST", "${Int.MIN_VALUE}") shouldBe Int.MIN_VALUE
+    }
+
+    "parseIntStrict should throw with the env var name for a non-numeric value" {
+      val exception = shouldThrow<IllegalArgumentException> {
+        EnvVars.parseIntStrict("PROXY_PORT", "not-a-number")
+      }
+      exception.message shouldContain "PROXY_PORT"
+      exception.message shouldContain "invalid integer value"
+      exception.message shouldContain "not-a-number"
+    }
+
+    "parseIntStrict should throw for a value that overflows Int" {
+      // Valid as a Long but out of Int range — toIntOrNull() returns null, so this must throw.
+      val tooBig = "${Int.MAX_VALUE.toLong() + 1}"
+      val exception = shouldThrow<IllegalArgumentException> {
+        EnvVars.parseIntStrict("MAX_CONCURRENT_CLIENTS", tooBig)
+      }
+      exception.message shouldContain "MAX_CONCURRENT_CLIENTS"
+      exception.message shouldContain tooBig
+    }
+
+    "parseIntStrict should throw for an empty or whitespace-padded value" {
+      shouldThrow<IllegalArgumentException> { EnvVars.parseIntStrict("TEST", "") }
+      // toIntOrNull() does not trim, so surrounding whitespace is rejected rather than silently parsed.
+      shouldThrow<IllegalArgumentException> { EnvVars.parseIntStrict("TEST", " 8080 ") }
+    }
+
+    // ==================== parseLongStrict validation ====================
+    // Covers the throw branch of getEnv(Long) for the same reason as parseIntStrict above.
+
+    "parseLongStrict should parse valid longs including boundaries and signs" {
+      EnvVars.parseLongStrict("TEST", "0") shouldBe 0L
+      EnvVars.parseLongStrict("TEST", "120") shouldBe 120L
+      EnvVars.parseLongStrict("TEST", "-1") shouldBe -1L
+      EnvVars.parseLongStrict("TEST", "${Long.MAX_VALUE}") shouldBe Long.MAX_VALUE
+      EnvVars.parseLongStrict("TEST", "${Long.MIN_VALUE}") shouldBe Long.MIN_VALUE
+    }
+
+    "parseLongStrict should accept a value that overflows Int but fits in Long" {
+      // Guards the Int-vs-Long distinction: this would fail parseIntStrict but is valid here.
+      val beyondInt = Int.MAX_VALUE.toLong() + 1
+      EnvVars.parseLongStrict("KEEPALIVE_TIME_SECS", "$beyondInt") shouldBe beyondInt
+    }
+
+    "parseLongStrict should throw with the env var name for a non-numeric value" {
+      val exception = shouldThrow<IllegalArgumentException> {
+        EnvVars.parseLongStrict("HANDSHAKE_TIMEOUT_SECS", "abc")
+      }
+      exception.message shouldContain "HANDSHAKE_TIMEOUT_SECS"
+      exception.message shouldContain "invalid long value"
+      exception.message shouldContain "abc"
+    }
+
+    "parseLongStrict should throw for an empty or whitespace-padded value" {
+      shouldThrow<IllegalArgumentException> { EnvVars.parseLongStrict("TEST", "") }
+      shouldThrow<IllegalArgumentException> { EnvVars.parseLongStrict("TEST", " 120 ") }
     }
 
     // ==================== Bug #16: parseBooleanStrict validation ====================

@@ -209,14 +209,12 @@ enum class EnvVars {
 
   fun getEnv(defaultVal: Int): Int {
     val value = getenv(name) ?: return defaultVal
-    return value.toIntOrNull()
-      ?: throw IllegalArgumentException("Environment variable $name has invalid integer value: '$value'")
+    return parseIntStrict(name, value)
   }
 
   fun getEnv(defaultVal: Long): Long {
     val value = getenv(name) ?: return defaultVal
-    return value.toLongOrNull()
-      ?: throw IllegalArgumentException("Environment variable $name has invalid long value: '$value'")
+    return parseLongStrict(name, value)
   }
 
   internal companion object {
@@ -233,5 +231,19 @@ enum class EnvVars {
           "Environment variable $envName has invalid boolean value: '$value' (expected 'true' or 'false')",
         )
       }
+
+    internal fun parseIntStrict(
+      envName: String,
+      value: String,
+    ): Int =
+      value.toIntOrNull()
+        ?: throw IllegalArgumentException("Environment variable $envName has invalid integer value: '$value'")
+
+    internal fun parseLongStrict(
+      envName: String,
+      value: String,
+    ): Long =
+      value.toLongOrNull()
+        ?: throw IllegalArgumentException("Environment variable $envName has invalid long value: '$value'")
   }
 }
