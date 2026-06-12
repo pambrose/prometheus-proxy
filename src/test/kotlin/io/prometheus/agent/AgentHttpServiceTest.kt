@@ -1297,6 +1297,97 @@ class AgentHttpServiceTest : StringSpec() {
       }
     }
 
+    "fetchScrapeUrl reads the full chunked body (no Content-Length) when under the limit" {
+      // respondTextWriter streams with chunked transfer-encoding and no Content-Length, so the
+      // bounded readRemaining(maxContentLength + 1) path is exercised. The body is well under the
+      // 10 MB default limit, so it must be returned intact (not truncated at the read cap).
+      val content = "metric_a 1.0\nmetric_b 2.0\nmetric_c 3.0\n".repeat(50)
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondTextWriter {
+              write(content)
+            }
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+
+        val mockAgent = createMockAgentWithPaths()
+        // minGzipSizeBytes is 1_000_000, so this small body stays on the non-zipped text path.
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 204L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe 200
+        results.srValidResponse.shouldBeTrue()
+        results.srZipped.shouldBeFalse()
+        results.srContentAsText shouldBe content
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "fetchScrapeUrl decodes a multi-byte UTF-8 body correctly on the text path" {
+      // Guards the switch from bodyAsText() (response charset) to contentBytes.decodeToString()
+      // (always UTF-8): a multi-byte body under the gzip threshold must round-trip byte-for-byte.
+      val multiByte = "café_µ_世界 42.0\n".repeat(5) // mix of 2- and 3-byte UTF-8 chars
+      val server = embeddedServer(ServerCIO, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText(multiByte)
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+
+        val mockAgent = createMockAgentWithPaths()
+        // minGzipSizeBytes is 1_000_000, so this stays on the non-zipped text path.
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 205L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe 200
+        results.srValidResponse.shouldBeTrue()
+        results.srZipped.shouldBeFalse()
+        results.srContentAsText shouldBe multiByte
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
     // ==================== Item 29: timeout resolution precedence ====================
     // resolveTimeoutSecs honors the deprecated cioTimeoutSecs only when it was explicitly
     // overridden (non-default) while httpClientTimeoutSecs was left at the default. Otherwise

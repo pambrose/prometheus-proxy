@@ -40,11 +40,12 @@ import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.readRemaining
 import io.prometheus.Agent
 import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.ScrapeResults
@@ -54,6 +55,7 @@ import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.ScrapeRequest
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
+import kotlinx.io.readByteArray
 import javax.net.ssl.X509TrustManager
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -206,14 +208,17 @@ internal class AgentHttpService(
       }
 
       val contentType = response.headers[CONTENT_TYPE].orEmpty()
-      val content = response.bodyAsText()
 
-      // Encode the body to UTF-8 bytes once and reuse it for both the size check and gzip
-      // compression. ByteArray.zip() avoids the second UTF-8 encode that String.zip() would do.
-      val contentBytes = content.encodeToByteArray()
+      // Read at most maxContentLength + 1 bytes straight from the response channel. A response with
+      // no Content-Length header (e.g. chunked transfer encoding) or an understated one bypasses the
+      // header guard above, and bodyAsText() would buffer the entire body into the heap before the
+      // size check below — a memory-exhaustion vector. readRemaining caps the read, so the guard
+      // runs against a bounded buffer. The bytes are reused for both the size check and gzip;
+      // ByteArray.zip() avoids the second UTF-8 encode that String.zip() would do.
+      val contentBytes = response.bodyAsChannel().readRemaining(maxContentLength + 1).readByteArray()
       val contentByteSize = contentBytes.size.toLong()
       if (contentByteSize > maxContentLength) {
-        val msg = "Content size $contentByteSize bytes exceeds maximum allowed size $maxContentLength"
+        val msg = "Content size exceeds maximum allowed size of $maxContentLength bytes"
         logger.warn { msg }
         return ScrapeResults(
           srAgentId = scrapeRequest.agentId,
@@ -232,7 +237,7 @@ internal class AgentHttpService(
         srStatusCode = statusCode,
         srContentType = contentType,
         srZipped = zipped,
-        srContentAsText = if (!zipped) content else "",
+        srContentAsText = if (!zipped) contentBytes.decodeToString() else "",
         srContentAsZipped = if (zipped) contentBytes.zip() else EMPTY_BYTE_ARRAY,
         srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
         scrapeCounterMsg = SUCCESS_MSG,
