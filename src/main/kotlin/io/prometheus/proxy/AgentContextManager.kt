@@ -83,11 +83,13 @@ internal class AgentContextManager(
    *
    * @return the scrape IDs that were removed
    */
-  fun removeChunkedContextsForAgent(agentId: String): List<Long> {
-    val scrapeIds = chunkedContextMap.entries.filter { (_, context) -> context.agentId == agentId }.map { it.key }
-    scrapeIds.forEach { chunkedContextMap.remove(it) }
-    return scrapeIds
-  }
+  fun removeChunkedContextsForAgent(agentId: String): List<Long> =
+    // Return only the IDs this call actually removed. A concurrent writeChunkedResponsesToProxy can
+    // complete (and remove) a matching context between the filter and the remove, so returning the
+    // pre-removal snapshot would over-count what was reclaimed in the caller's log.
+    chunkedContextMap.entries
+      .filter { (_, context) -> context.agentId == agentId }
+      .mapNotNull { (scrapeId, _) -> if (chunkedContextMap.remove(scrapeId) != null) scrapeId else null }
 
   fun findStaleAgents(maxInactivity: Duration): List<Pair<String, AgentContext>> =
     agentContextMap

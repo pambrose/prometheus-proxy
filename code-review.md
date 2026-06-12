@@ -67,6 +67,16 @@ essentially complete — verified against current `master`.
 - **Dead `Utils.decodeParams`** (`common/Utils.kt`): leftover from PR #160 with zero production
   callers; its decode-then-prepend behavior was exactly the bug #160 fixed. Removed along with its
   `URLDecoder`/`UTF_8` imports and the `UtilsTest` block.
+- **`keepAliveTimeSecs`/`keepAliveTimeoutSecs` skipped the gRPC-timeout bounds check** that item 27
+  added for the other timeouts (`BaseOptions.kt:277-291`): a `0` slipped past the `> -1L` guard in
+  `ProxyGrpcService` and died as an opaque Netty exception at startup. Now `require`d to be `-1`
+  (default) or `> 0`, mirroring `ProxyOptions.requireGrpcTimeout`. Added rejection + sentinel tests.
+- **`removeChunkedContextsForAgent` returned the pre-removal snapshot** (`AgentContextManager.kt:86`):
+  a concurrent `writeChunkedResponsesToProxy` completing a matching context between the `filter` and
+  the `remove` inflated the caller's "Reclaimed N" log. Now returns only the IDs actually removed via
+  `mapNotNull`.
+- **`ByteArrayOutputStream.toString(Charsets.UTF_8.name())`** (`ProxyUtils.kt:64`): switched to the
+  JDK 10+ `toString(Charset)` overload (no suppressed `UnsupportedEncodingException`).
 
 ---
 
