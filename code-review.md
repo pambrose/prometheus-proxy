@@ -41,15 +41,17 @@ essentially complete — verified against current `master`.
   30 (unknown-scrapeId header-drop test), 31 (wrapped-timeout→408 test), plus the ChunkedContext
   exact-boundary acceptance test.
 
+- **12 — per-chunk `withContext(Dispatchers.IO)` over an in-memory `ByteArrayInputStream`**
+  (`AgentGrpcService.kt:381`): fixed 2026-06-12. The wrapper was pure per-iteration continuation
+  overhead (the enclosing coroutine already runs on IO and `ByteArrayInputStream.read()` never
+  blocks); the loop now reads directly. The now-unused `withContext` import was removed.
+
 **Still open / deferred:**
 
-- **12 — per-chunk `withContext(Dispatchers.IO)` over an in-memory `ByteArrayInputStream`**
-  (`AgentGrpcService.kt:381`): still present. Pure per-iteration continuation overhead (the enclosing
-  coroutine is already on IO and the read never blocks). Low priority; safe to drop the wrapper.
 - **13–15** (micro-opts) and the **`ScrapeResults` 11-arg remodel**: intentionally deferred
   (profiling-gated / cleanup-not-fix).
 
-**New finding fixed 2026-06-11 (not in the original 31):**
+**New findings fixed 2026-06-11/12 (not in the original 31):**
 
 - **Unbounded response-body buffering on the agent** (`AgentHttpService.kt:210-218`): `bodyAsText()`
   materialized the entire response into the heap *before* the post-read size check, so a target with
@@ -58,6 +60,13 @@ essentially complete — verified against current `master`.
   via `bodyAsChannel().readRemaining(...)`, so the size guard runs against a bounded buffer. Added two
   tests (full chunked body under the limit round-trips intact; multi-byte UTF-8 round-trips on the
   text path after the `bodyAsText`→`decodeToString` switch).
+- **Agent shutdown stalled on the reconnect rate-limiter** (`Agent.kt:321`): the reconnect loop's
+  `finally` called the non-interruptible `reconnectLimiter.acquire()` even after shutdown flipped
+  `isRunning` to false, stalling `shutDown()`/`awaitTerminated()` for up to `reconnectPauseSecs`.
+  Now guarded with `if (isRunning)` — there is no reconnect to pace when the agent is stopping.
+- **Dead `Utils.decodeParams`** (`common/Utils.kt`): leftover from PR #160 with zero production
+  callers; its decode-then-prepend behavior was exactly the bug #160 fixed. Removed along with its
+  `URLDecoder`/`UTF_8` imports and the `UtilsTest` block.
 
 ---
 

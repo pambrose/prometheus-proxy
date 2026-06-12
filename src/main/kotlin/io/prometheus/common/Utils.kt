@@ -27,16 +27,11 @@ import io.prometheus.Proxy
 import kotlinx.serialization.json.Json
 import org.slf4j.Logger.ROOT_LOGGER_NAME
 import org.slf4j.LoggerFactory
-import java.net.URLDecoder
-import kotlin.text.Charsets.UTF_8
 
 internal object Utils {
   private const val REDACTED = "***"
 
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
-
-  fun decodeParams(encodedQueryParams: String): String =
-    if (encodedQueryParams.isNotBlank()) "?${URLDecoder.decode(encodedQueryParams, UTF_8)}" else ""
 
   /**
    * Masks secrets in a URL before it is logged or echoed back to Prometheus.
