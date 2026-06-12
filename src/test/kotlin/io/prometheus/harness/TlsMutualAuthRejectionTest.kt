@@ -29,8 +29,8 @@ import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.support.exceptionHandler
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration.Companion.seconds
 
 // Item 28: negative-path coverage for mutual TLS. The existing TlsWithMutualAuthTest /
@@ -83,7 +83,9 @@ class TlsMutualAuthRejectionTest : StringSpec() {
         // awaitInitialConnection returns false once the timeout elapses.
         agent.awaitInitialConnection(5.seconds).shouldBeFalse()
       } finally {
-        runBlocking {
+        // The test block is itself a suspend function, so suspend via coroutineScope rather than
+        // blocking the thread with runBlocking (mirrors the teardown in HarnessTests).
+        coroutineScope {
           for (service in listOf(proxy, agent)) {
             launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
           }
