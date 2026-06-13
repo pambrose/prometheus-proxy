@@ -1,5 +1,5 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
-        tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests regen-certs \
+        tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests all-tests regen-certs \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint detekt detekt-baseline \
@@ -79,13 +79,15 @@ netty-tests:  ## Run Netty harness tests
 tls-tests:  ## Run TLS harness tests
 	./gradlew test --tests "io.prometheus.harness.Tls*"
 
-container-tests: jars  ## Run the Testcontainers smoke test (needs Docker)
+container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
 	if [ -z "$$DOCKER_HOST" ]; then \
 		echo "Error: could not detect active Docker context. Is Docker running?" >&2; exit 1; \
 	fi; \
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true ./gradlew test --tests "io.prometheus.containers.*"
+
+all-tests: tests container-tests  ## Run the full suite: all tests + the container tests
 
 regen-certs:  ## Regenerate the testing/certs TLS fixtures (CA + server + client; 2048-bit, 100-year validity)
 	@command -v openssl >/dev/null 2>&1 || { echo "Error: openssl not found on PATH" >&2; exit 1; }

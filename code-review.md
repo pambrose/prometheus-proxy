@@ -59,8 +59,8 @@ Resolution status section below; full write-ups further down.
 | Idioms | `ScrapeResults` 11-arg remodel | ⬜ deferred |
 | Config/obs | `scrapeRequestTimeoutSecs` bounds check | ✅ |
 | Config/obs | Dead config keys removed | ✅ |
-| Config/obs | Proxy scrape-failure-mode metric label | ⬜ open |
-| Config/obs | `launch_id` labeling on `ProxyMetrics` | ⬜ open |
+| Config/obs | Proxy scrape-failure-mode metric label | ✅ |
+| Config/obs | `launch_id` labeling on `ProxyMetrics` | ✅ (resolved by design) |
 | Tests | ChunkedContext exact-boundary acceptance | ✅ |
 | Tests | `writeScrapeRequest`/`invalidate` race test | ⬜ won't-do |
 
@@ -78,8 +78,10 @@ Resolution status section below; full write-ups further down.
 | Redundant defensive list copies in `ProxyPathManager` (`/simplify`) | ✅ |
 
 **Still open (own PRs):** the High-severity unauthenticated agent-registration / path-hijacking
-finding (see `docs/security-agent-authentication.md`), gRPC-reflection-on-by-default, detekt alpha
-pin + CI/Docker hygiene, and the two observability items above.
+finding (see `docs/security-agent-authentication.md`), gRPC-reflection-on-by-default, and the detekt
+alpha pin. Docker base-image digest pinning, no-op JVM-flag removal, and `docs.yml` pip pinning were
+completed 2026-06-13; the two observability items are resolved (failure-mode metric done;
+`launch_id` scope intentional).
 
 ---
 
@@ -399,13 +401,14 @@ limit used by the zip-bomb test, so only negatives are rejected). Rejection + ac
   half — not done, low value.)
 - [x] **Dead config keys `maxThreads`/`minThreads`/`scrapeRequestCheckMillis`**: removed + ConfigVals regenerated, with
   referencing tests updated (PR #157).
-- [ ] **No metric distinguishes proxy scrape failure modes** (`ProxyHttpRoutes.kt:112, 244-340`): the rich `updateMsg`
-  taxonomy feeds only the count; the latency histogram has no outcome label, and the timeout (`:254`) and
-  `ClosedSendChannelException` write-failure (`:244`) paths never record latency. Add a status label to the histogram
-  and observe on those two branches. **Open** — metric-schema change, own PR.
-- [ ] **Inconsistent `launch_id` labeling** (`ProxyMetrics.kt:30-94`): AgentMetrics tags every series with `launch_id`;
-  ProxyMetrics tags none, so proxy counters reset silently on restart. Mostly consistency — PromQL `rate()`/`increase()`
-  tolerate resets. **Open / accepted** — low priority.
+- [x] **No metric distinguishes proxy scrape failure modes** (`ProxyHttpRoutes.kt:205-211`): `scrapeRequestLatency` now
+  carries an `outcome` label and a single recording site observes latency for **every** response — including the
+  `timed_out`, `agent_disconnected`, and `missing_results` early returns that the old per-request timer missed — using
+  `response.updateMsg` as the outcome. Verified done 2026-06-13.
+- [x] **`launch_id` labeling on `ProxyMetrics`** — **resolved by design.** `proxy_start_time_seconds` is labeled with
+  `launch_id` (enough to detect a restart on a Prometheus target); the counters/histograms are intentionally left
+  unlabeled because PromQL `rate()`/`increase()` already tolerate counter resets across restarts. This deliberate scope
+  is documented at `Proxy.kt:184-186`, so tagging every series was **not** done.
 
 ---
 

@@ -1,4 +1,6 @@
-FROM bellsoft/liberica-openjre-alpine:17
+# Pinned by digest for reproducible builds (tag kept for readability). Bump the digest periodically
+# to pick up base-image security patches: docker buildx imagetools inspect bellsoft/liberica-openjre-alpine:17
+FROM bellsoft/liberica-openjre-alpine:17@sha256:46d2697c9a83d968506f4da2d25439aa02cec887eba9b60e711a05bcba534f46
 LABEL maintainer="Paul Ambrose <pambrose@mac.com>"
 
 # Define the user to use in this instance to prevent using root that even in a container, can be a security risk.
@@ -23,4 +25,6 @@ EXPOSE 8093
 
 CMD []
 
-ENTRYPOINT ["java", "-server", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=100", "-XX:+UseStringDeduplication", "-jar", "/app/prometheus-agent.jar"]
+# G1 is the default GC on JDK 17 and MaxGCPauseMillis/UseStringDeduplication are non-experimental,
+# so -XX:+UseG1GC and -XX:+UnlockExperimentalVMOptions were no-ops and have been removed.
+ENTRYPOINT ["java", "-server", "-XX:MaxGCPauseMillis=100", "-XX:+UseStringDeduplication", "-jar", "/app/prometheus-agent.jar"]
