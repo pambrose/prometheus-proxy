@@ -135,7 +135,7 @@ object ContainerTestSupport {
       withEnv("AGENT_CONFIG", "/config/agent.conf")
       // A runtime-generated config (configText) is injected directly; otherwise mount the classpath resource.
       // The trailing Unit keeps the SELF-returning builder call out of value position (avoids a Nothing cast).
-      @Suppress("unused")
+      @Suppress("UNUSED_EXPRESSION")
       if (configText != null) {
         withCopyToContainer(transferable(configText), "/config/agent.conf")
         Unit
