@@ -26,6 +26,7 @@ import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 
 class EnvVarsTest : StringSpec() {
   init {
@@ -66,7 +67,7 @@ class EnvVarsTest : StringSpec() {
     }
 
     "getEnv should return default int when env var not set" {
-      val defaultVal = 8080
+      val defaultVal = PROXY_HTTP_PORT
       val result = EnvVars.PROXY_PORT.getEnv(defaultVal)
 
       // If PROXY_PORT env var is not set, should return default
@@ -311,7 +312,7 @@ class EnvVarsTest : StringSpec() {
 
     "parseIntStrict should parse valid integers including boundaries and signs" {
       EnvVars.parseIntStrict("TEST", "0") shouldBe 0
-      EnvVars.parseIntStrict("TEST", "8080") shouldBe 8080
+      EnvVars.parseIntStrict("TEST", "$PROXY_HTTP_PORT") shouldBe PROXY_HTTP_PORT
       EnvVars.parseIntStrict("TEST", "-1") shouldBe -1
       EnvVars.parseIntStrict("TEST", "${Int.MAX_VALUE}") shouldBe Int.MAX_VALUE
       EnvVars.parseIntStrict("TEST", "${Int.MIN_VALUE}") shouldBe Int.MIN_VALUE
@@ -339,7 +340,7 @@ class EnvVarsTest : StringSpec() {
     "parseIntStrict should throw for an empty or whitespace-padded value" {
       shouldThrow<IllegalArgumentException> { EnvVars.parseIntStrict("TEST", "") }
       // toIntOrNull() does not trim, so surrounding whitespace is rejected rather than silently parsed.
-      shouldThrow<IllegalArgumentException> { EnvVars.parseIntStrict("TEST", " 8080 ") }
+      shouldThrow<IllegalArgumentException> { EnvVars.parseIntStrict("TEST", " $PROXY_HTTP_PORT ") }
     }
 
     // ==================== parseLongStrict validation ====================

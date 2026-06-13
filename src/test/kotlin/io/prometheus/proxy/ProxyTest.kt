@@ -29,6 +29,7 @@ import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.registerAgentRequest
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -72,7 +73,7 @@ class ProxyTest : StringSpec() {
     }
 
     "buildServiceDiscoveryJson should return correct structure for single path" {
-      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy.example.com:8080")
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy.example.com:$PROXY_HTTP_PORT")
       val agentContext = createAgentContext(name = "agent-01", host = "internal.host.com")
       proxy.agentContextManager.addAgentContext(agentContext)
       proxy.pathManager.addPath("app1_metrics", "", agentContext)
@@ -83,7 +84,7 @@ class ProxyTest : StringSpec() {
       val entry = json[0].jsonObject
       val targets = entry["targets"]!!.jsonArray
       targets.size shouldBe 1
-      targets[0].jsonPrimitive.content shouldBe "proxy.example.com:8080"
+      targets[0].jsonPrimitive.content shouldBe "proxy.example.com:$PROXY_HTTP_PORT"
 
       val labels = entry["labels"]!!.jsonObject
       labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "/app1_metrics"
@@ -92,7 +93,7 @@ class ProxyTest : StringSpec() {
     }
 
     "buildServiceDiscoveryJson should produce multiple entries for multiple paths" {
-      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
       val agentContext = createAgentContext()
       proxy.agentContextManager.addAgentContext(agentContext)
       proxy.pathManager.addPath("metrics1", "", agentContext)
@@ -106,7 +107,7 @@ class ProxyTest : StringSpec() {
     }
 
     "buildServiceDiscoveryJson should include custom labels from agent" {
-      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
       val agentContext = createAgentContext()
       proxy.agentContextManager.addAgentContext(agentContext)
       proxy.pathManager.addPath("metrics", """{"environment":"production","service":"web"}""", agentContext)
@@ -120,7 +121,7 @@ class ProxyTest : StringSpec() {
     }
 
     "buildServiceDiscoveryJson should skip invalid JSON labels gracefully" {
-      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
       val agentContext = createAgentContext(name = "agent-bad-labels")
       proxy.agentContextManager.addAgentContext(agentContext)
       proxy.pathManager.addPath("metrics", "not-valid-json{{{", agentContext)
@@ -138,7 +139,7 @@ class ProxyTest : StringSpec() {
 
     // Bug #10: __metrics_path__ must include a leading slash per Prometheus SD convention
     "buildServiceDiscoveryJson should include leading slash in __metrics_path__" {
-      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
       val agentContext = createAgentContext()
       proxy.agentContextManager.addAgentContext(agentContext)
       proxy.pathManager.addPath("my_metrics", "", agentContext)
@@ -153,7 +154,7 @@ class ProxyTest : StringSpec() {
     }
 
     "buildServiceDiscoveryJson should not double-slash paths that already have slashes internally" {
-      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:8080")
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
       val agentContext = createAgentContext()
       proxy.agentContextManager.addAgentContext(agentContext)
       // Paths in the pathMap never have a leading slash (stripped by HTTP handler),

@@ -48,6 +48,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import io.prometheus.common.startAndAwaitReady
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import javax.net.ssl.X509TrustManager
@@ -1015,7 +1016,7 @@ class AgentHttpServiceTest : StringSpec() {
     "fetchScrapeUrl should rethrow generic CancellationException" {
       val mockAgent = createMockAgentWithPaths()
       val service = AgentHttpService(mockAgent)
-      mockAgent.pathManager.registerPath("metrics", "http://localhost:8080/metrics")
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
 
       val request = scrapeRequest {
         agentId = "agent-1"
@@ -1081,7 +1082,7 @@ class AgentHttpServiceTest : StringSpec() {
     "fetchScrapeUrl should NOT rethrow HttpRequestTimeoutException" {
       val mockAgent = createMockAgentWithPaths()
       val service = AgentHttpService(mockAgent)
-      mockAgent.pathManager.registerPath("metrics", "http://localhost:8080/metrics")
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
 
       val request = scrapeRequest {
         agentId = "agent-1"
@@ -1412,7 +1413,7 @@ class AgentHttpServiceTest : StringSpec() {
     "Item 31: fetchScrapeUrl converts a wrapped-timeout CancellationException to 408" {
       val mockAgent = createMockAgentWithPaths()
       val service = AgentHttpService(mockAgent)
-      mockAgent.pathManager.registerPath("metrics", "http://localhost:8080/metrics")
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
 
       val request = scrapeRequest {
         agentId = "agent-1"

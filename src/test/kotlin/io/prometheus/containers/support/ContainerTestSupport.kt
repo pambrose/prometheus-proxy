@@ -22,6 +22,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import io.prometheus.common.TestPorts.NGINX_PORT
+import io.prometheus.common.TestPorts.PROMETHEUS_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import org.slf4j.LoggerFactory
 import org.testcontainers.containers.BindMode
 import org.testcontainers.containers.GenericContainer
@@ -45,21 +48,10 @@ import java.nio.file.Path
  */
 @Suppress("TooManyFunctions")
 object ContainerTestSupport {
-  const val PROXY_ALIAS = "proxy-host"
-  const val AGENT_ALIAS = "agent"
-  const val PROMETHEUS_ALIAS = "prometheus"
+  private const val PROXY_ALIAS = "proxy-host"
+  private const val AGENT_ALIAS = "agent"
+  private const val PROMETHEUS_ALIAS = "prometheus"
   const val METRICS_STUB_ALIAS = "metrics-stub"
-
-  const val PROXY_HTTP_PORT = 8080
-  const val PROXY_METRICS_PORT = 8082
-  const val PROXY_ADMIN_PORT = 8092
-  const val PROXY_AGENT_PORT = 50051
-
-  const val AGENT_METRICS_PORT = 8083
-  const val AGENT_ADMIN_PORT = 8093
-
-  const val PROMETHEUS_PORT = 9090
-  const val NGINX_PORT = 80
 
   /** The default nginx document root path the metrics stub serves its exposition file from. */
   const val NGINX_METRICS_DEST = "/usr/share/nginx/html/metrics"
@@ -143,6 +135,7 @@ object ContainerTestSupport {
       withEnv("AGENT_CONFIG", "/config/agent.conf")
       // A runtime-generated config (configText) is injected directly; otherwise mount the classpath resource.
       // The trailing Unit keeps the SELF-returning builder call out of value position (avoids a Nothing cast).
+      @Suppress("UNUSED_EXPRESSION")
       if (configText != null) {
         withCopyToContainer(transferable(configText), "/config/agent.conf")
         Unit

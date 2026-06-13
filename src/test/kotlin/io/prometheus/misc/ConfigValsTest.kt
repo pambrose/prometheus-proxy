@@ -26,6 +26,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 
 class ConfigValsTest : StringSpec() {
   private fun loadDefaultConfigVals(): ConfigVals {
@@ -88,7 +89,7 @@ class ConfigValsTest : StringSpec() {
     "proxy HTTP config should have correct defaults" {
       val configVals = loadDefaultConfigVals()
       configVals.proxy.http.apply {
-        port shouldBe 8080
+        port shouldBe PROXY_HTTP_PORT
         idleTimeoutSecs shouldBe 45
         requestLoggingEnabled.shouldBeTrue()
       }
@@ -118,7 +119,7 @@ class ConfigValsTest : StringSpec() {
       configVals.proxy.service.discovery.apply {
         enabled.shouldBeFalse()
         path shouldBe "discovery"
-        targetPrefix shouldBe "http://localhost:8080/"
+        targetPrefix shouldBe "http://localhost:$PROXY_HTTP_PORT/"
       }
     }
 

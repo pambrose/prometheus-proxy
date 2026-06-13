@@ -35,6 +35,9 @@ import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.setLogLevel
 import io.prometheus.common.Utils.toJsonElement
+import io.prometheus.common.TestPorts.PROMETHEUS_PORT
+import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -58,31 +61,34 @@ class UtilsTest : StringSpec() {
     // percent-encoded keys/values. appendQueryParams appends it verbatim, preserving the encoding.
 
     "appendQueryParams should append an encoded query string to a base url without query" {
-      val url = appendQueryParams("http://localhost:8080/metrics", "foo=bar&baz=qux")
+      val url = appendQueryParams("http://localhost:$PROXY_HTTP_PORT/metrics", "foo=bar&baz=qux")
 
-      url shouldBe "http://localhost:8080/metrics?foo=bar&baz=qux"
+      url shouldBe "http://localhost:$PROXY_HTTP_PORT/metrics?foo=bar&baz=qux"
     }
 
     "appendQueryParams should append to a base url with an existing query using &" {
-      val url = appendQueryParams("http://localhost:8080/metrics?existing=1", "foo=bar")
+      val url = appendQueryParams("http://localhost:$PROXY_HTTP_PORT/metrics?existing=1", "foo=bar")
 
-      url shouldBe "http://localhost:8080/metrics?existing=1&foo=bar"
+      url shouldBe "http://localhost:$PROXY_HTTP_PORT/metrics?existing=1&foo=bar"
     }
 
     "appendQueryParams should not add a separator when the base url already ends with ? or &" {
-      appendQueryParams("http://localhost:8080/metrics?", "foo=bar") shouldBe
-        "http://localhost:8080/metrics?foo=bar"
+      appendQueryParams("http://localhost:$PROXY_HTTP_PORT/metrics?", "foo=bar") shouldBe
+        "http://localhost:$PROXY_HTTP_PORT/metrics?foo=bar"
     }
 
     "appendQueryParams should return the base url unchanged for blank params" {
-      appendQueryParams("http://localhost:8080/metrics", "") shouldBe "http://localhost:8080/metrics"
+      appendQueryParams(
+        "http://localhost:$PROXY_HTTP_PORT/metrics",
+        "",
+      ) shouldBe "http://localhost:$PROXY_HTTP_PORT/metrics"
     }
 
     // The fix: an encoded delimiter inside a value must stay encoded, not be decoded into a real
     // & (which would split one param into two) or # (which would start a URL fragment).
     "appendQueryParams should preserve encoded delimiters inside a value" {
-      appendQueryParams("http://localhost:8080/metrics", "q=a%26b%23c") shouldBe
-        "http://localhost:8080/metrics?q=a%26b%23c"
+      appendQueryParams("http://localhost:$PROXY_HTTP_PORT/metrics", "q=a%26b%23c") shouldBe
+        "http://localhost:$PROXY_HTTP_PORT/metrics?q=a%26b%23c"
     }
 
     // ==================== lowercase Tests ====================
@@ -202,75 +208,75 @@ class UtilsTest : StringSpec() {
     // ==================== parseHostPort Tests ====================
 
     "parseHostPort should parse simple host and port" {
-      val result = parseHostPort("localhost:8080", 50051)
+      val result = parseHostPort("localhost:$PROXY_HTTP_PORT", PROXY_AGENT_PORT)
 
-      result shouldBe HostPort("localhost", 8080)
+      result shouldBe HostPort("localhost", PROXY_HTTP_PORT)
     }
 
     "parseHostPort should use default port when no port specified" {
-      val result = parseHostPort("example.com", 50051)
+      val result = parseHostPort("example.com", PROXY_AGENT_PORT)
 
-      result shouldBe HostPort("example.com", 50051)
+      result shouldBe HostPort("example.com", PROXY_AGENT_PORT)
     }
 
     "parseHostPort should handle bracketed IPv6 with port" {
-      val result = parseHostPort("[::1]:50051", 9090)
+      val result = parseHostPort("[::1]:$PROXY_AGENT_PORT", PROMETHEUS_PORT)
 
-      result shouldBe HostPort("::1", 50051)
+      result shouldBe HostPort("::1", PROXY_AGENT_PORT)
     }
 
     "parseHostPort should handle bracketed IPv6 without port" {
-      val result = parseHostPort("[::1]", 50051)
+      val result = parseHostPort("[::1]", PROXY_AGENT_PORT)
 
-      result shouldBe HostPort("::1", 50051)
+      result shouldBe HostPort("::1", PROXY_AGENT_PORT)
     }
 
     "parseHostPort should handle unbracketed IPv6 without port" {
-      val result = parseHostPort("::1", 50051)
+      val result = parseHostPort("::1", PROXY_AGENT_PORT)
 
-      result shouldBe HostPort("::1", 50051)
+      result shouldBe HostPort("::1", PROXY_AGENT_PORT)
     }
 
     "parseHostPort should handle full IPv6 address without brackets" {
-      val result = parseHostPort("2001:db8::1", 50051)
+      val result = parseHostPort("2001:db8::1", PROXY_AGENT_PORT)
 
-      result shouldBe HostPort("2001:db8::1", 50051)
+      result shouldBe HostPort("2001:db8::1", PROXY_AGENT_PORT)
     }
 
     "parseHostPort should handle IPv4 address with port" {
-      val result = parseHostPort("192.168.1.100:5000", 50051)
+      val result = parseHostPort("192.168.1.100:5000", PROXY_AGENT_PORT)
 
       result shouldBe HostPort("192.168.1.100", 5000)
     }
 
     "parseHostPort should handle IPv4 address without port" {
-      val result = parseHostPort("192.168.1.100", 50051)
+      val result = parseHostPort("192.168.1.100", PROXY_AGENT_PORT)
 
-      result shouldBe HostPort("192.168.1.100", 50051)
+      result shouldBe HostPort("192.168.1.100", PROXY_AGENT_PORT)
     }
 
     "parseHostPort should handle hostname with custom port" {
-      val result = parseHostPort("proxy.example.org:9090", 50051)
+      val result = parseHostPort("proxy.example.org:$PROMETHEUS_PORT", PROXY_AGENT_PORT)
 
-      result shouldBe HostPort("proxy.example.org", 9090)
+      result shouldBe HostPort("proxy.example.org", PROMETHEUS_PORT)
     }
 
     "parseHostPort should throw for malformed IPv6 with missing close bracket" {
       val exception = shouldThrow<IllegalArgumentException> {
-        parseHostPort("[::1", 50051)
+        parseHostPort("[::1", PROXY_AGENT_PORT)
       }
       exception.message shouldContain "missing closing bracket"
     }
 
     "parseHostPort should throw for malformed IPv6 with content after unclosed bracket" {
       val exception = shouldThrow<IllegalArgumentException> {
-        parseHostPort("[2001:db8::1", 50051)
+        parseHostPort("[2001:db8::1", PROXY_AGENT_PORT)
       }
       exception.message shouldContain "missing closing bracket"
     }
 
     "parseHostPort should handle bracketed full IPv6 with port" {
-      val result = parseHostPort("[2001:db8::1]:8443", 50051)
+      val result = parseHostPort("[2001:db8::1]:8443", PROXY_AGENT_PORT)
 
       result shouldBe HostPort("2001:db8::1", 8443)
     }
@@ -279,7 +285,7 @@ class UtilsTest : StringSpec() {
     // instead of throwing raw NumberFormatException.
     "parseHostPort should throw IllegalArgumentException for non-numeric port" {
       val exception = shouldThrow<IllegalArgumentException> {
-        parseHostPort("host:abc", 50051)
+        parseHostPort("host:abc", PROXY_AGENT_PORT)
       }
       exception.message shouldContain "host:abc"
       exception.message shouldContain "abc"
@@ -287,40 +293,40 @@ class UtilsTest : StringSpec() {
 
     "parseHostPort should throw IllegalArgumentException for port above 65535" {
       val exception = shouldThrow<IllegalArgumentException> {
-        parseHostPort("host:99999", 50051)
+        parseHostPort("host:99999", PROXY_AGENT_PORT)
       }
       exception.message shouldContain "host:99999"
     }
 
     "parseHostPort should throw IllegalArgumentException for negative port" {
       val exception = shouldThrow<IllegalArgumentException> {
-        parseHostPort("host:-1", 50051)
+        parseHostPort("host:-1", PROXY_AGENT_PORT)
       }
       exception.message shouldContain "host:-1"
     }
 
     "parseHostPort should throw IllegalArgumentException for non-numeric port in bracketed IPv6" {
       val exception = shouldThrow<IllegalArgumentException> {
-        parseHostPort("[::1]:abc", 50051)
+        parseHostPort("[::1]:abc", PROXY_AGENT_PORT)
       }
       exception.message shouldContain "abc"
     }
 
     "parseHostPort should throw IllegalArgumentException for out-of-range port in bracketed IPv6" {
       val exception = shouldThrow<IllegalArgumentException> {
-        parseHostPort("[::1]:70000", 50051)
+        parseHostPort("[::1]:70000", PROXY_AGENT_PORT)
       }
       exception.message shouldContain "70000"
     }
 
     "parseHostPort should handle port 0" {
-      val result = parseHostPort("host:0", 50051)
+      val result = parseHostPort("host:0", PROXY_AGENT_PORT)
 
       result shouldBe HostPort("host", 0)
     }
 
     "parseHostPort should handle maximum port number" {
-      val result = parseHostPort("host:65535", 50051)
+      val result = parseHostPort("host:65535", PROXY_AGENT_PORT)
 
       result shouldBe HostPort("host", 65535)
     }
@@ -328,20 +334,20 @@ class UtilsTest : StringSpec() {
     // ==================== HostPort Data Class Tests ====================
 
     "HostPort should support equality" {
-      val hp1 = HostPort("localhost", 8080)
-      val hp2 = HostPort("localhost", 8080)
-      val hp3 = HostPort("localhost", 9090)
+      val hp1 = HostPort("localhost", PROXY_HTTP_PORT)
+      val hp2 = HostPort("localhost", PROXY_HTTP_PORT)
+      val hp3 = HostPort("localhost", PROMETHEUS_PORT)
 
       (hp1 == hp2) shouldBe true
       (hp1 == hp3) shouldBe false
     }
 
     "HostPort should support copy" {
-      val hp = HostPort("localhost", 8080)
-      val copied = hp.copy(port = 9090)
+      val hp = HostPort("localhost", PROXY_HTTP_PORT)
+      val copied = hp.copy(port = PROMETHEUS_PORT)
 
       copied.host shouldBe "localhost"
-      copied.port shouldBe 9090
+      copied.port shouldBe PROMETHEUS_PORT
     }
 
     // ==================== exceptionDetails Tests ====================
@@ -401,14 +407,14 @@ class UtilsTest : StringSpec() {
 
     "parseHostPort should throw for empty string" {
       val exception = shouldThrow<IllegalArgumentException> {
-        parseHostPort("", 50051)
+        parseHostPort("", PROXY_AGENT_PORT)
       }
       exception.message shouldContain "must not be blank"
     }
 
     "parseHostPort should throw for blank string" {
       val exception = shouldThrow<IllegalArgumentException> {
-        parseHostPort("   ", 50051)
+        parseHostPort("   ", PROXY_AGENT_PORT)
       }
       exception.message shouldContain "must not be blank"
     }
@@ -416,7 +422,9 @@ class UtilsTest : StringSpec() {
     // ==================== Bug #5: sanitizeUrl Tests ====================
 
     "sanitizeUrl should strip user and password from URL" {
-      sanitizeUrl("http://admin:secret@host:8080/metrics") shouldBe "http://***@host:8080/metrics"
+      sanitizeUrl(
+        "http://admin:secret@host:$PROXY_HTTP_PORT/metrics",
+      ) shouldBe "http://***@host:$PROXY_HTTP_PORT/metrics"
     }
 
     "sanitizeUrl should strip user-only credentials from URL" {
@@ -424,7 +432,7 @@ class UtilsTest : StringSpec() {
     }
 
     "sanitizeUrl should not modify URL without credentials" {
-      sanitizeUrl("http://host:8080/metrics") shouldBe "http://host:8080/metrics"
+      sanitizeUrl("http://host:$PROXY_HTTP_PORT/metrics") shouldBe "http://host:$PROXY_HTTP_PORT/metrics"
     }
 
     "sanitizeUrl should redact both credentials and query values" {
@@ -440,12 +448,14 @@ class UtilsTest : StringSpec() {
     }
 
     "sanitizeUrl should handle URL without scheme" {
-      sanitizeUrl("host:8080/metrics") shouldBe "host:8080/metrics"
+      sanitizeUrl("host:$PROXY_HTTP_PORT/metrics") shouldBe "host:$PROXY_HTTP_PORT/metrics"
     }
 
     // Item 1: query-string secrets (?token=…, ?api_key=…) must be redacted before logging/echoing.
     "sanitizeUrl should redact a single query-parameter value" {
-      sanitizeUrl("http://host:8080/metrics?token=secret123") shouldBe "http://host:8080/metrics?token=***"
+      sanitizeUrl(
+        "http://host:$PROXY_HTTP_PORT/metrics?token=secret123",
+      ) shouldBe "http://host:$PROXY_HTTP_PORT/metrics?token=***"
     }
 
     "sanitizeUrl should redact every query-parameter value while preserving keys" {
@@ -454,7 +464,9 @@ class UtilsTest : StringSpec() {
     }
 
     "sanitizeUrl should redact both userinfo and query values together" {
-      sanitizeUrl("http://admin:hunter2@host:8080/m?token=s3cr3t") shouldBe "http://***@host:8080/m?token=***"
+      sanitizeUrl(
+        "http://admin:hunter2@host:$PROXY_HTTP_PORT/m?token=s3cr3t",
+      ) shouldBe "http://***@host:$PROXY_HTTP_PORT/m?token=***"
     }
 
     "sanitizeUrl should preserve the fragment after redacting query values" {
@@ -466,7 +478,7 @@ class UtilsTest : StringSpec() {
     }
 
     "sanitizeUrl should not modify a URL with no query string" {
-      sanitizeUrl("http://host:8080/metrics") shouldBe "http://host:8080/metrics"
+      sanitizeUrl("http://host:$PROXY_HTTP_PORT/metrics") shouldBe "http://host:$PROXY_HTTP_PORT/metrics"
     }
 
     // ==================== sanitizeQueryParams Tests ====================

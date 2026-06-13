@@ -21,13 +21,14 @@ package io.prometheus.agent
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.prometheus.Agent
+import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
 
 class AgentBacklogDriftTest : StringSpec() {
   private fun createTestAgent(): Agent =
     Agent(
-      options = AgentOptions(listOf("--proxy", "localhost:50051"), exitOnMissingConfig = false),
+      options = AgentOptions(listOf("--proxy", "localhost:$PROXY_AGENT_PORT"), exitOnMissingConfig = false),
       inProcessServerName = "backlog-drift-test",
       testMode = true,
     )

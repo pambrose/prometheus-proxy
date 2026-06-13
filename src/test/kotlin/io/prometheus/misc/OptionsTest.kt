@@ -25,6 +25,9 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.agent.AgentOptions
+import io.prometheus.common.TestPorts.PROMETHEUS_PORT
+import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.harness.HarnessConstants.OPTIONS_CONFIG
 import io.prometheus.proxy.ProxyOptions
 
@@ -40,7 +43,7 @@ class OptionsTest : StringSpec() {
       val configVals = readProxyOptions(listOf())
       configVals.proxy
         .apply {
-          http.port shouldBe 8080
+          http.port shouldBe PROXY_HTTP_PORT
           internal.zipkin.enabled.shouldBeFalse()
         }
     }
@@ -76,8 +79,8 @@ class OptionsTest : StringSpec() {
     "should have correct proxy default port values" {
       ProxyOptions(listOf())
         .apply {
-          proxyPort shouldBe 8080
-          proxyAgentPort shouldBe 50051
+          proxyPort shouldBe PROXY_HTTP_PORT
+          proxyAgentPort shouldBe PROXY_AGENT_PORT
         }
     }
 
@@ -166,8 +169,8 @@ class OptionsTest : StringSpec() {
     // ==================== Proxy Configuration Edge Cases (2.1.2) ====================
 
     "verifyProxyPortOverride should override default port" {
-      val options = ProxyOptions(listOf("-p", "9090"))
-      options.proxyPort shouldBe 9090
+      val options = ProxyOptions(listOf("-p", "$PROMETHEUS_PORT"))
+      options.proxyPort shouldBe PROMETHEUS_PORT
     }
 
     "verifyProxyAgentPortOverride should override default agent port" {
@@ -177,11 +180,11 @@ class OptionsTest : StringSpec() {
 
     "verifyProxyServiceDiscovery should be configurable" {
       val options = ProxyOptions(
-        listOf("--sd_enabled", "--sd_path", "/sd", "--sd_target_prefix", "http://proxy:8080"),
+        listOf("--sd_enabled", "--sd_path", "/sd", "--sd_target_prefix", "http://proxy:$PROXY_HTTP_PORT"),
       )
       options.sdEnabled.shouldBeTrue()
       options.sdPath shouldBe "/sd"
-      options.sdTargetPrefix shouldBe "http://proxy:8080"
+      options.sdTargetPrefix shouldBe "http://proxy:$PROXY_HTTP_PORT"
     }
 
     "verifyProxyReflection can be disabled" {
@@ -360,7 +363,7 @@ class OptionsTest : StringSpec() {
     "agent proxy hostname and port should have defaults from config" {
       val configVals = readAgentOptions(listOf())
       configVals.agent.proxy.hostname shouldBe "localhost"
-      configVals.agent.proxy.port shouldBe 50051
+      configVals.agent.proxy.port shouldBe PROXY_AGENT_PORT
     }
   }
 }

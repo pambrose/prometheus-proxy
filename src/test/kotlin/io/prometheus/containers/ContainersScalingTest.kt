@@ -22,9 +22,10 @@ import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.datatest.withData
 import io.kotest.matchers.string.shouldContain
-import io.prometheus.containers.support.ContainerTestSupport.NGINX_PORT
-import io.prometheus.containers.support.ContainerTestSupport.PROXY_HTTP_PORT
-import io.prometheus.containers.support.ContainerTestSupport.PROXY_METRICS_PORT
+import io.prometheus.common.TestPorts.NGINX_PORT
+import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.common.TestPorts.PROXY_METRICS_PORT
 import io.prometheus.containers.support.ContainerTestSupport.agentContainer
 import io.prometheus.containers.support.ContainerTestSupport.containerTestsEnabled
 import io.prometheus.containers.support.ContainerTestSupport.httpClient
@@ -262,7 +263,7 @@ private fun agentConfig(
     if (consolidated) appendLine("  consolidated = true")
     appendLine("  proxy {")
     appendLine("    hostname = \"proxy-host\"")
-    appendLine("    port = 50051")
+    appendLine("    port = $PROXY_AGENT_PORT")
     appendLine("  }")
     appendLine("  pathConfigs: [")
     entries.forEach { (path, file) ->

@@ -35,6 +35,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
 import io.prometheus.common.ConfigLoadException
+import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -50,7 +51,7 @@ import kotlin.time.Duration.Companion.seconds
 class AgentTest : StringSpec() {
   private fun createTestAgent(vararg extraArgs: String): Agent {
     val args =
-      mutableListOf("--proxy", "localhost:50051").apply {
+      mutableListOf("--proxy", "localhost:$PROXY_AGENT_PORT").apply {
         addAll(extraArgs)
       }
     return Agent(

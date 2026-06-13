@@ -40,6 +40,9 @@ import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.TestPorts.PROMETHEUS_PORT
+import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.ScrapeResponse
@@ -114,11 +117,11 @@ class AgentGrpcServiceTest : StringSpec() {
 
   init {
     "parseProxyHostname should extract hostname and port correctly" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       service.agentHostName shouldBe "localhost"
-      service.agentPort shouldBe 50051
+      service.agentPort shouldBe PROXY_AGENT_PORT
 
       // Clean up
       service.shutDown()
@@ -129,18 +132,18 @@ class AgentGrpcServiceTest : StringSpec() {
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       service.agentHostName shouldBe "example.com"
-      service.agentPort shouldBe 50051
+      service.agentPort shouldBe PROXY_AGENT_PORT
 
       // Clean up
       service.shutDown()
     }
 
     "parseProxyHostname should strip http prefix" {
-      val agent = createMockAgent("http://example.com:8080")
+      val agent = createMockAgent("http://example.com:$PROXY_HTTP_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       service.agentHostName shouldBe "example.com"
-      service.agentPort shouldBe 8080
+      service.agentPort shouldBe PROXY_HTTP_PORT
 
       // Clean up
       service.shutDown()
@@ -158,11 +161,11 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "parseProxyHostname should handle custom port" {
-      val agent = createMockAgent("proxy.example.org:9090")
+      val agent = createMockAgent("proxy.example.org:$PROMETHEUS_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       service.agentHostName shouldBe "proxy.example.org"
-      service.agentPort shouldBe 9090
+      service.agentPort shouldBe PROMETHEUS_PORT
 
       // Clean up
       service.shutDown()
@@ -179,12 +182,12 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should handle hostname without port and default to 50051" {
+    "parseProxyHostname should handle hostname without port and default to $PROXY_AGENT_PORT" {
       val agent = createMockAgent("my-proxy-server")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       service.agentHostName shouldBe "my-proxy-server"
-      service.agentPort shouldBe 50051
+      service.agentPort shouldBe PROXY_AGENT_PORT
 
       // Clean up
       service.shutDown()
@@ -217,7 +220,7 @@ class AgentGrpcServiceTest : StringSpec() {
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       service.agentHostName shouldBe "example.com"
-      service.agentPort shouldBe 50051
+      service.agentPort shouldBe PROXY_AGENT_PORT
 
       // Clean up
       service.shutDown()
@@ -228,7 +231,7 @@ class AgentGrpcServiceTest : StringSpec() {
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       service.agentHostName shouldBe "example.com"
-      service.agentPort shouldBe 50051
+      service.agentPort shouldBe PROXY_AGENT_PORT
 
       // Clean up
       service.shutDown()
@@ -309,7 +312,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== ShutDown Tests ====================
 
     "shutDown should be safe to call when service has started" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // shutDown should not throw
@@ -317,7 +320,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "shutDown should be safe to call multiple times" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // Calling shutDown multiple times should not throw
@@ -328,7 +331,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== gRPC Stub Tests ====================
 
     "grpcStub should be initialized after construction" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // grpcStub should be accessible (no UninitializedPropertyAccessException)
@@ -340,7 +343,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== Unary Deadline Tests ====================
 
     "unaryDeadlineSecs should default to 30" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       service.unaryDeadlineSecs shouldBe 30L
@@ -351,7 +354,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== connectAgent Tests ====================
 
     "connectAgent should return true on successful connection" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -366,7 +369,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "connectAgent should return false on connection failure" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -381,7 +384,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "connectAgent with transportFilterDisabled should assign agentId" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -401,7 +404,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== registerAgent Tests ====================
 
     "registerAgent should send request with correct agent details" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -423,7 +426,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "registerAgent should throw RequestFailureException on invalid response" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -444,7 +447,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== Channel Termination Tests (M9) ====================
 
     "shutDown should fully terminate the channel" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // Before shutdown, channel should not be terminated
@@ -457,7 +460,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "resetGrpcStubs should terminate old channel before creating new one" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val oldChannel = service.channel
@@ -480,7 +483,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== Concurrent shutDown / resetGrpcStubs Tests ====================
 
     "concurrent shutDown and resetGrpcStubs should not deadlock" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // Run resetGrpcStubs and shutDown concurrently on separate threads.
@@ -526,7 +529,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "resetGrpcStubs called multiple times should not deadlock" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // Before the fix, each resetGrpcStubs call internally called shutDown(),
@@ -555,7 +558,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "concurrent resetGrpcStubs from multiple threads should not deadlock" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val threadCount = 4
@@ -586,7 +589,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== sendHeartBeat Tests ====================
 
     "sendHeartBeat should skip when agentId is empty" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       every { agent.agentId } returns ""
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -601,7 +604,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "sendHeartBeat should send request when agentId is set" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -618,7 +621,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== readRequestsFromProxy Tests ====================
 
     "readRequestsFromProxy should forward scrape requests to connectionContext" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -652,7 +655,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "readRequestsFromProxy should handle empty flow from proxy" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -677,7 +680,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // whether the content is zipped and whether the zipped size exceeds chunkContentSizeBytes.
 
     "processScrapeResults should route non-zipped result to nonChunkedChannel" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val connectionContext = AgentConnectionContext()
@@ -712,7 +715,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "processScrapeResults should route zipped small result to nonChunkedChannel" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       // chunkContentSizeBytes defaults to 32768 in mock
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -750,7 +753,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "processScrapeResults should route zipped large result to chunkedChannel with CRC32" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       // Set a very small chunk size so our test data gets chunked
       // Access the mock options directly to avoid MockK chain-mock issues
       val mockOptions = agent.options
@@ -823,7 +826,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "processScrapeResults should handle multiple results in sequence" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val connectionContext = AgentConnectionContext()
@@ -865,7 +868,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== sendHeartBeat Error Handling Tests ====================
 
     "sendHeartBeat should throw StatusRuntimeException with NOT_FOUND when proxy evicts agent" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -892,7 +895,7 @@ class AgentGrpcServiceTest : StringSpec() {
       // This test simulates the full reconnection path: sendHeartBeat throws NOT_FOUND,
       // which propagates through startHeartBeat, causing the launch's invokeOnCompletion
       // to close the connectionContext, which terminates all other coroutines.
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -928,7 +931,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "sendHeartBeat should handle generic exception without throwing" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -943,7 +946,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "registerAgent should throw on empty agentId" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       every { agent.agentId } returns ""
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -966,7 +969,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // The fix moves grpcStarted=true to AFTER channel is successfully assigned.
 
     "Bug #6: after construction channel and grpcStub should be initialized" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // channel is accessible (no UninitializedPropertyAccessException)
@@ -984,7 +987,7 @@ class AgentGrpcServiceTest : StringSpec() {
       // Demonstrates the old bug: grpcStarted=true but channel not initialized.
       // If the `else grpcStarted = true` line had run but channel() threw,
       // calling shutDown() would access the uninitialized lateinit channel.
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // Use reflection to null-out the channel, simulating an uninitialized lateinit.
@@ -1002,7 +1005,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "Bug #6: resetGrpcStubs should recover after shutDown" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // Shut down the service
@@ -1088,7 +1091,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "Bug #6 (channel close): writeResponsesToProxyUntilDisconnected should complete with closed connectionContext" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -1113,7 +1116,7 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "writeResponsesToProxyUntilDisconnected should close streams when a writer fails" {
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -1148,7 +1151,7 @@ class AgentGrpcServiceTest : StringSpec() {
       // Verify the invariant: grpcStarted=true implies channel is initialized.
       // We use reflection to read the grpcStarted delegate and verify
       // it was set correctly after construction.
-      val agent = createMockAgent("localhost:50051")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       // Read grpcStarted via the delegate field

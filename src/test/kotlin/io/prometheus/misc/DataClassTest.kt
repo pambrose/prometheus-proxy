@@ -29,6 +29,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 
 class DataClassTest : StringSpec() {
   private fun configVals(str: String): ConfigVals {
@@ -259,7 +260,7 @@ class DataClassTest : StringSpec() {
           it.allMetricsReported.shouldBeFalse()
         }
 
-      configVals("proxy.http.port=8080").proxy.metrics.grpc
+      configVals("proxy.http.port=$PROXY_HTTP_PORT").proxy.metrics.grpc
         .also {
           it.metricsEnabled.shouldBeFalse()
           it.allMetricsReported.shouldBeFalse()
