@@ -10,8 +10,16 @@ Prometheus Proxy is designed to be firewall-friendly:
 
 - The **agent** initiates an *outbound* gRPC connection to the proxy
 - **No inbound ports** need to be opened on the firewall
-- The proxy accepts connections only from registered agents
+- Agent connections can be authenticated with an optional
+  [pre-shared token](#agent-authentication-pre-shared-token) and/or [mutual TLS](tls.md)
 - Stale agent connections are automatically cleaned up
+
+!!! warning "The agent gRPC port is unauthenticated by default"
+
+    With neither a pre-shared agent token nor mutual TLS configured, any process that can reach the
+    agent port (default `50051`) can register as an agent. Set a token (below), require mutual TLS,
+    and/or restrict the port to trusted networks. The proxy logs a startup warning when the agent
+    port is left unauthenticated.
 
 ## TLS Encryption
 
@@ -25,6 +33,37 @@ mutual authentication.
 | **Mutual TLS**        | Server cert + key + CA cert | Client cert + key + CA cert |
 
 See [TLS Setup](tls.md) for detailed configuration instructions.
+
+## Agent Authentication (Pre-Shared Token)
+
+By default the proxy accepts agent gRPC connections with **no application-level authentication**. Set
+a shared **pre-shared token** so the proxy rejects agents that do not present it:
+
+| Side  | CLI             | Env Var       | Config             |
+|:------|:----------------|:--------------|:-------------------|
+| Proxy | `--agent_token` | `AGENT_TOKEN` | `proxy.agentToken` |
+| Agent | `--agent_token` | `AGENT_TOKEN` | `agent.agentToken` |
+
+Both sides must use the **same** value. When set, the agent attaches the token as a gRPC metadata
+header on every call and the proxy rejects any call with a missing or mismatched token
+(`UNAUTHENTICATED`). When the token is empty (the default), the open behavior is preserved and the
+proxy logs a startup warning — unless mutual TLS is configured, which already authenticates agents.
+The token is never logged.
+
+```bash
+# Proxy requiring a token
+java -jar prometheus-proxy.jar --agent_token "$AGENT_TOKEN"
+
+# Agent presenting the token
+java -jar prometheus-agent.jar --config myconfig.conf --agent_token "$AGENT_TOKEN"
+```
+
+!!! note "Token vs. mutual TLS"
+
+    A pre-shared token is a lightweight, app-level control that authenticates *that* a peer may
+    connect. [Mutual TLS](tls.md) additionally encrypts the channel and verifies a certificate
+    identity. They can be combined; for production, prefer mutual TLS and/or restrict the agent port
+    to trusted networks.
 
 ## Auth Header Forwarding
 

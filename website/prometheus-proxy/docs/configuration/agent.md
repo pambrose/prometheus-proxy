@@ -56,6 +56,19 @@ Or specify on the command line:
 java -jar prometheus-agent.jar --proxy proxy-host.example.com:50051 --config agent.conf
 ```
 
+## Agent Authentication
+
+If the proxy requires a [pre-shared agent token](../security/index.md#agent-authentication-pre-shared-token),
+set the matching value on the agent. It is presented as a gRPC metadata header on every call and is
+never logged. Resolved from `--agent_token` → `AGENT_TOKEN` → `agent.agentToken`; empty (the default)
+sends no token.
+
+```hocon
+agent {
+  agentToken = "shared-secret"   // Must match the proxy's proxy.agentToken
+}
+```
+
 ## HTTP Client Settings
 
 Configure how the agent makes HTTP requests to scrape endpoints:
