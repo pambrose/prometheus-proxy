@@ -29,6 +29,7 @@ All notable changes to this project are documented in this file.
 - `ProxyOptions` now validates `proxyPort` / `proxyAgentPort` (`1..65535`), gRPC timeouts (`-1` or `> 0`), `internal.scrapeRequestTimeoutSecs` / `staleAgentCheckPauseSecs` / `maxAgentInactivitySecs` (`> 0`), and `internal.maxUnzippedContentSizeMBytes` (`>= 0`, so `0` stays a valid "reject all" limit) at startup
 - Per-request call logging emits at DEBUG instead of INFO when `requestLoggingEnabled = true` (config default unchanged)
 - `HttpClientCache.close()` sets a terminal flag so a scrape racing shutdown can't create and cache a fresh client into the closed cache
+- Removed the deprecated `all` log level. `ALL` is vestigial from log4j 1.x; in logback the `Level` class is final and all levels are enabled by setting a logger to `TRACE`, so `Level.ALL` is marked deprecated. `logLevel = "all"` now fails fast at startup — use `"trace"` for the most verbose output
 
 ### Observability
 
