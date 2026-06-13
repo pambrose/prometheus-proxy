@@ -313,7 +313,14 @@ internal class ProxyServiceImpl(
     }
 
     // Clean up any in-progress chunked contexts that were not completed with a summary
-    // (e.g., due to stream cancellation or agent disconnect mid-transfer)
+    // (e.g., due to stream cancellation or agent disconnect mid-transfer).
+    //
+    // This sweep can race Proxy.removeAgentContext() (from the transport-terminated or cleanup-service
+    // thread) for the same scrapeId. Double-handling is prevented by two invariants that future edits
+    // must preserve: (a) contextManager.removeChunkedContext() is a ConcurrentHashMap.remove(), so only
+    // one caller gets the non-null context and the ?.also block (warn + failScrapeRequest + metric)
+    // runs at most once; and (b) failScrapeRequest() -> markComplete() is idempotent via an
+    // AtomicBoolean compareAndSet, so even a double-fail has no observable effect.
     if (activeScrapeIds.isNotEmpty()) {
       val contextManager = proxy.agentContextManager
       activeScrapeIds.forEach { scrapeId ->

@@ -38,8 +38,11 @@ import java.security.MessageDigest
 internal class AgentTokenServerInterceptor(
   private val expectedToken: String,
 ) : ServerInterceptor {
-  // Compared as raw header bytes so the constant-time check never depends on the secret's encoding.
-  private val expectedTokenBytes: ByteArray = expectedToken.toByteArray()
+  // Compare fixed-length SHA-256 digests rather than the raw token bytes: MessageDigest.isEqual is
+  // constant-time only for equal-length inputs and short-circuits on a length mismatch, so hashing
+  // both sides to a 32-byte digest removes that length-dependent early-out. Neither the token's
+  // length nor its content then leaks via response timing.
+  private val expectedTokenDigest: ByteArray = sha256(expectedToken)
 
   override fun <ReqT, RespT> interceptCall(
     call: ServerCall<ReqT, RespT>,
@@ -55,8 +58,8 @@ internal class AgentTokenServerInterceptor(
     return handler.startCall(call, requestHeaders)
   }
 
-  // Constant-time comparison avoids leaking the token length/content via response timing.
-  // MessageDigest.isEqual is constant-time for equal-length inputs and short-circuits only on length.
   private fun constantTimeEquals(provided: String): Boolean =
-    MessageDigest.isEqual(provided.toByteArray(), expectedTokenBytes)
+    MessageDigest.isEqual(sha256(provided), expectedTokenDigest)
+
+  private fun sha256(value: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
 }
