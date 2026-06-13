@@ -1,6 +1,6 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests scaling-tests all-tests regen-certs \
-        scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
+        all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint detekt detekt-baseline \
@@ -25,7 +25,7 @@ default: help
 
 help:  ## Show this help (list of targets)
 	@awk 'BEGIN {FS = ":.*?## "; printf "Usage: make <target>\n\nTargets:\n"} \
-		/^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+		/^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 stop:  ## Stop the running Gradle daemon
 	./gradlew --stop
@@ -144,6 +144,8 @@ scaling-soak:  ## Scaling preset: every dimension at once (broad mixed-load soak
 		SCALE_CONSOLIDATED_AGENTS=5 SCALE_CONCURRENT=true \
 		SCALE_CONCURRENCY_LIMIT=64 TEST_MAX_HEAP_SIZE=6g
 
+all-scaling: scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak  ## Run all scaling presets
+
 all-tests: tests container-tests  ## Run the full suite: all tests + the container tests
 
 regen-certs:  ## Regenerate the testing/certs TLS fixtures (CA + server + client; 2048-bit, 100-year validity)
@@ -204,7 +206,7 @@ tsconfig:  ## Regenerate ConfigVals from config/config.conf via tscfg
 
 distro: build jars  ## Clean build + jars
 
-docker-push:  ## Build and push multi-arch agent/proxy images
+docker-push: jars  ## Build and push multi-arch agent/proxy images
 	@case "$(VERSION)" in \
 		*SNAPSHOT*|*-rc*|*-beta*|*-alpha*) \
 			echo "Refusing to push pre-release version $(VERSION) as :latest" >&2; exit 1;; \
