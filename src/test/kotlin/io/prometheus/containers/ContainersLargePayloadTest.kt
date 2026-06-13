@@ -23,8 +23,8 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.string.shouldContain
 import io.prometheus.containers.support.ContainerTestSupport.LARGE_PAYLOAD_SERIES
 import io.prometheus.containers.support.ContainerTestSupport.METRICS_STUB_ALIAS
-import io.prometheus.containers.support.ContainerTestSupport.NGINX_PORT
-import io.prometheus.containers.support.ContainerTestSupport.PROXY_HTTP_PORT
+import io.prometheus.common.TestPorts.NGINX_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.containers.support.ContainerTestSupport.SENTINEL_METRIC
 import io.prometheus.containers.support.ContainerTestSupport.SENTINEL_VALUE
 import io.prometheus.containers.support.ContainerTestSupport.agentContainer

@@ -21,7 +21,7 @@ package io.prometheus.containers
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.string.shouldContain
-import io.prometheus.containers.support.ContainerTestSupport.PROXY_HTTP_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.containers.support.ContainerTestSupport.agentContainer
 import io.prometheus.containers.support.ContainerTestSupport.containerTestsEnabled
 import io.prometheus.containers.support.ContainerTestSupport.httpClient

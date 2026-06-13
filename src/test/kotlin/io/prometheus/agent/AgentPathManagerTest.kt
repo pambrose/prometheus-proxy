@@ -32,6 +32,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.TestPorts.PROMETHEUS_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 import kotlinx.coroutines.coroutineScope
@@ -73,7 +75,7 @@ class AgentPathManagerTest : StringSpec() {
         pathId = 123L
       }
 
-      manager.registerPath("metrics", "http://localhost:8080/metrics", """{"job":"test"}""")
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics", """{"job":"test"}""")
 
       coVerify { agent.grpcService.registerPathOnProxy("metrics", """{"job":"test"}""") }
 
@@ -81,7 +83,7 @@ class AgentPathManagerTest : StringSpec() {
       context.shouldNotBeNull()
       context.pathId shouldBe 123L
       context.path shouldBe "metrics"
-      context.url shouldBe "http://localhost:8080/metrics"
+      context.url shouldBe "http://localhost:$PROXY_HTTP_PORT/metrics"
     }
 
     "registerPath should strip leading slash from path" {
@@ -93,7 +95,7 @@ class AgentPathManagerTest : StringSpec() {
         pathId = 456L
       }
 
-      manager.registerPath("/metrics", "http://localhost:8080/metrics")
+      manager.registerPath("/metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
 
       coVerify { agent.grpcService.registerPathOnProxy("metrics", "{}") }
 
@@ -111,7 +113,7 @@ class AgentPathManagerTest : StringSpec() {
         pathId = 789L
       }
 
-      manager.registerPath("health", "http://localhost:8080/health")
+      manager.registerPath("health", "http://localhost:$PROXY_HTTP_PORT/health")
 
       coVerify { agent.grpcService.registerPathOnProxy("health", "{}") }
     }
@@ -121,7 +123,7 @@ class AgentPathManagerTest : StringSpec() {
       val manager = AgentPathManager(agent)
 
       val exception = shouldThrow<IllegalArgumentException> {
-        manager.registerPath("", "http://localhost:8080/metrics")
+        manager.registerPath("", "http://localhost:$PROXY_HTTP_PORT/metrics")
       }
 
       exception.message shouldContain "Empty path"
@@ -150,7 +152,7 @@ class AgentPathManagerTest : StringSpec() {
         valid = true
       }
 
-      manager.registerPath("metrics", "http://localhost:8080/metrics")
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
       manager["metrics"].shouldNotBeNull()
 
       manager.unregisterPath("metrics")
@@ -171,7 +173,7 @@ class AgentPathManagerTest : StringSpec() {
         valid = true
       }
 
-      manager.registerPath("metrics", "http://localhost:8080/metrics")
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
 
       manager.unregisterPath("/metrics")
 
@@ -220,13 +222,13 @@ class AgentPathManagerTest : StringSpec() {
         pathId = 999L
       }
 
-      manager.registerPath("test", "http://localhost:9090/test", """{"env":"prod"}""")
+      manager.registerPath("test", "http://localhost:$PROMETHEUS_PORT/test", """{"env":"prod"}""")
 
       val context = manager["test"]
       context.shouldNotBeNull()
       context.pathId shouldBe 999L
       context.path shouldBe "test"
-      context.url shouldBe "http://localhost:9090/test"
+      context.url shouldBe "http://localhost:$PROMETHEUS_PORT/test"
       context.labels shouldBe """{"env":"prod"}"""
     }
 
@@ -239,9 +241,9 @@ class AgentPathManagerTest : StringSpec() {
         pathId = 1L
       }
 
-      manager.registerPath("path1", "http://localhost:8080/path1")
-      manager.registerPath("path2", "http://localhost:8080/path2")
-      manager.registerPath("path3", "http://localhost:8080/path3")
+      manager.registerPath("path1", "http://localhost:$PROXY_HTTP_PORT/path1")
+      manager.registerPath("path2", "http://localhost:$PROXY_HTTP_PORT/path2")
+      manager.registerPath("path3", "http://localhost:$PROXY_HTTP_PORT/path3")
 
       manager["path1"].shouldNotBeNull()
       manager["path2"].shouldNotBeNull()
@@ -270,13 +272,13 @@ class AgentPathManagerTest : StringSpec() {
       val context = AgentPathManager.PathContext(
         pathId = 123L,
         path = "metrics",
-        url = "http://localhost:8080/metrics",
+        url = "http://localhost:$PROXY_HTTP_PORT/metrics",
         labels = """{"job":"test"}""",
       )
 
       context.pathId shouldBe 123L
       context.path shouldBe "metrics"
-      context.url shouldBe "http://localhost:8080/metrics"
+      context.url shouldBe "http://localhost:$PROXY_HTTP_PORT/metrics"
       context.labels shouldBe """{"job":"test"}"""
     }
 
@@ -289,9 +291,9 @@ class AgentPathManagerTest : StringSpec() {
         pathId = 1L
       }
 
-      manager.registerPath("metrics", "http://localhost:8080/metrics")
-      manager.registerPath("health", "http://localhost:8080/health")
-      manager.registerPath("info", "http://localhost:8080/info")
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+      manager.registerPath("health", "http://localhost:$PROXY_HTTP_PORT/health")
+      manager.registerPath("info", "http://localhost:$PROXY_HTTP_PORT/info")
 
       manager["metrics"].shouldNotBeNull()
       manager["health"].shouldNotBeNull()
@@ -323,7 +325,7 @@ class AgentPathManagerTest : StringSpec() {
             {
               name = "app_metrics"
               path = "app"
-              url = "http://localhost:8080/metrics"
+              url = "http://localhost:$PROXY_HTTP_PORT/metrics"
               labels = "{}"
             }
           ]
@@ -405,8 +407,8 @@ class AgentPathManagerTest : StringSpec() {
       }
 
       coroutineScope {
-        launch { manager.registerPath("path1", "http://localhost:8080/p1") }
-        launch { manager.registerPath("path2", "http://localhost:8080/p2") }
+        launch { manager.registerPath("path1", "http://localhost:$PROXY_HTTP_PORT/p1") }
+        launch { manager.registerPath("path2", "http://localhost:$PROXY_HTTP_PORT/p2") }
       }
 
       manager["path1"].shouldNotBeNull()

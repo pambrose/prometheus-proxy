@@ -24,6 +24,10 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.prometheus.common.TestPorts.AGENT_ADMIN_PORT
+import io.prometheus.common.TestPorts.AGENT_METRICS_PORT
+import io.prometheus.common.TestPorts.PROXY_ADMIN_PORT
+import io.prometheus.common.TestPorts.PROXY_METRICS_PORT
 
 class ConfigWrappersTest : StringSpec() {
   private fun loadDefaultConfigVals(): ConfigVals {
@@ -82,12 +86,12 @@ class ConfigWrappersTest : StringSpec() {
       val configVals = loadDefaultConfigVals()
       val metricsConfig = ConfigWrappers.newMetricsConfig(
         enabled = true,
-        port = 8082,
+        port = PROXY_METRICS_PORT,
         metrics = configVals.proxy.metrics,
       )
 
       metricsConfig.enabled shouldBe true
-      metricsConfig.port shouldBe 8082
+      metricsConfig.port shouldBe PROXY_METRICS_PORT
       metricsConfig.path.shouldNotBeEmpty()
     }
 
@@ -95,7 +99,7 @@ class ConfigWrappersTest : StringSpec() {
       val configVals = loadDefaultConfigVals()
       val metricsConfig = ConfigWrappers.newMetricsConfig(
         enabled = false,
-        port = 8082,
+        port = PROXY_METRICS_PORT,
         metrics = configVals.proxy.metrics,
       )
 
@@ -143,7 +147,7 @@ class ConfigWrappersTest : StringSpec() {
       val configVals = loadDefaultConfigVals()
       val adminConfig = ConfigWrappers.newAdminConfig(
         enabled = true,
-        port = 8092,
+        port = PROXY_ADMIN_PORT,
         admin = configVals.proxy.admin,
       )
 
@@ -157,7 +161,7 @@ class ConfigWrappersTest : StringSpec() {
       val configVals = loadDefaultConfigVals()
       val adminConfig = ConfigWrappers.newAdminConfig(
         enabled = true,
-        port = 8093,
+        port = AGENT_ADMIN_PORT,
         admin = configVals.agent.admin,
       )
 
@@ -173,7 +177,7 @@ class ConfigWrappersTest : StringSpec() {
       val configVals = loadDefaultConfigVals()
       val metricsConfig = ConfigWrappers.newMetricsConfig(
         enabled = true,
-        port = 8082,
+        port = PROXY_METRICS_PORT,
         metrics = configVals.proxy.metrics,
       )
 
@@ -191,7 +195,7 @@ class ConfigWrappersTest : StringSpec() {
       val configVals = loadDefaultConfigVals()
       val metricsConfig = ConfigWrappers.newMetricsConfig(
         enabled = true,
-        port = 8083,
+        port = AGENT_METRICS_PORT,
         metrics = configVals.agent.metrics,
       )
 

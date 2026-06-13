@@ -28,6 +28,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.network.sockets.SocketTimeoutException
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
+import io.prometheus.common.TestPorts.PROMETHEUS_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.scrapeResponse
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -77,7 +79,7 @@ class ScrapeResultsTest : StringSpec() {
         srContentAsText = "",
         srContentAsZipped = zippedContent,
         srFailureReason = "",
-        srUrl = "http://localhost:8080/metrics",
+        srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
       )
 
       results.srValidResponse.shouldBeTrue()
@@ -85,7 +87,7 @@ class ScrapeResultsTest : StringSpec() {
       results.srContentType shouldBe "text/plain"
       results.srZipped.shouldBeTrue()
       results.srContentAsZipped shouldBe zippedContent
-      results.srUrl shouldBe "http://localhost:8080/metrics"
+      results.srUrl shouldBe "http://localhost:$PROXY_HTTP_PORT/metrics"
     }
 
     // ==================== Debug Info Constructor Tests ====================
@@ -386,7 +388,7 @@ class ScrapeResultsTest : StringSpec() {
         srZipped = false,
         srContentAsText = "metric_name 42.0",
         srFailureReason = "",
-        srUrl = "http://localhost:9090/metrics",
+        srUrl = "http://localhost:$PROMETHEUS_PORT/metrics",
       )
 
       val roundTripped = original.toScrapeResponse().toScrapeResults()

@@ -188,7 +188,7 @@ internal class AgentGrpcService(
       grpcStarted = true
 
       val interceptors =
-        buildList<ClientInterceptor> {
+        buildList {
           if (!options.transportFilterDisabled)
             add(AgentClientInterceptor(agent))
           // Attach the pre-shared token (when set) regardless of transportFilterDisabled, so it also works

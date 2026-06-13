@@ -1,5 +1,6 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests scaling-tests all-tests regen-certs \
+        scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint detekt detekt-baseline \
@@ -96,6 +97,52 @@ scaling-tests: jars  ## Run the parameter-driven scaling container test (tune vi
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true \
 		$(foreach v,SCALE_AGENTS SCALE_ENDPOINTS_PER_AGENT SCALE_SERIES_PER_ENDPOINT SCALE_CONSOLIDATED_AGENTS SCALE_CONCURRENT SCALE_CONCURRENCY_LIMIT TEST_MAX_HEAP_SIZE,$(if $($(v)),$(v)="$($(v))" )) \
 		./gradlew test --tests "io.prometheus.containers.ContainersScalingTest"
+
+# Curated scaling presets. Each delegates to `scaling-tests` with a SCALE_* combo that hammers a
+# different part of the system. They are dev/stress aids — NOT run by `all-tests` or CI (the default
+# scaling table already runs via `container-tests`). Containers ≈ 2*agents + 2*consolidated + 1, so
+# many-agents presets stress Docker/host while many-endpoints presets stress the proxy cheaply.
+
+# Path/routing-table scaling: few agents, huge fan of paths. Stresses ProxyPathManager registration
+# and routing (4 agents x 500 = 2000 paths) with only ~9 containers.
+scaling-paths:  ## Scaling preset: 2000 paths across 4 agents (routing-table stress)
+	@$(MAKE) --no-print-directory scaling-tests \
+		SCALE_AGENTS=4 SCALE_ENDPOINTS_PER_AGENT=500 \
+		SCALE_CONCURRENT=true SCALE_CONCURRENCY_LIMIT=100 TEST_MAX_HEAP_SIZE=2g
+
+# Connection/stream scaling: many agents, few paths each. Stresses AgentContextManager, gRPC streams,
+# heartbeats, and the transport filter (~81 containers — most likely to hit host/Docker limits first).
+scaling-agents:  ## Scaling preset: 40 agents x 2 endpoints (gRPC connection stress)
+	@$(MAKE) --no-print-directory scaling-tests \
+		SCALE_AGENTS=40 SCALE_ENDPOINTS_PER_AGENT=2 SCALE_CONCURRENT=false
+
+# Chunking/gzip under load: big payloads through several agents at once. Stresses ChunkedContext
+# reassembly, CRC validation, and gzip (16 paths x ~50k series; heap-heavy, few containers).
+scaling-payload:  ## Scaling preset: 16 paths x 50k series (chunking/gzip stress)
+	@$(MAKE) --no-print-directory scaling-tests \
+		SCALE_AGENTS=4 SCALE_ENDPOINTS_PER_AGENT=4 SCALE_SERIES_PER_ENDPOINT=50000 \
+		SCALE_CONCURRENT=true TEST_MAX_HEAP_SIZE=4g
+
+# Consolidated fan-out: one path served by many agents. Stresses response merging and agent selection
+# on a single path (25 agents merge into one consolidated path; ~53 containers).
+scaling-consolidated:  ## Scaling preset: 25-agent consolidated fan-out (response-merge stress)
+	@$(MAKE) --no-print-directory scaling-tests \
+		SCALE_AGENTS=1 SCALE_ENDPOINTS_PER_AGENT=1 SCALE_CONSOLIDATED_AGENTS=25
+
+# Scrape-correlation concurrency: high concurrent in-flight scrapes. Stresses ScrapeRequestManager
+# request/response correlation and timeouts (1800 paths, 150 in flight at once; vary the limit).
+scaling-concurrency:  ## Scaling preset: 1800 paths, 150 concurrent (scrape-correlation stress)
+	@$(MAKE) --no-print-directory scaling-tests \
+		SCALE_AGENTS=6 SCALE_ENDPOINTS_PER_AGENT=300 \
+		SCALE_CONCURRENT=true SCALE_CONCURRENCY_LIMIT=150 TEST_MAX_HEAP_SIZE=3g
+
+# Broad soak: moderate on every axis at once — the most realistic mixed-load shape (501 paths,
+# mixed payloads, fan-out, bounded concurrency; ~51 containers).
+scaling-soak:  ## Scaling preset: every dimension at once (broad mixed-load soak)
+	@$(MAKE) --no-print-directory scaling-tests \
+		SCALE_AGENTS=20 SCALE_ENDPOINTS_PER_AGENT=25 SCALE_SERIES_PER_ENDPOINT=2000 \
+		SCALE_CONSOLIDATED_AGENTS=5 SCALE_CONCURRENT=true \
+		SCALE_CONCURRENCY_LIMIT=64 TEST_MAX_HEAP_SIZE=6g
 
 all-tests: tests container-tests  ## Run the full suite: all tests + the container tests
 

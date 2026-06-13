@@ -25,6 +25,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import java.util.zip.CRC32
@@ -39,7 +40,7 @@ class ChunkedContextTest : StringSpec() {
     agentId: String = "test-agent",
     statusCode: Int = 200,
     failureReason: String = "",
-    url: String = "http://localhost:8080/metrics",
+    url: String = "http://localhost:$PROXY_HTTP_PORT/metrics",
     contentType: String = "text/plain",
     zipped: Boolean = true,
   ) = chunkedScrapeResponse {

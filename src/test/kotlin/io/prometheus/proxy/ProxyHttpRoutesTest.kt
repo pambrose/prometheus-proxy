@@ -46,6 +46,7 @@ import io.mockk.slot
 import io.mockk.spyk
 import io.prometheus.Proxy
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -230,7 +231,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         contentType = ContentType.Application.Json.withCharset(Charsets.UTF_8),
         contentText = """{"metric":"value"}""",
         failureReason = "",
-        url = "http://localhost:8080/metrics",
+        url = "http://localhost:$PROXY_HTTP_PORT/metrics",
         fetchDuration = 150.milliseconds,
       )
 
@@ -238,7 +239,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       response.updateMsg shouldBe "success"
       response.contentText shouldBe """{"metric":"value"}"""
       response.failureReason shouldBe ""
-      response.url shouldBe "http://localhost:8080/metrics"
+      response.url shouldBe "http://localhost:$PROXY_HTTP_PORT/metrics"
       response.fetchDuration shouldBe 150.milliseconds
     }
 
@@ -361,7 +362,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         statusCode = HttpStatusCode.OK,
         updateMsg = "success",
         contentText = "metric 1.0",
-        url = "http://localhost:8080/metrics",
+        url = "http://localhost:$PROXY_HTTP_PORT/metrics",
         fetchDuration = 150.milliseconds,
       )
 
@@ -369,7 +370,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       capturedActivity.captured shouldContain "/metrics - success - 200 OK"
       capturedActivity.captured shouldContain "time: 150ms"
-      capturedActivity.captured shouldContain "url: http://localhost:8080/metrics"
+      capturedActivity.captured shouldContain "url: http://localhost:$PROXY_HTTP_PORT/metrics"
       // Success should NOT include "reason:" text
       capturedActivity.captured shouldNotContain "reason:"
     }
@@ -383,7 +384,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         statusCode = HttpStatusCode.NotFound,
         updateMsg = "path_not_found",
         failureReason = "Agent not found for path",
-        url = "http://localhost:8080/missing",
+        url = "http://localhost:$PROXY_HTTP_PORT/missing",
         fetchDuration = 50.milliseconds,
       )
 
@@ -391,7 +392,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       capturedActivity.captured shouldContain "/missing - path_not_found - 404 Not Found"
       capturedActivity.captured shouldContain "reason: [Agent not found for path]"
-      capturedActivity.captured shouldContain "url: http://localhost:8080/missing"
+      capturedActivity.captured shouldContain "url: http://localhost:$PROXY_HTTP_PORT/missing"
     }
 
     "logActivityForResponse should include failure reason for ServiceUnavailable" {
@@ -578,7 +579,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srStatusCode = 200,
           srContentType = "text/plain; charset=utf-8",
           srContentAsText = "metric_value 1.0",
-          srUrl = "http://localhost:8080/metrics",
+          srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
         proxy.scrapeRequestManager.assignScrapeResults(results)
       }
@@ -594,7 +595,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       response.statusCode shouldBe HttpStatusCode.OK
       response.updateMsg shouldBe "success"
       response.contentText shouldBe "metric_value 1.0"
-      response.url shouldBe "http://localhost:8080/metrics"
+      response.url shouldBe "http://localhost:$PROXY_HTTP_PORT/metrics"
     }
 
     "submitScrapeRequest should unzip zipped response content" {
@@ -612,7 +613,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srContentType = "text/plain; charset=utf-8",
           srZipped = true,
           srContentAsZipped = originalContent.zip(),
-          srUrl = "http://localhost:8080/metrics",
+          srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
         proxy.scrapeRequestManager.assignScrapeResults(results)
       }
@@ -644,7 +645,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srContentType = "text/plain; charset=utf-8",
           srZipped = true,
           srContentAsZipped = "not-gzip".toByteArray(),
-          srUrl = "http://localhost:8080/metrics",
+          srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
         proxy.scrapeRequestManager.assignScrapeResults(results)
       }
@@ -682,7 +683,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srContentType = "text/plain; charset=utf-8",
           srZipped = true,
           srContentAsZipped = originalContent.zip(),
-          srUrl = "http://localhost:8080/metrics",
+          srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
         proxy.scrapeRequestManager.assignScrapeResults(results)
       }
@@ -713,7 +714,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srStatusCode = 200,
           srContentType = "this-is-not-a-valid-content-type!!!",
           srContentAsText = "metric_value 1.0",
-          srUrl = "http://localhost:8080/metrics",
+          srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
         proxy.scrapeRequestManager.assignScrapeResults(results)
       }
@@ -744,7 +745,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srStatusCode = 404,
           srContentType = "text/plain; charset=utf-8",
           srFailureReason = "Endpoint not found",
-          srUrl = "http://localhost:8080/missing",
+          srUrl = "http://localhost:$PROXY_HTTP_PORT/missing",
         )
         proxy.scrapeRequestManager.assignScrapeResults(results)
       }
@@ -896,7 +897,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         "--sd_path",
         "/test-sd",
         "--sd_target_prefix",
-        "http://localhost:8080",
+        "http://localhost:$PROXY_HTTP_PORT",
       )
 
       val server = embeddedServer(ServerCIO, port = 0) {

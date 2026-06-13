@@ -26,6 +26,7 @@ import io.kotest.matchers.string.shouldNotContain
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 
 class ProxyGrpcServiceTest : StringSpec() {
   private fun createMockProxy(
@@ -75,11 +76,11 @@ class ProxyGrpcServiceTest : StringSpec() {
 
     "toString for Netty server should indicate Netty type and port" {
       val mockProxy = createMockProxy()
-      val service = ProxyGrpcService(mockProxy, port = 50051)
+      val service = ProxyGrpcService(mockProxy, port = PROXY_AGENT_PORT)
 
       val str = service.toString()
       str shouldContain "Netty"
-      str shouldContain "50051"
+      str shouldContain "$PROXY_AGENT_PORT"
       str shouldNotContain "InProcess"
     }
 

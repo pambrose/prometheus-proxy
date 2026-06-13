@@ -24,19 +24,22 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.prometheus.common.TestPorts.PROMETHEUS_PORT
+import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 
 class ProxyOptionsTest : StringSpec() {
   init {
     // ==================== Default Values ====================
 
-    "default proxyPort should be 8080" {
+    "default proxyPort should be $PROXY_HTTP_PORT" {
       val options = ProxyOptions(listOf())
-      options.proxyPort shouldBe 8080
+      options.proxyPort shouldBe PROXY_HTTP_PORT
     }
 
-    "default proxyAgentPort should be 50051" {
+    "default proxyAgentPort should be $PROXY_AGENT_PORT" {
       val options = ProxyOptions(listOf())
-      options.proxyAgentPort shouldBe 50051
+      options.proxyAgentPort shouldBe PROXY_AGENT_PORT
     }
 
     "sdEnabled should default to false" {
@@ -77,8 +80,8 @@ class ProxyOptionsTest : StringSpec() {
     // ==================== Command-Line Override Tests ====================
 
     "proxyPort should be settable via -p flag" {
-      val options = ProxyOptions(listOf("-p", "9090"))
-      options.proxyPort shouldBe 9090
+      val options = ProxyOptions(listOf("-p", "$PROMETHEUS_PORT"))
+      options.proxyPort shouldBe PROMETHEUS_PORT
     }
 
     "proxyAgentPort should be settable via -a flag" {
@@ -88,11 +91,11 @@ class ProxyOptionsTest : StringSpec() {
 
     "sdEnabled should be settable via command line" {
       val options = ProxyOptions(
-        listOf("--sd_enabled", "--sd_path", "/sd", "--sd_target_prefix", "http://proxy:8080"),
+        listOf("--sd_enabled", "--sd_path", "/sd", "--sd_target_prefix", "http://proxy:$PROXY_HTTP_PORT"),
       )
       options.sdEnabled.shouldBeTrue()
       options.sdPath shouldBe "/sd"
-      options.sdTargetPrefix shouldBe "http://proxy:8080"
+      options.sdTargetPrefix shouldBe "http://proxy:$PROXY_HTTP_PORT"
     }
 
     "reflectionDisabled should be settable via --ref_disabled" {
@@ -250,7 +253,7 @@ class ProxyOptionsTest : StringSpec() {
 
     "configVals should be populated after construction" {
       val options = ProxyOptions(listOf())
-      options.configVals.proxy.http.port shouldBe 8080
+      options.configVals.proxy.http.port shouldBe PROXY_HTTP_PORT
     }
 
     // ==================== KeepAlive Defaults Tests ====================
@@ -274,11 +277,11 @@ class ProxyOptionsTest : StringSpec() {
 
     "sdPath and sdTargetPrefix should be accessible when sdEnabled is true" {
       val options = ProxyOptions(
-        listOf("--sd_enabled", "--sd_path", "/discovery", "--sd_target_prefix", "http://proxy:8080"),
+        listOf("--sd_enabled", "--sd_path", "/discovery", "--sd_target_prefix", "http://proxy:$PROXY_HTTP_PORT"),
       )
       options.sdEnabled.shouldBeTrue()
       options.sdPath shouldBe "/discovery"
-      options.sdTargetPrefix shouldBe "http://proxy:8080"
+      options.sdTargetPrefix shouldBe "http://proxy:$PROXY_HTTP_PORT"
     }
 
     "sdPath and sdTargetPrefix should be set when sdEnabled is false" {
