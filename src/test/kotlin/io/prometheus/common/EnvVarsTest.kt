@@ -302,23 +302,10 @@ class EnvVarsTest : StringSpec() {
       actualNames shouldBe expectedNames
     }
 
-    "getEnv Int and Long return the default when the env var is unset" {
-      // System.getenv() can't be set in-process, so getEnv()'s default branch is exercised here and
-      // its parse-and-throw branch is covered directly via parseIntStrict / parseLongStrict below.
-      val intResult = EnvVars.PROXY_PORT.getEnv(8080)
-      val longResult = EnvVars.HANDSHAKE_TIMEOUT_SECS.getEnv(120L)
-
-      if (System.getenv("PROXY_PORT") == null) {
-        intResult shouldBe 8080
-      }
-      if (System.getenv("HANDSHAKE_TIMEOUT_SECS") == null) {
-        longResult shouldBe 120L
-      }
-    }
-
     // ==================== parseIntStrict validation ====================
-    // Covers the throw branch of getEnv(Int), which getEnv() reaches only when a real env var holds
-    // a non-numeric value — not settable in-process, so the extracted helper is tested directly.
+    // getEnv(Int)'s default branch (unset env var) is covered above by "getEnv should return default
+    // int when env var not set". Its parse-and-throw branch is reached only when a real env var holds
+    // a non-numeric value — not settable in-process — so the extracted helper is tested directly here.
 
     "parseIntStrict should parse valid integers including boundaries and signs" {
       EnvVars.parseIntStrict("TEST", "0") shouldBe 0
