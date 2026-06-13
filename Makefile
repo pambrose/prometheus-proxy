@@ -1,5 +1,5 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
-        tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests \
+        tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests regen-certs \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint detekt detekt-baseline \
@@ -86,6 +86,26 @@ container-tests: jars  ## Run the Testcontainers smoke test (needs Docker)
 	fi; \
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true ./gradlew test --tests "io.prometheus.containers.*"
+
+regen-certs:  ## Regenerate the testing/certs TLS fixtures (CA + server + client; 2048-bit, 100-year validity)
+	@command -v openssl >/dev/null 2>&1 || { echo "Error: openssl not found on PATH" >&2; exit 1; }
+	@echo "Regenerating TLS fixtures in testing/certs ..."
+	@cd testing/certs && \
+	openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 36500 \
+		-subj "/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd/CN=testca" && \
+	openssl req -new -newkey rsa:2048 -nodes -keyout server1.key -out server1.csr \
+		-subj "/C=US/ST=Illinois/L=Chicago/O=Example, Co./CN=*.test.google.com" && \
+	printf 'subjectAltName=DNS:*.test.google.fr,DNS:waterzooi.test.google.be,DNS:*.test.youtube.com,IP:192.168.1.3\nbasicConstraints=CA:FALSE\n' > server1.ext && \
+	openssl x509 -req -in server1.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 36500 \
+		-extfile server1.ext -out server1.pem && \
+	openssl req -new -newkey rsa:2048 -nodes -keyout client.key -out client.csr \
+		-subj "/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd/CN=testclient" && \
+	printf 'basicConstraints=CA:FALSE\n' > client.ext && \
+	openssl x509 -req -in client.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 36500 \
+		-extfile client.ext -out client.pem && \
+	rm -f ca.key ca.srl server1.csr server1.ext client.csr client.ext && \
+	openssl verify -CAfile ca.pem server1.pem client.pem && \
+	echo "Regenerated ca.pem, server1.pem, server1.key, client.pem, client.key in testing/certs/"
 
 coverage: coverage-html coverage-xml  ## Generate HTML and XML coverage reports
 
