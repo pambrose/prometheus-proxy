@@ -496,10 +496,14 @@ class Agent(
     super.shutDown()
   }
 
-  // This is called from EmbeddedAgentInfo to allow external callers to shutdown
-  // the agent without needing access to the full Agent instance.
+  // Called from EmbeddedAgentInfo to let external callers shut the agent down without access to the
+  // full Agent instance. Must drive the Guava service lifecycle (stopSync) rather than invoking the
+  // shutDown() hook directly: stopSync() transitions the service to STOPPING (flipping isRunning to
+  // false) so the run() loop exits, then Guava invokes the shutDown() hook exactly once for cleanup,
+  // and blocks until the service reaches TERMINATED. Calling shutDown() directly would tear down the
+  // channel/servlets but leave isRunning true, so the run loop would reconnect forever.
   fun stop() {
-    shutDown()
+    stopSync()
   }
 
   override fun toString() =
