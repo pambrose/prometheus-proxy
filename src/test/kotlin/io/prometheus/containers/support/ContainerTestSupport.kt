@@ -1,0 +1,219 @@
+/*
+ * Copyright © 2026 Paul Ambrose
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction", "UndocumentedPublicProperty")
+
+package io.prometheus.containers.support
+
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
+import org.slf4j.LoggerFactory
+import org.testcontainers.containers.BindMode
+import org.testcontainers.containers.GenericContainer
+import org.testcontainers.containers.Network
+import org.testcontainers.containers.output.Slf4jLogConsumer
+import org.testcontainers.containers.wait.strategy.Wait
+import org.testcontainers.containers.wait.strategy.WaitStrategy
+import org.testcontainers.images.builder.ImageFromDockerfile
+import org.testcontainers.images.builder.Transferable
+import org.testcontainers.utility.MountableFile
+import java.nio.file.Path
+
+/**
+ * Shared factories and helpers for the Testcontainers end-to-end suite.
+ *
+ * Every spec in `io.prometheus.containers` is gated on [containerTestsEnabled]; the Makefile and the
+ * `container-tests` GitHub workflow set `RUN_CONTAINER_TESTS=true` and build the fat JARs first. The
+ * proxy and agent images are built from the `etc/docker` Dockerfiles via [proxyImage] / [agentImage]; Testcontainers
+ * content-hashes the Dockerfile + JAR inputs, so building the same image across multiple specs reuses the
+ * cached build.
+ */
+@Suppress("TooManyFunctions")
+object ContainerTestSupport {
+  const val PROXY_ALIAS = "proxy-host"
+  const val AGENT_ALIAS = "agent"
+  const val PROMETHEUS_ALIAS = "prometheus"
+  const val METRICS_STUB_ALIAS = "metrics-stub"
+
+  const val PROXY_HTTP_PORT = 8080
+  const val PROXY_METRICS_PORT = 8082
+  const val PROXY_ADMIN_PORT = 8092
+  const val PROXY_AGENT_PORT = 50051
+
+  const val AGENT_METRICS_PORT = 8083
+  const val AGENT_ADMIN_PORT = 8093
+
+  const val PROMETHEUS_PORT = 9090
+  const val NGINX_PORT = 80
+
+  /** The default nginx document root path the metrics stub serves its exposition file from. */
+  const val NGINX_METRICS_DEST = "/usr/share/nginx/html/metrics"
+
+  /** True only when `RUN_CONTAINER_TESTS=true`; otherwise every spec registers a single disabled placeholder. */
+  fun containerTestsEnabled(): Boolean = System.getenv("RUN_CONTAINER_TESTS") == "true"
+
+  fun proxyImage(): ImageFromDockerfile =
+    ImageFromDockerfile()
+      .withFileFromPath("Dockerfile", Path.of("etc/docker/proxy.df"))
+      .withFileFromPath("build/libs/prometheus-proxy.jar", Path.of("build/libs/prometheus-proxy.jar"))
+
+  fun agentImage(): ImageFromDockerfile =
+    ImageFromDockerfile()
+      .withFileFromPath("Dockerfile", Path.of("etc/docker/agent.df"))
+      .withFileFromPath("build/libs/prometheus-agent.jar", Path.of("build/libs/prometheus-agent.jar"))
+
+  fun logConsumer(name: String): Slf4jLogConsumer =
+    Slf4jLogConsumer(LoggerFactory.getLogger("container.$name")).withPrefix(name)
+
+  /**
+   * An `nginx:alpine` container serving one or more classpath exposition files.
+   *
+   * @param files map of classpath resource → container path (defaults to serving `metrics.txt` at `/metrics`).
+   */
+  fun metricsStub(
+    network: Network,
+    alias: String = METRICS_STUB_ALIAS,
+    files: Map<String, String> = mapOf("containers/metrics.txt" to NGINX_METRICS_DEST),
+    waitPath: String = "/metrics",
+  ): GenericContainer<*> =
+    GenericContainer<Nothing>("nginx:alpine").apply {
+      withNetwork(network)
+      withNetworkAliases(alias)
+      files.forEach { (resource, dest) -> withClasspathResourceMapping(resource, dest, BindMode.READ_ONLY) }
+      withExposedPorts(NGINX_PORT)
+      withLogConsumer(logConsumer(alias))
+      waitingFor(Wait.forHttp(waitPath).forPort(NGINX_PORT))
+    }
+
+  fun proxyContainer(
+    network: Network,
+    image: ImageFromDockerfile = proxyImage(),
+    env: Map<String, String> = emptyMap(),
+    exposedPorts: List<Int> = listOf(PROXY_HTTP_PORT),
+    hostFiles: Map<String, String> = emptyMap(),
+    wait: WaitStrategy = Wait.forListeningPort(),
+  ): GenericContainer<*> =
+    GenericContainer<Nothing>(image).apply {
+      withNetwork(network)
+      withNetworkAliases(PROXY_ALIAS)
+      withExposedPorts(*exposedPorts.toTypedArray())
+      hostFiles.forEach { (hostPath, dest) -> withCopyFileToContainer(MountableFile.forHostPath(hostPath), dest) }
+      env.forEach { (key, value) -> withEnv(key, value) }
+      withLogConsumer(logConsumer("proxy"))
+      waitingFor(wait)
+    }
+
+  /**
+   * An agent container driven by a mounted HOCON config (path topology is config-file-only) plus env-var knobs.
+   *
+   * @param waitLogRegex log line the agent prints once it has registered a path (`Registered <url> as /<path> …`).
+   */
+  fun agentContainer(
+    network: Network,
+    image: ImageFromDockerfile = agentImage(),
+    alias: String = AGENT_ALIAS,
+    configResource: String = "containers/agent.conf",
+    env: Map<String, String> = emptyMap(),
+    exposedPorts: List<Int> = emptyList(),
+    classpathFiles: Map<String, String> = emptyMap(),
+    hostFiles: Map<String, String> = emptyMap(),
+    waitLogRegex: String = ".*Registered .* as /.*",
+    wait: WaitStrategy? = null,
+  ): GenericContainer<*> =
+    GenericContainer<Nothing>(image).apply {
+      withNetwork(network)
+      withNetworkAliases(alias)
+      withEnv("AGENT_CONFIG", "/config/agent.conf")
+      withClasspathResourceMapping(configResource, "/config/agent.conf", BindMode.READ_ONLY)
+      classpathFiles.forEach { (resource, dest) -> withClasspathResourceMapping(resource, dest, BindMode.READ_ONLY) }
+      hostFiles.forEach { (hostPath, dest) -> withCopyFileToContainer(MountableFile.forHostPath(hostPath), dest) }
+      env.forEach { (key, value) -> withEnv(key, value) }
+      if (exposedPorts.isNotEmpty()) withExposedPorts(*exposedPorts.toIntArray().toTypedArray())
+      withLogConsumer(logConsumer(alias))
+      waitingFor(wait ?: Wait.forLogMessage(waitLogRegex, 1))
+    }
+
+  fun prometheusContainer(
+    network: Network,
+    ymlResource: String = "containers/prometheus.yml",
+  ): GenericContainer<*> =
+    GenericContainer<Nothing>("prom/prometheus:latest").apply {
+      withNetwork(network)
+      withNetworkAliases(PROMETHEUS_ALIAS)
+      withClasspathResourceMapping(ymlResource, "/etc/prometheus/prometheus.yml", BindMode.READ_ONLY)
+      withExposedPorts(PROMETHEUS_PORT)
+      withLogConsumer(logConsumer("prometheus"))
+      waitingFor(Wait.forHttp("/-/ready").forPort(PROMETHEUS_PORT))
+    }
+
+  /** A Ktor client that returns non-2xx responses instead of throwing (so 404/503 can be asserted). */
+  fun httpClient(): HttpClient = HttpClient(CIO) { expectSuccess = false }
+
+  /**
+   * Generate a synthetic Prometheus exposition payload of roughly [seriesCount] series, ending in a
+   * recognizable [SENTINEL_METRIC] line. Used to force the agent's chunking + gzip path end-to-end.
+   *
+   * @return the exposition text and the number of metric (non-comment) lines it contains.
+   */
+  fun largeMetricsText(seriesCount: Int = LARGE_PAYLOAD_SERIES): Pair<String, Int> {
+    val sb =
+      StringBuilder()
+        .append("# HELP synthetic_metric Synthetic gauge used to exercise chunked, gzipped scrape responses.\n")
+        .append("# TYPE synthetic_metric gauge\n")
+    repeat(seriesCount) { i -> sb.append("synthetic_metric{series=\"").append(i).append("\"} ").append(i).append('\n') }
+    sb.append("# HELP ").append(SENTINEL_METRIC).append(" Final series; proves the whole payload survived chunking.\n")
+    sb.append("# TYPE ").append(SENTINEL_METRIC).append(" gauge\n")
+    sb.append(SENTINEL_METRIC).append(' ').append(SENTINEL_VALUE).append('\n')
+    return sb.toString() to (seriesCount + 1)
+  }
+
+  fun transferable(text: String): Transferable = Transferable.of(text)
+
+  const val SENTINEL_METRIC = "sentinel_metric"
+  const val SENTINEL_VALUE = 999999
+  const val LARGE_PAYLOAD_SERIES = 6000
+}
+
+/** Host base URL (`http://<host>:<mappedPort>`) for a container's exposed [port]. */
+fun GenericContainer<*>.baseUrl(port: Int): String = "http://$host:${getMappedPort(port)}"
+
+/** HTTP status code for a GET against [url]. */
+suspend fun HttpClient.statusOf(url: String): Int = get(url).status.value
+
+/** Response body text for a GET against [url]. */
+suspend fun HttpClient.bodyOf(url: String): String = get(url).bodyAsText()
+
+/** Best-effort stop of every supplied container, swallowing teardown failures. */
+fun stopQuietly(vararg containers: GenericContainer<*>) {
+  containers.forEach { container ->
+    try {
+      container.stop()
+    } catch (_: Exception) {
+      // best-effort teardown
+    }
+  }
+}
+
+/** Best-effort close of a Testcontainers [Network], swallowing teardown failures. */
+fun closeQuietly(network: Network) {
+  try {
+    network.close()
+  } catch (_: Exception) {
+    // best-effort teardown
+  }
+}

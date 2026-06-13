@@ -1,0 +1,3 @@
+# HELP metric_two Second smoke-test gauge served by the metrics stub.
+# TYPE metric_two gauge
+metric_two 7
