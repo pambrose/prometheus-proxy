@@ -157,6 +157,13 @@ enum class EnvVars {
 
   // ---- Common (apply to both Proxy and Agent) ----
 
+  /**
+   * Pre-shared authentication token for Agent-to-Proxy gRPC connections. The Proxy rejects any agent RPC whose
+   * token does not match; the Agent presents this value as a metadata header on every call. Both sides must share
+   * the same value. Empty (default) disables token authentication and preserves the open behavior.
+   */
+  AGENT_TOKEN,
+
   /** Enable the `/debug` admin servlet on whichever process this variable is read by. Default `false`. */
   DEBUG_ENABLED,
 

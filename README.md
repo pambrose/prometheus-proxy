@@ -347,6 +347,7 @@ Typesafe Config highlights include:
 | **Both**  | `--config, -c`     | `PROXY_CONFIG` / `AGENT_CONFIG` | Path or URL to config file                           |
 | **Both**  | `--admin, -r`      | `ADMIN_ENABLED`                 | Enable admin/health-check endpoints                  |
 | **Both**  | `--metrics, -e`    | `METRICS_ENABLED`               | Enable internal metrics collection                   |
+| **Both**  | `--agent_token`    | `AGENT_TOKEN`                   | Pre-shared agent auth token; both sides must match (Default: disabled) |
 | **Proxy** | `--port, -p`       | `PROXY_PORT`                    | Port for Prometheus to scrape (Default: 8080)        |
 | **Proxy** | `--agent_port, -a` | `AGENT_PORT`                    | Port for Agents to connect via gRPC (Default: 50051) |
 | **Agent** | `--proxy, -p`      | `PROXY_HOSTNAME`                | Hostname/IP of the Proxy                             |
@@ -434,6 +435,15 @@ mode, i.e., do not define any TLS properties.
 
 **Disable reflection:** Use `--ref_disabled`, `REFLECTION_DISABLED`, or `proxy.reflectionDisabled=true`.
 
+**⚠️ Security Note:** Reflection is **unauthenticated** and exposes the full gRPC API surface to anyone who can reach the
+agent port (default `50051`). A client such as `grpcurl` can enumerate every service, method, and message type without
+credentials, making it trivial for an attacker who reaches the port to discover and craft calls (for example, to attempt
+agent or path registration). The optional [agent token](#agent-token-authentication) does **not** protect reflection — the
+token interceptor guards only the `ProxyService` RPCs, not the separate reflection service. Leave reflection on only for
+local debugging on a trusted network; **disable it in production** and anywhere the agent port is reachable beyond trusted
+agents. Disabling reflection only hides the API shape — it is not a substitute for authentication, so still pair the agent
+port with the pre-shared agent token, mutual TLS, and/or network segmentation.
+
 ## 🔐 Security & TLS
 
 ### TLS Configuration Details
@@ -504,6 +514,31 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
 target for `--mount` options.
+
+### Agent Token Authentication
+
+The proxy accepts agent gRPC connections with no application-level authentication by default — any process that can reach
+the agent port (default `50051`) can register as an agent. Set a shared **pre-shared token** so the proxy rejects agents
+that do not present it:
+
+* Proxy: `--agent_token`, `AGENT_TOKEN`, or `proxy.agentToken`
+* Agent: `--agent_token`, `AGENT_TOKEN`, or `agent.agentToken`
+
+Both sides must use the **same** value. When set, the agent attaches the token as a gRPC metadata header on every call and
+the proxy rejects any call with a missing or mismatched token (`UNAUTHENTICATED`). When the token is empty (the default),
+the open behavior is preserved and the proxy logs a startup warning — unless mutual TLS is configured, which already
+authenticates agents.
+
+```bash
+# Proxy requiring a token
+java -jar prometheus-proxy.jar --agent_token "$AGENT_TOKEN"
+
+# Agent presenting the token
+java -jar prometheus-agent.jar --config myconfig.conf --agent_token "$AGENT_TOKEN"
+```
+
+The token is a lightweight, app-level control. For production, prefer mutual TLS (and/or restrict the agent port to
+trusted networks); the token complements, but does not replace, those controls. The value is never written to logs.
 
 ### Auth Header Forwarding
 

@@ -191,6 +191,10 @@ internal class AgentGrpcService(
         buildList<ClientInterceptor> {
           if (!options.transportFilterDisabled)
             add(AgentClientInterceptor(agent))
+          // Attach the pre-shared token (when set) regardless of transportFilterDisabled, so it also works
+          // when the Agent connects through an L7 reverse proxy (nginx) that strips transport info.
+          if (options.agentToken.isNotEmpty())
+            add(AgentTokenClientInterceptor(options.agentToken))
         }
       grpcStub = ProxyServiceGrpcKt.ProxyServiceCoroutineStub(ClientInterceptors.intercept(channel, interceptors))
     }

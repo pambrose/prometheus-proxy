@@ -23,6 +23,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.EnvVars.AGENT_PORT
+import io.prometheus.common.EnvVars.AGENT_TOKEN
 import io.prometheus.common.EnvVars.HANDSHAKE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.MAX_CONNECTION_AGE_GRACE_SECS
 import io.prometheus.common.EnvVars.MAX_CONNECTION_AGE_SECS
@@ -56,6 +57,16 @@ class ProxyOptions(
    */
   @Parameter(names = ["-a", "--agent_port"], description = "gRPC listen port for Agents")
   var proxyAgentPort = -1
+    private set
+
+  /**
+   * Pre-shared token agents must present on every gRPC call to authenticate to the Proxy. When set, a server
+   * interceptor rejects any agent RPC with a missing or mismatched token (`UNAUTHENTICATED`).
+   * Empty (default) disables token authentication and leaves the agent port open, subject only to TLS/network
+   * controls. Resolved from CLI → [AGENT_TOKEN] env var → `proxy.agentToken` config. Never logged.
+   */
+  @Parameter(names = ["--agent_token"], description = "Pre-shared agent authentication token")
+  var agentToken = ""
     private set
 
   /**
@@ -258,6 +269,19 @@ class ProxyOptions(
             "internal.maxUnzippedContentSizeMBytes must be >= 0: ${internal.maxUnzippedContentSizeMBytes}"
           }
           logger.info { "internal.maxUnzippedContentSizeMBytes: ${internal.maxUnzippedContentSizeMBytes}" }
+        }
+
+        // Resolved after assignCommonOptions so trustCertCollectionFilePath reflects the CLI/env/config value.
+        if (agentToken.isEmpty())
+          agentToken = AGENT_TOKEN.getEnv(proxyConfigVals.agentToken)
+        // Never log the token value -- only whether one is configured.
+        logger.info { "agentToken: ${if (agentToken.isEmpty()) "(none)" else "***"}" }
+        // Warn only when the agent port is genuinely open: no token AND no mutual-TLS trust store.
+        if (agentToken.isEmpty() && trustCertCollectionFilePath.isEmpty()) {
+          logger.warn {
+            "Agent gRPC port is unauthenticated -- no pre-shared agent token and no mutual-TLS trust store " +
+              "are configured. Any reachable peer can register as an agent. Do not expose this port in production."
+          }
         }
 
         assignLogLevel("proxy", PROXY_LOG_LEVEL, proxyConfigVals.logLevel)

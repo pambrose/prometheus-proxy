@@ -1,6 +1,6 @@
 # Security Finding: Unauthenticated Agent Registration / Path Hijacking
 
-**Status:** Open
+**Status:** Partially mitigated — optional pre-shared agent token implemented (remediation item 1); items 3–4 remain open
 **Severity:** High (conditional on network exposure of the agent gRPC port)
 **Component:** Proxy gRPC service (agent-facing port, default `50051`)
 **Identified:** 2026-06 code review
@@ -92,6 +92,13 @@ not hand agent credentials or scrape-target secrets to connecting agents.
 
 ## Current mitigations
 
+- **Pre-shared agent token** (remediation item 1, now implemented): set a shared secret on both sides via
+  `--agent_token` / `AGENT_TOKEN` / `proxy.agentToken` (proxy) and `agent.agentToken` (agent). The agent sends it
+  as a gRPC metadata header on every call; the proxy's `AgentTokenServerInterceptor`
+  (`proxy/AgentTokenServerInterceptor.kt`) rejects any RPC with a missing or mismatched token with
+  `Status.UNAUTHENTICATED` (constant-time comparison). When the token is empty the historical open behavior is
+  preserved, and the proxy logs a startup warning unless mutual TLS is configured. This is an app-level control that
+  complements, but does not replace, mutual TLS.
 - **Mutual TLS** fully closes the finding when configured: set the proxy's
   `trustCertCollectionFilePath` (and the TLS cert/key) so the proxy requires a valid client
   certificate, and provision agents with certificates. See the `tls { … }` blocks in
@@ -106,13 +113,14 @@ not hand agent credentials or scrape-target secrets to connecting agents.
 
 In rough priority order:
 
-1. **Optional pre-shared agent token (lowest-friction app-level auth).** Add a configurable
-   secret (e.g. `--agent-token` / `AGENT_TOKEN` / `proxy.agentToken`) that agents send in a
-   gRPC metadata header. A server interceptor (alongside `ProxyServerInterceptor`) rejects
-   any RPC lacking the correct token with `Status.UNAUTHENTICATED`. When the token is empty,
-   preserve today's open behavior for backward compatibility — but log a prominent startup
-   **warning** that the agent port is unauthenticated, mirroring the existing
-   `trustAllX509Certificates` warning pattern.
+1. **Optional pre-shared agent token (lowest-friction app-level auth).** ✅ **Implemented.** A configurable
+   secret (`--agent_token` / `AGENT_TOKEN` / `proxy.agentToken` on the proxy, `agent.agentToken` on the agent)
+   that agents send in a gRPC metadata header (`agent-token`). The proxy's `AgentTokenServerInterceptor` (added
+   to the interceptor chain alongside `ProxyServerInterceptor`) rejects any RPC lacking the correct token with
+   `Status.UNAUTHENTICATED`, using a constant-time comparison. When the token is empty, today's open behavior is
+   preserved for backward compatibility — and the proxy logs a prominent startup **warning** that the agent port
+   is unauthenticated (suppressed when mutual TLS is configured, since that already authenticates agents),
+   mirroring the existing `trustAllX509Certificates` warning pattern.
 2. **Document mutual TLS as the recommended production posture** and network segmentation as
    the minimum bar for plaintext deployments (README + CLI/config docs).
 3. **Disable gRPC reflection by default** (`reflectionDisabled = true` in

@@ -121,6 +121,7 @@ agent {
 |--------|---------|---------|-------------|
 | `--port, -p` | `PROXY_PORT` | 8080 | Proxy listen port |
 | `--agent_port, -a` | `AGENT_PORT` | 50051 | gRPC listen port for agents |
+| `--agent_token` | `AGENT_TOKEN` | | Pre-shared agent auth token; agents must present the same value (empty disables) |
 | `--config, -c` | `PROXY_CONFIG` | | Config file or URL |
 | `--admin, -r` | `ADMIN_ENABLED` | false | Enable admin endpoints |
 | `--metrics, -e` | `METRICS_ENABLED` | false | Enable internal metrics |
@@ -137,6 +138,7 @@ agent {
 | `--config, -c` | `AGENT_CONFIG` | | Config file or URL (required) |
 | `--name, -n` | `AGENT_NAME` | | Agent name |
 | `--consolidated, -o` | `CONSOLIDATED` | false | Multiple agents per path |
+| `--agent_token` | `AGENT_TOKEN` | | Pre-shared token presented to the proxy; must match the proxy's value (empty disables) |
 | `--timeout` | `SCRAPE_TIMEOUT_SECS` | 15 | Scrape timeout (seconds) |
 | `--chunk` | `CHUNK_CONTENT_SIZE_KBS` | 32 | Chunking threshold (KB) |
 | `--trust_all_x509` | `TRUST_ALL_X509_CERTIFICATES` | false | Disable SSL verification |
