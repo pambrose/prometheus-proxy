@@ -23,6 +23,20 @@ Configure the gRPC service that agents connect to:
 --8<-- "ConfigExamples.txt:proxy-grpc-config"
 ```
 
+## Agent Authentication
+
+The agent gRPC port is unauthenticated by default. Set a
+[pre-shared token](../security/index.md#agent-authentication-pre-shared-token) so the proxy rejects
+agents that do not present a matching value (`UNAUTHENTICATED`). Resolved from `--agent_token` →
+`AGENT_TOKEN` → `proxy.agentToken`; empty (the default) disables the check and logs a startup warning
+unless mutual TLS is configured. The token is never logged.
+
+```hocon
+proxy {
+  agentToken = "shared-secret"   // Agents must present the same value
+}
+```
+
 ## Service Discovery
 
 Enable Prometheus HTTP service discovery:

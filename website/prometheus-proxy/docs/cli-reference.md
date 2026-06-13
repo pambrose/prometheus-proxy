@@ -11,6 +11,7 @@ icon: lucide/terminal
 | `--config, -c`       | `PROXY_CONFIG`                    |                                         |                          | Config file path or URL      |
 | `--port, -p`         | `PROXY_PORT`                      | `proxy.http.port`                       | 8080                     | HTTP listen port             |
 | `--agent_port, -a`   | `AGENT_PORT`                      | `proxy.agent.port`                      | 50051                    | gRPC listen port for agents  |
+| `--agent_token`      | `AGENT_TOKEN`                     | `proxy.agentToken`                      | ""                       | Pre-shared agent auth token  |
 | `--admin, -r`        | `ADMIN_ENABLED`                   | `proxy.admin.enabled`                   | false                    | Enable admin endpoints       |
 | `--admin_port, -i`   | `ADMIN_PORT`                      | `proxy.admin.port`                      | 8092                     | Admin listen port            |
 | `--debug, -b`        | `DEBUG_ENABLED`                   | `proxy.admin.debugEnabled`              | false                    | Enable debug servlet         |
@@ -60,6 +61,7 @@ icon: lucide/terminal
 | `--chunk`                     | `CHUNK_CONTENT_SIZE_KBS`          | `agent.chunkContentSizeKbs`                 | 32      | Chunking threshold (KB)            |
 | `--gzip`                      | `MIN_GZIP_SIZE_BYTES`             | `agent.minGzipSizeBytes`                    | 1024    | Min size for gzip (bytes)          |
 | `--tf_disabled`               | `TRANSPORT_FILTER_DISABLED`       | `agent.transportFilterDisabled`             | false   | Disable transport filter           |
+| `--agent_token`               | `AGENT_TOKEN`                     | `agent.agentToken`                          | ""      | Pre-shared token presented to proxy |
 | `--trust_all_x509`            | `TRUST_ALL_X509_CERTIFICATES`     | `agent.http.enableTrustAllX509Certificates` | false   | Disable SSL verification           |
 | `--https_truststore`          | `HTTPS_TRUST_STORE_PATH`          | `agent.http.trustStorePath`                 | ""      | Trust store for HTTPS targets      |
 | `--https_truststore_password` | `HTTPS_TRUST_STORE_PASSWORD`      | `agent.http.trustStorePassword`             | ""      | Password for the trust store       |
