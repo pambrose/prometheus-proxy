@@ -27,12 +27,18 @@ This document describes the test suite structure and how to run tests for the pr
 ### Make Targets
 
 ```bash
-make tests        # Rerun all checks (lint + tests)
-make nh-tests     # Unit tests only (agent, proxy, common, misc — no harness)
-make ip-tests     # In-process integration tests only
-make netty-tests  # Netty integration tests only
-make tls-tests    # TLS integration tests only
+make tests            # Rerun all checks (lint + tests); the container smoke test is SKIPPED
+make nh-tests         # Unit tests only (agent, proxy, common, misc — no harness)
+make ip-tests         # In-process integration tests only
+make netty-tests      # Netty integration tests only
+make tls-tests        # TLS integration tests only
+make container-tests  # Testcontainers smoke test only (needs Docker)
+make all-tests        # Full suite: `make tests` + `make container-tests`
 ```
+
+The container smoke test (`io.prometheus.containers.*`) is gated on `RUN_CONTAINER_TESTS=true` and
+needs Docker, so a plain `make tests` / `./gradlew check` registers it as a SKIPPED placeholder. Use
+`make container-tests` to run it on its own, or `make all-tests` to run everything in one shot.
 
 ## Frameworks and Libraries
 

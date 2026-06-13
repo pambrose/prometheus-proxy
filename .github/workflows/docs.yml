@@ -29,7 +29,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
-      - run: pip install zensical mkdocs-material
+      # Pinned for reproducible doc builds; bump deliberately when upgrading the toolchain.
+      - run: pip install zensical==0.0.45 mkdocs-material==9.7.6
       - run: zensical build --clean
         working-directory: website/prometheus-proxy
 
