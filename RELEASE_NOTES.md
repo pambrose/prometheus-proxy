@@ -53,6 +53,7 @@ _Unreleased_
 
 - Full code-review cleanup pass with no behavior change: extracted the shared common-option assignment between `AgentOptions` and `ProxyOptions`, decomposed `Agent.run()`'s four connection tasks behind one `launchConnectionTask` helper, collapsed the six duplicated `ConfigWrappers` overloads onto shared builders, modeled basic-auth credentials as a `Credentials` value object, split the agent chunk-size field into a KB input plus a derived bytes value, replaced the stringly-typed `PathConfig` map with a typed data class, and unified the gRPC-default log formatting behind a single `grpcDefaultLabel` helper
 - Added a negative-path mutual-TLS rejection test plus unit coverage for timeout-override resolution, the chunked unknown-`scrapeId` header drop, wrapped-timeout detection, and the chunk-size boundary; encode the gzipped response body only once (was twice); deleted the dead `SslSettings` scaffolding (now wired into the new HTTPS trust store) and stale commented-out blocks
+- Closed a test-coverage gap on `EnvVars`: the `getEnv(Int)` / `getEnv(Long)` invalid-value error paths were unreachable from tests because `System.getenv()` can't be set in-process. Extracted `parseIntStrict` / `parseLongStrict` companion helpers (matching the existing `parseBooleanStrict` seam) and tested them directly for boundaries, signs, `Int`-overflow rejection, and non-numeric/whitespace input; removed a redundant default-fallback test
 
 ### Build & Tooling
 
