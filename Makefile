@@ -1,5 +1,5 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
-        tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests all-tests regen-certs \
+        tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests scaling-tests all-tests regen-certs \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint detekt detekt-baseline \
@@ -86,6 +86,16 @@ container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	fi; \
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true ./gradlew test --tests "io.prometheus.containers.*"
+
+scaling-tests: jars  ## Run the parameter-driven scaling container test (tune via SCALE_* vars; needs Docker)
+	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
+	if [ -z "$$DOCKER_HOST" ]; then \
+		echo "Error: could not detect active Docker context. Is Docker running?" >&2; exit 1; \
+	fi; \
+	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
+	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true \
+		$(foreach v,SCALE_AGENTS SCALE_ENDPOINTS_PER_AGENT SCALE_SERIES_PER_ENDPOINT SCALE_CONSOLIDATED_AGENTS SCALE_CONCURRENT SCALE_CONCURRENCY_LIMIT TEST_MAX_HEAP_SIZE,$(if $($(v)),$(v)="$($(v))" )) \
+		./gradlew test --tests "io.prometheus.containers.ContainersScalingTest"
 
 all-tests: tests container-tests  ## Run the full suite: all tests + the container tests
 

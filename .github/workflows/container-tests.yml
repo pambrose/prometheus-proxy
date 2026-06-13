@@ -1,9 +1,12 @@
 name: Container Tests
 
-# Runs the Testcontainers smoke test that builds the proxy/agent images from
-# etc/docker/*.df and verifies the full Prometheus -> proxy -> agent -> endpoint
-# scrape path. Slow (~1-2 min) so this is gated behind targeted triggers
-# rather than running on every PR. No untrusted event payloads are referenced.
+# Runs the full Testcontainers end-to-end suite (io.prometheus.containers.*): builds the
+# proxy/agent images from etc/docker/*.df and exercises the Prometheus -> proxy -> agent ->
+# endpoint scrape path across smoke, HTTP-surface, consolidated, large-payload, reconnect,
+# agent-token-auth, TLS/HTTPS, and parameter-driven scaling specs. The scaling spec runs its
+# small default table here (no SCALE_* overrides). Slow (several minutes) so this is gated
+# behind targeted triggers rather than running on every PR. No untrusted event payloads are
+# referenced.
 on:
   push:
     branches: [ master ]

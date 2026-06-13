@@ -128,24 +128,34 @@ object ContainerTestSupport {
     image: ImageFromDockerfile = agentImage(),
     alias: String = AGENT_ALIAS,
     configResource: String = "containers/agent.conf",
+    configText: String? = null,
     env: Map<String, String> = emptyMap(),
     exposedPorts: List<Int> = emptyList(),
     classpathFiles: Map<String, String> = emptyMap(),
     hostFiles: Map<String, String> = emptyMap(),
     waitLogRegex: String = ".*Registered .* as /.*",
+    waitTimes: Int = 1,
     wait: WaitStrategy? = null,
   ): GenericContainer<*> =
     GenericContainer<Nothing>(image).apply {
       withNetwork(network)
       withNetworkAliases(alias)
       withEnv("AGENT_CONFIG", "/config/agent.conf")
-      withClasspathResourceMapping(configResource, "/config/agent.conf", BindMode.READ_ONLY)
+      // A runtime-generated config (configText) is injected directly; otherwise mount the classpath resource.
+      // The trailing Unit keeps the SELF-returning builder call out of value position (avoids a Nothing cast).
+      if (configText != null) {
+        withCopyToContainer(transferable(configText), "/config/agent.conf")
+        Unit
+      } else {
+        withClasspathResourceMapping(configResource, "/config/agent.conf", BindMode.READ_ONLY)
+        Unit
+      }
       classpathFiles.forEach { (resource, dest) -> withClasspathResourceMapping(resource, dest, BindMode.READ_ONLY) }
       hostFiles.forEach { (hostPath, dest) -> withCopyFileToContainer(MountableFile.forHostPath(hostPath), dest) }
       env.forEach { (key, value) -> withEnv(key, value) }
       if (exposedPorts.isNotEmpty()) withExposedPorts(*exposedPorts.toIntArray().toTypedArray())
       withLogConsumer(logConsumer(alias))
-      waitingFor(wait ?: Wait.forLogMessage(waitLogRegex, 1))
+      waitingFor(wait ?: Wait.forLogMessage(waitLogRegex, waitTimes))
     }
 
   fun prometheusContainer(
@@ -171,15 +181,16 @@ object ContainerTestSupport {
    * @return the exposition text and the number of metric (non-comment) lines it contains.
    */
   fun largeMetricsText(seriesCount: Int = LARGE_PAYLOAD_SERIES): Pair<String, Int> {
-    val sb =
-      StringBuilder()
-        .append("# HELP synthetic_metric Synthetic gauge used to exercise chunked, gzipped scrape responses.\n")
-        .append("# TYPE synthetic_metric gauge\n")
-    repeat(seriesCount) { i -> sb.append("synthetic_metric{series=\"").append(i).append("\"} ").append(i).append('\n') }
-    sb.append("# HELP ").append(SENTINEL_METRIC).append(" Final series; proves the whole payload survived chunking.\n")
-    sb.append("# TYPE ").append(SENTINEL_METRIC).append(" gauge\n")
-    sb.append(SENTINEL_METRIC).append(' ').append(SENTINEL_VALUE).append('\n')
-    return sb.toString() to (seriesCount + 1)
+    val text =
+      buildString {
+        appendLine("# HELP synthetic_metric Synthetic gauge used to exercise chunked, gzipped scrape responses.")
+        appendLine("# TYPE synthetic_metric gauge")
+        repeat(seriesCount) { i -> appendLine("synthetic_metric{series=\"$i\"} $i") }
+        appendLine("# HELP $SENTINEL_METRIC Final series; proves the whole payload survived chunking.")
+        appendLine("# TYPE $SENTINEL_METRIC gauge")
+        appendLine("$SENTINEL_METRIC $SENTINEL_VALUE")
+      }
+    return text to (seriesCount + 1)
   }
 
   fun transferable(text: String): Transferable = Transferable.of(text)
