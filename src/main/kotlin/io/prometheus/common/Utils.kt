@@ -100,13 +100,19 @@ internal object Utils {
   ) {
     val level =
       when (logLevel.lowercase()) {
-        "all" -> Level.ALL
+        // "all" is intentionally unsupported: ch.qos.logback.classic.Level.ALL is deprecated. Use "trace".
         "trace" -> Level.TRACE
+
         "debug" -> Level.DEBUG
+
         "info" -> Level.INFO
+
         "warn" -> Level.WARN
+
         "error" -> Level.ERROR
+
         "off" -> Level.OFF
+
         else -> throw IllegalArgumentException("Invalid $context log level: $logLevel")
       }
     val rootLogger = LoggerFactory.getLogger(ROOT_LOGGER_NAME) as? Logger
