@@ -433,17 +433,29 @@ internal class AgentGrpcService(
       nonChunkedChannel.close()
       chunkedChannel.close()
     }
+
+    // Shared per-stream failure policy: run [block], and on a non-cancellation failure log it (tagged
+    // with [name]) while the agent is still running, then tear down the shared channels. Cancellation
+    // is propagated without closing (normal shutdown). Factored out of the three coroutines below so
+    // the failure handling lives in one place.
+    suspend fun runStreamTask(
+      name: String,
+      block: suspend () -> Unit,
+    ) {
+      runCatchingCancellable { block() }
+        .onFailure { e ->
+          if (agent.isRunning)
+            Status.fromThrowable(e).apply { logger.error(e) { "$name(): ${exceptionDetails(e)}" } }
+          if (e !is CancellationException) closeAll()
+        }
+    }
+
     coroutineScope {
       // Ends by connectionContext.close()
       launch(Dispatchers.IO) {
         try {
-          runCatchingCancellable {
+          runStreamTask("processScrapeResults") {
             processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
-          }.onFailure { e ->
-            if (agent.isRunning)
-              Status.fromThrowable(e)
-                .apply { logger.error(e) { "processScrapeResults(): ${exceptionDetails(e)}" } }
-            if (e !is CancellationException) closeAll()
           }
         } finally {
           // Close channels when the producer finishes so consumers' consumeAsFlow() will complete.
@@ -455,24 +467,14 @@ internal class AgentGrpcService(
 
       // Ends by disconnection from server
       launch(Dispatchers.IO) {
-        runCatchingCancellable {
+        runStreamTask("writeResponsesToProxy") {
           grpcStub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
-        }.onFailure { e ->
-          if (agent.isRunning)
-            Status.fromThrowable(e)
-              .apply { logger.error(e) { "writeResponsesToProxy(): ${exceptionDetails(e)}" } }
-          if (e !is CancellationException) closeAll()
         }
       }
 
       launch(Dispatchers.IO) {
-        runCatchingCancellable {
+        runStreamTask("writeChunkedResponsesToProxy") {
           grpcStub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
-        }.onFailure { e ->
-          if (agent.isRunning)
-            Status.fromThrowable(e)
-              .apply { logger.error(e) { "writeChunkedResponsesToProxy(): ${exceptionDetails(e)}" } }
-          if (e !is CancellationException) closeAll()
         }
       }
     }

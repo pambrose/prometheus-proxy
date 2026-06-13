@@ -45,6 +45,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -275,17 +276,23 @@ class HttpClientCacheTest : StringSpec() {
 
     "should handle concurrent access safely" {
       val key = ClientKey("user1", "pass1")
-      val entries = mutableListOf<CacheEntry>()
+      // Thread-safe: the coroutines below run on a real multi-threaded dispatcher.
+      val entries = ConcurrentLinkedQueue<CacheEntry>()
 
-      // Launch multiple coroutines to access the cache concurrently
+      // Launch on Dispatchers.IO (multi-threaded) and release all coroutines together via a start
+      // latch so they genuinely contend on the cache's mutex / ConcurrentHashMap, rather than merely
+      // interleaving on the single-threaded test dispatcher (which would not exercise thread-safety).
+      val startLatch = CountDownLatch(1)
       val jobs = (1..10).map {
-        launch {
+        launch(Dispatchers.IO) {
+          startLatch.await()
           val entry = cache.getOrCreateClient(key) { createMockHttpClient() }
           entries.add(entry)
           delay(50.milliseconds)
           cache.onFinishedWithClient(entry)
         }
       }
+      startLatch.countDown()
 
       // Wait for all jobs to complete
       jobs.joinAll()

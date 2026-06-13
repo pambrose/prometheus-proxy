@@ -109,7 +109,7 @@ internal class AgentHttpService(
     req: ScrapeRequest,
     pathContext: AgentPathManager.PathContext,
   ): ScrapeResults {
-    val requestTimer = if (agent.isMetricsEnabled) agent.startTimer(agent) else null
+    val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
     // Add the incoming query params to the url
     val url = appendQueryParams(pathContext.url, req.encodedQueryParams)
     val logUrl = sanitizeUrl(url)
@@ -124,8 +124,7 @@ internal class AgentHttpService(
       } catch (e: Throwable) {
         // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
         // but let other CancellationExceptions propagate (like system shutdown).
-        // Ktor often wraps the timeout exception, so we check the cause as well.
-        // We also check class names to handle cases where exceptions might be wrapped or mocked.
+        // Ktor often wraps the timeout exception, so we walk the cause chain as well.
         var isTimeout = e is HttpRequestTimeoutException || e is TimeoutCancellationException
         var curr: Throwable? = e
         while (!isTimeout && curr != null) {
@@ -352,10 +351,7 @@ internal class AgentHttpService(
     private const val UNSUCCESSFUL_MSG = "unsuccessful"
 
     private fun isTimeoutException(e: Throwable): Boolean =
-      e is HttpRequestTimeoutException ||
-        e is TimeoutCancellationException ||
-        e.javaClass.simpleName == "HttpRequestTimeoutException" ||
-        e.simpleClassName == "HttpRequestTimeoutException"
+      e is HttpRequestTimeoutException || e is TimeoutCancellationException
 
     private fun handleInvalidPath(scrapeRequest: ScrapeRequest): ScrapeResults {
       logger.warn { "Invalid path in fetchScrapeUrl(): ${scrapeRequest.path}" }

@@ -383,8 +383,7 @@ class Agent(
 
   internal val proxyHost get() = "${grpcService.agentHostName}:${grpcService.agentPort}"
 
-  internal fun startTimer(agent: Agent): Histogram.Timer? =
-    metrics.scrapeRequestLatency.labels(agent.launchId, agentName).startTimer()
+  internal fun startTimer(): Histogram.Timer? = metrics.scrapeRequestLatency.labels(launchId, agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"
 
