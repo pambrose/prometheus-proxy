@@ -295,6 +295,7 @@ class AgentOptions(
 
     if (scrapeTimeoutSecs == -1)
       scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
+    require(scrapeTimeoutSecs > 0) { "scrapeTimeoutSecs must be > 0: $scrapeTimeoutSecs" }
     logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
 
     if (scrapeMaxRetries == -1)

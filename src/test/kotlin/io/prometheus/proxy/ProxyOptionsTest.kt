@@ -179,6 +179,26 @@ class ProxyOptionsTest : StringSpec() {
       shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--port", "70000")) }
     }
 
+    // adminPort/metricsPort were previously unvalidated, unlike proxyPort/proxyAgentPort, so an
+    // out-of-range value surfaced only as an opaque bind failure. Validate them consistently.
+    "adminPort of 0 should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--admin_port", "0")) }
+      exception.message shouldContain "adminPort"
+    }
+
+    "adminPort above 65535 should be rejected" {
+      shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--admin_port", "70000")) }
+    }
+
+    "metricsPort of 0 should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--metrics_port", "0")) }
+      exception.message shouldContain "metricsPort"
+    }
+
+    "metricsPort above 65535 should be rejected" {
+      shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--metrics_port", "70000")) }
+    }
+
     "proxyAgentPort of 0 should be rejected" {
       val exception = shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--agent_port", "0")) }
       exception.message shouldContain "proxyAgentPort"

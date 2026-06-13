@@ -25,6 +25,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 
 class AgentOptionsTest : StringSpec() {
   init {
@@ -55,6 +56,21 @@ class AgentOptionsTest : StringSpec() {
     "scrapeTimeoutSecs should be settable via command line" {
       val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--timeout", "45"), false)
       options.scrapeTimeoutSecs shouldBe 45
+    }
+
+    // A non-positive scrapeTimeoutSecs makes withTimeout() cancel every scrape immediately, so it must
+    // fail fast at startup like the other numeric options (chunk, retries, client_timeout, etc.).
+    "scrapeTimeoutSecs of 0 should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> {
+        AgentOptions(listOf("--name", "test", "--proxy", "host", "--timeout", "0"), false)
+      }
+      exception.message shouldContain "scrapeTimeoutSecs"
+    }
+
+    "negative scrapeTimeoutSecs from config should be rejected" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(listOf("--name", "test", "--proxy", "host", "-Dagent.scrapeTimeoutSecs=-5"), false)
+      }
     }
 
     "scrapeMaxRetries should be settable via command line" {

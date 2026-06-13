@@ -76,7 +76,14 @@ internal class ProxyPathManager(
     agentContext: AgentContext,
   ): String? {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
+    return multiSegmentPathError(path) ?: addValidatedPath(path, labels, agentContext)
+  }
 
+  private fun addValidatedPath(
+    path: String,
+    labels: String,
+    agentContext: AgentContext,
+  ): String? {
     synchronized(pathMap) {
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
@@ -121,6 +128,17 @@ internal class ProxyPathManager(
       if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
     }
     return null
+  }
+
+  // The scrape route is registered as get("/*"), which matches exactly one path segment. A path with
+  // an embedded slash (e.g. "app/metrics") would be advertised in service discovery yet 404 at scrape
+  // time, so reject it at registration. A single leading slash is tolerated because the agent may or
+  // may not have stripped it. Returns a failure reason, or null when the path is a single segment.
+  private fun multiSegmentPathError(path: String): String? {
+    val normalized = path.removePrefix("/")
+    if ('/' !in normalized) return null
+    return "Multi-segment path not supported (use a single path segment): /$normalized"
+      .also { logger.error { it } }
   }
 
   fun removePath(
