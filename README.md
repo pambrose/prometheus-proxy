@@ -2,7 +2,7 @@
 
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/pambrose/prometheus-proxy)](https://github.com/pambrose/prometheus-proxy/releases)
 [![Maven Central](https://img.shields.io/maven-central/v/com.pambrose/prometheus-proxy)](https://central.sonatype.com/artifact/com.pambrose/prometheus-proxy)
-[![Kotlin version](https://img.shields.io/badge/kotlin-2.3.21-red?logo=kotlin)](http://kotlinlang.org)
+[![Kotlin version](https://img.shields.io/badge/kotlin-2.4.0-red?logo=kotlin)](http://kotlinlang.org)
 [![codecov](https://codecov.io/gh/pambrose/prometheus-proxy/branch/master/graph/badge.svg)](https://codecov.io/gh/pambrose/prometheus-proxy)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/422df508473443df9fbd8ea00fdee973)](https://app.codacy.com/gh/pambrose/prometheus-proxy/dashboard)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)

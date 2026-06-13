@@ -4,13 +4,15 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [3.2.0] - Unreleased
+## [3.2.0] - 2026-06-13
 
 ### New Features
 
 - Add an optional pre-shared agent token for authenticating agent gRPC connections: `--agent_token` / `AGENT_TOKEN` (config `proxy.agentToken` on the proxy, `agent.agentToken` on the agent). The agent sends the token as an `agent-token` gRPC metadata header; the proxy's `AgentTokenServerInterceptor` rejects any RPC with a missing or mismatched token (`Status.UNAUTHENTICATED`, constant-time comparison). Empty (the default) preserves today's open behavior and logs a startup warning unless mutual TLS is configured. Resolved CLI > env > config; the value is never logged
 - Add a per-CA HTTPS trust store for the agent's scrape client: `--https_truststore` / `--https_truststore_password` (env `HTTPS_TRUST_STORE_PATH` / `HTTPS_TRUST_STORE_PASSWORD`; config `agent.http.trustStorePath` / `agent.http.trustStorePassword`) verify HTTPS targets against a custom/private CA without disabling validation. Resolved CLI > env > config; password never logged; `--trust_all_x509` takes precedence; an empty path uses the JDK default trust store
 - Add `ContainersSmokeTest` (`io.prometheus.containers`) — Testcontainers-based end-to-end smoke test that builds the proxy/agent Docker images and verifies a Prometheus → proxy → agent → endpoint scrape, gated on `RUN_CONTAINER_TESTS=true`
+- Expand the container-test suite (`io.prometheus.containers`) beyond the smoke test with seven specs over real Netty/Docker — `ContainersProxyHttpTest` (404s, upstream-status passthrough, admin endpoints, proxy/agent `/metrics`, service discovery), `ContainersAgentTokenAuthTest` (token match + mismatch), `ContainersConsolidatedTest` (two-agent merge), `ContainersLargePayloadTest` (chunk + gzip reassembly), `ContainersReconnectTest` (agent reconnect after proxy replacement), `ContainersTlsTest` (server-only + mutual gRPC TLS), and `ContainersHttpsTargetTest` (trust-all positive/negative) — all gated on `RUN_CONTAINER_TESTS=true` and backed by a shared `support/ContainerTestSupport.kt`
+- Add `ContainersScalingTest` — a parameter-driven Testcontainers spec that scales the system along its real load axes (agents × endpoints per agent, series per endpoint, consolidated fan-out, and scrape concurrency), verifies every path is scrapable, and asserts the proxy's `proxy_agent_map_size` / `proxy_path_map_size` gauges match the expected counts; tunable via `SCALE_*` env vars without recompiling
 - Add `make container-tests` target with Docker context auto-detection so Testcontainers finds Docker Desktop's non-default socket on macOS
 - Add `.github/workflows/container-tests.yml` to run the smoke test on push to master, on `workflow_dispatch`, and on PRs touching packaging files
 - Add `make help` target listing every Make target with an auto-extracted description
@@ -68,24 +70,42 @@ All notable changes to this project are documented in this file.
 - Replace `distro: build $(MAKE) jars` with `distro: build jars` (drop the recursive sub-make)
 - Externalize the inline coverage-packages python to `scripts/coverage_packages.py`
 - Annotate every Make target with `## descriptions` and add `make help`
+- Add a `make all-tests` target that runs the full suite (`tests` + `container-tests`)
+- Add `make scaling-tests` (forwards `SCALE_*` and `TEST_MAX_HEAP_SIZE`) plus six curated scaling presets — `scaling-paths`, `scaling-agents`, `scaling-payload`, `scaling-consolidated`, `scaling-concurrency`, `scaling-soak` — and an `all-scaling` aggregate; these are dev/stress aids, not run by `all-tests` or CI
+- Honor `-PtestMaxHeapSize` / `TEST_MAX_HEAP_SIZE` to override the load-based forked-test JVM heap size for large scaling runs
+- Add `make regen-certs` to rebuild the `testing/certs` TLS fixtures (CA + server + client) at 2048-bit with 100-year validity, preserving the `*.test.google.fr` SAN the harness relies on; the committed fixtures were regenerated and the container TLS/HTTPS specs mount them (no runtime openssl)
+- Centralize scattered test port literals into a new `io.prometheus.common.TestPorts` object in the test source set, so unit/harness/container specs reference named constants and unit tests no longer pull in the Testcontainers support harness just for a port value
 - Document the double `./gradlew wrapper` invocation in `upgrade-wrapper`
 - Add missing `.PHONY` entries for `mini-tests` and the `coverage-*` family
 - Move `ContainersSmokeTest` from `io.prometheus.harness` to a dedicated `io.prometheus.containers` package
 - Switch the proxy/agent Docker images to the prebuilt `bellsoft/liberica-openjre-alpine:17` base (no build-time `apk add openjdk17-jre`, so builds are faster and not subject to Alpine-mirror stalls; genuine amd64 + arm64 multi-arch so the images run on Apple Silicon, unlike the amd64-only `eclipse-temurin:17-jre-alpine`)
+- Pin the `bellsoft/liberica-openjre-alpine:17` base image by digest in `etc/docker/{agent,proxy}.df` for reproducible builds (the tag is kept inline for readability), and drop the no-op `-XX:+UnlockExperimentalVMOptions` / `-XX:+UseG1GC` ENTRYPOINT flags (G1 is the JDK 17 default GC and the remaining flags are non-experimental)
+- Pin the documentation toolchain (`zensical==0.0.45`, `mkdocs-material==9.7.6`) in `.github/workflows/docs.yml` for reproducible doc builds
+- Harden the nginx reverse-proxy example image (`nginx/docker/Dockerfile`): switch the base from `nginx` (Debian) to `nginx:1.29-alpine` to clear a Snyk OS-package CVE while keeping the gRPC module, and add `RUN apk upgrade --no-cache` to pull patched Alpine package revisions (libxml2, xz-libs, libssl3/libcrypto3) at build time
 - Run tests in CI and upload kover coverage to Codecov on each push and pull request
 - Scope `netty-tcnative` and `jul-to-slf4j` as `runtimeOnly` (no compile-time references; still bundled in the fat JARs via `runtimeClasspath`)
 - Drop the unused `kotlinx-datetime` dependency (catalog entry, library, and a commented-out usage), removing a transitive dependency the code never referenced
 
 ### Dependency Updates
 
-| Dependency          | Old    | New    |
-|---------------------|--------|--------|
-| gRPC                | 1.81.0 | 1.82.0 |
-| testcontainers      | —      | 2.0.5  |
-| Typesafe Config     | 1.4.8  | 1.4.9  |
-| BuildConfig plugin  | 6.0.9  | 6.0.10 |
-| common-utils        | 2.8.1  | 2.9.1  |
-| gradle-plugins      | 1.0.12 | 1.0.15 |
+| Dependency             | Old           | New              |
+|------------------------|---------------|------------------|
+| Kotlin                 | 2.3.21        | 2.4.0            |
+| Gradle wrapper         | 9.5.0         | 9.5.1            |
+| Ktor                   | 3.4.3         | 3.5.0            |
+| gRPC                   | 1.80.0        | 1.82.0           |
+| Shadow plugin          | 8.3.7         | 9.4.2            |
+| detekt                 | 1.23.8        | 2.0.0-alpha.3    |
+| Typesafe Config        | 1.4.6         | 1.4.9            |
+| BuildConfig plugin     | 6.0.9         | 6.0.10           |
+| common-utils           | 2.8.1         | 2.9.1            |
+| gradle-plugins         | 1.0.14        | 1.0.15           |
+| Logback                | 1.5.32        | 1.5.34           |
+| SLF4J                  | 2.0.17        | 2.0.18           |
+| kotlin-logging         | 8.0.01        | 8.0.4            |
+| Dropwizard metrics     | 4.2.38        | 4.2.39           |
+| MockK                  | 1.14.9        | 1.14.11          |
+| Testcontainers         | —             | 2.0.5            |
 
 Pin `protobuf`/`protoc` (4.34.1 → 3.25.3) and `netty-tcnative` (2.0.77.Final → 2.0.75.Final) **down** to
 the versions the gRPC 1.82.0 artifacts expect, keeping the generated stubs and native TLS binary-compatible

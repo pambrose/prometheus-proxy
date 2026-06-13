@@ -178,5 +178,5 @@ agent.logLevel = "debug"
 # PROXY_LOG_LEVEL=debug
 # AGENT_LOG_LEVEL=debug
 
-# Available levels: all, trace, debug, info, warn, error, off
+# Available levels: trace, debug, info, warn, error, off
 ; --8<-- [end:log-level-config]

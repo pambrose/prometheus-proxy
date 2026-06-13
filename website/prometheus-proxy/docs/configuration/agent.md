@@ -86,6 +86,14 @@ scenarios). Configure cache behavior:
 --8<-- "ConfigExamples.txt:agent-cache-config"
 ```
 
+## Scraping HTTPS Endpoints
+
+For HTTPS scrape targets signed by a private or internal CA, point the agent at a trust store that
+contains that CA (`--https_truststore` / `HTTPS_TRUST_STORE_PATH` / `agent.http.trustStorePath`, with
+the matching `*_password`) so certificates are still validated. An empty path uses the JDK default
+trust store, and `--trust_all_x509` (which disables verification entirely) takes precedence. See
+[Scraping HTTPS Endpoints](../security/index.md#scraping-https-endpoints) for details.
+
 ## Scrape Settings
 
 ```hocon

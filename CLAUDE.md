@@ -40,8 +40,11 @@ make nh-tests        # Unit tests only (agent, proxy, common, misc — no harnes
 make ip-tests        # In-process integration tests only
 make netty-tests     # Netty integration tests only
 make tls-tests       # TLS integration tests only
-make container-tests # Testcontainers smoke test (proxy + agent + nginx + Prometheus); needs Docker
-make coverage        # Run tests + generate HTML coverage report
+make container-tests # Full Testcontainers end-to-end suite (proxy + agent + nginx + Prometheus); needs Docker
+make all-tests       # Full suite: `make tests` + `make container-tests`
+make scaling-tests   # Parameter-driven scaling container test (tune via SCALE_* vars); needs Docker
+make regen-certs     # Regenerate the testing/certs TLS fixtures (CA + server + client; 2048-bit)
+make coverage        # Run tests + generate HTML and XML coverage reports
 make coverage-xml    # XML coverage report (for Codacy/Coveralls/etc.)
 make coverage-log    # Print coverage % to console
 make tsconfig        # Regenerate ConfigVals from config/config.conf via tscfg
@@ -141,10 +144,19 @@ Integration tests in `src/test/kotlin/io/prometheus/harness/`:
 - `TlsNoMutualAuthTest` / `TlsWithMutualAuthTest` — TLS communication tests
 - `support/HarnessSetup.kt` — base class that sets up proxy+agent in test mode
 
-Container tests in `src/test/kotlin/io/prometheus/containers/`:
-- `ContainersSmokeTest` — Testcontainers-based end-to-end test that builds the proxy and agent images from `etc/docker/*.df`, stands them up alongside an `nginx:alpine` metrics stub and a `prom/prometheus` container, and verifies the full Prometheus → proxy → agent → endpoint scrape path. Requires Docker; gated on `RUN_CONTAINER_TESTS=true` (set automatically by `make container-tests`). Default `./gradlew test` registers a single placeholder marked SKIPPED.
+Container tests in `src/test/kotlin/io/prometheus/containers/` — a full Testcontainers suite that builds the proxy and agent images from `etc/docker/*.df`, stands them up alongside an `nginx:1.29-alpine` metrics stub and a `prom/prometheus` container, and verifies the full Prometheus → proxy → agent → endpoint scrape path. Shared container/network/HTTP/PromQL factories live in `support/ContainerTestSupport.kt`. The specs are:
+- `ContainersSmokeTest` — baseline single-metric scrape through proxy and agent
+- `ContainersProxyHttpTest` — proxy/agent HTTP surfaces (registered-path scrapes, 404/503 passthrough, admin servlets, `/metrics`, service discovery)
+- `ContainersConsolidatedTest` — two consolidated agents register the same path; proxy merges responses
+- `ContainersLargePayloadTest` — forces the chunked + gzipped scrape path with a large synthetic payload
+- `ContainersReconnectTest` — agent reconnects to a replacement proxy and scrapes resume
+- `ContainersAgentTokenAuthTest` — pre-shared agent-token authentication on the gRPC channel (match + mismatch)
+- `ContainersTlsTest` / `ContainersHttpsTargetTest` — TLS on the gRPC channel and HTTPS upstream targets
+- `ContainersScalingTest` — parameter-driven N-agents × M-endpoints scaling (tune via `SCALE_*` env vars / `make scaling-tests`)
 
-Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`.
+All container specs require Docker and are gated on `RUN_CONTAINER_TESTS=true` (set automatically by `make container-tests` / `make scaling-tests`). Default `./gradlew test` registers placeholders marked SKIPPED.
+
+Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`. Shared test constants live in `src/test/kotlin/io/prometheus/common/TestPorts.kt` (`TestPorts` object) — canonical proxy/agent/Prometheus/nginx port numbers used across the unit, harness, and container suites; reference these instead of hard-coding port literals in new tests.
 
 `EnvVars.getEnv()` reads `java.lang.System.getenv()`, which can't be set in-process, so its parse-and-throw branches aren't reachable by setting an env var in a test. The numeric/boolean parsing is therefore extracted into `internal` companion helpers (`parseBooleanStrict` / `parseIntStrict` / `parseLongStrict`) that the tests call directly. When adding a new typed `getEnv` overload, follow this pattern so the invalid-value path stays testable.
 
