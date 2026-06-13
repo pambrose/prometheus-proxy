@@ -34,8 +34,27 @@ make netty-tests      # Netty integration tests only
 make tls-tests        # TLS integration tests only
 make container-tests  # Full Testcontainers end-to-end suite (needs Docker)
 make scaling-tests    # Parameter-driven scaling container test only (needs Docker)
-make all-tests        # Full suite: `make tests` + `make container-tests` + `make scaling-tests`
+make all-tests        # Full suite: `make tests` + `make container-tests`
+                      #   (container-tests already includes ContainersScalingTest's default table)
 ```
+
+#### Scaling Presets
+
+For dev/stress work there are curated presets that each delegate to `scaling-tests` with a `SCALE_*` combo that
+hammers a different part of the system. They are **not** run by `all-tests` or CI:
+
+```bash
+make scaling-paths         # 2000 paths across 4 agents (routing-table stress)
+make scaling-agents        # 40 agents x 2 endpoints (gRPC connection stress)
+make scaling-payload       # 16 paths x 50k series (chunking/gzip stress)
+make scaling-consolidated  # 25-agent consolidated fan-out (response-merge stress)
+make scaling-concurrency   # 1800 paths, 150 concurrent (scrape-correlation stress)
+make scaling-soak          # every dimension at once (broad mixed-load soak)
+make all-scaling           # run all of the presets above in sequence
+```
+
+Container count is roughly `2*agents + 2*consolidated + 1`, so many-agents presets stress Docker/the host
+while many-endpoints presets stress the proxy cheaply.
 
 The container tests (`io.prometheus.containers.*`) are gated on `RUN_CONTAINER_TESTS=true` and
 need Docker, so a plain `make tests` / `./gradlew check` registers each spec as a SKIPPED placeholder. Use
@@ -93,12 +112,14 @@ src/test/kotlin/io/prometheus/
 │   ├── RequestFailureExceptionTest.kt
 │   ├── SslSettingsTest.kt
 │   └── TrustAllX509TrustManagerTest.kt
-├── common/                          # Shared utility tests (6 files)
+├── common/                          # Shared utility tests + support (8 files)
 │   ├── BaseOptionsTest.kt
 │   ├── ConfigWrappersTest.kt
 │   ├── ConstantsTest.kt
+│   ├── EmbeddedTestServer.kt
 │   ├── EnvVarsTest.kt
 │   ├── ScrapeResultsTest.kt
+│   ├── TestPorts.kt
 │   └── UtilsTest.kt
 ├── proxy/                           # Proxy component tests (21 files)
 │   ├── AgentContextCleanupServiceTest.kt
@@ -208,6 +229,13 @@ src/test/kotlin/io/prometheus/
 - **ScrapeResultsTest** — ScrapeResults data class, error code mapping, timeout handling, protobuf conversion
 - **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
   setLogLevel, exceptionDetails
+
+Two support helpers also live here (not test classes themselves):
+
+- **TestPorts** — canonical port constants shared across the unit, harness, and container suites (mirrors the
+  proxy/agent config defaults and the fixed container ports), so no test hard-codes a port literal
+- **EmbeddedTestServer** — `EmbeddedServer.startAndAwaitReady()`, which starts a Ktor server with `wait = false`
+  and polls with real HTTP probes until it serves several consecutive clean replies before returning the port
 
 ### Unit Tests — Misc (`misc/`)
 

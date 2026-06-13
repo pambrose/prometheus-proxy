@@ -88,6 +88,8 @@ container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true ./gradlew test --tests "io.prometheus.containers.*"
 
+all-tests: tests container-tests  ## Run the full suite: all tests + the container tests
+
 scaling-tests: jars  ## Run the parameter-driven scaling container test (tune via SCALE_* vars; needs Docker)
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
 	if [ -z "$$DOCKER_HOST" ]; then \
@@ -145,8 +147,6 @@ scaling-soak:  ## Scaling preset: every dimension at once (broad mixed-load soak
 		SCALE_CONCURRENCY_LIMIT=64 TEST_MAX_HEAP_SIZE=6g
 
 all-scaling: scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak  ## Run all scaling presets
-
-all-tests: tests container-tests  ## Run the full suite: all tests + the container tests
 
 regen-certs:  ## Regenerate the testing/certs TLS fixtures (CA + server + client; 2048-bit, 100-year validity)
 	@command -v openssl >/dev/null 2>&1 || { echo "Error: openssl not found on PATH" >&2; exit 1; }
