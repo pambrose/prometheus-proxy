@@ -99,7 +99,9 @@ icon: lucide/terminal
 
 Available log levels for both proxy and agent:
 
-`all`, `trace`, `debug`, `info`, `warn`, `error`, `off`
+`trace`, `debug`, `info`, `warn`, `error`, `off`
+
+The deprecated `all` level was removed in 3.2.0 — use `trace` for the most verbose output.
 
 ## Dynamic Properties
 

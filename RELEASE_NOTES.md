@@ -4,7 +4,7 @@
 
 ## 3.2.0
 
-_Unreleased_
+_Released 2026-06-13_
 
 ### Highlights
 
@@ -49,6 +49,8 @@ _Unreleased_
 
 - New `--https_truststore` / `--https_truststore_password` agent options (env `HTTPS_TRUST_STORE_PATH` / `HTTPS_TRUST_STORE_PASSWORD`; config `agent.http.trustStorePath` / `agent.http.trustStorePassword`) — verify HTTPS scrape targets against a custom/private CA without disabling validation. Resolved CLI > env > config; the password is never logged. `--trust_all_x509` takes precedence, and an empty path uses the JDK default trust store
 - New `ContainersSmokeTest` (`io.prometheus.containers`) — Testcontainers-based end-to-end test, gated on `RUN_CONTAINER_TESTS=true`. Default `./gradlew test` runs see a single SKIPPED placeholder
+- Expanded container-test suite (`io.prometheus.containers`) — beyond the smoke test, seven Testcontainers specs now exercise the full stack over real Netty/Docker: `ContainersProxyHttpTest` (404s, upstream-status passthrough, admin `ping`/`version`/`healthcheck`/`threaddump`, proxy & agent `/metrics`, service discovery), `ContainersAgentTokenAuthTest` (token match + mismatch), `ContainersConsolidatedTest` (two-agent path merge), `ContainersLargePayloadTest` (chunk + gzip reassembly), `ContainersReconnectTest` (agent reconnect after proxy replacement), `ContainersTlsTest` (server-only and mutual gRPC TLS), and `ContainersHttpsTargetTest` (trust-all positive/negative). All share a new `support/ContainerTestSupport.kt` (image/network/container factories, HTTP and PromQL helpers) and stay gated on `RUN_CONTAINER_TESTS=true`
+- New `ContainersScalingTest` — a single parameter-driven spec that scales the system along its real load axes (agents × endpoints per agent, series per endpoint, consolidated fan-out, and scrape concurrency), verifies every path is scrapable end-to-end, and asserts the proxy's own `proxy_agent_map_size` / `proxy_path_map_size` gauges match the expected counts. A CI-safe default table runs under `make container-tests`; setting any `SCALE_*` env var collapses the run to one tuned scenario so the load can be dialed up without recompiling
 - New `make container-tests` target — auto-detects Docker Desktop's active context (`docker context inspect`) and exports `DOCKER_HOST` so Testcontainers finds non-default sockets on macOS
 - New `.github/workflows/container-tests.yml` — runs the smoke test on push to master, on `workflow_dispatch`, and on PRs that touch packaging-relevant paths (`etc/docker/**`, `build.gradle.kts`, `gradle/libs.versions.toml`, `src/shadow/**`, the test sources/resources, and the workflow file)
 - New `make help` target with auto-extracted descriptions from `## …` annotations on each target
@@ -75,24 +77,42 @@ _Unreleased_
 - Replace `distro: build $(MAKE) jars` with a plain `distro: build jars` prerequisite list (no recursive sub-make)
 - Externalize the inline coverage-packages python script to `scripts/coverage_packages.py` (typed, error-on-missing-report)
 - Annotate every Make target with a `## description` and add a `make help` target that awk-extracts them
+- Add a `make all-tests` target that runs the full suite — the in-JVM tests plus the Docker-backed `container-tests`
+- Add `make scaling-tests` (forwarding `SCALE_*` and `TEST_MAX_HEAP_SIZE`) and six curated scaling presets — `scaling-paths`, `scaling-agents`, `scaling-payload`, `scaling-consolidated`, `scaling-concurrency`, and `scaling-soak`, each hammering a different subsystem — wired together under `all-scaling`. These are dev/stress aids only and are not run by `all-tests` or CI
+- Honor `-PtestMaxHeapSize` / `TEST_MAX_HEAP_SIZE` to size the forked test JVM heap, overriding the harness-load-based default so large `make scaling-tests` runs (which can hold thousands of scrape bodies at once) don't OOM
+- Add `make regen-certs` to rebuild the `testing/certs` TLS fixtures (CA + server + client) from scratch at 2048-bit with 100-year validity, preserving the `*.test.google.fr` SAN the TLS harness relies on; the committed fixtures were regenerated and the container TLS/HTTPS specs mount them directly (no runtime openssl)
+- Centralize the test suite's scattered port literals into a single `io.prometheus.common.TestPorts` object (test source set), so unit/harness/container specs reference named constants instead of duplicating magic numbers and unit tests no longer pull in the Testcontainers support harness just for a port value
 - Document the double `./gradlew wrapper` invocation in `upgrade-wrapper` as Gradle's documented two-run upgrade procedure
 - Fill in missing `.PHONY` entries for `mini-tests` and the `coverage-*` family
 - Move the Testcontainers smoke test out of `io.prometheus.harness` into a dedicated `io.prometheus.containers` package so the make target is a clean wildcard rather than a `Containers*` prefix match
 - Switch the proxy/agent Docker images to the prebuilt `bellsoft/liberica-openjre-alpine:17` base instead of `alpine` + `apk add openjdk17-jre`. Builds no longer download the JRE from the Alpine mirror at build time (faster and not subject to intermittent mirror stalls), and the base is genuinely multi-arch (amd64 + arm64), so the images run on Apple Silicon — the `eclipse-temurin:17-jre-alpine` alternative was amd64-only. Still Alpine-based, so the existing busybox `adduser` step is unchanged
+- Pin the proxy/agent `bellsoft/liberica-openjre-alpine:17` base image by digest in `etc/docker/{agent,proxy}.df` for reproducible builds (the tag is kept inline for readability), and drop the no-op `-XX:+UnlockExperimentalVMOptions` / `-XX:+UseG1GC` flags from the container ENTRYPOINT — G1 is the JDK 17 default GC and `MaxGCPauseMillis` / `UseStringDeduplication` are non-experimental, so the unlock flag did nothing
+- Pin the docs toolchain to `zensical==0.0.45` and `mkdocs-material==9.7.6` in `.github/workflows/docs.yml` so the published site builds reproducibly; bump deliberately when upgrading the toolchain
+- Harden the nginx reverse-proxy example image (`nginx/docker/Dockerfile`): the base image moved from the Debian-based `nginx` to `nginx:1.29-alpine` (clearing a Snyk OS-package CVE while retaining the gRPC module), and a `RUN apk upgrade --no-cache` step pulls the patched Alpine package revisions Snyk flagged — libxml2 `2.13.9-r1`, xz-libs `5.8.3-r0`, and libssl3/libcrypto3 `3.5.7-r0` — from the same Alpine branch at build time
 - Run the test suite in CI and upload kover coverage to Codecov on each push and pull request
 - Scope `netty-tcnative` and `jul-to-slf4j` as `runtimeOnly` (neither is referenced at compile time; the native TLS provider and the JUL→SLF4J bridge are still bundled into the fat JARs via `runtimeClasspath`)
 - Drop the unused `kotlinx-datetime` dependency (catalog entry, library, and a commented-out usage) — the code never referenced it
 
 ### Dependency Updates
 
-| Dependency          | Old    | New    |
-|---------------------|--------|--------|
-| gRPC                | 1.81.0 | 1.82.0 |
-| testcontainers      | —      | 2.0.5  |
-| Typesafe Config     | 1.4.8  | 1.4.9  |
-| BuildConfig plugin  | 6.0.9  | 6.0.10 |
-| common-utils        | 2.8.1  | 2.9.1  |
-| gradle-plugins      | 1.0.12 | 1.0.15 |
+| Dependency             | Old           | New              |
+|------------------------|---------------|------------------|
+| Kotlin                 | 2.3.21        | 2.4.0            |
+| Gradle wrapper         | 9.5.0         | 9.5.1            |
+| Ktor                   | 3.4.3         | 3.5.0            |
+| gRPC                   | 1.80.0        | 1.82.0           |
+| Shadow plugin          | 8.3.7         | 9.4.2            |
+| detekt                 | 1.23.8        | 2.0.0-alpha.3    |
+| Typesafe Config        | 1.4.6         | 1.4.9            |
+| BuildConfig plugin     | 6.0.9         | 6.0.10           |
+| common-utils           | 2.8.1         | 2.9.1            |
+| gradle-plugins         | 1.0.14        | 1.0.15           |
+| Logback                | 1.5.32        | 1.5.34           |
+| SLF4J                  | 2.0.17        | 2.0.18           |
+| kotlin-logging         | 8.0.01        | 8.0.4            |
+| Dropwizard metrics     | 4.2.38        | 4.2.39           |
+| MockK                  | 1.14.9        | 1.14.11          |
+| Testcontainers         | —             | 2.0.5            |
 
 `protobuf` / `protoc` (4.34.1 → 3.25.3) and `netty-tcnative` (2.0.77.Final → 2.0.75.Final) are pinned
 **down** to the versions the gRPC 1.82.0 artifacts ship — not the newer releases `make versions` flags —
