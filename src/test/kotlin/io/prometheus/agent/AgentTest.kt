@@ -100,6 +100,36 @@ class AgentTest : StringSpec() {
       result.shouldBeFalse()
     }
 
+    // ==================== Embedded shutdown lifecycle Tests ====================
+
+    // Regression: the documented embedded shutdown path (EmbeddedAgentInfo.shutdown() -> Agent.stop())
+    // must drive the Guava service lifecycle so the run() loop actually exits. Previously stop() called
+    // the shutDown() hook directly, which tore down the gRPC channel/servlets but never flipped
+    // isRunning, leaving the run loop reconnecting forever (a zombie thread). This starts a real Agent,
+    // lets its run loop spin (failing to reach the absent in-process proxy), then asserts shutdown()
+    // terminates the service rather than leaving it running.
+    "EmbeddedAgentInfo.shutdown() should terminate the agent service, not leave the run loop reconnecting" {
+      val agent =
+        Agent(
+          options = AgentOptions(listOf("--proxy", "localhost:$PROXY_AGENT_PORT"), exitOnMissingConfig = false),
+          inProcessServerName = "embedded-stop-test-${System.nanoTime()}",
+          testMode = true,
+        ) { startAsync() }
+      val info = EmbeddedAgentInfo(agent)
+
+      try {
+        // The run() loop is active, repeatedly failing to connect to the absent in-process proxy.
+        eventually(5.seconds) { agent.isRunning.shouldBeTrue() }
+
+        // shutdown() must block until the service has terminated (per its documented contract).
+        info.shutdown()
+
+        agent.isRunning.shouldBeFalse()
+      } finally {
+        runCatching { if (agent.isRunning) agent.stopSync() }
+      }
+    }
+
     // ==================== updateScrapeCounter Tests ====================
 
     "updateScrapeCounter should not fail for empty type" {
