@@ -42,7 +42,7 @@ All notable changes to this project are documented in this file.
 
 ### Bug Fixes
 
-- Fix `DnsNameResolverProvider` and `PickFirstLoadBalancerProvider` missing from the shaded `agentJar`/`proxyJar` (shadow 9.4.1 silently drops same-named `META-INF/services` entries when both grpc-core and grpc-netty-shaded contribute one). Without the DNS provider, gRPC defaulted to the `unix` scheme on any non-IP hostname. Static service files under `src/shadow/resources/` re-register both providers
+- Fix `DnsNameResolverProvider` and `PickFirstLoadBalancerProvider` missing from the shaded `agentJar`/`proxyJar` (shadow 9.4.2 silently drops same-named `META-INF/services` entries when both grpc-core and grpc-netty-shaded contribute one). Without the DNS provider, gRPC defaulted to the `unix` scheme on any non-IP hostname. Static service files under `src/shadow/resources/` re-register both providers
 - Fix flaky `ProxyHttpRoutesTest` test that occasionally hit `Connection reset` — the existing TCP-connect probe only confirmed kernel-level SYN/ACK; replaced with an HTTP-level readiness probe that retries on `IOException`/`ClosedByteChannelException`
 - Fix `appendQueryParams` URL-decoding the encoded query blob before concatenation (an encoded `&` / `#` inside a value could expand into extra params or a fragment); it now appends the already-encoded string verbatim
 - Fix `writeResponsesToProxy` letting a per-response processing error block the HTTP handler until `scrapeRequestTimeoutSecs` (slow, misleading 503); it now fails that scrape request immediately

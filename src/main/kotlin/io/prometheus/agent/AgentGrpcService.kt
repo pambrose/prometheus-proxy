@@ -39,6 +39,7 @@ import io.prometheus.common.BaseOptions.Companion.HTTP_PREFIX
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
+import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -60,6 +61,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
@@ -351,73 +353,90 @@ internal class AgentGrpcService(
     chunkedChannel: Channel<ChunkedScrapeResponse>,
   ) {
     for (scrapeResults in connectionContext.scrapeResults()) {
-      val scrapeId = scrapeResults.srScrapeId
+      try {
+        forwardScrapeResult(agent, scrapeResults, nonChunkedChannel, chunkedChannel)
+      } catch (e: ClosedSendChannelException) {
+        // A sibling writer coroutine closed the response channels (e.g. a transient gRPC failure
+        // triggered closeAll()). The fully-computed result can no longer be delivered on this
+        // connection, so count it as dropped -- mirroring AgentConnectionContext.sendScrapeResults()
+        // -- rather than losing it silently, then propagate so the producer stops.
+        agent.metrics { scrapeResultCount.labels(agent.launchId, "dropped").inc() }
+        throw e
+      }
+      agent.markMsgSent()
+    }
+  }
 
-      if (!scrapeResults.srZipped) {
-        logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.srContentAsText.length}" }
+  private suspend fun forwardScrapeResult(
+    agent: Agent,
+    scrapeResults: ScrapeResults,
+    nonChunkedChannel: Channel<ScrapeResponse>,
+    chunkedChannel: Channel<ChunkedScrapeResponse>,
+  ) {
+    val scrapeId = scrapeResults.srScrapeId
+
+    if (!scrapeResults.srZipped) {
+      logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.srContentAsText.length}" }
+      nonChunkedChannel.send(scrapeResults.toScrapeResponse())
+      agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
+    } else {
+      val zipped = scrapeResults.srContentAsZipped
+      val chunkContentSize = options.chunkContentSizeBytes
+
+      logger.debug { "Comparing ${zipped.size} and $chunkContentSize" }
+
+      if (zipped.size < chunkContentSize) {
+        logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
         nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-        agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
+        agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
       } else {
-        val zipped = scrapeResults.srContentAsZipped
-        val chunkContentSize = options.chunkContentSizeBytes
-
-        logger.debug { "Comparing ${zipped.size} and $chunkContentSize" }
-
-        if (zipped.size < chunkContentSize) {
-          logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
-          nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-          agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
-        } else {
-          scrapeResults.toScrapeResponseHeader()
-            .also {
-              logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapeId " }
-              chunkedChannel.send(it)
-            }
-
-          var totalByteCount = 0
-          var totalChunkCount = 0
-          val checksum = CRC32()
-          val bais = ByteArrayInputStream(zipped)
-          val buffer = ByteArray(chunkContentSize)
-          var readByteCount: Int
-
-          // bais is an in-memory ByteArrayInputStream, so read() never blocks; no Dispatchers.IO hop
-          // is needed (the enclosing coroutine already runs on IO).
-          while (bais.read(buffer).also { readByteCount = it } > 0) {
-            totalChunkCount++
-            totalByteCount += readByteCount
-            checksum.update(buffer, 0, readByteCount)
-
-            chunkedScrapeResponse {
-              chunk = chunkData {
-                chunkScrapeId = scrapeId
-                chunkCount = totalChunkCount
-                chunkByteCount = readByteCount
-                chunkChecksum = checksum.value
-                chunkBytes = copyFrom(buffer, 0, readByteCount)
-              }
-            }.also {
-              logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapeId" }
-              chunkedChannel.send(it)
-            }
+        scrapeResults.toScrapeResponseHeader()
+          .also {
+            logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapeId " }
+            chunkedChannel.send(it)
           }
+
+        var totalByteCount = 0
+        var totalChunkCount = 0
+        val checksum = CRC32()
+        val bais = ByteArrayInputStream(zipped)
+        val buffer = ByteArray(chunkContentSize)
+        var readByteCount: Int
+
+        // bais is an in-memory ByteArrayInputStream, so read() never blocks; no Dispatchers.IO hop
+        // is needed (the enclosing coroutine already runs on IO).
+        while (bais.read(buffer).also { readByteCount = it } > 0) {
+          totalChunkCount++
+          totalByteCount += readByteCount
+          checksum.update(buffer, 0, readByteCount)
 
           chunkedScrapeResponse {
-            summary = summaryData {
-              summaryScrapeId = scrapeId
-              summaryChunkCount = totalChunkCount
-              summaryByteCount = totalByteCount
-              summaryChecksum = checksum.value
+            chunk = chunkData {
+              chunkScrapeId = scrapeId
+              chunkCount = totalChunkCount
+              chunkByteCount = readByteCount
+              chunkChecksum = checksum.value
+              chunkBytes = copyFrom(buffer, 0, readByteCount)
             }
           }.also {
-            logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
+            logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapeId" }
             chunkedChannel.send(it)
-            agent.metrics { scrapeResultCount.labels(agent.launchId, "chunked").inc() }
           }
         }
-      }
 
-      agent.markMsgSent()
+        chunkedScrapeResponse {
+          summary = summaryData {
+            summaryScrapeId = scrapeId
+            summaryChunkCount = totalChunkCount
+            summaryByteCount = totalByteCount
+            summaryChecksum = checksum.value
+          }
+        }.also {
+          logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
+          chunkedChannel.send(it)
+          agent.metrics { scrapeResultCount.labels(agent.launchId, "chunked").inc() }
+        }
+      }
     }
   }
 

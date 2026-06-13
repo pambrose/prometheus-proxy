@@ -223,7 +223,7 @@ fun Project.configureJars() {
   val mainOutput = sourceSets.main.get().output
   val runtimeClasspath = configurations.runtimeClasspath
 
-  // shadow 9.4.1's mergeServiceFiles() silently drops entries when multiple JARs ship a
+  // shadow 9.4.2's mergeServiceFiles() silently drops entries when multiple JARs ship a
   // same-named META-INF/services file (its append() transformer is broken the same way),
   // so without intervention the fat JAR loses grpc-core's DnsNameResolverProvider and
   // PickFirstLoadBalancerProvider and the gRPC client defaults to the `unix` scheme on

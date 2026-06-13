@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.typesafe.config.ConfigFactory
+import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.shouldBe
@@ -116,13 +117,13 @@ class AgentContextCleanupServiceTest : StringSpec() {
 
       val service = AgentContextCleanupService(mockProxy, configVals)
 
-      // Start and let one cleanup cycle run
+      // Start and poll until the eviction fires, rather than blocking on a fixed sleep (which both
+      // slows the test and risks a false failure on a loaded CI host).
       service.startAsync()
-      Thread.sleep(1500) // Allow at least one cleanup cycle
+      eventually(5.seconds) {
+        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-agent-123", "Eviction") }
+      }
       service.stopAsync().awaitTerminated()
-
-      // Verify the stale agent was removed
-      verify(atLeast = 1) { mockProxy.removeAgentContext("stale-agent-123", "Eviction") }
     }
 
     "cleanup should not evict active agent" {
@@ -295,11 +296,10 @@ class AgentContextCleanupServiceTest : StringSpec() {
       val service = AgentContextCleanupService(mockProxy, configVals)
 
       service.startAsync()
-      Thread.sleep(1500)
+      eventually(5.seconds) {
+        verify(atLeast = 1) { mockProxy.removeAgentContext("still-stale", "Eviction") }
+      }
       service.stopAsync().awaitTerminated()
-
-      // Agent remained stale -- should be evicted
-      verify(atLeast = 1) { mockProxy.removeAgentContext("still-stale", "Eviction") }
     }
 
     // ==================== Multiple Stale Agents Test ====================
@@ -343,13 +343,13 @@ class AgentContextCleanupServiceTest : StringSpec() {
       val service = AgentContextCleanupService(mockProxy, configVals)
 
       service.startAsync()
-      Thread.sleep(1500)
+      eventually(5.seconds) {
+        // All three stale agents should have been evicted
+        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-1", "Eviction") }
+        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-2", "Eviction") }
+        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-3", "Eviction") }
+      }
       service.stopAsync().awaitTerminated()
-
-      // All three stale agents should have been evicted
-      verify(atLeast = 1) { mockProxy.removeAgentContext("stale-1", "Eviction") }
-      verify(atLeast = 1) { mockProxy.removeAgentContext("stale-2", "Eviction") }
-      verify(atLeast = 1) { mockProxy.removeAgentContext("stale-3", "Eviction") }
     }
   }
 }

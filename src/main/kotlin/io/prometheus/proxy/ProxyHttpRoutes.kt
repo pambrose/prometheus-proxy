@@ -146,6 +146,14 @@ internal object ProxyHttpRoutes {
       )
     }
 
+    return mergeResponseResults(results)
+  }
+
+  // Combines the per-agent responses for a (possibly consolidated) path into a single HTTP response:
+  // overall OK if any agent returned OK (otherwise the first distinct status code), the contentType of
+  // the first OK result (otherwise the first distinct contentType), and the merged body. Extracted as
+  // an internal seam so the status/contentType selection is unit-testable without driving real scrapes.
+  internal fun mergeResponseResults(results: List<ScrapeRequestResponse>): ResponseResults {
     val statusCodes = results.map { it.statusCode }.distinct()
     val contentTypes = results.map { it.contentType }.distinct()
     val updateMsgs: List<String> = results.map { it.updateMsg }

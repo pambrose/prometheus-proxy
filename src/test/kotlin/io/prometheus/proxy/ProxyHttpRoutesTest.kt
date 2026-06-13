@@ -923,6 +923,79 @@ class ProxyHttpRoutesTest : StringSpec() {
       }
     }
 
+    // ============== mergeResponseResults (consolidated status/contentType selection) ==============
+
+    // One OK + one failure: the merged response is OK, takes the OK result's contentType, and merges
+    // the bodies. This selection was previously only exercised by the Docker-gated consolidated test.
+    "mergeResponseResults should prefer OK status and the OK result's contentType" {
+      val okContentType = ContentType.Application.Json
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "unavailable",
+          contentType = ContentType.Text.Plain.withCharset(Charsets.UTF_8),
+          contentText = "",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.OK,
+          updateMsg = "success",
+          contentType = okContentType,
+          contentText = "metric_a 1.0",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeResponseResults(results)
+
+      merged.statusCode shouldBe HttpStatusCode.OK
+      merged.contentType shouldBe okContentType
+      merged.contentText shouldContain "metric_a 1.0"
+    }
+
+    // No agent returns OK: the merged status is the first distinct status code (statusCodes[0]).
+    "mergeResponseResults should return the first status code when no agent returns OK" {
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "unavailable",
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.NotFound,
+          updateMsg = "not_found",
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeResponseResults(results)
+
+      merged.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+    }
+
+    // No agent returns OK: the contentType falls back to the first distinct contentType (contentTypes[0]).
+    "mergeResponseResults should fall back to the first contentType when no agent returns OK" {
+      val firstContentType = ContentType.Application.Json
+      val results = listOf(
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "unavailable",
+          contentType = firstContentType,
+          fetchDuration = 10.milliseconds,
+        ),
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.NotFound,
+          updateMsg = "not_found",
+          contentType = ContentType.Text.Plain.withCharset(Charsets.UTF_8),
+          fetchDuration = 10.milliseconds,
+        ),
+      )
+
+      val merged = ProxyHttpRoutes.mergeResponseResults(results)
+
+      merged.contentType shouldBe firstContentType
+    }
+
     // ==================== Bug #13: Consolidated OpenMetrics EOF Handling Tests ====================
 
     // Bug #13: When consolidated paths have multiple agents returning OpenMetrics format,

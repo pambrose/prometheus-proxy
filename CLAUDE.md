@@ -174,7 +174,7 @@ Snippets use dual `base_path` in zensical.toml: first resolves `.txt` files from
 
 ## Shadow JAR Workaround
 
-The `agentJar` and `proxyJar` ShadowJar tasks include `src/shadow/resources/META-INF/services/` to re-register `io.grpc.NameResolverProvider` (DNS + UDS) and `io.grpc.LoadBalancerProvider` (PickFirst + HealthCheckingRoundRobin). Shadow 9.4.1's `mergeServiceFiles()` (and its `append()` transformer) silently drop entries when grpc-core and grpc-netty-shaded both ship a same-named service file, leaving the fat JAR without a DNS resolver — the gRPC client then defaults to the `unix` scheme on any non-IP hostname. The static files keep the providers registered without affecting the published Maven jar (they're under `src/shadow/`, not `src/main/`).
+The `agentJar` and `proxyJar` ShadowJar tasks include `src/shadow/resources/META-INF/services/` to re-register `io.grpc.NameResolverProvider` (DNS + UDS) and `io.grpc.LoadBalancerProvider` (PickFirst + HealthCheckingRoundRobin). Shadow 9.4.2's `mergeServiceFiles()` (and its `append()` transformer) silently drop entries when grpc-core and grpc-netty-shaded both ship a same-named service file, leaving the fat JAR without a DNS resolver — the gRPC client then defaults to the `unix` scheme on any non-IP hostname. The static files keep the providers registered without affecting the published Maven jar (they're under `src/shadow/`, not `src/main/`).
 
 If gRPC versions change provider class names or add new providers, update those files to match.
 

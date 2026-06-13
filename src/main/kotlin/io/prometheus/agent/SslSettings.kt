@@ -25,6 +25,10 @@ import javax.net.ssl.X509TrustManager
 // https://github.com/Hakky54/mutual-tls-ssl/blob/master/client/src/main/java/nl/altindag/client/service/KtorCIOHttpClientService.kt
 
 internal object SslSettings {
+  // The password arrives as a String, which stays resident on the heap for the JVM's lifetime. The
+  // CharArray overload below zeroes the array it derives, but that scrubbing is best-effort only: it
+  // cannot clear the originating String (nor the JCommander/config value it came from). Callers that
+  // need true in-memory secrecy must thread the password as a CharArray and avoid holding it as a String.
   fun getKeyStore(
     fileName: String,
     password: String,
