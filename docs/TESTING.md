@@ -27,18 +27,37 @@ This document describes the test suite structure and how to run tests for the pr
 ### Make Targets
 
 ```bash
-make tests            # Rerun all checks (lint + tests); the container smoke test is SKIPPED
+make tests            # Rerun all checks (lint + tests); the container tests are SKIPPED
 make nh-tests         # Unit tests only (agent, proxy, common, misc — no harness)
 make ip-tests         # In-process integration tests only
 make netty-tests      # Netty integration tests only
 make tls-tests        # TLS integration tests only
-make container-tests  # Testcontainers smoke test only (needs Docker)
-make all-tests        # Full suite: `make tests` + `make container-tests`
+make container-tests  # Full Testcontainers end-to-end suite (needs Docker)
+make scaling-tests    # Parameter-driven scaling container test only (needs Docker)
+make all-tests        # Full suite: `make tests` + `make container-tests` + `make scaling-tests`
 ```
 
-The container smoke test (`io.prometheus.containers.*`) is gated on `RUN_CONTAINER_TESTS=true` and
-needs Docker, so a plain `make tests` / `./gradlew check` registers it as a SKIPPED placeholder. Use
-`make container-tests` to run it on its own, or `make all-tests` to run everything in one shot.
+The container tests (`io.prometheus.containers.*`) are gated on `RUN_CONTAINER_TESTS=true` and
+need Docker, so a plain `make tests` / `./gradlew check` registers each spec as a SKIPPED placeholder. Use
+`make container-tests` to run the whole suite on its own, `make scaling-tests` for just the scaling spec, or
+`make all-tests` to run everything in one shot.
+
+The `make scaling-tests` target forwards any `SCALE_*` environment variables to the test, so the scaling
+inputs can be tuned without recompiling — for example:
+
+```bash
+make scaling-tests SCALE_AGENTS=10 SCALE_ENDPOINTS_PER_AGENT=20 SCALE_CONSOLIDATED_AGENTS=3 \
+                   SCALE_SERIES_PER_ENDPOINT=2000 SCALE_CONCURRENT=true
+```
+
+Large runs hold many scrape bodies in memory at once. The forked test JVM defaults to a 1g heap; raise it with
+`TEST_MAX_HEAP_SIZE` (or `-PtestMaxHeapSize`), and cap the number of in-flight verification coroutines with
+`SCALE_CONCURRENCY_LIMIT` so memory stays bounded even at high path counts:
+
+```bash
+make scaling-tests SCALE_AGENTS=100 SCALE_ENDPOINTS_PER_AGENT=200 SCALE_SERIES_PER_ENDPOINT=5000 \
+                   SCALE_CONCURRENT=true SCALE_CONCURRENCY_LIMIT=64 TEST_MAX_HEAP_SIZE=8g
+```
 
 ## Frameworks and Libraries
 
@@ -230,6 +249,44 @@ Each integration test class runs a standard suite defined in `AbstractHarnessTes
   `timeoutTest()`
 - **HarnessConfig** — Enum defining test scale configs (MINI, SMALL, MEDIUM, LARGE, XLARGE, XXLARGE)
 - **HarnessConstants** — Test constants (ports, delays, config paths)
+
+### Container Tests (`containers/`)
+
+End-to-end Testcontainers specs that build the proxy and agent images from `etc/docker/*.df`, stand them up
+alongside `nginx:alpine` metrics stubs (and `prom/prometheus` where needed), and exercise the full
+Prometheus → proxy → agent → endpoint scrape path over real network transport. Every spec is gated on
+`RUN_CONTAINER_TESTS=true`; shared factories live in `containers/support/ContainerTestSupport.kt`.
+
+- **ContainersSmokeTest** — baseline: Prometheus scrapes a single metric through the proxy and agent
+- **ContainersProxyHttpTest** — HTTP surfaces: registered-path scrapes, 404/503 passthrough, admin servlets,
+  self-metrics, service discovery
+- **ContainersConsolidatedTest** — two consolidated agents register the same path; the proxy merges responses
+- **ContainersLargePayloadTest** — forces the chunked + gzipped scrape path with a large synthetic payload
+- **ContainersReconnectTest** — agent reconnects to a replacement proxy and scrapes resume
+- **ContainersAgentTokenAuthTest** — pre-shared agent-token authentication on the gRPC channel
+- **ContainersTlsTest** / **ContainersHttpsTargetTest** — server-only and mutual TLS on gRPC; HTTPS upstreams
+- **ContainersScalingTest** — parameter-driven scaling (see below)
+
+#### Scaling Test (`ContainersScalingTest`)
+
+A single parameter-driven spec that stands up a fresh topology per scenario and verifies every path is
+scrapable end-to-end, then asserts the proxy's own `proxy_agent_map_size` / `proxy_path_map_size` gauges match
+the expected counts. Each scenario (a `ScalingScenario`) scales four dimensions:
+
+| Dimension | `SCALE_*` env var | Default |
+|-----------|-------------------|---------|
+| Number of agents | `SCALE_AGENTS` | table |
+| Endpoints (paths) per agent | `SCALE_ENDPOINTS_PER_AGENT` | table |
+| Series per endpoint (payload size) | `SCALE_SERIES_PER_ENDPOINT` | table |
+| Consolidated fan-out agents (share one path) | `SCALE_CONSOLIDATED_AGENTS` | table |
+| Concurrent vs sequential scrape verification | `SCALE_CONCURRENT` | table |
+| Max in-flight checks when concurrent (0 = unbounded) | `SCALE_CONCURRENCY_LIMIT` | `0` |
+
+All agent configs and per-endpoint exposition payloads are generated at runtime (no fixture files). With no
+overrides, a small CI-safe default table runs (a baseline row, an agents × endpoints row, a large-payload row,
+and a consolidated-fan-out row). Setting **any** `SCALE_*` variable collapses the run to a single tuned
+scenario built from those values (with modest fallbacks), letting the inputs be dialed up via
+`make scaling-tests SCALE_...=...` without editing code.
 
 ## Testing Patterns
 

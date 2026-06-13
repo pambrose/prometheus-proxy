@@ -163,13 +163,19 @@ fun Project.configureTesting() {
 
     // Scale the test JVM heap to the harness load. LARGE+ generates multi-MB scrape payloads
     // and runs them through 2000+ sequential calls; the default 512m heap OOMs in bodyAsText().
+    // An explicit -PtestMaxHeapSize=… (or TEST_MAX_HEAP_SIZE env var) overrides the load-based default —
+    // useful for large `make scaling-tests` runs, which can hold thousands of scrape bodies at once.
+    val testMaxHeapOverride =
+      providers.gradleProperty("testMaxHeapSize").orNull
+        ?: System.getenv("TEST_MAX_HEAP_SIZE")
     maxHeapSize =
-      when (harnessConfig?.uppercase()) {
-        "XXLARGE" -> "8g"
-        "XLARGE" -> "4g"
-        "LARGE" -> "2g"
-        else -> "1g"
-      }
+      testMaxHeapOverride
+        ?: when (harnessConfig?.uppercase()) {
+          "XXLARGE" -> "8g"
+          "XLARGE" -> "4g"
+          "LARGE" -> "2g"
+          else -> "1g"
+        }
 
     testLogging {
       showStandardStreams = false
