@@ -29,6 +29,7 @@ _Unreleased_
 - **Fail-fast configuration validation in `ProxyOptions`.** `proxyPort` / `proxyAgentPort` must be in `1..65535`; each gRPC timeout must be `-1` (use the gRPC default) or `> 0`; `internal.scrapeRequestTimeoutSecs`, `staleAgentCheckPauseSecs`, and `maxAgentInactivitySecs` must be `> 0` (a `0` would busy-loop the cleanup service or evict agents immediately); and `internal.maxUnzippedContentSizeMBytes` must be `>= 0` (`0` stays a valid "reject all" limit). Invalid values now produce a clear startup error instead of an opaque Ktor/gRPC builder exception or every scrape instantly returning "timed_out".
 - **Per-request call logging dropped from INFO to DEBUG.** With `requestLoggingEnabled = true` (still the default), routine per-scrape logging no longer floods INFO on a busy proxy; WARN/ERROR stay visible and operators can re-enable it by lowering the root log level.
 - **No `HttpClient` leak when an embedded agent is stopped mid-scrape.** `HttpClientCache.close()` now sets a terminal flag so a scrape racing shutdown can't create and cache a fresh client into the already-closed cache.
+- **Removed the deprecated `all` log level.** `ALL` is vestigial from log4j 1.x; in logback the `Level` class is final, so all levels are enabled simply by setting a logger to `TRACE`, and logback marks `Level.ALL` as deprecated. Accordingly, `logLevel = "all"` (config, `--log_level`, or env) now throws a clear startup error instead of mapping to the deprecated level — use `"trace"` for the most verbose output.
 
 ### Observability
 
