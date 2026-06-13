@@ -442,7 +442,14 @@ class Proxy(
             val labels = agentContextInfo.labels
             runCatching {
               val json = labels.toJsonElement()
-              json.jsonObject.forEach { (k, v) -> put(k, v) }
+              // Apply agent-supplied labels, but never let them clobber the proxy-computed reserved
+              // keys above (a colliding key could redirect the scrape target or spoof identity).
+              json.jsonObject.forEach { (k, v) ->
+                if (k in RESERVED_SD_LABEL_KEYS)
+                  logger.warn { "Ignoring agent label '$k' that collides with a reserved key for path $pathWithSlash" }
+                else
+                  put(k, v)
+              }
             }.onFailure { e ->
               logger.warn { "Invalid JSON in labels value: $labels - ${e.simpleClassName}: ${e.message}" }
             }
@@ -460,6 +467,9 @@ class Proxy(
 
   companion object {
     private val logger = logger {}
+
+    // Service-discovery label keys computed by the proxy; agent-supplied labels must not overwrite them.
+    private val RESERVED_SD_LABEL_KEYS = setOf("__metrics_path__", "agentName", "hostName")
 
     /**
      * JVM entry point for the standalone Proxy process.

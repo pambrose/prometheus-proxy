@@ -302,6 +302,7 @@ abstract class BaseOptions protected constructor(
   protected fun assignAdminPort(defaultVal: Int) {
     if (adminPort == -1)
       adminPort = ADMIN_PORT.getEnv(defaultVal)
+    require(adminPort in 1..65535) { "adminPort must be in 1..65535: $adminPort" }
     logger.info { "adminPort: $adminPort" }
   }
 
@@ -318,6 +319,7 @@ abstract class BaseOptions protected constructor(
   protected fun assignMetricsPort(defaultVal: Int) {
     if (metricsPort == -1)
       metricsPort = METRICS_PORT.getEnv(defaultVal)
+    require(metricsPort in 1..65535) { "metricsPort must be in 1..65535: $metricsPort" }
     logger.info { "metricsPort: $metricsPort" }
   }
 

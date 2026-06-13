@@ -80,6 +80,32 @@ class ProxyPathManagerTest : StringSpec() {
       exception.message shouldContain "Empty path"
     }
 
+    // The scrape route is registered as get("/*"), which matches exactly one path segment, so a
+    // multi-segment path would be advertised in service discovery yet 404 at scrape time. Reject it
+    // at registration with a clear reason instead of silently registering an unreachable path.
+    "addPath should reject a multi-segment path" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      val reason = manager.addPath("app/metrics", """{"job":"test"}""", context)
+
+      reason.shouldNotBeNull()
+      reason shouldContain "single"
+      manager.pathMapSize shouldBe 0
+    }
+
+    "addPath should reject a multi-segment path that has a leading slash" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      val reason = manager.addPath("/app/metrics", """{"job":"test"}""", context)
+
+      reason.shouldNotBeNull()
+      manager.pathMapSize shouldBe 0
+    }
+
     "addPath should overwrite non-consolidated path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)

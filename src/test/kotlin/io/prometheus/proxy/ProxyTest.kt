@@ -137,6 +137,29 @@ class ProxyTest : StringSpec() {
       labels.containsKey("environment").shouldBeFalse()
     }
 
+    // Agent-supplied labels must not clobber the proxy-computed reserved keys (__metrics_path__,
+    // agentName, hostName). Reserved keys are written last/skipped so an agent cannot redirect the
+    // scrape target or spoof identity via a colliding label name.
+    "buildServiceDiscoveryJson should not let agent labels override reserved keys" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
+      val agentContext = createAgentContext(name = "agent-real", host = "real-host")
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath(
+        "metrics",
+        """{"__metrics_path__":"/evil","hostName":"spoofed","env":"prod"}""",
+        agentContext,
+      )
+
+      val json = proxy.buildServiceDiscoveryJson()
+
+      val labels = json[0].jsonObject["labels"]!!.jsonObject
+      // Proxy-computed reserved values win over the agent-supplied collisions.
+      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "/metrics"
+      labels["hostName"]!!.jsonPrimitive.content shouldBe "real-host"
+      // Non-reserved custom labels are still applied.
+      labels["env"]!!.jsonPrimitive.content shouldBe "prod"
+    }
+
     // Bug #10: __metrics_path__ must include a leading slash per Prometheus SD convention
     "buildServiceDiscoveryJson should include leading slash in __metrics_path__" {
       val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
@@ -153,18 +176,18 @@ class ProxyTest : StringSpec() {
       metricsPath[0] shouldBe '/'
     }
 
-    "buildServiceDiscoveryJson should not double-slash paths that already have slashes internally" {
+    // Multi-segment paths are rejected at registration: the get("/*") scrape route matches only a
+    // single segment, so such a path would be advertised yet 404. Confirm a rejected path never
+    // reaches the service-discovery document.
+    "buildServiceDiscoveryJson should omit a rejected multi-segment path" {
       val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
       val agentContext = createAgentContext()
       proxy.agentContextManager.addAgentContext(agentContext)
-      // Paths in the pathMap never have a leading slash (stripped by HTTP handler),
-      // but they might contain internal slashes for nested paths
-      proxy.pathManager.addPath("app/metrics", "", agentContext)
 
-      val json = proxy.buildServiceDiscoveryJson()
+      val reason = proxy.pathManager.addPath("app/metrics", "", agentContext)
 
-      val labels = json[0].jsonObject["labels"]!!.jsonObject
-      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "/app/metrics"
+      reason.shouldNotBeNull()
+      proxy.buildServiceDiscoveryJson().size shouldBe 0
     }
 
     // ==================== removeAgentContext Tests ====================
