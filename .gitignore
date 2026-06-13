@@ -14,6 +14,9 @@ build/
 .idea/compiler.xml
 .idea/libraries/
 .idea/misc.xml
+.idea/kotlinc.xml
+.idea/inspectionProfiles/Project_Default.xml
+
 *.iws
 *.iml
 *.ipr
