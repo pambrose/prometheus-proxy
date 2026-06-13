@@ -26,6 +26,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.EnvVars.AGENT_CONFIG
 import io.prometheus.common.EnvVars.AGENT_LOG_LEVEL
 import io.prometheus.common.EnvVars.AGENT_NAME
+import io.prometheus.common.EnvVars.AGENT_TOKEN
 import io.prometheus.common.EnvVars.CHUNK_CONTENT_SIZE_KBS
 import io.prometheus.common.EnvVars.CLIENT_CACHE_CLEANUP_INTERVAL_MINS
 import io.prometheus.common.EnvVars.CLIENT_TIMEOUT_SECS
@@ -80,6 +81,15 @@ class AgentOptions(
    */
   @Parameter(names = ["-o", "--consolidated"], description = "Consolidated Agent")
   var consolidated = false
+    private set
+
+  /**
+   * Pre-shared token presented to the Proxy on every gRPC call. Must match the Proxy's `proxy.agentToken`; the
+   * Proxy rejects calls with a missing or mismatched token (`UNAUTHENTICATED`). Empty (default) sends no token.
+   * Resolved from CLI → [AGENT_TOKEN] env var → `agent.agentToken` config. Never logged.
+   */
+  @Parameter(names = ["--agent_token"], description = "Pre-shared token presented to the Proxy")
+  var agentToken = ""
     private set
 
   /**
@@ -277,6 +287,11 @@ class AgentOptions(
     consolidated =
       resolveBooleanOption(consolidated, CONSOLIDATED, agentConfigVals.consolidated, "-o", "--consolidated")
     logger.info { "consolidated: $consolidated" }
+
+    if (agentToken.isEmpty())
+      agentToken = AGENT_TOKEN.getEnv(agentConfigVals.agentToken)
+    // Never log the token value -- only whether one is configured.
+    logger.info { "agentToken: ${if (agentToken.isEmpty()) "(none)" else "***"}" }
 
     if (scrapeTimeoutSecs == -1)
       scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)

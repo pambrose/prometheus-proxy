@@ -188,8 +188,8 @@ class EnvVarsTest : StringSpec() {
       }
     }
 
-    "EnvVars enum should have exactly 46 entries" {
-      EnvVars.entries.size shouldBe 46
+    "EnvVars enum should have exactly 47 entries" {
+      EnvVars.entries.size shouldBe 47
     }
 
     "EnvVars entries should contain all defined constants" {
@@ -229,6 +229,7 @@ class EnvVarsTest : StringSpec() {
         "CLIENT_CACHE_CLEANUP_INTERVAL_MINS",
         "KEEPALIVE_WITHOUT_CALLS",
         "AGENT_LOG_LEVEL",
+        "AGENT_TOKEN",
         "DEBUG_ENABLED",
         "METRICS_ENABLED",
         "METRICS_PORT",
@@ -283,6 +284,7 @@ class EnvVarsTest : StringSpec() {
         "KEEPALIVE_WITHOUT_CALLS",
         "UNARY_DEADLINE_SECS",
         "AGENT_LOG_LEVEL",
+        "AGENT_TOKEN",
         "DEBUG_ENABLED",
         "METRICS_ENABLED",
         "METRICS_PORT",

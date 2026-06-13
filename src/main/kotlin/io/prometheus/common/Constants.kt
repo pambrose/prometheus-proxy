@@ -28,6 +28,9 @@ internal object Messages {
 internal object GrpcConstants {
   const val AGENT_ID = "agent-id"
   val META_AGENT_ID_KEY: Metadata.Key<String> = Metadata.Key.of(AGENT_ID, ASCII_STRING_MARSHALLER)
+
+  const val AGENT_TOKEN = "agent-token"
+  val META_AGENT_TOKEN_KEY: Metadata.Key<String> = Metadata.Key.of(AGENT_TOKEN, ASCII_STRING_MARSHALLER)
 }
 
 internal object DefaultObjects {

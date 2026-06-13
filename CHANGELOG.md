@@ -8,6 +8,7 @@ All notable changes to this project are documented in this file.
 
 ### New Features
 
+- Add an optional pre-shared agent token for authenticating agent gRPC connections: `--agent_token` / `AGENT_TOKEN` (config `proxy.agentToken` on the proxy, `agent.agentToken` on the agent). The agent sends the token as an `agent-token` gRPC metadata header; the proxy's `AgentTokenServerInterceptor` rejects any RPC with a missing or mismatched token (`Status.UNAUTHENTICATED`, constant-time comparison). Empty (the default) preserves today's open behavior and logs a startup warning unless mutual TLS is configured. Resolved CLI > env > config; the value is never logged
 - Add a per-CA HTTPS trust store for the agent's scrape client: `--https_truststore` / `--https_truststore_password` (env `HTTPS_TRUST_STORE_PATH` / `HTTPS_TRUST_STORE_PASSWORD`; config `agent.http.trustStorePath` / `agent.http.trustStorePassword`) verify HTTPS targets against a custom/private CA without disabling validation. Resolved CLI > env > config; password never logged; `--trust_all_x509` takes precedence; an empty path uses the JDK default trust store
 - Add `ContainersSmokeTest` (`io.prometheus.containers`) — Testcontainers-based end-to-end smoke test that builds the proxy/agent Docker images and verifies a Prometheus → proxy → agent → endpoint scrape, gated on `RUN_CONTAINER_TESTS=true`
 - Add `make container-tests` target with Docker context auto-detection so Testcontainers finds Docker Desktop's non-default socket on macOS
@@ -16,6 +17,7 @@ All notable changes to this project are documented in this file.
 
 ### Security
 
+- Mitigate the unauthenticated agent-registration / path-hijacking finding (`docs/security-agent-authentication.md`, item 1) with the optional pre-shared agent token above. Mutual TLS and network segmentation remain the recommended production posture; the token is a lightweight app-level control that complements them
 - Redact query-parameter *values* (not just the `user:pass@` userinfo) everywhere a scrape URL is logged or echoed back to Prometheus, so secrets in `?token=…` / `?api_key=…` no longer leak at WARN
 - Derive the agent `HttpClientCache` key from a per-process salted HMAC-SHA256 digest instead of the plaintext `username:password`, keeping the password out of the long-lived cache key
 - Bound the agent's scrape response-body read: `buildScrapeResults()` previously called `bodyAsText()`, buffering the whole body into the heap *before* the size check, so a target with no `Content-Length` (chunked transfer) or an understated one could push the agent toward OOM regardless of `maxContentLengthMBytes`. It now reads at most `maxContentLength + 1` bytes via `bodyAsChannel().readRemaining()`, so the guard runs against a bounded buffer
