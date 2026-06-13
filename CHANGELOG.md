@@ -45,6 +45,7 @@ All notable changes to this project are documented in this file.
 
 - Code-review cleanup with no behavior change: extracted shared common-option assignment between `AgentOptions` / `ProxyOptions`, decomposed `Agent.run()`'s connection tasks behind one helper, collapsed the duplicated `ConfigWrappers` overloads, modeled basic-auth credentials as a `Credentials` value object, split the chunk-size field into a KB input plus derived bytes, replaced the stringly-typed path config with a typed `PathConfig`, and unified gRPC-default log formatting behind one helper
 - Added a mutual-TLS rejection test and coverage for timeout-override resolution, the unknown-`scrapeId` header drop, wrapped-timeout detection, and the chunk-size boundary; encode the gzipped response body once (was twice); removed the dead `SslSettings` scaffolding (now wired into the HTTPS trust store) and stale commented-out blocks
+- Covered the previously-untested `EnvVars.getEnv(Int)` / `getEnv(Long)` invalid-value error paths: extracted `parseIntStrict` / `parseLongStrict` companion helpers (mirroring the existing `parseBooleanStrict`) so the parse-and-throw branches are testable without setting process env vars, and dropped a redundant default-fallback test
 
 ### Build & Tooling
 

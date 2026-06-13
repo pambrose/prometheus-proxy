@@ -146,6 +146,8 @@ Container tests in `src/test/kotlin/io/prometheus/containers/`:
 
 Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`.
 
+`EnvVars.getEnv()` reads `java.lang.System.getenv()`, which can't be set in-process, so its parse-and-throw branches aren't reachable by setting an env var in a test. The numeric/boolean parsing is therefore extracted into `internal` companion helpers (`parseBooleanStrict` / `parseIntStrict` / `parseLongStrict`) that the tests call directly. When adding a new typed `getEnv` overload, follow this pattern so the invalid-value path stays testable.
+
 ## Documentation Site
 
 Documentation is built with [Zensical](https://zensical.org) (static site generator) and lives in `website/prometheus-proxy/`.
