@@ -29,8 +29,8 @@ jobs:
       - name: Compile (no tests)
         run: ./gradlew clean build -xtest
 
-      - name: Lint
-        run: ./gradlew lintKotlinMain lintKotlinTest
+      - name: Lint and detekt
+        run: ./gradlew lintKotlinMain lintKotlinTest detekt
 
       # --continue lets the kover report tasks run even if some tests fail, preserving the
       # prior behavior where coverage was still uploaded on test failure.
