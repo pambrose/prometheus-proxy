@@ -18,12 +18,13 @@ All notable changes to this project are documented in this file.
 
 - Redact query-parameter *values* (not just the `user:pass@` userinfo) everywhere a scrape URL is logged or echoed back to Prometheus, so secrets in `?token=…` / `?api_key=…` no longer leak at WARN
 - Derive the agent `HttpClientCache` key from a per-process salted HMAC-SHA256 digest instead of the plaintext `username:password`, keeping the password out of the long-lived cache key
+- Bound the agent's scrape response-body read: `buildScrapeResults()` previously called `bodyAsText()`, buffering the whole body into the heap *before* the size check, so a target with no `Content-Length` (chunked transfer) or an understated one could push the agent toward OOM regardless of `maxContentLengthMBytes`. It now reads at most `maxContentLength + 1` bytes via `bodyAsChannel().readRemaining()`, so the guard runs against a bounded buffer
 
 ### Behavior Changes
 
 - Embedded agents (`startAsyncAgent`, `exitOnMissingConfig=false`) now throw the new public `io.prometheus.common.ConfigLoadException` on a config-load failure instead of calling `exitProcess(1)`; standalone agents and the proxy still exit
 - `connectAgent()` rethrows JVM `Error`s instead of swallowing them into retry-forever, and logs full stack traces on connection failures
-- `ProxyOptions` now validates `proxyPort` / `proxyAgentPort` (`1..65535`), gRPC timeouts (`-1` or `> 0`), and `internal.scrapeRequestTimeoutSecs` (`> 0`) at startup
+- `ProxyOptions` now validates `proxyPort` / `proxyAgentPort` (`1..65535`), gRPC timeouts (`-1` or `> 0`), `internal.scrapeRequestTimeoutSecs` / `staleAgentCheckPauseSecs` / `maxAgentInactivitySecs` (`> 0`), and `internal.maxUnzippedContentSizeMBytes` (`>= 0`, so `0` stays a valid "reject all" limit) at startup
 - Per-request call logging emits at DEBUG instead of INFO when `requestLoggingEnabled = true` (config default unchanged)
 - `HttpClientCache.close()` sets a terminal flag so a scrape racing shutdown can't create and cache a fresh client into the closed cache
 
@@ -44,8 +45,9 @@ All notable changes to this project are documented in this file.
 ### Code Quality
 
 - Code-review cleanup with no behavior change: extracted shared common-option assignment between `AgentOptions` / `ProxyOptions`, decomposed `Agent.run()`'s connection tasks behind one helper, collapsed the duplicated `ConfigWrappers` overloads, modeled basic-auth credentials as a `Credentials` value object, split the chunk-size field into a KB input plus derived bytes, replaced the stringly-typed path config with a typed `PathConfig`, and unified gRPC-default log formatting behind one helper
-- Added a mutual-TLS rejection test and coverage for timeout-override resolution, the unknown-`scrapeId` header drop, wrapped-timeout detection, and the chunk-size boundary; encode the gzipped response body once (was twice); removed the dead `SslSettings` scaffolding (now wired into the HTTPS trust store) and stale commented-out blocks
+- Added a mutual-TLS rejection test and coverage for timeout-override resolution, the unknown-`scrapeId` header drop, wrapped-timeout detection, the chunk-size boundary, `AgentHttpService` `PayloadTooLarge` branches, `SslSettings` success paths, and `BaseOptions` URL/HTTP config loading; encode the gzipped response body once (was twice); removed the dead `SslSettings` scaffolding (now wired into the HTTPS trust store) and stale commented-out blocks
 - Covered the previously-untested `EnvVars.getEnv(Int)` / `getEnv(Long)` invalid-value error paths: extracted `parseIntStrict` / `parseLongStrict` companion helpers (mirroring the existing `parseBooleanStrict`) so the parse-and-throw branches are testable without setting process env vars, and dropped a redundant default-fallback test
+- Made `ProxyPathManager`'s `AgentContextInfo.agentContexts` an immutable `List` (mutations now replace the `pathMap` entry with a `copy()` rather than mutating a shared list), dropping the now-redundant defensive `.toList()` copies in the read accessors
 
 ### Build & Tooling
 
@@ -69,17 +71,21 @@ All notable changes to this project are documented in this file.
 - Switch the proxy/agent Docker images to the prebuilt `bellsoft/liberica-openjre-alpine:17` base (no build-time `apk add openjdk17-jre`, so builds are faster and not subject to Alpine-mirror stalls; genuine amd64 + arm64 multi-arch so the images run on Apple Silicon, unlike the amd64-only `eclipse-temurin:17-jre-alpine`)
 - Run tests in CI and upload kover coverage to Codecov on each push and pull request
 - Scope `netty-tcnative` and `jul-to-slf4j` as `runtimeOnly` (no compile-time references; still bundled in the fat JARs via `runtimeClasspath`)
+- Drop the unused `kotlinx-datetime` dependency (catalog entry, library, and a commented-out usage), removing a transitive dependency the code never referenced
 
 ### Dependency Updates
 
-| Dependency          | Old   | New    |
-|---------------------|-------|--------|
-| testcontainers      | —     | 2.0.5  |
-| Typesafe Config     | 1.4.8 | 1.4.9  |
-| BuildConfig plugin  | 6.0.9 | 6.0.10 |
+| Dependency          | Old    | New    |
+|---------------------|--------|--------|
+| gRPC                | 1.81.0 | 1.82.0 |
+| testcontainers      | —      | 2.0.5  |
+| Typesafe Config     | 1.4.8  | 1.4.9  |
+| BuildConfig plugin  | 6.0.9  | 6.0.10 |
+| common-utils        | 2.8.1  | 2.9.1  |
+| gradle-plugins      | 1.0.12 | 1.0.15 |
 
 Pin `protobuf`/`protoc` (4.34.1 → 3.25.3) and `netty-tcnative` (2.0.77.Final → 2.0.75.Final) **down** to
-the versions the gRPC 1.81.0 artifacts expect, keeping the generated stubs and native TLS binary-compatible
+the versions the gRPC 1.82.0 artifacts expect, keeping the generated stubs and native TLS binary-compatible
 with grpc-netty-shaded.
 
 ---

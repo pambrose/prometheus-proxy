@@ -18,12 +18,13 @@ _Unreleased_
 
 - **Query-string secrets no longer leak into logs.** `sanitizeUrl` now blanket-redacts query-parameter *values* (`?token=secret&job=x` → `?token=***&job=***`) in addition to the `user:pass@` userinfo, at every site where a scrape URL is logged or echoed back to Prometheus (including `srUrl` / `srFailureReason` when debug is enabled). Previously a token on an authed endpoint leaked at WARN whenever that endpoint was merely slow.
 - **Basic-auth credentials are kept out of the HTTP-client cache key.** The agent's `HttpClientCache` no longer uses the plaintext `username:password` as the live `ConcurrentHashMap` key; it derives the key from a per-process salted HMAC-SHA256 digest, so the password no longer sits on the heap as the key for the cache's lifetime.
+- **The agent's scrape response-body read is bounded, closing a memory-exhaustion vector.** `buildScrapeResults()` previously called `bodyAsText()`, which buffered the entire response into the heap *before* the size check — so a scrape target with no `Content-Length` (chunked transfer encoding) or an understated one could drive the agent toward OOM regardless of `maxContentLengthMBytes`. It now reads at most `maxContentLength + 1` bytes via `bodyAsChannel().readRemaining()`, so the size guard runs against a bounded buffer. The text path also decodes UTF-8 via `decodeToString()`, consistent with the gzip path.
 
 ### Reliability & Behavior
 
 - **Embedded agents no longer terminate the host JVM on a config-load failure.** When `exitOnMissingConfig` is false (the `startAsyncAgent` / embedded path), a config parse or fetch failure now throws the new public `io.prometheus.common.ConfigLoadException` for the host application to catch, instead of calling `exitProcess(1)`. Standalone agents and the proxy still exit on a missing or unreadable config.
 - **Fatal JVM errors are no longer swallowed and retried forever.** `connectAgent()` now rethrows `Error`s (e.g. `OutOfMemoryError`, `StackOverflowError`) so the agent terminates instead of looping on corrupted state, and connection failures now log a full stack trace rather than a message-only line.
-- **Fail-fast configuration validation in `ProxyOptions`.** `proxyPort` / `proxyAgentPort` must be in `1..65535`, each gRPC timeout must be `-1` (use the gRPC default) or `> 0`, and `internal.scrapeRequestTimeoutSecs` must be `> 0`. Invalid values now produce a clear startup error instead of an opaque Ktor/gRPC builder exception or every scrape instantly returning "timed_out".
+- **Fail-fast configuration validation in `ProxyOptions`.** `proxyPort` / `proxyAgentPort` must be in `1..65535`; each gRPC timeout must be `-1` (use the gRPC default) or `> 0`; `internal.scrapeRequestTimeoutSecs`, `staleAgentCheckPauseSecs`, and `maxAgentInactivitySecs` must be `> 0` (a `0` would busy-loop the cleanup service or evict agents immediately); and `internal.maxUnzippedContentSizeMBytes` must be `>= 0` (`0` stays a valid "reject all" limit). Invalid values now produce a clear startup error instead of an opaque Ktor/gRPC builder exception or every scrape instantly returning "timed_out".
 - **Per-request call logging dropped from INFO to DEBUG.** With `requestLoggingEnabled = true` (still the default), routine per-scrape logging no longer floods INFO on a busy proxy; WARN/ERROR stay visible and operators can re-enable it by lowering the root log level.
 - **No `HttpClient` leak when an embedded agent is stopped mid-scrape.** `HttpClientCache.close()` now sets a terminal flag so a scrape racing shutdown can't create and cache a fresh client into the already-closed cache.
 
@@ -52,8 +53,9 @@ _Unreleased_
 ### Code Quality
 
 - Full code-review cleanup pass with no behavior change: extracted the shared common-option assignment between `AgentOptions` and `ProxyOptions`, decomposed `Agent.run()`'s four connection tasks behind one `launchConnectionTask` helper, collapsed the six duplicated `ConfigWrappers` overloads onto shared builders, modeled basic-auth credentials as a `Credentials` value object, split the agent chunk-size field into a KB input plus a derived bytes value, replaced the stringly-typed `PathConfig` map with a typed data class, and unified the gRPC-default log formatting behind a single `grpcDefaultLabel` helper
-- Added a negative-path mutual-TLS rejection test plus unit coverage for timeout-override resolution, the chunked unknown-`scrapeId` header drop, wrapped-timeout detection, and the chunk-size boundary; encode the gzipped response body only once (was twice); deleted the dead `SslSettings` scaffolding (now wired into the new HTTPS trust store) and stale commented-out blocks
+- Added a negative-path mutual-TLS rejection test plus unit coverage for timeout-override resolution, the chunked unknown-`scrapeId` header drop, wrapped-timeout detection, the chunk-size boundary, `AgentHttpService` `PayloadTooLarge` branches, `SslSettings` success paths, and `BaseOptions` URL/HTTP config loading; encode the gzipped response body only once (was twice); deleted the dead `SslSettings` scaffolding (now wired into the new HTTPS trust store) and stale commented-out blocks
 - Closed a test-coverage gap on `EnvVars`: the `getEnv(Int)` / `getEnv(Long)` invalid-value error paths were unreachable from tests because `System.getenv()` can't be set in-process. Extracted `parseIntStrict` / `parseLongStrict` companion helpers (matching the existing `parseBooleanStrict` seam) and tested them directly for boundaries, signs, `Int`-overflow rejection, and non-numeric/whitespace input; removed a redundant default-fallback test
+- Hardened `ProxyPathManager` against shared-mutable-state bugs: `AgentContextInfo.agentContexts` is now an immutable `List`, with each mutation replacing the `pathMap` entry via `copy()` instead of mutating a list a data-class `copy()` might still share; the read accessors drop their now-redundant defensive `.toList()` copies
 
 ### Build & Tooling
 
@@ -76,17 +78,21 @@ _Unreleased_
 - Switch the proxy/agent Docker images to the prebuilt `bellsoft/liberica-openjre-alpine:17` base instead of `alpine` + `apk add openjdk17-jre`. Builds no longer download the JRE from the Alpine mirror at build time (faster and not subject to intermittent mirror stalls), and the base is genuinely multi-arch (amd64 + arm64), so the images run on Apple Silicon — the `eclipse-temurin:17-jre-alpine` alternative was amd64-only. Still Alpine-based, so the existing busybox `adduser` step is unchanged
 - Run the test suite in CI and upload kover coverage to Codecov on each push and pull request
 - Scope `netty-tcnative` and `jul-to-slf4j` as `runtimeOnly` (neither is referenced at compile time; the native TLS provider and the JUL→SLF4J bridge are still bundled into the fat JARs via `runtimeClasspath`)
+- Drop the unused `kotlinx-datetime` dependency (catalog entry, library, and a commented-out usage) — the code never referenced it
 
 ### Dependency Updates
 
-| Dependency          | Old   | New    |
-|---------------------|-------|--------|
-| testcontainers      | —     | 2.0.5  |
-| Typesafe Config     | 1.4.8 | 1.4.9  |
-| BuildConfig plugin  | 6.0.9 | 6.0.10 |
+| Dependency          | Old    | New    |
+|---------------------|--------|--------|
+| gRPC                | 1.81.0 | 1.82.0 |
+| testcontainers      | —      | 2.0.5  |
+| Typesafe Config     | 1.4.8  | 1.4.9  |
+| BuildConfig plugin  | 6.0.9  | 6.0.10 |
+| common-utils        | 2.8.1  | 2.9.1  |
+| gradle-plugins      | 1.0.12 | 1.0.15 |
 
 `protobuf` / `protoc` (4.34.1 → 3.25.3) and `netty-tcnative` (2.0.77.Final → 2.0.75.Final) are pinned
-**down** to the versions the gRPC 1.81.0 artifacts ship — not the newer releases `make versions` flags —
+**down** to the versions the gRPC 1.82.0 artifacts ship — not the newer releases `make versions` flags —
 so the generated protobuf stubs and the native TLS provider stay binary-compatible with grpc-netty-shaded.
 
 ---
