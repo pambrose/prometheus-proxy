@@ -298,7 +298,9 @@ agent. This approach eliminates the need for a separate agent process when your 
   // The agent runs in the background and does not block your application
 
   // Shutdown the agent when the application terminates
-  agentInfo.close();
+  agentInfo.
+
+  shutdown();
   ```
 
 If the configuration cannot be loaded (a parse error, an unreachable config URL, or a missing file), the embedded
