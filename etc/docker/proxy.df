@@ -1,8 +1,9 @@
 # Pinned by digest for reproducible builds (tag kept for readability). Bump the digest periodically
-# to pick up base-image security patches: docker buildx imagetools inspect eclipse-temurin:17-jre
+# to pick up base-image security patches: docker buildx imagetools inspect eclipse-temurin:25-jre
 # eclipse-temurin (Ubuntu-based) publishes amd64, arm64, s390x, and ppc64le manifests, so the full
 # multi-arch `make docker-push` platform set resolves; Alpine JRE images cover only amd64/arm64.
-FROM eclipse-temurin:17-jre@sha256:8016378253033ebd971c237f6580f108b4afac11a188d3fc3b982497bbe55c65
+# Java 25 (LTS) runtime; the fat JAR is Java 17 bytecode, which runs unchanged on the newer JRE.
+FROM eclipse-temurin:25-jre@sha256:5cf92df78f6dba978777d5cffa3c856e583f86814fde82a6c3534ccdfd794f2f
 LABEL maintainer="Paul Ambrose <pambrose@mac.com>"
 
 # Define the user to use in this instance to prevent using root that even in a container, can be a security risk.
@@ -30,6 +31,9 @@ EXPOSE 50440
 
 CMD []
 
-# G1 is the default GC on JDK 17 and MaxGCPauseMillis/UseStringDeduplication are non-experimental,
+# G1 is the default GC on JDK 25 and MaxGCPauseMillis/UseStringDeduplication are non-experimental,
 # so -XX:+UseG1GC and -XX:+UnlockExperimentalVMOptions were no-ops and have been removed.
-ENTRYPOINT ["java", "-server", "-XX:MaxGCPauseMillis=100", "-XX:+UseStringDeduplication", "-jar", "/app/prometheus-proxy.jar"]
+# --enable-native-access=ALL-UNNAMED grants the classpath fat JAR native access (jansi's System.load),
+# and --sun-misc-unsafe-memory-access=allow silences netty's terminally-deprecated sun.misc.Unsafe
+# memory calls; both suppress JDK 25 startup warnings (drop the Unsafe flag once netty stops using it).
+ENTRYPOINT ["java", "-server", "-XX:MaxGCPauseMillis=100", "-XX:+UseStringDeduplication", "--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow", "-jar", "/app/prometheus-proxy.jar"]
