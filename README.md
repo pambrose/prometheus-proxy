@@ -35,6 +35,9 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## 🏗️ Architecture
 
+> 📖 **Docs site:
+** [Architecture](https://pambrose.github.io/prometheus-proxy/architecture/) for the full component breakdown and request flow, and the [Glossary](https://pambrose.github.io/prometheus-proxy/glossary/) for the core terms used throughout the docs.
+
 The `prometheus-proxy` runtime comprises two services:
 
 * `proxy`: runs in the same network domain as Prometheus server (outside the firewall) and proxies calls from Prometheus
@@ -75,6 +78,9 @@ agents.
 - ✅ **Zero changes** to existing Prometheus configuration patterns
 
 ## 🚀 Quick Start
+
+> 📖 **Docs site:
+** [Quick Start guide](https://pambrose.github.io/prometheus-proxy/getting-started/) walks through these steps with more detail.
 
 **Requirements:** Java 17 or newer
 
@@ -144,6 +150,9 @@ docker run --rm \
 
 ## 📋 Configuration Examples
 
+> 📖 **Docs site:
+** [Agent configuration](https://pambrose.github.io/prometheus-proxy/configuration/agent/) and [Proxy configuration](https://pambrose.github.io/prometheus-proxy/configuration/proxy/) document every config key in depth.
+
 ### Agent Configuration
 
 If the prometheus-proxy were running on a machine named *mymachine.local* and the
@@ -212,6 +221,9 @@ scrape_configs:
 
 ## 🐳 Docker Usage
 
+> 📖 **Docs site:
+** [Docker deployment guide](https://pambrose.github.io/prometheus-proxy/docker/) covers compose files, bind mounts, and container configuration. Running on Kubernetes? See the [Kubernetes guide](https://pambrose.github.io/prometheus-proxy/kubernetes/).
+
 ### Multi-Platform Images
 
 The docker images support multiple architectures (amd64, arm64, s390x):
@@ -275,6 +287,9 @@ target for `--mount` options.
 If you are running a JVM-based program, you can run with the agent embedded directly in your app and not use an external
 agent. This approach eliminates the need for a separate agent process when your application already runs on the JVM.
 
+> 📖 **Docs site:
+** [Embedded Agent guide](https://pambrose.github.io/prometheus-proxy/embedded-agent/) for the full API surface and lifecycle details.
+
   ```Java
   // Start embedded agent
   EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
@@ -304,6 +319,10 @@ java -jar prometheus-proxy.jar \
 
 Access discovery endpoint at: `http://proxy-host:8080/discovery`
 
+> 📖 **Docs site:
+** [Service Discovery guide](https://pambrose.github.io/prometheus-proxy/service-discovery/) explains the discovery payload format and the Prometheus
+`http_sd_configs` wiring.
+
 ### Performance Tuning
 
 Configure concurrent scraping:
@@ -317,6 +336,9 @@ java -jar prometheus-agent.jar \
 
 ## 📊 Monitoring & Observability
 
+> 📖 **Docs site:
+** [Monitoring guide](https://pambrose.github.io/prometheus-proxy/monitoring/) for the full metrics reference and admin endpoints, plus [Grafana & Alerting](https://pambrose.github.io/prometheus-proxy/grafana/) for ready-to-import dashboards and alert rules.
+
 ### Built-in Metrics
 
 Both proxy and agent expose their own metrics:
@@ -326,6 +348,9 @@ Both proxy and agent expose their own metrics:
 - **Admin endpoints:** `http://host:admin-port/ping`, `/healthcheck`, `/version`
 
 ## 🔧 Configuration Options
+
+> 📖 **Docs site:
+** [Configuration overview](https://pambrose.github.io/prometheus-proxy/configuration/) and the [CLI Reference](https://pambrose.github.io/prometheus-proxy/cli-reference/) document every option and environment variable.
 
 The proxy and agent use the [Typesafe Config](https://github.com/typesafehub/config) library. Configuration values are
 evaluated in order: **CLI options → environment variables → config file values**.
@@ -363,6 +388,10 @@ Typesafe Config highlights include:
 
 ## 📝 Examples & Use Cases
 
+> 📖 **Docs site:
+** [Example Configs guide](https://pambrose.github.io/prometheus-proxy/examples/) describes each ready-to-run config under
+`examples/`.
+
 ### Common Scenarios
 
 - **🏢 Enterprise environments** - Scrape metrics across firewall boundaries
@@ -383,6 +412,9 @@ Typesafe Config highlights include:
 | **Nginx reverse proxy**    | [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf)                         |
 
 ### Advanced Use Cases
+
+> 📖 **Docs site:
+** [Advanced Topics guide](https://pambrose.github.io/prometheus-proxy/advanced/) covers the Nginx reverse-proxy setup, federation, and other advanced configurations.
 
 #### Prometheus Federation
 
@@ -445,6 +477,9 @@ agents. Disabling reflection only hides the API shape — it is not a substitute
 port with the pre-shared agent token, mutual TLS, and/or network segmentation.
 
 ## 🔐 Security & TLS
+
+> 📖 **Docs site:
+** [Security overview](https://pambrose.github.io/prometheus-proxy/security/) and the [TLS Setup guide](https://pambrose.github.io/prometheus-proxy/security/tls/) cover agent authentication, mutual TLS, and certificate management in depth.
 
 ### TLS Configuration Details
 
@@ -592,6 +627,9 @@ scrapes, and it takes precedence over `--https_truststore`. Prefer a custom trus
 
 ## 🔧 Troubleshooting
 
+> 📖 **Docs site:
+** [Troubleshooting guide](https://pambrose.github.io/prometheus-proxy/troubleshooting/) is a symptom-driven reference covering more failure modes and fixes.
+
 ### Common Issues
 
 **Agent can't connect to proxy:**
@@ -629,6 +667,10 @@ at [pambrose.github.io/prometheus-proxy/kdocs](https://pambrose.github.io/promet
 [Kubernetes deployment guide](https://pambrose.github.io/prometheus-proxy/kubernetes/) for ready-to-use proxy and
 agent manifests, standalone and sidecar agent patterns, gRPC exposure for remote agents, and Prometheus Operator
 (`ServiceMonitor`) integration.
+
+**Note:** Deploying to production? The
+[Running in Production guide](https://pambrose.github.io/prometheus-proxy/production/) pulls the security, reliability,
+and tuning settings into a single operational checklist.
 
 ### Maven Central
 
