@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: proxy
-          image: pambrose/prometheus-proxy:3.2.0
+          image: pambrose/prometheus-proxy:3.2.1
           ports:
             - { name: http, containerPort: 8080 }     # Prometheus scrapes here
             - { name: grpc, containerPort: 50051 }     # agents connect here
@@ -110,7 +110,7 @@ spec:
     spec:
       containers:
         - name: agent
-          image: pambrose/prometheus-agent:3.2.0
+          image: pambrose/prometheus-agent:3.2.1
           ports:
             - { name: metrics, containerPort: 8083 }
             - { name: admin, containerPort: 8093 }
@@ -163,7 +163,7 @@ spec:
           ports:
             - { name: metrics, containerPort: 9100 }
         - name: prometheus-agent
-          image: pambrose/prometheus-agent:3.2.0
+          image: pambrose/prometheus-agent:3.2.1
           env:
             - { name: PROXY_HOSTNAME, value: "proxy.example.com:50051" }
             - { name: AGENT_CONFIG, value: /app/agent.conf }

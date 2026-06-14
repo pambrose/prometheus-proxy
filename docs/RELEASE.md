@@ -7,7 +7,7 @@ by hand.
 
 1) Bump `version` in `gradle.properties` (the single source of truth).
 
-2) Update the `3.2.0` literals in `README.md` and `llms.txt` (the Docker tag examples and the Maven
+2) Update the `3.2.1` literals in `README.md` and `llms.txt` (the Docker tag examples and the Maven
    Central dependency block) to the new version.
 
 3) Update `CHANGELOG.md` and `RELEASE_NOTES.md` with the changes in this release.
@@ -24,8 +24,8 @@ by hand.
    entry it checks. To publish a snapshot instead, use `make publish-snapshot`.
 
 7) Create a release on GitHub (https://github.com/pambrose/prometheus-proxy/releases):
-   - **Tag**: the version with no `v` prefix (e.g. `3.2.0`).
-   - **Title**: the version with a `v` prefix (e.g. `v3.2.0`).
+   - **Tag**: the version with no `v` prefix (e.g. `3.2.1`).
+   - **Title**: the version with a `v` prefix (e.g. `v3.2.1`).
    - **Description**: summarize the changes and include a full-changelog link
      (e.g. `**Full Changelog**: https://github.com/pambrose/prometheus-proxy/compare/<prev>...<new>`).
    - Attach `build/libs/prometheus-agent.jar` and `build/libs/prometheus-proxy.jar`.
