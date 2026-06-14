@@ -40,6 +40,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import org.testcontainers.DockerClientFactory
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.Network
 import org.testcontainers.containers.wait.strategy.Wait
@@ -68,12 +69,13 @@ class ContainersScalingTest : StringSpec() {
         val client = httpClient()
         val stubs = mutableListOf<GenericContainer<*>>()
         val agents = mutableListOf<GenericContainer<*>>()
+        val agentMemMib = s.agentMemoryMib()
         val proxy =
           proxyContainer(
             network,
             env = mapOf("METRICS_ENABLED" to "true"),
             exposedPorts = listOf(PROXY_HTTP_PORT, PROXY_METRICS_PORT),
-          )
+          ).withMemoryMib(PROXY_MEM_MIB)
         try {
           // --- unique-path agents (dimensions: agents × endpoints, payload size) ---
           for (a in 0 until s.agentCount) {
@@ -94,7 +96,7 @@ class ContainersScalingTest : StringSpec() {
                 alias = "scale-agent-a$a",
                 configText = agentConfig("scale-agent-a$a", stubAlias, entries),
                 waitTimes = s.endpointsPerAgent,
-              )
+              ).withMemoryMib(agentMemMib)
           }
 
           // --- consolidated fan-out agents (K agents share one path) ---
@@ -111,7 +113,7 @@ class ContainersScalingTest : StringSpec() {
                 configText =
                   agentConfig("scale-cons-agent-$k", stubAlias, listOf(CONSOLIDATED_PATH to "c"), consolidated = true),
                 waitLogRegex = ".*Registered .* as /$CONSOLIDATED_PATH.*",
-              )
+              ).withMemoryMib(agentMemMib)
           }
 
           stubs.forEach { it.start() }
@@ -189,6 +191,47 @@ data class ScalingScenario(
 
 private const val SCALE_SENTINEL = "scale_sentinel"
 private const val CONSOLIDATED_PATH = "scale_consolidated"
+
+// --- container memory caps -----------------------------------------------------------------------
+// Testcontainers sets no cgroup memory limit, so an uncapped JVM container sizes its max heap to 25%
+// of the *Docker VM's* RAM (≈2 GiB on a stock 8 GB Desktop VM). The connection-stress presets fan out
+// to 40+ agent JVMs, so the uncapped heaps over-commit the VM and the kernel OOM-kills the proxy
+// mid-scrape (the failure shows up as "server prematurely closed the connection" → "Connection
+// refused"). Giving each JVM container an explicit memory limit makes the JVM auto-size its heap to
+// the cgroup limit instead, so the whole fan-out fits the host.
+//
+// The cap must also be large enough that a connected, actively-scraped agent does not GC-thrash: too
+// tight (≈ its working set) and the agent stalls, drops its heartbeat stream, and the proxy evicts its
+// paths — a scrape then 404s. So the budget is a fraction of the *actual* Docker VM, divided across the
+// agents and clamped to a workable range: a 40-agent fan-out on an 8 GB VM lands near the floor, the
+// same fan-out on a 16 GB VM gets roomy headroom, and a few-agent / large-payload preset gets ample heap.
+private const val BYTES_PER_MIB = 1024L * 1024L
+private const val PROXY_MEM_MIB = 512L
+private const val AGENT_MIN_MEM_MIB = 160L
+private const val AGENT_MAX_MEM_MIB = 768L
+
+/** Fraction of the Docker VM to hand to all proxy + agent JVMs; the rest covers the per-agent nginx
+ *  stubs and Docker overhead. */
+private const val VM_BUDGET_PERCENT = 70L
+
+/** Fallback Docker VM size (MiB) when the daemon can't be queried — a stock 8 GB Docker Desktop VM. */
+private const val DEFAULT_VM_MIB = 8L * 1024L
+
+/** Docker VM RAM (MiB), read once; the per-agent cap scales to this so the fan-out fits whatever host runs it. */
+private val dockerVmMib: Long by lazy {
+  runCatching { DockerClientFactory.instance().client().infoCmd().exec().memTotal }
+    .getOrNull()?.div(BYTES_PER_MIB) ?: DEFAULT_VM_MIB
+}
+
+/** Per-agent container memory cap: the non-proxy share of the VM budget split across every agent, clamped
+ *  to a range frugal enough for a big fan-out yet large enough for the chunking/gzip payload presets. */
+private fun ScalingScenario.agentMemoryMib(): Long =
+  ((dockerVmMib * VM_BUDGET_PERCENT / 100 - PROXY_MEM_MIB) / totalAgents.coerceAtLeast(1))
+    .coerceIn(AGENT_MIN_MEM_MIB, AGENT_MAX_MEM_MIB)
+
+/** Pin a JVM container's memory so its heap auto-sizes to the cgroup limit instead of 25% of host RAM. */
+private fun GenericContainer<*>.withMemoryMib(mib: Long): GenericContainer<*> =
+  apply { withCreateContainerCmdModifier { cmd -> cmd.hostConfig?.withMemory(mib * BYTES_PER_MIB) } }
 
 private fun intEnv(
   name: String,
