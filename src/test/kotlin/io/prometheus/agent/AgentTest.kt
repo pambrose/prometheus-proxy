@@ -126,7 +126,10 @@ class AgentTest : StringSpec() {
 
         agent.isRunning.shouldBeFalse()
       } finally {
-        runCatching { if (agent.isRunning) agent.stopSync() }
+        try {
+          if (agent.isRunning) agent.stopSync()
+        } catch (_: Exception) {
+        }
       }
     }
 

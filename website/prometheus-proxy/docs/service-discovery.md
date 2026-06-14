@@ -99,3 +99,9 @@ agent.pathConfigs: [
 ```
 
 The labels appear in the discovery response and can be used in Prometheus relabeling rules.
+
+!!! note "Reserved label keys"
+
+    The proxy computes `__metrics_path__`, `agentName`, and `hostName` itself. Any agent-supplied
+    label whose key collides with one of these is ignored (the proxy logs a warning), so a custom
+    label can't override the scrape target or the reported agent identity.
