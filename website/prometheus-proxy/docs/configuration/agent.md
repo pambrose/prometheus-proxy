@@ -35,9 +35,16 @@ Each path config entry has these fields:
 | Field    | Required | Description                                                   |
 |:---------|:---------|:--------------------------------------------------------------|
 | `name`   | Yes      | Human-readable endpoint name (for logs and debugging)         |
-| `path`   | Yes      | URL path on the proxy that Prometheus will scrape             |
+| `path`   | Yes      | Single URL segment on the proxy that Prometheus scrapes (no embedded `/`) |
 | `url`    | Yes      | Actual metrics endpoint the agent fetches from                |
 | `labels` | No       | JSON string of labels for service discovery (default: `"{}"`) |
+
+!!! note "Paths are a single segment"
+
+    A `path` is one URL segment — it must not contain an embedded `/`. The proxy serves each
+    registered path at `/<path>` (a one-segment route), so a multi-segment value like
+    `app/metrics` is rejected at registration (the agent logs the failure rather than reconnecting).
+    Use `app_metrics` instead.
 
 ## Proxy Connection
 

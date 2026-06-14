@@ -103,6 +103,15 @@ Available log levels for both proxy and agent:
 
 The deprecated `all` level was removed in 3.2.0 — use `trace` for the most verbose output.
 
+## Validation
+
+Options are validated at startup and an invalid value fails fast with a clear message rather than an
+opaque bind or builder error:
+
+- **Ports** — `--port` / `--agent_port` (proxy), `--admin_port`, and `--metrics_port` must be in `1..65535`.
+- **Agent scrape timeout** — `--timeout` / `agent.scrapeTimeoutSecs` must be `> 0`.
+- **gRPC keepalive timeouts** — must be `-1` (use the gRPC default) or `> 0`.
+
 ## Dynamic Properties
 
 Use `-D` to override any configuration value:
