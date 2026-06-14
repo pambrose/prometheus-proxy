@@ -1,6 +1,8 @@
 # Pinned by digest for reproducible builds (tag kept for readability). Bump the digest periodically
-# to pick up base-image security patches: docker buildx imagetools inspect bellsoft/liberica-openjre-alpine:17
-FROM bellsoft/liberica-openjre-alpine:17@sha256:46d2697c9a83d968506f4da2d25439aa02cec887eba9b60e711a05bcba534f46
+# to pick up base-image security patches: docker buildx imagetools inspect eclipse-temurin:17-jre
+# eclipse-temurin (Ubuntu-based) publishes amd64, arm64, s390x, and ppc64le manifests, so the full
+# multi-arch `make docker-push` platform set resolves; Alpine JRE images cover only amd64/arm64.
+FROM eclipse-temurin:17-jre@sha256:8016378253033ebd971c237f6580f108b4afac11a188d3fc3b982497bbe55c65
 LABEL maintainer="Paul Ambrose <pambrose@mac.com>"
 
 # Define the user to use in this instance to prevent using root that even in a container, can be a security risk.

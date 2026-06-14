@@ -226,7 +226,7 @@ scrape_configs:
 
 ### Multi-Platform Images
 
-The docker images support multiple architectures (amd64, arm64, s390x):
+The docker images support multiple architectures (amd64, arm64, s390x, ppc64le):
 
 ```bash
 docker pull pambrose/prometheus-proxy:3.2.0

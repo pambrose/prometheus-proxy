@@ -4,7 +4,7 @@ icon: lucide/container
 
 # Docker Usage
 
-Multi-platform images (amd64, arm64, s390x) are published on Docker Hub for every release.
+Multi-platform images (amd64, arm64, s390x, ppc64le) are published on Docker Hub for every release.
 
 ```bash
 docker pull pambrose/prometheus-proxy:3.2.0
