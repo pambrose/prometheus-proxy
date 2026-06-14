@@ -23,7 +23,10 @@ nav = [
   ]},
   { "Getting Started" = [
     { "Quick Start" = "getting-started.md" },
+  ]},
+  { "Deployment" = [
     { "Docker" = "docker.md" },
+    { "Kubernetes" = "kubernetes.md" },
   ]},
   { "Configuration" = [
     { "Overview" = "configuration/index.md" },

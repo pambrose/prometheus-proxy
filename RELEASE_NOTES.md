@@ -100,6 +100,10 @@ _Released 2026-06-13_
 - Scope `netty-tcnative` and `jul-to-slf4j` as `runtimeOnly` (neither is referenced at compile time; the native TLS provider and the JUL→SLF4J bridge are still bundled into the fat JARs via `runtimeClasspath`)
 - Drop the unused `kotlinx-datetime` dependency (catalog entry, library, and a commented-out usage) — the code never referenced it
 
+### Documentation
+
+- **Kubernetes deployment guide.** A new [Kubernetes page](website/prometheus-proxy/docs/kubernetes.md) on the documentation site explains how to run Prometheus Proxy on Kubernetes, grouped with Docker under a new **Deployment** section in the nav. The guide leads with the deployment topology — the agent runs *inside* each firewalled cluster and opens an outbound gRPC connection to a centrally-reachable proxy, so target clusters never expose an inbound port, while Prometheus scrapes the proxy on its HTTP port. It then walks through `Deployment` / `Service` / `ConfigMap` manifests for both components, the standalone-Deployment and sidecar agent patterns, exposing the gRPC port to remote agents via a `LoadBalancer` (with an HTTP/2-ingress caveat), Prometheus integration through both a plain `scrape_config` and a Prometheus Operator `ServiceMonitor`, mounting TLS certificates from a `Secret`, and wiring Kubernetes liveness/readiness probes to the `/ping` and `/healthcheck` admin endpoints. The manifests are kept in a `check_paths`-validated snippet file so they can't silently drift from the build.
+
 ### Dependency Updates
 
 | Dependency             | Old           | New              |

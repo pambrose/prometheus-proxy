@@ -1,0 +1,224 @@
+; --8<-- [start:proxy-deployment]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-proxy
+  namespace: monitoring
+  labels:
+    app: prometheus-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-proxy
+  template:
+    metadata:
+      labels:
+        app: prometheus-proxy
+    spec:
+      containers:
+        - name: proxy
+          image: pambrose/prometheus-proxy:3.2.0
+          ports:
+            - { name: http, containerPort: 8080 }     # Prometheus scrapes here
+            - { name: grpc, containerPort: 50051 }     # agents connect here
+            - { name: metrics, containerPort: 8082 }
+            - { name: admin, containerPort: 8092 }
+          env:
+            - { name: ADMIN_ENABLED, value: "true" }
+            - { name: METRICS_ENABLED, value: "true" }
+          livenessProbe:
+            httpGet: { path: /ping, port: admin }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /healthcheck, port: admin }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-proxy
+  namespace: monitoring
+  labels:
+    app: prometheus-proxy
+spec:
+  selector:
+    app: prometheus-proxy
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+    - { name: grpc, port: 50051, targetPort: grpc }
+    - { name: metrics, port: 8082, targetPort: metrics }
+; --8<-- [end:proxy-deployment]
+
+; --8<-- [start:proxy-expose-grpc]
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-proxy-grpc
+  namespace: monitoring
+  labels:
+    app: prometheus-proxy
+spec:
+  type: LoadBalancer
+  selector:
+    app: prometheus-proxy
+  ports:
+    - { name: grpc, port: 50051, targetPort: grpc }
+; --8<-- [end:proxy-expose-grpc]
+
+; --8<-- [start:agent-config]
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-agent-config
+  namespace: default
+data:
+  agent.conf: |
+    agent {
+      pathConfigs: [
+        {
+          name: "My App metrics"
+          path: my_app_metrics
+          url: "http://my-app.default.svc.cluster.local:8080/metrics"
+        }
+      ]
+    }
+; --8<-- [end:agent-config]
+
+; --8<-- [start:agent-deployment]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-agent
+  namespace: default
+  labels:
+    app: prometheus-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-agent
+  template:
+    metadata:
+      labels:
+        app: prometheus-agent
+    spec:
+      containers:
+        - name: agent
+          image: pambrose/prometheus-agent:3.2.0
+          ports:
+            - { name: metrics, containerPort: 8083 }
+            - { name: admin, containerPort: 8093 }
+          env:
+            - name: PROXY_HOSTNAME
+              value: "proxy.example.com:50051"   # the proxy's externally reachable address
+            - { name: AGENT_CONFIG, value: /app/agent.conf }
+            - { name: ADMIN_ENABLED, value: "true" }
+            - { name: METRICS_ENABLED, value: "true" }
+          volumeMounts:
+            - { name: config, mountPath: /app/agent.conf, subPath: agent.conf }
+          livenessProbe:
+            httpGet: { path: /ping, port: admin }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /healthcheck, port: admin }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-agent-config
+; --8<-- [end:agent-deployment]
+
+; --8<-- [start:agent-sidecar]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  namespace: default
+  labels:
+    app: my-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+        - name: my-app
+          image: my-app:latest
+          ports:
+            - { name: metrics, containerPort: 9100 }
+        - name: prometheus-agent
+          image: pambrose/prometheus-agent:3.2.0
+          env:
+            - { name: PROXY_HOSTNAME, value: "proxy.example.com:50051" }
+            - { name: AGENT_CONFIG, value: /app/agent.conf }
+          volumeMounts:
+            - { name: agent-config, mountPath: /app/agent.conf, subPath: agent.conf }
+      volumes:
+        - name: agent-config
+          configMap:
+            name: prometheus-agent-config   # agent.conf url points at http://localhost:9100/metrics
+; --8<-- [end:agent-sidecar]
+
+; --8<-- [start:prometheus-scrape]
+scrape_configs:
+  - job_name: 'my-app-via-proxy'
+    metrics_path: '/my_app_metrics'
+    static_configs:
+      - targets: ['prometheus-proxy.monitoring.svc.cluster.local:8080']
+; --8<-- [end:prometheus-scrape]
+
+; --8<-- [start:servicemonitor]
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: prometheus-proxy
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack   # must match your Prometheus serviceMonitorSelector
+spec:
+  selector:
+    matchLabels:
+      app: prometheus-proxy
+  endpoints:
+    # Add one endpoint per registered proxy path.
+    - port: http
+      path: /my_app_metrics
+      interval: 30s
+; --8<-- [end:servicemonitor]
+
+; --8<-- [start:tls-secret]
+# Bundle your certificate files into a Secret:
+kubectl create secret generic prometheus-proxy-tls \
+  --namespace monitoring \
+  --from-file=cert.pem \
+  --from-file=key.pem \
+  --from-file=ca.pem
+; --8<-- [end:tls-secret]
+
+; --8<-- [start:tls-mount]
+# Container spec excerpt — point the config at the mounted certs:
+          env:
+            - { name: PROXY_CONFIG, value: /app/tls.conf }
+          volumeMounts:
+            - { name: tls, mountPath: /app/certs, readOnly: true }
+      volumes:
+        - name: tls
+          secret:
+            secretName: prometheus-proxy-tls
+; --8<-- [end:tls-mount]
