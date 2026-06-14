@@ -625,6 +625,11 @@ Full documentation is available at the [Prometheus Proxy Documentation](https://
 KDoc API documentation is published
 at [pambrose.github.io/prometheus-proxy/kdocs](https://pambrose.github.io/prometheus-proxy/kdocs/).
 
+**Note:** Running on Kubernetes? See the
+[Kubernetes deployment guide](https://pambrose.github.io/prometheus-proxy/kubernetes/) for ready-to-use proxy and
+agent manifests, standalone and sidecar agent patterns, gRPC exposure for remote agents, and Prometheus Operator
+(`ServiceMonitor`) integration.
+
 ### Maven Central
 
 The library is published to Maven Central under `com.pambrose:prometheus-proxy`:

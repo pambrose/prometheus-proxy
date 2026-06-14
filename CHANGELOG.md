@@ -93,6 +93,15 @@ All notable changes to this project are documented in this file.
 - Scope `netty-tcnative` and `jul-to-slf4j` as `runtimeOnly` (no compile-time references; still bundled in the fat JARs via `runtimeClasspath`)
 - Drop the unused `kotlinx-datetime` dependency (catalog entry, library, and a commented-out usage), removing a transitive dependency the code never referenced
 
+### Documentation
+
+- Add a Kubernetes deployment guide (`website/prometheus-proxy/docs/kubernetes.md`) under a new top-level **Deployment** nav section that also hosts the existing Docker page. Covers the cluster topology (the agent runs inside each firewalled cluster and dials *out* to a centrally-reachable proxy that Prometheus scrapes), `Deployment` / `Service` / `ConfigMap` manifests for the proxy and agent, the standalone-Deployment and sidecar agent patterns, exposing the gRPC port to remote agents (`LoadBalancer` / HTTP/2 ingress), Prometheus integration via both a plain `scrape_config` and a Prometheus Operator `ServiceMonitor`, mounting TLS certs from a `Secret`, and wiring liveness/readiness probes to the `/ping` and `/healthcheck` admin endpoints. The manifests live in `src/test/kotlin/website/KubernetesExamples.txt` and are pulled into the page as `check_paths`-validated snippets
+- Add a **Troubleshooting** page (new **Operations** nav section) — a symptom → cause → fix guide for the failures the system actually emits: the `unix`-scheme gRPC DNS error, `404` (path / `metrics_path` mismatch, multi-segment-path rejection), `503` (`no_agents` / `agent_disconnected` / `proxy_not_running`), `413 Payload Too Large`, scrape `timed_out`, `UNAUTHENTICATED: Missing or invalid agent token`, consolidated-mode registration rejections, and TLS handshake failures — each tied to the real log string and `proxy_scrape_requests` `type` label
+- Add a **Running in Production** page (Operations) consolidating the security, high-availability (consolidated-mode redundancy vs. single-instance proxy), sizing/tuning, logging, and shutdown guidance scattered across the advanced/security/Kubernetes pages, ending in a pre-flight checklist
+- Add a **Grafana & Alerting** page (Features) with import instructions and raw URLs for the shipped `grafana/prometheus-proxy.json` / `grafana/prometheus-agents.json` dashboards, plus ready-to-use Prometheus alerting rules (success rate, P99 latency, no agents connected, backlog growth, payload-too-large, eviction churn, agent connect failures) built on the documented metrics
+- Add an **Example Configs** page (Configuration) walking through `examples/{simple,myapps,federate,tls-no-mutual-auth,tls-with-mutual-auth}.conf`, each imported as a whole-file snippet so the page can't drift from the committed configs
+- Add a **Glossary** page (Overview) defining the core terms (proxy, agent, path / pathConfig, consolidated mode, chunking, heartbeat, service discovery, stale-agent cleanup, embedded agent, transport filter, `launch_id`), cross-linked to the relevant pages
+
 ### Dependency Updates
 
 | Dependency             | Old           | New              |
