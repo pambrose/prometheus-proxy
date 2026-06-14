@@ -20,6 +20,7 @@ nav = [
   { "Overview" = [
     { "Home" = "index.md" },
     { "Architecture" = "architecture.md" },
+    { "Glossary" = "glossary.md" },
   ]},
   { "Getting Started" = [
     { "Quick Start" = "getting-started.md" },
@@ -33,6 +34,7 @@ nav = [
     { "Agent" = "configuration/agent.md" },
     { "Proxy" = "configuration/proxy.md" },
     { "CLI Reference" = "cli-reference.md" },
+    { "Example Configs" = "examples.md" },
   ]},
   { "Security" = [
     { "Overview" = "security/index.md" },
@@ -42,6 +44,11 @@ nav = [
     { "Service Discovery" = "service-discovery.md" },
     { "Embedded Agent" = "embedded-agent.md" },
     { "Monitoring" = "monitoring.md" },
+    { "Grafana & Alerting" = "grafana.md" },
+  ]},
+  { "Operations" = [
+    { "Running in Production" = "production.md" },
+    { "Troubleshooting" = "troubleshooting.md" },
   ]},
   { "Advanced" = [
     { "Advanced Topics" = "advanced.md" },
