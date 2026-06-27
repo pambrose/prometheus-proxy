@@ -8,6 +8,7 @@ import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 import org.gradle.api.provider.ValueSource
 import org.gradle.api.provider.ValueSourceParameters
 import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jmailen.gradle.kotlinter.tasks.FormatTask
 import org.jmailen.gradle.kotlinter.tasks.LintTask
 import java.time.LocalDate
@@ -134,10 +135,6 @@ fun Project.configureKotlin() {
   kotlin {
     jvmToolchain(libs.versions.jvm.get().toInt())
 
-    compilerOptions {
-      freeCompilerArgs.add("-Xreturn-value-checker=check")
-    }
-
     sourceSets.all {
       listOf(
         "kotlin.time.ExperimentalTime",
@@ -150,6 +147,16 @@ fun Project.configureKotlin() {
       ).forEach {
         languageSettings.optIn(it)
       }
+    }
+  }
+
+  // Run the unused-return-value checker over production code only. Kotest's
+  // assertion DSL (e.g. shouldBe) returns its receiver, and tests intentionally
+  // discard that result, so applying the checker to the test source set would
+  // emit only false-positive warnings.
+  tasks.named<KotlinCompile>("compileKotlin") {
+    compilerOptions {
+      freeCompilerArgs.add("-Xreturn-value-checker=check")
     }
   }
 }
