@@ -206,7 +206,7 @@ tsconfig:  ## Regenerate ConfigVals from config/config.conf via tscfg
 
 distro: build jars  ## Clean build + jars
 
-docker-push: jars  ## Build and push multi-arch agent/proxy images
+docker-push: _require-version jars  ## Build and push multi-arch agent/proxy images
 	@case "$(VERSION)" in \
 		*SNAPSHOT*|*-rc*|*-beta*|*-alpha*) \
 			echo "Refusing to push pre-release version $(VERSION) as :latest" >&2; exit 1;; \

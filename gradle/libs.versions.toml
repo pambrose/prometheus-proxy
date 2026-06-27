@@ -1,6 +1,6 @@
 [versions]
 # Toolchain
-gradle-wrapper = "9.5.1"
+gradle-wrapper = "9.6.1"
 jvm = "17"
 
 # Kotlin
@@ -13,13 +13,13 @@ detekt = "2.0.0-alpha.3"
 dokka = "2.2.0"
 gradle-plugins = "1.0.15"
 kover = "0.9.8"
-maven-publish = "0.36.0"
+maven-publish = "0.37.0"
 protobuf = "0.10.0"
-shadow = "9.4.2"
+shadow = "9.4.3"
 taskinfo = "3.0.2"
 
 # gRPC / Protobuf
-grpc = "1.82.0"
+grpc = "1.82.1"
 gengrpc = "1.5.0"
 # Keep in sync with grpc
 protoc = "3.25.3"
@@ -27,7 +27,7 @@ protoc = "3.25.3"
 tcnative = "2.0.75.Final"
 
 # Ktor
-ktor = "3.5.0"
+ktor = "3.5.1"
 
 # Jetty
 jetty = "11.0.26"
@@ -41,7 +41,7 @@ zipkin = "6.3.1"
 
 # Logging
 logging = "8.0.4"
-logback = "1.5.34"
+logback = "1.5.37"
 slf4j = "2.0.18"
 
 # Config / CLI
@@ -49,13 +49,13 @@ typesafe = "1.4.9"
 jcommander = "3.0"
 
 # Common Utils
-utils = "2.9.1"
+utils = "2.9.2"
 
 # Misc
 annotation = "1.3.2"
 
 # Testing
-kotest = "6.1.11"
+kotest = "6.2.1"
 mockk = "1.14.11"
 testcontainers = "2.0.5"
 
