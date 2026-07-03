@@ -1,3 +1,4 @@
+import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.google.protobuf.gradle.id
 import com.vanniktech.maven.publish.JavadocJar
@@ -7,6 +8,7 @@ import kotlinx.kover.gradle.plugin.dsl.AggregationType
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 import org.gradle.api.provider.ValueSource
 import org.gradle.api.provider.ValueSourceParameters
+import org.gradle.kotlin.dsl.withType
 import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jmailen.gradle.kotlinter.tasks.FormatTask
@@ -24,7 +26,7 @@ plugins {
   alias(libs.plugins.kover)
   alias(libs.plugins.detekt)
   alias(libs.plugins.pambrose.envvar)
-  alias(libs.plugins.pambrose.stable.versions)
+  alias(libs.plugins.ben.manes.versions)
   alias(libs.plugins.pambrose.kotlinter)
   alias(libs.plugins.pambrose.testing)
   alias(libs.plugins.dokka)
@@ -105,6 +107,7 @@ configurePublishing()
 configureKotlinter()
 configureDetekt()
 configureCoverage()
+configureVersions()
 
 fun Project.configureKotlin() {
   // Apply taskinfo only when not running inside IntelliJ sync
@@ -247,11 +250,11 @@ fun Project.configureJars() {
     configurations.add(runtimeClasspath)
   }
 
-  val agentJar by tasks.registering(ShadowJar::class) {
+  val agentJar = tasks.register<ShadowJar>("agentJar") {
     configureFatJar("prometheus-agent.jar", "io.prometheus.Agent")
   }
 
-  val proxyJar by tasks.registering(ShadowJar::class) {
+  val proxyJar = tasks.register<ShadowJar>("proxyJar") {
     configureFatJar("prometheus-proxy.jar", "io.prometheus.Proxy")
   }
 
@@ -385,6 +388,28 @@ fun Project.configureCoverage() {
           aggregationForGroup = AggregationType.COVERED_PERCENTAGE
         }
       }
+    }
+  }
+}
+
+fun Project.configureVersions() {
+  val unstableQualifiers = listOf("-RC", "-BETA", "-ALPHA", "-M")
+
+  /**
+   * Returns `true` if [version] contains a pre-release qualifier (RC, BETA, ALPHA, or M).
+   */
+  fun isNonStable(version: String): Boolean {
+    val upper = version.uppercase()
+    return unstableQualifiers.any { it in upper }
+  }
+
+  tasks.withType<DependencyUpdatesTask> {
+    notCompatibleWithConfigurationCache("the dependency updates plugin is not compatible with the configuration cache")
+    // Reject a pre-release candidate only when the current version is stable. For
+    // dependencies, we intentionally track on a pre-release line (e.g. a detekt
+    // alpha), newer pre-releases are still surfaced as available updates.
+    rejectVersionIf {
+      isNonStable(candidate.version) && !isNonStable(currentVersion)
     }
   }
 }
