@@ -9,14 +9,15 @@ serialization = "1.11.0"
 
 # Build plugins
 config = "6.0.10"
-detekt = "2.0.0-alpha.3"
+detekt = "2.0.0-alpha.5"
 dokka = "2.2.0"
-gradle-plugins = "1.0.15"
+gradle-plugins = "1.1.0"
 kover = "0.9.8"
 maven-publish = "0.37.0"
 protobuf = "0.10.0"
 shadow = "9.4.3"
 taskinfo = "3.0.2"
+versions = "0.54.0"
 
 # gRPC / Protobuf
 grpc = "1.82.1"
@@ -160,6 +161,7 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
 # Build / packaging
+ben-manes-versions = { id = "com.github.ben-manes.versions", version.ref = "versions" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "config" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobuf" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
@@ -173,8 +175,7 @@ kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }
 
-# Pambrose convention plugins
+# pambrose convention plugins
 pambrose-envvar = { id = "com.pambrose.envvar", version.ref = "gradle-plugins" }
-pambrose-stable-versions = { id = "com.pambrose.stable-versions", version.ref = "gradle-plugins" }
 pambrose-kotlinter = { id = "com.pambrose.kotlinter", version.ref = "gradle-plugins" }
 pambrose-testing = { id = "com.pambrose.testing", version.ref = "gradle-plugins" }
