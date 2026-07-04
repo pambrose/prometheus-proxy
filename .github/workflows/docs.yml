@@ -16,10 +16,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  # Build the docs site + KDocs and upload the Pages artifact. Kept separate from
+  # the deploy job so that recovering a failed deploy means re-running only the
+  # deploy job (via "Re-run failed jobs"), which does NOT re-upload the artifact.
+  # actions/deploy-pages hard-fails when a run contains more than one artifact
+  # named "github-pages", which is what re-running a combined build+deploy job did.
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/configure-pages@v5
@@ -48,5 +50,16 @@ jobs:
       - uses: actions/upload-pages-artifact@v4
         with:
           path: website/prometheus-proxy/site
+
+  # Deploy the artifact produced by the build job. Deliberately minimal (no
+  # checkout or build) so re-running just this job re-deploys the existing
+  # artifact without rebuilding or re-uploading it.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - uses: actions/deploy-pages@v4
         id: deployment
