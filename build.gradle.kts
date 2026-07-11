@@ -233,18 +233,25 @@ fun Project.configureJars() {
   val mainOutput = sourceSets.main.get().output
   val runtimeClasspath = configurations.runtimeClasspath
 
-  // shadow 9.4.2's mergeServiceFiles() silently drops entries when multiple JARs ship a
-  // same-named META-INF/services file (its append() transformer is broken the same way),
-  // so without intervention the fat JAR loses grpc-core's DnsNameResolverProvider and
-  // PickFirstLoadBalancerProvider and the gRPC client defaults to the `unix` scheme on
-  // any non-IP hostname. Static service files under src/shadow/resources re-register the
-  // missing providers; kept out of src/main/resources so the published Maven jar is clean.
+  // Under ShadowJar's default EXCLUDE duplicates strategy, mergeServiceFiles() loses
+  // entries when multiple JARs ship a same-named META-INF/services file — the fat JAR
+  // then lacks grpc-core's DnsNameResolverProvider and the gRPC client defaults to the
+  // `unix` scheme on any non-IP hostname. The filesMatching() block below fixes the
+  // merge itself; the static service files under src/shadow/resources additionally
+  // pin the critical grpc providers as a guard against future Shadow regressions.
+  // Kept out of src/main/resources so the published Maven jar is clean.
   val shadowResources = file("src/shadow/resources")
 
   fun ShadowJar.configureFatJar(archiveName: String, mainClass: String) {
     archiveFileName.set(archiveName)
     manifest { attributes("Main-Class" to mainClass) }
     mergeServiceFiles()
+    // ShadowJar's default DuplicatesStrategy (EXCLUDE) drops duplicate entries before the
+    // merging transformers run, so allow duplicates through on the transformer-matched
+    // paths only; everything else keeps first-wins EXCLUDE semantics.
+    filesMatching(listOf("META-INF/services/**", "META-INF/*.kotlin_module")) {
+      duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
     from(mainOutput)
     from(shadowResources)
     configurations.add(runtimeClasspath)

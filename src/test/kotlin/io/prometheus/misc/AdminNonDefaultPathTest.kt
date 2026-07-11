@@ -18,7 +18,8 @@
 
 package io.prometheus.misc
 
-import com.pambrose.common.dsl.KtorDsl.blockingGet
+import com.pambrose.common.dsl.KtorDsl
+import com.pambrose.common.dsl.blockingGet
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
@@ -67,7 +68,7 @@ class AdminNonDefaultPathTest : StringSpec() {
         port shouldBe 8099
         pingPath shouldBe "pingPath2"
 
-        blockingGet("$port/$pingPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$pingPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldStartWith "pong"
         }
@@ -79,7 +80,7 @@ class AdminNonDefaultPathTest : StringSpec() {
         port shouldBe 8099
         versionPath shouldBe "versionPath2"
 
-        blockingGet("$port/$versionPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$versionPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldContain "version"
         }
@@ -90,7 +91,7 @@ class AdminNonDefaultPathTest : StringSpec() {
       proxyConfigVals.admin.apply {
         healthCheckPath shouldBe "healthCheckPath2"
 
-        blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText().length shouldBeGreaterThan 10
         }
@@ -101,7 +102,7 @@ class AdminNonDefaultPathTest : StringSpec() {
       proxyConfigVals.admin.apply {
         threadDumpPath shouldBe "threadDumpPath2"
 
-        blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
           response.bodyAsText().length shouldBeGreaterThan 10
         }
       }
