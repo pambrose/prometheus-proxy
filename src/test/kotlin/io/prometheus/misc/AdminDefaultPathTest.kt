@@ -18,7 +18,8 @@
 
 package io.prometheus.misc
 
-import com.pambrose.common.dsl.KtorDsl.blockingGet
+import com.pambrose.common.dsl.KtorDsl
+import com.pambrose.common.dsl.blockingGet
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
@@ -53,7 +54,7 @@ class AdminDefaultPathTest : StringSpec() {
 
     "proxy ping path should respond with pong" {
       proxyConfigVals.admin.apply {
-        blockingGet("$port/$pingPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$pingPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldStartWith "pong"
         }
@@ -62,7 +63,7 @@ class AdminDefaultPathTest : StringSpec() {
 
     "agent ping path should respond with pong" {
       agentConfigVals.admin.apply {
-        blockingGet("$port/$pingPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$pingPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldStartWith "pong"
         }
@@ -71,7 +72,7 @@ class AdminDefaultPathTest : StringSpec() {
 
     "proxy version path should return version info" {
       agentConfigVals.admin.apply {
-        blockingGet("$port/$versionPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$versionPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldContain "version"
         }
@@ -80,7 +81,7 @@ class AdminDefaultPathTest : StringSpec() {
 
     "agent version path should return version info" {
       agentConfigVals.admin.apply {
-        blockingGet("$port/$versionPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$versionPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldContain "version"
         }
@@ -89,7 +90,7 @@ class AdminDefaultPathTest : StringSpec() {
 
     "proxy health check path should return health status" {
       proxyConfigVals.admin.apply {
-        blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText().length shouldBeGreaterThan 10
         }
@@ -98,7 +99,7 @@ class AdminDefaultPathTest : StringSpec() {
 
     "agent health check path should return health status" {
       agentConfigVals.admin.apply {
-        blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText().length shouldBeGreaterThan 10
         }
@@ -107,7 +108,7 @@ class AdminDefaultPathTest : StringSpec() {
 
     "proxy thread dump path should return thread dump" {
       proxyConfigVals.admin.apply {
-        blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText().length shouldBeGreaterThan 10
         }
@@ -116,7 +117,7 @@ class AdminDefaultPathTest : StringSpec() {
 
     "agent thread dump path should return thread dump" {
       agentConfigVals.admin.apply {
-        blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText().length shouldBeGreaterThan 10
         }

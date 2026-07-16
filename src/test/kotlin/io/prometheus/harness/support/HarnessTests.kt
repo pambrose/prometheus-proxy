@@ -18,7 +18,8 @@
 
 package io.prometheus.harness.support
 
-import com.pambrose.common.dsl.KtorDsl.blockingGet
+import com.pambrose.common.dsl.KtorDsl
+import com.pambrose.common.dsl.blockingGet
 import com.pambrose.common.dsl.KtorDsl.get
 import com.pambrose.common.dsl.KtorDsl.httpClient
 import com.pambrose.common.dsl.KtorDsl.withHttpClient
@@ -126,7 +127,7 @@ internal object HarnessTests {
     try {
       pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
 
-      blockingGet("$proxyPort/$proxyPath".withPrefix()) { response ->
+      KtorDsl.blockingGet("$proxyPort/$proxyPath".withPrefix()) { response ->
         response.status shouldBe HttpStatusCode.RequestTimeout
       }
 

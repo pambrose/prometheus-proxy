@@ -18,7 +18,8 @@
 
 package io.prometheus.misc
 
-import com.pambrose.common.dsl.KtorDsl.blockingGet
+import com.pambrose.common.dsl.KtorDsl
+import com.pambrose.common.dsl.blockingGet
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
@@ -63,7 +64,7 @@ class AdminEmptyPathTest : StringSpec() {
         port shouldBe 8098
         pingPath shouldBe ""
 
-        blockingGet("$port/$pingPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$pingPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.NotFound
         }
       }
@@ -74,7 +75,7 @@ class AdminEmptyPathTest : StringSpec() {
         port shouldBe 8098
         versionPath shouldBe ""
 
-        blockingGet("$port/$versionPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$versionPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.NotFound
         }
       }
@@ -84,7 +85,7 @@ class AdminEmptyPathTest : StringSpec() {
       proxyConfigVals.admin.apply {
         healthCheckPath shouldBe ""
 
-        blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.NotFound
         }
       }
@@ -94,7 +95,7 @@ class AdminEmptyPathTest : StringSpec() {
       proxyConfigVals.admin.apply {
         threadDumpPath shouldBe ""
 
-        blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+        KtorDsl.blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.NotFound
         }
       }

@@ -16,7 +16,8 @@
 
 package io.prometheus.harness.support
 
-import com.pambrose.common.dsl.KtorDsl.blockingGet
+import com.pambrose.common.dsl.KtorDsl
+import com.pambrose.common.dsl.blockingGet
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -39,7 +40,7 @@ internal object BasicHarnessTests {
     caller: String,
   ) {
     logger.debug { "Calling missingPathTest() from $caller" }
-    blockingGet("$proxyPort/".withPrefix()) { response ->
+    KtorDsl.blockingGet("$proxyPort/".withPrefix()) { response ->
       response.status shouldBe HttpStatusCode.NotFound
     }
   }
@@ -49,7 +50,7 @@ internal object BasicHarnessTests {
     caller: String,
   ) {
     logger.debug { "Calling invalidPathTest() from $caller" }
-    blockingGet("$proxyPort/invalid_path".withPrefix()) { response ->
+    KtorDsl.blockingGet("$proxyPort/invalid_path".withPrefix()) { response ->
       response.status shouldBe HttpStatusCode.NotFound
     }
   }
@@ -87,7 +88,7 @@ internal object BasicHarnessTests {
     logger.debug { "Calling invalidAgentUrlTest() from $caller" }
 
     pathManager.registerPath(badPath, "33/metrics".withPrefix())
-    blockingGet("$proxyPort/$badPath".withPrefix()) { response ->
+    KtorDsl.blockingGet("$proxyPort/$badPath".withPrefix()) { response ->
       // Invalid agent URL causes IOException, which should return ServiceUnavailable (503)
       response.status shouldBe HttpStatusCode.ServiceUnavailable
     }

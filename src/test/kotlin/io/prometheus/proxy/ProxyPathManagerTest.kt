@@ -32,6 +32,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
 import io.prometheus.grpc.RegisterAgentRequest
+import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.incrementAndFetch
 import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 
 @Suppress("LargeClass")
@@ -43,9 +45,14 @@ class ProxyPathManagerTest : StringSpec() {
     return proxy
   }
 
+  // Counter-based like AgentContext.AGENT_ID_GENERATOR; a timestamp+random id can collide
+  // when two mocks are created in the same millisecond, and duplicate agentIds make
+  // removeFromPathManager() drop every agent's registrations instead of one agent's.
+  private val agentIdCounter = AtomicLong(0L)
+
   private fun createMockAgentContext(consolidated: Boolean = false): AgentContext {
     val context = mockk<AgentContext>(relaxed = true)
-    val agentId = "agent-${System.currentTimeMillis()}-${(1..1000).random()}"
+    val agentId = "agent-${agentIdCounter.incrementAndFetch()}"
     every { context.agentId } returns agentId
     every { context.consolidated } returns consolidated
     every { context.isNotValid() } returns false
