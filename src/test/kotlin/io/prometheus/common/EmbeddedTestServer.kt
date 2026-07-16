@@ -46,9 +46,12 @@ import kotlin.time.TimeSource.Monotonic
 // The deadline is generous because it is only a ceiling, not a wait: a healthy server satisfies
 // the streak in tens of milliseconds. The extra headroom absorbs CPU contention during a full
 // test-suite run, where many embedded servers and the gRPC harness compete for cores and a fresh
-// CIO server can take several seconds to start answering.
+// CIO server can take several seconds to start answering. Raised to 60s because on heavily loaded /
+// fewer-core machines the 30s ceiling could still be exceeded before the server answered stably;
+// since this only ever delays the return on a struggling server, the extra headroom is free for
+// healthy runs.
 suspend fun EmbeddedServer<*, *>.startAndAwaitReady(
-  timeout: Duration = 30.seconds,
+  timeout: Duration = 60.seconds,
   stableProbes: Int = 3,
 ): Int {
   start(wait = false)
