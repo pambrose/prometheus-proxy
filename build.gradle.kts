@@ -160,6 +160,7 @@ fun Project.configureKotlin() {
   tasks.named<KotlinCompile>("compileKotlin") {
     compilerOptions {
       freeCompilerArgs.add("-Xreturn-value-checker=check")
+      freeCompilerArgs.add("-Xcollection-literals")
     }
   }
 }

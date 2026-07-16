@@ -226,7 +226,7 @@ class Agent(
         logger.info { "Adding /$DEBUG endpoint" }
         addServlet(
           path = DEBUG,
-          servlet = LambdaServlet { listOf(toPlainText(), pathManager.toPlainText()).joinToString("\n") },
+          servlet = LambdaServlet { [toPlainText(), pathManager.toPlainText()].joinToString("\n") },
         )
       }
     }

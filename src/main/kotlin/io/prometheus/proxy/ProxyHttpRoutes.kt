@@ -29,7 +29,6 @@ import io.ktor.http.withCharset
 import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.header
 import io.ktor.server.request.path
-import io.ktor.server.response.header
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
@@ -145,7 +144,7 @@ internal object ProxyHttpRoutes {
         statusCode = HttpStatusCode.ServiceUnavailable,
         contentType = Text.Plain.withCharset(Charsets.UTF_8),
         contentText = "No agents available to handle request",
-        updateMsgs = listOf("no_agents"),
+        updateMsgs = ["no_agents"],
       )
     }
 
@@ -432,5 +431,5 @@ internal data class ResponseResults(
   val statusCode: HttpStatusCode = HttpStatusCode.OK,
   val contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
   val contentText: String = "",
-  val updateMsgs: List<String> = emptyList(),
+  val updateMsgs: List<String> = [],
 )

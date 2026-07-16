@@ -226,11 +226,11 @@ class Proxy(
                 else
                   ""
               }
-            listOf(
+            [
               toPlainText(),
               pathManager.toPlainText(),
               recentReqsText,
-            ).joinToString("\n")
+            ].joinToString("\n")
           },
         )
       } else {
@@ -477,7 +477,7 @@ class Proxy(
     private val RUN_LOOP_PAUSE = 500.milliseconds
 
     // Service-discovery label keys computed by the proxy; agent-supplied labels must not overwrite them.
-    private val RESERVED_SD_LABEL_KEYS = setOf("__metrics_path__", "agentName", "hostName")
+    private val RESERVED_SD_LABEL_KEYS: Set<String> = ["__metrics_path__", "agentName", "hostName"]
 
     /**
      * JVM entry point for the standalone Proxy process.
