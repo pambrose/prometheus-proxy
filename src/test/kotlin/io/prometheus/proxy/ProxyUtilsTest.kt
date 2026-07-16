@@ -35,6 +35,7 @@ import io.ktor.server.routing.routing
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.common.startAndAwaitReady
 import io.prometheus.proxy.ProxyUtils.respondWith
 import io.prometheus.proxy.ProxyUtils.unzip
 import io.ktor.server.cio.CIO as ServerCIO
@@ -158,10 +159,10 @@ class ProxyUtilsTest : StringSpec() {
             call.respondWith("test content")
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-respond")
@@ -184,10 +185,10 @@ class ProxyUtilsTest : StringSpec() {
             )
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-json")
@@ -207,10 +208,10 @@ class ProxyUtilsTest : StringSpec() {
             call.respondWith("error", status = HttpStatusCode.ServiceUnavailable)
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-error")
@@ -230,10 +231,10 @@ class ProxyUtilsTest : StringSpec() {
             call.respondWith("content", status = HttpStatusCode.NotFound)
           }
         }
-      }.start(wait = false)
+      }
 
       try {
-        val port = server.engine.resolvedConnectors().first().port
+        val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
         val response = client.get("http://localhost:$port/test-bug14")
