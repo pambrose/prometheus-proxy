@@ -27,12 +27,10 @@ import io.mockk.mockk
 import io.prometheus.Agent
 import io.prometheus.client.CollectorRegistry
 import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 // Tests for AgentMetrics which manages Prometheus metrics for the agent component.
 // Metrics include counters for scrape requests and results, connect counts,
 // and gauges for backlog and cache sizes.
-@OptIn(ExperimentalAtomicApi::class)
 class AgentMetricsTest : StringSpec() {
   private fun createMockAgent(): Agent {
     val mockHttpClientCache = mockk<HttpClientCache>(relaxed = true)
