@@ -539,7 +539,8 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       // It should return 502 Bad Gateway because failScrapeRequest uses that code
       response.statusCode shouldBe HttpStatusCode.BadGateway
-      response.updateMsg shouldBe "path_not_found" // assigned by failScrapeRequest
+      // 502 maps to upstream_error (finding 10): a disconnect/bad-gateway is not a path-not-found.
+      response.updateMsg shouldBe "upstream_error"
     }
 
     "submitScrapeRequest should unblock immediately when proxy is shut down" {
@@ -563,7 +564,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       )
 
       response.statusCode shouldBe HttpStatusCode.BadGateway
-      response.updateMsg shouldBe "path_not_found"
+      response.updateMsg shouldBe "upstream_error"
     }
 
     "submitScrapeRequest should return success for valid non-zipped response" {
@@ -732,7 +733,52 @@ class ProxyHttpRoutesTest : StringSpec() {
       response.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
     }
 
-    "submitScrapeRequest should return path_not_found for non-success status" {
+    // Finding 10: a non-2xx upstream status must map to a label that reflects the cause, so operators
+    // can tell a down target, a timeout, an oversized payload, and a truly unknown path apart -- instead
+    // of every failure being labeled path_not_found.
+    "Finding 10: upstreamErrorLabel maps status codes to distinct labels" {
+      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.NotFound) shouldBe "path_not_found"
+      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.RequestTimeout) shouldBe "timed_out"
+      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.GatewayTimeout) shouldBe "timed_out"
+      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.PayloadTooLarge) shouldBe "content_too_large"
+      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.InternalServerError) shouldBe "upstream_error"
+      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.BadGateway) shouldBe "upstream_error"
+      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.ServiceUnavailable) shouldBe "upstream_error"
+    }
+
+    "Finding 10: submitScrapeRequest labels a 500 upstream response upstream_error" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
+      val agentContext = AgentContext("test-remote")
+
+      launch {
+        val wrapper = agentContext.readScrapeRequest()!!
+        val results = ScrapeResults(
+          srAgentId = agentContext.agentId,
+          srScrapeId = wrapper.scrapeId,
+          srValidResponse = false,
+          srStatusCode = 500,
+          srContentType = "text/plain; charset=utf-8",
+          srFailureReason = "Internal Server Error",
+          srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
+        )
+        proxy.scrapeRequestManager.assignScrapeResults(results)
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      response.statusCode shouldBe HttpStatusCode.InternalServerError
+      response.updateMsg shouldBe "upstream_error"
+      response.failureReason shouldBe "Internal Server Error"
+      response.contentText shouldBe ""
+    }
+
+    "submitScrapeRequest should return path_not_found for a 404 (unregistered path) status" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
 

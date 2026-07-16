@@ -91,7 +91,7 @@ internal class HttpClientCache(
             logger.error(e) { "Error during HTTP client cache cleanup" }
             emptyList()
           }
-        clientsToClose.forEach { it.close() }
+        clientsToClose.forEach { closeQuietly(it) }
       }
     }
   }
@@ -213,7 +213,7 @@ internal class HttpClientCache(
         result to drainPendingCloses()
       }
 
-    clientsToClose.forEach { it.close() }
+    clientsToClose.forEach { closeQuietly(it) }
     return entry
   }
 
@@ -225,7 +225,7 @@ internal class HttpClientCache(
       entry.onDoneWithClient()
     }
     if (shouldClose) {
-      entry.client.close()
+      closeQuietly(entry.client)
     }
   }
 
@@ -334,7 +334,7 @@ internal class HttpClientCache(
       closed = true
     }
     // Close clients outside the lock to avoid blocking
-    clientsToClose.forEach { it.close() }
+    clientsToClose.forEach { closeQuietly(it) }
   }
 
   suspend fun getCacheStats(): CacheStats =
@@ -356,5 +356,14 @@ internal class HttpClientCache(
 
   companion object {
     private val logger = logger {}
+
+    // Closes a client, swallowing and logging any failure so it can never propagate. Critical for the
+    // background sweeper loop: a throwing HttpClient.close() there would break out of the while(isActive)
+    // loop and kill the sweeper permanently, leaking every future expired client (finding 9). At the
+    // batch-close sites it also keeps one bad close() from aborting the remaining closes.
+    internal fun closeQuietly(client: HttpClient) {
+      runCatching { client.close() }
+        .onFailure { e -> logger.warn(e) { "Error closing HTTP client: ${e.message}" } }
+    }
   }
 }

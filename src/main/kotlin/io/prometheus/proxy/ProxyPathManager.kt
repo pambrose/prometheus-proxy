@@ -79,12 +79,23 @@ internal class ProxyPathManager(
     return multiSegmentPathError(path) ?: addValidatedPath(path, labels, agentContext)
   }
 
+  @Suppress("ReturnCount")
   private fun addValidatedPath(
     path: String,
     labels: String,
     agentContext: AgentContext,
   ): String? {
     synchronized(pathMap) {
+      // Re-check validity inside the lock: agent removal (transportTerminated / cleanup eviction) can
+      // interleave between the caller's out-of-lock getAgentContext() check and here, invalidating the
+      // context. Inserting a path for an invalidated context creates a permanently-dead path that no
+      // cleanup sweeps, so reject it and let the agent re-register on reconnect (finding 7).
+      if (agentContext.isNotValid()) {
+        val reason = "Agent context ${agentContext.agentId} was invalidated during registration of /$path"
+        logger.warn { reason }
+        return reason
+      }
+
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
         if (agentInfo == null) {
@@ -194,41 +205,42 @@ internal class ProxyPathManager(
   ) {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
-    val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-    if (agentContext == null) {
+    if (proxy.agentContextManager.getAgentContext(agentId) == null)
       logger.debug { "Agent context already removed for agentId: $agentId ($reason)" }
-    } else {
+    else
       logger.info { "Removing paths for agentId: $agentId ($reason)" }
 
-      synchronized(pathMap) {
-        // Collect map mutations in a first pass to avoid modifying the map during iteration.
-        val keysToRemove = mutableListOf<String>()
-        val keysToUpdate = mutableMapOf<String, AgentContextInfo>()
-        pathMap.forEach { (k, v) ->
-          if (v.agentContexts.size == 1) {
-            if (v.agentContexts[0].agentId == agentId)
+    // Always sweep the pathMap by agentId, even when the context is already gone from the manager: a
+    // registerPath that raced this removal can strand a path pointing at an invalidated context, and
+    // skipping the sweep would leave that path 404ing forever (finding 7).
+    synchronized(pathMap) {
+      // Collect map mutations in a first pass to avoid modifying the map during iteration.
+      val keysToRemove = mutableListOf<String>()
+      val keysToUpdate = mutableMapOf<String, AgentContextInfo>()
+      pathMap.forEach { (k, v) ->
+        if (v.agentContexts.size == 1) {
+          if (v.agentContexts[0].agentId == agentId)
+            keysToRemove += k
+        } else {
+          val filtered = v.agentContexts.filterNot { it.agentId == agentId }
+          if (filtered.size != v.agentContexts.size) {
+            logger.info { "Removed agentId $agentId from consolidated path /$k" }
+            if (filtered.isEmpty())
               keysToRemove += k
-          } else {
-            val filtered = v.agentContexts.filterNot { it.agentId == agentId }
-            if (filtered.size != v.agentContexts.size) {
-              logger.info { "Removed agentId $agentId from consolidated path /$k" }
-              if (filtered.isEmpty())
-                keysToRemove += k
-              else
-                keysToUpdate[k] = v.copy(agentContexts = filtered)
-            }
+            else
+              keysToUpdate[k] = v.copy(agentContexts = filtered)
           }
         }
+      }
 
-        keysToUpdate.forEach { (k, v) -> pathMap[k] = v }
+      keysToUpdate.forEach { (k, v) -> pathMap[k] = v }
 
-        keysToRemove.forEach { k ->
-          pathMap.remove(k)
-            ?.also {
-              if (!isTestMode)
-                logger.info { "Removed path /$k for $it" }
-            } ?: logger.warn { "Missing ${agentContext.desc}path /$k for agentId: $agentId" }
-        }
+      keysToRemove.forEach { k ->
+        pathMap.remove(k)
+          ?.also {
+            if (!isTestMode)
+              logger.info { "Removed path /$k for $it" }
+          } ?: logger.warn { "Missing path /$k for agentId: $agentId" }
       }
     }
   }

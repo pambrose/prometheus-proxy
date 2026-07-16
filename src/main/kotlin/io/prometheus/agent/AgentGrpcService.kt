@@ -190,8 +190,11 @@ internal class AgentGrpcService(
     grpcLock.withLock {
       logger.info { "Creating gRPC stubs" }
 
+      // Only tear down the channel on reconnect, NOT tracing: tracing/grpcTracing are one-shot lazy
+      // fields, so closing tracing here would leave every channel built after the first reconnect
+      // intercepting over a closed Tracing. tracing is closed once, in the final shutDown() (finding 8).
       if (grpcStarted)
-        shutDownLocked()
+        shutDownChannelLocked()
 
       channel =
         channel(

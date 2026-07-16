@@ -271,6 +271,36 @@ class AgentOptionsTest : StringSpec() {
 
     // ==================== Validation Tests ====================
 
+    // Finding 11: config values used in arithmetic/capacity must be validated. reconnectPauseSecs feeds
+    // RateLimiter.create(1.0 / reconnectPauseSecs) (0 -> infinite rate), scrapeRequestBacklogUnhealthySize
+    // * 2 is the connection channel capacity (0 -> rendezvous channel), and a negative minGzipSizeBytes
+    // would gzip everything.
+    "Finding 11: reconnectPauseSecs of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(listOf("--name", "test", "--proxy", "host", "-Dagent.internal.reconnectPauseSecs=0"), false)
+      }
+    }
+
+    "Finding 11: scrapeRequestBacklogUnhealthySize of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(
+          listOf("--name", "test", "--proxy", "host", "-Dagent.internal.scrapeRequestBacklogUnhealthySize=0"),
+          false,
+        )
+      }
+    }
+
+    "Finding 11: minGzipSizeBytes of -1 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        AgentOptions(listOf("--name", "test", "--proxy", "host", "-Dagent.minGzipSizeBytes=-5"), false)
+      }
+    }
+
+    "Finding 11: minGzipSizeBytes of 0 should be accepted (gzip every non-empty payload)" {
+      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "-Dagent.minGzipSizeBytes=0"), false)
+      options.minGzipSizeBytes shouldBe 0
+    }
+
     "maxConcurrentHttpClients of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
         AgentOptions(

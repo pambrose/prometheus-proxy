@@ -425,12 +425,22 @@ class Agent(
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) {
     val cfg = agentConfigVals.internal
+    val heartbeatPauseTime = cfg.heartbeatCheckPauseMillis.milliseconds
+
     if (!cfg.heartbeatEnabled) {
       logger.info { "Heartbeat disabled" }
+      // Stay alive for the connection's lifetime instead of returning: launchConnectionTask treats any
+      // task's completion as a disconnect and closes the shared connectionContext, so returning here would
+      // close the context right after connect -- the first scrape then hits a ClosedSendChannelException
+      // and the agent flaps, dropping its paths (finding 6). Poll connected (rather than awaitCancellation,
+      // which nothing cancels here) so the task still ends promptly once the connection actually closes.
+      while (isRunning && connectionContext.connected) {
+        delay(heartbeatPauseTime)
+      }
+      logger.info { "Heartbeat (disabled) completed" }
       return
     }
 
-    val heartbeatPauseTime = cfg.heartbeatCheckPauseMillis.milliseconds
     val maxInactivityTime = cfg.heartbeatMaxInactivitySecs.seconds
     logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
 

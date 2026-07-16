@@ -269,6 +269,14 @@ class ProxyOptions(
             "internal.maxUnzippedContentSizeMBytes must be >= 0: ${internal.maxUnzippedContentSizeMBytes}"
           }
           logger.info { "internal.maxUnzippedContentSizeMBytes: ${internal.maxUnzippedContentSizeMBytes}" }
+
+          // maxZippedContentSizeMBytes is used in chunked-transfer size math; mirror its sibling above
+          // (0 is a valid reject-all limit, negatives are invalid) so a bad value fails fast at startup
+          // instead of surfacing as a confusing ChunkValidationException per transfer (finding 11).
+          require(internal.maxZippedContentSizeMBytes >= 0) {
+            "internal.maxZippedContentSizeMBytes must be >= 0: ${internal.maxZippedContentSizeMBytes}"
+          }
+          logger.info { "internal.maxZippedContentSizeMBytes: ${internal.maxZippedContentSizeMBytes}" }
         }
 
         // Resolved after assignCommonOptions so trustCertCollectionFilePath reflects the CLI/env/config value.

@@ -418,9 +418,11 @@ class ProxyPathManagerTest : StringSpec() {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
-      every { context.isNotValid() } returns true
 
+      // Register while valid, then the agent becomes invalid (disconnect/eviction) while the path is
+      // still mapped -- addValidatedPath now rejects an already-invalid context (finding 7, Fix 1).
       manager.addPath("/metrics", """{"job":"test"}""", context)
+      every { context.isNotValid() } returns true
 
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
@@ -449,11 +451,13 @@ class ProxyPathManagerTest : StringSpec() {
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
       val context2 = createMockAgentContext(consolidated = true)
-      every { context1.isNotValid() } returns true
-      every { context2.isNotValid() } returns true
 
+      // Register both while valid, then both agents become invalid (finding 7, Fix 1 rejects adding an
+      // already-invalid context, so invalidate after registration).
       manager.addPath("/metrics", """{"job":"test"}""", context1)
       manager.addPath("/metrics", """{"job":"test"}""", context2)
+      every { context1.isNotValid() } returns true
+      every { context2.isNotValid() } returns true
 
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
@@ -467,11 +471,12 @@ class ProxyPathManagerTest : StringSpec() {
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
       val context2 = createMockAgentContext(consolidated = true)
-      every { context1.isNotValid() } returns true
-      every { context2.isNotValid() } returns false
 
+      // Register both while valid, then only context1 becomes invalid (finding 7, Fix 1).
       manager.addPath("/metrics", """{"job":"test"}""", context1)
       manager.addPath("/metrics", """{"job":"test"}""", context2)
+      every { context1.isNotValid() } returns true
+      every { context2.isNotValid() } returns false
 
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
@@ -605,6 +610,45 @@ class ProxyPathManagerTest : StringSpec() {
 
       // Should not throw
       manager.removeFromPathManager("missing-agent", "disconnect")
+    }
+
+    // Finding 7: registerPath checks the agent context validity outside the pathMap lock, so agent
+    // removal can interleave and leave a path pointing at an invalidated context that no cleanup sweeps.
+    // Fix 1: addValidatedPath re-checks validity inside the lock and rejects an invalidated context.
+    "Finding 7: addPath should reject an already-invalidated agent context" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+      // Simulate the context being invalidated by a racing removal between the caller's check and here.
+      every { context.isNotValid() } returns true
+
+      val reason = manager.addPath("/metrics", """{"job":"test"}""", context)
+
+      reason.shouldNotBeNull()
+      reason shouldContain "invalidated"
+      manager.pathMapSize shouldBe 0
+      manager.getAgentContextInfo("/metrics").shouldBeNull()
+    }
+
+    // Fix 2: removeFromPathManager sweeps the pathMap by agentId even when the context is already gone
+    // from the manager, so a path stranded by the race above is still cleaned up.
+    "Finding 7: removeFromPathManager sweeps a stranded path even when the context is gone" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+      val agentId = context.agentId
+
+      manager.addPath("/metrics", """{"job":"test"}""", context)
+      manager.pathMapSize shouldBe 1
+
+      // The context has already been removed from the manager (raced disconnect).
+      every { proxy.agentContextManager.getAgentContext(agentId) } returns null
+      proxy.agentContextManager.getAgentContext(agentId).shouldBeNull()
+
+      manager.removeFromPathManager(agentId, "disconnect")
+
+      manager.pathMapSize shouldBe 0
+      manager.getAgentContextInfo("/metrics").shouldBeNull()
     }
 
     // ==================== getAgentContextInfo Defensive Copy ====================

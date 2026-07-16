@@ -18,7 +18,9 @@
 
 package io.prometheus.agent
 
+import brave.Tracing
 import com.pambrose.common.concurrent.await
+import com.pambrose.common.service.ZipkinReporterService
 import com.pambrose.common.util.zip
 import io.grpc.Metadata
 import io.kotest.assertions.throwables.shouldNotThrow
@@ -33,6 +35,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
@@ -475,6 +478,32 @@ class AgentGrpcServiceTest : StringSpec() {
       newChannel.isTerminated.shouldBeFalse()
 
       service.shutDown()
+    }
+
+    // ==================== Finding 8: Zipkin tracing lifecycle across reconnects ====================
+
+    // tracing/grpcTracing are one-shot lazy fields. resetGrpcStubs() runs on every reconnect and must
+    // NOT close tracing, or every channel built after the first reconnect installs an interceptor over
+    // a closed Tracing and tracing silently dies for the rest of the agent's life. tracing must be
+    // closed only by the final shutDown().
+    "Finding 8: tracing survives reconnects and is closed only on final shutDown" {
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      every { agent.isZipkinEnabled } returns true
+      val tracing = spyk(Tracing.newBuilder().build())
+      val zipkinService = mockk<ZipkinReporterService>(relaxed = true)
+      every { agent.zipkinReporterService } returns zipkinService
+      every { zipkinService.newTracing(any()) } returns tracing
+
+      // Construction builds the first channel, installing the tracing interceptor (creating `tracing`).
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // Each reconnect swaps the channel but must NOT close the one-shot tracing.
+      repeat(3) { service.resetGrpcStubs() }
+      verify(exactly = 0) { tracing.close() }
+
+      // Only the final shutDown closes tracing.
+      service.shutDown()
+      verify(exactly = 1) { tracing.close() }
     }
 
     // ==================== Concurrent shutDown / resetGrpcStubs Tests ====================
