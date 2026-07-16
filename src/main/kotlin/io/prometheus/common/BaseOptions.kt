@@ -239,6 +239,20 @@ abstract class BaseOptions protected constructor(
   protected fun parseOptions() {
     cliArgs = args
 
+    // exitProcess() would kill an embedding host's JVM, defeating exitOnMissingConfig == false whose
+    // documented purpose is letting embedded hosts survive startup failures. In embedded mode, throw a
+    // catchable ConfigLoadException instead; standalone CLI keeps the exit-code behavior. Mirrors the
+    // same policy already used by readConfig() below.
+    fun exitOrThrow(
+      exitCode: Int,
+      message: String,
+      cause: Throwable? = null,
+    ): Nothing =
+      if (exitOnMissingConfig)
+        exitProcess(exitCode)
+      else
+        throw ConfigLoadException(message, cause)
+
     fun parseArgs(args: Array<String>?) {
       try {
         val jcom =
@@ -251,16 +265,16 @@ abstract class BaseOptions protected constructor(
 
         if (usage) {
           jcom.usage()
-          exitProcess(0)
+          exitOrThrow(0, "Usage requested via -u/--usage")
         }
 
         if (version) {
           jcom.console.println(Utils.getVersionDesc(false))
-          exitProcess(0)
+          exitOrThrow(0, "Version requested via -v/--version")
         }
       } catch (e: ParameterException) {
         logger.error(e) { e.message }
-        exitProcess(1)
+        exitOrThrow(1, e.message ?: "Invalid command-line options", e)
       }
     }
 

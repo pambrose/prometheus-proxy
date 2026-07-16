@@ -1037,6 +1037,63 @@ class AgentHttpServiceTest : StringSpec() {
       }
     }
 
+    // ==================== Finding 4: JVM Errors must not be swallowed into 503 results ====================
+
+    // The scrape path catches Throwable and converts failures into a routine failure ScrapeResults.
+    // A JVM Error (OutOfMemoryError, StackOverflowError, ...) means the process is in a corrupted state
+    // and must propagate so the agent terminates rather than continuing to "scrape" -- mirroring the
+    // Error-rethrow policy already enforced in Agent.handleConnectionFailure() and connectAgent().
+
+    "Finding 4: fetchScrapeUrl should rethrow OutOfMemoryError instead of returning a failure result" {
+      val mockAgent = createMockAgentWithPaths()
+      val service = AgentHttpService(mockAgent)
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+
+      val request = scrapeRequest {
+        agentId = "agent-1"
+        scrapeId = 73L
+        path = "metrics"
+      }
+
+      val spiedService = spyk(service)
+      coEvery {
+        spiedService.fetchContent(any<String>(), any())
+      } coAnswers {
+        throw OutOfMemoryError("test OOM")
+      }
+
+      io.kotest.assertions.throwables.shouldThrow<OutOfMemoryError> {
+        spiedService.fetchScrapeUrl(request)
+      }
+
+      service.close()
+    }
+
+    "Finding 4: fetchScrapeUrl should rethrow StackOverflowError instead of returning a failure result" {
+      val mockAgent = createMockAgentWithPaths()
+      val service = AgentHttpService(mockAgent)
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+
+      val request = scrapeRequest {
+        agentId = "agent-1"
+        scrapeId = 74L
+        path = "metrics"
+      }
+
+      val spiedService = spyk(service)
+      coEvery {
+        spiedService.fetchContent(any<String>(), any())
+      } coAnswers {
+        throw StackOverflowError("test stack overflow")
+      }
+
+      io.kotest.assertions.throwables.shouldThrow<StackOverflowError> {
+        spiedService.fetchScrapeUrl(request)
+      }
+
+      service.close()
+    }
+
     // ==================== Bug #3: Retry timeout bounded by scrapeTimeoutSecs ====================
 
     "Bug #3: total fetch time should be bounded by scrapeTimeoutSecs despite retries" {

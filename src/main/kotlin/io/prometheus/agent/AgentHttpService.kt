@@ -136,6 +136,12 @@ internal class AgentHttpService(
           throw e
         }
 
+        // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.) so the agent terminates
+        // instead of swallowing them into a routine 503 result and running in a corrupted state.
+        // Mirrors the Error-rethrow policy at Agent.handleConnectionFailure() and connectAgent().
+        if (e is Error)
+          throw e
+
         ScrapeResults(
           srAgentId = req.agentId,
           srScrapeId = req.scrapeId,

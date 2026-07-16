@@ -19,11 +19,8 @@
 package io.prometheus.agent
 
 import com.pambrose.common.concurrent.await
-import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.zip
 import io.grpc.Metadata
-import io.grpc.Status
-import io.grpc.StatusRuntimeException
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -597,8 +594,9 @@ class AgentGrpcServiceTest : StringSpec() {
       service.grpcStub = mockStub
       service.unaryDeadlineSecs = 0
 
-      service.sendHeartBeat()
+      val result = service.sendHeartBeat()
 
+      result shouldBe HeartBeatResult.SUCCESS
       coVerify(exactly = 0) { mockStub.sendHeartBeat(any(), any<Metadata>()) }
       service.shutDown()
     }
@@ -612,8 +610,9 @@ class AgentGrpcServiceTest : StringSpec() {
       service.grpcStub = mockStub
       service.unaryDeadlineSecs = 0
 
-      service.sendHeartBeat()
+      val result = service.sendHeartBeat()
 
+      result shouldBe HeartBeatResult.SUCCESS
       coVerify { mockStub.sendHeartBeat(match { it.agentId == "test-agent-123" }, any<Metadata>()) }
       service.shutDown()
     }
@@ -867,7 +866,7 @@ class AgentGrpcServiceTest : StringSpec() {
 
     // ==================== sendHeartBeat Error Handling Tests ====================
 
-    "sendHeartBeat should throw StatusRuntimeException with NOT_FOUND when proxy evicts agent" {
+    "sendHeartBeat should return EVICTED when the proxy reports the agent invalid" {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -879,58 +878,29 @@ class AgentGrpcServiceTest : StringSpec() {
       service.grpcStub = mockStub
       service.unaryDeadlineSecs = 0
 
-      // Before the fix, NOT_FOUND was silently swallowed, causing the agent to enter
-      // a zombie state where it kept sending failing heartbeats without reconnecting.
-      // After the fix, NOT_FOUND is re-thrown so it propagates to startHeartBeat(),
-      // triggering connectionContext.close() and forcing a reconnect.
-      val exception = shouldThrow<StatusRuntimeException> {
-        service.sendHeartBeat()
-      }
-      exception.status.code shouldBe Status.Code.NOT_FOUND
+      // An invalid response means the proxy evicted this agent's context. sendHeartBeat classifies it
+      // as EVICTED so startHeartBeat() tears the connection down and reconnects, instead of swallowing
+      // it into a zombie state (finding 2).
+      service.sendHeartBeat() shouldBe HeartBeatResult.EVICTED
 
       service.shutDown()
     }
 
-    "sendHeartBeat NOT_FOUND should trigger connectionContext close via invokeOnCompletion" {
-      // This test simulates the full reconnection path: sendHeartBeat throws NOT_FOUND,
-      // which propagates through startHeartBeat, causing the launch's invokeOnCompletion
-      // to close the connectionContext, which terminates all other coroutines.
+    "sendHeartBeat should return SUCCESS when the proxy validates the heartbeat" {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse {
-        valid = false
-        reason = "Agent not found"
-      }
+      coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse { valid = true }
       service.grpcStub = mockStub
       service.unaryDeadlineSecs = 0
 
-      val connectionContext = AgentConnectionContext()
-      connectionContext.connected.shouldBeTrue()
-
-      // Simulate the pattern from Agent.connectToProxy(): launch with invokeOnCompletion
-      coroutineScope {
-        launch {
-          runCatchingCancellable {
-            // Simulate startHeartBeat loop — calls sendHeartBeat which throws NOT_FOUND
-            service.sendHeartBeat()
-          }.onFailure { e ->
-            // This mirrors the error handler in Agent.connectToProxy()
-            // The exception propagated, which is what we want
-          }
-        }.apply {
-          invokeOnCompletion { connectionContext.close() }
-        }
-      }
-
-      // connectionContext should be closed, which would cause the agent to reconnect
-      connectionContext.connected.shouldBeFalse()
+      service.sendHeartBeat() shouldBe HeartBeatResult.SUCCESS
 
       service.shutDown()
     }
 
-    "sendHeartBeat should handle generic exception without throwing" {
+    "sendHeartBeat should return TRANSIENT_FAILURE on an RPC exception without throwing" {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -939,8 +909,9 @@ class AgentGrpcServiceTest : StringSpec() {
       service.grpcStub = mockStub
       service.unaryDeadlineSecs = 0
 
-      // Should not throw - error is caught internally and logged
-      service.sendHeartBeat()
+      // A transient RPC failure is classified (not thrown) so the caller can tolerate a bounded number
+      // of consecutive failures before forcing a reconnect (finding 2).
+      service.sendHeartBeat() shouldBe HeartBeatResult.TRANSIENT_FAILURE
 
       service.shutDown()
     }
