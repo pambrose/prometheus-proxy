@@ -63,12 +63,19 @@ internal class ScrapeRequestWrapper(
 
   fun ageDuration() = createTimeMark.elapsedNow()
 
-  fun markComplete() {
+  // Publishes [results] and completes the request, but ONLY if this call wins the completion CAS. Folding
+  // the result write and the completion flag together means a losing racer (e.g. failScrapeRequest racing
+  // a real assignScrapeResults) can't clobber the winning result before the HTTP handler reads it
+  // (finding 16). The volatile scrapeResults write happens-before closeChannel(), which unblocks
+  // awaitCompleted(). Returns true if this call completed the request.
+  fun complete(results: ScrapeResults): Boolean =
     if (completed.compareAndSet(expectedValue = false, newValue = true)) {
-      // Required
+      scrapeResults = results
       closeChannel()
+      true
+    } else {
+      false
     }
-  }
 
   fun closeChannel() {
     completeChannel.close()

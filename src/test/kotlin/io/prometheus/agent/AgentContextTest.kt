@@ -217,8 +217,8 @@ class AgentContextTest : StringSpec() {
       // isValid should be false
       context.isValid().shouldBeFalse()
 
-      // closeChannel was called on the drained wrapper
-      verify(exactly = 1) { mockRequest.closeChannel() }
+      // The drained wrapper is failed with an agent-disconnected result via complete() (finding 15).
+      verify(exactly = 1) { mockRequest.complete(any()) }
     }
 
     "markActivityTime should reset inactivity duration" {

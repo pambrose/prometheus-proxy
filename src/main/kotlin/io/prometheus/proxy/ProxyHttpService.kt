@@ -53,7 +53,9 @@ internal class ProxyHttpService(
   isTestMode: Boolean,
 ) : GenericIdleService() {
   private val idleTimeout =
-    with(proxy.proxyConfigVals.http) { (if (idleTimeoutSecs == -1) 45 else idleTimeoutSecs).seconds }
+    with(proxy.proxyConfigVals.http) {
+      (if (idleTimeoutSecs == -1) DEFAULT_IDLE_TIMEOUT_SECS else idleTimeoutSecs).seconds
+    }
 
   private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
@@ -73,11 +75,6 @@ internal class ProxyHttpService(
       routing {
         handleRequests(proxy)
       }
-
-//      EmbeddedServer.monitor.subscribe(ApplicationStarted) {
-//        // This runs when Ktor signals the application has started
-//        println("Ktor application started")
-//      }
     }
 
   init {
@@ -92,12 +89,14 @@ internal class ProxyHttpService(
     if (proxy.isZipkinEnabled)
       tracing.close()
     httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
-    // sleep(2.seconds)
   }
 
   override fun toString() = toStringElements { add("port", httpPort) }
 
   companion object {
     private val logger = logger {}
+
+    // Fallback Ktor server idle timeout (seconds) used when http.idleTimeoutSecs is the -1 sentinel (finding 28).
+    private const val DEFAULT_IDLE_TIMEOUT_SECS = 45
   }
 }

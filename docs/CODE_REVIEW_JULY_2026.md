@@ -38,35 +38,35 @@ embedded host JVMs.
 | 11 | Config-value validation gaps (`reconnectPauseSecs`, backlog capacity, zipped size, gzip min) | medium | ✅ |
 | 12 | `submitScrapeRequest` is a ~125-line god method with `.also { return }` control flow | medium | ✅ |
 | 13 | `sendHeartBeat` error handling: ERROR noise, lost stack traces, exception-as-goto | medium | ✅ (via finding 2) |
-| 14 | Polled scrape request lost on stream-only RPC cancellation | low | ⬜ |
-| 15 | Disconnect-vs-submit races mislabel agent-disconnect results as `timed_out` | low | ⬜ |
-| 16 | `scrapeResults` write not atomic with completion CAS — fail can clobber a real result | low | ⬜ |
-| 17 | Chunked HEADER check-then-act buffers a transfer nobody awaits | low | ⬜ |
-| 18 | `closeAll()` discards drained count → inflated backlog gauge until reconnect | low | ⬜ |
-| 19 | `AgentPathManager` RPC+map updates not atomic; `clear()` bypasses the mutex | low | ⬜ |
-| 20 | Ignored `awaitTermination` → stale agentId can poison the next connection | low | ⬜ |
-| 21 | Routine client errors and normal shutdown logged at ERROR | low | ⬜ |
-| 22 | `handleConnectionFailure` discards the gRPC status | low | ⬜ |
-| 23 | Stream-failure logging block duplicated four times (already drifted) | low | ⬜ |
-| 24 | `http_client_cache_size_check` health check is unreachable | low | ⬜ |
-| 25 | Hand-rolled LRU: `ConcurrentHashMap` under a mutex + parallel recency map | low | ⬜ |
-| 26 | Public API leaks beyond the documented surface | low | ⬜ |
-| 27 | Commented-out code remnants (one comment contradicts the line below it) | low | ⬜ |
-| 28 | Magic numbers (idle timeout, backlog multiplier, retry delays, grace periods) | low | ⬜ |
-| 29 | Duplicate `Cache-Control` header on every scrape response | low | ⬜ |
-| 30 | Doubled exception rendering in scrape-failure warn logging | low | ⬜ |
-| 31 | Dead parameter flexibility (`parseArgs(Array<String>?)`, unused `backlogCapacity` default) | low | ⬜ |
-| 32 | Cleanup-service gating predicate duplicated between `startUp`/`shutDown` | low | ⬜ |
-| 33 | `HttpClientCache` uses epoch millis instead of monotonic `TimeMark`s | idiom | ⬜ |
-| 34 | Two hand-rolled cause-chain walks with different exception sets (drifted) | idiom | ⬜ |
-| 35 | The `-1`-sentinel resolve/validate/log stanza copy-pasted ~25× | idiom | ⬜ |
-| 36 | Scope-function misuse cluster (`apply` receiver smuggling, consumer `apply`, shadowing) | idiom | ⬜ |
-| 37 | `readConfig` control flow: nullable `Throwable` + non-local returns from `runCatching` | idiom | ⬜ |
-| 38 | Manual CAS loop in `decrementBacklog` — stdlib `update` now exists | idiom | ⬜ |
-| 39 | `mergeContentTexts`: `var` flag mutated inside `map` + repeated `"# EOF"` literal | idiom | ⬜ |
-| 40 | `reconnectLimiter` split declaration/`init`-assignment | idiom | ⬜ |
-| 41 | Manual `while(true)/poll/break` drain loops | idiom | ⬜ |
-| 42 | Scheme-stripping `when` reducible to `removePrefix` chain (+ case-sensitivity gap) | idiom | ⬜ |
+| 14 | Polled scrape request lost on stream-only RPC cancellation | low | ✅ |
+| 15 | Disconnect-vs-submit races mislabel agent-disconnect results as `timed_out` | low | ✅ |
+| 16 | `scrapeResults` write not atomic with completion CAS — fail can clobber a real result | low | ✅ |
+| 17 | Chunked HEADER check-then-act buffers a transfer nobody awaits | low | ⬜ (deferred — optional, self-healing/size-capped) |
+| 18 | `closeAll()` discards drained count → inflated backlog gauge until reconnect | low | ✅ |
+| 19 | `AgentPathManager` RPC+map updates not atomic; `clear()` bypasses the mutex | low | ✅ |
+| 20 | Ignored `awaitTermination` → stale agentId can poison the next connection | low | ✅ (awaitTermination logged; interceptor-generation token deferred) |
+| 21 | Routine client errors and normal shutdown logged at ERROR | low | ✅ |
+| 22 | `handleConnectionFailure` discards the gRPC status | low | ✅ |
+| 23 | Stream-failure logging block duplicated four times (already drifted) | low | ✅ |
+| 24 | `http_client_cache_size_check` health check is unreachable | low | ✅ |
+| 25 | Hand-rolled LRU: `ConcurrentHashMap` under a mutex + parallel recency map | low | ✅ |
+| 26 | Public API leaks beyond the documented surface | low | ✅ |
+| 27 | Commented-out code remnants (one comment contradicts the line below it) | low | ✅ |
+| 28 | Magic numbers (idle timeout, backlog multiplier, retry delays, grace periods) | low | ✅ |
+| 29 | Duplicate `Cache-Control` header on every scrape response | low | ✅ |
+| 30 | Doubled exception rendering in scrape-failure warn logging | low | ✅ |
+| 31 | Dead parameter flexibility (`parseArgs(Array<String>?)`, unused `backlogCapacity` default) | low | ✅ |
+| 32 | Cleanup-service gating predicate duplicated between `startUp`/`shutDown` | low | ✅ |
+| 33 | `HttpClientCache` uses epoch millis instead of monotonic `TimeMark`s | idiom | ✅ |
+| 34 | Two hand-rolled cause-chain walks with different exception sets (drifted) | idiom | ✅ |
+| 35 | The `-1`-sentinel resolve/validate/log stanza copy-pasted ~25× | idiom | ⬜ (deferred — large precedence-sensitive refactor) |
+| 36 | Scope-function misuse cluster (`apply` receiver smuggling, consumer `apply`, shadowing) | idiom | ✅ (apply-misuse sites; 65–120-line options `apply` blocks deferred) |
+| 37 | `readConfig` control flow: nullable `Throwable` + non-local returns from `runCatching` | idiom | ✅ |
+| 38 | Manual CAS loop in `decrementBacklog` — stdlib `update` now exists | idiom | ✅ |
+| 39 | `mergeContentTexts`: `var` flag mutated inside `map` + repeated `"# EOF"` literal | idiom | ✅ |
+| 40 | `reconnectLimiter` split declaration/`init`-assignment | idiom | ✅ |
+| 41 | Manual `while(true)/poll/break` drain loops | idiom | ✅ |
+| 42 | Scheme-stripping `when` reducible to `removePrefix` chain (+ case-sensitivity gap) | idiom | ✅ |
 
 ---
 
@@ -304,7 +304,7 @@ finding 2 — fix together.)
 All traced; all bounded (no hangs or leaks) — these cost accuracy or a timeout window, not
 availability.
 
-### 14. [ ] Polled scrape request lost on stream-only RPC cancellation
+### 14. [x] Polled scrape request lost on stream-only RPC cancellation
 `proxy/AgentContext.kt:100-103` · `proxy/ProxyServiceImpl.kt:183-185` — **low, confirmed**
 
 `readScrapeRequest` receives the notifier token then `poll()`s the wrapper; if the
@@ -317,7 +317,7 @@ cancellation.
 
 **Fix:** re-queue or fail the polled wrapper from a `finally`/cancellation handler around the emit.
 
-### 15. [ ] Disconnect-vs-submit races mislabel agent-disconnect results as `timed_out`
+### 15. [x] Disconnect-vs-submit races mislabel agent-disconnect results as `timed_out`
 `proxy/ScrapeRequestManager.kt:80-87` · `proxy/AgentContext.kt:109-119` ·
 `proxy/ProxyHttpRoutes.kt:252-271` · `proxy/ProxyPathManager.kt:117-125` — **low, confirmed**
 
@@ -332,7 +332,7 @@ disconnect/displacement. Metrics labels are skewed accordingly.
 wrapper with an agent-disconnected result instead of bare-closing the channel; distinguish
 "completed with null results" from "await timed out" in `submitScrapeRequest`.
 
-### 16. [ ] `scrapeResults` write not atomic with completion CAS
+### 16. [x] `scrapeResults` write not atomic with completion CAS
 `proxy/ScrapeRequestManager.kt:53-78` · `proxy/ScrapeRequestWrapper.kt:58-71` — **low, confirmed**
 
 `markComplete()`'s CAS makes completion idempotent, but both `assignScrapeResults` and
@@ -355,7 +355,7 @@ end-of-stream orphan sweep — transient memory waste only, self-healing and siz
 **Fix (optional):** re-check `containsScrapeRequest` at SUMMARY time or on each CHUNK and abandon
 early; low priority given the cap.
 
-### 18. [ ] `closeAll()` discards the drained-request count
+### 18. [x] `closeAll()` discards the drained-request count
 `agent/AgentGrpcService.kt:450-454` vs `Agent.kt:350-353` — **low, confirmed**
 
 On write-stream failure, `closeAll()` wins the close race and drains N buffered scrape actions but
@@ -366,7 +366,7 @@ can falsely report unhealthy during the disconnect window.
 **Fix:** `val drained = connectionContext.close(); if (drained > 0) agent.decrementBacklog(drained)`
 inside `closeAll()`, mirroring the `invokeOnCompletion` handler.
 
-### 19. [ ] `AgentPathManager` RPC+map updates not atomic; `clear()` bypasses the mutex
+### 19. [x] `AgentPathManager` RPC+map updates not atomic; `clear()` bypasses the mutex
 `agent/AgentPathManager.kt:47, 60-91` · `Agent.kt:250` — **low, confirmed lock-scope tracing;
 interleavings plausible**
 
@@ -379,7 +379,7 @@ because `clear()` doesn't take the mutex. Requires concurrent dynamic path manag
 **Fix:** hold `pathMutex` across RPC+map (or serialize path mutations onto a single actor/channel),
 and route `clear()` through the mutex.
 
-### 20. [ ] Ignored `awaitTermination` → stale agentId can poison the next connection
+### 20. [x] Ignored `awaitTermination` → stale agentId can poison the next connection
 `agent/AgentGrpcService.kt:151-152` · `Agent.kt:243-247` · `agent/AgentClientInterceptor.kt:52-74`
 — **low, plausible**
 
@@ -397,7 +397,7 @@ generation (e.g. pass a generation token) or synchronize all `agentId` writers c
 
 ## 🟡 Low severity — quality & observability
 
-### 21. [ ] Routine client errors and normal shutdown logged at ERROR
+### 21. [x] Routine client errors and normal shutdown logged at ERROR
 `proxy/ProxyUtils.kt:79, 91, 109` — **logging, low, confirmed**
 
 Every request for an unknown path logs at ERROR — a misconfigured Prometheus or a port scanner
@@ -405,14 +405,14 @@ floods the error log on every scrape interval — and `proxyNotRunningResponse` 
 at ERROR once per in-flight request during normal shutdown. **Fix:** warn (or info) for these
 expected conditions.
 
-### 22. [ ] `handleConnectionFailure` discards the gRPC status
+### 22. [x] `handleConnectionFailure` discards the gRPC status
 `Agent.kt:362-364` — **logging, low, confirmed**
 
 The `StatusRuntimeException` branch logs only "Disconnected from proxy at $proxyHost", dropping
 `e.status` entirely — UNAVAILABLE vs UNAUTHENTICATED vs RESOURCE_EXHAUSTED reconnect loops are
 indistinguishable in logs. **Fix:** include `e.status` (and message) in the log line.
 
-### 23. [ ] Stream-failure logging block duplicated four times (already drifted)
+### 23. [x] Stream-failure logging block duplicated four times (already drifted)
 `Agent.kt:344-348` · `agent/AgentGrpcService.kt:464-470` · `proxy/ProxyServiceImpl.kt:215-222,
 306-313` — **duplication, low, confirmed**
 
@@ -420,7 +420,7 @@ The `runCatchingCancellable { ... }.onFailure { if (isRunning) Status.fromThrowa
 pattern recurs with variations that have already diverged (some suppress CANCELLED, some don't;
 some close channels). **Fix:** extract one shared helper with explicit knobs.
 
-### 24. [ ] `http_client_cache_size_check` health check is unreachable
+### 24. [x] `http_client_cache_size_check` health check is unreachable
 `Agent.kt:403-413` · `agent/HttpClientCache.kt:239-241` — **dead code/boundary, low, plausible**
 
 Threshold is `maxCacheSize + 1` with `>=` (i.e. `size > maxCacheSize`), but `createAndCacheClient`
@@ -428,7 +428,7 @@ evicts before insert and `removeEntry` removes from the map immediately even for
 `cache.size` never exceeds `maxCacheSize` — the unhealthy branch can never fire. **Fix:** either
 track (and alert on) in-use-but-evicted clients pending close, or remove the check.
 
-### 25. [ ] Hand-rolled LRU: `ConcurrentHashMap` under a mutex + parallel recency map
+### 25. [x] Hand-rolled LRU: `ConcurrentHashMap` under a mutex + parallel recency map
 `agent/HttpClientCache.kt:63-66` — **design, low, confirmed**
 
 `cache` is a `ConcurrentHashMap` yet every mutation is serialized under `accessMutex` alongside a
@@ -437,7 +437,7 @@ contract that isn't the real one, and `evictLeastRecentlyUsed` is O(n) per inser
 **Fix:** a single `LinkedHashMap(accessOrder = true)` under the mutex (or Caffeine) replaces both
 structures. (Interacts with finding 33 — do together.)
 
-### 26. [ ] Public API leaks beyond the documented surface
+### 26. [x] Public API leaks beyond the documented surface
 `Proxy.kt:391, 427` · `common/BaseOptions.kt:201` — **API surface, low, confirmed (policy
 documented in CLAUDE.md)**
 
@@ -447,7 +447,7 @@ signature. `BaseOptions.configVals` / `Proxy.proxyConfigVals` / `Agent.agentConf
 expose the generated `ConfigVals` type, which is not in the enumerated public-API list. **Fix:**
 demote to `internal` (checking `docs/packages.md` per the promotion/demotion policy).
 
-### 27. [ ] Commented-out code remnants
+### 27. [x] Commented-out code remnants
 `Proxy.kt:364` · `proxy/ProxyHttpService.kt:77-81, 95` · `proxy/AgentContext.kt:139` ·
 `common/BaseOptions.kt:50, 422` — **dead code, low, confirmed**
 
@@ -455,7 +455,7 @@ Includes one actively misleading case: `common/BaseOptions.kt:422` has the comme
 `// .resolve() Unnecessary` directly above/beside a line that *does* call `.resolve(...)`.
 **Fix:** delete the remnants; correct or remove the contradictory comment.
 
-### 28. [ ] Magic numbers
+### 28. [x] Magic numbers
 `proxy/ProxyHttpService.kt:56` (`45` idle-timeout fallback) · `Agent.kt:265` (`* 2` backlog
 multiplier) · `agent/AgentGrpcService.kt:152` (`awaitTermination(5, SECONDS)`) ·
 `agent/AgentHttpService.kt:287` (`exponentialDelay(maxDelayMs = 5000L)`) · `Proxy.kt:273`
@@ -464,14 +464,14 @@ confirmed**
 
 **Fix:** name them as constants with a one-line rationale where non-obvious (especially the `* 2`).
 
-### 29. [ ] Duplicate `Cache-Control` header on every scrape response
+### 29. [x] Duplicate `Cache-Control` header on every scrape response
 `proxy/ProxyHttpRoutes.kt:93` + `proxy/ProxyUtils.kt:128` — **duplication, low, duplication
 confirmed / append semantics plausible**
 
 `handleClientRequests` sets `Cache-Control` on entry, then `respondWith` appends the same header
 again (Ktor's `response.header` appends rather than replaces). **Fix:** one site owns the header.
 
-### 30. [ ] Doubled exception rendering in scrape-failure warn logging
+### 30. [x] Doubled exception rendering in scrape-failure warn logging
 `common/ScrapeResults.kt:104, 115` — **logging, low, confirmed**
 
 `logger.warn(e) { "fetchScrapeUrl() $e - $url" }` interpolates the exception's `toString()` into
@@ -479,7 +479,7 @@ the message *and* passes it for a full stack trace — every scrape of a down en
 common failure) prints the exception twice plus a stack at WARN. **Fix:** message without `$e`
 (keep the throwable argument), matching the deliberately compact IOException branch at line 110.
 
-### 31. [ ] Dead parameter flexibility
+### 31. [x] Dead parameter flexibility
 `common/BaseOptions.kt:242-249` · `agent/AgentConnectionContext.kt:39` — **dead code, low,
 confirmed**
 
@@ -489,7 +489,7 @@ shadows the constructor's non-null `args` and is called exactly once with the no
 silently diverges from config if a new call site forgets to pass it. **Fix:** drop the nullability
 and the default.
 
-### 32. [ ] Cleanup-service gating predicate duplicated between `startUp`/`shutDown`
+### 32. [x] Cleanup-service gating predicate duplicated between `startUp`/`shutDown`
 `Proxy.kt:247-254` vs `265-266` — **duplication, low, confirmed**
 
 The predicate deciding whether `agentCleanupService` runs is written twice in different shapes; an
@@ -501,7 +501,7 @@ both.
 
 ## 🔵 Kotlin idioms
 
-### 33. [ ] `HttpClientCache` uses epoch millis instead of monotonic `TimeMark`s
+### 33. [x] `HttpClientCache` uses epoch millis instead of monotonic `TimeMark`s
 `agent/HttpClientCache.kt:99-103, 189, 258-265, 301, 342` — **consistency + minor correctness**
 
 `CacheEntry(createdAt/lastAccessedAt: Long = System.currentTimeMillis())` with manual `now - then`
@@ -510,7 +510,7 @@ vs `maxAge.inWholeMilliseconds` arithmetic, while the rest of the project uses
 an NTP wall-clock step means mass eviction or immortal entries. **Fix:**
 `val createdAt: TimeMark = markNow()` + `createdAt.elapsedNow() < maxAge`.
 
-### 34. [ ] Two hand-rolled cause-chain walks with different exception sets
+### 34. [x] Two hand-rolled cause-chain walks with different exception sets
 `agent/AgentHttpService.kt:124-137` · `common/ScrapeResults.kt:121-134` — **duplication with
 behavioral drift**
 
@@ -533,7 +533,7 @@ but resolution can collapse to a helper:
 `scrapeTimeoutSecs = resolvePositiveInt(scrapeTimeoutSecs, SCRAPE_TIMEOUT_SECS, default, "scrapeTimeoutSecs")`
 — mirroring the existing `resolveBooleanOption`, which proves the pattern works here.
 
-### 36. [ ] Scope-function misuse cluster
+### 36. [x] Scope-function misuse cluster
 Multiple sites — **readability**
 
 - `Agent.kt:347` / `agent/AgentGrpcService.kt:467`: `Status.fromThrowable(e).apply { logger.error(e)
@@ -549,7 +549,7 @@ Multiple sites — **readability**
   times — the classic sign the scope function is fighting you. → `val http = agentConfigVals.http`
   and plain member access.
 
-### 37. [ ] `readConfig` control flow: nullable `Throwable` + non-local returns
+### 37. [x] `readConfig` control flow: nullable `Throwable` + non-local returns
 `common/BaseOptions.kt:447-500` — **readability**
 
 Success paths `return` non-locally from inside `runCatchingCancellable { }`, while
@@ -559,7 +559,7 @@ local `fun fail(configName: String, e: Throwable?): Nothing` + per-branch
 throwable, no non-local returns. (Restructure together with finding 5, which touches the same
 function family.)
 
-### 38. [ ] Manual CAS loop in `decrementBacklog`
+### 38. [x] Manual CAS loop in `decrementBacklog`
 `Agent.kt:187-193` — **readability**
 
 The hand-written `while (true) { load; compareAndSet }` loop predates the API; Kotlin 2.4's
@@ -567,7 +567,7 @@ The hand-written `while (true) { load; compareAndSet }` loop predates the API; K
 `scrapeRequestBacklogSize.update { maxOf(it - delta, 0) }` — 7 lines become 1; keep the KDoc
 rationale.
 
-### 39. [ ] `mergeContentTexts`: `var` flag mutated inside `map` + repeated literal
+### 39. [x] `mergeContentTexts`: `var` flag mutated inside `map` + repeated literal
 `proxy/ProxyHttpRoutes.kt:183-193` — **readability**
 
 `var hasEof = false` is set as a side effect of the `nonEmpty.map { }` transformation, and
@@ -575,19 +575,19 @@ rationale.
 trimmed.any { it.endsWith(EOF) }`, `val stripped = trimmed.map { it.removeSuffix(EOF).trimEnd() }`;
 hoist an `EOF` constant.
 
-### 40. [ ] `reconnectLimiter` split declaration/`init`-assignment
+### 40. [x] `reconnectLimiter` split declaration/`init`-assignment
 `Agent.kt:174, 204` — **readability**
 
 `private val reconnectLimiter: RateLimiter` declared, assigned 30 lines later in `init` — nothing
 forces the split. Initialize at the declaration (with the finding-11 validation added first).
 
-### 41. [ ] Manual `while(true)/poll/break` drain loops
+### 41. [x] Manual `while(true)/poll/break` drain loops
 `proxy/AgentContext.kt:115-118` · `agent/AgentConnectionContext.kt:81-84` — **readability**
 
 → `generateSequence { scrapeRequestQueue.poll() }.forEach { it.closeChannel() }` and
 `generateSequence { tryReceive().getOrNull() }.count()` respectively.
 
-### 42. [ ] Scheme-stripping `when` reducible to `removePrefix` chain
+### 42. [x] Scheme-stripping `when` reducible to `removePrefix` chain
 `agent/AgentGrpcService.kt:117-125` — **readability + tiny consistency gap**
 
 The `when { startsWith... }` reduces to

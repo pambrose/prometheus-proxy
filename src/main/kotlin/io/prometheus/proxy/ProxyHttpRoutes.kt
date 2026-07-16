@@ -36,7 +36,6 @@ import io.ktor.server.routing.get
 import io.prometheus.Proxy
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.sanitizeQueryParams
-import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
 import io.prometheus.proxy.ProxyUtils.DecodedContent
 import io.prometheus.proxy.ProxyUtils.incrementScrapeRequestCount
@@ -70,6 +69,9 @@ internal object ProxyHttpRoutes {
   private val format = Json { prettyPrint = true }
   private val authHeaderWithoutTlsWarned = AtomicBoolean(false)
 
+  // OpenMetrics end-of-stream marker, stripped from each consolidated agent's body and re-appended once.
+  private const val EOF_MARKER = "# EOF"
+
   fun Routing.handleRequests(proxy: Proxy) {
     handleServiceDiscoveryEndpoint(proxy)
     handleClientRequests(proxy)
@@ -91,8 +93,8 @@ internal object ProxyHttpRoutes {
 
   private fun Routing.handleClientRequests(proxy: Proxy) {
     get("/*") {
-      call.response.header(HttpHeaders.CacheControl, CACHE_CONTROL_VALUE)
-
+      // Cache-Control is set once, by respondWith() (the single response site); setting it here too
+      // would make Ktor append a second identical header (finding 29).
       val path = call.request.path().drop(1)
       val queryParams = call.request.queryParameters.formUrlEncode()
 
@@ -181,20 +183,11 @@ internal object ProxyHttpRoutes {
     if (nonEmpty.isEmpty()) return ""
     if (nonEmpty.size == 1) return nonEmpty[0].contentText
 
-    var hasEof = false
-    val stripped = nonEmpty.map { result ->
-      val text = result.contentText
-      val trimmed = text.trimEnd()
-      if (trimmed.endsWith("# EOF")) {
-        hasEof = true
-        trimmed.removeSuffix("# EOF").trimEnd()
-      } else {
-        trimmed
-      }
-    }
-
+    val trimmed = nonEmpty.map { it.contentText.trimEnd() }
+    val hasEof = trimmed.any { it.endsWith(EOF_MARKER) }
+    val stripped = trimmed.map { it.removeSuffix(EOF_MARKER).trimEnd() }
     val joined = stripped.joinToString("\n")
-    return if (hasEof) "$joined\n# EOF" else joined
+    return if (hasEof) "$joined\n$EOF_MARKER" else joined
   }
 
   private suspend fun RoutingContext.executeScrapeRequests(

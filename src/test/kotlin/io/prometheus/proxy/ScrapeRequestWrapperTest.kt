@@ -128,13 +128,12 @@ class ScrapeRequestWrapperTest : StringSpec() {
 
     // ==================== Completion Tests ====================
 
-    "awaitCompleted should return true when markComplete is called with results" {
+    "awaitCompleted should return true when complete() is called with results" {
       val wrapper = createWrapper()
 
       launch {
         Thread.sleep(50)
-        wrapper.scrapeResults = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
-        wrapper.markComplete()
+        wrapper.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId))
       }
 
       val result = wrapper.awaitCompleted(5.seconds)
@@ -172,13 +171,13 @@ class ScrapeRequestWrapperTest : StringSpec() {
       str shouldContain "/test/path"
     }
 
-    // ==================== markComplete Tests ====================
+    // ==================== complete() Tests ====================
 
-    "markComplete without metrics should not throw" {
+    "complete without metrics should not throw" {
       val wrapper = createWrapper()
 
       // Should not throw
-      wrapper.markComplete()
+      wrapper.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId))
     }
 
     // ==================== awaitCompleted Edge Cases ====================
@@ -186,10 +185,9 @@ class ScrapeRequestWrapperTest : StringSpec() {
     "awaitCompleted should return true immediately when already completed with results" {
       val wrapper = createWrapper()
 
-      wrapper.scrapeResults = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
-      wrapper.markComplete()
+      wrapper.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId))
 
-      // After markComplete with results, awaitCompleted should return true quickly
+      // After complete() with results, awaitCompleted should return true quickly
       val result = wrapper.awaitCompleted(5.seconds)
       result.shouldBeTrue()
     }
@@ -203,8 +201,7 @@ class ScrapeRequestWrapperTest : StringSpec() {
 
       launch {
         Thread.sleep(50)
-        wrapper.scrapeResults = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
-        wrapper.markComplete()
+        wrapper.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId))
       }
 
       // Using named parameter `timeout`
@@ -238,31 +235,27 @@ class ScrapeRequestWrapperTest : StringSpec() {
       }
     }
 
-    // ==================== markComplete Idempotency Tests ====================
+    // ==================== complete() Idempotency Tests ====================
 
-    "markComplete should not throw when called multiple times" {
+    "complete should not throw when called multiple times" {
       val wrapper = createWrapper()
-      wrapper.scrapeResults = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
+      val results = ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)
 
-      wrapper.markComplete()
-      // Second call should not throw — channel is already closed
-      wrapper.markComplete()
+      wrapper.complete(results).shouldBeTrue()
+      // Second call should be a no-op (returns false) — channel already closed
+      wrapper.complete(results).shouldBeFalse()
     }
 
-    // ==================== Bug #15: markComplete double-call protection ====================
-
-    // Bug #15: markComplete() uses an AtomicBoolean so the channel is closed exactly once even when
-    // called multiple times. (Latency is now observed once per response in the routing layer rather
-    // than inside markComplete, so repeated markComplete calls can no longer skew the metric.)
-
-    "Bug #15: markComplete should close channel only once" {
+    // Bug #15 / finding 16: complete() uses an AtomicBoolean so the channel is closed exactly once and
+    // only the first (winning) call publishes its result, so a losing racer can't clobber it.
+    "complete should close channel and publish only once" {
       val wrapper = createWrapper()
 
-      wrapper.markComplete()
+      wrapper.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)).shouldBeTrue()
 
-      // Second and third calls should be no-ops (no exceptions)
-      wrapper.markComplete()
-      wrapper.markComplete()
+      // Second and third calls should be no-ops (return false, no exceptions)
+      wrapper.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)).shouldBeFalse()
+      wrapper.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)).shouldBeFalse()
     }
   }
 }

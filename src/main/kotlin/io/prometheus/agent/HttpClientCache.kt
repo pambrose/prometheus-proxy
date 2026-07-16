@@ -29,7 +29,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.security.SecureRandom
-import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -38,6 +37,8 @@ import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource.Monotonic
 
 /**
  * LRU cache for Ktor [HttpClient] instances keyed by authentication credentials.
@@ -60,9 +61,14 @@ internal class HttpClientCache(
   private val maxIdleTime: Duration = 10.minutes,
   private val cleanupInterval: Duration = 5.minutes,
 ) {
-  private val cache = ConcurrentHashMap<String, CacheEntry>()
+  // A single access-ordered LinkedHashMap (accessOrder = true) is both the cache and the recency
+  // tracker: get() moves an entry to the most-recently-used end, so the least-recently-used entry is
+  // always the iteration head -- O(1) eviction, no parallel recency map (finding 25). Every access is
+  // under accessMutex, so the plain map is safe; cacheSize mirrors the size for a lock-free
+  // currentCacheSize() read from the metrics/health-check threads (Bug #12).
+  private val cache = LinkedHashMap<String, CacheEntry>(INITIAL_CAPACITY, LOAD_FACTOR, true)
+  private val cacheSize = AtomicInt(0)
 
-  private val accessOrder = HashMap<String, Long>()
   private val accessMutex = Mutex()
   private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -98,8 +104,10 @@ internal class HttpClientCache(
 
   class CacheEntry(
     val client: HttpClient,
-    val createdAt: Long = System.currentTimeMillis(),
-    var lastAccessedAt: Long = System.currentTimeMillis(),
+    // Monotonic TimeMarks rather than epoch millis so an NTP wall-clock step can't mass-evict or
+    // immortalize entries, matching the rest of the project (finding 33).
+    val createdAt: TimeMark = Monotonic.markNow(),
+    var lastAccessedAt: TimeMark = Monotonic.markNow(),
   ) {
     private val markedForClose = AtomicBoolean(false)
     private val inUseCount = AtomicInt(0)
@@ -177,7 +185,7 @@ internal class HttpClientCache(
     }
   }
 
-  fun currentCacheSize() = cache.size
+  fun currentCacheSize() = cacheSize.load()
 
   // When an entry is returned from the cache, it is marked as in use.
   suspend fun getOrCreateClient(
@@ -186,15 +194,14 @@ internal class HttpClientCache(
   ): CacheEntry {
     val cacheKey = key.cacheKey()
     val maskedString = key.maskedKey()
-    val now = System.currentTimeMillis()
 
     val (entry, clientsToClose) =
       accessMutex.withLock {
         check(!closed) { "HttpClientCache is closed" }
+        // cache[cacheKey] is a get(): on an accessOrder LinkedHashMap it also marks the entry MRU.
         val result = cache[cacheKey]?.let { existing ->
-          if (isEntryValid(existing, now)) {
-            existing.lastAccessedAt = now
-            updateAccessOrder(cacheKey, now)
+          if (isEntryValid(existing)) {
+            existing.lastAccessedAt = Monotonic.markNow()
             logger.debug { "Using cached HTTP client for key: $maskedString" }
             existing.onStartWithClient()
             existing
@@ -203,12 +210,7 @@ internal class HttpClientCache(
             removeEntry(cacheKey)
             null
           }
-        } ?: createAndCacheClient(
-          cacheKey,
-          maskedString,
-          clientFactory = clientFactory,
-          now = now,
-        ).apply { onStartWithClient() }
+        } ?: createAndCacheClient(cacheKey, maskedString, clientFactory).apply { onStartWithClient() }
 
         result to drainPendingCloses()
       }
@@ -234,39 +236,24 @@ internal class HttpClientCache(
     keyString: String,
     maskedKey: String,
     clientFactory: () -> HttpClient,
-    now: Long,
   ): CacheEntry {
-    if (cache.size >= maxCacheSize) {
+    if (cache.size >= maxCacheSize)
       evictLeastRecentlyUsed()
-    }
 
-    val client = clientFactory()
-    val entry = CacheEntry(client, now, now)
+    val entry = CacheEntry(clientFactory())
     cache[keyString] = entry
-    updateAccessOrder(keyString, now)
+    cacheSize.store(cache.size)
     logger.info { "Created and cached HTTP client for key: $maskedKey" }
     return entry
   }
 
-  private fun updateAccessOrder(
-    keyString: String,
-    timestamp: Long,
-  ) {
-    accessOrder[keyString] = timestamp
-  }
-
-  private fun isEntryValid(
-    entry: CacheEntry,
-    now: Long,
-  ): Boolean {
-    val age = now - entry.createdAt
-    val idleTime = now - entry.lastAccessedAt
-    return age < maxAge.inWholeMilliseconds && idleTime < maxIdleTime.inWholeMilliseconds
-  }
+  private fun isEntryValid(entry: CacheEntry): Boolean =
+    entry.createdAt.elapsedNow() < maxAge && entry.lastAccessedAt.elapsedNow() < maxIdleTime
 
   // Called with mutex
   private fun evictLeastRecentlyUsed() {
-    val lruKey = accessOrder.entries.minByOrNull { it.value }?.key
+    // accessOrder = true keeps the least-recently-used entry at the iteration head.
+    val lruKey = cache.keys.firstOrNull()
     if (lruKey != null) {
       // The cache key for authenticated clients is a salted digest (non-sensitive), but mask it
       // anyway so eviction logs never expose a per-credential identifier; NO_AUTH is left as-is.
@@ -281,13 +268,13 @@ internal class HttpClientCache(
   private fun removeEntry(keyString: String) {
     val entry = cache.remove(keyString)
     if (entry != null) {
+      cacheSize.store(cache.size)
       entry.markForClose()
       if (!entry.isInUse()) {
         pendingCloses += entry.client
       }
       // In-use entries will be closed when the last user calls onFinishedWithClient()
     }
-    accessOrder.remove(keyString)
   }
 
   // Called with mutex. Returns and clears the pending-close list.
@@ -298,9 +285,8 @@ internal class HttpClientCache(
 
   // Called with mutex
   private fun cleanupExpiredEntries() {
-    val now = System.currentTimeMillis()
     val expiredKeys = cache.entries
-      .filter { !isEntryValid(it.value, now) }
+      .filter { !isEntryValid(it.value) }
       .map { it.key }
 
     if (expiredKeys.isNotEmpty()) {
@@ -328,7 +314,7 @@ internal class HttpClientCache(
       // Drain any pending closes from prior removeEntry() calls
       clientsToClose += drainPendingCloses()
       cache.clear()
-      accessOrder.clear()
+      cacheSize.store(0)
       // Set the terminal flag in the same critical section that clears the map, so there is no
       // window where getOrCreateClient() could repopulate the cache after this point.
       closed = true
@@ -339,8 +325,7 @@ internal class HttpClientCache(
 
   suspend fun getCacheStats(): CacheStats =
     accessMutex.withLock {
-      val now = System.currentTimeMillis()
-      val validEntries = cache.values.count { isEntryValid(it, now) }
+      val validEntries = cache.values.count { isEntryValid(it) }
       CacheStats(
         totalEntries = cache.size,
         validEntries = validEntries,
@@ -356,6 +341,9 @@ internal class HttpClientCache(
 
   companion object {
     private val logger = logger {}
+
+    private const val INITIAL_CAPACITY = 16
+    private const val LOAD_FACTOR = 0.75f
 
     // Closes a client, swallowing and logging any failure so it can never propagate. Critical for the
     // background sweeper loop: a throwing HttpClient.close() there would break out of the while(isActive)

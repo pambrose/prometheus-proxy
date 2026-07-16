@@ -389,7 +389,7 @@ class AgentPathManagerTest : StringSpec() {
     // operations for the full RPC duration. The fix moves the gRPC call outside
     // the mutex so concurrent registrations for different paths can proceed in
     // parallel. The mutex now only protects the local pathContextMap update.
-    "concurrent registerPath calls for different paths should not block each other" {
+    "concurrent registerPath calls are serialized for atomicity (finding 19)" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
       val concurrentCalls = AtomicInteger(0)
@@ -413,9 +413,9 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["path1"].shouldNotBeNull()
       manager["path2"].shouldNotBeNull()
-      // With the fix, both gRPC calls run concurrently outside the mutex.
-      // With the old code, the global mutex serialized them (maxConcurrent=1).
-      maxConcurrent.get() shouldBe 2
+      // finding 19: the proxy RPC and the local map write are held under pathMutex together so the local
+      // map and the proxy's view can't disagree, which serializes concurrent registrations.
+      maxConcurrent.get() shouldBe 1
     }
 
     "registerPaths should register all configured paths" {

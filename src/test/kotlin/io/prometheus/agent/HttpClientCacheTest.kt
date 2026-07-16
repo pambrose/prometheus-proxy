@@ -680,9 +680,8 @@ class HttpClientCacheTest : StringSpec() {
     // is identity-based. Mutable lastAccessedAt no longer affects equals/hashCode.
     "CacheEntry equality should be identity-based" {
       val client = createMockHttpClient()
-      val now = System.currentTimeMillis()
-      val entry1 = CacheEntry(client, now, now)
-      val entry2 = CacheEntry(client, now, now)
+      val entry1 = CacheEntry(client)
+      val entry2 = CacheEntry(client)
 
       // Same instance should be equal
       (entry1 == entry1).shouldBeTrue()

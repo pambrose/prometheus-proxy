@@ -42,7 +42,7 @@ import kotlin.time.Duration.Companion.seconds
 class AgentConnectionContextTest : StringSpec() {
   init {
     "close should disconnect context and return 0 when empty" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
       context.connected.shouldBeTrue()
 
       val drained = context.close()
@@ -52,7 +52,7 @@ class AgentConnectionContextTest : StringSpec() {
     }
 
     "close should be idempotent and return 0 on second call" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
 
       val drained1 = context.close()
       context.connected.shouldBeFalse()
@@ -71,7 +71,7 @@ class AgentConnectionContextTest : StringSpec() {
     // The fix replaces the coroutine Mutex + runBlocking with a plain synchronized block.
     // This test verifies close() completes promptly when called from invokeOnCompletion.
     "close should not deadlock when called from invokeOnCompletion" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
       val completedLatch = CountDownLatch(1)
 
       coroutineScope {
@@ -94,7 +94,7 @@ class AgentConnectionContextTest : StringSpec() {
     // Verifies that concurrent close() calls from multiple threads don't cause issues.
     // This exercises the synchronized block under contention.
     "concurrent close calls should not throw or deadlock" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
       val threadCount = 10
       val startLatch = CountDownLatch(1)
       val doneLatch = CountDownLatch(threadCount)
@@ -119,7 +119,7 @@ class AgentConnectionContextTest : StringSpec() {
     // M8: scrapeResultsChannel uses close() instead of cancel(), so buffered results
     // can still be drained by the consumer after the context is closed.
     "buffered scrape results should be drainable after close" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
 
       // Buffer some results before closing
       val result1 = ScrapeResults(srAgentId = "agent-1", srScrapeId = 1L, srValidResponse = true)
@@ -154,7 +154,7 @@ class AgentConnectionContextTest : StringSpec() {
     }
 
     "empty scrape results channel should close cleanly" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
 
       // Close with no buffered results
       context.close()
@@ -168,7 +168,7 @@ class AgentConnectionContextTest : StringSpec() {
     // Item 8: sendScrapeResults reports delivery (true) vs. drop-on-closed (false) so the caller
     // can increment a "dropped" metric instead of silently losing a computed result.
     "sendScrapeResults should return true when open and false after close" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
       val result = ScrapeResults(srAgentId = "agent-1", srScrapeId = 1L, srValidResponse = true)
 
       // While the connection is open, the result is accepted into the unbounded channel.
@@ -188,7 +188,7 @@ class AgentConnectionContextTest : StringSpec() {
     // ==================== Bug #5: close() drains scrapeRequestActionsChannel ====================
 
     "Bug #5: close should drain buffered scrape request actions and return count" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
 
       // Buffer some scrape request actions
       context.sendScrapeRequestAction {
@@ -208,7 +208,7 @@ class AgentConnectionContextTest : StringSpec() {
     }
 
     "Bug #5: second close should return 0 after items already drained" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
 
       context.sendScrapeRequestAction {
         ScrapeResults(srAgentId = "agent-1", srScrapeId = 1L, srValidResponse = true)
@@ -234,7 +234,7 @@ class AgentConnectionContextTest : StringSpec() {
     // and logs a warning instead of throwing.
 
     "Bug #7: sendScrapeResults on open channel should deliver result" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
       val result = ScrapeResults(srAgentId = "agent-1", srScrapeId = 42L, srValidResponse = true)
 
       context.sendScrapeResults(result)
@@ -248,7 +248,7 @@ class AgentConnectionContextTest : StringSpec() {
     }
 
     "Bug #7: sendScrapeResults on closed channel should not throw" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
 
       // Close the context first
       context.close()
@@ -268,7 +268,7 @@ class AgentConnectionContextTest : StringSpec() {
       // then close() is called. With the old send(), one ClosedSendChannelException
       // would cancel ALL sibling coroutines. With trySend(), each coroutine completes
       // independently.
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
       val completedCount = AtomicInteger(0)
       val threwException = AtomicBoolean(false)
 
@@ -301,7 +301,7 @@ class AgentConnectionContextTest : StringSpec() {
     }
 
     "Bug #7: results sent before close should be drainable alongside dropped post-close sends" {
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
 
       // Send a result before close
       context.sendScrapeResults(
@@ -331,7 +331,7 @@ class AgentConnectionContextTest : StringSpec() {
       // Verifies that the try/finally pattern for scrapeRequestBacklogSize works
       // correctly even when sendScrapeResults drops the result on a closed channel.
       // The counter should still decrement in the finally block.
-      val context = AgentConnectionContext()
+      val context = AgentConnectionContext(128)
       val backlogSize = AtomicInteger(0)
 
       coroutineScope {

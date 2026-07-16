@@ -21,6 +21,8 @@ package io.prometheus.proxy
 import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
+import io.ktor.http.HttpStatusCode
+import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
@@ -109,12 +111,18 @@ internal class AgentContext(
   fun invalidate() {
     valid = false
     scrapeRequestNotifier.close()
-    // Drain any buffered scrape requests and close their completion channels
-    // so HTTP handlers waiting on awaitCompleted() are notified immediately
-    // instead of waiting for the full scrape timeout to expire.
-    while (true) {
-      val wrapper = scrapeRequestQueue.poll() ?: break
-      wrapper.closeChannel()
+    // Drain any buffered scrape requests and FAIL them with an agent-disconnected result (not a bare
+    // channel close) so a waiting HTTP handler's awaitCompleted() sees a truthful 502 instead of a null
+    // result that submitScrapeRequest would mislabel as timed_out (finding 15).
+    generateSequence { scrapeRequestQueue.poll() }.forEach { wrapper ->
+      wrapper.complete(
+        ScrapeResults(
+          srAgentId = agentId,
+          srScrapeId = wrapper.scrapeId,
+          srStatusCode = HttpStatusCode.BadGateway.value,
+          srFailureReason = "Agent disconnected",
+        ),
+      )
     }
   }
 
@@ -136,7 +144,6 @@ internal class AgentContext(
       add("hostName", hostName)
       add("remoteAddr", remoteAddr)
       add("lastRequestDuration", lastRequestDuration)
-      // add("inactivityDuration", inactivityDuration)
     }
 
   override fun equals(other: Any?): Boolean {

@@ -44,7 +44,9 @@ internal class AgentPathManager(
 
   operator fun get(path: String): PathContext? = pathContextMap[path]
 
-  fun clear() = pathContextMap.clear()
+  // Routed through pathMutex so a dynamic registerPath racing a reconnect can't insert a stale
+  // PathContext into the freshly-cleared map (finding 19).
+  suspend fun clear() = pathMutex.withLock { pathContextMap.clear() }
 
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
@@ -67,8 +69,10 @@ internal class AgentPathManager(
 
     val path = pathVal.removePrefix("/")
     val labelsJson = labels.defaultEmptyJsonObject()
-    val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
+    // Hold pathMutex across the proxy RPC AND the local map write so concurrent register/unregister of
+    // the same path can't leave the local map and the proxy's view disagreeing (finding 19).
     pathMutex.withLock {
+      val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
       if (!agent.isTestMode)
         logger.info { "Registered $url as /$path with labels $labelsJson" }
       pathContextMap[path] = PathContext(pathId, path, url, labelsJson)
@@ -79,8 +83,9 @@ internal class AgentPathManager(
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
 
     val path = pathVal.removePrefix("/")
-    agent.grpcService.unregisterPathOnProxy(path)
+    // Hold pathMutex across the proxy RPC AND the local map write (finding 19).
     pathMutex.withLock {
+      agent.grpcService.unregisterPathOnProxy(path)
       val pathContext = pathContextMap.remove(path)
       if (pathContext == null) {
         logger.info { "No path value /$path found in pathContextMap when unregistering" }

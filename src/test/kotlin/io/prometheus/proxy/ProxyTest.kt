@@ -327,9 +327,8 @@ class ProxyTest : StringSpec() {
 
       // Old (broken) order: invalidate agents THEN fail requests
       proxy.agentContextManager.invalidateAllAgentContexts()
-      // The wrapper's completeChannel was already closed by invalidate(),
-      // so markComplete in failAllInFlightScrapeRequests won't call observeDuration again.
-      // But the results ARE still set because scrapeResults is assigned before markComplete.
+      // This wrapper is only in the scrapeRequestMap (not an agent queue), so failAllInFlightScrapeRequests
+      // completes it: ScrapeRequestWrapper.complete() publishes the result behind its CAS (finding 16).
       proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
 
       // Results are set, but awaitCompleted() would have already returned false

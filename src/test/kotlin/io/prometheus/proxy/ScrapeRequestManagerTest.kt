@@ -173,7 +173,7 @@ class ScrapeRequestManagerTest : StringSpec() {
     // assignScrapeResults matches the response to the original request and calls
     // markComplete() to signal the waiting HTTP handler. This test verifies that
     // multiple concurrent scrapes are correctly tracked and completed independently.
-    "multiple assignScrapeResults should call markComplete for each" {
+    "multiple assignScrapeResults should complete each wrapper" {
       val manager = ScrapeRequestManager()
       val wrapper1 = createMockWrapper(123L)
       val wrapper2 = createMockWrapper(456L)
@@ -189,13 +189,13 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.assignScrapeResults(results1)
       manager.assignScrapeResults(results2)
 
-      verify { wrapper1.markComplete() }
-      verify { wrapper2.markComplete() }
+      verify { wrapper1.complete(results1) }
+      verify { wrapper2.complete(results2) }
     }
 
     // ==================== assignScrapeResults Verification Tests ====================
 
-    "assignScrapeResults should set scrapeResults on wrapper" {
+    "assignScrapeResults should complete the wrapper with the results" {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(100L)
       val results = mockk<ScrapeResults>(relaxed = true)
@@ -205,7 +205,8 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.addToScrapeRequestMap(wrapper)
       manager.assignScrapeResults(results)
 
-      verify { wrapper.scrapeResults = results }
+      // Result publication is now folded behind the completion CAS (finding 16).
+      verify { wrapper.complete(results) }
     }
 
     "assignScrapeResults should call markActivityTime on agent context" {
@@ -227,17 +228,17 @@ class ScrapeRequestManagerTest : StringSpec() {
     // Bug #2: Chunk/summary validation failures left the HTTP handler waiting until timeout.
     // failScrapeRequest() notifies the waiting handler immediately with an error result.
 
-    "failScrapeRequest should set error results and call markComplete" {
+    "failScrapeRequest should complete the wrapper with error results" {
       val manager = ScrapeRequestManager()
       val resultsSlot = slot<ScrapeResults>()
       val wrapper = createMockWrapper(300L)
       every { wrapper.agentContext.agentId } returns "agent-99"
-      every { wrapper.scrapeResults = capture(resultsSlot) } answers { nothing }
+      every { wrapper.complete(capture(resultsSlot)) } returns true
 
       manager.addToScrapeRequestMap(wrapper)
       manager.failScrapeRequest(300L, "Chunk checksum mismatch")
 
-      verify { wrapper.markComplete() }
+      verify { wrapper.complete(any()) }
       verify { wrapper.agentContext.markActivityTime(true) }
 
       val captured = resultsSlot.captured
@@ -265,14 +266,15 @@ class ScrapeRequestManagerTest : StringSpec() {
     // recording a duplicate latency observation and skewing metrics. The fix uses an
     // AtomicBoolean in markComplete() so observeDuration() is only called once.
 
-    "Bug #15: assignScrapeResults should call markComplete each time wrapper is in map" {
+    "Bug #15: assignScrapeResults should complete each time wrapper is in map" {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(400L)
-      var markCompleteCallCount = 0
+      var completeCallCount = 0
 
-      // Track markComplete invocations
-      every { wrapper.markComplete() } answers {
-        markCompleteCallCount++
+      // Track complete() invocations
+      every { wrapper.complete(any()) } answers {
+        completeCallCount++
+        true
       }
 
       manager.addToScrapeRequestMap(wrapper)
@@ -286,10 +288,10 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.assignScrapeResults(results1)
       manager.assignScrapeResults(results2)
 
-      // Both calls go through the manager (since wrapper is still in the map).
-      // The real ScrapeRequestWrapper.markComplete() uses AtomicBoolean to guard
-      // observeDuration, but the manager itself calls markComplete on every assignment.
-      markCompleteCallCount shouldBe 2
+      // Both calls go through the manager (since wrapper is still in the map). The real
+      // ScrapeRequestWrapper.complete() CAS makes only the first publish, but the manager itself
+      // calls complete() on every assignment.
+      completeCallCount shouldBe 2
     }
 
     "Bug #15: double assignScrapeResults should not throw" {
@@ -308,9 +310,9 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.assignScrapeResults(results1)
       manager.assignScrapeResults(results2)
 
-      // The manager calls markComplete() each time, but the real ScrapeRequestWrapper's
-      // AtomicBoolean guard ensures observeDuration is only called once.
-      verify(atLeast = 1) { wrapper.markComplete() }
+      // The manager calls complete() each time, but the real ScrapeRequestWrapper's CAS
+      // ensures only the first call publishes.
+      verify(atLeast = 1) { wrapper.complete(any()) }
     }
 
     "Bug #15: double failScrapeRequest should not throw" {
@@ -324,9 +326,9 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.failScrapeRequest(600L, "first failure")
       manager.failScrapeRequest(600L, "second failure")
 
-      // Both calls should succeed without exceptions; the real markComplete()
-      // uses AtomicBoolean to guard observeDuration
-      verify(exactly = 2) { wrapper.markComplete() }
+      // Both calls should succeed without exceptions; the real complete()
+      // CAS ensures only the first publishes.
+      verify(exactly = 2) { wrapper.complete(any()) }
     }
 
     // ==================== Bug #5: Log level for missing scrape request ====================

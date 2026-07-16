@@ -47,7 +47,6 @@ import java.io.FileNotFoundException
 import java.net.URI
 import kotlin.system.exitProcess
 
-// @Parameters(separators = "=")
 abstract class BaseOptions protected constructor(
   private val progName: String,
   private val args: Array<String>,
@@ -198,7 +197,8 @@ abstract class BaseOptions protected constructor(
 
   private lateinit var config: Config
 
-  lateinit var configVals: ConfigVals
+  // internal: the generated ConfigVals type is not part of the documented public API (finding 26).
+  internal lateinit var configVals: ConfigVals
     private set
 
   val isTlsEnabled: Boolean
@@ -253,14 +253,14 @@ abstract class BaseOptions protected constructor(
       else
         throw ConfigLoadException(message, cause)
 
-    fun parseArgs(args: Array<String>?) {
+    fun parseArgs() {
       try {
         val jcom =
           JCommander(this)
             .apply {
               programName = progName
               setCaseSensitiveOptions(false)
-              parse(*(args.orEmpty()))
+              parse(*args)
             }
 
         if (usage) {
@@ -278,7 +278,7 @@ abstract class BaseOptions protected constructor(
       }
     }
 
-    parseArgs(args)
+    parseArgs()
     readConfig(envConfig, exitOnMissingConfig)
     configVals = ConfigVals(config)
     assignConfigVals()
@@ -433,7 +433,6 @@ abstract class BaseOptions protected constructor(
         exitOnMissingConfig,
       )
         .resolve(ConfigResolveOptions.defaults())
-    // .resolve() Unnecessary
 
     dynamicParams
       .forEach { (k, v) ->
@@ -465,52 +464,51 @@ abstract class BaseOptions protected constructor(
     fallback: Config,
     exitOnMissingConfig: Boolean,
   ): Config {
-    // Captures the parse failure (if any) so the post-when handling can honor exitOnMissingConfig.
-    // The success paths return early from inside runCatchingCancellable.
-    val failureCause: Throwable? =
-      when {
-        configName.isBlank() -> {
-          if (exitOnMissingConfig) {
-            logger.error { $$"A configuration file or url must be specified with --config or $$$envConfig" }
-            exitProcess(1)
-          }
-          return fallback
-        }
+    // A parse failure ends startup: in standalone mode terminate the process; in embedded mode
+    // (exitOnMissingConfig == false) throw so the host application can recover. Local helper so each
+    // branch fails inline (no nullable Throwable threaded past the when, no non-local returns -- finding 37).
+    fun fail(e: Throwable): Nothing =
+      if (exitOnMissingConfig)
+        exitProcess(1)
+      else
+        throw ConfigLoadException("Unable to load configuration from '$configName'", e)
 
-        configName.isUrlPrefix() -> {
-          runCatchingCancellable {
-            val configSyntax = getConfigSyntax(configName)
-            return ConfigFactory
-              .parseURL(URI(configName).toURL(), configParseOptions.setSyntax(configSyntax))
-              .withFallback(fallback)
-          }.exceptionOrNull()
-            ?.also { e ->
-              if (e.cause is FileNotFoundException)
-                logger.error { "Invalid config url: $configName" }
-              else
-                logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
-            }
+    return when {
+      configName.isBlank() -> {
+        if (exitOnMissingConfig) {
+          logger.error { $$"A configuration file or url must be specified with --config or $$$envConfig" }
+          exitProcess(1)
         }
+        fallback
+      }
 
-        else -> {
-          runCatchingCancellable {
-            return ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
-          }.exceptionOrNull()
-            ?.also { e ->
-              if (e.cause is FileNotFoundException)
-                logger.error { "Invalid config filename: $configName" }
-              else
-                logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
-            }
+      configName.isUrlPrefix() -> {
+        runCatchingCancellable {
+          val configSyntax = getConfigSyntax(configName)
+          ConfigFactory
+            .parseURL(URI(configName).toURL(), configParseOptions.setSyntax(configSyntax))
+            .withFallback(fallback)
+        }.getOrElse { e ->
+          if (e.cause is FileNotFoundException)
+            logger.error { "Invalid config url: $configName" }
+          else
+            logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
+          fail(e)
         }
       }
 
-    // A parse failure reached here. In standalone mode terminate the process; in embedded mode
-    // (exitOnMissingConfig == false) throw so the host application can recover instead of dying.
-    if (exitOnMissingConfig)
-      exitProcess(1)
-    else
-      throw ConfigLoadException("Unable to load configuration from '$configName'", failureCause)
+      else -> {
+        runCatchingCancellable {
+          ConfigFactory.parseFileAnySyntax(File(configName), configParseOptions).withFallback(fallback)
+        }.getOrElse { e ->
+          if (e.cause is FileNotFoundException)
+            logger.error { "Invalid config filename: $configName" }
+          else
+            logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
+          fail(e)
+        }
+      }
+    }
   }
 
   internal companion object {

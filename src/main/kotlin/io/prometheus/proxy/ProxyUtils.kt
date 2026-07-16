@@ -76,7 +76,7 @@ internal object ProxyUtils {
   ): ResponseResults {
     val message = "Invalid AgentContext for /$path"
     proxy.logActivity(message)
-    logger.error { message }
+    logger.warn { message }
     return ResponseResults(
       statusCode = HttpStatusCode.NotFound,
       updateMsgs = listOf("invalid_agent_context"),
@@ -89,7 +89,7 @@ internal object ProxyUtils {
   ): ResponseResults {
     val message = "Invalid path request /$path"
     proxy.logActivity(message)
-    logger.error { message }
+    logger.warn { message }
     return ResponseResults(
       statusCode = HttpStatusCode.NotFound,
       updateMsgs = listOf("invalid_path"),
@@ -106,7 +106,7 @@ internal object ProxyUtils {
   }
 
   fun proxyNotRunningResponse(): ResponseResults {
-    logger.error { "Proxy stopped" }
+    logger.info { "Proxy stopped" }
     return ResponseResults(
       statusCode = HttpStatusCode.ServiceUnavailable,
       updateMsgs = listOf("proxy_stopped"),

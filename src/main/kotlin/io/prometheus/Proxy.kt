@@ -186,7 +186,14 @@ class Proxy(
   // unlabeled since PromQL rate()/increase() already tolerate counter resets across restarts.
   internal val launchId = randomId(15)
 
-  val proxyConfigVals: ConfigVals.Proxy2 get() = configVals.proxy
+  // internal: the generated ConfigVals type is not part of the documented public API (finding 26).
+  internal val proxyConfigVals: ConfigVals.Proxy2 get() = configVals.proxy
+
+  // The stale-agent cleanup service runs when explicitly enabled, or is forced on when the transport
+  // filter is disabled (there's then no per-connection disconnect detection, so it's the only cleanup
+  // mechanism). Computed once so startUp() and shutDown() can't drift (finding 32).
+  private val agentCleanupServiceEnabled: Boolean
+    get() = proxyConfigVals.internal.staleAgentCheckEnabled || options.transportFilterDisabled
 
   init {
     fun toPlainText() =
@@ -244,10 +251,9 @@ class Proxy(
     // agent disconnects. The stale agent cleanup service is the only mechanism to clean up
     // leaked AgentContexts (e.g., agents that called connectAgentWithTransportFilterDisabled
     // but crashed before opening a readRequestsFromProxy stream). Force-enable it.
-    if (proxyConfigVals.internal.staleAgentCheckEnabled) {
-      agentCleanupService.startSync()
-    } else if (options.transportFilterDisabled) {
-      logger.warn { "Forcing agent eviction thread on: transportFilterDisabled requires stale agent cleanup" }
+    if (agentCleanupServiceEnabled) {
+      if (!proxyConfigVals.internal.staleAgentCheckEnabled)
+        logger.warn { "Forcing agent eviction thread on: transportFilterDisabled requires stale agent cleanup" }
       agentCleanupService.startSync()
     } else {
       logger.info { "Agent eviction thread not started" }
@@ -262,7 +268,7 @@ class Proxy(
     agentContextManager.invalidateAllAgentContexts()
     grpcService.stopSync()
     httpService.stopSync()
-    if (proxyConfigVals.internal.staleAgentCheckEnabled || options.transportFilterDisabled)
+    if (agentCleanupServiceEnabled)
       agentCleanupService.stopSync()
     super.shutDown()
   }
@@ -270,7 +276,7 @@ class Proxy(
   override fun run() {
     runBlocking {
       while (isRunning) {
-        delay(500.milliseconds)
+        delay(RUN_LOOP_PAUSE)
       }
     }
   }
@@ -361,7 +367,6 @@ class Proxy(
       args.invoke(metrics)
   }
 
-  // val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
   private val formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
   /**
@@ -388,7 +393,7 @@ class Proxy(
    * @param path The request path to check
    * @return true if this is a Blitz verification request, false otherwise
    */
-  fun isBlitzRequest(path: String) = with(proxyConfigVals.internal) { blitz.enabled && path == blitz.path }
+  internal fun isBlitzRequest(path: String) = with(proxyConfigVals.internal) { blitz.enabled && path == blitz.path }
 
   /**
    * Builds a Prometheus-compatible service discovery JSON response.
@@ -424,7 +429,7 @@ class Proxy(
    * @return JsonArray containing service discovery information for all registered paths
    * @see <a href="https://prometheus.io/docs/prometheus/latest/http_sd/">Prometheus HTTP Service Discovery</a>
    */
-  fun buildServiceDiscoveryJson(): JsonArray =
+  internal fun buildServiceDiscoveryJson(): JsonArray =
     buildJsonArray {
       pathManager.allPathContextInfos().forEach { (path, agentContextInfo) ->
         addJsonObject {
@@ -467,6 +472,9 @@ class Proxy(
 
   companion object {
     private val logger = logger {}
+
+    // Idle pause of the proxy's run loop, which just parks the service thread until shutdown (finding 28).
+    private val RUN_LOOP_PAUSE = 500.milliseconds
 
     // Service-discovery label keys computed by the proxy; agent-supplied labels must not overwrite them.
     private val RESERVED_SD_LABEL_KEYS = setOf("__metrics_path__", "agentName", "hostName")

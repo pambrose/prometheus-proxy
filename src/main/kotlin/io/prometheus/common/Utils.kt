@@ -22,6 +22,7 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import com.pambrose.common.util.Version.Companion.versionDesc
 import com.pambrose.common.util.simpleClassName
+import io.github.oshai.kotlinlogging.KLogger
 import io.grpc.Status
 import io.prometheus.Proxy
 import kotlinx.serialization.json.Json
@@ -125,6 +126,21 @@ internal object Utils {
   }
 
   fun Status.exceptionDetails(e: Throwable) = "$code $description ${e.simpleClassName} - ${e.message}"
+
+  // The throwable's cause chain (itself first), for detecting a wrapped cause without a hand-rolled
+  // while/cause loop. Shared so the different cause-walks no longer drift (finding 34).
+  fun Throwable.causeChain(): Sequence<Throwable> = generateSequence(this) { it.cause }
+
+  // Logs a connection/stream-task failure at ERROR with the gRPC status details. Shared by the agent's
+  // connection-task and stream-task failure handlers, which were byte-for-byte identical (finding 23) and
+  // used apply {} only to smuggle the Status receiver for exceptionDetails() (finding 36).
+  fun KLogger.logStreamFailure(
+    name: String,
+    e: Throwable,
+  ) {
+    val status = Status.fromThrowable(e)
+    error(e) { "$name(): ${status.exceptionDetails(e)}" }
+  }
 
   data class HostPort(
     val host: String,

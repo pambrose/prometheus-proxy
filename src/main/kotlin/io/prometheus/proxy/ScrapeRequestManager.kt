@@ -54,8 +54,7 @@ internal class ScrapeRequestManager {
     val scrapeId = scrapeResults.srScrapeId
     scrapeRequestMap[scrapeId]
       ?.also { wrapper ->
-        wrapper.scrapeResults = scrapeResults
-        wrapper.markComplete()
+        wrapper.complete(scrapeResults)
         wrapper.agentContext.markActivityTime(true)
       } ?: logger.warn { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId (likely timed out)" }
   }
@@ -66,13 +65,14 @@ internal class ScrapeRequestManager {
   ) {
     scrapeRequestMap[scrapeId]
       ?.also { wrapper ->
-        wrapper.scrapeResults = ScrapeResults(
-          srAgentId = wrapper.agentContext.agentId,
-          srScrapeId = scrapeId,
-          srStatusCode = HttpStatusCode.BadGateway.value,
-          srFailureReason = failureReason,
+        wrapper.complete(
+          ScrapeResults(
+            srAgentId = wrapper.agentContext.agentId,
+            srScrapeId = scrapeId,
+            srStatusCode = HttpStatusCode.BadGateway.value,
+            srFailureReason = failureReason,
+          ),
         )
-        wrapper.markComplete()
         wrapper.agentContext.markActivityTime(true)
       } ?: logger.warn { "failScrapeRequest() missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
   }
