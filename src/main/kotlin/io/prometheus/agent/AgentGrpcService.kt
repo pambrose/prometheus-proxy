@@ -32,7 +32,6 @@ import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
 import io.grpc.Status
-import io.grpc.StatusRuntimeException
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions.Companion.HTTPS_PREFIX
 import io.prometheus.common.BaseOptions.Companion.HTTP_PREFIX
@@ -72,6 +71,21 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.CRC32
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
+
+/**
+ * Outcome of a single [AgentGrpcService.sendHeartBeat] call, used by the agent's heartbeat loop to
+ * decide whether the connection is healthy or should be torn down so the run loop reconnects.
+ */
+internal enum class HeartBeatResult {
+  /** The proxy acknowledged the heartbeat; the connection is healthy. */
+  SUCCESS,
+
+  /** The proxy reported it no longer knows this agent (evicted its context); reconnect immediately. */
+  EVICTED,
+
+  /** The heartbeat RPC failed (deadline/transport/other); tolerated up to a threshold before reconnecting. */
+  TRANSIENT_FAILURE,
+}
 
 /**
  * gRPC client that manages the agent's connection to the proxy.
@@ -144,18 +158,32 @@ internal class AgentGrpcService(
   }
 
   // Must be called while holding grpcLock
-  private fun shutDownLocked() {
-    if (agent.isZipkinEnabled)
-      tracing.close()
+  private fun shutDownChannelLocked() {
     if (grpcStarted) {
       channel.shutdownNow()
       channel.awaitTermination(5, SECONDS)
     }
   }
 
+  // Must be called while holding grpcLock
+  private fun shutDownLocked() {
+    if (agent.isZipkinEnabled)
+      tracing.close()
+    shutDownChannelLocked()
+  }
+
   fun shutDown() =
     grpcLock.withLock {
       shutDownLocked()
+    }
+
+  // Shuts the gRPC channel down without touching tracing, breaking any in-flight RPCs (e.g. an idle
+  // readRequestsFromProxy collect). Called from Agent.triggerShutdown() so stopSync() can unblock the
+  // run loop (finding 1); the full shutDown() (tracing included) still runs from the service shutDown()
+  // hook, and channel.shutdownNow() is idempotent so that later call is a no-op on the channel.
+  fun shutDownChannel() =
+    grpcLock.withLock {
+      shutDownChannelLocked()
     }
 
   fun resetGrpcStubs() =
@@ -289,38 +317,32 @@ internal class AgentGrpcService(
         throw RequestFailureException("unregisterPathOnProxy() - $reason")
     }
 
-  suspend fun sendHeartBeat() {
-    agent.agentId
-      .also { anAgentId ->
-        if (anAgentId.isNotEmpty())
-          runCatchingCancellable {
-            val request =
-              heartBeatRequest {
-                agentId = anAgentId
-              }
-            unaryStub().sendHeartBeat(request)
-              .apply {
-                agent.markMsgSent()
-                if (!valid) {
-                  logger.error { "AgentId $anAgentId not found on proxy" }
-                  throw StatusRuntimeException(Status.NOT_FOUND)
-                }
-              }
-          }.onFailure { e ->
-            if (e is StatusRuntimeException) {
-              logger.error { "sendHeartBeat() failed ${e.status}" }
-              // NOT_FOUND means the proxy has evicted this agent's context.
-              // Re-throw so the exception propagates to startHeartBeat(), triggering
-              // connectionContext.close() via invokeOnCompletion and forcing a reconnect.
-              // Without this, the agent enters a zombie state: the heartbeat loop continues
-              // but no scrape requests are ever routed to this agent.
-              if (e.status.code == Status.Code.NOT_FOUND)
-                throw e
-            } else {
-              logger.error { "sendHeartBeat() failed ${e.message}" }
-            }
+  // Sends one heartbeat and classifies the outcome for the caller (Agent.startHeartBeat), which uses the
+  // result to keep the connection or tear it down. A NOT_FOUND *response* (proxy evicted this agent) maps
+  // to EVICTED; any RPC failure -- DEADLINE_EXCEEDED / UNAVAILABLE / non-gRPC -- maps to TRANSIENT_FAILURE
+  // so the caller can force a reconnect after N consecutive failures rather than spinning forever on a
+  // half-open transport (finding 2). Cancellation propagates (runCatchingCancellable) for clean shutdown.
+  suspend fun sendHeartBeat(): HeartBeatResult {
+    val anAgentId = agent.agentId
+    if (anAgentId.isEmpty())
+      return HeartBeatResult.SUCCESS
+
+    return runCatchingCancellable {
+      unaryStub().sendHeartBeat(heartBeatRequest { agentId = anAgentId })
+        .let { response ->
+          agent.markMsgSent()
+          if (response.valid) {
+            HeartBeatResult.SUCCESS
+          } else {
+            logger.warn { "Heartbeat: agentId $anAgentId not found on proxy" }
+            HeartBeatResult.EVICTED
           }
-      }
+        }
+    }.getOrElse { e ->
+      // Log at WARN with the throwable attached so the stack trace is preserved (finding 13).
+      logger.warn(e) { "Heartbeat failure: ${e.simpleClassName} - ${e.message}" }
+      HeartBeatResult.TRANSIENT_FAILURE
+    }
   }
 
   suspend fun readRequestsFromProxy(

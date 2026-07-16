@@ -17,17 +17,18 @@
 package io.prometheus.common
 
 /**
- * Thrown when a configuration file or URL cannot be loaded or parsed and the process was started
- * with `exitOnMissingConfig = false` (the embedded mode used by
- * [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]).
+ * Thrown when startup cannot complete — a configuration file or URL cannot be loaded/parsed, or the
+ * command-line options fail to parse — and the process was started with `exitOnMissingConfig = false`
+ * (the embedded mode used by [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]).
  *
- * In standalone mode (`exitOnMissingConfig = true`) a config-load failure terminates the process
- * via `exitProcess(1)` instead. Embedders that host an Agent inside their own JVM should catch this
- * exception so a transient remote-config fetch failure or a malformed config file does not kill the
- * host application.
+ * In standalone mode (`exitOnMissingConfig = true`) such a failure terminates the process via
+ * `exitProcess` instead. Embedders that host an Agent inside their own JVM should catch this
+ * exception so a transient remote-config fetch failure, a malformed config file, or an invalid
+ * command-line option does not kill the host application.
  *
- * @param message a human-readable description of which config source failed to load
- * @param cause the underlying failure (e.g. a parse error or `FileNotFoundException`), if any
+ * @param message a human-readable description of what failed to load or parse
+ * @param cause the underlying failure (e.g. a parse error, `FileNotFoundException`, or a JCommander
+ *   `ParameterException`), if any
  */
 class ConfigLoadException(
   message: String,

@@ -42,6 +42,7 @@ import io.prometheus.agent.AgentMetrics
 import io.prometheus.agent.AgentOptions
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.EmbeddedAgentInfo
+import io.prometheus.agent.HeartBeatResult
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.client.Histogram
 import io.prometheus.common.BaseOptions.Companion.DEBUG
@@ -170,8 +171,8 @@ class Agent(
   private val initialConnectionLatch = CountDownLatch(1)
   private val initialPathsRegisteredLatch = CountDownLatch(1)
 
-  // Prime the limiter
-  private val reconnectLimiter: RateLimiter
+  // Prime the limiter. internal + var so tests can substitute a mock to verify reconnect pacing (finding 3).
+  internal var reconnectLimiter: RateLimiter
   private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
   internal val agentName = options.agentName.ifBlank { "Unnamed-${hostInfo.hostName}" }
@@ -323,9 +324,18 @@ class Agent(
         // interruptible, so blocking here would stall Agent.shutDown()/awaitTerminated() for up to
         // reconnectPauseSecs; there is also no reconnect to pace when the agent is stopping.
         if (isRunning)
-          logger.info { "Waited ${reconnectLimiter.acquire().roundToInt().seconds} to reconnect" }
+          reconnectPause()
       }
     }
+  }
+
+  // Blocks on the reconnect rate limiter to pace reconnect attempts, then logs the wait.
+  // acquire() MUST stay outside the logger.info { } lambda: kotlin-logging skips lambda bodies when the
+  // level is disabled, so an acquire() inside the lambda silently stops pacing reconnects at log levels
+  // above INFO -- a hot reconnect loop that hammers the proxy (finding 3).
+  internal fun reconnectPause() {
+    val waited = reconnectLimiter.acquire()
+    logger.info { "Waited ${waited.roundToInt().seconds} to reconnect" }
   }
 
   /**
@@ -414,26 +424,52 @@ class Agent(
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) {
-    agentConfigVals.internal.apply {
-      if (heartbeatEnabled) {
-        val heartbeatPauseTime = heartbeatCheckPauseMillis.milliseconds
-        val maxInactivityTime = heartbeatMaxInactivitySecs.seconds
-        logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
-
-        while (isRunning && connectionContext.connected) {
-          val timeSinceLastWrite = lastMsgSentMark.elapsedNow()
-          if (timeSinceLastWrite > maxInactivityTime) {
-            logger.debug { "Sending heartbeat" }
-            grpcService.sendHeartBeat()
-          }
-          delay(heartbeatPauseTime)
-        }
-        logger.info { "Heartbeat completed" }
-      } else {
-        logger.info { "Heartbeat disabled" }
-      }
+    val cfg = agentConfigVals.internal
+    if (!cfg.heartbeatEnabled) {
+      logger.info { "Heartbeat disabled" }
+      return
     }
+
+    val heartbeatPauseTime = cfg.heartbeatCheckPauseMillis.milliseconds
+    val maxInactivityTime = cfg.heartbeatMaxInactivitySecs.seconds
+    logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
+
+    var consecutiveFailures = 0
+    while (isRunning && connectionContext.connected) {
+      if (lastMsgSentMark.elapsedNow() > maxInactivityTime) {
+        logger.debug { "Sending heartbeat" }
+        val result = grpcService.sendHeartBeat()
+        val nextCount = nextHeartbeatFailureCount(result, consecutiveFailures, MAX_HEARTBEAT_FAILURES)
+        if (nextCount == null) {
+          // EVICTED, or MAX_HEARTBEAT_FAILURES consecutive failures on a half-open transport. Tear the
+          // channel down so the idle readRequestsFromProxy collect errors out and the run loop reconnects
+          // (findings 1 & 2); closing the connection context alone cannot unblock that collect, so the
+          // agent would otherwise linger as a zombie until proxy eviction.
+          logger.warn { "Heartbeat signalled disconnect ($result); tearing down connection to reconnect" }
+          grpcService.shutDownChannel()
+          break
+        }
+        consecutiveFailures = nextCount
+      }
+      delay(heartbeatPauseTime)
+    }
+    logger.info { "Heartbeat completed" }
   }
+
+  // Given the latest heartbeat [result] and the running [consecutiveFailures] count, returns the updated
+  // count, or null to signal the connection should be torn down: immediately on EVICTED, or once transient
+  // failures reach [maxFailures] in a row (a half-open transport fails every heartbeat -- finding 2). A
+  // SUCCESS resets the count to 0. Pure and side-effect-free so the threshold logic is unit-testable.
+  internal fun nextHeartbeatFailureCount(
+    result: HeartBeatResult,
+    consecutiveFailures: Int,
+    maxFailures: Int,
+  ): Int? =
+    when (result) {
+      HeartBeatResult.SUCCESS -> 0
+      HeartBeatResult.EVICTED -> null
+      HeartBeatResult.TRANSIENT_FAILURE -> (consecutiveFailures + 1).takeIf { it < maxFailures }
+    }
 
   /**
    * Updates the scrape counter metrics for the specified operation type.
@@ -489,6 +525,18 @@ class Agent(
       args.invoke(metrics)
   }
 
+  // Guava's AbstractExecutionThreadService invokes the shutDown() hook only AFTER run() returns, but
+  // run() can be parked in an idle readRequestsFromProxy collect that nothing else cancels. Shut the
+  // gRPC channel down here -- triggerShutdown() runs on the stopping thread, concurrently with the
+  // blocked run() -- so that collect errors out, the connection coroutineScope completes, runBlocking
+  // returns, and the while(isRunning) loop exits. Without this, stopSync()/awaitTerminated() deadlocks
+  // until a scrape arrives, the proxy evicts the agent, or the OS TCP timeout fires (finding 1).
+  // Mirrors AgentContextCleanupService.triggerShutdown().
+  override fun triggerShutdown() {
+    runCatchingCancellable { grpcService.shutDownChannel() }
+      .onFailure { e -> logger.warn(e) { "triggerShutdown() failed to shut down the gRPC channel: ${e.message}" } }
+  }
+
   override fun shutDown() {
     grpcService.shutDown()
     runBlocking { agentHttpService.close() }
@@ -516,6 +564,11 @@ class Agent(
 
   companion object {
     private val logger = logger {}
+
+    // Consecutive heartbeat failures tolerated before forcing a reconnect. On a half-open transport
+    // every heartbeat fails; a small threshold keeps a transient blip from reconnecting while still
+    // detecting a truly dead connection within a few heartbeat cycles (finding 2).
+    private const val MAX_HEARTBEAT_FAILURES = 3
 
     /**
      * JVM entry point for the standalone Agent process.

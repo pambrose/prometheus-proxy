@@ -343,6 +343,27 @@ class BaseOptionsTest : StringSpec() {
       options.debugEnabled shouldBe true
     }
 
+    // ==================== Finding 5: parseArgs must not exitProcess in embedded mode ====================
+
+    // In embedded mode (exitOnMissingConfig = false) a JCommander ParameterException must throw a
+    // catchable ConfigLoadException rather than exitProcess(1), which would kill the host JVM.
+    // (The exitProcess CLI path cannot be asserted directly here: exitProcess would terminate the
+    // test worker -- same reason the "version flag should not trigger exitProcess" test above only
+    // exercises the non-exiting path.)
+    "Finding 5: invalid CLI option throws ConfigLoadException when exitOnMissingConfig is false" {
+      val ex =
+        shouldThrow<ConfigLoadException> {
+          AgentOptions(listOf("--proxy", "host", "--admin_port", "not_a_number"), exitOnMissingConfig = false)
+        }
+      ex.message.shouldNotBeEmpty()
+    }
+
+    "Finding 5: unknown CLI flag throws ConfigLoadException when exitOnMissingConfig is false" {
+      shouldThrow<ConfigLoadException> {
+        AgentOptions(listOf("--proxy", "host", "--this-flag-does-not-exist"), exitOnMissingConfig = false)
+      }
+    }
+
     // ==================== readConfig Error Message ====================
 
     // The readConfig error message uses escaped-dollar interpolation to produce a

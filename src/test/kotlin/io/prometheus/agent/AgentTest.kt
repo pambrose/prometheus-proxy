@@ -18,6 +18,9 @@
 
 package io.prometheus.agent
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger as LogbackLogger
+import com.google.common.util.concurrent.RateLimiter
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
@@ -28,11 +31,13 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
@@ -47,6 +52,7 @@ import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import org.slf4j.LoggerFactory
 
 class AgentTest : StringSpec() {
   private fun createTestAgent(vararg extraArgs: String): Agent {
@@ -131,6 +137,61 @@ class AgentTest : StringSpec() {
         } catch (_: Exception) {
         }
       }
+    }
+
+    // ==================== Finding 3: reconnect pacing must not depend on the log level ====================
+
+    // The reconnect rate limiter's acquire() must run every reconnect cycle regardless of log level.
+    // Previously acquire() lived inside a logger.info { } lambda, which kotlin-logging skips when the
+    // level is above INFO -- silently disabling reconnect pacing (hot reconnect loop) under --log_level warn.
+    // Raising the Agent logger to WARN and asserting acquire() is still invoked catches that regression.
+    "Finding 3: reconnectPause acquires a permit even when the info log level is disabled" {
+      val agent = createTestAgent()
+
+      val mockLimiter = mockk<RateLimiter>()
+      every { mockLimiter.acquire() } returns 0.0
+      agent.reconnectLimiter = mockLimiter
+
+      val agentLogger = LoggerFactory.getLogger("io.prometheus.Agent") as LogbackLogger
+      val originalLevel = agentLogger.level
+      agentLogger.level = Level.WARN
+      try {
+        agent.reconnectPause()
+        verify(exactly = 1) { mockLimiter.acquire() }
+      } finally {
+        agentLogger.level = originalLevel
+      }
+    }
+
+    // ==================== Finding 2: heartbeat-failure threshold before reconnect ====================
+
+    // nextHeartbeatFailureCount drives the heartbeat loop's disconnect decision. SUCCESS resets the
+    // running failure count; EVICTED disconnects immediately; consecutive transient failures accumulate
+    // and force a disconnect (null) once they reach maxFailures -- so a half-open transport (heartbeats
+    // failing while the read stream stays silently suspended) no longer leaves the agent a zombie.
+
+    "Finding 2: nextHeartbeatFailureCount resets to 0 on SUCCESS" {
+      val agent = createTestAgent()
+      agent.nextHeartbeatFailureCount(HeartBeatResult.SUCCESS, consecutiveFailures = 2, maxFailures = 3) shouldBe 0
+    }
+
+    "Finding 2: nextHeartbeatFailureCount signals immediate disconnect on EVICTED" {
+      val agent = createTestAgent()
+      agent.nextHeartbeatFailureCount(HeartBeatResult.EVICTED, consecutiveFailures = 0, maxFailures = 3)
+        .shouldBeNull()
+    }
+
+    "Finding 2: nextHeartbeatFailureCount accumulates transient failures below the threshold" {
+      val agent = createTestAgent()
+      val transient = HeartBeatResult.TRANSIENT_FAILURE
+      agent.nextHeartbeatFailureCount(transient, consecutiveFailures = 0, maxFailures = 3) shouldBe 1
+      agent.nextHeartbeatFailureCount(transient, consecutiveFailures = 1, maxFailures = 3) shouldBe 2
+    }
+
+    "Finding 2: nextHeartbeatFailureCount signals disconnect at the failure threshold" {
+      val agent = createTestAgent()
+      agent.nextHeartbeatFailureCount(HeartBeatResult.TRANSIENT_FAILURE, consecutiveFailures = 2, maxFailures = 3)
+        .shouldBeNull()
     }
 
     // ==================== updateScrapeCounter Tests ====================
