@@ -99,7 +99,7 @@ internal class ProxyPathManager(
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
         if (agentInfo == null) {
-          pathMap[path] = AgentContextInfo(true, labels, listOf(agentContext))
+          pathMap[path] = AgentContextInfo(true, labels, [agentContext])
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated) {
             val reason = "Consolidated agent rejected for non-consolidated path /$path"
@@ -114,12 +114,12 @@ internal class ProxyPathManager(
           logger.error { reason }
           return reason
         }
-        val displacedContexts = agentInfo?.agentContexts ?: emptyList()
+        val displacedContexts = agentInfo?.agentContexts ?: []
         if (agentInfo != null) {
           logger.info { "Overwriting path /$path for ${agentInfo.agentContexts.firstOrNull()}" }
           proxy.metrics { agentDisplacementCount.inc() }
         }
-        pathMap[path] = AgentContextInfo(false, labels, listOf(agentContext))
+        pathMap[path] = AgentContextInfo(false, labels, [agentContext])
 
         // Invalidate displaced agent contexts that have no other registered paths.
         // Even live agents are invalidated here — a displaced agent with zero paths

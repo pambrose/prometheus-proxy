@@ -66,16 +66,16 @@ internal class AgentMetrics(
     SamplerGaugeCollector(
       "agent_scrape_backlog_size",
       "Agent scrape backlog size",
-      labelNames = listOf(LAUNCH_ID),
-      labelValues = listOf(agent.launchId),
+      labelNames = [LAUNCH_ID],
+      labelValues = [agent.launchId],
       data = { agent.scrapeRequestBacklogSize.load().toDouble() },
     )
 
     SamplerGaugeCollector(
       "agent_client_cache_size",
       "Agent client cache size",
-      labelNames = listOf(LAUNCH_ID),
-      labelValues = listOf(agent.launchId),
+      labelNames = [LAUNCH_ID],
+      labelValues = [agent.launchId],
       data = { agent.agentHttpService.httpClientCache.currentCacheSize().toDouble() },
     )
   }

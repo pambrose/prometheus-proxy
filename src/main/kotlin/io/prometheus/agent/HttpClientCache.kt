@@ -95,7 +95,7 @@ internal class HttpClientCache(
             }
           }.getOrElse { e ->
             logger.error(e) { "Error during HTTP client cache cleanup" }
-            emptyList()
+            []
           }
         clientsToClose.forEach { closeQuietly(it) }
       }
@@ -279,7 +279,7 @@ internal class HttpClientCache(
 
   // Called with mutex. Returns and clears the pending-close list.
   private fun drainPendingCloses(): List<HttpClient> {
-    if (pendingCloses.isEmpty()) return emptyList()
+    if (pendingCloses.isEmpty()) return []
     return pendingCloses.toList().also { pendingCloses.clear() }
   }
 
