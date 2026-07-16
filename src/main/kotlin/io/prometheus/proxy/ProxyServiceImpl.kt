@@ -148,7 +148,8 @@ internal class ProxyServiceImpl(
         reason = "Invalid agentId: $agentId (unregisterPath)"
       }
     } else {
-      proxy.pathManager.removePath(request.path, agentId).apply { agentContext.markActivityTime(false) }
+      // The activity-time bump is unrelated to the response receiver, so .also (not .apply) -- finding 36.
+      proxy.pathManager.removePath(request.path, agentId).also { agentContext.markActivityTime(false) }
     }
   }
 
@@ -181,7 +182,16 @@ internal class ProxyServiceImpl(
             ),
           )
         while (proxy.isRunning && agentContext.isValid()) {
-          agentContext.readScrapeRequest()?.apply { emit(scrapeRequest) }
+          val wrapper = agentContext.readScrapeRequest() ?: continue
+          try {
+            emit(wrapper.scrapeRequest)
+          } catch (e: CancellationException) {
+            // Cancelled after polling the wrapper out of the queue but before delivering it: fail the
+            // wrapper so the waiting HTTP handler gets a prompt error instead of blocking the full
+            // scrape-timeout window (finding 14).
+            proxy.scrapeRequestManager.failScrapeRequest(wrapper.scrapeId, "readRequestsFromProxy cancelled")
+            throw e
+          }
         }
       } finally {
         // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to
@@ -247,9 +257,9 @@ internal class ProxyServiceImpl(
           }
 
           ChunkOneOfCase.CHUNK -> {
-            response.chunk
-              .apply {
-                logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
+            // with(...) rather than apply { }: this block consumes the chunk, it doesn't configure it (finding 36).
+            with(response.chunk) {
+              logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
                 val context = contextManager.getChunkedContext(chunkScrapeId)
                 if (context == null) {
                   logger.warn { "Missing chunked context for chunk with scrapeId: $chunkScrapeId, skipping" }
@@ -271,9 +281,9 @@ internal class ProxyServiceImpl(
           }
 
           ChunkOneOfCase.SUMMARY -> {
-            response.summary
-              .apply {
-                val context = contextManager.removeChunkedContext(summaryScrapeId)
+            // with(...) rather than apply { }: this block consumes the summary (finding 36).
+            with(response.summary) {
+              val context = contextManager.removeChunkedContext(summaryScrapeId)
                 activeScrapeIds -= summaryScrapeId
                 if (context == null) {
                   logger.warn { "Missing chunked context for summary with scrapeId: $summaryScrapeId, skipping" }
@@ -319,8 +329,8 @@ internal class ProxyServiceImpl(
     // thread) for the same scrapeId. Double-handling is prevented by two invariants that future edits
     // must preserve: (a) contextManager.removeChunkedContext() is a ConcurrentHashMap.remove(), so only
     // one caller gets the non-null context and the ?.also block (warn + failScrapeRequest + metric)
-    // runs at most once; and (b) failScrapeRequest() -> markComplete() is idempotent via an
-    // AtomicBoolean compareAndSet, so even a double-fail has no observable effect.
+    // runs at most once; and (b) failScrapeRequest() -> ScrapeRequestWrapper.complete() is idempotent
+    // via an AtomicBoolean compareAndSet, so even a double-fail has no observable effect.
     if (activeScrapeIds.isNotEmpty()) {
       val contextManager = proxy.agentContextManager
       activeScrapeIds.forEach { scrapeId ->

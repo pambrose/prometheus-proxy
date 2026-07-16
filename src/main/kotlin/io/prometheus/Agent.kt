@@ -32,7 +32,6 @@ import com.pambrose.common.util.randomId
 import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
-import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
 import io.prometheus.agent.AgentConnectionContext
@@ -50,8 +49,8 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.Utils.exceptionDetails
 import io.prometheus.common.Utils.getVersionDesc
+import io.prometheus.common.Utils.logStreamFailure
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -62,6 +61,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.update
 import kotlin.math.roundToInt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -171,8 +171,10 @@ class Agent(
   private val initialConnectionLatch = CountDownLatch(1)
   private val initialPathsRegisteredLatch = CountDownLatch(1)
 
-  // Prime the limiter. internal + var so tests can substitute a mock to verify reconnect pacing (finding 3).
-  internal var reconnectLimiter: RateLimiter
+  // Primed (one acquire) at construction. internal + var so tests can substitute a mock to verify
+  // reconnect pacing (finding 3). reconnectPauseSecs is validated > 0 in AgentOptions (finding 11).
+  internal var reconnectLimiter: RateLimiter =
+    RateLimiter.create(1.0 / agentConfigVals.internal.reconnectPauseSecs).apply { acquire() }
   private var lastMsgSentMark: TimeMark by nonNullableReference(clock.markNow())
 
   internal val agentName = options.agentName.ifBlank { "Unnamed-${hostInfo.hostName}" }
@@ -186,11 +188,7 @@ class Agent(
    * overlapping items. This CAS loop prevents the counter from going negative.
    */
   internal fun decrementBacklog(delta: Int) {
-    while (true) {
-      val current = scrapeRequestBacklogSize.load()
-      val next = maxOf(current - delta, 0)
-      if (scrapeRequestBacklogSize.compareAndSet(current, next)) return
-    }
+    scrapeRequestBacklogSize.update { maxOf(it - delta, 0) }
   }
 
   internal val pathManager = AgentPathManager(this)
@@ -199,11 +197,9 @@ class Agent(
   internal val launchId = randomId(15)
   internal val metrics by lazy { AgentMetrics(this) }
 
-  val agentConfigVals: ConfigVals.Agent get() = configVals.agent
+  internal val agentConfigVals: ConfigVals.Agent get() = configVals.agent
 
   init {
-    reconnectLimiter = RateLimiter.create(1.0 / agentConfigVals.internal.reconnectPauseSecs).apply { acquire() }
-
     fun toPlainText() =
       """
         Prometheus Agent Info [${getVersionDesc(false)}]
@@ -263,7 +259,10 @@ class Agent(
         initialPathsRegisteredLatch.countDown()
 
         // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
-        val connectionContext = AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * 2)
+        val connectionContext =
+          AgentConnectionContext(
+            agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER,
+          )
 
         coroutineScope {
           // Each task runs for the connection's lifetime; on completion launchConnectionTask closes
@@ -354,7 +353,7 @@ class Agent(
       runCatchingCancellable { block() }
         .onFailure { e ->
           if (isRunning)
-            Status.fromThrowable(e).apply { logger.error(e) { "$name(): ${exceptionDetails(e)}" } }
+            logger.logStreamFailure(name, e)
         }
     }.apply {
       invokeOnCompletion {
@@ -370,7 +369,9 @@ class Agent(
       }
 
       is StatusRuntimeException -> {
-        logger.info { "Disconnected from proxy at $proxyHost" }
+        // Include the gRPC status so UNAVAILABLE / UNAUTHENTICATED / RESOURCE_EXHAUSTED reconnect loops
+        // are distinguishable in the logs (finding 22).
+        logger.info { "Disconnected from proxy at $proxyHost - ${e.status}" }
       }
 
       is StatusException -> {
@@ -410,17 +411,10 @@ class Agent(
           HealthCheck.Result.healthy()
       },
     )
-    healthCheckRegistry.register(
-      "http_client_cache_size_check",
-      healthCheck {
-        val currentSize = agentHttpService.httpClientCache.currentCacheSize()
-        val threshold = options.maxCacheSize + 1
-        if (currentSize >= threshold)
-          HealthCheck.Result.unhealthy("HTTP client cache size $currentSize >= threshold $threshold")
-        else
-          HealthCheck.Result.healthy()
-      },
-    )
+    // The http_client_cache_size_check health check was removed (finding 24): its threshold
+    // (maxCacheSize + 1) was unreachable because the cache evicts before insert, so cache.size never
+    // exceeds maxCacheSize and the unhealthy branch could never fire. The cache size is still exported
+    // as a metric (AgentMetrics).
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) {
@@ -579,6 +573,10 @@ class Agent(
     // every heartbeat fails; a small threshold keeps a transient blip from reconnecting while still
     // detecting a truly dead connection within a few heartbeat cycles (finding 2).
     private const val MAX_HEARTBEAT_FAILURES = 3
+
+    // The connection's scrape-request channel is sized at 2x the backlog-unhealthy threshold so the
+    // health check can fire (backlog >= threshold) before the channel actually blocks senders (finding 28).
+    private const val BACKLOG_CAPACITY_MULTIPLIER = 2
 
     /**
      * JVM entry point for the standalone Agent process.

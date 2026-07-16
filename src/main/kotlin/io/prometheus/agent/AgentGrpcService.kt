@@ -31,7 +31,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
-import io.grpc.Status
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions.Companion.HTTPS_PREFIX
 import io.prometheus.common.BaseOptions.Companion.HTTP_PREFIX
@@ -39,7 +38,7 @@ import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.ScrapeResults
-import io.prometheus.common.Utils.exceptionDetails
+import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
@@ -128,15 +127,12 @@ internal class AgentGrpcService(
   private val tlsContext: TlsContext
 
   init {
+    // Strip either scheme prefix (case-insensitively, matching BaseOptions.isUrlPrefix); the prefixes
+    // are mutually exclusive so a chain works, and removePrefixIgnoreCase no-ops when absent (finding 42).
     val schemeStripped =
       options.proxyHostname
-        .run {
-          when {
-            startsWith(HTTP_PREFIX) -> removePrefix(HTTP_PREFIX)
-            startsWith(HTTPS_PREFIX) -> removePrefix(HTTPS_PREFIX)
-            else -> this
-          }
-        }
+        .removePrefixIgnoreCase(HTTPS_PREFIX)
+        .removePrefixIgnoreCase(HTTP_PREFIX)
 
     val parsed = parseHostPort(schemeStripped, DEFAULT_GRPC_PORT)
     agentHostName = parsed.host
@@ -161,7 +157,11 @@ internal class AgentGrpcService(
   private fun shutDownChannelLocked() {
     if (grpcStarted) {
       channel.shutdownNow()
-      channel.awaitTermination(5, SECONDS)
+      // A false return means the channel did not terminate in time; a leftover call's late onHeaders can
+      // then re-assign a stale agentId to the next connection (finding 20), so surface it instead of
+      // ignoring the boolean.
+      if (!channel.awaitTermination(CHANNEL_TERMINATION_TIMEOUT_SECS, SECONDS))
+        logger.warn { "gRPC channel did not terminate within ${CHANNEL_TERMINATION_TIMEOUT_SECS}s" }
     }
   }
 
@@ -473,7 +473,11 @@ internal class AgentGrpcService(
     val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
 
     fun closeAll() {
-      connectionContext.close()
+      // close() drains N buffered scrape actions; decrement the backlog by that count here too (mirroring
+      // Agent.launchConnectionTask's invokeOnCompletion) so the gauge isn't left inflated by N until the
+      // next connect resets it (finding 18).
+      val drained = connectionContext.close()
+      if (drained > 0) agent.decrementBacklog(drained)
       nonChunkedChannel.close()
       chunkedChannel.close()
     }
@@ -489,7 +493,7 @@ internal class AgentGrpcService(
       runCatchingCancellable { block() }
         .onFailure { e ->
           if (agent.isRunning)
-            Status.fromThrowable(e).apply { logger.error(e) { "$name(): ${exceptionDetails(e)}" } }
+            logger.logStreamFailure(name, e)
           if (e !is CancellationException) closeAll()
         }
     }
@@ -527,5 +531,13 @@ internal class AgentGrpcService(
   companion object {
     private val logger = logger {}
     private const val DEFAULT_GRPC_PORT = 50051
+
+    // Max time to wait for the gRPC channel to terminate after shutdownNow() (finding 28).
+    private const val CHANNEL_TERMINATION_TIMEOUT_SECS = 5L
+
+    // Case-insensitive counterpart to String.removePrefix, so the proxy-hostname scheme strip matches
+    // BaseOptions.isUrlPrefix's case-insensitivity (finding 42). No-ops when the prefix is absent.
+    private fun String.removePrefixIgnoreCase(prefix: String): String =
+      if (startsWith(prefix, ignoreCase = true)) substring(prefix.length) else this
   }
 }

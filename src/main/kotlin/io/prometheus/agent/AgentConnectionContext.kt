@@ -36,7 +36,9 @@ import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
  * @see io.prometheus.Agent
  */
 internal class AgentConnectionContext(
-  val backlogCapacity: Int = 128,
+  // No default: the sole production caller derives this from config, and a default would silently
+  // diverge if a future call site forgot to pass it (finding 31).
+  val backlogCapacity: Int,
 ) {
   private var disconnected by atomicBoolean(false)
   private val scrapeRequestActionsChannel = Channel<ScrapeRequestAction>(backlogCapacity)
@@ -78,10 +80,7 @@ internal class AgentConnectionContext(
         // Close (not cancel) and drain the scrape request actions channel so that
         // callers can adjust scrapeRequestBacklogSize by the drained count.
         scrapeRequestActionsChannel.close()
-        var drained = 0
-        while (scrapeRequestActionsChannel.tryReceive().isSuccess) {
-          drained++
-        }
+        val drained = generateSequence { scrapeRequestActionsChannel.tryReceive().getOrNull() }.count()
         // Use close() instead of cancel() so buffered results can still be drained
         // by the consumer. cancel() discards all buffered items, causing the proxy
         // to time out waiting for results that were already computed.

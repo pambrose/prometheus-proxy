@@ -74,7 +74,7 @@ internal class ProxyGrpcService(
         PLAINTEXT_CONTEXT
 
     grpcServer = createGrpcServer(tlsContext, options)
-    grpcServer.shutdownWithJvm(2.seconds)
+    grpcServer.shutdownWithJvm(SHUTDOWN_GRACE)
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
 
     healthCheck = healthCheck {
@@ -149,7 +149,7 @@ internal class ProxyGrpcService(
   override fun shutDown() {
     if (proxy.isZipkinEnabled)
       tracing.close()
-    grpcServer.shutdownGracefully(2.seconds)
+    grpcServer.shutdownGracefully(SHUTDOWN_GRACE)
   }
 
   override fun toString() =
@@ -165,5 +165,8 @@ internal class ProxyGrpcService(
 
   companion object {
     private val logger = logger {}
+
+    // Grace period for gRPC server shutdown before forcing termination (finding 28).
+    private val SHUTDOWN_GRACE = 2.seconds
   }
 }

@@ -27,6 +27,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.ktor.http.HttpStatusCode
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -97,7 +98,7 @@ class AgentContextTest : StringSpec() {
     // M3: invalidate() now drains buffered scrape requests and calls closeChannel() on each
     // so HTTP handlers waiting on awaitCompleted() are notified immediately instead of
     // waiting for the full scrape timeout to expire.
-    "invalidate should close pending scrape request wrappers" {
+    "invalidate should complete pending scrape request wrappers" {
       val context = AgentContext("remote-addr")
       val wrapper1 = mockk<ScrapeRequestWrapper>(relaxed = true)
       val wrapper2 = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -111,13 +112,13 @@ class AgentContextTest : StringSpec() {
       context.invalidate()
 
       context.isValid().shouldBeFalse()
-      // All buffered wrappers should have had closeChannel() called
-      verify(exactly = 1) { wrapper1.closeChannel() }
-      verify(exactly = 1) { wrapper2.closeChannel() }
-      verify(exactly = 1) { wrapper3.closeChannel() }
+      // All buffered wrappers should be failed with an agent-disconnected result (finding 15).
+      verify(exactly = 1) { wrapper1.complete(any()) }
+      verify(exactly = 1) { wrapper2.complete(any()) }
+      verify(exactly = 1) { wrapper3.complete(any()) }
     }
 
-    "invalidate should unblock awaitCompleted on buffered wrappers" {
+    "invalidate should fail buffered wrappers with an agent-disconnected result (finding 15)" {
       val context = AgentContext("remote-addr")
 
       // Create a real ScrapeRequestWrapper so awaitCompleted() works end-to-end
@@ -131,15 +132,15 @@ class AgentContextTest : StringSpec() {
         wrapper.awaitCompleted(30.seconds)
       }
 
-      // Invalidate should drain the channel and close the wrapper's completion channel
       context.invalidate()
 
-      // awaitCompleted should unblock almost immediately.
-      // It returns false because scrapeResults was never assigned (agent disconnected).
+      // awaitCompleted unblocks almost immediately, now returning TRUE with a 502 result so
+      // submitScrapeRequest reports the truthful agent-disconnect instead of mislabeling it timed_out.
       val completed = deferred.await()
       val elapsed = System.currentTimeMillis() - startTime
 
-      completed.shouldBeFalse()
+      completed.shouldBeTrue()
+      wrapper.scrapeResults?.srStatusCode shouldBe HttpStatusCode.BadGateway.value
       // Should unblock in well under the 30-second timeout
       elapsed shouldBeLessThan 5000L
     }

@@ -20,6 +20,7 @@ package io.prometheus.common
 
 import com.pambrose.common.util.EMPTY_BYTE_ARRAY
 import com.pambrose.common.util.simpleClassName
+import io.prometheus.common.Utils.causeChain
 import com.google.protobuf.ByteString
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.plugins.HttpRequestTimeoutException
@@ -98,10 +99,11 @@ internal class ScrapeResults(
       e: Throwable,
       url: String,
     ): Int {
-      // Walk the cause chain to detect wrapped timeout exceptions.
-      // Ktor sometimes wraps HttpRequestTimeoutException in other exceptions.
-      if (hasTimeoutCause(e)) {
-        logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+      // Detect wrapped timeout exceptions (Ktor sometimes wraps them) via the shared cause-walk.
+      if (e.hasTimeoutCause()) {
+        // Message without $e -- the throwable is already passed for the stack trace, so interpolating
+        // its toString() too would render it twice (finding 30).
+        logger.warn(e) { "fetchScrapeUrl() timed out - $url" }
         return RequestTimeout.value
       }
 
@@ -112,25 +114,20 @@ internal class ScrapeResults(
         }
 
         else -> {
-          logger.warn(e) { "fetchScrapeUrl() $e - $url" }
+          logger.warn(e) { "fetchScrapeUrl() - $url" }
           ServiceUnavailable.value
         }
       }
     }
-
-    private fun hasTimeoutCause(e: Throwable): Boolean {
-      var current: Throwable? = e
-      while (current != null) {
-        when (current) {
-          is TimeoutCancellationException,
-          is HttpConnectTimeoutException,
-          is SocketTimeoutException,
-          is HttpRequestTimeoutException,
-            -> return true
-        }
-        current = current.cause
-      }
-      return false
-    }
   }
 }
+
+// Shared timeout-cause predicate used by both the status-code mapping here and the agent's scrape-fetch
+// catch branch, so they can no longer disagree about the same throwable (finding 34).
+internal fun Throwable.hasTimeoutCause(): Boolean =
+  causeChain().any {
+    it is TimeoutCancellationException ||
+      it is HttpConnectTimeoutException ||
+      it is SocketTimeoutException ||
+      it is HttpRequestTimeoutException
+  }

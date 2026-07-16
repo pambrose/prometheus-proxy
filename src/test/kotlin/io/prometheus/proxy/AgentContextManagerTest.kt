@@ -25,6 +25,7 @@ import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.ktor.http.HttpStatusCode
 import io.mockk.mockk
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
@@ -320,7 +321,7 @@ class AgentContextManagerTest : StringSpec() {
       manager.totalAgentScrapeRequestBacklogSize shouldBe 0
     }
 
-    "invalidateAllAgentContexts should unblock awaitCompleted on buffered wrappers" {
+    "invalidateAllAgentContexts should fail buffered wrappers with an agent-disconnected result (finding 15)" {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("remote-addr")
       manager.addAgentContext(context)
@@ -334,13 +335,15 @@ class AgentContextManagerTest : StringSpec() {
         wrapper.awaitCompleted(30.seconds)
       }
 
-      // invalidateAllAgentContexts should drain and close the wrapper's channel
+      // invalidateAllAgentContexts drains each context, failing buffered wrappers with a 502 result.
       manager.invalidateAllAgentContexts()
 
       val completed = deferred.await()
       val elapsed = System.currentTimeMillis() - startTime
 
-      completed.shouldBeFalse()
+      // awaitCompleted returns true with a 502 result rather than a null that would read as timed_out.
+      completed.shouldBeTrue()
+      wrapper.scrapeResults?.srStatusCode shouldBe HttpStatusCode.BadGateway.value
       // Should unblock well under the 30-second timeout
       elapsed shouldBeLessThan 5000L
     }

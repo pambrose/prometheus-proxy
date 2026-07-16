@@ -667,7 +667,7 @@ class AgentGrpcServiceTest : StringSpec() {
       every { mockStub.readRequestsFromProxy(any(), any()) } returns flowOf(request1, request2)
       service.grpcStub = mockStub
 
-      val connectionContext = AgentConnectionContext()
+      val connectionContext = AgentConnectionContext(128)
       val mockHttpService = mockk<AgentHttpService>(relaxed = true)
 
       service.readRequestsFromProxy(mockHttpService, connectionContext)
@@ -690,7 +690,7 @@ class AgentGrpcServiceTest : StringSpec() {
       every { mockStub.readRequestsFromProxy(any(), any()) } returns flowOf()
       service.grpcStub = mockStub
 
-      val connectionContext = AgentConnectionContext()
+      val connectionContext = AgentConnectionContext(128)
       val mockHttpService = mockk<AgentHttpService>(relaxed = true)
 
       // Should complete without error
@@ -711,7 +711,7 @@ class AgentGrpcServiceTest : StringSpec() {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
-      val connectionContext = AgentConnectionContext()
+      val connectionContext = AgentConnectionContext(128)
       val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
       val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
 
@@ -747,7 +747,7 @@ class AgentGrpcServiceTest : StringSpec() {
       // chunkContentSizeBytes defaults to 32768 in mock
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
-      val connectionContext = AgentConnectionContext()
+      val connectionContext = AgentConnectionContext(128)
       val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
       val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
 
@@ -788,7 +788,7 @@ class AgentGrpcServiceTest : StringSpec() {
       every { mockOptions.chunkContentSizeBytes } returns 10
       val service = AgentGrpcService(agent, mockOptions, "test-server")
 
-      val connectionContext = AgentConnectionContext()
+      val connectionContext = AgentConnectionContext(128)
       val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
       val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
 
@@ -857,7 +857,7 @@ class AgentGrpcServiceTest : StringSpec() {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
-      val connectionContext = AgentConnectionContext()
+      val connectionContext = AgentConnectionContext(128)
       val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
       val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
 
@@ -1100,7 +1100,7 @@ class AgentGrpcServiceTest : StringSpec() {
       coEvery { mockStub.writeChunkedResponsesToProxy(any()) } returns EMPTY_INSTANCE
       service.grpcStub = mockStub
 
-      val connectionContext = AgentConnectionContext()
+      val connectionContext = AgentConnectionContext(128)
       // Close the connectionContext immediately so processScrapeResults exits,
       // triggering the inner finally to close both channels.
       connectionContext.close()
@@ -1129,7 +1129,7 @@ class AgentGrpcServiceTest : StringSpec() {
       }
       service.grpcStub = mockStub
 
-      val connectionContext = AgentConnectionContext()
+      val connectionContext = AgentConnectionContext(128)
 
       shouldNotThrow<Throwable> {
         coroutineScope {

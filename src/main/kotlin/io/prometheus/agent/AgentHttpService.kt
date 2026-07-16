@@ -31,7 +31,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpRequestRetry
-import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.auth.Auth
 import io.ktor.client.plugins.auth.providers.BasicAuthCredentials
@@ -52,8 +51,9 @@ import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.common.hasTimeoutCause
 import io.prometheus.grpc.ScrapeRequest
-import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.readByteArray
 import javax.net.ssl.X509TrustManager
@@ -123,18 +123,10 @@ internal class AgentHttpService(
         }
       } catch (e: Throwable) {
         // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
-        // but let other CancellationExceptions propagate (like system shutdown).
-        // Ktor often wraps the timeout exception, so we walk the cause chain as well.
-        var isTimeout = e is HttpRequestTimeoutException || e is TimeoutCancellationException
-        var curr: Throwable? = e
-        while (!isTimeout && curr != null) {
-          isTimeout = isTimeoutException(curr)
-          curr = curr.cause
-        }
-
-        if (e is kotlinx.coroutines.CancellationException && !isTimeout) {
+        // but let other CancellationExceptions propagate (like system shutdown). Uses the shared
+        // cause-walk predicate so the catch branch and the status-code mapping agree (finding 34).
+        if (e is CancellationException && !e.hasTimeoutCause())
           throw e
-        }
 
         // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.) so the agent terminates
         // instead of swallowing them into a routine 503 result and running in a corrupted state.
@@ -289,7 +281,7 @@ internal class AgentHttpService(
               response.status.value in 500..599
             }
             modifyRequest { it.headers.append("x-retry-count", retryCount.toString()) }
-            exponentialDelay(maxDelayMs = 5000L)
+            exponentialDelay(maxDelayMs = MAX_RETRY_DELAY_MS)
           }
         }
       }
@@ -356,8 +348,8 @@ internal class AgentHttpService(
     private const val SUCCESS_MSG = "success"
     private const val UNSUCCESSFUL_MSG = "unsuccessful"
 
-    private fun isTimeoutException(e: Throwable): Boolean =
-      e is HttpRequestTimeoutException || e is TimeoutCancellationException
+    // Cap on the retry backoff so total retry time stays bounded within the scrape timeout (finding 28).
+    private const val MAX_RETRY_DELAY_MS = 5000L
 
     private fun handleInvalidPath(scrapeRequest: ScrapeRequest): ScrapeResults {
       logger.warn { "Invalid path in fetchScrapeUrl(): ${scrapeRequest.path}" }

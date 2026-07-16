@@ -473,7 +473,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       response.updateMsg shouldBe "timed_out"
     }
 
-    "submitScrapeRequest should return timed_out when agent disconnects during scrape" {
+    "submitScrapeRequest should report agent-disconnect (not timed_out) when the agent disconnects mid-scrape" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
 
@@ -490,8 +490,10 @@ class ProxyHttpRoutesTest : StringSpec() {
         mockk<ApplicationRequest>(relaxed = true),
       )
 
-      response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
-      response.updateMsg shouldBe "timed_out"
+      // finding 15: invalidate() now fails the buffered wrapper with a 502 agent-disconnected result,
+      // so this is reported truthfully as an upstream error instead of being mislabeled timed_out.
+      response.statusCode shouldBe HttpStatusCode.BadGateway
+      response.updateMsg shouldBe "upstream_error"
     }
 
     "submitScrapeRequest should return timed_out when proxy stops during scrape" {
