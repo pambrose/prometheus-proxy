@@ -22,7 +22,7 @@ import com.google.common.collect.EvictingQueue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import java.util.concurrent.CyclicBarrier
-import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.thread
 
 // Bug #6: The debug servlet read recentReqs (an EvictingQueue backed by ArrayDeque)
@@ -64,7 +64,7 @@ class RecentReqsSynchronizationTest : StringSpec() {
               }
             }
           } catch (e: ConcurrentModificationException) {
-            failed.set(true)
+            failed.store(true)
           }
         }
       }
@@ -72,7 +72,7 @@ class RecentReqsSynchronizationTest : StringSpec() {
       writer.join()
       reader.join()
 
-      failed.get().shouldBeFalse()
+      failed.load().shouldBeFalse()
     }
   }
 }

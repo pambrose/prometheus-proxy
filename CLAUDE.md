@@ -8,7 +8,7 @@ Gradle with Kotlin DSL. Java 17+ required. All commands from project root.
 
 ```bash
 ./gradlew build                          # Build with tests
-./gradlew build -xtest                   # Build without tests
+./gradlew build -x test                  # Build without tests
 ./gradlew test                           # Run all tests
 ./gradlew test --tests "TestClassName"   # Run specific test class
 ./gradlew test --tests "io.prometheus.SomeTestClass.someTestMethod"  # Single test method
@@ -29,7 +29,7 @@ Gradle with Kotlin DSL. Java 17+ required. All commands from project root.
 ```
 
 Always run lint and build before completing tasks:
-`./gradlew detekt && ./gradlew lintKotlinMain && ./gradlew build -xtest`
+`./gradlew detekt && ./gradlew lintKotlinMain && ./gradlew build -x test`
 
 ### Useful Make Targets
 

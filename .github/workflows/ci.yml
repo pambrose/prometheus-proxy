@@ -27,7 +27,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
 
       - name: Compile (no tests)
-        run: ./gradlew clean build -xtest
+        run: ./gradlew clean build -x test
 
       - name: Lint and detekt
         run: ./gradlew lintKotlinMain lintKotlinTest detekt

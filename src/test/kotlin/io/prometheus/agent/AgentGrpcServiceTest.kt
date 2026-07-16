@@ -62,8 +62,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.concurrent.atomics.update
 import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.jvm.isAccessible
@@ -243,7 +246,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // never counted. The increment and decrement are always paired in the same try-finally scope.
     "backlog counter should never go negative with consumer-side increment pattern" {
       val channel = Channel<Int>(UNLIMITED)
-      val backlogSize = AtomicInteger(0)
+      val backlogSize = AtomicInt(0)
       val wentNegative = AtomicBoolean(false)
       val itemCount = 10_000
 
@@ -259,27 +262,27 @@ class AgentGrpcServiceTest : StringSpec() {
         // Consumer: mirrors Agent.kt consumer loop — increment then try/finally decrement
         launch(Dispatchers.IO) {
           for (@Suppress("UnusedPrivateProperty") item in channel) {
-            backlogSize.incrementAndGet()
+            backlogSize.incrementAndFetch()
             try {
               // Simulate processing
             } finally {
-              val current = backlogSize.decrementAndGet()
+              val current = backlogSize.decrementAndFetch()
               if (current < 0) {
-                wentNegative.set(true)
+                wentNegative.store(true)
               }
             }
           }
         }
       }
 
-      wentNegative.get() shouldBe false
-      backlogSize.get() shouldBe 0
+      wentNegative.load() shouldBe false
+      backlogSize.load() shouldBe 0
     }
 
     "backlog counter should remain non-negative throughout processing" {
       val channel = Channel<Int>(UNLIMITED)
-      val backlogSize = AtomicInteger(0)
-      val minObserved = AtomicInteger(Int.MAX_VALUE)
+      val backlogSize = AtomicInt(0)
+      val minObserved = AtomicInt(Int.MAX_VALUE)
       val itemCount = 10_000
 
       coroutineScope {
@@ -294,19 +297,19 @@ class AgentGrpcServiceTest : StringSpec() {
         // Consumer: increment then try/finally decrement, track minimum
         launch(Dispatchers.IO) {
           for (@Suppress("UnusedPrivateProperty") item in channel) {
-            backlogSize.incrementAndGet()
+            backlogSize.incrementAndFetch()
             try {
               // Simulate processing
             } finally {
-              val current = backlogSize.decrementAndGet()
-              minObserved.updateAndGet { min -> minOf(min, current) }
+              val current = backlogSize.decrementAndFetch()
+              minObserved.update { min -> minOf(min, current) }
             }
           }
         }
       }
 
-      minObserved.get() shouldBeGreaterThanOrEqual 0
-      backlogSize.get() shouldBe 0
+      minObserved.load() shouldBeGreaterThanOrEqual 0
+      backlogSize.load() shouldBe 0
     }
 
     // ==================== ShutDown Tests ====================
@@ -545,9 +548,9 @@ class AgentGrpcServiceTest : StringSpec() {
       // Both threads should complete well within 10 seconds.
       // Before the fix, each resetGrpcStubs iteration could block shutDown
       // for up to 5s (awaitTermination) with the redundant nested lock.
-      completedWithinTimeout.set(latch.await(10.seconds))
+      completedWithinTimeout.store(latch.await(10.seconds))
 
-      completedWithinTimeout.get().shouldBeTrue()
+      completedWithinTimeout.load().shouldBeTrue()
 
       // Service should still be in a usable state -- either shut down or with a valid channel
       // Final cleanup
@@ -575,9 +578,9 @@ class AgentGrpcServiceTest : StringSpec() {
       }
 
       thread.start()
-      completedWithinTimeout.set(latch.await(10.seconds))
+      completedWithinTimeout.store(latch.await(10.seconds))
 
-      completedWithinTimeout.get().shouldBeTrue()
+      completedWithinTimeout.load().shouldBeTrue()
       service.channel.isTerminated.shouldBeFalse()
 
       service.shutDown()
@@ -1051,12 +1054,12 @@ class AgentGrpcServiceTest : StringSpec() {
         // Consumer: consumes via flow (mirrors grpcStub.writeResponsesToProxy)
         launch(Dispatchers.IO) {
           channel.consumeAsFlow().collect { consumed.add(it) }
-          consumerCompleted.set(true)
+          consumerCompleted.store(true)
         }
       }
 
       consumed shouldBe listOf(1, 2, 3)
-      consumerCompleted.get().shouldBeTrue()
+      consumerCompleted.load().shouldBeTrue()
     }
 
     "Bug #6 (channel close): producer-side close on error should still terminate consumers" {
@@ -1082,12 +1085,12 @@ class AgentGrpcServiceTest : StringSpec() {
 
         launch(Dispatchers.IO) {
           channel.consumeAsFlow().collect { consumed.add(it) }
-          consumerCompleted.set(true)
+          consumerCompleted.store(true)
         }
       }
 
       consumed shouldBe listOf(10, 20)
-      consumerCompleted.get().shouldBeTrue()
+      consumerCompleted.load().shouldBeTrue()
     }
 
     "Bug #6 (channel close): writeResponsesToProxyUntilDisconnected should complete with closed connectionContext" {
@@ -1159,10 +1162,12 @@ class AgentGrpcServiceTest : StringSpec() {
       delegateField.isAccessible = true
       val delegate = delegateField.get(service)
 
-      // The delegate wraps an AtomicBoolean in a field named "atomicVal"
+      // The delegate wraps a java.util.concurrent.atomic.AtomicBoolean in a field named "atomicVal"
+      // (the AtomicDelegates library uses the Java type), so this interop cast stays on the Java atomic
+      // and keeps .get() even though the rest of the file now uses kotlin.concurrent.atomics.
       val atomicValField = delegate.javaClass.getDeclaredField("atomicVal")
       atomicValField.isAccessible = true
-      val atomicBool = atomicValField.get(delegate) as AtomicBoolean
+      val atomicBool = atomicValField.get(delegate) as java.util.concurrent.atomic.AtomicBoolean
 
       // After successful construction, grpcStarted should be true
       atomicBool.get().shouldBeTrue()

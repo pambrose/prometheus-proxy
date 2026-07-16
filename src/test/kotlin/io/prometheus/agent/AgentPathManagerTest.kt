@@ -39,7 +39,10 @@ import io.prometheus.grpc.unregisterPathResponse
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.concurrent.atomics.update
 import kotlin.time.Duration.Companion.milliseconds
 
 class AgentPathManagerTest : StringSpec() {
@@ -392,14 +395,14 @@ class AgentPathManagerTest : StringSpec() {
     "concurrent registerPath calls are serialized for atomicity (finding 19)" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
-      val concurrentCalls = AtomicInteger(0)
-      val maxConcurrent = AtomicInteger(0)
+      val concurrentCalls = AtomicInt(0)
+      val maxConcurrent = AtomicInt(0)
 
       coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } coAnswers {
-        val current = concurrentCalls.incrementAndGet()
-        maxConcurrent.updateAndGet { max -> maxOf(max, current) }
+        val current = concurrentCalls.incrementAndFetch()
+        maxConcurrent.update { max -> maxOf(max, current) }
         delay(100.milliseconds) // Simulate slow gRPC call
-        concurrentCalls.decrementAndGet()
+        concurrentCalls.decrementAndFetch()
         registerPathResponse {
           valid = true
           pathId = firstArg<String>().hashCode().toLong()
@@ -415,7 +418,7 @@ class AgentPathManagerTest : StringSpec() {
       manager["path2"].shouldNotBeNull()
       // finding 19: the proxy RPC and the local map write are held under pathMutex together so the local
       // map and the proxy's view can't disagree, which serializes concurrent registrations.
-      maxConcurrent.get() shouldBe 1
+      maxConcurrent.load() shouldBe 1
     }
 
     "registerPaths should register all configured paths" {
