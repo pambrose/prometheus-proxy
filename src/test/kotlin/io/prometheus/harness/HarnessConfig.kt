@@ -50,7 +50,10 @@ enum class HarnessConfig(
     parallelQueryCount = 10,
     concurrentClients = 100,
     addRemoveReps = 1000,
-    proxyCallTimeoutSecs = 60,
+    // 1000 sequential scrapes take ~29s on an idle machine; under full-suite/CI CPU
+    // contention that can more than double. 150s leaves ~5x headroom over the isolated
+    // baseline so the phase no longer brushes its own withTimeout ceiling under load.
+    proxyCallTimeoutSecs = 150,
   ),
   LARGE(
     httpServerCount = 10,
