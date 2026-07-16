@@ -34,8 +34,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -269,7 +271,7 @@ class AgentConnectionContextTest : StringSpec() {
       // would cancel ALL sibling coroutines. With trySend(), each coroutine completes
       // independently.
       val context = AgentConnectionContext(128)
-      val completedCount = AtomicInteger(0)
+      val completedCount = AtomicInt(0)
       val threwException = AtomicBoolean(false)
 
       coroutineScope {
@@ -282,9 +284,9 @@ class AgentConnectionContextTest : StringSpec() {
               context.sendScrapeResults(
                 ScrapeResults(srAgentId = "agent-1", srScrapeId = i.toLong(), srValidResponse = true),
               )
-              completedCount.incrementAndGet()
+              completedCount.incrementAndFetch()
             } catch (e: Exception) {
-              threwException.set(true)
+              threwException.store(true)
             }
           }
         }
@@ -295,9 +297,9 @@ class AgentConnectionContextTest : StringSpec() {
       }
 
       // All coroutines should complete without throwing
-      threwException.get().shouldBeFalse()
+      threwException.load().shouldBeFalse()
       // All coroutines should have completed (even though some results were dropped)
-      completedCount.get() shouldBe 5
+      completedCount.load() shouldBe 5
     }
 
     "Bug #7: results sent before close should be drainable alongside dropped post-close sends" {
@@ -332,19 +334,19 @@ class AgentConnectionContextTest : StringSpec() {
       // correctly even when sendScrapeResults drops the result on a closed channel.
       // The counter should still decrement in the finally block.
       val context = AgentConnectionContext(128)
-      val backlogSize = AtomicInteger(0)
+      val backlogSize = AtomicInt(0)
 
       coroutineScope {
         (1..10).forEach { i ->
           launch(Dispatchers.IO) {
-            backlogSize.incrementAndGet()
+            backlogSize.incrementAndFetch()
             try {
               delay(20.milliseconds)
               context.sendScrapeResults(
                 ScrapeResults(srAgentId = "agent-1", srScrapeId = i.toLong(), srValidResponse = true),
               )
             } finally {
-              backlogSize.decrementAndGet()
+              backlogSize.decrementAndFetch()
             }
           }
         }
@@ -355,7 +357,7 @@ class AgentConnectionContextTest : StringSpec() {
       }
 
       // After all coroutines complete, backlog should be exactly 0
-      backlogSize.get() shouldBe 0
+      backlogSize.load() shouldBe 0
     }
   }
 }

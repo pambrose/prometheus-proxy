@@ -33,6 +33,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.async
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
 
 class AgentContextTest : StringSpec() {
@@ -290,7 +291,7 @@ class AgentContextTest : StringSpec() {
     "backlog size should never go negative under concurrent read-write" {
       val context = AgentContext("remote-addr")
       val iterations = 1000
-      val observedNegative = java.util.concurrent.atomic.AtomicBoolean(false)
+      val observedNegative = AtomicBoolean(false)
 
       // Writer: rapidly write items
       val writerThread = Thread {
@@ -307,7 +308,7 @@ class AgentContextTest : StringSpec() {
           repeat(iterations) {
             context.readScrapeRequest()
             if (context.scrapeRequestBacklogSize < 0) {
-              observedNegative.set(true)
+              observedNegative.store(true)
             }
           }
         }
@@ -320,7 +321,7 @@ class AgentContextTest : StringSpec() {
 
       writerThread.isAlive.shouldBeFalse()
       readerThread.isAlive.shouldBeFalse()
-      observedNegative.get().shouldBeFalse()
+      observedNegative.load().shouldBeFalse()
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
