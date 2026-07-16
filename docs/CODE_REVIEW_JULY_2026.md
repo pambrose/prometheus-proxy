@@ -30,14 +30,14 @@ embedded host JVMs.
 | 3 | Reconnect rate limit disabled when log level > INFO (`acquire()` inside log lambda) | high | ✅ |
 | 4 | `fetchContentFromUrl` swallows JVM `Error`s into 503 scrape results | high | ✅ |
 | 5 | `parseArgs` `exitProcess()` kills embedded host JVMs | high | ✅ |
-| 6 | `heartbeatEnabled=false` closes every connection immediately after connect | medium | ⬜ |
-| 7 | `registerPath` races agent removal → permanently dead path in `pathMap` | medium | ⬜ |
-| 8 | Zipkin tracing closed on first reconnect, then reused | medium | ⬜ |
-| 9 | Unguarded `HttpClient.close()` can permanently kill the cache sweeper | medium | ⬜ |
-| 10 | All non-2xx upstream responses mislabeled `path_not_found` | medium | ⬜ |
-| 11 | Config-value validation gaps (`reconnectPauseSecs`, backlog capacity, zipped size, gzip min) | medium | ⬜ |
-| 12 | `submitScrapeRequest` is a ~125-line god method with `.also { return }` control flow | medium | ⬜ |
-| 13 | `sendHeartBeat` error handling: ERROR noise, lost stack traces, exception-as-goto | medium | ⬜ |
+| 6 | `heartbeatEnabled=false` closes every connection immediately after connect | medium | ✅ |
+| 7 | `registerPath` races agent removal → permanently dead path in `pathMap` | medium | ✅ |
+| 8 | Zipkin tracing closed on first reconnect, then reused | medium | ✅ |
+| 9 | Unguarded `HttpClient.close()` can permanently kill the cache sweeper | medium | ✅ |
+| 10 | All non-2xx upstream responses mislabeled `path_not_found` | medium | ✅ |
+| 11 | Config-value validation gaps (`reconnectPauseSecs`, backlog capacity, zipped size, gzip min) | medium | ✅ |
+| 12 | `submitScrapeRequest` is a ~125-line god method with `.also { return }` control flow | medium | ✅ |
+| 13 | `sendHeartBeat` error handling: ERROR noise, lost stack traces, exception-as-goto | medium | ✅ (via finding 2) |
 | 14 | Polled scrape request lost on stream-only RPC cancellation | low | ⬜ |
 | 15 | Disconnect-vs-submit races mislabel agent-disconnect results as `timed_out` | low | ⬜ |
 | 16 | `scrapeResults` write not atomic with completion CAS — fail can clobber a real result | low | ⬜ |
@@ -178,7 +178,7 @@ document that usage/version remain CLI-only. Keep `exitProcess` behavior for the
 
 ## 🟠 Medium severity
 
-### 6. [ ] `heartbeatEnabled=false` closes every connection immediately after connect
+### 6. [x] `heartbeatEnabled=false` closes every connection immediately after connect
 `Agent.kt:274-276, 349-354, 416-436` — **lifecycle, medium (non-default config, total breakage),
 confirmed**
 
@@ -195,7 +195,7 @@ points at the config flag. Deterministic.
 *successful completion* of the heartbeat task as a disconnect. Add a container/harness test running
 with `heartbeatEnabled=false`.
 
-### 7. [ ] `registerPath` races agent removal → permanently dead path
+### 7. [x] `registerPath` races agent removal → permanently dead path
 `proxy/ProxyServiceImpl.kt:117-127` · `proxy/ProxyPathManager.kt:87-131, 191-200` ·
 `Proxy.kt:339-348` — **concurrency (TOCTOU), medium, confirmed**
 
@@ -215,7 +215,7 @@ re-register the same path. For consolidated paths it is worse — a new agent *a
 `addValidatedPath` and reject registration for an invalidated context; and/or make
 `removeFromPathManager` sweep by agentId even when the context is already absent from the manager.
 
-### 8. [ ] Zipkin tracing closed on first reconnect, then reused
+### 8. [x] Zipkin tracing closed on first reconnect, then reused
 `agent/AgentGrpcService.kt:147-154, 161-201` — **resource lifecycle, medium, confirmed (code
 path); impact plausible**
 
@@ -227,7 +227,7 @@ Tracing silently dies for the remainder of the agent's life in Zipkin-enabled de
 **Fix:** either don't close `tracing` in `resetGrpcStubs()` (close it only in final shutdown), or
 make the tracing objects re-creatable per connection generation.
 
-### 9. [ ] Unguarded `HttpClient.close()` can permanently kill the cache sweeper
+### 9. [x] Unguarded `HttpClient.close()` can permanently kill the cache sweeper
 `agent/HttpClientCache.kt:80-97 (94), 216, 228, 337` — **error path/resource leak, medium,
 plausible**
 
@@ -240,7 +240,7 @@ remaining closes in `close()` and `getOrCreateClient`.
 **Fix:** wrap each `client.close()` in its own `runCatching { }` (log failures), at all three
 sites.
 
-### 10. [ ] All non-2xx upstream responses mislabeled `path_not_found`
+### 10. [x] All non-2xx upstream responses mislabeled `path_not_found`
 `proxy/ProxyHttpRoutes.kt:305-315 (312), 216-219` — **observability, medium, confirmed**
 
 In `submitScrapeRequest`, any non-success status from the agent — target endpoint 500/503, 408
@@ -251,7 +251,7 @@ activity log. Operators cannot distinguish a genuinely unknown path from a down 
 **Fix:** derive the label from the status code (e.g. `upstream_error`, `timed_out`,
 `content_too_large`, with `path_not_found` reserved for the actual 404-unknown-path case).
 
-### 11. [ ] Config-value validation gaps for values used in arithmetic/capacity
+### 11. [x] Config-value validation gaps for values used in arithmetic/capacity
 `Agent.kt:204, 265` · `proxy/ProxyServiceImpl.kt:241` vs `proxy/ProxyOptions.kt:267-271` ·
 `agent/AgentOptions.kt:317-319` — **input validation, medium, confirmed**
 
@@ -267,7 +267,7 @@ activity log. Operators cannot distinguish a genuinely unknown path from a down 
 **Fix:** add `require(... > 0)` checks in the respective options classes, mirroring the existing
 sibling validations (June review finding 27 established the pattern).
 
-### 12. [ ] `submitScrapeRequest` is a ~125-line god method with `.also { return }` control flow
+### 12. [x] `submitScrapeRequest` is a ~125-line god method with `.also { return }` control flow
 `proxy/ProxyHttpRoutes.kt:238-363 (288)` — **maintainability, medium, confirmed**
 
 One suspend function handles wrapper creation, map registration, channel write + disconnect
@@ -282,7 +282,7 @@ trafficked function in the proxy HTTP path.
 **Fix:** `val statusCode = HttpStatusCode.fromValue(...)` + plain `if/else` expression returns;
 extract the await/timeout leg, the gzip-decode leg, and response assembly into private helpers.
 
-### 13. [ ] `sendHeartBeat` error handling: ERROR noise, lost stack traces, exception-as-goto
+### 13. [x] `sendHeartBeat` error handling: ERROR noise, lost stack traces, exception-as-goto
 `agent/AgentGrpcService.kt:292-324` — **error handling/logging, medium, confirmed**
 
 Three defects in one function: (a) routine transient failures are logged at ERROR; (b) the non-gRPC

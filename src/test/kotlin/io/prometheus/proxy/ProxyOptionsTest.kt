@@ -264,6 +264,22 @@ class ProxyOptionsTest : StringSpec() {
       options.configVals.proxy.internal.maxUnzippedContentSizeMBytes shouldBe 0
     }
 
+    // Finding 11: maxZippedContentSizeMBytes is used in chunked-transfer size math but its sibling
+    // maxUnzippedContentSizeMBytes was the only one validated. Mirror the sibling: reject negatives,
+    // allow 0 as a degenerate reject-all limit.
+    "Finding 11: a negative maxZippedContentSizeMBytes should be rejected" {
+      val exception =
+        shouldThrow<IllegalArgumentException> {
+          ProxyOptions(listOf("-Dproxy.internal.maxZippedContentSizeMBytes=-1"))
+        }
+      exception.message shouldContain "maxZippedContentSizeMBytes"
+    }
+
+    "Finding 11: a zero maxZippedContentSizeMBytes should be accepted (reject-all limit)" {
+      val options = ProxyOptions(listOf("-Dproxy.internal.maxZippedContentSizeMBytes=0"))
+      options.configVals.proxy.internal.maxZippedContentSizeMBytes shouldBe 0
+    }
+
     // ==================== Constructor Variants Tests ====================
 
     "list constructor should work" {

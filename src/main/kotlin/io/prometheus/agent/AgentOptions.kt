@@ -316,6 +316,8 @@ class AgentOptions(
 
     if (minGzipSizeBytes == -1)
       minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agentConfigVals.minGzipSizeBytes)
+    // 0 is valid (gzip every non-empty payload); a negative threshold would gzip everything (finding 11).
+    require(minGzipSizeBytes >= 0) { "minGzipSizeBytes must be >= 0: $minGzipSizeBytes" }
     logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
 
     if (overrideAuthority.isEmpty())
@@ -360,6 +362,20 @@ class AgentOptions(
 
       val inactivityVal = internal.heartbeatMaxInactivitySecs
       logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
+
+      // reconnectPauseSecs feeds RateLimiter.create(1.0 / reconnectPauseSecs) in Agent: 0 yields an
+      // infinite rate (hot reconnect loop) and a negative value an opaque Guava IAE at startup (finding 11).
+      require(internal.reconnectPauseSecs > 0) {
+        "agent.internal.reconnectPauseSecs must be > 0: ${internal.reconnectPauseSecs}"
+      }
+      logger.info { "agent.internal.reconnectPauseSecs: ${internal.reconnectPauseSecs}" }
+
+      // scrapeRequestBacklogUnhealthySize * 2 is the AgentConnectionContext channel capacity: 0 makes it
+      // a rendezvous channel (every send blocks) and a negative value throws at connect time (finding 11).
+      require(internal.scrapeRequestBacklogUnhealthySize > 0) {
+        "agent.internal.scrapeRequestBacklogUnhealthySize must be > 0: ${internal.scrapeRequestBacklogUnhealthySize}"
+      }
+      logger.info { "agent.internal.scrapeRequestBacklogUnhealthySize: ${internal.scrapeRequestBacklogUnhealthySize}" }
     }
 
     assignLogLevel("agent", AGENT_LOG_LEVEL, agentConfigVals.logLevel)

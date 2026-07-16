@@ -34,6 +34,7 @@ import io.ktor.server.routing.Routing
 import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
 import io.prometheus.Proxy
+import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.proxy.ProxyConstants.CACHE_CONTROL_VALUE
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
@@ -235,7 +236,6 @@ internal object ProxyHttpRoutes {
     proxy.logActivity(status)
   }
 
-  @Suppress("ReturnCount")
   internal suspend fun submitScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,
@@ -244,11 +244,48 @@ internal object ProxyHttpRoutes {
     request: ApplicationRequest,
   ): ScrapeRequestResponse {
     val scrapeRequest = createScrapeRequest(agentContext, proxy, path, encodedQueryParams, request)
+    val timeoutTime = proxy.proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
 
+    // A terminal response here means the agent disconnected or the request timed out.
+    dispatchScrapeRequest(agentContext, proxy, scrapeRequest, timeoutTime)?.let { return it }
+
+    logger.debug { "Results returned from $agentContext for $scrapeRequest" }
+
+    val scrapeResults =
+      scrapeRequest.scrapeResults
+        ?: return ScrapeRequestResponse(
+          statusCode = HttpStatusCode.ServiceUnavailable,
+          updateMsg = "missing_results",
+          fetchDuration = scrapeRequest.ageDuration(),
+        )
+
+    val statusCode = HttpStatusCode.fromValue(scrapeResults.srStatusCode)
+    val contentType = parseContentType(scrapeResults.srContentType, path)
+
+    // Do not return content on error status codes.
+    return if (!statusCode.isSuccess())
+      ScrapeRequestResponse(
+        statusCode = statusCode,
+        contentType = contentType,
+        failureReason = scrapeResults.srFailureReason,
+        url = scrapeResults.srUrl,
+        updateMsg = upstreamErrorLabel(statusCode),
+        fetchDuration = scrapeRequest.ageDuration(),
+      )
+    else
+      buildSuccessResponse(proxy, path, scrapeRequest, scrapeResults, statusCode, contentType)
+  }
+
+  // Registers the request, sends it to the agent, and awaits completion, cleaning up the request map in
+  // a finally. Returns a terminal ScrapeRequestResponse for the agent-disconnected and timed-out cases,
+  // or null when the agent completed and the caller should read scrapeRequest.scrapeResults.
+  private suspend fun dispatchScrapeRequest(
+    agentContext: AgentContext,
+    proxy: Proxy,
+    scrapeRequest: ScrapeRequestWrapper,
+    timeoutTime: Duration,
+  ): ScrapeRequestResponse? {
     try {
-      val proxyConfigVals = proxy.proxyConfigVals
-      val timeoutTime = proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
-
       proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
       try {
         agentContext.writeScrapeRequest(scrapeRequest)
@@ -261,106 +298,103 @@ internal object ProxyHttpRoutes {
       }
 
       // Suspends until completed, agent disconnects, or timeout expires.
-      // The polling loop (Bug #2) is replaced by a single awaitCompleted() call.
-      if (!scrapeRequest.awaitCompleted(timeoutTime)) {
+      if (!scrapeRequest.awaitCompleted(timeoutTime))
         return ScrapeRequestResponse(
           statusCode = HttpStatusCode.ServiceUnavailable,
           updateMsg = "timed_out",
           fetchDuration = scrapeRequest.ageDuration(),
         )
-      }
+
+      return null
     } finally {
       scrapeRequest.closeChannel()
       val scrapeId = scrapeRequest.scrapeId
       proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeId)
         ?: logger.error { "Scrape request $scrapeId missing in map" }
     }
-
-    logger.debug { "Results returned from $agentContext for $scrapeRequest" }
-
-    val scrapeResults = scrapeRequest.scrapeResults
-      ?: return ScrapeRequestResponse(
-        statusCode = HttpStatusCode.ServiceUnavailable,
-        updateMsg = "missing_results",
-        fetchDuration = scrapeRequest.ageDuration(),
-      )
-
-    HttpStatusCode.fromValue(scrapeResults.srStatusCode).also { statusCode ->
-
-      val contentType =
-        runCatching {
-          ContentType.parse(scrapeResults.srContentType)
-        }.getOrElse {
-          // A malformed Content-Type from the target endpoint is a (minor) misconfiguration worth
-          // surfacing at warn; text/plain is the correct fallback for Prometheus exposition format.
-          logger.warn {
-            "Error parsing content type for /$path: '${scrapeResults.srContentType}' " +
-              "(${it.simpleClassName}); falling back to text/plain"
-          }
-          Text.Plain.withCharset(Charsets.UTF_8)
-        }
-      logger.debug { "Content type: $contentType" }
-
-      // Do not return content on error status codes
-      return if (!statusCode.isSuccess())
-        scrapeResults.run {
-          ScrapeRequestResponse(
-            statusCode = statusCode,
-            contentType = contentType,
-            failureReason = srFailureReason,
-            url = srUrl,
-            updateMsg = "path_not_found",
-            fetchDuration = scrapeRequest.ageDuration(),
-          )
-        }
-      else
-        scrapeResults.run {
-          val maxSize = proxy.proxyConfigVals.internal.maxUnzippedContentSizeMBytes * 1024L * 1024L
-          val decoded =
-            try {
-              if (srZipped)
-                srContentAsZipped.unzip(maxSize)
-              else
-                DecodedContent(srContentAsText, srContentAsText.toByteArray().size.toLong())
-            } catch (e: ProxyUtils.ZipBombException) {
-              return ScrapeRequestResponse(
-                statusCode = HttpStatusCode.PayloadTooLarge,
-                contentType = Text.Plain.withCharset(Charsets.UTF_8),
-                failureReason = e.message ?: "Unzipped content too large",
-                url = srUrl,
-                updateMsg = "payload_too_large",
-                fetchDuration = scrapeRequest.ageDuration(),
-              )
-            } catch (e: IOException) {
-              return ScrapeRequestResponse(
-                statusCode = HttpStatusCode.BadGateway,
-                contentType = Text.Plain.withCharset(Charsets.UTF_8),
-                failureReason = e.message ?: "Invalid gzipped content",
-                url = srUrl,
-                updateMsg = "invalid_gzip",
-                fetchDuration = scrapeRequest.ageDuration(),
-              )
-            }
-
-          proxy.metrics {
-            // Observe the byte count already computed during unzip (gzipped) or the small plain
-            // payload's length, instead of re-encoding the decoded text just to measure it.
-            val encoding = if (srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN
-            scrapeResponseBytes.labels(path, encoding).observe(decoded.byteCount.toDouble())
-          }
-
-          ScrapeRequestResponse(
-            statusCode = statusCode,
-            contentType = contentType,
-            contentText = decoded.text,
-            failureReason = srFailureReason,
-            url = srUrl,
-            updateMsg = "success",
-            fetchDuration = scrapeRequest.ageDuration(),
-          )
-        }
-    }
   }
+
+  // Parses the agent-reported Content-Type, falling back to text/plain (the correct default for the
+  // Prometheus exposition format) with a warning when it is malformed.
+  private fun parseContentType(
+    rawContentType: String,
+    path: String,
+  ): ContentType =
+    runCatching { ContentType.parse(rawContentType) }
+      .getOrElse {
+        logger.warn {
+          "Error parsing content type for /$path: '$rawContentType' " +
+            "(${it.simpleClassName}); falling back to text/plain"
+        }
+        Text.Plain.withCharset(Charsets.UTF_8)
+      }
+
+  // Decodes (and size-guards) a successful scrape body and assembles the response, returning a terminal
+  // 413/502 response instead when the gzipped payload is a zip bomb or is corrupt.
+  private fun buildSuccessResponse(
+    proxy: Proxy,
+    path: String,
+    scrapeRequest: ScrapeRequestWrapper,
+    scrapeResults: ScrapeResults,
+    statusCode: HttpStatusCode,
+    contentType: ContentType,
+  ): ScrapeRequestResponse {
+    val maxSize = proxy.proxyConfigVals.internal.maxUnzippedContentSizeMBytes * 1024L * 1024L
+    val decoded =
+      try {
+        if (scrapeResults.srZipped)
+          scrapeResults.srContentAsZipped.unzip(maxSize)
+        else
+          DecodedContent(scrapeResults.srContentAsText, scrapeResults.srContentAsText.toByteArray().size.toLong())
+      } catch (e: ProxyUtils.ZipBombException) {
+        return ScrapeRequestResponse(
+          statusCode = HttpStatusCode.PayloadTooLarge,
+          contentType = Text.Plain.withCharset(Charsets.UTF_8),
+          failureReason = e.message ?: "Unzipped content too large",
+          url = scrapeResults.srUrl,
+          updateMsg = "payload_too_large",
+          fetchDuration = scrapeRequest.ageDuration(),
+        )
+      } catch (e: IOException) {
+        return ScrapeRequestResponse(
+          statusCode = HttpStatusCode.BadGateway,
+          contentType = Text.Plain.withCharset(Charsets.UTF_8),
+          failureReason = e.message ?: "Invalid gzipped content",
+          url = scrapeResults.srUrl,
+          updateMsg = "invalid_gzip",
+          fetchDuration = scrapeRequest.ageDuration(),
+        )
+      }
+
+    proxy.metrics {
+      // Observe the byte count already computed during unzip (gzipped) or the small plain payload's
+      // length, instead of re-encoding the decoded text just to measure it.
+      val encoding = if (scrapeResults.srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN
+      scrapeResponseBytes.labels(path, encoding).observe(decoded.byteCount.toDouble())
+    }
+
+    return ScrapeRequestResponse(
+      statusCode = statusCode,
+      contentType = contentType,
+      contentText = decoded.text,
+      failureReason = scrapeResults.srFailureReason,
+      url = scrapeResults.srUrl,
+      updateMsg = "success",
+      fetchDuration = scrapeRequest.ageDuration(),
+    )
+  }
+
+  // Maps a non-success upstream status code (returned by the agent for an already-resolved path) to a
+  // metric/activity label, so operators can tell a down target (5xx), a scrape timeout (408/504), an
+  // oversized payload (413), and a path not registered on the agent (404) apart -- instead of every
+  // failure reading as path_not_found (finding 10).
+  internal fun upstreamErrorLabel(statusCode: HttpStatusCode): String =
+    when (statusCode) {
+      HttpStatusCode.NotFound -> "path_not_found"
+      HttpStatusCode.RequestTimeout, HttpStatusCode.GatewayTimeout -> "timed_out"
+      HttpStatusCode.PayloadTooLarge -> "content_too_large"
+      else -> "upstream_error"
+    }
 
   private fun createScrapeRequest(
     agentContext: AgentContext,

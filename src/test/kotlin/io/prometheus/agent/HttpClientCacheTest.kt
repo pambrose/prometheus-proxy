@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import com.pambrose.common.concurrent.await
+import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -74,6 +75,18 @@ class HttpClientCacheTest : StringSpec() {
 
     afterEach {
       cache.close()
+    }
+
+    // Finding 9: a throwing HttpClient.close() must never propagate. In the background sweeper loop it
+    // would break out of the while(isActive) loop and kill the sweeper permanently (leaking every
+    // future expired client); at the batch-close sites it would abort the remaining closes. closeQuietly
+    // wraps close() so the failure is logged and swallowed.
+    "Finding 9: closeQuietly swallows a throwing HttpClient.close()" {
+      val throwing = mockk<HttpClient>(relaxed = true)
+      every { throwing.close() } throws RuntimeException("close boom")
+
+      shouldNotThrow<Throwable> { HttpClientCache.closeQuietly(throwing) }
+      verify { throwing.close() }
     }
 
     // Item 4: once closed, the cache must reject new requests. Otherwise an in-flight scrape
