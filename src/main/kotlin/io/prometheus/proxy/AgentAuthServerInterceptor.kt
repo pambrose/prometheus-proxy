@@ -16,50 +16,45 @@
 
 package io.prometheus.proxy
 
+import io.grpc.Context
+import io.grpc.Contexts
 import io.grpc.Metadata
 import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
 import io.grpc.ServerInterceptor
 import io.grpc.Status
 import io.prometheus.common.GrpcConstants.META_AGENT_TOKEN_KEY
-import java.security.MessageDigest
+import io.prometheus.proxy.AgentAuthManager.Companion.AGENT_IDENTITY_KEY
 
 /**
- * Rejects agent RPCs that do not present the configured pre-shared token.
+ * Authenticates agent RPCs against the configured identities and attaches the resolved identity.
  *
- * Installed only when `proxy.agentToken` is non-empty. Every RPC must carry the token in the
- * [META_AGENT_TOKEN_KEY] metadata header; a missing or mismatched token is closed with
- * [Status.UNAUTHENTICATED] before the handler runs. When no token is configured this interceptor
- * is not installed and the agent port preserves its historical open behavior.
+ * Installed only when [AgentAuthManager.isEnabled]. Every RPC must carry a token in the
+ * [META_AGENT_TOKEN_KEY] metadata header; a missing or unrecognized token is closed with
+ * [Status.UNAUTHENTICATED] before the handler runs. On success the resolved [AgentIdentity] is
+ * stored in the gRPC [Context] under [AGENT_IDENTITY_KEY] so [ProxyServiceImpl.registerPath] can
+ * enforce per-agent path authorization. When no identities are configured this interceptor is not
+ * installed and the agent port preserves its historical open behavior.
  *
- * @param expectedToken the non-empty token agents must present
+ * @param authManager resolves presented tokens to identities
  * @see io.prometheus.agent.AgentTokenClientInterceptor
  */
-internal class AgentTokenServerInterceptor(
-  private val expectedToken: String,
+internal class AgentAuthServerInterceptor(
+  private val authManager: AgentAuthManager,
 ) : ServerInterceptor {
-  // Compare fixed-length SHA-256 digests rather than the raw token bytes: MessageDigest.isEqual is
-  // constant-time only for equal-length inputs and short-circuits on a length mismatch, so hashing
-  // both sides to a 32-byte digest removes that length-dependent early-out. Neither the token's
-  // length nor its content then leaks via response timing.
-  private val expectedTokenDigest: ByteArray = sha256(expectedToken)
-
   override fun <ReqT, RespT> interceptCall(
     call: ServerCall<ReqT, RespT>,
     requestHeaders: Metadata,
     handler: ServerCallHandler<ReqT, RespT>,
   ): ServerCall.Listener<ReqT> {
     val provided = requestHeaders.get(META_AGENT_TOKEN_KEY)
-    if (provided == null || !constantTimeEquals(provided)) {
+    val identity = if (provided == null) null else authManager.resolveToken(provided)
+    if (identity == null) {
       call.close(Status.UNAUTHENTICATED.withDescription("Missing or invalid agent token"), Metadata())
       // Return a no-op listener: the call is already closed, so no messages must be delivered.
       return object : ServerCall.Listener<ReqT>() {}
     }
-    return handler.startCall(call, requestHeaders)
+    val context = Context.current().withValue(AGENT_IDENTITY_KEY, identity)
+    return Contexts.interceptCall(context, call, requestHeaders, handler)
   }
-
-  private fun constantTimeEquals(provided: String): Boolean =
-    MessageDigest.isEqual(sha256(provided), expectedTokenDigest)
-
-  private fun sha256(value: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
 }

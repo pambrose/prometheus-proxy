@@ -29,30 +29,43 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.common.GrpcConstants.META_AGENT_TOKEN_KEY
+import io.prometheus.proxy.AgentAuthManager.AuthEntry
 
-class AgentTokenServerInterceptorTest : StringSpec() {
+class AgentAuthServerInterceptorTest : StringSpec() {
+  private val authManager =
+    AgentAuthManager.create(
+      authEntries = listOf(AuthEntry("team_a", "s3cret", listOf("team_a_*"))),
+      legacyToken = "",
+    )
+
   private fun headersWithToken(token: String?): Metadata =
     Metadata().apply { token?.also { put(META_AGENT_TOKEN_KEY, it) } }
 
   init {
-    "META_AGENT_TOKEN_KEY should use agent-token name" {
-      META_AGENT_TOKEN_KEY.name() shouldBe "agent-token"
-    }
-
-    "valid token should delegate to handler and not close the call" {
-      val interceptor = AgentTokenServerInterceptor("s3cret")
+    "valid token should delegate to handler and expose the resolved identity in the context" {
+      val interceptor = AgentAuthServerInterceptor(authManager)
       val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
-      val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
       val headers = headersWithToken("s3cret")
 
-      interceptor.interceptCall(mockCall, headers, mockHandler)
+      // A real handler that captures the identity attached to the gRPC context at startCall time.
+      var startCalled = false
+      var capturedIdentity: AgentIdentity? = null
+      val handler =
+        ServerCallHandler<Any, Any> { _, _ ->
+          startCalled = true
+          capturedIdentity = AgentAuthManager.AGENT_IDENTITY_KEY.get()
+          mockk(relaxed = true)
+        }
 
-      verify { mockHandler.startCall(mockCall, headers) }
+      interceptor.interceptCall(mockCall, headers, handler)
+
+      startCalled shouldBe true
+      capturedIdentity?.name shouldBe "team_a"
       verify(exactly = 0) { mockCall.close(any(), any()) }
     }
 
     "missing token should close with UNAUTHENTICATED and not start the handler" {
-      val interceptor = AgentTokenServerInterceptor("s3cret")
+      val interceptor = AgentAuthServerInterceptor(authManager)
       val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
       val statusSlot = slot<Status>()
@@ -66,8 +79,8 @@ class AgentTokenServerInterceptorTest : StringSpec() {
       listener.shouldNotBeNull()
     }
 
-    "wrong token should close with UNAUTHENTICATED and not start the handler" {
-      val interceptor = AgentTokenServerInterceptor("s3cret")
+    "unknown token should close with UNAUTHENTICATED and not start the handler" {
+      val interceptor = AgentAuthServerInterceptor(authManager)
       val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
       val statusSlot = slot<Status>()
@@ -80,7 +93,10 @@ class AgentTokenServerInterceptorTest : StringSpec() {
     }
 
     "token of the same length but different value should be rejected (constant-time path)" {
-      val interceptor = AgentTokenServerInterceptor("abcdef")
+      val interceptor =
+        AgentAuthServerInterceptor(
+          AgentAuthManager.create(listOf(AuthEntry("team_a", "abcdef", listOf("*"))), ""),
+        )
       val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
 

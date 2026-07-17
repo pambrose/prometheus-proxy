@@ -11,7 +11,8 @@ Prometheus Proxy is designed to be firewall-friendly:
 - The **agent** initiates an *outbound* gRPC connection to the proxy
 - **No inbound ports** need to be opened on the firewall
 - Agent connections can be authenticated with an optional
-  [pre-shared token](#agent-authentication-pre-shared-token) and/or [mutual TLS](tls.md)
+  [pre-shared token](#agent-authentication-pre-shared-token) — optionally scoped to
+  [per-agent identities](#per-agent-identities-and-path-authorization) — and/or [mutual TLS](tls.md)
 - Stale agent connections are automatically cleaned up
 
 !!! warning "The agent gRPC port is unauthenticated by default"
@@ -64,6 +65,58 @@ java -jar prometheus-agent.jar --config myconfig.conf --agent_token "$AGENT_TOKE
     connect. [Mutual TLS](tls.md) additionally encrypts the channel and verifies a certificate
     identity. They can be combined; for production, prefer mutual TLS and/or restrict the agent port
     to trusted networks.
+
+## Per-Agent Identities and Path Authorization
+
+A single shared `agentToken` authenticates agents but cannot tell them apart: any agent holding the
+token can register **any** path, including one already served by another agent. Define named
+identities under `proxy.auth`, each with its own token and a list of allowed path glob patterns, to
+scope what each agent may register:
+
+```hocon
+proxy {
+  auth = [
+    { name = team-a, token = "team-a-token", paths = ["team_a_*"] }
+    { name = team-b, token = "team-b-token", paths = ["team_b_*"] }
+    { name = infra,  token = "infra-token",  paths = [] }          // empty paths = may register any path
+  ]
+}
+```
+
+Each agent presents its identity's token the usual way (`--agent_token`, `AGENT_TOKEN`, or
+`agent.agentToken`) — no agent-side change is needed. The proxy resolves the token to an identity and
+enforces, on every path registration, that the requested path matches one of the identity's patterns.
+
+| Condition                | Result                                             |
+|:-------------------------|:---------------------------------------------------|
+| Unknown token            | Connection rejected with `UNAUTHENTICATED`         |
+| Path matches a pattern   | Registration succeeds                              |
+| Path matches no pattern  | Registration fails with a "not authorized" reason  |
+| Empty `paths` list       | Identity may register **any** path (allow-all)     |
+
+Patterns are single-segment globs: `*` matches any run of characters and `?` matches exactly one
+(e.g. `team_a_*`). Because authorization is per-identity-per-path,
+[consolidated mode](../advanced.md#consolidated-mode) still works as long as each participating
+agent's identity permits the shared path.
+
+!!! note "Config-file only"
+
+    `proxy.auth` is a list of objects, so it can only be set in a config file — there is no
+    equivalent CLI flag or environment variable, and the `-D` property override (parsed as Java
+    properties) cannot express a list. Identity names must be unique and tokens non-empty; the proxy
+    fails fast at startup otherwise.
+
+### Migrating from a shared token
+
+Setting `proxy.auth` does **not** disable a legacy `proxy.agentToken`. When both are present, the
+shared token is honored as an additional **allow-all** identity (the proxy logs a warning that it is
+active), so you can adopt per-agent identities incrementally:
+
+1. Add a `proxy.auth` entry per agent while leaving `proxy.agentToken` in place — existing agents
+   keep connecting with the shared token.
+2. Move each agent onto its own identity token, one at a time.
+3. Once every agent presents an identity token, remove `proxy.agentToken` to close the shared
+   allow-all path.
 
 ## Auth Header Forwarding
 

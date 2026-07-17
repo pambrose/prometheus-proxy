@@ -28,7 +28,7 @@ import io.prometheus.common.GrpcConstants.META_AGENT_TOKEN_KEY
 /**
  * Attaches the configured pre-shared token to every outgoing gRPC call to the Proxy.
  *
- * Installed only when `agent.agentToken` is non-empty. The Proxy's [io.prometheus.proxy.AgentTokenServerInterceptor]
+ * Installed only when `agent.agentToken` is non-empty. The Proxy's [io.prometheus.proxy.AgentAuthServerInterceptor]
  * validates this header and rejects calls that omit or mismatch it.
  *
  * @param token the non-empty token to present to the Proxy

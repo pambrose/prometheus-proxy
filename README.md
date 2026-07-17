@@ -372,7 +372,7 @@ Typesafe Config highlights include:
 | **Both**  | `--config, -c`     | `PROXY_CONFIG` / `AGENT_CONFIG` | Path or URL to config file                           |
 | **Both**  | `--admin, -r`      | `ADMIN_ENABLED`                 | Enable admin/health-check endpoints                  |
 | **Both**  | `--metrics, -e`    | `METRICS_ENABLED`               | Enable internal metrics collection                   |
-| **Both**  | `--agent_token`    | `AGENT_TOKEN`                   | Pre-shared agent auth token; both sides must match (Default: disabled) |
+| **Both**  | `--agent_token`    | `AGENT_TOKEN`                   | Pre-shared agent auth token; both sides must match (Default: disabled). For per-agent identities see `proxy.auth` |
 | **Proxy** | `--port, -p`       | `PROXY_PORT`                    | Port for Prometheus to scrape (Default: 8080)        |
 | **Proxy** | `--agent_port, -a` | `AGENT_PORT`                    | Port for Agents to connect via gRPC (Default: 50051) |
 | **Agent** | `--proxy, -p`      | `PROXY_HOSTNAME`                | Hostname/IP of the Proxy                             |
@@ -381,7 +381,8 @@ Typesafe Config highlights include:
 
 * **Formats:** Supports HOCON (`.conf`), JSON (`.json`), and Java Properties (`.properties`).
 * **Logging:** Customize with `-Dlogback.configurationFile=/path/to/logback.xml`.
-* **Dynamic Props:** Use `-Dproperty.name=value` for any configuration key.
+* **Dynamic Props:** Use `-Dproperty.name=value` for any scalar configuration key (parsed as Java properties, so list/object values like `proxy.auth` must be set in a config file).
+* **Per-Agent Auth:** `proxy.auth` (per-agent identities with path authorization) is a list of objects, so it is config-file-only — see [Per-Agent Identities and Path Authorization](#per-agent-identities-and-path-authorization).
 * **Keepalives:** See the [gRPC keepalive guide](https://grpc.io/docs/guides/keepalive/) for tuning details.
 
 ---
@@ -574,6 +575,44 @@ java -jar prometheus-agent.jar --config myconfig.conf --agent_token "$AGENT_TOKE
 
 The token is a lightweight, app-level control. For production, prefer mutual TLS (and/or restrict the agent port to
 trusted networks); the token complements, but does not replace, those controls. The value is never written to logs.
+
+### Per-Agent Identities and Path Authorization
+
+A single shared `agentToken` authenticates agents but does not distinguish between them: any agent holding the token can
+register **any** path, including one already served by another agent. To scope agents, define named identities under
+`proxy.auth`, each with its own token and a list of allowed path glob patterns:
+
+```hocon
+proxy {
+  auth = [
+    { name = team-a, token = "team-a-token", paths = ["team_a_*"] }
+    { name = team-b, token = "team-b-token", paths = ["team_b_*"] }
+    { name = infra,  token = "infra-token",  paths = [] }          # empty paths = may register any path
+  ]
+}
+```
+
+Each agent presents its identity's token the usual way (`--agent_token`, `AGENT_TOKEN`, or `agent.agentToken`); no
+agent-side change is needed. The proxy resolves the token to an identity and enforces, on every `registerPath`, that the
+requested path matches one of the identity's `paths` patterns. Patterns are single-segment globs where `*` matches any run
+of characters and `?` matches one (e.g. `team_a_*`); an **empty** `paths` list authorizes every path. An unknown token is
+rejected with `UNAUTHENTICATED`; a path outside the identity's patterns fails registration with a "not authorized" reason.
+Because authorization is per-identity-per-path, consolidated mode (multiple agents serving one path) still works as long as
+each agent's identity permits the shared path.
+
+`proxy.auth` is a list of objects, so it is set in the config file only — there is no equivalent CLI flag or environment
+variable. Identity names must be unique and tokens must be non-empty; the proxy fails fast at startup otherwise.
+
+#### Migrating from a shared token
+
+Setting `proxy.auth` does **not** disable a legacy `proxy.agentToken`. When both are present, the shared token is honored
+as an additional **allow-all** identity (and the proxy logs a warning that it is active), so you can adopt per-agent
+identities incrementally:
+
+1. Add a `proxy.auth` entry per agent while leaving `proxy.agentToken` in place — existing agents keep connecting with the
+   shared token.
+2. Move each agent onto its own identity token one at a time.
+3. Once every agent presents an identity token, remove `proxy.agentToken` to close the shared allow-all path.
 
 ### Auth Header Forwarding
 

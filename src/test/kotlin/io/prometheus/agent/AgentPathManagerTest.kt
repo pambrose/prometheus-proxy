@@ -55,7 +55,7 @@ class AgentPathManagerTest : StringSpec() {
       agent {
         pathConfigs = []
       }
-      proxy {}
+      proxy { auth = [] }
       """.trimIndent(),
     )
     val configVals = ConfigVals(config)
@@ -333,7 +333,7 @@ class AgentPathManagerTest : StringSpec() {
             }
           ]
         }
-        proxy {}
+        proxy { auth = [] }
         """.trimIndent(),
       )
       val configVals = ConfigVals(config)
@@ -368,7 +368,7 @@ class AgentPathManagerTest : StringSpec() {
             }
           ]
         }
-        proxy {}
+        proxy { auth = [] }
         """.trimIndent(),
       )
       val configVals = ConfigVals(config)
@@ -440,7 +440,7 @@ class AgentPathManagerTest : StringSpec() {
             }
           ]
         }
-        proxy {}
+        proxy { auth = [] }
         """.trimIndent(),
       )
       val configVals = ConfigVals(config)
