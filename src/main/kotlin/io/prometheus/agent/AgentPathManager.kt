@@ -16,8 +16,10 @@
 
 package io.prometheus.agent
 
+import com.pambrose.common.util.runCatchingCancellable
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
+import io.prometheus.agent.discovery.DiscoveredPath
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import kotlinx.coroutines.sync.Mutex
@@ -25,15 +27,28 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 /**
+ * Ownership of a registered path. [STATIC] means "not managed by discovery" — config-driven
+ * `pathConfigs` entries and any manual runtime registrations — and is never touched by
+ * [AgentPathManager.reconcileDiscoveredPaths]; [DISCOVERED] paths are owned (added, updated,
+ * and removed) by the reconciler.
+ */
+internal enum class PathSource {
+  STATIC,
+  DISCOVERED,
+}
+
+/**
  * Manages the agent's path registration lifecycle with the proxy.
  *
- * Loads path configurations from the agent's HOCON config, registers each path with
- * the proxy via gRPC, and maintains a local map of path to [PathContext] (URL, labels,
- * path ID). Supports dynamic registration and unregistration at runtime.
+ * Loads static path configurations from the agent's HOCON config, registers each path with the
+ * proxy via gRPC, and maintains a local map of path to [PathContext] (URL, labels, path ID, source).
+ * Supports dynamic registration/unregistration at runtime and, via [reconcileDiscoveredPaths],
+ * reconciling the [PathSource.DISCOVERED] subset against a desired set without touching the
+ * [PathSource.STATIC] baseline.
  *
  * @param agent the parent [Agent] instance
  * @see AgentGrpcService
- * @see io.prometheus.Agent
+ * @see io.prometheus.agent.discovery.PathDiscoveryService
  */
 internal class AgentPathManager(
   private val agent: Agent,
@@ -44,7 +59,7 @@ internal class AgentPathManager(
 
   operator fun get(path: String): PathContext? = pathContextMap[path]
 
-  // Routed through pathMutex so a dynamic registerPath racing a reconnect can't insert a stale
+  // Routed through pathMutex so a dynamic registerPath racing a reconcile can't insert a stale
   // PathContext into the freshly-cleared map (finding 19).
   suspend fun clear() = pathMutex.withLock { pathContextMap.clear() }
 
@@ -63,35 +78,90 @@ internal class AgentPathManager(
     pathVal: String,
     url: String,
     labels: String = "{}",
+  ) = pathMutex.withLock { doRegisterPath(pathVal, url, labels, PathSource.STATIC) }
+
+  suspend fun unregisterPath(pathVal: String) = pathMutex.withLock { doUnregisterPath(pathVal) }
+
+  /**
+   * Reconciles the [PathSource.DISCOVERED] paths so the registered set matches [desired].
+   *
+   * Runs the whole diff-and-apply under [pathMutex] so it is atomic with respect to any other
+   * register/unregister/clear call. Registers desired paths not yet present, unregisters discovered
+   * paths no longer desired, and re-registers a discovered path whose URL or labels changed. A
+   * desired path colliding with a [PathSource.STATIC] path is skipped (static wins). Each per-path
+   * operation is isolated, so one failing path does not abort the rest of the reconcile; the failure
+   * is retried on the next call (reconcile is idempotent).
+   */
+  suspend fun reconcileDiscoveredPaths(desired: List<DiscoveredPath>) =
+    pathMutex.withLock {
+      // Build the desired discovered set keyed by normalized path; drop collisions with STATIC paths.
+      val desiredByPath = LinkedHashMap<String, DiscoveredPath>()
+      for (entry in desired) {
+        val path = entry.path.removePrefix("/")
+        if (pathContextMap[path]?.source == PathSource.STATIC) {
+          logger.warn { "Discovered path /$path collides with a static path; keeping the static entry" }
+          continue
+        }
+        if (path in desiredByPath)
+          logger.warn { "Duplicate discovered path /$path; using the last entry" }
+        desiredByPath[path] = entry
+      }
+
+      // Unregister DISCOVERED paths that are no longer desired.
+      val stale =
+        pathContextMap.mapNotNull { (path, ctx) ->
+          path.takeIf { ctx.source == PathSource.DISCOVERED && path !in desiredByPath }
+        }
+      for (path in stale) {
+        runCatchingCancellable { doUnregisterPath(path) }
+          .onFailure { logger.warn(it) { "Failed to unregister discovered path /$path" } }
+      }
+
+      // Register new discovered paths and re-register changed ones (unregister-then-register keeps the
+      // local mapping and the proxy's stored labels in agreement).
+      for ((path, entry) in desiredByPath) {
+        val current = pathContextMap[path]
+        if (current != null && current.url == entry.url && current.labels == entry.labels.defaultEmptyJsonObject())
+          continue // Unchanged discovered path.
+        runCatchingCancellable {
+          if (current != null)
+            doUnregisterPath(path)
+          doRegisterPath(path, entry.url, entry.labels, PathSource.DISCOVERED)
+        }.onFailure { logger.warn(it) { "Failed to register discovered path /$path" } }
+      }
+    }
+
+  // Lock-free registration body; callers MUST hold pathMutex. Kotlin's Mutex is not reentrant, so
+  // reconcileDiscoveredPaths (which holds the lock across the whole diff) calls this directly rather
+  // than the locking registerPath wrapper.
+  private suspend fun doRegisterPath(
+    pathVal: String,
+    url: String,
+    labels: String,
+    source: PathSource,
   ) {
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
     require(url.isNotEmpty()) { "Empty URL" }
 
     val path = pathVal.removePrefix("/")
     val labelsJson = labels.defaultEmptyJsonObject()
-    // Hold pathMutex across the proxy RPC AND the local map write so concurrent register/unregister of
-    // the same path can't leave the local map and the proxy's view disagreeing (finding 19).
-    pathMutex.withLock {
-      val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
-      if (!agent.isTestMode)
-        logger.info { "Registered $url as /$path with labels $labelsJson" }
-      pathContextMap[path] = PathContext(pathId, path, url, labelsJson)
-    }
+    val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
+    if (!agent.isTestMode)
+      logger.info { "Registered $url as /$path with labels $labelsJson (${source.name.lowercase()})" }
+    pathContextMap[path] = PathContext(pathId, path, url, labelsJson, source)
   }
 
-  suspend fun unregisterPath(pathVal: String) {
+  // Lock-free unregistration body; callers MUST hold pathMutex (see doRegisterPath).
+  private suspend fun doUnregisterPath(pathVal: String) {
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
 
     val path = pathVal.removePrefix("/")
-    // Hold pathMutex across the proxy RPC AND the local map write (finding 19).
-    pathMutex.withLock {
-      agent.grpcService.unregisterPathOnProxy(path)
-      val pathContext = pathContextMap.remove(path)
-      if (pathContext == null) {
-        logger.info { "No path value /$path found in pathContextMap when unregistering" }
-      } else if (!agent.isTestMode) {
-        logger.info { "Unregistered /$path for ${pathContext.url}" }
-      }
+    agent.grpcService.unregisterPathOnProxy(path)
+    val pathContext = pathContextMap.remove(path)
+    if (pathContext == null) {
+      logger.info { "No path value /$path found in pathContextMap when unregistering" }
+    } else if (!agent.isTestMode) {
+      logger.info { "Unregistered /$path for ${pathContext.url}" }
     }
   }
 
@@ -122,5 +192,6 @@ internal class AgentPathManager(
     val path: String,
     val url: String,
     val labels: String,
+    val source: PathSource,
   )
 }

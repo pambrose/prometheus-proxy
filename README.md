@@ -323,6 +323,51 @@ Access discovery endpoint at: `http://proxy-host:8080/discovery`
 ** [Service Discovery guide](https://pambrose.github.io/prometheus-proxy/service-discovery/) explains the discovery payload format and the Prometheus
 `http_sd_configs` wiring.
 
+### Dynamic Target Discovery (Agent)
+
+By default the agent's scrape targets come from the static `agent.pathConfigs` list, read once at
+startup — adding or removing a target means editing the config and restarting the agent. Enable
+dynamic discovery to have the agent reconcile its registered paths against a **watched file** at
+runtime, with no restart:
+
+```hocon
+agent {
+  discovery {
+    enabled = true
+    file.path = "/etc/prometheus-proxy/targets.conf"   // HOCON or JSON list of paths
+    reconcileIntervalSecs = 30                          // Poll and full-resync interval
+  }
+}
+```
+
+The discovery file is a `paths` list of the same `{ name, path, url, labels }` entries as
+`pathConfigs`:
+
+```hocon
+paths = [
+  { name = "app1", path = "app1_metrics", url = "http://app1:9090/metrics" }
+  { name = "app2", path = "app2_metrics", url = "http://app2:9090/metrics" }
+]
+```
+
+Every `reconcileIntervalSecs` the agent reads the file and registers new paths, unregisters ones no
+longer listed, and re-registers a path whose URL or labels changed — without disturbing the paths
+that did not change. Behavior worth knowing:
+
+- **Additive to the static baseline.** Discovered paths add to `agent.pathConfigs` (which is never
+  touched); on a path collision the static entry wins. Leave `pathConfigs` empty to run
+  discovery-only.
+- **Fail-safe reads.** A missing/unreadable/malformed file keeps the last-known-good set; a
+  *valid-but-empty* file removes all discovered paths.
+- **Polling, not inotify.** Reliable under Kubernetes ConfigMap updates and bind mounts, where file
+  watches often miss changes.
+- **Config-file only.** `discovery.file.path` points at a list, so there is no CLI/env equivalent
+  (though `enabled`, the path, and the interval are scalars you can also set via `-D`).
+
+> This is distinct from the [Prometheus Service Discovery](#service-discovery) above: that exposes a
+> discovery endpoint so *Prometheus* can find proxied targets, whereas this lets the *agent* pick up
+> target changes behind the firewall without a restart.
+
 ### Performance Tuning
 
 Configure concurrent scraping:

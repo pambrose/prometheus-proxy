@@ -151,6 +151,7 @@ Container tests in `src/test/kotlin/io/prometheus/containers/` — a full Testco
 - `ContainersLargePayloadTest` — forces the chunked + gzipped scrape path with a large synthetic payload
 - `ContainersReconnectTest` — agent reconnects to a replacement proxy and scrapes resume
 - `ContainersAgentTokenAuthTest` — pre-shared agent-token authentication on the gRPC channel (match + mismatch)
+- `ContainersDiscoveryTest` — dynamic target discovery: agent reconciles a path from a watched file and serves it
 - `ContainersTlsTest` / `ContainersHttpsTargetTest` — TLS on the gRPC channel and HTTPS upstream targets
 - `ContainersScalingTest` — parameter-driven N-agents × M-endpoints scaling (tune via `SCALE_*` env vars / `make scaling-tests`)
 

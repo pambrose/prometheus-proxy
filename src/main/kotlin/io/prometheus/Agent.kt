@@ -43,6 +43,8 @@ import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.agent.HeartBeatResult
 import io.prometheus.agent.RequestFailureException
+import io.prometheus.agent.discovery.FileDiscoverySource
+import io.prometheus.agent.discovery.PathDiscoveryService
 import io.prometheus.client.Histogram
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
@@ -192,6 +194,7 @@ class Agent(
   }
 
   internal val pathManager = AgentPathManager(this)
+  private val pathDiscoveryService: PathDiscoveryService? = createPathDiscoveryService()
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
   internal val launchId = randomId(15)
@@ -234,6 +237,16 @@ class Agent(
     initBlock?.invoke(this)
   }
 
+  // Built once at construction; null when discovery is disabled. AgentOptions has already validated
+  // the file path and interval when discovery is enabled, so no misconfig branch is needed here.
+  private fun createPathDiscoveryService(): PathDiscoveryService? {
+    val discovery = configVals.agent.discovery
+    if (!discovery.enabled)
+      return null
+    logger.info { "Path discovery enabled from file: ${discovery.file.path}" }
+    return PathDiscoveryService(pathManager, FileDiscoverySource(discovery.file.path), discovery.reconcileIntervalSecs)
+  }
+
   override fun run() {
     suspend fun connectToProxy() {
       // Reset gRPC stubs if the previous iteration had a successful connection, i.e., the agentId != ""
@@ -273,6 +286,14 @@ class Agent(
 
           launchConnectionTask(connectionContext, "startHeartBeat") {
             startHeartBeat(connectionContext)
+          }
+
+          // Dynamic target discovery: reconcile discovered paths for the connection's lifetime.
+          // Polls isRunning/connected so the task ends on disconnect or shutdown (like startHeartBeat).
+          pathDiscoveryService?.let { service ->
+            launchConnectionTask(connectionContext, "reconcilePaths") {
+              service.run { isRunning && connectionContext.connected }
+            }
           }
 
           launchConnectionTask(connectionContext, "writeResponsesToProxyUntilDisconnected") {
