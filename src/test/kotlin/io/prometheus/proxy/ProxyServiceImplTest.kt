@@ -20,6 +20,7 @@ package io.prometheus.proxy
 
 import com.google.protobuf.ByteString
 import com.typesafe.config.ConfigFactory
+import io.grpc.Context
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
@@ -74,6 +75,7 @@ class ProxyServiceImplTest : StringSpec() {
     val config = ConfigFactory.parseString(
       """
       proxy {
+        auth = []
         internal {
           maxZippedContentSizeMBytes = 5
           maxUnzippedContentSizeMBytes = 10
@@ -301,6 +303,77 @@ class ProxyServiceImplTest : StringSpec() {
       response.valid.shouldBeFalse()
       response.pathId shouldBe -1
       response.reason shouldContain "Invalid agentId"
+    }
+
+    // Feature 3: when an identity is attached to the gRPC context, registerPath enforces its path
+    // patterns. A path outside the identity's patterns is rejected before addPath is ever called.
+    "registerPath should deny a path the agent identity is not authorized for" {
+      val proxy = createMockProxy()
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "team-a-agent"
+      val deniedPath = "team_b_metrics"
+
+      // Capture the manager in a local so the exactly=0 verify checks addPath only, not the
+      // pathManager getter (which is legitimately called for pathMapSize in the response).
+      val pathManager = proxy.pathManager
+      every { mockAgentContext.agentId } returns testAgentId
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+      every { pathManager.pathMapSize } returns 0
+
+      val identity = AgentIdentity("team_a", ByteArray(0), listOf(AgentAuthManager.globToRegex("team_a_*")))
+      val request = registerPathRequest {
+        agentId = testAgentId
+        path = deniedPath
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val context = Context.current().withValue(AgentAuthManager.AGENT_IDENTITY_KEY, identity)
+      val previous = context.attach()
+      val response =
+        try {
+          service.registerPath(request)
+        } finally {
+          context.detach(previous)
+        }
+
+      response.valid.shouldBeFalse()
+      response.pathId shouldBe -1
+      response.reason shouldContain "not authorized"
+      response.reason shouldContain "team_a"
+      // addPath must not be called when authorization fails.
+      verify(exactly = 0) { pathManager.addPath(any(), any(), any()) }
+      verify { mockAgentContext.markActivityTime(false) }
+    }
+
+    "registerPath should allow a path the agent identity is authorized for" {
+      val proxy = createMockProxy()
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "team-a-agent"
+      val allowedPath = "team_a_metrics"
+
+      every { mockAgentContext.agentId } returns testAgentId
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+      every { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext) } returns null
+      every { proxy.pathManager.pathMapSize } returns 1
+
+      val identity = AgentIdentity("team_a", ByteArray(0), listOf(AgentAuthManager.globToRegex("team_a_*")))
+      val request = registerPathRequest {
+        agentId = testAgentId
+        path = allowedPath
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val context = Context.current().withValue(AgentAuthManager.AGENT_IDENTITY_KEY, identity)
+      val previous = context.attach()
+      val response =
+        try {
+          service.registerPath(request)
+        } finally {
+          context.detach(previous)
+        }
+
+      response.valid.shouldBeTrue()
+      verify { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext) }
     }
 
     "unregisterPath should succeed with valid agent context" {

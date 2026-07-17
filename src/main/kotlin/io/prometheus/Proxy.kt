@@ -37,6 +37,7 @@ import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
+import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
@@ -166,6 +167,11 @@ class Proxy(
 ) {
   private val httpService = ProxyHttpService(this, proxyPort, isTestMode)
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
+
+  // Declared before grpcService: createGrpcServer() reads isEnabled to decide whether to install the auth
+  // interceptor. Eager construction fail-fasts on invalid proxy.auth config at startup.
+  internal val agentAuthManager = AgentAuthManager(this)
+
   private val grpcService =
     if (inProcessServerName.isEmpty())
       ProxyGrpcService(proxy = this, port = options.proxyAgentPort)

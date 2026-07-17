@@ -37,6 +37,28 @@ proxy {
 }
 ```
 
+## Per-Agent Identities
+
+Scope agents to specific paths with `proxy.auth`: a list of named identities, each with its own token
+and allowed path glob patterns. The proxy resolves an agent's token to an identity and rejects any
+`registerPath` for a path that does not match the identity's patterns. An empty `paths` list allows
+all paths. A legacy `proxy.agentToken` (above) is honored alongside `auth` as an allow-all identity,
+easing migration. See
+[Per-Agent Identities and Path Authorization](../security/index.md#per-agent-identities-and-path-authorization)
+for details and a migration walkthrough.
+
+```hocon
+proxy {
+  auth = [
+    { name = team-a, token = "team-a-token", paths = ["team_a_*"] }
+    { name = team-b, token = "team-b-token", paths = ["team_b_*"] }
+  ]
+}
+```
+
+Because `auth` is a list of objects, it is config-file-only — there is no CLI/env equivalent, and the
+`-D` override cannot express a list. Identity names must be unique and tokens non-empty.
+
 ## Service Discovery
 
 Enable Prometheus HTTP service discovery:

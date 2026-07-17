@@ -99,7 +99,7 @@ class AgentHttpServiceTest : StringSpec() {
           cioTimeoutSecs = 90
         }
       }
-      proxy {}
+      proxy { auth = [] }
       """.trimIndent(),
     )
     val configVals = ConfigVals(config)
@@ -146,7 +146,7 @@ class AgentHttpServiceTest : StringSpec() {
           cioTimeoutSecs = 90
         }
       }
-      proxy {}
+      proxy { auth = [] }
       """.trimIndent(),
     )
     val configVals = ConfigVals(config)

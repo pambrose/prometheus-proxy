@@ -97,10 +97,10 @@ internal class ProxyGrpcService(
       val proxyService = ProxyServiceImpl(proxy)
       val interceptors: List<ServerInterceptor> =
         buildList {
-          // Token check first: a missing/invalid token is rejected (call.close) before the call proceeds.
+          // Auth check first: an unrecognized token is rejected (call.close) before the call proceeds.
           // Ordering is not security-critical (close() short-circuits regardless), but keeps the intent clear.
-          if (options.agentToken.isNotEmpty())
-            add(AgentTokenServerInterceptor(options.agentToken))
+          if (proxy.agentAuthManager.isEnabled)
+            add(AgentAuthServerInterceptor(proxy.agentAuthManager))
           if (!options.transportFilterDisabled)
             add(ProxyServerInterceptor())
           if (proxy.isZipkinEnabled)
