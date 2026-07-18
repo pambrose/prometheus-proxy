@@ -60,7 +60,7 @@ open class HarnessSetup {
 
   protected fun takeDownProxyAndAgent() {
     runBlocking {
-      for (service in listOf(proxy, agent)) {
+      for (service in [proxy, agent]) {
         logger.info { "Stopping ${service.simpleClassName}" }
         launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
       }

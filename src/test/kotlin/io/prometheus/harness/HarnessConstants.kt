@@ -52,7 +52,7 @@ object HarnessConstants {
 
   private fun localOrGitHub(path: String): String = if (File(path).exists()) path else "$GH_PREFIX$path"
 
-  val CONFIG_ARG = listOf("--config", localOrGitHub(HARNESS_CONFIG_FILE))
+  val CONFIG_ARG = ["--config", localOrGitHub(HARNESS_CONFIG_FILE)]
 
   val OPTIONS_CONFIG = localOrGitHub(JUNIT_FILE)
 }

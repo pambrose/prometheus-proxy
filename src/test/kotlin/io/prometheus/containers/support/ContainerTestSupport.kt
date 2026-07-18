@@ -96,7 +96,7 @@ object ContainerTestSupport {
     network: Network,
     image: ImageFromDockerfile = proxyImage(),
     env: Map<String, String> = emptyMap(),
-    exposedPorts: List<Int> = listOf(PROXY_HTTP_PORT),
+    exposedPorts: List<Int> = [PROXY_HTTP_PORT],
     hostFiles: Map<String, String> = emptyMap(),
     wait: WaitStrategy = Wait.forListeningPort(),
   ): GenericContainer<*> =
@@ -122,7 +122,7 @@ object ContainerTestSupport {
     configResource: String = "containers/agent.conf",
     configText: String? = null,
     env: Map<String, String> = emptyMap(),
-    exposedPorts: List<Int> = emptyList(),
+    exposedPorts: List<Int> = [],
     classpathFiles: Map<String, String> = emptyMap(),
     hostFiles: Map<String, String> = emptyMap(),
     waitLogRegex: String = ".*Registered .* as /.*",

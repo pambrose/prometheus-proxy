@@ -49,14 +49,14 @@ class TlsNoMutualAuthTest :
         proxySetup = {
           startProxy(
             serverName = "nomutualauth",
-            args = listOf(
+            args = [
               "--agent_port",
               "50440",
               "--cert",
               "testing/certs/server1.pem",
               "--key",
               "testing/certs/server1.key",
-            ),
+            ],
           )
         },
         agentSetup = {
@@ -65,14 +65,14 @@ class TlsNoMutualAuthTest :
             scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
             chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
-            args = listOf(
+            args = [
               "--proxy",
               "localhost:50440",
               "--trust",
               "testing/certs/ca.pem",
               "--override",
               "foo.test.google.fr",
-            ),
+            ],
           )
         },
       )

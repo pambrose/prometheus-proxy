@@ -26,35 +26,36 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.prometheus.agent.AgentOptions.Companion.agentOptions
 
 class AgentOptionsTest : StringSpec() {
   init {
     // ==================== Default Value Tests ====================
 
     "default proxyHostname should be set from config" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "myhost:1234"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "myhost:1234"], false)
       options.proxyHostname shouldBe "myhost:1234"
     }
 
     "default agentName should be overridable via command line" {
-      val options = AgentOptions(listOf("--name", "custom-agent", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "custom-agent", "--proxy", "host"], false)
       options.agentName shouldBe "custom-agent"
     }
 
     "consolidated should default to false" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.consolidated.shouldBeFalse()
     }
 
     "consolidated should be settable via command line" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "-o"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "-o"], false)
       options.consolidated.shouldBeTrue()
     }
 
     // ==================== Scrape Configuration Tests ====================
 
     "scrapeTimeoutSecs should be settable via command line" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--timeout", "45"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--timeout", "45"], false)
       options.scrapeTimeoutSecs shouldBe 45
     }
 
@@ -62,62 +63,62 @@ class AgentOptionsTest : StringSpec() {
     // fail fast at startup like the other numeric options (chunk, retries, client_timeout, etc.).
     "scrapeTimeoutSecs of 0 should be rejected" {
       val exception = shouldThrow<IllegalArgumentException> {
-        AgentOptions(listOf("--name", "test", "--proxy", "host", "--timeout", "0"), false)
+        agentOptions(["--name", "test", "--proxy", "host", "--timeout", "0"], false)
       }
       exception.message shouldContain "scrapeTimeoutSecs"
     }
 
     "negative scrapeTimeoutSecs from config should be rejected" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(listOf("--name", "test", "--proxy", "host", "-Dagent.scrapeTimeoutSecs=-5"), false)
+        agentOptions(["--name", "test", "--proxy", "host", "-Dagent.scrapeTimeoutSecs=-5"], false)
       }
     }
 
     "scrapeMaxRetries should be settable via command line" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--max_retries", "3"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--max_retries", "3"], false)
       options.scrapeMaxRetries shouldBe 3
     }
 
     // ==================== Chunk and Gzip Tests ====================
 
     "chunkContentSizeBytes should be multiplied by 1024" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--chunk", "32"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--chunk", "32"], false)
       options.chunkContentSizeBytes shouldBe 32 * 1024
     }
 
     // Item 16: --chunk now binds the KB-unit input field; chunkContentSizeBytes is derived once.
     "chunkContentSizeKbs should hold the raw --chunk input and chunkContentSizeBytes its KB*1024 value" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--chunk", "64"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--chunk", "64"], false)
       options.chunkContentSizeKbs shouldBe 64
       options.chunkContentSizeBytes shouldBe 64 * 1024
     }
 
     "minGzipSizeBytes should be settable via command line" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--gzip", "2048"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--gzip", "2048"], false)
       options.minGzipSizeBytes shouldBe 2048
     }
 
     // ==================== HTTP Client Tests ====================
 
     "trustAllX509Certificates should default to false" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.trustAllX509Certificates.shouldBeFalse()
     }
 
     "trustAllX509Certificates should be settable via command line" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--trust_all_x509"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--trust_all_x509"], false)
       options.trustAllX509Certificates.shouldBeTrue()
     }
 
     "httpsTrustStorePath and password should default to empty" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.httpsTrustStorePath shouldBe ""
       options.httpsTrustStorePassword shouldBe ""
     }
 
     "httpsTrustStorePath and password should be settable via command line" {
       val args =
-        listOf(
+        [
           "--name",
           "test",
           "--proxy",
@@ -126,67 +127,67 @@ class AgentOptionsTest : StringSpec() {
           "/etc/agent/truststore.jks",
           "--https_truststore_password",
           "s3cr3t",
-        )
+        ]
       val options = AgentOptions(args, false)
       options.httpsTrustStorePath shouldBe "/etc/agent/truststore.jks"
       options.httpsTrustStorePassword shouldBe "s3cr3t"
     }
 
     "maxConcurrentHttpClients should have positive default" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.maxConcurrentHttpClients shouldBeGreaterThan 0
     }
 
     "httpClientTimeoutSecs should have positive default" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.httpClientTimeoutSecs shouldBeGreaterThan 0
     }
 
     // ==================== Cache Settings Tests ====================
 
     "maxCacheSize should have valid default" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.maxCacheSize shouldBeGreaterThan 0
     }
 
     "maxCacheAgeMins should have valid default" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.maxCacheAgeMins shouldBeGreaterThan 0
     }
 
     "maxCacheIdleMins should have valid default" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.maxCacheIdleMins shouldBeGreaterThan 0
     }
 
     "cacheCleanupIntervalMins should have valid default" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.cacheCleanupIntervalMins shouldBeGreaterThan 0
     }
 
     // ==================== gRPC Settings Tests ====================
 
     "keepAliveWithoutCalls should default to false" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.keepAliveWithoutCalls.shouldBeFalse()
     }
 
     "keepAliveWithoutCalls should be settable via command line" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--keepalive_without_calls"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--keepalive_without_calls"],
         false,
       )
       options.keepAliveWithoutCalls.shouldBeTrue()
     }
 
     "unaryDeadlineSecs should have positive default" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.unaryDeadlineSecs shouldBeGreaterThan 0
     }
 
     "unaryDeadlineSecs should be settable via command line" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--unary_deadline_secs", "60"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--unary_deadline_secs", "60"],
         false,
       )
       options.unaryDeadlineSecs shouldBe 60
@@ -195,25 +196,25 @@ class AgentOptionsTest : StringSpec() {
     // ==================== Constructor Variants ====================
 
     "list constructor should work" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.agentName shouldBe "test"
     }
 
     "configVals should be populated after construction" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.configVals.agent.name.shouldNotBeNull()
     }
 
     // ==================== Override Authority Tests ====================
 
     "overrideAuthority should default to empty" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.overrideAuthority shouldBe ""
     }
 
     "overrideAuthority should be settable via command line" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--override", "my-authority"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--override", "my-authority"],
         false,
       )
       options.overrideAuthority shouldBe "my-authority"
@@ -222,48 +223,48 @@ class AgentOptionsTest : StringSpec() {
     // ==================== CLI Args for HTTP Client and Cache ====================
 
     "maxConcurrentHttpClients should be settable via command line" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--max_concurrent_clients", "25"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--max_concurrent_clients", "25"],
         false,
       )
       options.maxConcurrentHttpClients shouldBe 25
     }
 
     "httpClientTimeoutSecs should be settable via command line" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--client_timeout_secs", "120"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--client_timeout_secs", "120"],
         false,
       )
       options.httpClientTimeoutSecs shouldBe 120
     }
 
     "maxCacheSize should be settable via command line" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--max_cache_size", "200"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--max_cache_size", "200"],
         false,
       )
       options.maxCacheSize shouldBe 200
     }
 
     "maxCacheAgeMins should be settable via command line" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--max_cache_age_mins", "60"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--max_cache_age_mins", "60"],
         false,
       )
       options.maxCacheAgeMins shouldBe 60
     }
 
     "maxCacheIdleMins should be settable via command line" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--max_cache_idle_mins", "20"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--max_cache_idle_mins", "20"],
         false,
       )
       options.maxCacheIdleMins shouldBe 20
     }
 
     "cacheCleanupIntervalMins should be settable via command line" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "15"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "15"],
         false,
       )
       options.cacheCleanupIntervalMins shouldBe 15
@@ -277,14 +278,14 @@ class AgentOptionsTest : StringSpec() {
     // would gzip everything.
     "Finding 11: reconnectPauseSecs of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(listOf("--name", "test", "--proxy", "host", "-Dagent.internal.reconnectPauseSecs=0"), false)
+        agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.reconnectPauseSecs=0"], false)
       }
     }
 
     "Finding 11: scrapeRequestBacklogUnhealthySize of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(
-          listOf("--name", "test", "--proxy", "host", "-Dagent.internal.scrapeRequestBacklogUnhealthySize=0"),
+        agentOptions(
+          ["--name", "test", "--proxy", "host", "-Dagent.internal.scrapeRequestBacklogUnhealthySize=0"],
           false,
         )
       }
@@ -292,19 +293,19 @@ class AgentOptionsTest : StringSpec() {
 
     "Finding 11: minGzipSizeBytes of -1 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(listOf("--name", "test", "--proxy", "host", "-Dagent.minGzipSizeBytes=-5"), false)
+        agentOptions(["--name", "test", "--proxy", "host", "-Dagent.minGzipSizeBytes=-5"], false)
       }
     }
 
     "Finding 11: minGzipSizeBytes of 0 should be accepted (gzip every non-empty payload)" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "-Dagent.minGzipSizeBytes=0"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "-Dagent.minGzipSizeBytes=0"], false)
       options.minGzipSizeBytes shouldBe 0
     }
 
     "maxConcurrentHttpClients of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(
-          listOf("--name", "test", "--proxy", "host", "--max_concurrent_clients", "0"),
+        agentOptions(
+          ["--name", "test", "--proxy", "host", "--max_concurrent_clients", "0"],
           false,
         )
       }
@@ -312,8 +313,8 @@ class AgentOptionsTest : StringSpec() {
 
     "httpClientTimeoutSecs of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(
-          listOf("--name", "test", "--proxy", "host", "--client_timeout_secs", "0"),
+        agentOptions(
+          ["--name", "test", "--proxy", "host", "--client_timeout_secs", "0"],
           false,
         )
       }
@@ -323,8 +324,8 @@ class AgentOptionsTest : StringSpec() {
     // These tests verify that 1 is now accepted and 0 is still rejected.
 
     "maxCacheSize of 1 should be accepted" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--max_cache_size", "1"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--max_cache_size", "1"],
         false,
       )
       options.maxCacheSize shouldBe 1
@@ -332,16 +333,16 @@ class AgentOptionsTest : StringSpec() {
 
     "maxCacheSize of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(
-          listOf("--name", "test", "--proxy", "host", "--max_cache_size", "0"),
+        agentOptions(
+          ["--name", "test", "--proxy", "host", "--max_cache_size", "0"],
           false,
         )
       }
     }
 
     "maxCacheAgeMins of 1 should be accepted" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--max_cache_age_mins", "1"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--max_cache_age_mins", "1"],
         false,
       )
       options.maxCacheAgeMins shouldBe 1
@@ -349,16 +350,16 @@ class AgentOptionsTest : StringSpec() {
 
     "maxCacheAgeMins of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(
-          listOf("--name", "test", "--proxy", "host", "--max_cache_age_mins", "0"),
+        agentOptions(
+          ["--name", "test", "--proxy", "host", "--max_cache_age_mins", "0"],
           false,
         )
       }
     }
 
     "maxCacheIdleMins of 1 should be accepted" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--max_cache_idle_mins", "1"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--max_cache_idle_mins", "1"],
         false,
       )
       options.maxCacheIdleMins shouldBe 1
@@ -366,16 +367,16 @@ class AgentOptionsTest : StringSpec() {
 
     "maxCacheIdleMins of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(
-          listOf("--name", "test", "--proxy", "host", "--max_cache_idle_mins", "0"),
+        agentOptions(
+          ["--name", "test", "--proxy", "host", "--max_cache_idle_mins", "0"],
           false,
         )
       }
     }
 
     "cacheCleanupIntervalMins of 1 should be accepted" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "1"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "1"],
         false,
       )
       options.cacheCleanupIntervalMins shouldBe 1
@@ -383,8 +384,8 @@ class AgentOptionsTest : StringSpec() {
 
     "cacheCleanupIntervalMins of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(
-          listOf("--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "0"),
+        agentOptions(
+          ["--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "0"],
           false,
         )
       }
@@ -398,16 +399,16 @@ class AgentOptionsTest : StringSpec() {
     // the KB value is positive and checks for overflow before the conversion.
 
     "Bug #9: chunkContentSizeBytes should correctly convert KB to bytes" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--chunk", "64"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--chunk", "64"],
         false,
       )
       options.chunkContentSizeBytes shouldBe 64 * 1024
     }
 
     "Bug #9: chunkContentSizeBytes of 1 KB should be accepted" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--chunk", "1"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--chunk", "1"],
         false,
       )
       options.chunkContentSizeBytes shouldBe 1024
@@ -416,8 +417,8 @@ class AgentOptionsTest : StringSpec() {
     "Bug #9: chunkContentSizeBytes at max safe KB value should be accepted" {
       // Int.MAX_VALUE / 1024 = 2097151
       val maxSafeKb = (Int.MAX_VALUE / 1024).toString()
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--chunk", maxSafeKb),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--chunk", maxSafeKb],
         false,
       )
       options.chunkContentSizeBytes shouldBe (Int.MAX_VALUE / 1024) * 1024
@@ -427,8 +428,8 @@ class AgentOptionsTest : StringSpec() {
       // Int.MAX_VALUE / 1024 + 1 = 2097152, which overflows when multiplied by 1024
       val overflowKb = (Int.MAX_VALUE / 1024 + 1).toString()
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(
-          listOf("--name", "test", "--proxy", "host", "--chunk", overflowKb),
+        agentOptions(
+          ["--name", "test", "--proxy", "host", "--chunk", overflowKb],
           false,
         )
       }
@@ -436,8 +437,8 @@ class AgentOptionsTest : StringSpec() {
 
     "Bug #9: chunkContentSizeBytes of 0 should throw" {
       shouldThrow<IllegalArgumentException> {
-        AgentOptions(
-          listOf("--name", "test", "--proxy", "host", "--chunk", "0"),
+        agentOptions(
+          ["--name", "test", "--proxy", "host", "--chunk", "0"],
           false,
         )
       }

@@ -19,7 +19,6 @@
 package io.prometheus.agent
 
 import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.Logger as LogbackLogger
 import com.google.common.util.concurrent.RateLimiter
 import io.grpc.Status
 import io.grpc.StatusException
@@ -39,6 +38,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Agent
+import io.prometheus.agent.AgentOptions.Companion.agentOptions
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlinx.coroutines.CompletableDeferred
@@ -47,17 +47,19 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.slf4j.LoggerFactory
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import org.slf4j.LoggerFactory
+import ch.qos.logback.classic.Logger as LogbackLogger
 
 class AgentTest : StringSpec() {
   private fun createTestAgent(vararg extraArgs: String): Agent {
     val args =
-      mutableListOf("--proxy", "localhost:$PROXY_AGENT_PORT").apply {
+      buildList {
+        addAll(["--proxy", "localhost:$PROXY_AGENT_PORT"])
         addAll(extraArgs)
       }
     return Agent(
@@ -117,7 +119,7 @@ class AgentTest : StringSpec() {
     "EmbeddedAgentInfo.shutdown() should terminate the agent service, not leave the run loop reconnecting" {
       val agent =
         Agent(
-          options = AgentOptions(listOf("--proxy", "localhost:$PROXY_AGENT_PORT"), exitOnMissingConfig = false),
+          options = agentOptions(["--proxy", "localhost:$PROXY_AGENT_PORT"], exitOnMissingConfig = false),
           inProcessServerName = "embedded-stop-test-${System.nanoTime()}",
           testMode = true,
         ) { startAsync() }

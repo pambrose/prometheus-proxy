@@ -818,7 +818,7 @@ class AgentGrpcServiceTest : StringSpec() {
       nonChunkedChannel.tryReceive().isSuccess.shouldBeFalse()
 
       // Drain chunked channel
-      val capturedChunked = mutableListOf<ChunkedScrapeResponse>()
+      val capturedChunked: MutableList<ChunkedScrapeResponse> = []
       while (true) {
         val item = chunkedChannel.tryReceive()
         if (item.isSuccess) capturedChunked.add(item.getOrThrow()) else break
@@ -1036,7 +1036,7 @@ class AgentGrpcServiceTest : StringSpec() {
       // Mirrors the writeResponsesToProxyUntilDisconnected pattern: a producer closes channels
       // in its finally block, and consumers using consumeAsFlow() should complete normally.
       val channel = Channel<Int>(UNLIMITED)
-      val consumed = mutableListOf<Int>()
+      val consumed: MutableList<Int> = []
       val consumerCompleted = AtomicBoolean(false)
 
       coroutineScope {
@@ -1058,7 +1058,7 @@ class AgentGrpcServiceTest : StringSpec() {
         }
       }
 
-      consumed shouldBe listOf(1, 2, 3)
+      consumed shouldBe [1, 2, 3]
       consumerCompleted.load().shouldBeTrue()
     }
 
@@ -1066,7 +1066,7 @@ class AgentGrpcServiceTest : StringSpec() {
       // When the producer throws, the finally block still closes the channel,
       // allowing consumers to drain remaining items and complete.
       val channel = Channel<Int>(UNLIMITED)
-      val consumed = mutableListOf<Int>()
+      val consumed: MutableList<Int> = []
       val consumerCompleted = AtomicBoolean(false)
 
       coroutineScope {
@@ -1089,7 +1089,7 @@ class AgentGrpcServiceTest : StringSpec() {
         }
       }
 
-      consumed shouldBe listOf(10, 20)
+      consumed shouldBe [10, 20]
       consumerCompleted.load().shouldBeTrue()
     }
 

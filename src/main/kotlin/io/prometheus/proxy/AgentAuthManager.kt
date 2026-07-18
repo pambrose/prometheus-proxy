@@ -120,7 +120,7 @@ internal class AgentAuthManager private constructor(
               "Legacy proxy.agentToken is active as an allow-all identity alongside " +
                 "${configured.size} per-agent ${if (configured.size == 1) "identity" else "identities"}"
             }
-          AgentIdentity(LEGACY_IDENTITY_NAME, sha256(legacyToken), emptyList())
+          AgentIdentity(LEGACY_IDENTITY_NAME, sha256(legacyToken), [])
         }
 
       val allIdentities = configured + listOfNotNull(legacyIdentity)

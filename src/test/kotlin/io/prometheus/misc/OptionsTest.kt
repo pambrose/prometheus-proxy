@@ -30,6 +30,8 @@ import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.harness.HarnessConstants.OPTIONS_CONFIG
 import io.prometheus.proxy.ProxyOptions
+import io.prometheus.agent.AgentOptions.Companion.agentOptions
+import io.prometheus.proxy.ProxyOptions.Companion.proxyOptions
 
 class OptionsTest : StringSpec() {
   private fun readProxyOptions(argList: List<String>) = ProxyOptions(argList).configVals
@@ -40,7 +42,7 @@ class OptionsTest : StringSpec() {
     // ==================== Proxy Default Values Tests ====================
 
     "should use default values when no config is provided" {
-      val configVals = readProxyOptions(listOf())
+      val configVals = readProxyOptions([])
       configVals.proxy
         .apply {
           http.port shouldBe PROXY_HTTP_PORT
@@ -49,7 +51,7 @@ class OptionsTest : StringSpec() {
     }
 
     "should override defaults with config file values" {
-      val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG))
+      val configVals = readProxyOptions(["--config", OPTIONS_CONFIG])
       configVals.proxy
         .apply {
           http.port shouldBe 8181
@@ -58,7 +60,7 @@ class OptionsTest : StringSpec() {
     }
 
     "should override defaults with unquoted system property values" {
-      val configVals = readProxyOptions(listOf("-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"))
+      val configVals = readProxyOptions(["-Dproxy.http.port=9393", "-Dproxy.internal.zipkin.enabled=true"])
       configVals.proxy
         .apply {
           http.port shouldBe 9393
@@ -67,17 +69,17 @@ class OptionsTest : StringSpec() {
     }
 
     "should override defaults with quoted system property values" {
-      val configVals = readProxyOptions(listOf("-Dproxy.http.port=9394"))
+      val configVals = readProxyOptions(["-Dproxy.http.port=9394"])
       configVals.proxy.http.port shouldBe 9394
     }
 
     "should parse path configs from config file" {
-      val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
+      val configVals = readAgentOptions(["--config", OPTIONS_CONFIG])
       configVals.agent.pathConfigs.size shouldBe 3
     }
 
     "should have correct proxy default port values" {
-      ProxyOptions(listOf())
+      proxyOptions([])
         .apply {
           proxyPort shouldBe PROXY_HTTP_PORT
           proxyAgentPort shouldBe PROXY_AGENT_PORT
@@ -85,7 +87,7 @@ class OptionsTest : StringSpec() {
     }
 
     "should have correct agent default values" {
-      val options = AgentOptions(listOf("--name", "test-name", "--proxy", "host5"), false)
+      val options = agentOptions(["--name", "test-name", "--proxy", "host5"], false)
       options
         .apply {
           metricsEnabled shouldBe false
@@ -98,7 +100,7 @@ class OptionsTest : StringSpec() {
     // ==================== Complex Agent Path Configuration Tests (2.1.1) ====================
 
     "verifyPathConfigs should parse multiple path entries correctly" {
-      val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
+      val configVals = readAgentOptions(["--config", OPTIONS_CONFIG])
       val pathConfigs = configVals.agent.pathConfigs
 
       pathConfigs.size shouldBe 3
@@ -108,7 +110,7 @@ class OptionsTest : StringSpec() {
     }
 
     "verifyPathConfigs should have correct properties for each path" {
-      val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
+      val configVals = readAgentOptions(["--config", OPTIONS_CONFIG])
       val pathConfigs = configVals.agent.pathConfigs
 
       // Verify each path config has all required properties
@@ -120,7 +122,7 @@ class OptionsTest : StringSpec() {
     }
 
     "verifyPathConfigs should differentiate between paths" {
-      val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
+      val configVals = readAgentOptions(["--config", OPTIONS_CONFIG])
       val pathConfigs = configVals.agent.pathConfigs
 
       // Ensure all paths are unique
@@ -133,7 +135,7 @@ class OptionsTest : StringSpec() {
     }
 
     "verifyAgentHttpClientDefaults should have valid defaults" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.apply {
         // HTTP client settings should have sensible defaults after config loading
         // The defaults come from the built-in configuration, not command line args
@@ -142,24 +144,24 @@ class OptionsTest : StringSpec() {
     }
 
     "verifyAgentChunkSettings should accept custom chunk size" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--chunk", "64"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--chunk", "64"], false)
       // chunkContentSizeBytes is multiplied by 1024 in processing
       options.chunkContentSizeBytes shouldBe 64 * 1024
     }
 
     "verifyAgentGzipSettings should accept custom gzip threshold" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--gzip", "1024"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--gzip", "1024"], false)
       options.minGzipSizeBytes shouldBe 1024
     }
 
     "verifyAgentConsolidated mode can be enabled via command line" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "-o"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "-o"], false)
       options.consolidated.shouldBeTrue()
     }
 
     "verifyAgentScrapeSettings should accept timeout and retries" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--timeout", "30", "--max_retries", "5"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--timeout", "30", "--max_retries", "5"],
         false,
       )
       options.scrapeTimeoutSecs shouldBe 30
@@ -169,18 +171,18 @@ class OptionsTest : StringSpec() {
     // ==================== Proxy Configuration Edge Cases (2.1.2) ====================
 
     "verifyProxyPortOverride should override default port" {
-      val options = ProxyOptions(listOf("-p", "$PROMETHEUS_PORT"))
+      val options = proxyOptions(["-p", "$PROMETHEUS_PORT"])
       options.proxyPort shouldBe PROMETHEUS_PORT
     }
 
     "verifyProxyAgentPortOverride should override default agent port" {
-      val options = ProxyOptions(listOf("-a", "50052"))
+      val options = proxyOptions(["-a", "50052"])
       options.proxyAgentPort shouldBe 50052
     }
 
     "verifyProxyServiceDiscovery should be configurable" {
-      val options = ProxyOptions(
-        listOf("--sd_enabled", "--sd_path", "/sd", "--sd_target_prefix", "http://proxy:$PROXY_HTTP_PORT"),
+      val options = proxyOptions(
+        ["--sd_enabled", "--sd_path", "/sd", "--sd_target_prefix", "http://proxy:$PROXY_HTTP_PORT"],
       )
       options.sdEnabled.shouldBeTrue()
       options.sdPath shouldBe "/sd"
@@ -188,20 +190,20 @@ class OptionsTest : StringSpec() {
     }
 
     "verifyProxyReflection can be disabled" {
-      val options = ProxyOptions(listOf("--ref_disabled"))
+      val options = proxyOptions(["--ref_disabled"])
       options.reflectionDisabled.shouldBeTrue()
     }
 
     "verifyProxyGrpcSettings should accept custom timeouts" {
-      val options = ProxyOptions(
-        listOf(
+      val options = proxyOptions(
+        [
           "--handshake_timeout_secs",
           "60",
           "--permit_keepalive_time_secs",
           "120",
           "--max_connection_idle_secs",
           "300",
-        ),
+        ],
       )
       options.handshakeTimeoutSecs shouldBe 60L
       options.permitKeepAliveTimeSecs shouldBe 120L
@@ -209,29 +211,29 @@ class OptionsTest : StringSpec() {
     }
 
     "verifyProxyConnectionAge settings should be configurable" {
-      val options = ProxyOptions(listOf("--max_connection_age_secs", "3600", "--max_connection_age_grace_secs", "60"))
+      val options = proxyOptions(["--max_connection_age_secs", "3600", "--max_connection_age_grace_secs", "60"])
       options.maxConnectionAgeSecs shouldBe 3600L
       options.maxConnectionAgeGraceSecs shouldBe 60L
     }
 
     "verifyProxyKeepAlive without calls should be configurable" {
-      val options = ProxyOptions(listOf("--permit_keepalive_without_calls"))
+      val options = proxyOptions(["--permit_keepalive_without_calls"])
       options.permitKeepAliveWithoutCalls.shouldBeTrue()
     }
 
     "verifyProxySystemPropertyOverride should work for port" {
-      val configVals = readProxyOptions(listOf("-Dproxy.http.port=7777"))
+      val configVals = readProxyOptions(["-Dproxy.http.port=7777"])
       configVals.proxy.http.port shouldBe 7777
     }
 
     "verifyProxyConfigFileOverride should take precedence over defaults" {
-      val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG))
+      val configVals = readProxyOptions(["--config", OPTIONS_CONFIG])
       // junit-test.conf sets port to 8181
       configVals.proxy.http.port shouldBe 8181
     }
 
     "verifyProxyInternalSettings from config" {
-      val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG))
+      val configVals = readProxyOptions(["--config", OPTIONS_CONFIG])
       // zipkin is enabled in junit-test.conf
       configVals.proxy.internal.zipkin.enabled.shouldBeTrue()
     }
@@ -245,7 +247,7 @@ class OptionsTest : StringSpec() {
       val propKey = "proxy.http.port"
       val original = System.getProperty(propKey)
       try {
-        readProxyOptions(listOf("-D$propKey=6161"))
+        readProxyOptions(["-D$propKey=6161"])
 
         // System property should NOT have been set
         System.getProperty(propKey) shouldBe original
@@ -256,24 +258,24 @@ class OptionsTest : StringSpec() {
     }
 
     "dynamic param with quoted value should apply to config correctly" {
-      val configVals = readProxyOptions(listOf("-Dproxy.http.port=\"7272\""))
+      val configVals = readProxyOptions(["-Dproxy.http.port=\"7272\""])
 
       // Quotes are stripped and config reflects the bare value
       configVals.proxy.http.port shouldBe 7272
     }
 
     "dynamic param should apply to config correctly" {
-      val configVals = readProxyOptions(listOf("-Dproxy.http.port=8282"))
+      val configVals = readProxyOptions(["-Dproxy.http.port=8282"])
 
       // Config should reflect the value
       configVals.proxy.http.port shouldBe 8282
     }
 
     "multiple dynamic params should not leak any system properties" {
-      val keys = listOf("proxy.http.port", "proxy.internal.zipkin.enabled")
+      val keys = ["proxy.http.port", "proxy.internal.zipkin.enabled"]
       val originals = keys.associateWith { System.getProperty(it) }
       try {
-        readProxyOptions(listOf("-Dproxy.http.port=5555", "-Dproxy.internal.zipkin.enabled=true"))
+        readProxyOptions(["-Dproxy.http.port=5555", "-Dproxy.internal.zipkin.enabled=true"])
 
         // No system properties should have been set
         keys.forEach { key ->
@@ -290,24 +292,24 @@ class OptionsTest : StringSpec() {
     // ==================== Agent Trust and KeepAlive Tests ====================
 
     "agent trustAllX509Certificates should be settable via command line" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--trust_all_x509"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--trust_all_x509"], false)
       options.trustAllX509Certificates.shouldBeTrue()
     }
 
     "agent trustAllX509Certificates should default to false" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.trustAllX509Certificates.shouldBeFalse()
     }
 
     "agent keepAliveWithoutCalls should be settable via command line" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host", "--keepalive_without_calls"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--keepalive_without_calls"], false)
       options.keepAliveWithoutCalls.shouldBeTrue()
     }
 
     // ==================== Agent HTTP Client Cache Default Tests ====================
 
     "agent HTTP client cache settings should have valid defaults" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.maxCacheSize shouldBeGreaterThan 1
       options.maxCacheAgeMins shouldBeGreaterThan 1
       options.maxCacheIdleMins shouldBeGreaterThan 1
@@ -317,7 +319,7 @@ class OptionsTest : StringSpec() {
     // ==================== Agent Internal Config Defaults ====================
 
     "agent internal config should have expected defaults" {
-      val configVals = readAgentOptions(listOf())
+      val configVals = readAgentOptions([])
       configVals.agent.internal.apply {
         cioTimeoutSecs shouldBe 90
         heartbeatEnabled.shouldBeTrue()
@@ -331,14 +333,14 @@ class OptionsTest : StringSpec() {
     // ==================== Config Precedence Tests ====================
 
     "dynamic param should override config file value" {
-      val configVals = readProxyOptions(listOf("--config", OPTIONS_CONFIG, "-Dproxy.http.port=4444"))
+      val configVals = readProxyOptions(["--config", OPTIONS_CONFIG, "-Dproxy.http.port=4444"])
       // Dynamic param (4444) should override junit-test.conf (8181)
       configVals.proxy.http.port shouldBe 4444
     }
 
     "multiple dynamic params should all be applied" {
       val configVals = readProxyOptions(
-        listOf("-Dproxy.http.port=3333", "-Dproxy.internal.zipkin.enabled=true"),
+        ["-Dproxy.http.port=3333", "-Dproxy.internal.zipkin.enabled=true"],
       )
       configVals.proxy.http.port shouldBe 3333
       configVals.proxy.internal.zipkin.enabled.shouldBeTrue()
@@ -347,12 +349,12 @@ class OptionsTest : StringSpec() {
     // ==================== Proxy Request Logging and Path Config Labels ====================
 
     "proxy requestLoggingEnabled should default to true" {
-      val configVals = readProxyOptions(listOf())
+      val configVals = readProxyOptions([])
       configVals.proxy.http.requestLoggingEnabled.shouldBeTrue()
     }
 
     "agent path config labels should default to empty JSON object" {
-      val configVals = readAgentOptions(listOf("--config", OPTIONS_CONFIG))
+      val configVals = readAgentOptions(["--config", OPTIONS_CONFIG])
       val pathConfigs = configVals.agent.pathConfigs
       pathConfigs.forEach { pathConfig ->
         pathConfig.labels.shouldNotBeEmpty()
@@ -361,7 +363,7 @@ class OptionsTest : StringSpec() {
     }
 
     "agent proxy hostname and port should have defaults from config" {
-      val configVals = readAgentOptions(listOf())
+      val configVals = readAgentOptions([])
       configVals.agent.proxy.hostname shouldBe "localhost"
       configVals.agent.proxy.port shouldBe PROXY_AGENT_PORT
     }

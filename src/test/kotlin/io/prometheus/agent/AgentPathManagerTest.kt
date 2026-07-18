@@ -304,10 +304,10 @@ class AgentPathManagerTest : StringSpec() {
       val manager = AgentPathManager(agent)
 
       manager.reconcileDiscoveredPaths(
-        listOf(
+        [
           DiscoveredPath("a", "a_metrics", "http://a/m", "{}"),
           DiscoveredPath("b", "b_metrics", "http://b/m", "{}"),
-        ),
+        ],
       )
 
       manager["a_metrics"].shouldNotBeNull().source shouldBe PathSource.DISCOVERED
@@ -321,12 +321,12 @@ class AgentPathManagerTest : StringSpec() {
       val manager = AgentPathManager(agent)
 
       manager.reconcileDiscoveredPaths(
-        listOf(
+        [
           DiscoveredPath("a", "a_metrics", "http://a/m", "{}"),
           DiscoveredPath("b", "b_metrics", "http://b/m", "{}"),
-        ),
+        ],
       )
-      manager.reconcileDiscoveredPaths(listOf(DiscoveredPath("b", "b_metrics", "http://b/m", "{}")))
+      manager.reconcileDiscoveredPaths([DiscoveredPath("b", "b_metrics", "http://b/m", "{}")])
 
       manager["a_metrics"].shouldBeNull()
       manager["b_metrics"].shouldNotBeNull()
@@ -338,7 +338,7 @@ class AgentPathManagerTest : StringSpec() {
       val grpc = agent.grpcService
       val manager = AgentPathManager(agent)
 
-      val desired = listOf(DiscoveredPath("a", "a_metrics", "http://a/m", "{}"))
+      val desired = [DiscoveredPath("a", "a_metrics", "http://a/m", "{}")]
       manager.reconcileDiscoveredPaths(desired)
       manager.reconcileDiscoveredPaths(desired)
 
@@ -351,8 +351,8 @@ class AgentPathManagerTest : StringSpec() {
       val grpc = agent.grpcService
       val manager = AgentPathManager(agent)
 
-      manager.reconcileDiscoveredPaths(listOf(DiscoveredPath("a", "a_metrics", "http://a/v1", "{}")))
-      manager.reconcileDiscoveredPaths(listOf(DiscoveredPath("a", "a_metrics", "http://a/v2", "{}")))
+      manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/v1", "{}")])
+      manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/v2", "{}")])
 
       manager["a_metrics"].shouldNotBeNull().url shouldBe "http://a/v2"
       coVerify(exactly = 1) { grpc.unregisterPathOnProxy("a_metrics") }
@@ -366,7 +366,7 @@ class AgentPathManagerTest : StringSpec() {
 
       // Register a static baseline path, then try to discover the same path with a different url.
       manager.registerPath("shared", "http://static/m")
-      manager.reconcileDiscoveredPaths(listOf(DiscoveredPath("shared", "shared", "http://discovered/m", "{}")))
+      manager.reconcileDiscoveredPaths([DiscoveredPath("shared", "shared", "http://discovered/m", "{}")])
 
       val context = manager["shared"].shouldNotBeNull()
       context.source shouldBe PathSource.STATIC
@@ -380,8 +380,8 @@ class AgentPathManagerTest : StringSpec() {
       val manager = AgentPathManager(agent)
 
       manager.registerPath("static_path", "http://static/m")
-      manager.reconcileDiscoveredPaths(listOf(DiscoveredPath("d", "disc_path", "http://d/m", "{}")))
-      manager.reconcileDiscoveredPaths(emptyList())
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "disc_path", "http://d/m", "{}")])
+      manager.reconcileDiscoveredPaths([])
 
       manager["disc_path"].shouldBeNull()
       manager["static_path"].shouldNotBeNull().source shouldBe PathSource.STATIC

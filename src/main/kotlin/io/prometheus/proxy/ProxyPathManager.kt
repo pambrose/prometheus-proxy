@@ -215,8 +215,8 @@ internal class ProxyPathManager(
     // skipping the sweep would leave that path 404ing forever (finding 7).
     synchronized(pathMap) {
       // Collect map mutations in a first pass to avoid modifying the map during iteration.
-      val keysToRemove = mutableListOf<String>()
-      val keysToUpdate = mutableMapOf<String, AgentContextInfo>()
+      val keysToRemove: MutableList<String> = []
+      val keysToUpdate: MutableMap<String, AgentContextInfo> = mutableMapOf()
       pathMap.forEach { (k, v) ->
         if (v.agentContexts.size == 1) {
           if (v.agentContexts[0].agentId == agentId)

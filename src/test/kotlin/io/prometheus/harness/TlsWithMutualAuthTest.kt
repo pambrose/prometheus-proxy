@@ -49,7 +49,7 @@ class TlsWithMutualAuthTest :
         proxySetup = {
           startProxy(
             serverName = "withmutualauth",
-            args = listOf(
+            args = [
               "--agent_port",
               "50440",
               "--cert",
@@ -58,7 +58,7 @@ class TlsWithMutualAuthTest :
               "testing/certs/server1.key",
               "--trust",
               "testing/certs/ca.pem",
-            ),
+            ],
           )
         },
         agentSetup = {
@@ -67,7 +67,7 @@ class TlsWithMutualAuthTest :
             scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
             chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
-            args = listOf(
+            args = [
               "--proxy",
               "localhost:50440",
               "--cert",
@@ -78,7 +78,7 @@ class TlsWithMutualAuthTest :
               "testing/certs/ca.pem",
               "--override",
               "foo.test.google.fr",
-            ),
+            ],
           )
         },
       )

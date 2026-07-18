@@ -81,7 +81,7 @@ internal class HttpClientCache(
   // Clients removed via removeEntry() that are not in use and need to be closed.
   // Only accessed while holding accessMutex. Drained after releasing the mutex
   // so that potentially slow HttpClient.close() calls don't block other cache operations.
-  private val pendingCloses = mutableListOf<HttpClient>()
+  private val pendingCloses: MutableList<HttpClient> = []
 
   init {
     scope.launch {
@@ -301,7 +301,7 @@ internal class HttpClientCache(
     // if the cleanup coroutine held the mutex when close() tried to acquire it via runBlocking.
     scope.cancel()
 
-    val clientsToClose = mutableListOf<HttpClient>()
+    val clientsToClose: MutableList<HttpClient> = []
     accessMutex.withLock {
       cache.values.forEach { entry ->
         entry.markForClose()

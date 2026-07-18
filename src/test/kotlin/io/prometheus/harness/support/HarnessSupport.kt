@@ -21,10 +21,10 @@ package io.prometheus.harness.support
 import io.github.oshai.kotlinlogging.KLogger
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import io.prometheus.agent.AgentOptions
+import io.prometheus.agent.AgentOptions.Companion.agentOptions
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
-import io.prometheus.proxy.ProxyOptions
+import io.prometheus.proxy.ProxyOptions.Companion.proxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -74,22 +74,21 @@ object TestUtils {
     adminEnabled: Boolean = false,
     debugEnabled: Boolean = false,
     metricsEnabled: Boolean = false,
-    args: List<String> = emptyList(),
+    args: List<String> = [],
   ): Proxy {
 //    logger.apply {
 //      info { getBanner("banners/proxy.txt", logger) }
 //      info { getVersionDesc(false) }
 //    }
 
-    val proxyOptions = ProxyOptions(
-      mutableListOf<String>()
-        .apply {
-          addAll(CONFIG_ARG)
-          addAll(args)
-          add("-Dproxy.admin.enabled=$adminEnabled")
-          add("-Dproxy.admin.debugEnabled=$debugEnabled")
-          add("-Dproxy.metrics.enabled=$metricsEnabled")
-        },
+    val proxyOptions = proxyOptions(
+      buildList {
+        addAll(CONFIG_ARG)
+        addAll(args)
+        add("-Dproxy.admin.enabled=$adminEnabled")
+        add("-Dproxy.admin.debugEnabled=$debugEnabled")
+        add("-Dproxy.metrics.enabled=$metricsEnabled")
+      },
     )
     return Proxy(
       options = proxyOptions,
@@ -107,28 +106,27 @@ object TestUtils {
     scrapeTimeoutSecs: Int = -1,
     chunkContentSizeBytes: Int = -1,
     maxConcurrentClients: Int = -1,
-    args: List<String> = emptyList(),
+    args: List<String> = [],
   ): Agent {
 //    logger.apply {
 //      info { getBanner("banners/agent.txt", logger) }
 //      info { getVersionDesc(false) }
 //    }
 
-    val agentOptions = AgentOptions(
-      args = mutableListOf<String>()
-        .apply {
-          addAll(CONFIG_ARG)
-          addAll(args)
-          add("-Dagent.admin.enabled=$adminEnabled")
-          add("-Dagent.admin.debugEnabled=$debugEnabled")
-          add("-Dagent.metrics.enabled=$metricsEnabled")
-          if (scrapeTimeoutSecs != -1)
-            add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
-          if (chunkContentSizeBytes != -1)
-            add("-Dagent.chunkContentSizeBytes=$chunkContentSizeBytes")
-          if (maxConcurrentClients != -1)
-            add("-Dagent.http.maxConcurrentClients=$maxConcurrentClients")
-        },
+    val agentOptions = agentOptions(
+      args = buildList {
+        addAll(CONFIG_ARG)
+        addAll(args)
+        add("-Dagent.admin.enabled=$adminEnabled")
+        add("-Dagent.admin.debugEnabled=$debugEnabled")
+        add("-Dagent.metrics.enabled=$metricsEnabled")
+        if (scrapeTimeoutSecs != -1)
+          add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
+        if (chunkContentSizeBytes != -1)
+          add("-Dagent.chunkContentSizeBytes=$chunkContentSizeBytes")
+        if (maxConcurrentClients != -1)
+          add("-Dagent.http.maxConcurrentClients=$maxConcurrentClients")
+      },
       exitOnMissingConfig = false,
     )
     return Agent(options = agentOptions, inProcessServerName = serverName, testMode = true) { startSync() }

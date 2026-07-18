@@ -42,13 +42,13 @@ class AdminEmptyPathTest : StringSpec() {
         proxySetup = {
           startProxy(
             adminEnabled = true,
-            args = listOf(
+            args = [
               "-Dproxy.admin.port=8098",
               "-Dproxy.admin.pingPath=\"\"",
               "-Dproxy.admin.versionPath=\"\"",
               "-Dproxy.admin.healthCheckPath=\"\"",
               "-Dproxy.admin.threadDumpPath=\"\"",
-            ),
+            ],
           )
         },
         agentSetup = { startAgent(adminEnabled = true) },

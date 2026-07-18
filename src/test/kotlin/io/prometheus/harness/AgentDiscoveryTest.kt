@@ -55,13 +55,13 @@ class AgentDiscoveryTest : StringSpec() {
       val agent =
         TestUtils.startAgent(
           args =
-            listOf(
+            [
               "--proxy",
               "localhost:$AGENT_PORT",
               "-Dagent.discovery.enabled=true",
               "-Dagent.discovery.file.path=${discoveryFile.absolutePath}",
               "-Dagent.discovery.reconcileIntervalSecs=1",
-            ),
+            ],
         )
 
       try {
@@ -98,7 +98,7 @@ class AgentDiscoveryTest : StringSpec() {
       ProxyOptions(
         buildList {
           addAll(CONFIG_ARG)
-          addAll(listOf("--agent_port", agentPort.toString()))
+          addAll(["--agent_port", agentPort.toString()])
           add("-Dproxy.admin.enabled=false")
           add("-Dproxy.metrics.enabled=false")
         },
@@ -111,7 +111,7 @@ class AgentDiscoveryTest : StringSpec() {
     agent: Agent,
   ) {
     coroutineScope {
-      for (service in listOf(proxy, agent)) {
+      for (service in [proxy, agent]) {
         launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
       }
     }

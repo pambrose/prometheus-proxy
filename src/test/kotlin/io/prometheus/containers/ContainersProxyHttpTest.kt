@@ -66,14 +66,14 @@ class ContainersProxyHttpTest : StringSpec() {
         proxyContainer(
           network,
           env = mapOf("ADMIN_ENABLED" to "true", "METRICS_ENABLED" to "true", "SD_ENABLED" to "true"),
-          exposedPorts = listOf(PROXY_HTTP_PORT, PROXY_METRICS_PORT, PROXY_ADMIN_PORT),
+          exposedPorts = [PROXY_HTTP_PORT, PROXY_METRICS_PORT, PROXY_ADMIN_PORT],
         )
       val agent =
         agentContainer(
           network,
           configResource = "containers/agent-http.conf",
           env = mapOf("ADMIN_ENABLED" to "true", "METRICS_ENABLED" to "true"),
-          exposedPorts = listOf(AGENT_METRICS_PORT, AGENT_ADMIN_PORT),
+          exposedPorts = [AGENT_METRICS_PORT, AGENT_ADMIN_PORT],
         )
       val httpClient = httpClient()
 
@@ -95,7 +95,7 @@ class ContainersProxyHttpTest : StringSpec() {
 
       afterSpec {
         httpClient.close()
-        listOf(agent, proxy, metricsStub).forEach { container ->
+        [agent, proxy, metricsStub].forEach { container ->
           try {
             container.stop()
           } catch (_: Exception) {

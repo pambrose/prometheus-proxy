@@ -36,7 +36,7 @@ class PathDiscoveryServiceTest : StringSpec() {
     }
 
     "a successful read reconciles the desired set" {
-      val desired = listOf(DiscoveredPath("a", "a_metrics", "http://a/m", "{}"))
+      val desired = [DiscoveredPath("a", "a_metrics", "http://a/m", "{}")]
       val pathManager = mockk<AgentPathManager>(relaxed = true)
       val service = PathDiscoveryService(pathManager, { desired }, 30)
 
@@ -47,11 +47,11 @@ class PathDiscoveryServiceTest : StringSpec() {
 
     "a successful empty read reconciles to empty (removes all discovered)" {
       val pathManager = mockk<AgentPathManager>(relaxed = true)
-      val service = PathDiscoveryService(pathManager, { emptyList() }, 30)
+      val service = PathDiscoveryService(pathManager, { [] }, 30)
 
       service.reconcileOnce()
 
-      coVerify(exactly = 1) { pathManager.reconcileDiscoveredPaths(emptyList()) }
+      coVerify(exactly = 1) { pathManager.reconcileDiscoveredPaths([]) }
     }
   }
 }

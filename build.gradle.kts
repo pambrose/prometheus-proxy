@@ -163,6 +163,14 @@ fun Project.configureKotlin() {
       freeCompilerArgs.add("-Xcollection-literals")
     }
   }
+
+  // Collection literals are also enabled for tests, but the unused-return-value
+  // checker is not (see above) — Kotest's assertion DSL would trip it.
+  tasks.named<KotlinCompile>("compileTestKotlin") {
+    compilerOptions {
+      freeCompilerArgs.add("-Xcollection-literals")
+    }
+  }
 }
 
 fun Project.configureTesting() {

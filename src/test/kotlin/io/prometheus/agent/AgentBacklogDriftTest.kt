@@ -24,11 +24,12 @@ import io.prometheus.Agent
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
+import io.prometheus.agent.AgentOptions.Companion.agentOptions
 
 class AgentBacklogDriftTest : StringSpec() {
   private fun createTestAgent(): Agent =
     Agent(
-      options = AgentOptions(listOf("--proxy", "localhost:$PROXY_AGENT_PORT"), exitOnMissingConfig = false),
+      options = agentOptions(["--proxy", "localhost:$PROXY_AGENT_PORT"], exitOnMissingConfig = false),
       inProcessServerName = "backlog-drift-test",
       testMode = true,
     )

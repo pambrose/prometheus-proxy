@@ -243,7 +243,7 @@ class AgentContextManagerTest : StringSpec() {
 
       val removed = manager.removeChunkedContextsForAgent("agent-A")
 
-      removed.sorted() shouldBe listOf(1L, 2L)
+      removed.sorted() shouldBe [1L, 2L]
       manager.chunkedContextSize shouldBe 1
       manager.getChunkedContext(3L).shouldNotBeNull()
       manager.getChunkedContext(1L).shouldBeNull()
@@ -252,7 +252,7 @@ class AgentContextManagerTest : StringSpec() {
 
     "removeChunkedContextsForAgent should return an empty list for an unknown agent" {
       val manager = AgentContextManager(isTestMode = true)
-      manager.removeChunkedContextsForAgent("nobody") shouldBe emptyList()
+      manager.removeChunkedContextsForAgent("nobody") shouldBe []
     }
 
     // ==================== Non-Zero Backlog Aggregation ====================

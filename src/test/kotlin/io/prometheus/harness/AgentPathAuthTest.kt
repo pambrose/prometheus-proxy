@@ -74,7 +74,7 @@ class AgentPathAuthTest : StringSpec() {
       ProxyOptions(
         buildList {
           addAll(CONFIG_ARG)
-          addAll(listOf("--agent_port", agentPort.toString()))
+          addAll(["--agent_port", agentPort.toString()])
           add("-Dproxy.admin.enabled=false")
           add("-Dproxy.metrics.enabled=false")
         },
@@ -92,8 +92,8 @@ class AgentPathAuthTest : StringSpec() {
         args =
           buildList {
             addAll(CONFIG_ARG)
-            addAll(listOf("--proxy", "localhost:$agentPort"))
-            addAll(listOf("--agent_token", token))
+            addAll(["--proxy", "localhost:$agentPort"])
+            addAll(["--agent_token", token])
             add("-Dagent.admin.enabled=false")
             add("-Dagent.metrics.enabled=false")
           },
@@ -107,7 +107,7 @@ class AgentPathAuthTest : StringSpec() {
     agent: Agent,
   ) {
     coroutineScope {
-      for (service in listOf(proxy, agent)) {
+      for (service in [proxy, agent]) {
         launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
       }
     }
@@ -127,7 +127,7 @@ class AgentPathAuthTest : StringSpec() {
 
     private fun localOrGitHub(path: String): String = if (File(path).exists()) path else "$GH_PREFIX$path"
 
-    private val CONFIG_ARG = listOf("--config", localOrGitHub(AUTH_CONFIG_FILE))
+    private val CONFIG_ARG = ["--config", localOrGitHub(AUTH_CONFIG_FILE)]
 
     // Dedicated ports to avoid clashing with the shared harness ports and the other auth tests.
     private const val HTTP_PORT = 9515
