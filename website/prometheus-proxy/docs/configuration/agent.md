@@ -46,6 +46,57 @@ Each path config entry has these fields:
     `app/metrics` is rejected at registration (the agent logs the failure rather than reconnecting).
     Use `app_metrics` instead.
 
+## Dynamic Target Discovery
+
+By default `pathConfigs` is read once at startup, so adding or removing a target means editing the
+config and restarting the agent. Enable dynamic discovery to have the agent reconcile its registered
+paths against a **watched file** at runtime — no restart, and paths that did not change keep scraping:
+
+```hocon
+agent {
+  discovery {
+    enabled = false                                    // Enable dynamic discovery
+    file.path = "/etc/prometheus-proxy/targets.conf"   // HOCON/JSON list of paths
+    reconcileIntervalSecs = 30                         // Poll and full-resync interval
+  }
+}
+```
+
+The discovery file holds a `paths` list of the same `{ name, path, url, labels }` entries as
+`pathConfigs`:
+
+```hocon
+paths = [
+  { name = "app1", path = "app1_metrics", url = "http://app1:9090/metrics" }
+  { name = "app2", path = "app2_metrics", url = "http://app2:9090/metrics" }
+]
+```
+
+Every interval the agent registers newly-listed paths, unregisters removed ones, and re-registers a
+path whose URL or labels changed.
+
+| Situation                               | Behavior                                                     |
+|:----------------------------------------|:------------------------------------------------------------|
+| Path in both `pathConfigs` and the file | Static wins; the discovered entry is skipped (logged)       |
+| File missing / unreadable / malformed   | Keeps the last-known-good set (a read failure drops nothing) |
+| Valid but empty file                    | Removes all discovered paths                                |
+| `pathConfigs` empty                     | Discovery-only — every path comes from the file             |
+
+!!! note "Polling, not file-watching"
+
+    Discovery polls the file on the interval rather than relying on OS file-change events, which are
+    unreliable under Kubernetes ConfigMap updates (symlink swaps) and some bind mounts. The interval
+    doubles as a full-resync safety net.
+
+!!! note "Config-file only"
+
+    `discovery.file.path` points at a list, so — like `pathConfigs` — it has no CLI/env equivalent.
+    The scalar `enabled`, `file.path`, and `reconcileIntervalSecs` can also be set via `-D` overrides.
+
+Dynamic target discovery is distinct from [Prometheus service discovery](../service-discovery.md),
+which exposes an endpoint so *Prometheus* can find proxied targets; discovery instead lets the *agent*
+pick up target changes behind the firewall without a restart.
+
 ## Proxy Connection
 
 ```hocon

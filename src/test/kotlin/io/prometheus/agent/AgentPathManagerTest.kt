@@ -31,6 +31,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
+import io.prometheus.agent.discovery.DiscoveredPath
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
@@ -48,6 +49,13 @@ import kotlin.time.Duration.Companion.milliseconds
 class AgentPathManagerTest : StringSpec() {
   private fun createMockAgent(): Agent {
     val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+
+    // Default happy-path stubs (valid=true, pathId=1); tests needing specific responses re-stub.
+    coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      valid = true
+      pathId = 1L
+    }
+    coEvery { mockGrpcService.unregisterPathOnProxy(any()) } returns unregisterPathResponse { valid = true }
 
     // Create a real ConfigVals with minimal config
     val config = ConfigFactory.parseString(
@@ -277,12 +285,106 @@ class AgentPathManagerTest : StringSpec() {
         path = "metrics",
         url = "http://localhost:$PROXY_HTTP_PORT/metrics",
         labels = """{"job":"test"}""",
+        source = PathSource.STATIC,
       )
 
       context.pathId shouldBe 123L
       context.path shouldBe "metrics"
       context.url shouldBe "http://localhost:$PROXY_HTTP_PORT/metrics"
       context.labels shouldBe """{"job":"test"}"""
+      context.source shouldBe PathSource.STATIC
+    }
+
+    // ---- reconcileDiscoveredPaths ----
+    // grpc is captured in a local so exactly-count verifies don't also count the grpcService getter.
+
+    "reconcile registers new discovered paths tagged DISCOVERED" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+
+      manager.reconcileDiscoveredPaths(
+        listOf(
+          DiscoveredPath("a", "a_metrics", "http://a/m", "{}"),
+          DiscoveredPath("b", "b_metrics", "http://b/m", "{}"),
+        ),
+      )
+
+      manager["a_metrics"].shouldNotBeNull().source shouldBe PathSource.DISCOVERED
+      manager["b_metrics"].shouldNotBeNull()
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any()) }
+    }
+
+    "reconcile unregisters discovered paths no longer desired" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+
+      manager.reconcileDiscoveredPaths(
+        listOf(
+          DiscoveredPath("a", "a_metrics", "http://a/m", "{}"),
+          DiscoveredPath("b", "b_metrics", "http://b/m", "{}"),
+        ),
+      )
+      manager.reconcileDiscoveredPaths(listOf(DiscoveredPath("b", "b_metrics", "http://b/m", "{}")))
+
+      manager["a_metrics"].shouldBeNull()
+      manager["b_metrics"].shouldNotBeNull()
+      coVerify(exactly = 1) { grpc.unregisterPathOnProxy("a_metrics") }
+    }
+
+    "reconcile leaves an unchanged discovered path alone (no re-register)" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+
+      val desired = listOf(DiscoveredPath("a", "a_metrics", "http://a/m", "{}"))
+      manager.reconcileDiscoveredPaths(desired)
+      manager.reconcileDiscoveredPaths(desired)
+
+      // Registered exactly once across two identical reconciles.
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any()) }
+    }
+
+    "reconcile re-registers a discovered path whose url changed" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+
+      manager.reconcileDiscoveredPaths(listOf(DiscoveredPath("a", "a_metrics", "http://a/v1", "{}")))
+      manager.reconcileDiscoveredPaths(listOf(DiscoveredPath("a", "a_metrics", "http://a/v2", "{}")))
+
+      manager["a_metrics"].shouldNotBeNull().url shouldBe "http://a/v2"
+      coVerify(exactly = 1) { grpc.unregisterPathOnProxy("a_metrics") }
+      coVerify(exactly = 2) { grpc.registerPathOnProxy("a_metrics", any()) }
+    }
+
+    "reconcile skips a discovered path colliding with a static path" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+
+      // Register a static baseline path, then try to discover the same path with a different url.
+      manager.registerPath("shared", "http://static/m")
+      manager.reconcileDiscoveredPaths(listOf(DiscoveredPath("shared", "shared", "http://discovered/m", "{}")))
+
+      val context = manager["shared"].shouldNotBeNull()
+      context.source shouldBe PathSource.STATIC
+      context.url shouldBe "http://static/m"
+      // Only the initial static registration happened; the colliding discovered entry was skipped.
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("shared", any()) }
+    }
+
+    "reconcile with an empty desired set removes all discovered but keeps static" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      manager.registerPath("static_path", "http://static/m")
+      manager.reconcileDiscoveredPaths(listOf(DiscoveredPath("d", "disc_path", "http://d/m", "{}")))
+      manager.reconcileDiscoveredPaths(emptyList())
+
+      manager["disc_path"].shouldBeNull()
+      manager["static_path"].shouldNotBeNull().source shouldBe PathSource.STATIC
     }
 
     "multiple paths can be registered" {

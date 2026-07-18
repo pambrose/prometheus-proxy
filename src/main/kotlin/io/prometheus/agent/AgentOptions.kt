@@ -376,6 +376,19 @@ class AgentOptions(
         "agent.internal.scrapeRequestBacklogUnhealthySize must be > 0: ${internal.scrapeRequestBacklogUnhealthySize}"
       }
       logger.info { "agent.internal.scrapeRequestBacklogUnhealthySize: ${internal.scrapeRequestBacklogUnhealthySize}" }
+
+      // Discovery misconfig fails fast like the other config-only values: an empty file path would
+      // silently discover nothing, and a non-positive interval would turn the reconcile loop into a hot spin.
+      if (discovery.enabled) {
+        require(discovery.file.path.isNotEmpty()) {
+          "agent.discovery.file.path must be set when agent.discovery.enabled is true"
+        }
+        require(discovery.reconcileIntervalSecs > 0) {
+          "agent.discovery.reconcileIntervalSecs must be > 0: ${discovery.reconcileIntervalSecs}"
+        }
+        logger.info { "agent.discovery.file.path: ${discovery.file.path}" }
+        logger.info { "agent.discovery.reconcileIntervalSecs: ${discovery.reconcileIntervalSecs}" }
+      }
     }
 
     assignLogLevel("agent", AGENT_LOG_LEVEL, agentConfigVals.logLevel)
