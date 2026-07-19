@@ -277,7 +277,7 @@ contract — **not** a gRPC `PERMISSION_DENIED` status. The agent already surfac
 `RequestFailureException`. Consequently there is **no `.proto` change**. Authentication failures
 (unknown token) still close the call with `UNAUTHENTICATED`, unchanged.
 
-**Interceptor (diverged).** `AgentTokenServerInterceptor` was **replaced** by
+**Interceptor (diverged).** The original `AgentTokenServerInterceptor` was **replaced** by
 `AgentAuthServerInterceptor`, backed by a new `AgentAuthManager` that holds the identities, resolves
 tokens (constant-time SHA-256 digest compare), and compiles the globs. The single-token path is now
 simply one allow-all identity.
@@ -286,8 +286,8 @@ simply one allow-all identity.
 `config/config.conf` (+ regenerated `ConfigVals.java`), `src/main/resources/reference.conf`
 (`proxy.auth = []` backward-compat fallback — the generated `c.getList("auth")` is required-present),
 `Proxy.kt`, `ProxyGrpcService.kt`, `ProxyServiceImpl.registerPath`. Removed:
-`AgentTokenServerInterceptor.kt`. `ProxyOptions` / `EnvVars` were **not** touched — the identity list
-is config-file-only (a list of objects), like `agent.pathConfigs`.
+`AgentTokenServerInterceptor.kt` (the pre-rename interceptor). `ProxyOptions` / `EnvVars` were
+**not** touched — the identity list is config-file-only (a list of objects), like `agent.pathConfigs`.
 
 **Tests.** `AgentAuthManagerTest` (globs, token resolution, fail-fast validation),
 `AgentAuthServerInterceptorTest` (replaces the old interceptor test; also verifies the identity is
