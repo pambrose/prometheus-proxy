@@ -284,8 +284,8 @@ class ProxyOptions(
           agentToken = AGENT_TOKEN.getEnv(proxyConfigVals.agentToken)
         // Never log the token value -- only whether one is configured.
         logger.info { "agentToken: ${if (agentToken.isEmpty()) "(none)" else "***"}" }
-        // Warn only when the agent port is genuinely open: no token AND no mutual-TLS trust store.
-        if (agentToken.isEmpty() && trustCertCollectionFilePath.isEmpty()) {
+        // Warn only when the agent port is genuinely open to any reachable peer.
+        if (isAgentPortUnauthenticated(agentToken, trustCertCollectionFilePath, proxyConfigVals.auth.size)) {
           logger.warn {
             "Agent gRPC port is unauthenticated -- no pre-shared agent token and no mutual-TLS trust store " +
               "are configured. Any reachable peer can register as an agent. Do not expose this port in production."
@@ -298,6 +298,20 @@ class ProxyOptions(
 
   internal companion object {
     private val logger = logger {}
+
+    /**
+     * True when the agent gRPC port accepts any reachable peer: no per-agent identities, no legacy
+     * shared token, and no mutual-TLS trust store.
+     *
+     * Extracted from the startup warning so the condition is directly testable — asserting on a log
+     * line would otherwise need an appender harness. Takes the identity *count* rather than the
+     * config object so the caller does not need a ConfigVals instance to evaluate it.
+     */
+    internal fun isAgentPortUnauthenticated(
+      agentToken: String,
+      trustCertCollectionFilePath: String,
+      authIdentityCount: Int,
+    ): Boolean = agentToken.isEmpty() && trustCertCollectionFilePath.isEmpty() && authIdentityCount == 0
 
     // gRPC timeout fields use -1L as the "leave the gRPC default in place" sentinel (the
     // `> -1L` guards in ProxyGrpcService rely on it). Any other non-positive value is invalid

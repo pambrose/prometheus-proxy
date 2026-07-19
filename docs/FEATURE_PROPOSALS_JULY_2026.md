@@ -10,6 +10,49 @@ A suggested implementation order appears at the end of the document.
 
 ## Feature 1: Dynamic Target Discovery on the Agent
 
+> **Status: Implemented (MVP — file source).** A polling reconcile loop keeps the agent's registered
+> paths in sync with a HOCON/JSON file (`agent.discovery`), diffing desired-vs-actual and tagging each
+> path `STATIC` or `DISCOVERED` so static `pathConfigs` are never disturbed. Still deferred: the
+> **Kubernetes** and **Docker** discovery sources, and change-triggered (rather than polled) file
+> reloads. See **Implementation Notes (As Built)** immediately below for the shipped design and where
+> it diverged from the original proposal.
+
+### Implementation Notes (As Built)
+
+Shipped as the file-source MVP. The proposal below is preserved as the original design; these notes
+record what landed and the places it diverged.
+
+**Config (diverged — flattened, file-only).** A single `agent.discovery` block with a flat
+`file.path`, not the nested `file { } / kubernetes { } / docker { }` structure:
+
+```hocon
+agent {
+  discovery {
+    enabled = false
+    file.path = ""              // HOCON/JSON file listing discovered paths
+    reconcileIntervalSecs = 30  // Poll-and-reconcile / full-resync interval
+  }
+}
+```
+
+**Trigger (diverged — polling, not a watcher).** `PathDiscoveryService` re-reads the source every
+`reconcileIntervalSecs` (the interval wait is sliced into short polls so shutdown stays prompt). The
+proposal's `WatchService` + `SIGHUP` change-triggering was **not** built; the safety-net poll is the
+sole mechanism.
+
+**Reconciler.** `AgentPathManager.reconcileDiscoveredPaths(desired: List<DiscoveredPath>)` holds the
+path lock across a desired-vs-actual diff and issues the `registerPath` / `unregisterPath` deltas.
+Each path carries a `PathSource` (`STATIC` vs `DISCOVERED`): static `pathConfigs` are never added,
+updated, or removed by reconciliation — resolving the source-tagging open question affirmatively.
+
+**Files.** New `agent/discovery/` package: `PathDiscoverySource` (a `fun interface` with
+`read(): List<DiscoveredPath>`, so the Kubernetes/Docker sources plug in later without other changes),
+`FileDiscoverySource`, `PathDiscoveryService`. Modified: `AgentPathManager` (reconcile API +
+`PathSource`), `Agent` (lifecycle wiring alongside the heartbeat service), `AgentOptions` / `ConfigVals`.
+
+**Tests.** `FileDiscoverySourceTest`, `PathDiscoveryServiceTest` (+ shared `DiscoveryTestSupport`),
+the Netty-transport harness `AgentDiscoveryTest`, and container `ContainersDiscoveryTest`.
+
 ### Motivation
 
 Without dynamic discovery, prometheus-proxy is effectively limited to static fleets: every
@@ -97,9 +140,12 @@ machinery that the Kubernetes/Docker watchers plug into later.
 
 ### Open Questions
 
-- Should discovered paths be visually distinguishable from static ones in the debug
-  servlet / future UI (Feature 5)? (Recommended: yes, tag with a `source` field.)
-- Kubernetes watcher: in-cluster config only, or also kubeconfig for out-of-cluster agents?
+- ~~Should discovered paths be visually distinguishable from static ones in the debug
+  servlet / future UI (Feature 5)?~~ **Partly done:** paths now carry an internal `PathSource`
+  (`STATIC` / `DISCOVERED`) that scopes reconciliation; surfacing it in the debug servlet / future
+  UI (Feature 5) remains open.
+- Kubernetes watcher: in-cluster config only, or also kubeconfig for out-of-cluster agents? (Still
+  open — the Kubernetes source is not yet built.)
 
 ---
 
@@ -573,7 +619,7 @@ If Feature 3 lands first, the UI displays identities but never tokens.
 | Order | Feature | Rationale |
 |-------|---------|-----------|
 | 1st ✅ | **Feature 3** — Per-agent identity & path authorization | **Implemented (MVP)** — closes a known security gap; security blockers stall adoption more than missing features |
-| 2nd | **Feature 1** — Dynamic target discovery | Biggest day-to-day operational pain relief; MVP (file hot-reload) is small |
+| 2nd ✅ | **Feature 1** — Dynamic target discovery | **Implemented (file-source MVP)** — biggest day-to-day operational relief; Kubernetes/Docker sources still deferred |
 | 3rd | **Feature 4** — Agent-side metric filtering | Best bang-for-buck: strengthens the core value proposition (efficient transport across network boundaries) |
 | 4th | **Feature 2** — Proxy HA / agent failover | Phase 1 is cheap and unlocks redundant deployments |
 | 5th | **Feature 5** — Operational web UI | Highest value once Features 1 and 3 add state worth visualizing (identities, discovery sources) |

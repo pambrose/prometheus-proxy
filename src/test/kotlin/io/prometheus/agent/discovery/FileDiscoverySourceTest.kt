@@ -84,5 +84,37 @@ class FileDiscoverySourceTest : StringSpec() {
     "an empty file path is rejected" {
       shouldThrow<IllegalArgumentException> { FileDiscoverySource("").read() }
     }
+
+    // parseFile() returns an unresolved Config, so without an explicit resolve() any HOCON
+    // substitution throws ConfigException.NotResolved on the first getString(). PathDiscoveryService
+    // swallows that into a per-tick warning, so discovery would be silently dead for anyone using
+    // the substitution syntax that BaseOptions already supports for the main agent/proxy configs.
+    "resolves HOCON substitutions against the file's own keys" {
+      val path = writeTemp(
+        """
+        host = "app.internal"
+        paths = [ { path = "a_metrics", url = "http://"${'$'}{host}":9090/metrics" } ]
+        """.trimIndent(),
+      )
+
+      val result = FileDiscoverySource(path).read()
+
+      result.size shouldBe 1
+      result[0].url shouldBe "http://app.internal:9090/metrics"
+    }
+
+    "resolves optional substitutions that fall back to a literal" {
+      val path = writeTemp(
+        """
+        port = 9090
+        port = ${'$'}{?DISCOVERY_TEST_PORT_UNSET}
+        paths = [ { path = "a_metrics", url = "http://a:"${'$'}{port}"/metrics" } ]
+        """.trimIndent(),
+      )
+
+      val result = FileDiscoverySource(path).read()
+
+      result[0].url shouldBe "http://a:9090/metrics"
+    }
   }
 }

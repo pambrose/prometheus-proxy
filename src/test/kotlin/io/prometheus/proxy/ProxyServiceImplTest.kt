@@ -377,6 +377,171 @@ class ProxyServiceImplTest : StringSpec() {
       verify { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext) }
     }
 
+    // ==================== agentId / connection binding ====================
+    //
+    // Path authorization checks the identity against request.path, but the AgentContext being acted
+    // on came from the caller-supplied request.agentId. agentIds are sequential integers that the
+    // proxy echoes back to each client, so an authenticated agent could enumerate its neighbors and
+    // pass a *victim's* agentId while presenting its own valid token — registering paths against the
+    // victim's context, unregistering the victim's paths, or draining the victim's scrape queue.
+    // The connection's true agentId now rides the gRPC Context and every RPC rejects a mismatch.
+
+    "registerPath should reject a request whose agentId is not the connection's" {
+      val proxy = createMockProxy()
+      val victimContext = mockk<AgentContext>(relaxed = true)
+      val attackerAgentId = "attacker-agent"
+      val victimAgentId = "victim-agent"
+
+      val pathManager = proxy.pathManager
+      every { victimContext.agentId } returns victimAgentId
+      every { proxy.agentContextManager.getAgentContext(victimAgentId) } returns victimContext
+      every { pathManager.pathMapSize } returns 0
+
+      // The attacker is authorized for team_a_* and asks for a team_a_* path, so the identity check
+      // passes — only the agentId binding stands between it and the victim's context.
+      val identity = AgentIdentity("team_a", ByteArray(0), [AgentAuthManager.globToRegex("team_a_*")])
+      val request = registerPathRequest {
+        agentId = victimAgentId
+        path = "team_a_metrics"
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val context =
+        Context.current()
+          .withValue(AgentAuthManager.AGENT_IDENTITY_KEY, identity)
+          .withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, attackerAgentId)
+      val previous = context.attach()
+      val response =
+        try {
+          service.registerPath(request)
+        } finally {
+          context.detach(previous)
+        }
+
+      response.valid.shouldBeFalse()
+      response.pathId shouldBe -1
+      response.reason shouldContain "does not match"
+      // The victim's context must never be handed to addPath.
+      verify(exactly = 0) { pathManager.addPath(any(), any(), any()) }
+    }
+
+    "registerPath should allow a request whose agentId is the connection's" {
+      val proxy = createMockProxy()
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "own-agent"
+      val allowedPath = "team_a_metrics"
+
+      every { mockAgentContext.agentId } returns testAgentId
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+      every { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext) } returns null
+      every { proxy.pathManager.pathMapSize } returns 1
+
+      val request = registerPathRequest {
+        agentId = testAgentId
+        path = allowedPath
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, testAgentId)
+      val previous = context.attach()
+      val response =
+        try {
+          service.registerPath(request)
+        } finally {
+          context.detach(previous)
+        }
+
+      response.valid.shouldBeTrue()
+      verify { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext) }
+    }
+
+    "unregisterPath should reject a request whose agentId is not the connection's" {
+      val proxy = createMockProxy()
+      val victimContext = mockk<AgentContext>(relaxed = true)
+      val pathManager = proxy.pathManager
+      val victimAgentId = "victim-agent"
+
+      every { proxy.agentContextManager.getAgentContext(victimAgentId) } returns victimContext
+
+      val request = unregisterPathRequest {
+        agentId = victimAgentId
+        path = "team_b_metrics"
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, "attacker-agent")
+      val previous = context.attach()
+      val response =
+        try {
+          service.unregisterPath(request)
+        } finally {
+          context.detach(previous)
+        }
+
+      response.valid.shouldBeFalse()
+      response.reason shouldContain "does not match"
+      // unregisterPath has no identity gate of its own, so the binding check is the only guard.
+      coVerify(exactly = 0) { pathManager.removePath(any(), any()) }
+    }
+
+    "registerAgent should reject a request whose agentId is not the connection's" {
+      val proxy = createMockProxy()
+      val victimContext = mockk<AgentContext>(relaxed = true)
+      val victimAgentId = "victim-agent"
+
+      every { proxy.agentContextManager.getAgentContext(victimAgentId) } returns victimContext
+
+      val request = registerAgentRequest {
+        agentId = victimAgentId
+        agentName = "spoofed-name"
+        hostName = "spoofed-host"
+      }
+
+      val service = ProxyServiceImpl(proxy)
+      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, "attacker-agent")
+      val previous = context.attach()
+      val response =
+        try {
+          service.registerAgent(request)
+        } finally {
+          context.detach(previous)
+        }
+
+      response.valid.shouldBeFalse()
+      response.reason shouldContain "does not match"
+      // The victim's identifying metadata must not be overwritten.
+      verify(exactly = 0) { victimContext.assignProperties(any()) }
+    }
+
+    "readRequestsFromProxy should reject a request whose agentId is not the connection's" {
+      val proxy = createMockProxy()
+      val victimContext = mockk<AgentContext>(relaxed = true)
+      val victimAgentId = "victim-agent"
+
+      every { victimContext.agentId } returns victimAgentId
+      // Bounded so an unfixed build exits the stream loop instead of draining the queue forever.
+      every { victimContext.isValid() } returnsMany [true, false]
+      every { proxy.agentContextManager.getAgentContext(victimAgentId) } returns victimContext
+
+      val request = agentInfo { agentId = victimAgentId }
+
+      val service = ProxyServiceImpl(proxy)
+      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, "attacker-agent")
+      val previous = context.attach()
+      val exception =
+        try {
+          shouldThrow<StatusException> {
+            service.readRequestsFromProxy(request).collect {}
+          }
+        } finally {
+          context.detach(previous)
+        }
+
+      exception.status.code shouldBe Status.PERMISSION_DENIED.code
+      // Draining the victim's scrape queue must not happen.
+      coVerify(exactly = 0) { victimContext.readScrapeRequest() }
+    }
+
     "unregisterPath should succeed with valid agent context" {
       val proxy = createMockProxy()
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
