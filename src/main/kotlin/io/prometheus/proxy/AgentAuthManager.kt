@@ -128,6 +128,20 @@ internal class AgentAuthManager private constructor(
       val duplicateNames = allIdentities.groupingBy { it.name }.eachCount().filterValues { it > 1 }.keys
       require(duplicateNames.isEmpty()) { "Duplicate proxy.auth identity names: ${duplicateNames.joinToString()}" }
 
+      // resolveToken() takes the first digest match, so a shared token makes every later identity
+      // dead config. Named identities are ordered ahead of the legacy one, so reusing the legacy
+      // token value would also silently narrow its allow-all scope. Compare digests, not tokens, and
+      // report only names so no token value reaches the logs.
+      val duplicateTokenNames =
+        allIdentities
+          .groupBy { it.tokenDigest.toList() }
+          .values
+          .filter { it.size > 1 }
+          .flatMap { group -> group.map { it.name } }
+      require(duplicateTokenNames.isEmpty()) {
+        "proxy.auth identities share a token: ${duplicateTokenNames.joinToString()}"
+      }
+
       if (allIdentities.isNotEmpty())
         logger.info { "Per-agent auth enabled with identities: ${allIdentities.joinToString { it.name }}" }
 

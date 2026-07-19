@@ -171,5 +171,33 @@ class AgentAuthManagerTest : StringSpec() {
         )
       }
     }
+
+    // resolveToken() takes the first digest match, so two identities sharing a token silently
+    // collapse to whichever comes first — the second is dead config the operator never gets told
+    // about.
+    "duplicate identity tokens are rejected" {
+      shouldThrow<IllegalArgumentException> {
+        AgentAuthManager.create(
+          [
+            AuthEntry("team_a", "shared", emptyList()),
+            AuthEntry("team_b", "shared", emptyList()),
+          ],
+          "",
+        )
+      }
+    }
+
+    // The bite: per-agent identities are ordered ahead of the legacy identity, so reusing the legacy
+    // token value for a per-agent entry silently strips the legacy allow-all scope down to that
+    // entry's patterns — while the "legacy token is active as an allow-all identity" warning still
+    // fires, telling the operator the opposite of what is happening.
+    "a per-agent identity reusing the legacy token value is rejected" {
+      shouldThrow<IllegalArgumentException> {
+        AgentAuthManager.create(
+          [AuthEntry("team_a", "shared", ["team_a_*"])],
+          legacyToken = "shared",
+        )
+      }
+    }
   }
 }
