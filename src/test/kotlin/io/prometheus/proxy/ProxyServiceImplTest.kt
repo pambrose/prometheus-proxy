@@ -683,7 +683,7 @@ class ProxyServiceImplTest : StringSpec() {
       val proxy = createMockProxy(isRunning = true)
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val mockScrapeRequestWrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
-      val mockScrapeRequest = mockk<io.prometheus.grpc.ScrapeRequest>(relaxed = true)
+      val mockScrapeRequest = mockk<ScrapeRequest>(relaxed = true)
       val testAgentId = "test-agent-123"
 
       every { mockAgentContext.agentId } returns testAgentId
@@ -995,7 +995,7 @@ class ProxyServiceImplTest : StringSpec() {
       val proxy = createMockProxy(transportFilterDisabled = true, isRunning = true)
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val mockScrapeRequestWrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
-      val mockScrapeRequest = mockk<io.prometheus.grpc.ScrapeRequest>(relaxed = true)
+      val mockScrapeRequest = mockk<ScrapeRequest>(relaxed = true)
       val testAgentId = "test-agent-cancel-cleanup"
 
       every { mockAgentContext.agentId } returns testAgentId

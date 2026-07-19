@@ -40,15 +40,15 @@ internal class AgentContextManager(
   private val agentContextMap = ConcurrentHashMap<String, AgentContext>()
   val agentContextSize: Int get() = agentContextMap.size
 
-  // Map scrape_id to ChunkedContext
-  private val chunkedContextMap = ConcurrentHashMap<Long, ChunkedContext>()
-  val chunkedContextSize: Int get() = chunkedContextMap.size
+  val chunkedContextSize: Int get() = chunkedContextMapView.size
 
   val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.sumOf { it.scrapeRequestBacklogSize }
 
   val agentContextEntries: Set<Map.Entry<String, AgentContext>> get() = agentContextMap.entries
 
-  val chunkedContextMapView: Map<Long, ChunkedContext> get() = chunkedContextMap
+  // Map scrape_id to ChunkedContext
+  val chunkedContextMapView: Map<Long, ChunkedContext>
+    field = ConcurrentHashMap<Long, ChunkedContext>()
 
   fun addAgentContext(agentContext: AgentContext): AgentContext? {
     logger.info { "Registering agentId: ${agentContext.agentId}" }
@@ -68,12 +68,12 @@ internal class AgentContextManager(
     scrapeId: Long,
     context: ChunkedContext,
   ) {
-    chunkedContextMap[scrapeId] = context
+    chunkedContextMapView[scrapeId] = context
   }
 
-  fun getChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMap[scrapeId]
+  fun getChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMapView[scrapeId]
 
-  fun removeChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMap.remove(scrapeId)
+  fun removeChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMapView.remove(scrapeId)
 
   /**
    * Removes every in-flight [ChunkedContext] owned by [agentId] (e.g. when the agent disconnects or is
@@ -87,9 +87,9 @@ internal class AgentContextManager(
     // Return only the IDs this call actually removed. A concurrent writeChunkedResponsesToProxy can
     // complete (and remove) a matching context between the filter and the remove, so returning the
     // pre-removal snapshot would over-count what was reclaimed in the caller's log.
-    chunkedContextMap.entries
+    chunkedContextMapView.entries
       .filter { (_, context) -> context.agentId == agentId }
-      .mapNotNull { (scrapeId, _) -> if (chunkedContextMap.remove(scrapeId) != null) scrapeId else null }
+      .mapNotNull { (scrapeId, _) -> if (chunkedContextMapView.remove(scrapeId) != null) scrapeId else null }
 
   fun findStaleAgents(maxInactivity: Duration): List<Pair<String, AgentContext>> =
     agentContextMap

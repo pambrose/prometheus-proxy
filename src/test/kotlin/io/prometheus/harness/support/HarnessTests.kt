@@ -214,7 +214,7 @@ internal object HarnessTests {
             val counter = AtomicInt(0)
             repeat(args.sequentialQueryCount) { cnt ->
               val job =
-                launch(dispatcher + exceptionHandler(logger)) {
+                this@withTimeout.launch(dispatcher + exceptionHandler(logger)) {
                   callRandomProxyPath(client, args.proxyPort, pathMap, "Sequential $cnt")
                   counter += 1
                 }
@@ -237,7 +237,7 @@ internal object HarnessTests {
             val counter = AtomicInt(0)
             val jobs =
               List(args.parallelQueryCount) { cnt ->
-                launch(dispatcher + exceptionHandler(logger)) {
+                this@withTimeout.launch(dispatcher + exceptionHandler(logger)) {
                   delay((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random().milliseconds)
                   callRandomProxyPath(client, args.proxyPort, pathMap, "Parallel $cnt")
                   counter += 1

@@ -35,24 +35,23 @@ import java.util.concurrent.ConcurrentHashMap
  */
 internal class ScrapeRequestManager {
   // Map scrape_id to ScrapeRequestWrapper
-  private val scrapeRequestMap = ConcurrentHashMap<Long, ScrapeRequestWrapper>()
+  val scrapeRequestMapView: Map<Long, ScrapeRequestWrapper>
+    field = ConcurrentHashMap<Long, ScrapeRequestWrapper>()
 
-  val scrapeRequestMapView: Map<Long, ScrapeRequestWrapper> get() = scrapeRequestMap
-
-  fun containsScrapeRequest(scrapeId: Long): Boolean = scrapeRequestMap.containsKey(scrapeId)
+  fun containsScrapeRequest(scrapeId: Long): Boolean = scrapeRequestMapView.containsKey(scrapeId)
 
   val scrapeMapSize: Int
-    get() = scrapeRequestMap.size
+    get() = scrapeRequestMapView.size
 
   fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper): ScrapeRequestWrapper? {
     val scrapeId = scrapeRequest.scrapeId
     logger.debug { "Adding scrapeId: $scrapeId to scrapeRequestMap" }
-    return scrapeRequestMap.put(scrapeId, scrapeRequest)
+    return scrapeRequestMapView.put(scrapeId, scrapeRequest)
   }
 
   fun assignScrapeResults(scrapeResults: ScrapeResults) {
     val scrapeId = scrapeResults.srScrapeId
-    scrapeRequestMap[scrapeId]
+    scrapeRequestMapView[scrapeId]
       ?.also { wrapper ->
         wrapper.complete(scrapeResults)
         wrapper.agentContext.markActivityTime(true)
@@ -63,7 +62,7 @@ internal class ScrapeRequestManager {
     scrapeId: Long,
     failureReason: String,
   ) {
-    scrapeRequestMap[scrapeId]
+    scrapeRequestMapView[scrapeId]
       ?.also { wrapper ->
         wrapper.complete(
           ScrapeResults(
@@ -81,18 +80,18 @@ internal class ScrapeRequestManager {
     agentId: String,
     failureReason: String,
   ) {
-    scrapeRequestMap.values
+    scrapeRequestMapView.values
       .filter { it.agentContext.agentId == agentId }
       .forEach { failScrapeRequest(it.scrapeId, failureReason) }
   }
 
   fun failAllInFlightScrapeRequests(failureReason: String) {
-    scrapeRequestMap.values.forEach { failScrapeRequest(it.scrapeId, failureReason) }
+    scrapeRequestMapView.values.forEach { failScrapeRequest(it.scrapeId, failureReason) }
   }
 
   fun removeFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {
     logger.debug { "Removing scrapeId: $scrapeId from scrapeRequestMap" }
-    return scrapeRequestMap.remove(scrapeId)
+    return scrapeRequestMapView.remove(scrapeId)
   }
 
   companion object {

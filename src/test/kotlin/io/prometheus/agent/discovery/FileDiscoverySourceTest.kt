@@ -91,9 +91,9 @@ class FileDiscoverySourceTest : StringSpec() {
     // the substitution syntax that BaseOptions already supports for the main agent/proxy configs.
     "resolves HOCON substitutions against the file's own keys" {
       val path = writeTemp(
-        """
+        $$"""
         host = "app.internal"
-        paths = [ { path = "a_metrics", url = "http://"${'$'}{host}":9090/metrics" } ]
+        paths = [ { path = "a_metrics", url = "http://"${host}":9090/metrics" } ]
         """.trimIndent(),
       )
 
@@ -105,10 +105,10 @@ class FileDiscoverySourceTest : StringSpec() {
 
     "resolves optional substitutions that fall back to a literal" {
       val path = writeTemp(
-        """
+        $$"""
         port = 9090
-        port = ${'$'}{?DISCOVERY_TEST_PORT_UNSET}
-        paths = [ { path = "a_metrics", url = "http://a:"${'$'}{port}"/metrics" } ]
+        port = ${?DISCOVERY_TEST_PORT_UNSET}
+        paths = [ { path = "a_metrics", url = "http://a:"${port}"/metrics" } ]
         """.trimIndent(),
       )
 
