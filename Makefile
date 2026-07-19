@@ -16,6 +16,16 @@ IMAGE_PREFIX := pambrose/prometheus
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 
+# Banner printed at the start of every scaling target, so a long `all-scaling` run makes it obvious
+# which preset is executing at any moment (they look alike in Gradle's output otherwise).
+SCALING_BANNER = printf '\n\033[1;36m==> make %s\033[0m -- %s\n\n'
+
+# SCALE_* knobs honored by `scaling-tests`. Single source of truth: used both to forward the
+# non-empty ones to Gradle and to render them in the banner.
+SCALE_VARS = SCALE_AGENTS SCALE_ENDPOINTS_PER_AGENT SCALE_SERIES_PER_ENDPOINT \
+             SCALE_CONSOLIDATED_AGENTS SCALE_CONCURRENT SCALE_CONCURRENCY_LIMIT TEST_MAX_HEAP_SIZE
+SCALE_SETTINGS = $(strip $(foreach v,$(SCALE_VARS),$(if $($(v)),$(v)=$($(v)))))
+
 GPG_ENV = \
 	ORG_GRADLE_PROJECT_signingInMemoryKey="$$(gpg --armor --export-secret-keys "$$GPG_SIGNING_KEY_ID")" \
 	ORG_GRADLE_PROJECT_signingInMemoryKeyId="$$GPG_SIGNING_KEY_ID" \
@@ -91,13 +101,14 @@ container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 all-tests: tests container-tests  ## Run the full suite: all tests + the container tests
 
 scaling-tests: jars  ## Run the parameter-driven scaling container test (tune via SCALE_* vars; needs Docker)
+	@$(SCALING_BANNER) scaling-tests "$(if $(SCALE_SETTINGS),$(SCALE_SETTINGS),built-in defaults)"
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
 	if [ -z "$$DOCKER_HOST" ]; then \
 		echo "Error: could not detect active Docker context. Is Docker running?" >&2; exit 1; \
 	fi; \
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true \
-		$(foreach v,SCALE_AGENTS SCALE_ENDPOINTS_PER_AGENT SCALE_SERIES_PER_ENDPOINT SCALE_CONSOLIDATED_AGENTS SCALE_CONCURRENT SCALE_CONCURRENCY_LIMIT TEST_MAX_HEAP_SIZE,$(if $($(v)),$(v)="$($(v))" )) \
+		$(foreach v,$(SCALE_VARS),$(if $($(v)),$(v)="$($(v))" )) \
 		./gradlew test --tests "io.prometheus.containers.ContainersScalingTest"
 
 # Curated scaling presets. Each delegates to `scaling-tests` with a SCALE_* combo that hammers a
@@ -108,6 +119,7 @@ scaling-tests: jars  ## Run the parameter-driven scaling container test (tune vi
 # Path/routing-table scaling: few agents, huge fan of paths. Stresses ProxyPathManager registration
 # and routing (4 agents x 500 = 2000 paths) with only ~9 containers.
 scaling-paths:  ## Scaling preset: 2000 paths across 4 agents (routing-table stress)
+	@$(SCALING_BANNER) scaling-paths "2000 paths across 4 agents (routing-table stress)"
 	@$(MAKE) --no-print-directory scaling-tests \
 		SCALE_AGENTS=4 SCALE_ENDPOINTS_PER_AGENT=500 \
 		SCALE_CONCURRENT=true SCALE_CONCURRENCY_LIMIT=100 TEST_MAX_HEAP_SIZE=2g
@@ -115,12 +127,14 @@ scaling-paths:  ## Scaling preset: 2000 paths across 4 agents (routing-table str
 # Connection/stream scaling: many agents, few paths each. Stresses AgentContextManager, gRPC streams,
 # heartbeats, and the transport filter (~81 containers — most likely to hit host/Docker limits first).
 scaling-agents:  ## Scaling preset: 40 agents x 2 endpoints (gRPC connection stress)
+	@$(SCALING_BANNER) scaling-agents "40 agents x 2 endpoints (gRPC connection stress)"
 	@$(MAKE) --no-print-directory scaling-tests \
 		SCALE_AGENTS=40 SCALE_ENDPOINTS_PER_AGENT=2 SCALE_CONCURRENT=false
 
 # Chunking/gzip under load: big payloads through several agents at once. Stresses ChunkedContext
 # reassembly, CRC validation, and gzip (16 paths x ~50k series; heap-heavy, few containers).
 scaling-payload:  ## Scaling preset: 16 paths x 50k series (chunking/gzip stress)
+	@$(SCALING_BANNER) scaling-payload "16 paths x 50k series (chunking/gzip stress)"
 	@$(MAKE) --no-print-directory scaling-tests \
 		SCALE_AGENTS=4 SCALE_ENDPOINTS_PER_AGENT=4 SCALE_SERIES_PER_ENDPOINT=50000 \
 		SCALE_CONCURRENT=true TEST_MAX_HEAP_SIZE=4g
@@ -128,12 +142,14 @@ scaling-payload:  ## Scaling preset: 16 paths x 50k series (chunking/gzip stress
 # Consolidated fan-out: one path served by many agents. Stresses response merging and agent selection
 # on a single path (25 agents merge into one consolidated path; ~53 containers).
 scaling-consolidated:  ## Scaling preset: 25-agent consolidated fan-out (response-merge stress)
+	@$(SCALING_BANNER) scaling-consolidated "25-agent consolidated fan-out (response-merge stress)"
 	@$(MAKE) --no-print-directory scaling-tests \
 		SCALE_AGENTS=1 SCALE_ENDPOINTS_PER_AGENT=1 SCALE_CONSOLIDATED_AGENTS=25
 
 # Scrape-correlation concurrency: high concurrent in-flight scrapes. Stresses ScrapeRequestManager
 # request/response correlation and timeouts (1800 paths, 150 in flight at once; vary the limit).
 scaling-concurrency:  ## Scaling preset: 1800 paths, 150 concurrent (scrape-correlation stress)
+	@$(SCALING_BANNER) scaling-concurrency "1800 paths, 150 concurrent (scrape-correlation stress)"
 	@$(MAKE) --no-print-directory scaling-tests \
 		SCALE_AGENTS=6 SCALE_ENDPOINTS_PER_AGENT=300 \
 		SCALE_CONCURRENT=true SCALE_CONCURRENCY_LIMIT=150 TEST_MAX_HEAP_SIZE=3g
@@ -141,6 +157,7 @@ scaling-concurrency:  ## Scaling preset: 1800 paths, 150 concurrent (scrape-corr
 # Broad soak: moderate on every axis at once — the most realistic mixed-load shape (501 paths,
 # mixed payloads, fan-out, bounded concurrency; ~51 containers).
 scaling-soak:  ## Scaling preset: every dimension at once (broad mixed-load soak)
+	@$(SCALING_BANNER) scaling-soak "every dimension at once (broad mixed-load soak)"
 	@$(MAKE) --no-print-directory scaling-tests \
 		SCALE_AGENTS=20 SCALE_ENDPOINTS_PER_AGENT=25 SCALE_SERIES_PER_ENDPOINT=2000 \
 		SCALE_CONSOLIDATED_AGENTS=5 SCALE_CONCURRENT=true \
