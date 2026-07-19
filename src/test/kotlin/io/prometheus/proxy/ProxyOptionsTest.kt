@@ -329,5 +329,41 @@ class ProxyOptionsTest : StringSpec() {
       options.sdPath shouldBe options.configVals.proxy.service.discovery.path
       options.sdTargetPrefix shouldBe options.configVals.proxy.service.discovery.targetPrefix
     }
+
+    // The startup "agent gRPC port is unauthenticated" warning predates per-agent identities. Left
+    // guarded on only the legacy token and mTLS, it fires for a proxy.auth-only config — the very
+    // setup the docs recommend — training operators to ignore a security-critical warning.
+
+    "the agent port counts as unauthenticated with no token, no trust store and no identities" {
+      ProxyOptions.isAgentPortUnauthenticated(
+        agentToken = "",
+        trustCertCollectionFilePath = "",
+        authIdentityCount = 0,
+      ).shouldBeTrue()
+    }
+
+    "per-agent identities alone authenticate the agent port" {
+      ProxyOptions.isAgentPortUnauthenticated(
+        agentToken = "",
+        trustCertCollectionFilePath = "",
+        authIdentityCount = 1,
+      ).shouldBeFalse()
+    }
+
+    "a legacy agent token alone authenticates the agent port" {
+      ProxyOptions.isAgentPortUnauthenticated(
+        agentToken = "tok",
+        trustCertCollectionFilePath = "",
+        authIdentityCount = 0,
+      ).shouldBeFalse()
+    }
+
+    "a mutual-TLS trust store alone authenticates the agent port" {
+      ProxyOptions.isAgentPortUnauthenticated(
+        agentToken = "",
+        trustCertCollectionFilePath = "/certs/ca.pem",
+        authIdentityCount = 0,
+      ).shouldBeFalse()
+    }
   }
 }

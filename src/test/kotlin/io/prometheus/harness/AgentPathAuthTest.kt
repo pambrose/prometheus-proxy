@@ -116,8 +116,10 @@ class AgentPathAuthTest : StringSpec() {
   companion object {
     private val logger = logger {}
 
+    // Only team_a's token is exercised here: the deny path is driven by having the team_a agent
+    // attempt a team_b_* registration. Resolving a *different* token to a different identity is
+    // covered at unit level by AgentAuthManagerTest.
     private const val TOKEN_A = "team-a-token"
-    private const val TOKEN_B = "team-b-token"
     private const val TARGET_URL = "http://localhost:9100/metrics"
 
     // The `proxy.auth` identity list is a HOCON list, which the -D property mechanism cannot express,

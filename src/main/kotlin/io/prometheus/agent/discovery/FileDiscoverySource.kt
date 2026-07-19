@@ -41,7 +41,9 @@ internal class FileDiscoverySource(
   override fun read(): List<DiscoveredPath> {
     // setAllowMissing(false): a missing file throws instead of yielding an empty config, so it is
     // never mistaken for a valid-but-empty file (which would tear down every discovered path).
-    val config = ConfigFactory.parseFile(File(filePath), PARSE_OPTIONS)
+    // resolve(): parseFile() leaves substitutions unevaluated, so ${...} would throw NotResolved on
+    // the first getString() below. A no-op for files that use no substitutions.
+    val config = ConfigFactory.parseFile(File(filePath), PARSE_OPTIONS).resolve()
     val elements = if (config.hasPath(PATHS_KEY)) config.getConfigList(PATHS_KEY) else emptyList()
     return elements.map { element ->
       val path = element.getString("path") // required; a missing field throws (malformed)
