@@ -34,14 +34,19 @@ import kotlin.time.TimeSource.Monotonic
 // bodies on the next real request. Sending a real HTTP/1.0 line and waiting for the "HTTP/"
 // reply means the request pipeline is live before we hand back the port.
 //
-// A *single* HTTP reply is still not enough under a full-suite load spike: there is a narrow
-// window where the engine answers one request and then briefly stalls or resets the next while
-// the application module finishes installing, so the first real scrape can land in that gap and
-// see a transient non-200 (e.g. a default 404 before the test's route is matchable). To close
-// that window we require [stableProbes] *consecutive* successful HTTP replies, each on a fresh
-// connection with a short gap; any failure resets the streak. This only ever delays the return
-// (never advances it), so it cannot make a healthy server look unready — it just refuses to hand
-// back the port until the server has answered cleanly several times in a row.
+// A *single* HTTP reply is still not enough under a full-suite load spike: the engine can answer
+// one request and then briefly stall or reset the next. [stableProbes] *consecutive* successful
+// replies, each on a fresh connection with a short gap, ride that out; any failure resets the
+// streak. This only ever delays the return (never advances it), so it cannot make a healthy server
+// look unready.
+//
+// Note what the streak can NOT do: detect whether routing is installed. A probe counts any HTTP
+// status line as success, and an engine that is accepting connections but has not yet installed
+// the application module answers *every* request with 404 -- byte-identical to the 404 a fully
+// configured server returns for the probe's own unrouted /__readiness__ path. Three probes against
+// an unrouted engine are three indistinguishable successes, so the streak alone let specs race the
+// module install and see a 404 with their route handler never invoked. startSuspend() above is what
+// actually closes that window.
 //
 // The deadline is generous because it is only a ceiling, not a wait: a healthy server satisfies
 // the streak in tens of milliseconds. The extra headroom absorbs CPU contention during a full
@@ -54,7 +59,17 @@ suspend fun EmbeddedServer<*, *>.startAndAwaitReady(
   timeout: Duration = 60.seconds,
   stableProbes: Int = 3,
 ): Int {
-  start(wait = false)
+  // startSuspend() -- unlike start() -- does not return until the application module has been
+  // installed, so routing is guaranteed present before the first probe below.
+  //
+  // This matters because probeServesHttp() cannot detect routing readiness on its own: it accepts any
+  // HTTP status line, and an engine that is accepting connections but has not yet installed routing
+  // answers *every* request with 404 -- indistinguishable from the 404 a fully-configured server
+  // returns for the probe's own unrouted /__readiness__ path. With start(wait = false), a spec could
+  // therefore pass readiness and still race the module install, and its first real request would 404
+  // with the route handler never invoked. That is the intermittent failure behind assertions like
+  // `requestCount shouldBe 1` seeing 0 and `srValidResponse` being false.
+  startSuspend(wait = false)
   val port = engine.resolvedConnectors().first().port
   val deadline = Monotonic.markNow() + timeout
   var consecutive = 0
