@@ -557,8 +557,12 @@ class Agent(
   // returns, and the while(isRunning) loop exits. Without this, stopSync()/awaitTerminated() deadlocks
   // until a scrape arrives, the proxy evicts the agent, or the OS TCP timeout fires (finding 1).
   // Mirrors AgentContextCleanupService.triggerShutdown().
+  //
+  // Uses the permanent variant because Guava calls this exactly once: a run-loop iteration that read
+  // isRunning as true just before stopAsync() flipped it could otherwise reach resetGrpcStubs() and
+  // build a fresh channel that no second triggerShutdown() will ever break.
   override fun triggerShutdown() {
-    runCatchingCancellable { grpcService.shutDownChannel() }
+    runCatchingCancellable { grpcService.shutDownChannelPermanently() }
       .onFailure { e -> logger.warn(e) { "triggerShutdown() failed to shut down the gRPC channel: ${e.message}" } }
   }
 

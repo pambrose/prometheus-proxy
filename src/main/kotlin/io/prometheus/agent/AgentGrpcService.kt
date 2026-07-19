@@ -28,7 +28,6 @@ import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.pambrose.common.utils.TlsUtils.buildClientTlsContext
 import com.google.protobuf.ByteString.copyFrom
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
-import io.grpc.ClientInterceptor
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
 import io.prometheus.Agent
@@ -108,6 +107,11 @@ internal class AgentGrpcService(
 ) {
   private val grpcLock = ReentrantLock()
   private var grpcStarted by atomicBoolean(false)
+
+  // Latched by shutDownChannelPermanently() and never cleared: the agent is stopping for good, so no
+  // further channel may be created. Read and written only under grpcLock, which is what makes the
+  // stop-vs-reconnect ordering decisive rather than racy.
+  private var shutDownRequested by atomicBoolean(false)
   private val tracing by lazy { agent.zipkinReporterService.newTracing("grpc_client") }
   private val grpcTracing by lazy { GrpcTracing.create(tracing) }
 
@@ -178,16 +182,40 @@ internal class AgentGrpcService(
     }
 
   // Shuts the gRPC channel down without touching tracing, breaking any in-flight RPCs (e.g. an idle
-  // readRequestsFromProxy collect). Called from Agent.triggerShutdown() so stopSync() can unblock the
-  // run loop (finding 1); the full shutDown() (tracing included) still runs from the service shutDown()
-  // hook, and channel.shutdownNow() is idempotent so that later call is a no-op on the channel.
+  // readRequestsFromProxy collect). This is the *transient* teardown used by the heartbeat loop to force
+  // a reconnect, so it deliberately leaves the service able to build a new channel.
   fun shutDownChannel() =
     grpcLock.withLock {
       shutDownChannelLocked()
     }
 
+  // Terminal counterpart of shutDownChannel(), called from Agent.triggerShutdown() so stopSync() can
+  // unblock the run loop (finding 1). Guava invokes triggerShutdown() exactly once, so tearing the
+  // current channel down is not enough on its own: a run-loop iteration that read `while (isRunning)`
+  // as true just before stopAsync() flipped it can still reach resetGrpcStubs() and build a fresh live
+  // channel that nothing will ever break, parking run() in an idle collect and reinstating the deadlock.
+  // Latching shutDownRequested under grpcLock makes the outcome the same either way the race lands:
+  // reset-then-stop tears the new channel down, stop-then-reset never creates it.
+  //
+  // The full shutDown() (tracing included) still runs from the service shutDown() hook, and
+  // channel.shutdownNow() is idempotent so that later call is a no-op on the channel.
+  fun shutDownChannelPermanently() =
+    grpcLock.withLock {
+      shutDownRequested = true
+      shutDownChannelLocked()
+    }
+
   fun resetGrpcStubs() =
     grpcLock.withLock {
+      // A stop was already requested and the channel torn down; handing the run loop a fresh live
+      // channel now would leave it parked in a collect nothing can break (see shutDownChannelPermanently).
+      // Returning early leaves grpcStub pointing at the terminated channel, so the connectAgent() that
+      // follows fails fast and the run loop falls out of its already-false while (isRunning) test.
+      if (shutDownRequested) {
+        logger.info { "Skipping gRPC stub creation: shutdown already requested" }
+        return@withLock
+      }
+
       logger.info { "Creating gRPC stubs" }
 
       // Only tear down the channel on reconnect, NOT tracing: tracing/grpcTracing are one-shot lazy

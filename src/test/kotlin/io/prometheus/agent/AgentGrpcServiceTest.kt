@@ -483,6 +483,49 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
+    // ==================== Terminal shutdown must latch out later channel creation ====================
+
+    // Agent.triggerShutdown() tears down whatever channel exists at that instant, but Guava invokes it
+    // exactly once. A run-loop iteration that read `while (isRunning)` as true just before stopAsync()
+    // flipped it can then reach resetGrpcStubs() and build a brand-new live channel that nothing will
+    // ever break -- leaving run() parked in the idle readRequestsFromProxy collect and reinstating the
+    // very deadlock triggerShutdown() exists to prevent. Both callers of the transient teardown and the
+    // terminal one funnel through grpcLock, so latching the terminal case makes the ordering decisive:
+    // whichever runs first, no live channel survives a requested stop.
+
+    "shutDownChannel leaves the service able to rebuild a channel for a reconnect" {
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      val oldChannel = service.channel
+
+      // The heartbeat teardown path (EVICTED / MAX_HEARTBEAT_FAILURES): break the connection so the run
+      // loop reconnects. This must NOT latch the service closed.
+      service.shutDownChannel()
+      service.resetGrpcStubs()
+
+      (service.channel !== oldChannel).shouldBeTrue()
+      service.channel.isShutdown.shouldBeFalse()
+
+      service.shutDown()
+    }
+
+    "shutDownChannelPermanently prevents resetGrpcStubs from building another channel" {
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // The Agent.triggerShutdown() path, racing a run-loop iteration that is about to reconnect.
+      service.shutDownChannelPermanently()
+      val terminatedChannel = service.channel
+
+      service.resetGrpcStubs()
+
+      (service.channel === terminatedChannel).shouldBeTrue()
+      service.channel.isShutdown.shouldBeTrue()
+
+      service.shutDown()
+    }
+
     // ==================== Finding 8: Zipkin tracing lifecycle across reconnects ====================
 
     // tracing/grpcTracing are one-shot lazy fields. resetGrpcStubs() runs on every reconnect and must
