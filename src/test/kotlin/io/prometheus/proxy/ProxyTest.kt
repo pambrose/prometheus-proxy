@@ -28,6 +28,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.spyk
 import io.prometheus.Proxy
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.registerAgentRequest
@@ -354,6 +355,46 @@ class ProxyTest : StringSpec() {
       str shouldContain "proxyPort"
       str shouldContain "adminService"
       str shouldContain "metricsService"
+    }
+
+    // ==================== removeAgentContext Ordering Tests ====================
+
+    "removeAgentContext should invalidate the agent context before sweeping the path map" {
+      val proxy = createTestProxy()
+      val agentContext = spyk(createAgentContext())
+
+      // Capture how many paths were still registered at the instant invalidate() ran. The sweep in
+      // removeFromPathManager must come after invalidation, so the path is still present here.
+      var pathMapSizeAtInvalidation = -1
+      every { agentContext.invalidate() } answers {
+        pathMapSizeAtInvalidation = proxy.pathManager.pathMapSize
+        callOriginal()
+      }
+
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("metrics", "", agentContext)
+      proxy.pathManager.pathMapSize shouldBe 1
+
+      proxy.removeAgentContext(agentContext.agentId, "test disconnect")
+
+      // If the sweep ran first this is 0, which leaves an unguarded window: a registerPath blocked on
+      // the pathMap monitor during the sweep is released into it and strands a path pointing at a
+      // context that is about to be invalidated, and no later sweep removes it (finding 7).
+      pathMapSizeAtInvalidation shouldBe 1
+      proxy.pathManager.pathMapSize shouldBe 0
+    }
+
+    "removeAgentContext should reject a path registered for the removed context" {
+      val proxy = createTestProxy()
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+
+      proxy.removeAgentContext(agentContext.agentId, "test disconnect")
+      val error = proxy.pathManager.addPath("metrics", "", agentContext)
+
+      error.shouldNotBeNull()
+      error shouldContain "was invalidated during registration"
+      proxy.pathManager.pathMapSize shouldBe 0
     }
   }
 }

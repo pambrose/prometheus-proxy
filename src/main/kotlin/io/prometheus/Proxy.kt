@@ -348,6 +348,13 @@ class Proxy(
   ): AgentContext? {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
+    // Drop the context first: removeFromContextManager invalidates it, and registerPath re-checks
+    // validity inside the pathMap lock. Invalidating before the sweep below means a registration
+    // racing this teardown is either rejected by that check (it arrives after invalidation) or
+    // undone by the sweep (it arrived before). Sweeping first leaves a window where a registration
+    // blocked on the pathMap monitor is released after the sweep but before invalidation, stranding
+    // a path pointing at a dead context that nothing later removes (finding 7).
+    val agentContext = agentContextManager.removeFromContextManager(agentId, reason)
     pathManager.removeFromPathManager(agentId, reason)
     scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason")
     // Proactively reclaim any in-flight chunked-transfer buffers for this agent (the requests
@@ -357,7 +364,7 @@ class Proxy(
         if (reclaimed.isNotEmpty())
           logger.info { "Reclaimed ${reclaimed.size} in-flight chunked context(s) for agentId: $agentId ($reason)" }
       }
-    return agentContextManager.removeFromContextManager(agentId, reason)
+    return agentContext
   }
 
   /**

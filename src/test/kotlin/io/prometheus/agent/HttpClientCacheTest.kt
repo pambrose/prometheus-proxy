@@ -89,6 +89,48 @@ class HttpClientCacheTest : StringSpec() {
       verify { throwing.close() }
     }
 
+    // Finding 9, wiring: the test above only proves the helper swallows a throw, not that the sweeper
+    // actually routes through it. This drives a throwing close through the background cleanup loop --
+    // the one site (clientsToClose.forEach) that sits outside runCatchingCancellable but inside
+    // while(isActive), on a scope with no exception handler, so an escaping throw kills the sweeper
+    // silently. Reverting that site to `it.close()` must fail this test.
+    "Finding 9: a throwing close in the sweeper must not kill the cleanup loop" {
+      val sweeperCache = HttpClientCache(
+        maxCacheSize = 5,
+        maxAge = 30.seconds, // Long, so eviction is driven by idle time alone.
+        maxIdleTime = 100.milliseconds,
+        cleanupInterval = 50.milliseconds,
+      )
+
+      try {
+        val throwing = mockk<HttpClient>(relaxed = true)
+        every { throwing.close() } throws RuntimeException("close boom")
+        sweeperCache.getOrCreateClient(ClientKey("bad", "pass")) { throwing }
+          .also { sweeperCache.onFinishedWithClient(it) }
+
+        // The entry is dropped from the map under the mutex and only closed after it is released, so
+        // this first eviction happens whether or not the close is guarded. It just gets the throwing
+        // close in front of the sweeper.
+        withTimeout(5.seconds) {
+          while (sweeperCache.currentCacheSize() > 0) delay(25.milliseconds)
+        }
+        verify { throwing.close() }
+
+        // The real assertion: a second entry must still be evicted, which can only happen if the
+        // sweeper coroutine survived the throw above.
+        sweeperCache.getOrCreateClient(ClientKey("good", "pass")) { createMockHttpClient() }
+          .also { sweeperCache.onFinishedWithClient(it) }
+        sweeperCache.currentCacheSize() shouldBe 1
+
+        withTimeout(5.seconds) {
+          while (sweeperCache.currentCacheSize() > 0) delay(25.milliseconds)
+        }
+        sweeperCache.currentCacheSize() shouldBe 0
+      } finally {
+        sweeperCache.close()
+      }
+    }
+
     // Item 4: once closed, the cache must reject new requests. Otherwise an in-flight scrape
     // racing shutdown could create and cache a fresh HttpClient into the dead cache (whose cleanup
     // coroutine is cancelled), leaking that client until JVM exit. The factory must not be invoked.
@@ -832,7 +874,10 @@ class HttpClientCacheTest : StringSpec() {
     // Companion to the above: verify that the cleanup coroutine still catches real
     // (non-cancellation) exceptions from cleanup operations. runCatchingCancellable
     // only rethrows CancellationException; other failures are still handled by getOrElse.
-    "cleanup should still run after a non-cancellation error" {
+    // Renamed from "cleanup should still run after a non-cancellation error": this test injects no
+    // error, it only exercises ordinary background expiry. The error path it was named for is covered
+    // by "Finding 9: a throwing close in the sweeper must not kill the cleanup loop" above.
+    "background cleanup should remove an expired entry" {
       val cleanupCache = HttpClientCache(
         maxCacheSize = 10,
         maxAge = 100.milliseconds,
