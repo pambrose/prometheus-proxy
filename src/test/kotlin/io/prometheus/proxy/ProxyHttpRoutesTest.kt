@@ -45,6 +45,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.spyk
 import io.prometheus.Proxy
+import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.common.proxyOptions
@@ -166,7 +167,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       val configPath = "discovery"
       val normalizedPath = configPath.ensureLeadingSlash()
 
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get(normalizedPath) {
             call.respondText("found")
@@ -195,7 +196,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       val normalizedPath = configPath.ensureLeadingSlash()
       normalizedPath shouldBe "/discovery"
 
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get(normalizedPath) {
             call.respondText("found")
@@ -815,7 +816,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       val proxy = createSpyProxyForRoutes()
       every { proxy.isRunning } returns false
 
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
@@ -838,7 +839,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     "handleClientRequests should return NotFound for favicon request" {
       val proxy = createSpyProxyForRoutes()
 
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
@@ -861,7 +862,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     "handleClientRequests should return NotFound for unregistered path" {
       val proxy = createSpyProxyForRoutes()
 
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
@@ -887,7 +888,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         "-Dproxy.internal.blitz.path=blitz-test",
       )
 
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
@@ -914,7 +915,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       proxy.pathManager.addPath("test-metrics", "", agentContext)
       agentContext.invalidate()
 
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
@@ -943,7 +944,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         "http://localhost:$PROXY_HTTP_PORT",
       )
 
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }
@@ -1431,7 +1432,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       val proxy = createSpyProxyForRoutes()
       // SD is disabled by default
 
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           val r = this
           with(ProxyHttpRoutes) { r.handleRequests(proxy) }

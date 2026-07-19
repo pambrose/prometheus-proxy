@@ -35,6 +35,7 @@ import io.ktor.server.routing.routing
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.proxy.ProxyUtils.respondWith
 import io.prometheus.proxy.ProxyUtils.unzip
@@ -153,7 +154,7 @@ class ProxyUtilsTest : StringSpec() {
     // ==================== Bug #14: respondWith no longer sets status redundantly ====================
 
     "respondWith should set CacheControl header and respond with text" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/test-respond") {
             call.respondWith("test content")
@@ -176,7 +177,7 @@ class ProxyUtilsTest : StringSpec() {
     }
 
     "respondWith should use custom content type" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/test-json") {
             call.respondWith(
@@ -202,7 +203,7 @@ class ProxyUtilsTest : StringSpec() {
     }
 
     "respondWith should use custom status code" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/test-error") {
             call.respondWith("error", status = HttpStatusCode.ServiceUnavailable)
@@ -225,7 +226,7 @@ class ProxyUtilsTest : StringSpec() {
     }
 
     "respondWith should set CacheControl header and correct status without redundant status call" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/test-bug14") {
             call.respondWith("content", status = HttpStatusCode.NotFound)

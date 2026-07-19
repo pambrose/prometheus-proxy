@@ -34,6 +34,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.prometheus.Agent
 import io.prometheus.Proxy
+import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.agentOptions
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.startAndAwaitReady
@@ -58,7 +59,7 @@ class InProcessHeartbeatDisabledTest : StringSpec() {
 
       // The metrics endpoint the agent will scrape.
       val stub =
-        embeddedServer(ServerCIO, port = 0) {
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
           routing {
             get("/metrics") { call.respondText("test_metric 42\n") }
           }

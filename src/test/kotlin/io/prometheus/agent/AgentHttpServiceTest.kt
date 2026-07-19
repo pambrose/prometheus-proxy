@@ -45,6 +45,7 @@ import io.mockk.mockk
 import io.mockk.spyk
 import io.prometheus.Agent
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import io.prometheus.common.startAndAwaitReady
@@ -287,7 +288,7 @@ class AgentHttpServiceTest : StringSpec() {
     // ==================== Valid Path Fetching Tests ====================
 
     "fetchScrapeUrl should fetch content from valid path" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondText("test_metric{label=\"value\"} 42\n")
@@ -353,7 +354,7 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "fetchScrapeUrl should handle 404 response" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           // No route for /metrics, Ktor will return 404
         }
@@ -415,7 +416,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "fetchScrapeUrl should include query params in URL" {
       var receivedUrl = ""
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             receivedUrl = call.request.queryParameters.entries().joinToString("&") { "${it.key}=${it.value.first()}" }
@@ -456,7 +457,7 @@ class AgentHttpServiceTest : StringSpec() {
     "fetchScrapeUrl should append query params to existing query" {
       var existingParam: String? = null
       var fooParam: String? = null
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             existingParam = call.request.queryParameters["existing"]
@@ -500,7 +501,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "fetchScrapeUrl should gzip content larger than minGzipSizeBytes" {
       val largeContent = "a".repeat(2000)
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondText(largeContent)
@@ -543,7 +544,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "fetchScrapeUrl should not gzip content smaller than minGzipSizeBytes" {
       val smallContent = "small"
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondText(smallContent)
@@ -586,7 +587,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "fetchScrapeUrl should forward accept header to target" {
       var receivedAccept = ""
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             receivedAccept = call.request.header("Accept").orEmpty()
@@ -626,7 +627,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "fetchScrapeUrl should forward authorization header to target" {
       var receivedAuth = ""
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             receivedAuth = call.request.header("Authorization").orEmpty()
@@ -667,7 +668,7 @@ class AgentHttpServiceTest : StringSpec() {
     // ==================== Timeout Tests ====================
 
     "fetchScrapeUrl should handle timeout gracefully" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             delay(5000.milliseconds) // Delay longer than timeout
@@ -712,7 +713,7 @@ class AgentHttpServiceTest : StringSpec() {
     // ==================== Counter Message Tests ====================
 
     "fetchScrapeUrl should set success counter message on successful fetch" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondText("metric_value 1.0\n")
@@ -753,7 +754,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "retry policy should not retry 400 Bad Request" {
       val requestCount = AtomicInt(0)
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             requestCount.incrementAndFetch()
@@ -786,7 +787,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "retry policy should not retry 401 Unauthorized" {
       val requestCount = AtomicInt(0)
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             requestCount.incrementAndFetch()
@@ -819,7 +820,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "retry policy should not retry 403 Forbidden" {
       val requestCount = AtomicInt(0)
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             requestCount.incrementAndFetch()
@@ -852,7 +853,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "retry policy should retry 500 Internal Server Error" {
       val requestCount = AtomicInt(0)
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             requestCount.incrementAndFetch()
@@ -887,7 +888,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "retry policy should retry 503 Service Unavailable" {
       val requestCount = AtomicInt(0)
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             requestCount.incrementAndFetch()
@@ -921,7 +922,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "retry policy should not retry 404 Not Found" {
       val requestCount = AtomicInt(0)
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             requestCount.incrementAndFetch()
@@ -970,7 +971,7 @@ class AgentHttpServiceTest : StringSpec() {
       // Create content with multi-byte UTF-8 chars where charCount < threshold < byteCount
       // Each CJK char is 3 bytes in UTF-8, so 200 chars = 600 bytes
       val multiByte = "\u4e16".repeat(200) // 200 chars, 600 bytes
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondText(multiByte)
@@ -1099,7 +1100,7 @@ class AgentHttpServiceTest : StringSpec() {
     // ==================== Bug #3: Retry timeout bounded by scrapeTimeoutSecs ====================
 
     "Bug #3: total fetch time should be bounded by scrapeTimeoutSecs despite retries" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.response.status(HttpStatusCode.InternalServerError)
@@ -1184,7 +1185,7 @@ class AgentHttpServiceTest : StringSpec() {
     "fetchScrapeUrl returns 413 when Content-Length header exceeds max" {
       // respondText sets a real Content-Length header. With maxContentLengthMBytes=0,
       // any positive Content-Length trips the pre-read guard before the body is fetched.
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondText("ok")
@@ -1227,7 +1228,7 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "fetchScrapeUrl populates debug fields on 413 from Content-Length when debug enabled" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondText("ok")
@@ -1271,7 +1272,7 @@ class AgentHttpServiceTest : StringSpec() {
     "fetchScrapeUrl returns 413 when body bytes exceed max with chunked encoding" {
       // respondTextWriter uses chunked transfer-encoding (no Content-Length header),
       // so the first guard is skipped and the post-read body-size guard fires instead.
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondTextWriter {
@@ -1315,7 +1316,7 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "fetchScrapeUrl 413 from chunked body has empty url and reason when debug disabled" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondTextWriter {
@@ -1362,7 +1363,7 @@ class AgentHttpServiceTest : StringSpec() {
       // bounded readRemaining(maxContentLength + 1) path is exercised. The body is well under the
       // 10 MB default limit, so it must be returned intact (not truncated at the read cap).
       val content = "metric_a 1.0\nmetric_b 2.0\nmetric_c 3.0\n".repeat(50)
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondTextWriter {
@@ -1408,7 +1409,7 @@ class AgentHttpServiceTest : StringSpec() {
       // Guards the switch from bodyAsText() (response charset) to contentBytes.decodeToString()
       // (always UTF-8): a multi-byte body under the gzip threshold must round-trip byte-for-byte.
       val multiByte = "café_µ_世界 42.0\n".repeat(5) // mix of 2- and 3-byte UTF-8 chars
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             call.respondText(multiByte)

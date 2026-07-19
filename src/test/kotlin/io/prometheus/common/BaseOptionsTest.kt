@@ -641,7 +641,7 @@ class BaseOptionsTest : StringSpec() {
     body: String,
     expectedPort: Int,
   ) {
-    val server = embeddedServer(ServerCIO, port = 0) {
+    val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
       routing {
         get("/$fileName") {
           call.respondText(body)

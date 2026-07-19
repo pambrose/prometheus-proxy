@@ -33,6 +33,7 @@ import io.ktor.server.request.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.startAndAwaitReady
 import java.util.*
 import io.ktor.server.cio.CIO as ServerCIO
@@ -47,7 +48,7 @@ class AgentHttpServiceHeaderTest : StringSpec() {
   init {
     "per-request Accept header should vary independently of cached client" {
       val capturedHeaders: MutableList<String?> = Collections.synchronizedList([])
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             capturedHeaders.add(call.request.header(HttpHeaders.Accept))
@@ -86,7 +87,7 @@ class AgentHttpServiceHeaderTest : StringSpec() {
 
     "defaultRequest Accept header should persist across requests demonstrating old bug" {
       val capturedHeaders: MutableList<String?> = Collections.synchronizedList([])
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/metrics") {
             capturedHeaders.add(call.request.header(HttpHeaders.Accept))
