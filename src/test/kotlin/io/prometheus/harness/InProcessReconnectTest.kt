@@ -51,11 +51,11 @@ class InProcessReconnectTest : StringSpec() {
             scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
             chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
-            args = listOf(
+            args = [
               "-Dagent.internal.heartbeatMaxInactivitySecs=1",
               "-Dagent.internal.heartbeatCheckPauseMillis=200",
               "-Dagent.internal.reconnectPauseSecs=1",
-            ),
+            ],
           )
         },
       )

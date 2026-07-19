@@ -51,10 +51,10 @@ class TlsMutualAuthRejectionTest : StringSpec() {
         ProxyOptions(
           buildList {
             addAll(CONFIG_ARG)
-            addAll(listOf("--agent_port", AGENT_PORT.toString()))
-            addAll(listOf("--cert", "testing/certs/server1.pem"))
-            addAll(listOf("--key", "testing/certs/server1.key"))
-            addAll(listOf("--trust", "testing/certs/ca.pem"))
+            addAll(["--agent_port", AGENT_PORT.toString()])
+            addAll(["--cert", "testing/certs/server1.pem"])
+            addAll(["--key", "testing/certs/server1.key"])
+            addAll(["--trust", "testing/certs/ca.pem"])
             add("-Dproxy.admin.enabled=false")
             add("-Dproxy.metrics.enabled=false")
           },
@@ -67,10 +67,10 @@ class TlsMutualAuthRejectionTest : StringSpec() {
           args =
             buildList {
               addAll(CONFIG_ARG)
-              addAll(listOf("--proxy", "localhost:$AGENT_PORT"))
+              addAll(["--proxy", "localhost:$AGENT_PORT"])
               // Trust the proxy's server cert, but present NO client certificate (no --cert/--key).
-              addAll(listOf("--trust", "testing/certs/ca.pem"))
-              addAll(listOf("--override", "foo.test.google.fr"))
+              addAll(["--trust", "testing/certs/ca.pem"])
+              addAll(["--override", "foo.test.google.fr"])
               add("-Dagent.admin.enabled=false")
               add("-Dagent.metrics.enabled=false")
             },
@@ -86,7 +86,7 @@ class TlsMutualAuthRejectionTest : StringSpec() {
         // The test block is itself a suspend function, so suspend via coroutineScope rather than
         // blocking the thread with runBlocking (mirrors the teardown in HarnessTests).
         coroutineScope {
-          for (service in listOf(proxy, agent)) {
+          for (service in [proxy, agent]) {
             launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
           }
         }

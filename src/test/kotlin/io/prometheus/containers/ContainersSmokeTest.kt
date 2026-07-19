@@ -59,7 +59,7 @@ class ContainersSmokeTest : StringSpec() {
 
       afterSpec {
         httpClient.close()
-        listOf(prometheus, agent, proxy, metricsStub).forEach { container ->
+        [prometheus, agent, proxy, metricsStub].forEach { container ->
           try {
             container.stop()
           } catch (_: Exception) {

@@ -40,6 +40,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.agentInfo
 import io.prometheus.grpc.chunkData
@@ -320,7 +321,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
       every { pathManager.pathMapSize } returns 0
 
-      val identity = AgentIdentity("team_a", ByteArray(0), listOf(AgentAuthManager.globToRegex("team_a_*")))
+      val identity = AgentIdentity("team_a", ByteArray(0), [AgentAuthManager.globToRegex("team_a_*")])
       val request = registerPathRequest {
         agentId = testAgentId
         path = deniedPath
@@ -356,7 +357,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext) } returns null
       every { proxy.pathManager.pathMapSize } returns 1
 
-      val identity = AgentIdentity("team_a", ByteArray(0), listOf(AgentAuthManager.globToRegex("team_a_*")))
+      val identity = AgentIdentity("team_a", ByteArray(0), [AgentAuthManager.globToRegex("team_a_*")])
       val request = registerPathRequest {
         agentId = testAgentId
         path = allowedPath
@@ -521,7 +522,7 @@ class ProxyServiceImplTest : StringSpec() {
       val testAgentId = "test-agent-123"
 
       every { mockAgentContext.agentId } returns testAgentId
-      every { mockAgentContext.isValid() } returnsMany listOf(true, false)
+      every { mockAgentContext.isValid() } returnsMany [true, false]
       coEvery { mockAgentContext.readScrapeRequest() } returns mockScrapeRequestWrapper andThen null
       every { mockScrapeRequestWrapper.scrapeRequest } returns mockScrapeRequest
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
@@ -533,7 +534,7 @@ class ProxyServiceImplTest : StringSpec() {
       val service = ProxyServiceImpl(proxy)
       val flow = service.readRequestsFromProxy(request)
 
-      val emittedRequests = mutableListOf<io.prometheus.grpc.ScrapeRequest>()
+      val emittedRequests: MutableList<ScrapeRequest> = []
       flow.collect { emittedRequests.add(it) }
 
       emittedRequests.size shouldBe 1
@@ -748,7 +749,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { mockAgentContext.agentId } returns testAgentId
       every { mockAgentContext.isValid() } returns true
       // Simulate proxy stopping after first check
-      every { proxy.isRunning } returnsMany listOf(true, false)
+      every { proxy.isRunning } returnsMany [true, false]
       coEvery { mockAgentContext.readScrapeRequest() } returns null
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
 
@@ -756,7 +757,7 @@ class ProxyServiceImplTest : StringSpec() {
       val service = ProxyServiceImpl(proxy)
       val flow = service.readRequestsFromProxy(request)
 
-      val emittedRequests = mutableListOf<io.prometheus.grpc.ScrapeRequest>()
+      val emittedRequests: MutableList<ScrapeRequest> = []
       flow.collect { emittedRequests.add(it) }
 
       emittedRequests.size shouldBe 0
@@ -769,7 +770,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       // Valid for two iterations then invalid
-      every { mockAgentContext.isValid() } returnsMany listOf(true, true, false)
+      every { mockAgentContext.isValid() } returnsMany [true, true, false]
       // Return null both times (channel drained)
       coEvery { mockAgentContext.readScrapeRequest() } returns null
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
@@ -778,7 +779,7 @@ class ProxyServiceImplTest : StringSpec() {
       val service = ProxyServiceImpl(proxy)
       val flow = service.readRequestsFromProxy(request)
 
-      val emittedRequests = mutableListOf<io.prometheus.grpc.ScrapeRequest>()
+      val emittedRequests: MutableList<ScrapeRequest> = []
       flow.collect { emittedRequests.add(it) }
 
       // readScrapeRequest returned null, so nothing emitted
@@ -834,7 +835,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       // Valid for one iteration, then stream will be cancelled by the test
-      every { mockAgentContext.isValid() } returnsMany listOf(true, false)
+      every { mockAgentContext.isValid() } returnsMany [true, false]
       coEvery { mockAgentContext.readScrapeRequest() } returns mockScrapeRequestWrapper andThen null
       every { mockScrapeRequestWrapper.scrapeRequest } returns mockScrapeRequest
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
@@ -1318,7 +1319,7 @@ class ProxyServiceImplTest : StringSpec() {
       // Invalidate the agent context immediately so the loop exits
       agentContext.invalidate()
 
-      val results = mutableListOf<io.prometheus.grpc.ScrapeRequest>()
+      val results: MutableList<ScrapeRequest> = []
       service.readRequestsFromProxy(request).collect { results.add(it) }
 
       // Verify cleanup was called because transportFilterDisabled is true
@@ -1340,7 +1341,7 @@ class ProxyServiceImplTest : StringSpec() {
       // Invalidate the agent context immediately so the loop exits
       agentContext.invalidate()
 
-      val results = mutableListOf<io.prometheus.grpc.ScrapeRequest>()
+      val results: MutableList<ScrapeRequest> = []
       service.readRequestsFromProxy(request).collect { results.add(it) }
 
       // Verify cleanup was NOT called because transportFilterDisabled is false

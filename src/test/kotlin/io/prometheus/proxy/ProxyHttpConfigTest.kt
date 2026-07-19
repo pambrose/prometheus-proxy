@@ -52,6 +52,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.startAndAwaitReady
 import org.slf4j.event.Level
 import io.ktor.server.cio.CIO as ServerCIO
+import io.prometheus.common.proxyOptions
 
 // Tests for ProxyHttpConfig which configures Ktor server plugins for the proxy HTTP service.
 // Note: Full integration tests with testApplication would require ktor-server-test-host dependency.
@@ -68,7 +69,7 @@ class ProxyHttpConfigTest : StringSpec() {
 
   private fun createTestProxy(): Proxy =
     Proxy(
-      options = ProxyOptions(listOf()),
+      options = proxyOptions(emptyList()),
       inProcessServerName = "config-test-${System.nanoTime()}",
       testMode = true,
     )

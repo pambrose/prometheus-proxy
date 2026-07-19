@@ -36,7 +36,7 @@ class PathDiscoveryServiceTest : StringSpec() {
     }
 
     "a successful read reconciles the desired set" {
-      val desired = listOf(DiscoveredPath("a", "a_metrics", "http://a/m", "{}"))
+      val desired = [DiscoveredPath("a", "a_metrics", "http://a/m", "{}")]
       val pathManager = mockk<AgentPathManager>(relaxed = true)
       val service = PathDiscoveryService(pathManager, { desired }, 30)
 

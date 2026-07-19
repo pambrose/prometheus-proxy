@@ -178,7 +178,7 @@ class HttpClientCacheTest : StringSpec() {
 
       try {
         // Fill cache to capacity with distinct timestamps so LRU order is deterministic
-        val entries = mutableListOf<CacheEntry>()
+        val entries: MutableList<CacheEntry> = []
         for (i in 1..5) {
           val key = ClientKey("user$i", "pass$i")
           val entry = lruCache.getOrCreateClient(key) { createMockHttpClient() }
@@ -452,7 +452,7 @@ class HttpClientCacheTest : StringSpec() {
       )
 
       // Populate cache to give the cleanup coroutine work to do
-      val entries = mutableListOf<CacheEntry>()
+      val entries: MutableList<CacheEntry> = []
       for (i in 1..5) {
         val key = ClientKey("user$i", "pass$i")
         val entry = fastCleanupCache.getOrCreateClient(key) { createMockHttpClient() }
@@ -869,7 +869,7 @@ class HttpClientCacheTest : StringSpec() {
 
       try {
         // Create multiple entries
-        val entries = mutableListOf<CacheEntry>()
+        val entries: MutableList<CacheEntry> = []
         for (i in 1..3) {
           val key = ClientKey("user$i", "pass$i")
           val entry = testCache.getOrCreateClient(key) { createMockHttpClient() }

@@ -67,14 +67,14 @@ class ContainersScalingTest : StringSpec() {
       withData(nameFn = { it.toString() }, scalingScenarios) { s ->
         val network = Network.newNetwork()
         val client = httpClient()
-        val stubs = mutableListOf<GenericContainer<*>>()
-        val agents = mutableListOf<GenericContainer<*>>()
+        val stubs: MutableList<GenericContainer<*>> = []
+        val agents: MutableList<GenericContainer<*>> = []
         val agentMemMib = s.agentMemoryMib()
         val proxy =
           proxyContainer(
             network,
             env = mapOf("METRICS_ENABLED" to "true"),
-            exposedPorts = listOf(PROXY_HTTP_PORT, PROXY_METRICS_PORT),
+            exposedPorts = [PROXY_HTTP_PORT, PROXY_METRICS_PORT],
           ).withMemoryMib(PROXY_MEM_MIB)
         try {
           // --- unique-path agents (dimensions: agents × endpoints, payload size) ---
@@ -111,7 +111,7 @@ class ContainersScalingTest : StringSpec() {
                 network,
                 alias = "scale-cons-agent-$k",
                 configText =
-                  agentConfig("scale-cons-agent-$k", stubAlias, listOf(CONSOLIDATED_PATH to "c"), consolidated = true),
+                  agentConfig("scale-cons-agent-$k", stubAlias, [CONSOLIDATED_PATH to "c"], consolidated = true),
                 waitLogRegex = ".*Registered .* as /$CONSOLIDATED_PATH.*",
               ).withMemoryMib(agentMemMib)
           }
@@ -248,18 +248,18 @@ private fun boolEnv(
  * touches each dimension (baseline, agents × endpoints, payload size, consolidated fan-out).
  */
 private val scaleEnvVars =
-  listOf(
+  [
     "SCALE_AGENTS",
     "SCALE_ENDPOINTS_PER_AGENT",
     "SCALE_SERIES_PER_ENDPOINT",
     "SCALE_CONSOLIDATED_AGENTS",
     "SCALE_CONCURRENT",
     "SCALE_CONCURRENCY_LIMIT",
-  )
+  ]
 
 private val scalingScenarios: List<ScalingScenario> =
   if (scaleEnvVars.any { System.getenv(it) != null })
-    listOf(
+    [
       ScalingScenario(
         agentCount = intEnv("SCALE_AGENTS", 2),
         endpointsPerAgent = intEnv("SCALE_ENDPOINTS_PER_AGENT", 2),
@@ -268,14 +268,14 @@ private val scalingScenarios: List<ScalingScenario> =
         concurrentScrapes = boolEnv("SCALE_CONCURRENT", true),
         concurrencyLimit = intEnv("SCALE_CONCURRENCY_LIMIT", 0),
       ),
-    )
+    ]
   else
-    listOf(
+    [
       ScalingScenario(1, 1, 1, 0, false),
       ScalingScenario(2, 3, 1, 0, true),
       ScalingScenario(2, 2, 2000, 0, false),
       ScalingScenario(2, 1, 1, 3, true),
-    )
+    ]
 
 /** `seriesPerEndpoint` filler series plus a sentinel line whose value is unique per (agent, endpoint). */
 private fun endpointText(

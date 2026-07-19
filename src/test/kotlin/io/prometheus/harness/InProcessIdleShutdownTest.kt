@@ -24,10 +24,10 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.comparables.shouldBeLessThan
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import io.prometheus.agent.AgentOptions
+import io.prometheus.common.agentOptions
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
-import io.prometheus.proxy.ProxyOptions
+import io.prometheus.common.proxyOptions
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
@@ -49,22 +49,20 @@ class InProcessIdleShutdownTest : StringSpec() {
       val serverName = "idle-shutdown-${System.nanoTime()}"
       val httpPort = 9525
 
+      val proxyArgs = ["-Dproxy.admin.enabled=false", "-Dproxy.metrics.enabled=false"]
       val proxy =
         Proxy(
-          options = ProxyOptions(CONFIG_ARG + listOf("-Dproxy.admin.enabled=false", "-Dproxy.metrics.enabled=false")),
+          options = proxyOptions(CONFIG_ARG + proxyArgs),
           proxyPort = httpPort,
           inProcessServerName = serverName,
           testMode = true,
         ) { startSync() }
 
       try {
+        val agentArgs = ["-Dagent.admin.enabled=false", "-Dagent.metrics.enabled=false"]
         val agent =
           Agent(
-            options =
-              AgentOptions(
-                CONFIG_ARG + listOf("-Dagent.admin.enabled=false", "-Dagent.metrics.enabled=false"),
-                exitOnMissingConfig = false,
-              ),
+            options = agentOptions(CONFIG_ARG + agentArgs, exitOnMissingConfig = false),
             inProcessServerName = serverName,
             testMode = true,
           ) { startSync() }

@@ -250,7 +250,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       // Subsequent calls (during the re-check) return 1s (active).
       val agentContext = mockk<AgentContext>(relaxed = true)
       every { agentContext.agentId } returns "revived-agent"
-      every { agentContext.inactivityDuration } returnsMany listOf(5.seconds, 1.seconds)
+      every { agentContext.inactivityDuration } returnsMany [5.seconds, 1.seconds]
 
       agentContextManager.putAgentContext("revived-agent", agentContext)
 

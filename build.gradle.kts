@@ -153,6 +153,14 @@ fun Project.configureKotlin() {
     }
   }
 
+  // Collection literals are a language-wide opt-in, so enable them for every
+  // Kotlin source set (main + test) rather than per-task.
+  tasks.withType<KotlinCompile>().configureEach {
+    compilerOptions {
+      freeCompilerArgs.add("-Xcollection-literals")
+    }
+  }
+
   // Run the unused-return-value checker over production code only. Kotest's
   // assertion DSL (e.g. shouldBe) returns its receiver, and tests intentionally
   // discard that result, so applying the checker to the test source set would
@@ -160,7 +168,6 @@ fun Project.configureKotlin() {
   tasks.named<KotlinCompile>("compileKotlin") {
     compilerOptions {
       freeCompilerArgs.add("-Xreturn-value-checker=check")
-      freeCompilerArgs.add("-Xcollection-literals")
     }
   }
 }

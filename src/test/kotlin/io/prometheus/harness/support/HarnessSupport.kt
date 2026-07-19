@@ -21,10 +21,10 @@ package io.prometheus.harness.support
 import io.github.oshai.kotlinlogging.KLogger
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import io.prometheus.agent.AgentOptions
+import io.prometheus.common.agentOptions
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
-import io.prometheus.proxy.ProxyOptions
+import io.prometheus.common.proxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -81,15 +81,14 @@ object TestUtils {
 //      info { getVersionDesc(false) }
 //    }
 
-    val proxyOptions = ProxyOptions(
-      mutableListOf<String>()
-        .apply {
-          addAll(CONFIG_ARG)
-          addAll(args)
-          add("-Dproxy.admin.enabled=$adminEnabled")
-          add("-Dproxy.admin.debugEnabled=$debugEnabled")
-          add("-Dproxy.metrics.enabled=$metricsEnabled")
-        },
+    val proxyOptions = proxyOptions(
+      buildList {
+        addAll(CONFIG_ARG)
+        addAll(args)
+        add("-Dproxy.admin.enabled=$adminEnabled")
+        add("-Dproxy.admin.debugEnabled=$debugEnabled")
+        add("-Dproxy.metrics.enabled=$metricsEnabled")
+      },
     )
     return Proxy(
       options = proxyOptions,
@@ -114,21 +113,20 @@ object TestUtils {
 //      info { getVersionDesc(false) }
 //    }
 
-    val agentOptions = AgentOptions(
-      args = mutableListOf<String>()
-        .apply {
-          addAll(CONFIG_ARG)
-          addAll(args)
-          add("-Dagent.admin.enabled=$adminEnabled")
-          add("-Dagent.admin.debugEnabled=$debugEnabled")
-          add("-Dagent.metrics.enabled=$metricsEnabled")
-          if (scrapeTimeoutSecs != -1)
-            add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
-          if (chunkContentSizeBytes != -1)
-            add("-Dagent.chunkContentSizeBytes=$chunkContentSizeBytes")
-          if (maxConcurrentClients != -1)
-            add("-Dagent.http.maxConcurrentClients=$maxConcurrentClients")
-        },
+    val agentOptions = agentOptions(
+      args = buildList {
+        addAll(CONFIG_ARG)
+        addAll(args)
+        add("-Dagent.admin.enabled=$adminEnabled")
+        add("-Dagent.admin.debugEnabled=$debugEnabled")
+        add("-Dagent.metrics.enabled=$metricsEnabled")
+        if (scrapeTimeoutSecs != -1)
+          add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
+        if (chunkContentSizeBytes != -1)
+          add("-Dagent.chunkContentSizeBytes=$chunkContentSizeBytes")
+        if (maxConcurrentClients != -1)
+          add("-Dagent.http.maxConcurrentClients=$maxConcurrentClients")
+      },
       exitOnMissingConfig = false,
     )
     return Agent(options = agentOptions, inProcessServerName = serverName, testMode = true) { startSync() }

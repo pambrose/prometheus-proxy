@@ -34,7 +34,7 @@ import io.prometheus.proxy.AgentAuthManager.AuthEntry
 class AgentAuthServerInterceptorTest : StringSpec() {
   private val authManager =
     AgentAuthManager.create(
-      authEntries = listOf(AuthEntry("team_a", "s3cret", listOf("team_a_*"))),
+      authEntries = [AuthEntry("team_a", "s3cret", ["team_a_*"])],
       legacyToken = "",
     )
 
@@ -95,7 +95,7 @@ class AgentAuthServerInterceptorTest : StringSpec() {
     "token of the same length but different value should be rejected (constant-time path)" {
       val interceptor =
         AgentAuthServerInterceptor(
-          AgentAuthManager.create(listOf(AuthEntry("team_a", "abcdef", listOf("*"))), ""),
+          AgentAuthManager.create([AuthEntry("team_a", "abcdef", ["*"])], ""),
         )
       val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)

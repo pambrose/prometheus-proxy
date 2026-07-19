@@ -96,7 +96,7 @@ object ContainerTestSupport {
     network: Network,
     image: ImageFromDockerfile = proxyImage(),
     env: Map<String, String> = emptyMap(),
-    exposedPorts: List<Int> = listOf(PROXY_HTTP_PORT),
+    exposedPorts: List<Int> = [PROXY_HTTP_PORT],
     hostFiles: Map<String, String> = emptyMap(),
     wait: WaitStrategy = Wait.forListeningPort(),
   ): GenericContainer<*> =

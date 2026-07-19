@@ -84,10 +84,10 @@ class AgentAuthManagerTest : StringSpec() {
       val manager =
         AgentAuthManager.create(
           authEntries =
-            listOf(
-              AuthEntry("team_a", "tok_a", listOf("team_a_*")),
-              AuthEntry("team_b", "tok_b", listOf("team_b_*")),
-            ),
+            [
+              AuthEntry("team_a", "tok_a", ["team_a_*"]),
+              AuthEntry("team_b", "tok_b", ["team_b_*"]),
+            ],
           legacyToken = "",
         )
       manager.resolveToken("tok_a")?.name shouldBe "team_a"
@@ -95,12 +95,12 @@ class AgentAuthManagerTest : StringSpec() {
     }
 
     "resolveToken returns null for an unknown token" {
-      val manager = AgentAuthManager.create(listOf(AuthEntry("team_a", "tok_a", listOf("team_a_*"))), "")
+      val manager = AgentAuthManager.create([AuthEntry("team_a", "tok_a", ["team_a_*"])], "")
       manager.resolveToken("nope").shouldBeNull()
     }
 
     "resolveToken rejects a same-length but different token" {
-      val manager = AgentAuthManager.create(listOf(AuthEntry("team_a", "abcdef", listOf("*"))), "")
+      val manager = AgentAuthManager.create([AuthEntry("team_a", "abcdef", ["*"])], "")
       manager.resolveToken("abcxyz").shouldBeNull()
     }
 
@@ -114,7 +114,7 @@ class AgentAuthManagerTest : StringSpec() {
     "the legacy token coexists with per-agent identities" {
       val manager =
         AgentAuthManager.create(
-          authEntries = listOf(AuthEntry("team_a", "tok_a", listOf("team_a_*"))),
+          authEntries = [AuthEntry("team_a", "tok_a", ["team_a_*"])],
           legacyToken = "legacy-secret",
         )
       manager.resolveToken("tok_a")?.name shouldBe "team_a"
@@ -134,30 +134,30 @@ class AgentAuthManagerTest : StringSpec() {
     }
 
     "isEnabled is true when per-agent identities are configured" {
-      AgentAuthManager.create(listOf(AuthEntry("team_a", "tok_a", emptyList())), "").isEnabled.shouldBeTrue()
+      AgentAuthManager.create([AuthEntry("team_a", "tok_a", emptyList())], "").isEnabled.shouldBeTrue()
     }
 
     // ---- fail-fast construction ----
 
     "an empty identity name is rejected" {
       shouldThrow<IllegalArgumentException> {
-        AgentAuthManager.create(listOf(AuthEntry("", "tok", emptyList())), "")
+        AgentAuthManager.create([AuthEntry("", "tok", emptyList())], "")
       }
     }
 
     "an empty identity token is rejected" {
       shouldThrow<IllegalArgumentException> {
-        AgentAuthManager.create(listOf(AuthEntry("team_a", "", emptyList())), "")
+        AgentAuthManager.create([AuthEntry("team_a", "", emptyList())], "")
       }
     }
 
     "duplicate identity names are rejected" {
       shouldThrow<IllegalArgumentException> {
         AgentAuthManager.create(
-          listOf(
+          [
             AuthEntry("team_a", "tok_a", emptyList()),
             AuthEntry("team_a", "tok_b", emptyList()),
-          ),
+          ],
           "",
         )
       }
@@ -166,7 +166,7 @@ class AgentAuthManagerTest : StringSpec() {
     "a per-agent identity named like the legacy identity collides with the legacy token" {
       shouldThrow<IllegalArgumentException> {
         AgentAuthManager.create(
-          listOf(AuthEntry(LEGACY_IDENTITY_NAME, "tok", emptyList())),
+          [AuthEntry(LEGACY_IDENTITY_NAME, "tok", emptyList())],
           legacyToken = "legacy-secret",
         )
       }

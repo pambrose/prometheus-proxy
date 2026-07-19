@@ -36,14 +36,12 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class ProxyTest : StringSpec() {
-  private fun createTestProxy(vararg extraArgs: String): Proxy {
-    val args = mutableListOf<String>().apply { addAll(extraArgs) }
-    return Proxy(
-      options = ProxyOptions(args),
+  private fun createTestProxy(vararg extraArgs: String) =
+    Proxy(
+      options = ProxyOptions(extraArgs.asList()),
       inProcessServerName = "proxy-test-${System.nanoTime()}",
       testMode = true,
     )
-  }
 
   private fun createAgentContext(
     name: String = "test-agent",

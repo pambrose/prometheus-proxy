@@ -47,6 +47,7 @@ import io.mockk.spyk
 import io.prometheus.Proxy
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.common.proxyOptions
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,7 +62,7 @@ import io.ktor.server.cio.CIO as ServerCIO
 // ensureLeadingSlash() to ensure consistent route registration regardless of config format.
 @Suppress("LargeClass")
 class ProxyHttpRoutesTest : StringSpec() {
-  private val testProxies = mutableListOf<Proxy>()
+  private val testProxies: MutableList<Proxy> = []
 
   init {
     afterTest {
@@ -94,11 +95,7 @@ class ProxyHttpRoutesTest : StringSpec() {
   ): Proxy {
     val proxy = spyk(
       Proxy(
-        options = ProxyOptions(
-          listOf(
-            "-Dproxy.internal.scrapeRequestTimeoutSecs=$timeoutSecs",
-          ) + args,
-        ),
+        options = proxyOptions(["-Dproxy.internal.scrapeRequestTimeoutSecs=$timeoutSecs"] + args),
         inProcessServerName = "proxy-submit-test-${System.nanoTime()}",
         testMode = true,
       ),
@@ -111,9 +108,7 @@ class ProxyHttpRoutesTest : StringSpec() {
   private fun createSpyProxyForRoutes(vararg extraArgs: String): Proxy {
     val proxy = spyk(
       Proxy(
-        options = ProxyOptions(
-          listOf(*extraArgs),
-        ),
+        options = proxyOptions(extraArgs.asList()),
         inProcessServerName = "proxy-routes-test-${System.nanoTime()}",
         testMode = true,
       ),
@@ -286,12 +281,12 @@ class ProxyHttpRoutesTest : StringSpec() {
         statusCode = HttpStatusCode.ServiceUnavailable,
         contentType = ContentType.Application.Json.withCharset(Charsets.UTF_8),
         contentText = """{"error":"proxy stopped"}""",
-        updateMsgs = listOf("proxy_stopped"),
+        updateMsgs = ["proxy_stopped"],
       )
 
       results.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       results.contentText shouldBe """{"error":"proxy stopped"}"""
-      results.updateMsgs shouldBe listOf("proxy_stopped")
+      results.updateMsgs shouldBe ["proxy_stopped"]
     }
 
     "ResponseResults copy should produce modified instance" {
@@ -300,12 +295,12 @@ class ProxyHttpRoutesTest : StringSpec() {
       val modified = results.copy(
         statusCode = HttpStatusCode.NotFound,
         contentText = "modified content",
-        updateMsgs = listOf("modified_msg"),
+        updateMsgs = ["modified_msg"],
       )
 
       modified.statusCode shouldBe HttpStatusCode.NotFound
       modified.contentText shouldBe "modified content"
-      modified.updateMsgs shouldBe listOf("modified_msg")
+      modified.updateMsgs shouldBe ["modified_msg"]
     }
 
     // ==================== ClosedSendChannelException Handling Tests ====================
@@ -670,7 +665,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       // Set a very small limit for testing via system property
       val proxy = createSpyProxyForSubmit(
         timeoutSecs = 30,
-        args = listOf("-Dproxy.internal.maxUnzippedContentSizeMBytes=0"),
+        args = ["-Dproxy.internal.maxUnzippedContentSizeMBytes=0"],
       )
 
       val agentContext = AgentContext("test-remote")
@@ -977,7 +972,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     // the bodies. This selection was previously only exercised by the Docker-gated consolidated test.
     "mergeResponseResults should prefer OK status and the OK result's contentType" {
       val okContentType = ContentType.Application.Json
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.ServiceUnavailable,
           updateMsg = "unavailable",
@@ -992,7 +987,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_a 1.0",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeResponseResults(results)
 
@@ -1003,7 +998,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
     // No agent returns OK: the merged status is the first distinct status code (statusCodes[0]).
     "mergeResponseResults should return the first status code when no agent returns OK" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.ServiceUnavailable,
           updateMsg = "unavailable",
@@ -1014,7 +1009,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           updateMsg = "not_found",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeResponseResults(results)
 
@@ -1024,7 +1019,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     // No agent returns OK: the contentType falls back to the first distinct contentType (contentTypes[0]).
     "mergeResponseResults should fall back to the first contentType when no agent returns OK" {
       val firstContentType = ContentType.Application.Json
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.ServiceUnavailable,
           updateMsg = "unavailable",
@@ -1037,7 +1032,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentType = ContentType.Text.Plain.withCharset(Charsets.UTF_8),
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeResponseResults(results)
 
@@ -1052,7 +1047,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     // strips intermediate "# EOF" markers and appends a single one at the end.
 
     "Bug #13: mergeContentTexts should strip intermediate EOF markers" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1065,7 +1060,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_b 2.0\n# EOF",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1079,7 +1074,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "Bug #13: mergeContentTexts should not add EOF when no results have it" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1092,7 +1087,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_b 2.0\n",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1102,14 +1097,14 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "Bug #13: mergeContentTexts should return single result unchanged" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
           contentText = "metric_a 1.0\n# EOF",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1118,7 +1113,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "Bug #13: mergeContentTexts should handle three agents with EOF" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1137,7 +1132,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_c 3.0\n# EOF",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1156,7 +1151,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     // results with empty contentText before merging.
 
     "Bug #4: mergeContentTexts should exclude empty content from failed agents" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1169,7 +1164,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1178,7 +1173,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "Bug #4: mergeContentTexts should handle multiple failed agents with one success" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.ServiceUnavailable,
           updateMsg = "timed_out",
@@ -1197,7 +1192,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1205,7 +1200,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "Bug #4: mergeContentTexts should return empty string when all agents fail" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.ServiceUnavailable,
           updateMsg = "timed_out",
@@ -1218,7 +1213,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1229,7 +1224,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       // Without the fix, the empty string from the failed agent would be joined in,
       // producing three consecutive newlines between the two metrics.
       // With the fix, the empty result is filtered out first.
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1248,7 +1243,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_c 3.0\n",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1261,7 +1256,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "Bug #4: mergeContentTexts should handle failed agents with EOF results" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1280,7 +1275,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_c 3.0\n# EOF",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1292,7 +1287,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "Bug #13: mergeContentTexts should handle mixed EOF and non-EOF results" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1305,7 +1300,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_b 2.0\n",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1327,7 +1322,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
     "Bug #14: mergeContentTexts should not produce double newlines with trailing whitespace" {
       // Agent1 has EOF with trailing newline; Agent2 has trailing newline but no EOF
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1340,7 +1335,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_b 2.0\n",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1353,7 +1348,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     "Bug #14: mergeContentTexts should trim trailing whitespace from non-EOF results" {
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1366,7 +1361,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_b 2.0\n",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1377,7 +1372,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
     "Bug #14: mergeContentTexts should handle mixed trailing whitespace with EOF" {
       // Three agents: two with trailing newlines + EOF, one without EOF but with trailing whitespace
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1396,7 +1391,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_c 3.0\n# EOF\n",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 
@@ -1411,7 +1406,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     "Bug #14: mergeContentTexts should produce clean output with no trailing whitespace per entry" {
       // Verify that each entry's trailing whitespace is stripped before joining,
       // regardless of whether the entry has EOF
-      val results = listOf(
+      val results = [
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.OK,
           updateMsg = "success",
@@ -1424,7 +1419,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           contentText = "metric_b 2.0\n\n\n",
           fetchDuration = 10.milliseconds,
         ),
-      )
+      ]
 
       val merged = ProxyHttpRoutes.mergeContentTexts(results)
 

@@ -44,89 +44,89 @@ class BaseOptionsTest : StringSpec() {
     // ==================== Shared Option Defaults (via ProxyOptions) ====================
 
     "adminEnabled should default to false" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.adminEnabled.shouldBeFalse()
     }
 
     "metricsEnabled should default to false" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.metricsEnabled.shouldBeFalse()
     }
 
     "debugEnabled should default to false" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.debugEnabled.shouldBeFalse()
     }
 
     "transportFilterDisabled should default to false" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.transportFilterDisabled.shouldBeFalse()
     }
 
     "certChainFilePath should default to empty" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.certChainFilePath.shouldBeEmpty()
     }
 
     "privateKeyFilePath should default to empty" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.privateKeyFilePath.shouldBeEmpty()
     }
 
     "trustCertCollectionFilePath should default to empty" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.trustCertCollectionFilePath.shouldBeEmpty()
     }
 
     "logLevel should default to empty" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.logLevel.shouldBeEmpty()
     }
 
     // ==================== Admin Option Overrides ====================
 
     "adminEnabled should be settable via -r flag" {
-      val options = ProxyOptions(listOf("-r"))
+      val options = proxyOptions(["-r"])
       options.adminEnabled shouldBe true
     }
 
     "adminPort should be settable via -i flag" {
-      val options = ProxyOptions(listOf("-i", "9000"))
+      val options = proxyOptions(["-i", "9000"])
       options.adminPort shouldBe 9000
     }
 
     "metricsEnabled should be settable via -e flag" {
-      val options = ProxyOptions(listOf("-e"))
+      val options = proxyOptions(["-e"])
       options.metricsEnabled shouldBe true
     }
 
     "metricsPort should be settable via -m flag" {
-      val options = ProxyOptions(listOf("-m", "9100"))
+      val options = proxyOptions(["-m", "9100"])
       options.metricsPort shouldBe 9100
     }
 
     "debugEnabled should be settable via -b flag" {
-      val options = ProxyOptions(listOf("-b"))
+      val options = proxyOptions(["-b"])
       options.debugEnabled shouldBe true
     }
 
     // ==================== Transport Filter and TLS ====================
 
     "isTlsEnabled should be false when no TLS options set" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.isTlsEnabled shouldBe false
     }
 
     // Bug #3: isTlsEnabled requires BOTH cert and key (AND, not OR)
     "isTlsEnabled should be true when both cert and key are set" {
-      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"))
+      val options = proxyOptions(["-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"])
       options.isTlsEnabled shouldBe true
     }
 
     "partial TLS config with only cert should fail fast" {
       val ex =
         shouldThrow<IllegalArgumentException> {
-          ProxyOptions(listOf("-t", "/path/to/cert.pem"))
+          proxyOptions(["-t", "/path/to/cert.pem"])
         }
       ex.message shouldContain "private key file is missing"
     }
@@ -134,80 +134,80 @@ class BaseOptionsTest : StringSpec() {
     "partial TLS config with only key should fail fast" {
       val ex =
         shouldThrow<IllegalArgumentException> {
-          ProxyOptions(listOf("-k", "/path/to/key.pem"))
+          proxyOptions(["-k", "/path/to/key.pem"])
         }
       ex.message shouldContain "certificate chain file is missing"
     }
 
     "transportFilterDisabled should be settable via --tf_disabled" {
-      val options = ProxyOptions(listOf("--tf_disabled"))
+      val options = proxyOptions(["--tf_disabled"])
       options.transportFilterDisabled shouldBe true
     }
 
     "transportFilterDisabled should accept hyphenated variant --tf-disabled" {
-      val options = ProxyOptions(listOf("--tf-disabled"))
+      val options = proxyOptions(["--tf-disabled"])
       options.transportFilterDisabled shouldBe true
     }
 
     "certChainFilePath should be settable via -t flag" {
-      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"))
+      val options = proxyOptions(["-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"])
       options.certChainFilePath shouldBe "/path/to/cert.pem"
     }
 
     "privateKeyFilePath should be settable via -k flag" {
-      val options = ProxyOptions(listOf("-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"))
+      val options = proxyOptions(["-t", "/path/to/cert.pem", "-k", "/path/to/key.pem"])
       options.privateKeyFilePath shouldBe "/path/to/key.pem"
     }
 
     "trustCertCollectionFilePath should be settable via -s flag" {
-      val options = ProxyOptions(listOf("-s", "/path/to/trust.pem"))
+      val options = proxyOptions(["-s", "/path/to/trust.pem"])
       options.trustCertCollectionFilePath shouldBe "/path/to/trust.pem"
     }
 
     // ==================== KeepAlive Settings ====================
 
     "keepAliveTimeSecs should be settable via --keepalive_time_secs" {
-      val options = ProxyOptions(listOf("--keepalive_time_secs", "600"))
+      val options = proxyOptions(["--keepalive_time_secs", "600"])
       options.keepAliveTimeSecs shouldBe 600L
     }
 
     "keepAliveTimeoutSecs should be settable via --keepalive_timeout_secs" {
-      val options = ProxyOptions(listOf("--keepalive_timeout_secs", "30"))
+      val options = proxyOptions(["--keepalive_timeout_secs", "30"])
       options.keepAliveTimeoutSecs shouldBe 30L
     }
 
     // ==================== Dynamic Parameters ====================
 
     "dynamic params should be empty by default" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.dynamicParams.size shouldBe 0
     }
 
     "dynamic params should capture -D values" {
-      val options = ProxyOptions(listOf("-Dproxy.http.port=9999"))
+      val options = proxyOptions(["-Dproxy.http.port=9999"])
       options.dynamicParams.size shouldBe 1
     }
 
     // ==================== Shared Defaults via AgentOptions ====================
 
     "agent adminEnabled should default to false" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.adminEnabled.shouldBeFalse()
     }
 
     "agent metricsEnabled should default to false" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.metricsEnabled.shouldBeFalse()
     }
 
     "agent debugEnabled should default to false" {
-      val options = AgentOptions(listOf("--name", "test", "--proxy", "host"), false)
+      val options = agentOptions(["--name", "test", "--proxy", "host"], false)
       options.debugEnabled.shouldBeFalse()
     }
 
     "agent logLevel should be settable via --log_level" {
-      val options = AgentOptions(
-        listOf("--name", "test", "--proxy", "host", "--log_level", "DEBUG"),
+      val options = agentOptions(
+        ["--name", "test", "--proxy", "host", "--log_level", "DEBUG"],
         false,
       )
       options.logLevel shouldBe "DEBUG"
@@ -227,7 +227,7 @@ class BaseOptionsTest : StringSpec() {
           """.trimIndent(),
         )
 
-        val options = ProxyOptions(listOf("-c", confFile.absolutePath))
+        val options = proxyOptions(["-c", confFile.absolutePath])
         options.proxyPort shouldBe 9999
       } finally {
         tempDir.deleteRecursively()
@@ -250,7 +250,7 @@ class BaseOptionsTest : StringSpec() {
           """.trimIndent(),
         )
 
-        val options = ProxyOptions(listOf("-c", jsonFile.absolutePath))
+        val options = proxyOptions(["-c", jsonFile.absolutePath])
         options.proxyPort shouldBe 7777
       } finally {
         tempDir.deleteRecursively()
@@ -263,7 +263,7 @@ class BaseOptionsTest : StringSpec() {
         val propsFile = File(tempDir, "test.properties")
         propsFile.writeText("proxy.http.port=6666")
 
-        val options = ProxyOptions(listOf("-c", propsFile.absolutePath))
+        val options = proxyOptions(["-c", propsFile.absolutePath])
         options.proxyPort shouldBe 6666
       } finally {
         tempDir.deleteRecursively()
@@ -284,7 +284,7 @@ class BaseOptionsTest : StringSpec() {
     }
 
     "dynamic params should strip surrounding quotes" {
-      val options = ProxyOptions(listOf("-Dproxy.http.port=\"5555\""))
+      val options = proxyOptions(["-Dproxy.http.port=\"5555\""])
       options.proxyPort shouldBe 5555
     }
 
@@ -303,7 +303,7 @@ class BaseOptionsTest : StringSpec() {
           """.trimIndent(),
         )
 
-        val options = ProxyOptions(listOf("-c", confFile.absolutePath))
+        val options = proxyOptions(["-c", confFile.absolutePath])
         options.proxyPort shouldBe 8888
         // Variable substitution resolved: admin.port = proxy.http.port = 8888
         options.configVals.proxy.admin.port shouldBe 8888
@@ -339,7 +339,7 @@ class BaseOptionsTest : StringSpec() {
       // validator during parse(). Now the version flag is checked after parsing,
       // so constructing with other flags should not exit.
       // This test verifies normal construction still works (no exitProcess during parsing).
-      val options = ProxyOptions(listOf("-b"))
+      val options = proxyOptions(["-b"])
       options.debugEnabled shouldBe true
     }
 
@@ -353,14 +353,14 @@ class BaseOptionsTest : StringSpec() {
     "Finding 5: invalid CLI option throws ConfigLoadException when exitOnMissingConfig is false" {
       val ex =
         shouldThrow<ConfigLoadException> {
-          AgentOptions(listOf("--proxy", "host", "--admin_port", "not_a_number"), exitOnMissingConfig = false)
+          agentOptions(["--proxy", "host", "--admin_port", "not_a_number"], exitOnMissingConfig = false)
         }
       ex.message.shouldNotBeEmpty()
     }
 
     "Finding 5: unknown CLI flag throws ConfigLoadException when exitOnMissingConfig is false" {
       shouldThrow<ConfigLoadException> {
-        AgentOptions(listOf("--proxy", "host", "--this-flag-does-not-exist"), exitOnMissingConfig = false)
+        agentOptions(["--proxy", "host", "--this-flag-does-not-exist"], exitOnMissingConfig = false)
       }
     }
 
@@ -380,7 +380,7 @@ class BaseOptionsTest : StringSpec() {
     // ==================== ConfigVals Tests ====================
 
     "configVals should be initialized after construction" {
-      val options = ProxyOptions(listOf())
+      val options = proxyOptions(emptyList())
       options.configVals.proxy.http.port shouldBeGreaterThan 0
       options.configVals.proxy.admin.pingPath.shouldNotBeEmpty()
     }
@@ -553,7 +553,7 @@ class BaseOptionsTest : StringSpec() {
     }
     try {
       val port = server.startAndAwaitReady()
-      val options = ProxyOptions(listOf("-c", "http://localhost:$port/$fileName"))
+      val options = proxyOptions(["-c", "http://localhost:$port/$fileName"])
       options.proxyPort shouldBe expectedPort
     } finally {
       server.stop(0, 0)

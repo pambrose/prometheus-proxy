@@ -46,7 +46,7 @@ import io.ktor.server.cio.CIO as ServerCIO
 class AgentHttpServiceHeaderTest : StringSpec() {
   init {
     "per-request Accept header should vary independently of cached client" {
-      val capturedHeaders = Collections.synchronizedList(mutableListOf<String?>())
+      val capturedHeaders: MutableList<String?> = Collections.synchronizedList([])
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
@@ -85,7 +85,7 @@ class AgentHttpServiceHeaderTest : StringSpec() {
     }
 
     "defaultRequest Accept header should persist across requests demonstrating old bug" {
-      val capturedHeaders = Collections.synchronizedList(mutableListOf<String?>())
+      val capturedHeaders: MutableList<String?> = Collections.synchronizedList([])
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {

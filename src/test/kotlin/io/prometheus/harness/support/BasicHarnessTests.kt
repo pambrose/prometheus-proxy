@@ -101,7 +101,7 @@ internal object BasicHarnessTests {
     caller: String,
   ) {
     logger.debug { "Calling threadedAddRemovePathsTest() from $caller" }
-    val paths: MutableList<String> = mutableListOf()
+    val paths: MutableList<String> = []
 
     // Take into account pre-existing paths already registered
     val originalSize = pathManager.pathMapSize()

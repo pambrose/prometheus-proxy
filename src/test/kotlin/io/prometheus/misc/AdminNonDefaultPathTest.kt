@@ -46,13 +46,13 @@ class AdminNonDefaultPathTest : StringSpec() {
         proxySetup = {
           startProxy(
             adminEnabled = true,
-            args = listOf(
+            args = [
               "-Dproxy.admin.port=8099",
               "-Dproxy.admin.pingPath=pingPath2",
               "-Dproxy.admin.versionPath=versionPath2",
               "-Dproxy.admin.healthCheckPath=healthCheckPath2",
               "-Dproxy.admin.threadDumpPath=threadDumpPath2",
-            ),
+            ],
           )
         },
         agentSetup = { startAgent(adminEnabled = true) },

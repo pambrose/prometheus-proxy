@@ -166,7 +166,7 @@ class EnvVarsTest : StringSpec() {
     // ==================== Enum Completeness Tests ====================
 
     "EnvVars enum should contain all expected proxy variables" {
-      val proxyVars = listOf(
+      val proxyVars = [
         EnvVars.PROXY_CONFIG,
         EnvVars.PROXY_PORT,
         EnvVars.AGENT_PORT,
@@ -181,7 +181,7 @@ class EnvVarsTest : StringSpec() {
         EnvVars.MAX_CONNECTION_AGE_SECS,
         EnvVars.MAX_CONNECTION_AGE_GRACE_SECS,
         EnvVars.PROXY_LOG_LEVEL,
-      )
+      ]
 
       proxyVars.forEach { envVar ->
         // Verify each enum constant exists and has a name
@@ -196,7 +196,7 @@ class EnvVarsTest : StringSpec() {
     "EnvVars entries should contain all defined constants" {
       val allNames = EnvVars.entries.map { it.name }
 
-      allNames shouldContainAll listOf(
+      allNames shouldContainAll [
         "PROXY_CONFIG",
         "PROXY_PORT",
         "AGENT_PORT",
@@ -244,13 +244,13 @@ class EnvVarsTest : StringSpec() {
         "KEEPALIVE_TIME_SECS",
         "KEEPALIVE_TIMEOUT_SECS",
         "UNARY_DEADLINE_SECS",
-      )
+      ]
     }
 
     "entry count should match completeness list size to prevent drift" {
       // Guard against M11-style bugs: if someone adds an enum entry but forgets to
       // update the count test or the completeness list, this test will catch it.
-      val allExpected = listOf(
+      val allExpected = [
         "PROXY_CONFIG",
         "PROXY_PORT",
         "AGENT_PORT",
@@ -298,7 +298,7 @@ class EnvVarsTest : StringSpec() {
         "OVERRIDE_AUTHORITY",
         "KEEPALIVE_TIME_SECS",
         "KEEPALIVE_TIMEOUT_SECS",
-      )
+      ]
       val actualNames = EnvVars.entries.map { it.name }.sorted()
       val expectedNames = allExpected.sorted()
 
@@ -424,7 +424,7 @@ class EnvVarsTest : StringSpec() {
     // ==================== Agent Variables ====================
 
     "EnvVars enum should contain all expected agent variables" {
-      val agentVars = listOf(
+      val agentVars = [
         EnvVars.AGENT_CONFIG,
         EnvVars.PROXY_HOSTNAME,
         EnvVars.AGENT_NAME,
@@ -440,7 +440,7 @@ class EnvVarsTest : StringSpec() {
         EnvVars.CLIENT_TIMEOUT_SECS,
         EnvVars.UNARY_DEADLINE_SECS,
         EnvVars.AGENT_LOG_LEVEL,
-      )
+      ]
 
       agentVars.forEach { envVar ->
         envVar.name.shouldNotBeEmpty()
