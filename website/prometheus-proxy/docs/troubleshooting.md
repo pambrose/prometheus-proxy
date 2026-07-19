@@ -20,8 +20,9 @@ Before diving into a specific symptom, gather signal:
    `curl -i http://<proxy-host>:8080/<path>` — the HTTP status code tells you a lot (see
    below).
 4. **Watch the outcome metric**: `proxy_scrape_requests` is labeled by `type`
-   (`success`, `timed_out`, `no_agents`, `path_not_found`, `payload_too_large`, …). Whichever
-   `type` is incrementing names the failure mode.
+   (`success`, `timed_out`, `upstream_timed_out`, `no_agents`, `path_not_found`, `upstream_error`,
+   `content_too_large`, `payload_too_large`, …). Whichever `type` is incrementing names the failure
+   mode; see [Monitoring](monitoring.md) for the full table.
 5. **Read the logs.** The proxy and agent log the reason for most rejections at WARN/INFO.
 
 ---
@@ -88,19 +89,27 @@ The path is known but cannot be served right now.
 
 The scrape body exceeded a configured size limit.
 
-- **Agent side:** raise `agent.http.maxContentLengthMBytes` (default `10`).
+- **Agent side:** raise `agent.http.maxContentLengthMBytes` (default `10`). Outcome label
+  `content_too_large`.
 - **Proxy side:** raise `proxy.internal.maxUnzippedContentSizeMBytes` (the decompressed-size
-  guard; `0` means "reject all").
-- The proxy outcome label for this is `payload_too_large`.
+  guard; `0` means "reject all"). Outcome label `payload_too_large`.
+- The two limits are independent and both surface as HTTP 413 — the outcome label tells you which
+  one rejected the scrape.
 
-### Scrape hangs, then `timed_out`
+### Scrape hangs, then times out
 
-The agent didn't return a response within the timeout.
+Check which timeout fired: `upstream_timed_out` means the agent answered promptly to report that
+the *target* was slow, while `timed_out` means the agent never answered the proxy at all. Because
+`scrapeTimeoutSecs` (15s) is well below the proxy's `scrapeRequestTimeoutSecs` (90s), a slow target
+normally shows up as `upstream_timed_out`.
 
-- The target endpoint is slow — raise the agent's `scrapeTimeoutSecs` (default `15`) and/or
-  `clientTimeoutSecs` (default `90`).
-- The agent is saturated — raise `maxConcurrentClients` (default `1`) so scrapes run in
-  parallel; watch `agent_scrape_backlog_size` and `proxy_cumulative_agent_backlog_size`.
+- **`upstream_timed_out`** — the target endpoint is slow. Raise the agent's `scrapeTimeoutSecs`
+  (default `15`) and/or `clientTimeoutSecs` (default `90`), or fix the target.
+- **`timed_out`** — the agent is unresponsive or the link to it is broken. Check the agent is still
+  connected (`proxy_connected_agents`) and raise `proxy.internal.scrapeRequestTimeoutSecs` only if
+  the agent legitimately needs longer than 90s.
+- Either can mean the agent is saturated — raise `maxConcurrentClients` (default `1`) so scrapes
+  run in parallel; watch `agent_scrape_backlog_size` and `proxy_cumulative_agent_backlog_size`.
 - See [Performance Tuning](advanced.md#performance-tuning).
 
 ---

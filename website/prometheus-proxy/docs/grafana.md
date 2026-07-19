@@ -81,12 +81,14 @@ groups:
         annotations:
           summary: "Proxy agent scrape backlog is large ({{ $value }} queued)"
 
+      # Covers both size limits: content_too_large is the agent's maxContentLengthMBytes rejecting
+      # the target response, payload_too_large is the proxy's unzipped-size guard.
       - alert: ProxyPayloadTooLarge
-        expr: rate(proxy_scrape_requests{type="payload_too_large"}[5m]) > 0
+        expr: rate(proxy_scrape_requests{type=~"payload_too_large|content_too_large"}[5m]) > 0
         for: 5m
         labels: { severity: warning }
         annotations:
-          summary: "Scrapes are being rejected for exceeding the size limit"
+          summary: "Scrapes are being rejected for exceeding the size limit ({{ $labels.type }})"
 
       - alert: ProxyFrequentEvictions
         expr: rate(proxy_eviction_count[5m]) > 0
