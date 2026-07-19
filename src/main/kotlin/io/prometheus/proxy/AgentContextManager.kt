@@ -46,7 +46,12 @@ internal class AgentContextManager(
 
   val agentContextEntries: Set<Map.Entry<String, AgentContext>> get() = agentContextMap.entries
 
-  // Map scrape_id to ChunkedContext
+  // Map scrape_id to ChunkedContext.
+  //
+  // The View suffix names the *external* contract: callers outside this class get a read-only Map.
+  // Inside the class the same name resolves to the ConcurrentHashMap backing field, so the put/remove
+  // calls below really are mutating the map itself -- not a copy, and not a violation of the read-only
+  // exposure the name promises everyone else.
   val chunkedContextMapView: Map<Long, ChunkedContext>
     field = ConcurrentHashMap<Long, ChunkedContext>()
 

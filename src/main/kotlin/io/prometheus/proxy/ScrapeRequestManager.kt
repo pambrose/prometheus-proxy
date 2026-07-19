@@ -34,7 +34,12 @@ import java.util.concurrent.ConcurrentHashMap
  * @see ProxyServiceImpl
  */
 internal class ScrapeRequestManager {
-  // Map scrape_id to ScrapeRequestWrapper
+  // Map scrape_id to ScrapeRequestWrapper.
+  //
+  // The View suffix names the *external* contract: callers outside this class get a read-only Map.
+  // Inside the class the same name resolves to the ConcurrentHashMap backing field, so the put/remove
+  // calls below really are mutating the map itself -- not a copy, and not a violation of the read-only
+  // exposure the name promises everyone else.
   val scrapeRequestMapView: Map<Long, ScrapeRequestWrapper>
     field = ConcurrentHashMap<Long, ScrapeRequestWrapper>()
 
