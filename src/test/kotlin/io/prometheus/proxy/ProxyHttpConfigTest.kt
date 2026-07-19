@@ -49,6 +49,7 @@ import io.ktor.server.routing.routing
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.startAndAwaitReady
 import org.slf4j.event.Level
 import io.ktor.server.cio.CIO as ServerCIO
@@ -147,7 +148,7 @@ class ProxyHttpConfigTest : StringSpec() {
     "gzip should be preferred over deflate for large responses" {
       val proxy = createTestProxy()
       val largeContent = "a".repeat(2000)
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         val app = this
         with(ProxyHttpConfig) {
           app.configureKtorServer(proxy, isTestMode = true)
@@ -175,7 +176,7 @@ class ProxyHttpConfigTest : StringSpec() {
 
     "small responses should not be deflate-compressed" {
       val proxy = createTestProxy()
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         val app = this
         with(ProxyHttpConfig) {
           app.configureKtorServer(proxy, isTestMode = true)
@@ -206,7 +207,7 @@ class ProxyHttpConfigTest : StringSpec() {
     // Both gzip and deflate should now skip compression for small responses.
     "Bug #6: small responses should not be gzip-compressed" {
       val proxy = createTestProxy()
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         val app = this
         with(ProxyHttpConfig) {
           app.configureKtorServer(proxy, isTestMode = true)
@@ -238,7 +239,7 @@ class ProxyHttpConfigTest : StringSpec() {
     // ==================== StatusPages Integration Tests ====================
 
     "StatusPages NotFound handler should return correct text" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         install(StatusPages) {
           status(HttpStatusCode.NotFound) { call, cause ->
             call.respond(
@@ -271,7 +272,7 @@ class ProxyHttpConfigTest : StringSpec() {
     }
 
     "StatusPages exception handler should return InternalServerError" {
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         install(StatusPages) {
           exception<Throwable> { call, _ ->
             call.respond(HttpStatusCode.InternalServerError)
@@ -420,7 +421,7 @@ class ProxyHttpConfigTest : StringSpec() {
 
     "configureKtorServer should add X-Engine default header to responses" {
       val proxy = createTestProxy()
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         val app = this
         with(ProxyHttpConfig) { app.configureKtorServer(proxy, isTestMode = true) }
         routing {
@@ -445,7 +446,7 @@ class ProxyHttpConfigTest : StringSpec() {
 
     "configureKtorServer should handle NotFound via StatusPages" {
       val proxy = createTestProxy()
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         val app = this
         with(ProxyHttpConfig) { app.configureKtorServer(proxy, isTestMode = true) }
         routing { }
@@ -469,7 +470,7 @@ class ProxyHttpConfigTest : StringSpec() {
 
     "configureKtorServer should handle exceptions via StatusPages" {
       val proxy = createTestProxy()
-      val server = embeddedServer(ServerCIO, port = 0) {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         val app = this
         with(ProxyHttpConfig) { app.configureKtorServer(proxy, isTestMode = true) }
         routing {

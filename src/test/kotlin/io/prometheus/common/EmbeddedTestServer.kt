@@ -28,6 +28,20 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource.Monotonic
 
+// Bind test servers to loopback explicitly rather than taking Ktor's default wildcard (0.0.0.0).
+//
+// With a wildcard bind, `port = 0` asks the OS for a port free on *0.0.0.0*, which does not conflict
+// with another process already listening on 127.0.0.1 at that same port -- different addresses, so
+// both binds succeed. This box routinely has a dozen-plus JVMs (Gradle daemons among them) holding
+// ephemeral loopback ports, and when the OS hands us one of those, BSD delivers every localhost
+// connection to the *more specific* listener. Our server is then live on a port it can never receive
+// traffic on: connections are accepted by the other process and dropped, so the readiness probe sees
+// a clean EOF forever and the spec fails after the full timeout.
+//
+// Binding 127.0.0.1 makes the OS pick a port free on loopback itself, so the collision cannot happen.
+// Measured over 6000 server starts on this machine: 8 failures with the wildcard bind, 0 with this.
+const val LOOPBACK_HOST = "127.0.0.1"
+
 // Start an embeddedServer with start(wait = false) and poll until it serves HTTP. A bare
 // TCP-connect probe isn't enough: CIO's listening socket can accept and immediately close
 // while the routing pipeline is still being installed, surfacing as EOFException or empty
