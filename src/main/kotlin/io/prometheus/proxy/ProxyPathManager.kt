@@ -205,14 +205,13 @@ internal class ProxyPathManager(
   ) {
     require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
 
-    if (proxy.agentContextManager.getAgentContext(agentId) == null)
-      logger.debug { "Agent context already removed for agentId: $agentId ($reason)" }
-    else
-      logger.info { "Removing paths for agentId: $agentId ($reason)" }
-
     // Always sweep the pathMap by agentId, even when the context is already gone from the manager: a
     // registerPath that raced this removal can strand a path pointing at an invalidated context, and
-    // skipping the sweep would leave that path 404ing forever (finding 7).
+    // skipping the sweep would leave that path 404ing forever (finding 7). The caller invalidates the
+    // context before calling this, so the context is normally already absent from the manager here —
+    // report on what the sweep actually removed rather than on a manager lookup that no longer
+    // distinguishes a live disconnect from a repeat call.
+    var removedPathCount = 0
     synchronized(pathMap) {
       // Collect map mutations in a first pass to avoid modifying the map during iteration.
       val keysToRemove: MutableList<String> = []
@@ -238,11 +237,17 @@ internal class ProxyPathManager(
       keysToRemove.forEach { k ->
         pathMap.remove(k)
           ?.also {
+            removedPathCount++
             if (!isTestMode)
               logger.info { "Removed path /$k for $it" }
           } ?: logger.warn { "Missing path /$k for agentId: $agentId" }
       }
     }
+
+    if (removedPathCount == 0)
+      logger.debug { "No paths registered for agentId: $agentId ($reason)" }
+    else
+      logger.info { "Removed $removedPathCount path(s) for agentId: $agentId ($reason)" }
   }
 
   fun toPlainText(): String =

@@ -215,6 +215,15 @@ re-register the same path. For consolidated paths it is worse — a new agent *a
 `addValidatedPath` and reject registration for an invalidated context; and/or make
 `removeFromPathManager` sweep by agentId even when the context is already absent from the manager.
 
+**Follow-up (both fixes above were ordered wrong):** PR #198 landed both halves, but
+`Proxy.removeAgentContext` swept the `pathMap` *before* `removeFromContextManager` invalidated the
+context — so the in-lock re-check read a flag the remover had not set yet, and the sweep ran before
+the racing insert. A `registerPath` blocked on the `pathMap` monitor during the sweep was released
+directly into the unguarded gap. Closed by hoisting `removeFromContextManager` above
+`removeFromPathManager`, so a registration racing teardown is either rejected by the in-lock check
+or undone by the sweep. Pinned by `ProxyTest` → "removeAgentContext should invalidate the agent
+context before sweeping the path map".
+
 ### 8. [x] Zipkin tracing closed on first reconnect, then reused
 `agent/AgentGrpcService.kt:147-154, 161-201` — **resource lifecycle, medium, confirmed (code
 path); impact plausible**
@@ -239,6 +248,12 @@ remaining closes in `close()` and `getOrCreateClient`.
 
 **Fix:** wrap each `client.close()` in its own `runCatching { }` (log failures), at all three
 sites.
+
+**Follow-up (coverage gap):** PR #198's fix was correct, but its only test called `closeQuietly`
+directly — reverting the sweeper call site to `it.close()` left the whole suite green, so nothing
+pinned the wiring. Covered by `HttpClientCacheTest` → "Finding 9: a throwing close in the sweeper
+must not kill the cleanup loop", which drives a throwing close through the background loop and
+asserts a *subsequent* entry is still evicted. Verified to fail when the call site is reverted.
 
 ### 10. [x] All non-2xx upstream responses mislabeled `path_not_found`
 `proxy/ProxyHttpRoutes.kt:305-315 (312), 216-219` — **observability, medium, confirmed**
