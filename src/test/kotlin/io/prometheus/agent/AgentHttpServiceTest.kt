@@ -52,6 +52,8 @@ import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import javax.net.ssl.X509TrustManager
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.measureTime
 import io.ktor.server.cio.CIO as ServerCIO
@@ -750,11 +752,11 @@ class AgentHttpServiceTest : StringSpec() {
     // ==================== Retry Policy Tests ====================
 
     "retry policy should not retry 400 Bad Request" {
-      var requestCount = 0
+      val requestCount = AtomicInt(0)
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
-            requestCount++
+            requestCount.incrementAndFetch()
             call.response.status(HttpStatusCode.BadRequest)
             call.respondText("bad request")
           }
@@ -775,7 +777,7 @@ class AgentHttpServiceTest : StringSpec() {
 
         service.fetchScrapeUrl(request)
 
-        requestCount shouldBe 1
+        requestCount.load() shouldBe 1
         service.close()
       } finally {
         server.stop(0, 0)
@@ -783,11 +785,11 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "retry policy should not retry 401 Unauthorized" {
-      var requestCount = 0
+      val requestCount = AtomicInt(0)
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
-            requestCount++
+            requestCount.incrementAndFetch()
             call.response.status(HttpStatusCode.Unauthorized)
             call.respondText("unauthorized")
           }
@@ -808,7 +810,7 @@ class AgentHttpServiceTest : StringSpec() {
 
         service.fetchScrapeUrl(request)
 
-        requestCount shouldBe 1
+        requestCount.load() shouldBe 1
         service.close()
       } finally {
         server.stop(0, 0)
@@ -816,11 +818,11 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "retry policy should not retry 403 Forbidden" {
-      var requestCount = 0
+      val requestCount = AtomicInt(0)
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
-            requestCount++
+            requestCount.incrementAndFetch()
             call.response.status(HttpStatusCode.Forbidden)
             call.respondText("forbidden")
           }
@@ -841,7 +843,7 @@ class AgentHttpServiceTest : StringSpec() {
 
         service.fetchScrapeUrl(request)
 
-        requestCount shouldBe 1
+        requestCount.load() shouldBe 1
         service.close()
       } finally {
         server.stop(0, 0)
@@ -849,11 +851,11 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "retry policy should retry 500 Internal Server Error" {
-      var requestCount = 0
+      val requestCount = AtomicInt(0)
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
-            requestCount++
+            requestCount.incrementAndFetch()
             call.response.status(HttpStatusCode.InternalServerError)
             call.respondText("server error")
           }
@@ -875,8 +877,8 @@ class AgentHttpServiceTest : StringSpec() {
         service.fetchScrapeUrl(request)
 
         // 1 initial + up to 2 retries = up to 3 total
-        requestCount shouldBeGreaterThan 1
-        requestCount shouldBeLessThanOrEqual 3
+        requestCount.load() shouldBeGreaterThan 1
+        requestCount.load() shouldBeLessThanOrEqual 3
         service.close()
       } finally {
         server.stop(0, 0)
@@ -884,11 +886,11 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "retry policy should retry 503 Service Unavailable" {
-      var requestCount = 0
+      val requestCount = AtomicInt(0)
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
-            requestCount++
+            requestCount.incrementAndFetch()
             call.response.status(HttpStatusCode.ServiceUnavailable)
             call.respondText("unavailable")
           }
@@ -909,8 +911,8 @@ class AgentHttpServiceTest : StringSpec() {
 
         service.fetchScrapeUrl(request)
 
-        requestCount shouldBeGreaterThan 1
-        requestCount shouldBeLessThanOrEqual 3
+        requestCount.load() shouldBeGreaterThan 1
+        requestCount.load() shouldBeLessThanOrEqual 3
         service.close()
       } finally {
         server.stop(0, 0)
@@ -918,11 +920,11 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "retry policy should not retry 404 Not Found" {
-      var requestCount = 0
+      val requestCount = AtomicInt(0)
       val server = embeddedServer(ServerCIO, port = 0) {
         routing {
           get("/metrics") {
-            requestCount++
+            requestCount.incrementAndFetch()
             call.response.status(HttpStatusCode.NotFound)
             call.respondText("not found")
           }
@@ -943,7 +945,7 @@ class AgentHttpServiceTest : StringSpec() {
 
         service.fetchScrapeUrl(request)
 
-        requestCount shouldBe 1
+        requestCount.load() shouldBe 1
         service.close()
       } finally {
         server.stop(0, 0)
