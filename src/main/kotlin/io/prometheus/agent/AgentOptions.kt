@@ -463,10 +463,5 @@ class AgentOptions(
 
   internal companion object {
     private val logger = logger {}
-
-    fun agentOptions(
-      args: List<String>,
-      exitOnMissingConfig: Boolean,
-    ) = AgentOptions(args, exitOnMissingConfig)
   }
 }

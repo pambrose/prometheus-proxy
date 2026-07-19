@@ -18,7 +18,7 @@ package io.prometheus.proxy
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
-import io.prometheus.proxy.ProxyOptions.Companion.proxyOptions
+import io.prometheus.common.proxyOptions
 
 class ProxyDynamicConfigTest : StringSpec() {
   init {

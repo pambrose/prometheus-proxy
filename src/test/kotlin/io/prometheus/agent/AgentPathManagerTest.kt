@@ -381,7 +381,7 @@ class AgentPathManagerTest : StringSpec() {
 
       manager.registerPath("static_path", "http://static/m")
       manager.reconcileDiscoveredPaths([DiscoveredPath("d", "disc_path", "http://d/m", "{}")])
-      manager.reconcileDiscoveredPaths([])
+      manager.reconcileDiscoveredPaths(emptyList())
 
       manager["disc_path"].shouldBeNull()
       manager["static_path"].shouldNotBeNull().source shouldBe PathSource.STATIC

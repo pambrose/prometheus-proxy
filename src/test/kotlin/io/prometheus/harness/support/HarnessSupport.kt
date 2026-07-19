@@ -21,10 +21,10 @@ package io.prometheus.harness.support
 import io.github.oshai.kotlinlogging.KLogger
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import io.prometheus.agent.AgentOptions.Companion.agentOptions
+import io.prometheus.common.agentOptions
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
-import io.prometheus.proxy.ProxyOptions.Companion.proxyOptions
+import io.prometheus.common.proxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -74,7 +74,7 @@ object TestUtils {
     adminEnabled: Boolean = false,
     debugEnabled: Boolean = false,
     metricsEnabled: Boolean = false,
-    args: List<String> = [],
+    args: List<String> = emptyList(),
   ): Proxy {
 //    logger.apply {
 //      info { getBanner("banners/proxy.txt", logger) }
@@ -106,7 +106,7 @@ object TestUtils {
     scrapeTimeoutSecs: Int = -1,
     chunkContentSizeBytes: Int = -1,
     maxConcurrentClients: Int = -1,
-    args: List<String> = [],
+    args: List<String> = emptyList(),
   ): Agent {
 //    logger.apply {
 //      info { getBanner("banners/agent.txt", logger) }

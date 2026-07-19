@@ -38,7 +38,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Agent
-import io.prometheus.agent.AgentOptions.Companion.agentOptions
+import io.prometheus.common.agentOptions
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlinx.coroutines.CompletableDeferred
@@ -57,13 +57,9 @@ import ch.qos.logback.classic.Logger as LogbackLogger
 
 class AgentTest : StringSpec() {
   private fun createTestAgent(vararg extraArgs: String): Agent {
-    val args =
-      buildList {
-        addAll(["--proxy", "localhost:$PROXY_AGENT_PORT"])
-        addAll(extraArgs)
-      }
+    val args = ["--proxy", "localhost:$PROXY_AGENT_PORT"] + extraArgs
     return Agent(
-      options = AgentOptions(args, exitOnMissingConfig = false),
+      options = agentOptions(args, exitOnMissingConfig = false),
       inProcessServerName = "agent-test-${System.nanoTime()}",
       testMode = true,
     )

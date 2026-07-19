@@ -34,11 +34,11 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import io.prometheus.agent.AgentOptions.Companion.agentOptions
+import io.prometheus.common.agentOptions
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
-import io.prometheus.proxy.ProxyOptions.Companion.proxyOptions
+import io.prometheus.common.proxyOptions
 import kotlin.time.Duration.Companion.seconds
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -65,7 +65,7 @@ class InProcessHeartbeatDisabledTest : StringSpec() {
         }
       val stubPort = stub.startAndAwaitReady()
 
-      val args = [
+      val proxyArgs = [
         "-Dproxy.admin.enabled=false",
         "-Dproxy.metrics.enabled=false",
         // Fail a lost scrape fast so the buggy path doesn't block the whole scrape timeout.
@@ -73,7 +73,7 @@ class InProcessHeartbeatDisabledTest : StringSpec() {
       ]
       val proxy =
         Proxy(
-          options = proxyOptions(CONFIG_ARG + args),
+          options = proxyOptions(CONFIG_ARG + proxyArgs),
           proxyPort = httpPort,
           inProcessServerName = serverName,
           testMode = true,
@@ -81,14 +81,14 @@ class InProcessHeartbeatDisabledTest : StringSpec() {
 
       val client = HttpClient(CIO)
       try {
-        val args = [
+        val agentArgs = [
           "-Dagent.admin.enabled=false",
           "-Dagent.metrics.enabled=false",
           "-Dagent.internal.heartbeatEnabled=false",
         ]
         val agent =
           Agent(
-            options = agentOptions(CONFIG_ARG + args, exitOnMissingConfig = false),
+            options = agentOptions(CONFIG_ARG + agentArgs, exitOnMissingConfig = false),
             inProcessServerName = serverName,
             testMode = true,
           ) { startSync() }

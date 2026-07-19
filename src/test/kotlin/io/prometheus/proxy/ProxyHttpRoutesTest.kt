@@ -47,7 +47,7 @@ import io.mockk.spyk
 import io.prometheus.Proxy
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
-import io.prometheus.proxy.ProxyOptions.Companion.proxyOptions
+import io.prometheus.common.proxyOptions
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -91,7 +91,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
   private fun createSpyProxyForSubmit(
     timeoutSecs: Int = 1,
-    args: List<String> = [],
+    args: List<String> = emptyList(),
   ): Proxy {
     val proxy = spyk(
       Proxy(
@@ -108,7 +108,7 @@ class ProxyHttpRoutesTest : StringSpec() {
   private fun createSpyProxyForRoutes(vararg extraArgs: String): Proxy {
     val proxy = spyk(
       Proxy(
-        options = proxyOptions(listOf(*extraArgs)),
+        options = proxyOptions(extraArgs.asList()),
         inProcessServerName = "proxy-routes-test-${System.nanoTime()}",
         testMode = true,
       ),
@@ -273,7 +273,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       results.statusCode shouldBe HttpStatusCode.OK
       results.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
       results.contentText shouldBe ""
-      results.updateMsgs shouldBe []
+      results.updateMsgs shouldBe emptyList()
     }
 
     "ResponseResults should accept custom values" {

@@ -299,8 +299,6 @@ class ProxyOptions(
   internal companion object {
     private val logger = logger {}
 
-    fun proxyOptions(args: List<String>) = ProxyOptions(args)
-
     // gRPC timeout fields use -1L as the "leave the gRPC default in place" sentinel (the
     // `> -1L` guards in ProxyGrpcService rely on it). Any other non-positive value is invalid
     // and would otherwise surface as an opaque gRPC builder exception at startup.

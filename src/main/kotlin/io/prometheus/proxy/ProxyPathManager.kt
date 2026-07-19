@@ -114,7 +114,7 @@ internal class ProxyPathManager(
           logger.error { reason }
           return reason
         }
-        val displacedContexts = agentInfo?.agentContexts ?: []
+        val displacedContexts = agentInfo?.agentContexts ?: emptyList()
         if (agentInfo != null) {
           logger.info { "Overwriting path /$path for ${agentInfo.agentContexts.firstOrNull()}" }
           proxy.metrics { agentDisplacementCount.inc() }

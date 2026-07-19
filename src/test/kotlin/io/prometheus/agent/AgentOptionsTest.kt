@@ -26,7 +26,7 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import io.prometheus.agent.AgentOptions.Companion.agentOptions
+import io.prometheus.common.agentOptions
 
 class AgentOptionsTest : StringSpec() {
   init {
@@ -128,7 +128,7 @@ class AgentOptionsTest : StringSpec() {
           "--https_truststore_password",
           "s3cr3t",
         ]
-      val options = AgentOptions(args, false)
+      val options = agentOptions(args, false)
       options.httpsTrustStorePath shouldBe "/etc/agent/truststore.jks"
       options.httpsTrustStorePassword shouldBe "s3cr3t"
     }

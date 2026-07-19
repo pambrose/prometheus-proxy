@@ -24,7 +24,7 @@ import io.prometheus.Agent
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
-import io.prometheus.agent.AgentOptions.Companion.agentOptions
+import io.prometheus.common.agentOptions
 
 class AgentBacklogDriftTest : StringSpec() {
   private fun createTestAgent(): Agent =

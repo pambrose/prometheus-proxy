@@ -27,54 +27,54 @@ import io.kotest.matchers.string.shouldContain
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
-import io.prometheus.proxy.ProxyOptions.Companion.proxyOptions
+import io.prometheus.common.proxyOptions
 
 class ProxyOptionsTest : StringSpec() {
   init {
     // ==================== Default Values ====================
 
     "default proxyPort should be $PROXY_HTTP_PORT" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.proxyPort shouldBe PROXY_HTTP_PORT
     }
 
     "default proxyAgentPort should be $PROXY_AGENT_PORT" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.proxyAgentPort shouldBe PROXY_AGENT_PORT
     }
 
     "sdEnabled should default to false" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.sdEnabled.shouldBeFalse()
     }
 
     "reflectionDisabled should default to false" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.reflectionDisabled.shouldBeFalse()
     }
 
     "handshakeTimeoutSecs should default to -1" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.handshakeTimeoutSecs shouldBe -1L
     }
 
     "permitKeepAliveWithoutCalls should default to false" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.permitKeepAliveWithoutCalls.shouldBeFalse()
     }
 
     "maxConnectionIdleSecs should default to -1" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.maxConnectionIdleSecs shouldBe -1L
     }
 
     "maxConnectionAgeSecs should default to -1" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.maxConnectionAgeSecs shouldBe -1L
     }
 
     "maxConnectionAgeGraceSecs should default to -1" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.maxConnectionAgeGraceSecs shouldBe -1L
     }
 
@@ -289,24 +289,24 @@ class ProxyOptionsTest : StringSpec() {
     }
 
     "configVals should be populated after construction" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.configVals.proxy.http.port shouldBe PROXY_HTTP_PORT
     }
 
     // ==================== KeepAlive Defaults Tests ====================
 
     "keepAliveTimeSecs should default to -1" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.keepAliveTimeSecs shouldBe -1L
     }
 
     "keepAliveTimeoutSecs should default to -1" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.keepAliveTimeoutSecs shouldBe -1L
     }
 
     "permitKeepAliveTimeSecs should default to -1" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.permitKeepAliveTimeSecs shouldBe -1L
     }
 
@@ -322,7 +322,7 @@ class ProxyOptionsTest : StringSpec() {
     }
 
     "sdPath and sdTargetPrefix should be set when sdEnabled is false" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.sdEnabled.shouldBeFalse()
       // Values should still be assigned from config defaults (even when SD disabled)
       // Bug #8 fix ensures these values are logged regardless of sdEnabled state

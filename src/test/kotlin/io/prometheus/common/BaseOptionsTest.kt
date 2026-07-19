@@ -34,54 +34,52 @@ import io.ktor.server.routing.routing
 import io.prometheus.agent.AgentOptions
 import io.prometheus.common.BaseOptions.Companion.resolveBoolean
 import io.prometheus.proxy.ProxyOptions
-import io.prometheus.proxy.ProxyOptions.Companion.proxyOptions
 import java.io.File
 import java.net.URI
 import kotlin.io.path.createTempDirectory
 import io.ktor.server.cio.CIO as ServerCIO
-import io.prometheus.agent.AgentOptions.Companion.agentOptions
 
 class BaseOptionsTest : StringSpec() {
   init {
     // ==================== Shared Option Defaults (via ProxyOptions) ====================
 
     "adminEnabled should default to false" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.adminEnabled.shouldBeFalse()
     }
 
     "metricsEnabled should default to false" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.metricsEnabled.shouldBeFalse()
     }
 
     "debugEnabled should default to false" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.debugEnabled.shouldBeFalse()
     }
 
     "transportFilterDisabled should default to false" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.transportFilterDisabled.shouldBeFalse()
     }
 
     "certChainFilePath should default to empty" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.certChainFilePath.shouldBeEmpty()
     }
 
     "privateKeyFilePath should default to empty" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.privateKeyFilePath.shouldBeEmpty()
     }
 
     "trustCertCollectionFilePath should default to empty" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.trustCertCollectionFilePath.shouldBeEmpty()
     }
 
     "logLevel should default to empty" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.logLevel.shouldBeEmpty()
     }
 
@@ -115,7 +113,7 @@ class BaseOptionsTest : StringSpec() {
     // ==================== Transport Filter and TLS ====================
 
     "isTlsEnabled should be false when no TLS options set" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.isTlsEnabled shouldBe false
     }
 
@@ -181,7 +179,7 @@ class BaseOptionsTest : StringSpec() {
     // ==================== Dynamic Parameters ====================
 
     "dynamic params should be empty by default" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.dynamicParams.size shouldBe 0
     }
 
@@ -382,7 +380,7 @@ class BaseOptionsTest : StringSpec() {
     // ==================== ConfigVals Tests ====================
 
     "configVals should be initialized after construction" {
-      val options = proxyOptions([])
+      val options = proxyOptions(emptyList())
       options.configVals.proxy.http.port shouldBeGreaterThan 0
       options.configVals.proxy.admin.pingPath.shouldNotBeEmpty()
     }

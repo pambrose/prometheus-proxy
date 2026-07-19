@@ -122,7 +122,7 @@ object ContainerTestSupport {
     configResource: String = "containers/agent.conf",
     configText: String? = null,
     env: Map<String, String> = emptyMap(),
-    exposedPorts: List<Int> = [],
+    exposedPorts: List<Int> = emptyList(),
     classpathFiles: Map<String, String> = emptyMap(),
     hostFiles: Map<String, String> = emptyMap(),
     waitLogRegex: String = ".*Registered .* as /.*",

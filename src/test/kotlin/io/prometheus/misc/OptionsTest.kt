@@ -30,8 +30,8 @@ import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.harness.HarnessConstants.OPTIONS_CONFIG
 import io.prometheus.proxy.ProxyOptions
-import io.prometheus.agent.AgentOptions.Companion.agentOptions
-import io.prometheus.proxy.ProxyOptions.Companion.proxyOptions
+import io.prometheus.common.agentOptions
+import io.prometheus.common.proxyOptions
 
 class OptionsTest : StringSpec() {
   private fun readProxyOptions(argList: List<String>) = ProxyOptions(argList).configVals
@@ -42,7 +42,7 @@ class OptionsTest : StringSpec() {
     // ==================== Proxy Default Values Tests ====================
 
     "should use default values when no config is provided" {
-      val configVals = readProxyOptions([])
+      val configVals = readProxyOptions(emptyList())
       configVals.proxy
         .apply {
           http.port shouldBe PROXY_HTTP_PORT
@@ -79,7 +79,7 @@ class OptionsTest : StringSpec() {
     }
 
     "should have correct proxy default port values" {
-      proxyOptions([])
+      proxyOptions(emptyList())
         .apply {
           proxyPort shouldBe PROXY_HTTP_PORT
           proxyAgentPort shouldBe PROXY_AGENT_PORT
@@ -319,7 +319,7 @@ class OptionsTest : StringSpec() {
     // ==================== Agent Internal Config Defaults ====================
 
     "agent internal config should have expected defaults" {
-      val configVals = readAgentOptions([])
+      val configVals = readAgentOptions(emptyList())
       configVals.agent.internal.apply {
         cioTimeoutSecs shouldBe 90
         heartbeatEnabled.shouldBeTrue()
@@ -349,7 +349,7 @@ class OptionsTest : StringSpec() {
     // ==================== Proxy Request Logging and Path Config Labels ====================
 
     "proxy requestLoggingEnabled should default to true" {
-      val configVals = readProxyOptions([])
+      val configVals = readProxyOptions(emptyList())
       configVals.proxy.http.requestLoggingEnabled.shouldBeTrue()
     }
 
@@ -363,7 +363,7 @@ class OptionsTest : StringSpec() {
     }
 
     "agent proxy hostname and port should have defaults from config" {
-      val configVals = readAgentOptions([])
+      val configVals = readAgentOptions(emptyList())
       configVals.agent.proxy.hostname shouldBe "localhost"
       configVals.agent.proxy.port shouldBe PROXY_AGENT_PORT
     }

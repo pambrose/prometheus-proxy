@@ -431,5 +431,5 @@ internal data class ResponseResults(
   val statusCode: HttpStatusCode = HttpStatusCode.OK,
   val contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
   val contentText: String = "",
-  val updateMsgs: List<String> = [],
+  val updateMsgs: List<String> = emptyList(),
 )
