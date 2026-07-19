@@ -27,15 +27,15 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.kotest.matchers.string.shouldNotContain
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import io.prometheus.agent.AgentOptions
 import io.prometheus.common.BaseOptions.Companion.resolveBoolean
-import io.prometheus.proxy.ProxyOptions
 import java.io.File
 import java.net.URI
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.createTempDirectory
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -364,6 +364,80 @@ class BaseOptionsTest : StringSpec() {
       }
     }
 
+    // The -u/--usage and -v/--version arms of exitOrThrow are separately reachable from the
+    // ParameterException arm above, and are the two that fire on a *successful* invocation. In embedded
+    // mode they must throw rather than exit, so a stray -v in a host's args cannot kill the host JVM.
+    "Finding 5: version flag throws ConfigLoadException when exitOnMissingConfig is false" {
+      val ex =
+        shouldThrow<ConfigLoadException> {
+          agentOptions(["--proxy", "host", "-v"], exitOnMissingConfig = false)
+        }
+      ex.message shouldContain "Version"
+    }
+
+    "Finding 5: usage flag throws ConfigLoadException when exitOnMissingConfig is false" {
+      val ex =
+        shouldThrow<ConfigLoadException> {
+          agentOptions(["--proxy", "host", "-u"], exitOnMissingConfig = false)
+        }
+      ex.message shouldContain "Usage"
+    }
+
+    // ==================== Standalone CLI must exit 0 for --version / --usage ====================
+
+    // exitOnMissingConfig answers "is a config file required?", not "am I embedded?". ProxyOptions never
+    // passes it -- the proxy runs fine with no config file -- so gating the -u/-v exit on it made the
+    // standalone proxy take the embedded throw-branch: `prometheus-proxy.jar --version` printed the
+    // version and then died with an uncaught ConfigLoadException and exit code 1 instead of exiting 0.
+    //
+    // exitProcess cannot be asserted in-process (it would terminate the test worker), which is precisely
+    // why that regression shipped unnoticed. These specs fork a JVM and assert the real exit code, so the
+    // CLI contract documented on the version/usage @Parameter fields is actually pinned.
+
+    "standalone Proxy CLI prints the version and exits 0" {
+      val result = runCliMain("io.prometheus.Proxy", "--version")
+      result.exitCode shouldBe 0
+      result.output shouldContain "Version"
+    }
+
+    "standalone Proxy CLI prints usage and exits 0" {
+      runCliMain("io.prometheus.Proxy", "--usage").exitCode shouldBe 0
+    }
+
+    "standalone Agent CLI prints the version and exits 0" {
+      val result = runCliMain("io.prometheus.Agent", "--version")
+      result.exitCode shouldBe 0
+      result.output shouldContain "Version"
+    }
+
+    // Same conflation as above, in readConfig's parse-failure path: a standalone CLI given a config file
+    // it cannot parse should log the reason and exit non-zero, not terminate on an uncaught
+    // ConfigLoadException. The blank-config branch is a separate question and correctly stays gated on
+    // exitOnMissingConfig -- the Proxy falls back to the built-in reference config when given none.
+    "standalone Proxy CLI fails cleanly on a malformed config file" {
+      val badConfig = File(createTempDirectory().toFile(), "bad.conf")
+      badConfig.writeText("this is { not valid hocon [[[")
+
+      val result = runCliMain("io.prometheus.Proxy", "-c", badConfig.absolutePath)
+
+      result.exitCode shouldBe 1
+      result.output shouldNotContain "Exception in thread"
+    }
+
+    "standalone Proxy CLI fails cleanly on a config file that does not exist" {
+      val result = runCliMain("io.prometheus.Proxy", "-c", "/no/such/config.conf")
+
+      result.exitCode shouldBe 1
+      result.output shouldContain "Invalid config filename"
+      result.output shouldNotContain "Exception in thread"
+    }
+
+    "standalone Proxy CLI starts with no config file at all" {
+      // The blank-config fallback must survive the change: the Proxy runs off its built-in reference
+      // config, so --version with no -c reaches the version branch rather than a missing-config exit.
+      runCliMain("io.prometheus.Proxy", "--version").exitCode shouldBe 0
+    }
+
     // ==================== readConfig Error Message ====================
 
     // The readConfig error message uses escaped-dollar interpolation to produce a
@@ -537,6 +611,29 @@ class BaseOptionsTest : StringSpec() {
     }
   }
 
+  private class CliResult(
+    val exitCode: Int,
+    val output: String,
+  )
+
+  // Runs a main class in a forked JVM on the test runtime classpath and captures its exit code. The only
+  // way to assert an exitProcess() path: calling it in-process would terminate the test worker.
+  private fun runCliMain(
+    mainClass: String,
+    vararg args: String,
+  ): CliResult {
+    val javaBin =
+      ProcessHandle.current().info().command()
+        .orElse(File(File(System.getProperty("java.home"), "bin"), "java").path)
+    val process =
+      ProcessBuilder([javaBin, "-cp", System.getProperty("java.class.path"), mainClass] + args)
+        .redirectErrorStream(true)
+        .start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }
+    process.waitFor(CLI_TIMEOUT_SECS, TimeUnit.SECONDS).shouldBeTrue()
+    return CliResult(process.exitValue(), output)
+  }
+
   // Serves the given config body over HTTP at /<fileName> and asserts the loaded proxy port.
   // Exercises the URL branch of readConfig() and the suffix-based syntax detection.
   private suspend fun verifyHttpConfigLoads(
@@ -558,5 +655,11 @@ class BaseOptionsTest : StringSpec() {
     } finally {
       server.stop(0, 0)
     }
+  }
+
+  companion object {
+    // Generous: the fork pays JVM startup on a cold CI machine, but --version exits before any config
+    // load or port binding, so a healthy run finishes in well under a second.
+    private const val CLI_TIMEOUT_SECS = 60L
   }
 }
