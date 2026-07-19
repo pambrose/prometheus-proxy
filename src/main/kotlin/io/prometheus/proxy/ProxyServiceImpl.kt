@@ -94,47 +94,82 @@ internal class ProxyServiceImpl(
     }
   }
 
-  override suspend fun registerAgent(request: RegisterAgentRequest): RegisterAgentResponse {
-    val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
-    if (agentContext == null) {
-      logger.error { "registerAgent() missing AgentContext agentId: ${request.agentId}" }
+  /**
+   * Rejects a request whose `agentId` is not the one the transport assigned to this connection.
+   *
+   * `request.agentId` is caller-supplied, and agentIds are sequential integers that the proxy echoes
+   * back to every client in the `agent-id` response header — so without this check an authenticated
+   * agent could enumerate its neighbors and pass a victim's agentId to act on the victim's
+   * [AgentContext] while presenting its own valid token.
+   *
+   * Returns null (allow) when the connection agentId is unset, which happens when no transport
+   * filter ran: `transportFilterDisabled` deployments and in-process tests. Those paths have no
+   * transport-assigned identity to compare against, so behavior there is unchanged.
+   */
+  private fun connectionMismatchReason(
+    requestAgentId: String,
+    rpcName: String,
+  ): String? {
+    val connectionAgentId = ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get()
+    return if (connectionAgentId == null || connectionAgentId == requestAgentId) {
+      null
     } else {
-      agentContext.assignProperties(request)
-      agentContext.markActivityTime(false)
-      logger.info { "Connected to $agentContext" }
+      logger.warn {
+        "Agent on connection $connectionAgentId sent agentId $requestAgentId to $rpcName(); rejecting"
+      }
+      "agentId $requestAgentId does not match the connection's agentId ($rpcName)"
     }
+  }
 
-    val isValid = agentContext != null
+  override suspend fun registerAgent(request: RegisterAgentRequest): RegisterAgentResponse {
+    val failureReason =
+      connectionMismatchReason(request.agentId, "registerAgent") ?: run {
+        val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
+        if (agentContext == null) {
+          logger.error { "registerAgent() missing AgentContext agentId: ${request.agentId}" }
+          "Invalid agentId: ${request.agentId} (registerAgent)"
+        } else {
+          agentContext.assignProperties(request)
+          agentContext.markActivityTime(false)
+          logger.info { "Connected to $agentContext" }
+          null
+        }
+      }
+
+    val isValid = failureReason == null
     return registerAgentResponse {
       valid = isValid
       agentId = request.agentId
       if (!isValid) {
-        reason = "Invalid agentId: ${request.agentId} (registerAgent)"
+        // Smart-cast to non-null: isValid == false implies failureReason != null.
+        reason = failureReason
       }
     }
   }
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
-    val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
-    // addPath() (and the authorization check below) returns null on success or a failure message;
-    // failureReason is null iff valid.
+    // addPath() (and the binding/authorization checks below) return null on success or a failure
+    // message; failureReason is null iff valid.
     val failureReason =
-      if (agentContext == null) {
-        logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
-        "Invalid agentId: ${request.agentId} (registerPath)"
-      } else {
-        // AGENT_IDENTITY_KEY is null when per-agent auth is disabled (no interceptor); an identity
-        // with no path patterns authorizes everything, so legacy single-token behavior is unchanged.
-        val identity = AgentAuthManager.AGENT_IDENTITY_KEY.get()
-        val reason =
-          if (identity != null && !identity.isAuthorized(request.path)) {
-            val normalizedPath = request.path.removePrefix("/")
-            logger.warn { "Agent identity '${identity.name}' denied registration of path /$normalizedPath" }
-            "Agent identity '${identity.name}' is not authorized to register path /$normalizedPath"
-          } else {
-            proxy.pathManager.addPath(request.path, request.labels, agentContext)
-          }
-        reason.also { agentContext.markActivityTime(false) }
+      connectionMismatchReason(request.agentId, "registerPath") ?: run {
+        val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
+        if (agentContext == null) {
+          logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
+          "Invalid agentId: ${request.agentId} (registerPath)"
+        } else {
+          // AGENT_IDENTITY_KEY is null when per-agent auth is disabled (no interceptor); an identity
+          // with no path patterns authorizes everything, so legacy single-token behavior is unchanged.
+          val identity = AgentAuthManager.AGENT_IDENTITY_KEY.get()
+          val reason =
+            if (identity != null && !identity.isAuthorized(request.path)) {
+              val normalizedPath = request.path.removePrefix("/")
+              logger.warn { "Agent identity '${identity.name}' denied registration of path /$normalizedPath" }
+              "Agent identity '${identity.name}' is not authorized to register path /$normalizedPath"
+            } else {
+              proxy.pathManager.addPath(request.path, request.labels, agentContext)
+            }
+          reason.also { agentContext.markActivityTime(false) }
+        }
       }
 
     val isValid = failureReason == null
@@ -151,6 +186,14 @@ internal class ProxyServiceImpl(
 
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {
     val agentId = request.agentId
+    val mismatchReason = connectionMismatchReason(agentId, "unregisterPath")
+    if (mismatchReason != null) {
+      return unregisterPathResponse {
+        valid = false
+        reason = mismatchReason
+      }
+    }
+
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
     return if (agentContext == null) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
@@ -185,6 +228,11 @@ internal class ProxyServiceImpl(
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> =
     flow {
       val agentId = request.agentId
+      connectionMismatchReason(agentId, "readRequestsFromProxy")?.also { reason ->
+        // Thrown before the try/finally so the mismatched agentId never reaches the cleanup branch —
+        // a spoofed id must not be able to evict another agent's context.
+        throw StatusException(Status.PERMISSION_DENIED.withDescription(reason))
+      }
       try {
         val agentContext = proxy.agentContextManager.getAgentContext(agentId)
           ?: throw StatusException(

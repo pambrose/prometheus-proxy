@@ -23,6 +23,7 @@ import io.grpc.Metadata
 import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
@@ -55,10 +56,49 @@ class ProxyServerInterceptorTest : StringSpec() {
       val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
       val requestHeaders = Metadata()
+      // Real (empty) attributes: a relaxed Attributes mock returns a bare Object from get(), which
+      // no real ServerCall ever does — interceptCall reads AGENT_ID_KEY up front to bind the
+      // connection agentId onto the Context.
+      every { mockCall.attributes } returns Attributes.EMPTY
 
       interceptor.interceptCall(mockCall, requestHeaders, mockHandler)
 
       verify { mockHandler.startCall(any(), eq(requestHeaders)) }
+    }
+
+    // With no transport-assigned agentId (transportFilterDisabled, or an in-process server with no
+    // transport filter), the Context key stays unset so ProxyServiceImpl skips the binding check.
+    "interceptCall should leave the connection agentId unset when the attribute is missing" {
+      val interceptor = ProxyServerInterceptor()
+
+      val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
+      val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
+      every { mockCall.attributes } returns Attributes.EMPTY
+      every { mockHandler.startCall(any(), any()) } answers {
+        ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get().shouldBeNull()
+        mockk(relaxed = true)
+      }
+
+      interceptor.interceptCall(mockCall, Metadata(), mockHandler)
+
+      verify { mockHandler.startCall(any(), any()) }
+    }
+
+    "interceptCall should bind the transport-assigned agentId onto the Context" {
+      val interceptor = ProxyServerInterceptor()
+
+      val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
+      val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
+      every { mockCall.attributes } returns Attributes.newBuilder().set(AGENT_ID_KEY, "agent-42").build()
+      every { mockHandler.startCall(any(), any()) } answers {
+        // Contexts.interceptCall attaches the Context for the duration of the downstream call.
+        ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get() shouldBe "agent-42"
+        mockk(relaxed = true)
+      }
+
+      interceptor.interceptCall(mockCall, Metadata(), mockHandler)
+
+      verify { mockHandler.startCall(any(), any()) }
     }
 
     "sendHeaders should inject agent-id from call attributes" {
