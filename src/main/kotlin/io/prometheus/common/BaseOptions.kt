@@ -30,7 +30,6 @@ import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
-import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
 import io.prometheus.common.EnvVars.CERT_CHAIN_FILE_PATH
@@ -52,6 +51,7 @@ abstract class BaseOptions protected constructor(
   private val args: Array<String>,
   private val envConfig: String,
   private val exitOnMissingConfig: Boolean = false,
+  private val embedded: Boolean = false,
 ) {
   /**
    * Path or URL to the HOCON config file. Accepts a local filesystem path, an `http://`/`https://` URL, or a
@@ -173,13 +173,17 @@ abstract class BaseOptions protected constructor(
   var logLevel = ""
     protected set
 
-  /** When set, prints `name version (build-date)` to stdout and exits with code `0`. Not retained as state. */
+  /**
+   * When set, prints `name version (build-date)` to stdout and exits with code `0`. Not retained as state.
+   * Embedded callers get a [ConfigLoadException] instead of the exit, so the host JVM survives.
+   */
   @Parameter(names = ["-v", "--version"], description = "Print version info and exit")
   private var version = false
 
   /**
    * When set, JCommander prints the auto-generated usage banner to stdout and the process exits with code `0`.
    * Marked `help = true` so JCommander does not enforce required-parameter checks when this flag is present.
+   * Embedded callers get a [ConfigLoadException] instead of the exit, so the host JVM survives.
    */
   @Parameter(names = ["-u", "--usage"], help = true)
   private var usage = false
@@ -239,19 +243,23 @@ abstract class BaseOptions protected constructor(
   protected fun parseOptions() {
     cliArgs = args
 
-    // exitProcess() would kill an embedding host's JVM, defeating exitOnMissingConfig == false whose
-    // documented purpose is letting embedded hosts survive startup failures. In embedded mode, throw a
-    // catchable ConfigLoadException instead; standalone CLI keeps the exit-code behavior. Mirrors the
-    // same policy already used by readConfig() below.
+    // exitProcess() would kill an embedding host's JVM, so embedded callers get a catchable
+    // ConfigLoadException instead; a standalone CLI keeps the exit-code behavior.
+    //
+    // This gates on `embedded`, NOT on exitOnMissingConfig -- the two answer different questions.
+    // exitOnMissingConfig means "is a config file required?", and the Proxy leaves it false because it
+    // runs fine off the built-in reference config, yet it is always a standalone CLI. Conflating them
+    // made `prometheus-proxy.jar --version` print the version and then die with an uncaught
+    // ConfigLoadException and exit code 1, instead of exiting 0 as documented on the flags below.
     fun exitOrThrow(
       exitCode: Int,
       message: String,
       cause: Throwable? = null,
     ): Nothing =
-      if (exitOnMissingConfig)
-        exitProcess(exitCode)
-      else
+      if (embedded)
         throw ConfigLoadException(message, cause)
+      else
+        exitProcess(exitCode)
 
     fun parseArgs() {
       try {
@@ -464,14 +472,20 @@ abstract class BaseOptions protected constructor(
     fallback: Config,
     exitOnMissingConfig: Boolean,
   ): Config {
-    // A parse failure ends startup: in standalone mode terminate the process; in embedded mode
-    // (exitOnMissingConfig == false) throw so the host application can recover. Local helper so each
-    // branch fails inline (no nullable Throwable threaded past the when, no non-local returns -- finding 37).
+    // A parse failure ends startup: embedded hosts get a catchable exception, a standalone CLI exits
+    // non-zero (the caller has already logged the reason). Local helper so each branch fails inline (no
+    // nullable Throwable threaded past the when, no non-local returns -- finding 37).
+    //
+    // Gated on `embedded` rather than exitOnMissingConfig for the same reason as exitOrThrow() above:
+    // the Proxy leaves exitOnMissingConfig false because a config file is optional for it, not because
+    // it is embedded, and an unparseable --config should exit it cleanly instead of terminating on an
+    // uncaught ConfigLoadException. Whether a *blank* config is fatal is a different question, so the
+    // isBlank() branch below stays gated on exitOnMissingConfig.
     fun fail(e: Throwable): Nothing =
-      if (exitOnMissingConfig)
-        exitProcess(1)
-      else
+      if (embedded)
         throw ConfigLoadException("Unable to load configuration from '$configName'", e)
+      else
+        exitProcess(1)
 
     return when {
       configName.isBlank() -> {
