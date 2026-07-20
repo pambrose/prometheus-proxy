@@ -573,5 +573,68 @@ class AgentPathManagerTest : StringSpec() {
       manager["metrics1"].shouldNotBeNull()
       manager["metrics2"].shouldNotBeNull()
     }
+
+    "registerPath should attach a configured filter to the path context" {
+      val config = ConfigFactory.parseString(
+        """
+        agent {
+          pathConfigs = []
+          filters = [ { path = "metrics", metricNameAllow = [], metricNameDeny = ["go_.*"] } ]
+        }
+        proxy { auth = [] }
+        """.trimIndent(),
+      )
+      val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+      val mockAgent = mockk<Agent>(relaxed = true)
+      every { mockAgent.grpcService } returns mockGrpcService
+      every { mockAgent.configVals } returns ConfigVals(config)
+      every { mockAgent.isTestMode } returns true
+
+      val manager = AgentPathManager(mockAgent)
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+
+      manager["metrics"].shouldNotBeNull().filter.shouldNotBeNull()
+    }
+
+    "registerPath should leave filter null for a path with no configured filter" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+
+      manager["metrics"].shouldNotBeNull().filter.shouldBeNull()
+    }
+
+    "reconcileDiscoveredPaths should attach a configured filter to a discovered path" {
+      val config = ConfigFactory.parseString(
+        """
+        agent {
+          pathConfigs = []
+          filters = [ { path = "discovered", metricNameAllow = [], metricNameDeny = ["go_.*"] } ]
+        }
+        proxy { auth = [] }
+        """.trimIndent(),
+      )
+      val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+      val mockAgent = mockk<Agent>(relaxed = true)
+      every { mockAgent.grpcService } returns mockGrpcService
+      every { mockAgent.configVals } returns ConfigVals(config)
+      every { mockAgent.isTestMode } returns true
+
+      val manager = AgentPathManager(mockAgent)
+      manager.reconcileDiscoveredPaths(
+        [DiscoveredPath(name = "d", path = "discovered", url = "http://localhost:$PROMETHEUS_PORT/m", labels = "{}")],
+      )
+
+      manager["discovered"].shouldNotBeNull().filter.shouldNotBeNull()
+    }
   }
 }

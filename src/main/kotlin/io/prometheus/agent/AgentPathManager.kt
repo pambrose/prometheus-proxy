@@ -20,6 +20,7 @@ import com.pambrose.common.util.runCatchingCancellable
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.agent.discovery.DiscoveredPath
+import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import kotlinx.coroutines.sync.Mutex
@@ -71,6 +72,25 @@ internal class AgentPathManager(
       .onEach {
         logger.info { "Proxy path /${it.path} will be assigned to ${it.url} with labels ${it.labels}" }
       }
+
+  // Compiled once at startup, never per scrape. Keyed by normalized path, so a filter applies to
+  // that path regardless of whether it was registered statically or by discovery.
+  private val filtersByPath: Map<String, MetricFilter> =
+    agentConfigVals.filters
+      .mapNotNull { cfg ->
+        val path = cfg.path.removePrefix("/")
+        MetricFilter.createOrNull(cfg.metricNameAllow, cfg.metricNameDeny, path)?.let { path to it }
+      }
+      .toMap()
+
+  init {
+    // A filter path that matches no static path is almost always a typo. Discovered paths are
+    // excluded: a filter may legitimately target a path that only appears later via discovery.
+    val staticPaths = pathConfigs.mapTo(mutableSetOf()) { it.path.removePrefix("/") }
+    filtersByPath.keys
+      .filterNot { it in staticPaths }
+      .forEach { logger.warn { "Metric filter configured for /$it, which matches no pathConfigs entry" } }
+  }
 
   suspend fun registerPaths() = pathConfigs.forEach { registerPath(it.path, it.url, it.labels) }
 
@@ -148,7 +168,7 @@ internal class AgentPathManager(
     val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
     if (!agent.isTestMode)
       logger.info { "Registered $url as /$path with labels $labelsJson (${source.name.lowercase()})" }
-    pathContextMap[path] = PathContext(pathId, path, url, labelsJson, source)
+    pathContextMap[path] = PathContext(pathId, path, url, labelsJson, source, filtersByPath[path])
   }
 
   // Lock-free unregistration body; callers MUST hold pathMutex (see doRegisterPath).
@@ -193,5 +213,6 @@ internal class AgentPathManager(
     val url: String,
     val labels: String,
     val source: PathSource,
+    val filter: MetricFilter? = null,
   )
 }
