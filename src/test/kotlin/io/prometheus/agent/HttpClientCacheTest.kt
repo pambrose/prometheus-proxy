@@ -89,6 +89,20 @@ class HttpClientCacheTest : StringSpec() {
       verify { throwing.close() }
     }
 
+    // Finding 9 swallowed Throwable, which is broader than it needs to be: catching Exception fully
+    // meets its goal (keep a throwing close from killing the sweeper) while preserving the policy the
+    // same review series set in Agent.handleConnectionFailure, AgentHttpService.fetchContentFromUrl,
+    // and AgentGrpcService.connectAgent -- a JVM Error means terminate, not run on in a corrupted
+    // state. Sites 218/230 are reached from inside the very catch(Throwable) block whose
+    // `if (e is Error) throw e` was added one PR earlier, so swallowing here reopened that hole.
+    "closeQuietly should rethrow a JVM Error rather than downgrading it to a warning" {
+      val throwing = mockk<HttpClient>(relaxed = true)
+      every { throwing.close() } throws OutOfMemoryError("simulated heap exhaustion")
+
+      shouldThrow<OutOfMemoryError> { HttpClientCache.closeQuietly(throwing) }
+      verify { throwing.close() }
+    }
+
     // Finding 9, wiring: the test above only proves the helper swallows a throw, not that the sweeper
     // actually routes through it. This drives a throwing close through the background cleanup loop --
     // the one site (clientsToClose.forEach) that sits outside runCatchingCancellable but inside

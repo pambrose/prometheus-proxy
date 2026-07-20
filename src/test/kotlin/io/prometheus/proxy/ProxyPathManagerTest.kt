@@ -643,7 +643,6 @@ class ProxyPathManagerTest : StringSpec() {
 
       // The context has already been removed from the manager (raced disconnect).
       every { proxy.agentContextManager.getAgentContext(agentId) } returns null
-      proxy.agentContextManager.getAgentContext(agentId).shouldBeNull()
 
       manager.removeFromPathManager(agentId, "disconnect")
 

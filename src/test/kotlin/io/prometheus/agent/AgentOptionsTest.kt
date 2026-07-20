@@ -291,9 +291,41 @@ class AgentOptionsTest : StringSpec() {
       }
     }
 
-    "Finding 11: minGzipSizeBytes of -1 should throw IllegalArgumentException" {
+    // heartbeatCheckPauseMillis is the poll interval of the keepalive loop in Agent.connectToProxy.
+    // delay() returns immediately for a non-positive duration, so 0 spins that loop without ever
+    // suspending or reaching a cancellation check, pinning an IO thread for the connection's lifetime.
+    // Same hazard the discovery.reconcileIntervalSecs guard below already covers.
+    "heartbeatCheckPauseMillis of 0 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.heartbeatCheckPauseMillis=0"], false)
+      }
+    }
+
+    "heartbeatCheckPauseMillis of -1 should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.heartbeatCheckPauseMillis=-1"], false)
+      }
+    }
+
+    "Finding 11: a negative minGzipSizeBytes from config should be rejected" {
       shouldThrow<IllegalArgumentException> {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.minGzipSizeBytes=-5"], false)
+      }
+    }
+
+    // -1 is the unset sentinel for --gzip (AgentOptions declares `var minGzipSizeBytes = -1` and
+    // substitutes the env/config value when it is still -1), so it is the one negative value whose
+    // behavior differs by route: the flag resolves to the config default, while the same number
+    // supplied as config is a real value and fails the require. Pin both so a refactor that drops the
+    // sentinel breaks a test instead of breaking deployments that pass -1 explicitly.
+    "minGzipSizeBytes of -1 via --gzip should resolve to the config default" {
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--gzip", "-1"], false)
+      options.minGzipSizeBytes shouldBe 512
+    }
+
+    "minGzipSizeBytes of -1 from config should be rejected" {
+      shouldThrow<IllegalArgumentException> {
+        agentOptions(["--name", "test", "--proxy", "host", "-Dagent.minGzipSizeBytes=-1"], false)
       }
     }
 

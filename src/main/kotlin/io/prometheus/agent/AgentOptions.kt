@@ -365,8 +365,14 @@ class AgentOptions(
       logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
       logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
 
-      val pauseVal = internal.heartbeatCheckPauseMillis
-      logger.info { "agent.internal.heartbeatCheckPauseMillis: $pauseVal" }
+      // heartbeatCheckPauseMillis is the poll interval of the keepalive loop in Agent.connectToProxy,
+      // on both the heartbeat-enabled and heartbeat-disabled branches. delay() returns immediately for
+      // a non-positive duration, and neither loop condition suspends, so 0 spins without ever reaching
+      // a cancellation check and pins an IO thread for the connection's lifetime.
+      require(internal.heartbeatCheckPauseMillis > 0) {
+        "agent.internal.heartbeatCheckPauseMillis must be > 0: ${internal.heartbeatCheckPauseMillis}"
+      }
+      logger.info { "agent.internal.heartbeatCheckPauseMillis: ${internal.heartbeatCheckPauseMillis}" }
 
       val inactivityVal = internal.heartbeatMaxInactivitySecs
       logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
@@ -379,7 +385,10 @@ class AgentOptions(
       logger.info { "agent.internal.reconnectPauseSecs: ${internal.reconnectPauseSecs}" }
 
       // scrapeRequestBacklogUnhealthySize * 2 is the AgentConnectionContext channel capacity: 0 makes it
-      // a rendezvous channel (every send blocks) and a negative value throws at connect time (finding 11).
+      // a rendezvous channel (every send blocks). A negative value is worse than it looks -- -1 yields
+      // Channel(-2), which kotlinx maps to BUFFERED, i.e. a silent 64-slot channel rather than an error,
+      // and the health check then compares the backlog against a negative threshold and reports
+      // unhealthy from startup. Only values <= -2 actually throw at connect time (finding 11).
       require(internal.scrapeRequestBacklogUnhealthySize > 0) {
         "agent.internal.scrapeRequestBacklogUnhealthySize must be > 0: ${internal.scrapeRequestBacklogUnhealthySize}"
       }
