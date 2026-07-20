@@ -22,6 +22,7 @@ import brave.Tracing
 import com.pambrose.common.concurrent.await
 import com.pambrose.common.service.ZipkinReporterService
 import com.pambrose.common.util.zip
+import com.pambrose.common.util.hostInfo
 import io.grpc.Metadata
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
@@ -30,11 +31,13 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Agent
@@ -45,6 +48,7 @@ import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
+import io.prometheus.grpc.RegisterAgentRequest
 import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.agentInfo
 import io.prometheus.grpc.heartBeatResponse
@@ -1219,6 +1223,36 @@ class AgentGrpcServiceTest : StringSpec() {
       service.channel.isTerminated.shouldBeFalse()
 
       service.shutDown()
+    }
+
+    // ==================== registerAgent Request Contents ====================
+
+    // The proxy stores this on AgentContext and publishes it as the reserved `hostName`
+    // service-discovery label, documented as "hostnames of agents serving this path" -- and its own
+    // tests (AgentContextTest, ProxyTest) are written against that meaning. Sending agentHostName
+    // instead would report the PROXY endpoint: identical across every target, and with failover it
+    // would change on rotation, altering Prometheus target identity and churning the series.
+    "registerAgent should report the agent's own host, not the proxy endpoint" {
+      val agent = createMockAgent("proxy-endpoint-host:$PROXY_AGENT_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      try {
+        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>()
+        val request = slot<RegisterAgentRequest>()
+        coEvery { mockStub.registerAgent(capture(request), any()) } returns registerAgentResponse { valid = true }
+
+        service.grpcStub = mockStub
+        // Bypass withDeadlineAfter so unaryStub() hands back the mock itself.
+        service.unaryDeadlineSecs = 0
+
+        service.registerAgent(CountDownLatch(1))
+
+        request.captured.hostName shouldBe hostInfo.hostName
+        request.captured.hostName shouldNotBe "proxy-endpoint-host"
+        request.captured.hostName shouldNotBe service.agentHostName
+      } finally {
+        service.shutDown()
+      }
     }
 
     // ==================== Failover Endpoint Rotation ====================

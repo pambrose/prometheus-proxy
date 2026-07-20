@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- Fix the `hostName` service-discovery label, which reported the **proxy's** hostname instead of the agent's. The label is documented as "hostnames of agents serving this path" and is a reserved key the proxy computes itself (agents cannot override it), but the agent was sending the proxy endpoint it had dialed — so every discovered target carried the same value and the label identified nothing. It now reports the agent's own host. **This changes an existing target label value**: on upgrade Prometheus sees the new label and starts fresh series for affected targets, a one-time churn. The alternative was worse once proxy failover landed, since a value tracking the current endpoint would change on every failover and churn the series repeatedly
+
 ### New Features
 
 - Add agent-side proxy failover, so redundant proxies can be run without DNS tricks or a TCP load balancer. The agent takes an **ordered** list of proxy endpoints and connects to the first that answers: `agent.proxy.endpoints = [ "proxy-a:50051", "proxy-b:50051" ]`, or the same list comma-separated in `--proxy` / `PROXY_HOSTNAME`. A single value resolves to a one-element list and behaves exactly as before, so existing configurations are unaffected. `endpoints` is the base when non-empty and `agent.proxy.hostname` is used otherwise; env and CLI each replace the list wholesale rather than merging, and `agent.proxy.port` supplies the default port for config entries that omit one. An unparseable endpoint fails at agent startup rather than surfacing later as a connection error

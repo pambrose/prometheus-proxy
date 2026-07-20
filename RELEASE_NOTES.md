@@ -11,6 +11,16 @@
 - **Agent-side scrape timeouts are now their own metric label.** `upstream_timed_out` separates "the agent told us the target was slow" from `timed_out`, "the agent never answered us." This is the one change here that needs operator attention — see the upgrade note below.
 - **A path-registration race is closed.** An agent reconnecting at exactly the wrong moment could leave a scrape path pointing at a context that was already being torn down, inflating the disconnect counter for the life of the proxy.
 
+### Upgrade Note — the `hostName` service-discovery label changes value
+
+If you use `http_sd_config` and reference the `hostName` label, its value changes in this release.
+
+It is documented as the hostname of the **agent** serving a path, and the proxy reserves it so agents cannot override it — but the agent was sending the *proxy* endpoint it had connected to. Every discovered target therefore carried the same value, and a label meant to identify which internal host serves a path identified nothing. It now reports the agent's own hostname, as documented.
+
+Expect a **one-time series churn** for affected targets: Prometheus treats a changed label set as a new target. Nothing else needs to be done.
+
+This was fixed now rather than later because proxy failover makes the old behavior actively harmful — a value that tracked the current proxy endpoint would change on every failover, churning the series each time.
+
 ### Upgrade Note — metric label change
 
 `proxy_scrape_requests{type}` (and the `outcome` label on `proxy_scrape_request_latency_seconds`) gained a new value, `upstream_timed_out`.

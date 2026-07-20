@@ -21,6 +21,7 @@ package io.prometheus.agent
 import brave.grpc.GrpcTracing
 import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.pambrose.common.dsl.GrpcDsl.channel
+import com.pambrose.common.util.hostInfo
 import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.utils.TlsContext
@@ -335,7 +336,13 @@ internal class AgentGrpcService(
         agentId = agent.agentId
         launchId = agent.launchId
         agentName = agent.agentName
-        hostName = agentHostName
+        // This agent's OWN host, not agentHostName -- which is the proxy endpoint being dialed. The
+        // proxy stores this on AgentContext and publishes it as the reserved `hostName` service-discovery
+        // label, documented as "hostnames of agents serving this path", so reporting the proxy's host
+        // made the label identical across every target and useless for identifying anything. It matters
+        // more with failover: hostName participates in Prometheus target identity, so a value that
+        // tracked the current endpoint would change targets on every failover and churn the series.
+        hostName = hostInfo.hostName
         consolidated = agent.options.consolidated
       }
     unaryStub().registerAgent(request)
