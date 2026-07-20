@@ -57,6 +57,7 @@ import io.prometheus.grpc.ScrapeRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.readByteArray
+import java.nio.charset.CharacterCodingException
 import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.X509TrustManager
 import kotlin.time.Duration.Companion.minutes
@@ -102,6 +103,11 @@ internal class AgentHttpService(
   // Paths already warned about an unfilterable content type. A scrape recurs every scrape interval
   // forever, so an unguarded warn here would be a permanent log-spam source.
   private val contentTypeWarnedPaths = ConcurrentHashMap.newKeySet<String>()
+
+  // Paths already warned about a non-UTF-8 body on a filterable content type. Kept separate from
+  // contentTypeWarnedPaths (distinct condition, distinct message, and independently testable) --
+  // a path that already tripped one guard must still be able to warn once for the other.
+  private val invalidUtf8WarnedPaths = ConcurrentHashMap.newKeySet<String>()
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
@@ -250,13 +256,39 @@ internal class AgentHttpService(
           }
           contentBytes
         } else {
-          val result = filter.filterText(contentBytes.decodeToString())
-          result.text.encodeToByteArray().also { bytes ->
-            // Only filtered paths ever create series here, so cardinality stays bounded.
-            agent.metrics {
-              val path = scrapeRequest.path
-              filterLinesDropped.labels(agent.launchId, path).inc(result.linesDropped.toDouble())
-              filterBytesSaved.labels(agent.launchId, path).inc((contentBytes.size - bytes.size).toDouble())
+          // Fail open on undecodable bytes, mirroring the non-filterable-content-type branch above.
+          // Lenient decodeToString() replaces each malformed byte with U+FFFD, which encodes back to
+          // 3 bytes -- silently corrupting the payload, and (if the expansion outgrows what filtering
+          // removed) driving contentBytes.size - bytes.size negative, which Counter.inc() rejects with
+          // IllegalArgumentException, turning a routine scrape into a 503. A strict decode sidesteps
+          // both: on malformed input it throws instead of substituting, so we can detect it and pass
+          // the raw bytes through untouched rather than ever recording a corrupted/negative delta.
+          val decoded =
+            try {
+              contentBytes.decodeToString(throwOnInvalidSequence = true)
+            } catch (expected: CharacterCodingException) {
+              null
+            }
+          if (decoded == null) {
+            // Warn once per path -- this recurs on every scrape, so an unguarded warn would spam forever.
+            if (invalidUtf8WarnedPaths.add(scrapeRequest.path)) {
+              logger.warn {
+                "Skipping metric filter for /${scrapeRequest.path}: response body is not valid UTF-8"
+              }
+            }
+            contentBytes
+          } else {
+            val result = filter.filterText(decoded)
+            // filtered.size <= raw.size is a provable invariant from here on: filterText only removes
+            // whole lines from a successfully strict-decoded string, and re-encoding a string that came
+            // from valid UTF-8 reproduces the exact bytes it was decoded from -- so no clamp is needed.
+            result.text.encodeToByteArray().also { bytes ->
+              // Only filtered paths ever create series here, so cardinality stays bounded.
+              agent.metrics {
+                val path = scrapeRequest.path
+                filterLinesDropped.labels(agent.launchId, path).inc(result.linesDropped.toDouble())
+                filterBytesSaved.labels(agent.launchId, path).inc((contentBytes.size - bytes.size).toDouble())
+              }
             }
           }
         }

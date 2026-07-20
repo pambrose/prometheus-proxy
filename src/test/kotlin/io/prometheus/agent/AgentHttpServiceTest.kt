@@ -37,6 +37,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.header
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.get
@@ -56,6 +57,7 @@ import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.proxy.ProxyUtils.unzip
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import java.util.zip.GZIPInputStream
 import javax.net.ssl.X509TrustManager
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -249,6 +251,13 @@ class AgentHttpServiceTest : StringSpec() {
 
     return mockAgent to realMetrics
   }
+
+  // Raw byte-level gunzip. Unlike ProxyUtils.unzip()/the pambrose-common-utils ByteArray.unzip(),
+  // which both decode through a String on the way out (lossy for non-UTF-8 bytes -- malformed
+  // sequences become U+FFFD), this stays entirely in ByteArray so byte-exactness on an
+  // invalid-UTF-8 payload can actually be asserted rather than accidentally re-corrupted by the
+  // test's own verification step.
+  private fun gunzipToBytes(zipped: ByteArray): ByteArray = GZIPInputStream(zipped.inputStream()).use { it.readBytes() }
 
   init {
     // ==================== Invalid Path Tests ====================
@@ -1906,6 +1915,124 @@ class AgentHttpServiceTest : StringSpec() {
 
         metrics.filterLinesDropped.labels("test-launch-id", "metrics").get() shouldBe expectedLinesDropped
         metrics.filterBytesSaved.labels("test-launch-id", "metrics").get() shouldBe expectedBytesSaved
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // ==================== Task 6: fail open on invalid UTF-8 on a filtered path ====================
+    // Lenient ByteArray.decodeToString() replaces a malformed byte with U+FFFD, which encodes back to
+    // 3 bytes -- corrupting the payload, and (if the expansion outgrows what filtering removed) driving
+    // contentBytes.size - bytes.size negative, which Counter.inc() rejects with
+    // IllegalArgumentException, turning the scrape into a 503. Both tests below build a body that is
+    // valid UTF-8 except for a single spliced-in 0xFF byte -- 0xFF is never a valid UTF-8 lead or
+    // continuation byte, so it is guaranteed malformed under strict decoding -- with a deny rule that
+    // matches nothing in the body, so under the pre-fix lenient decode, filterText would drop zero
+    // lines and the entire byte delta would come from the U+FFFD expansion alone.
+
+    "invalid UTF-8 body on a filtered path passes through byte-identical instead of being corrupted" {
+      val (mockAgent, _) = createMockAgentWithFilterAndMetrics(
+        """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["nonexistent_metric_xyz"] }""",
+      )
+      val options = mockAgent.options
+      every { options.minGzipSizeBytes } returns 100
+
+      val validText =
+        "# TYPE some_metric counter\n" + (1..40).joinToString("") { "some_metric{i=\"$it\"} $it\n" }
+      val validBytes = validText.encodeToByteArray()
+      val splitAt = validBytes.size / 2
+      val rawBytes =
+        validBytes.copyOfRange(0, splitAt) +
+          byteArrayOf(0xFF.toByte()) +
+          validBytes.copyOfRange(splitAt, validBytes.size)
+      rawBytes.size shouldBeGreaterThan 100
+
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondBytes(rawBytes, ContentType.Text.Plain)
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 400L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe 200
+        results.srValidResponse.shouldBeTrue()
+        results.srZipped.shouldBeTrue()
+        gunzipToBytes(results.srContentAsZipped) shouldBe rawBytes
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "invalid UTF-8 body on a filtered path does not record filterLinesDropped or filterBytesSaved" {
+      val (mockAgent, metrics) = createMockAgentWithFilterAndMetrics(
+        """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["nonexistent_metric_xyz"] }""",
+      )
+      val options = mockAgent.options
+      every { options.minGzipSizeBytes } returns 100
+
+      val validText =
+        "# TYPE some_metric counter\n" + (1..40).joinToString("") { "some_metric{i=\"$it\"} $it\n" }
+      val validBytes = validText.encodeToByteArray()
+      val splitAt = validBytes.size / 2
+      val rawBytes =
+        validBytes.copyOfRange(0, splitAt) +
+          byteArrayOf(0xFF.toByte()) +
+          validBytes.copyOfRange(splitAt, validBytes.size)
+
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondBytes(rawBytes, ContentType.Text.Plain)
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 401L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe 200
+        // The filter never ran (strict decode failed first), so nothing should be recorded --
+        // the label combination stays at its lazily-initialized zero rather than drifting.
+        metrics.filterLinesDropped.labels("test-launch-id", "metrics").get() shouldBe 0.0
+        metrics.filterBytesSaved.labels("test-launch-id", "metrics").get() shouldBe 0.0
 
         service.close()
       } finally {
