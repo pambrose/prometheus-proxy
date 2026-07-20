@@ -221,6 +221,8 @@ class Agent(
       """.trimIndent()
 
     logger.info { "Agent name: $agentName" }
+    if (grpcService.hasFailoverEndpoints)
+      logger.info { "Proxy failover endpoints, tried in order: ${grpcService.endpointsDesc}" }
     logger.info { "Proxy reconnect pause time: ${agentConfigVals.internal.reconnectPauseSecs.seconds}" }
     logger.info { "Scrape timeout time: ${options.scrapeTimeoutSecs.seconds}" }
 
@@ -248,13 +250,34 @@ class Agent(
   }
 
   override fun run() {
+    // The first attempt uses the channel AgentGrpcService.init already built, so it must not tear that
+    // channel down and rebuild it. Every later attempt is a retry, and a retry is where rotation happens.
+    var firstAttempt = true
+
     suspend fun connectToProxy() {
-      // Reset gRPC stubs if the previous iteration had a successful connection, i.e., the agentId != ""
+      // A non-empty agentId means the PREVIOUS attempt connected and then dropped; an empty one means it
+      // never connected at all. That single bit is what selects between failing back and failing forward.
       if (agentId.isNotEmpty()) {
+        // Connected, then dropped. Return to the head of the endpoint list so a recovered primary gets
+        // re-probed on this attempt -- that is what makes the list a priority order rather than a ring,
+        // and it is the entire failback mechanism. A no-op when already on the primary.
+        grpcService.resetEndpoint()
+        // Unconditional, exactly as before: the previous connection's channel is spent either way.
         grpcService.resetGrpcStubs()
         logger.info { "Resetting agentId" }
         agentId = ""
+      } else if (!firstAttempt && grpcService.advanceEndpoint()) {
+        // Never connected, so move to the next endpoint. The rebuild is REQUIRED, not incidental: a
+        // ManagedChannel is bound to its target address, so without it the cursor would be inert and the
+        // agent would keep retrying the same dead proxy forever.
+        //
+        // Guarded on advanceEndpoint() returning true so a single-endpoint agent -- which is every
+        // pre-failover deployment -- keeps reusing its channel and leaning on gRPC's own backoff,
+        // exactly as it did before. Rebuilding there would add channel churn to every failed retry and
+        // widen the stale-agentId window that shutDownChannelLocked() warns about.
+        grpcService.resetGrpcStubs()
       }
+      firstAttempt = false
 
       // Reset values for each connection attempt
       pathManager.clear()

@@ -30,6 +30,7 @@ import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.exceptionDetails
+import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
@@ -494,6 +495,75 @@ class UtilsTest : StringSpec() {
 
     "sanitizeQueryParams should leave a valueless key untouched" {
       sanitizeQueryParams("debug&token=abc") shouldBe "debug&token=***"
+    }
+
+    // ==================== parseEndpointList Tests ====================
+
+    // A single entry must behave exactly as parseHostPort did before failover existed: this is what
+    // makes the whole feature non-breaking for every existing single-proxy deployment.
+    "parseEndpointList should parse a single endpoint as a one-element list" {
+      parseEndpointList("localhost:$PROXY_AGENT_PORT", PROXY_AGENT_PORT) shouldBe
+        [HostPort("localhost", PROXY_AGENT_PORT)]
+    }
+
+    "parseEndpointList should preserve the configured order" {
+      parseEndpointList("a:$PROXY_AGENT_PORT,b:$PROXY_HTTP_PORT", PROXY_AGENT_PORT) shouldBe
+        [HostPort("a", PROXY_AGENT_PORT), HostPort("b", PROXY_HTTP_PORT)]
+    }
+
+    "parseEndpointList should apply the default port per entry" {
+      parseEndpointList("a,b:$PROXY_HTTP_PORT,c", PROXY_AGENT_PORT) shouldBe
+        [
+          HostPort("a", PROXY_AGENT_PORT),
+          HostPort("b", PROXY_HTTP_PORT),
+          HostPort("c", PROXY_AGENT_PORT),
+        ]
+    }
+
+    "parseEndpointList should trim whitespace around entries" {
+      parseEndpointList("  a:$PROXY_AGENT_PORT ,\tb:$PROXY_HTTP_PORT  ", PROXY_AGENT_PORT) shouldBe
+        [HostPort("a", PROXY_AGENT_PORT), HostPort("b", PROXY_HTTP_PORT)]
+    }
+
+    // A trailing comma is the most likely hand-edit slip; it must not yield a blank endpoint.
+    "parseEndpointList should ignore empty entries from stray commas" {
+      parseEndpointList("a:$PROXY_AGENT_PORT,,b:$PROXY_HTTP_PORT,", PROXY_AGENT_PORT) shouldBe
+        [HostPort("a", PROXY_AGENT_PORT), HostPort("b", PROXY_HTTP_PORT)]
+    }
+
+    "parseEndpointList should strip scheme prefixes per entry" {
+      parseEndpointList(
+        "http://a:$PROXY_AGENT_PORT,HTTPS://b:$PROXY_HTTP_PORT",
+        PROXY_AGENT_PORT,
+      ) shouldBe [HostPort("a", PROXY_AGENT_PORT), HostPort("b", PROXY_HTTP_PORT)]
+    }
+
+    "parseEndpointList should handle bracketed IPv6 entries" {
+      parseEndpointList("[::1]:$PROXY_AGENT_PORT,[fe80::1]", PROXY_HTTP_PORT) shouldBe
+        [HostPort("::1", PROXY_AGENT_PORT), HostPort("fe80::1", PROXY_HTTP_PORT)]
+    }
+
+    // Duplicates are preserved rather than collapsed: the list is a faithful record of what the
+    // operator configured, and rotation through a repeated endpoint is wasteful but harmless.
+    "parseEndpointList should preserve duplicate entries" {
+      parseEndpointList("a:$PROXY_AGENT_PORT,a:$PROXY_AGENT_PORT", PROXY_AGENT_PORT) shouldBe
+        [HostPort("a", PROXY_AGENT_PORT), HostPort("a", PROXY_AGENT_PORT)]
+    }
+
+    "parseEndpointList should reject a spec with no usable entries" {
+      shouldThrow<IllegalArgumentException> { parseEndpointList("", PROXY_AGENT_PORT) }
+      shouldThrow<IllegalArgumentException> { parseEndpointList("   ", PROXY_AGENT_PORT) }
+      shouldThrow<IllegalArgumentException> { parseEndpointList(",,", PROXY_AGENT_PORT) }
+    }
+
+    // Fail fast at startup on a bad entry rather than surfacing it as a mysterious connect failure
+    // that rotation would otherwise paper over by moving to the next endpoint.
+    "parseEndpointList should reject a malformed entry rather than skipping it" {
+      val e =
+        shouldThrow<IllegalArgumentException> {
+          parseEndpointList("good:$PROXY_AGENT_PORT,bad:notaport", PROXY_AGENT_PORT)
+        }
+      e.message.orEmpty() shouldContain "notaport"
     }
   }
 }

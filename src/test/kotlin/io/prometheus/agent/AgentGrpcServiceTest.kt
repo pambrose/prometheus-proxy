@@ -1220,5 +1220,99 @@ class AgentGrpcServiceTest : StringSpec() {
 
       service.shutDown()
     }
+
+    // ==================== Failover Endpoint Rotation ====================
+
+    // The whole feature must be inert for a single-endpoint agent -- i.e. every deployment that existed
+    // before failover. Both rotation calls return false, which is what tells Agent.run() not to rebuild
+    // the channel, so the retry path stays byte-for-byte what it was.
+    "a single endpoint should report no failover and refuse to rotate" {
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      service.hasFailoverEndpoints.shouldBeFalse()
+      service.advanceEndpoint().shouldBeFalse()
+      service.resetEndpoint().shouldBeFalse()
+      service.agentHostName shouldBe "localhost"
+      service.agentPort shouldBe PROXY_AGENT_PORT
+
+      service.shutDown()
+    }
+
+    "a comma-separated list should select the first endpoint and report failover available" {
+      val agent = createMockAgent("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      service.hasFailoverEndpoints.shouldBeTrue()
+      service.agentHostName shouldBe "first"
+      service.agentPort shouldBe PROXY_AGENT_PORT
+      service.endpointsDesc shouldBe "first:$PROXY_AGENT_PORT, second:$PROXY_HTTP_PORT"
+
+      service.shutDown()
+    }
+
+    "advanceEndpoint should move to the next endpoint and wrap around" {
+      val agent = createMockAgent("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      service.advanceEndpoint().shouldBeTrue()
+      service.agentHostName shouldBe "second"
+      service.agentPort shouldBe PROXY_HTTP_PORT
+
+      service.advanceEndpoint().shouldBeTrue()
+      service.agentHostName shouldBe "first"
+      service.agentPort shouldBe PROXY_AGENT_PORT
+
+      service.shutDown()
+    }
+
+    // resetEndpoint is the entire failback mechanism: without it the agent would stay on whichever
+    // endpoint answered last and never re-probe a recovered primary.
+    "resetEndpoint should return to the primary and report whether it moved" {
+      val agent = createMockAgent("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      // Already on the primary: nothing to do, so no channel rebuild is requested.
+      service.resetEndpoint().shouldBeFalse()
+
+      service.advanceEndpoint().shouldBeTrue()
+      service.agentHostName shouldBe "second"
+
+      service.resetEndpoint().shouldBeTrue()
+      service.agentHostName shouldBe "first"
+
+      service.shutDown()
+    }
+
+    "endpoint entries without a port should each take the default port" {
+      val agent = createMockAgent("first,second:$PROXY_HTTP_PORT,third")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      service.endpointsDesc shouldBe
+        "first:$PROXY_AGENT_PORT, second:$PROXY_HTTP_PORT, third:$PROXY_AGENT_PORT"
+
+      service.shutDown()
+    }
+
+    // Rotation must never resurrect a channel after a requested stop. advanceEndpoint moves the cursor,
+    // but only resetGrpcStubs builds channels, and its shutDownRequested latch has to keep winning --
+    // bypassing it would reinstate the run-loop deadlock that latch was added to fix.
+    "rotation after a permanent shutdown must not build another channel" {
+      val agent = createMockAgent("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+      val originalChannel = service.channel
+
+      service.shutDownChannelPermanently()
+      originalChannel.isShutdown.shouldBeTrue()
+
+      service.advanceEndpoint().shouldBeTrue()
+      service.resetGrpcStubs()
+
+      // Same terminated channel: no new one was created for the rotated-to endpoint.
+      (service.channel === originalChannel).shouldBeTrue()
+      service.channel.isShutdown.shouldBeTrue()
+
+      service.shutDown()
+    }
   }
 }
