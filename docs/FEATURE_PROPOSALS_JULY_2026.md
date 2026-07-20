@@ -450,6 +450,68 @@ any agent re-registering any path. Recommended sequencing:
 
 ## Feature 4: Metric Filtering and Relabeling at the Agent
 
+> **Status: Implemented (MVP — `metricNameAllow` / `metricNameDeny`).** Per-path, family-scoped
+> metric filtering applied before gzip and chunking. Still deferred: `dropLabels`, full relabeling,
+> and an agent-global filter. See **Implementation Notes (As Built)** immediately below for the
+> shipped design and where it diverged from the original proposal.
+
+### Implementation Notes (As Built)
+
+Shipped as line-oriented `metricNameAllow` / `metricNameDeny` filtering, family-scoped via
+`# HELP`/`# TYPE`/`# UNIT` lines. The proposal below is preserved as the original design; these notes
+record what landed and where it diverged.
+
+**Config (diverged — top-level list, not nested).** The proposal's `pathConfigs[].filter { }` block,
+shown below, could **not** be implemented as sketched. Verified empirically against
+`config/jars/tscfg-1.2.5.jar`: the proposal's literal `metricNameAllow = []` crashes tscfg at
+generation time (`ModelBuilder.listType`), and the workaround `metricNameAllow = [ String ]` instead
+generates an **unguarded** `c.getList("metricNameAllow")` — because tscfg wraps the enclosing optional
+`filter` block as `hasPathOrNull("filter") ? ... : new Filter(parseString("filter{}"))`, a config that
+omits `filter` reaches that unguarded call against an empty synthesized object and throws `Missing: No
+configuration setting found for key 'metricNameAllow'`, breaking every existing agent config that
+doesn't declare a filter. Filters are therefore declared in a **top-level `agent.filters` list keyed by
+path**, mirroring the `proxy.auth` pattern from Feature 3 — defaulted to `filters = []` in
+`reference.conf`, with `path`, `metricNameAllow`, and `metricNameDeny` all required on each element
+(an allow-all deny-only filter must still write `metricNameAllow: []`):
+
+```hocon
+agent {
+  pathConfigs: [
+    { name: "app1", path: "app1_metrics", url: "http://app1:9090/metrics" }
+  ]
+  filters: [
+    { path: "app1_metrics", metricNameAllow: [], metricNameDeny: [ "go_gc_.*" ] }
+  ]
+}
+```
+
+See the [design doc](superpowers/specs/2026-07-19-agent-metric-filtering-design.md) (Decision 6) for
+the full tscfg investigation, including the quoted-form (`"[string]?"`) and `reference.conf` fallback
+approaches that were also ruled out.
+
+**Matching (as designed, refined during review).** Fully-anchored regexes (`Regex.matches()`), so a
+rule copied from a Prometheus `relabel_config` behaves identically at the agent. A `# HELP`, `# TYPE`,
+**or `# UNIT`** comment line opens a metric family and the allow/deny verdict is computed once against
+the family name, so a histogram's `_bucket`/`_sum`/`_count` series (and OpenMetrics's `_total` /
+`_created` / `_gsum` / `_gcount` / `_info` suffixes) are kept or dropped as a unit. Deny is evaluated
+after allow. A non-text payload (e.g. protobuf) or a body that fails strict UTF-8 decoding passes
+through unfiltered and byte-exact rather than risk corrupting it — both fail open with a once-per-path
+warning, an additional guard added during review alongside the `# UNIT` handling above.
+
+**Scope (unchanged from the MVP cut below).** `dropLabels`, full relabeling, and an agent-global filter
+remain unimplemented, matching the proposal's original MVP boundary and Open Questions.
+
+**Files.** New `agent/filter/MetricFilter.kt`. Modified: `AgentPathManager` (compiles and attaches a
+filter per path at registration time, keyed by path so it applies to both static `pathConfigs` and
+Feature 1 discovered paths), `AgentHttpService` (applies the filter before the gzip/chunk decision),
+`AgentMetrics` (`agent_filter_lines_dropped` / `agent_filter_bytes_saved` counters), `config/config.conf`
+and `reference.conf`.
+
+**Tests.** `MetricFilterTest` (anchoring, family scoping, HELP/TYPE/UNIT handling), filter-compilation
+and path-typo-warning cases in `AgentPathManagerTest`, filter-ordering and fail-open cases in
+`AgentHttpServiceTest`, and the Netty-transport harness test `AgentMetricFilterTest` exercising
+per-path filtering end-to-end.
+
 ### Motivation
 
 The product's whole reason to exist is moving metrics efficiently across a network boundary,

@@ -165,6 +165,67 @@ trust store, and `--trust_all_x509` (which disables verification entirely) takes
 | `chunkContentSizeKbs` | 32      | Responses larger than this are chunked            |
 | `minGzipSizeBytes`    | 512     | Responses larger than this are gzip-compressed    |
 
+## Metric Filtering
+
+Drop unwanted metric families at the agent, before a scraped payload is gzipped and chunked, so the
+bandwidth saving composes with `chunkContentSizeKbs` and `minGzipSizeBytes` above. Filters are declared
+in a top-level `agent.filters` list, keyed by `path` rather than nested inside `pathConfigs`:
+
+```hocon
+--8<-- "examples/agent-filters.conf"
+```
+
+| Field             | Required | Description                                                    |
+|:------------------|:---------|:----------------------------------------------------------------|
+| `path`            | Yes      | The `pathConfigs` (or discovered) path this filter applies to |
+| `metricNameAllow` | Yes      | Fully-anchored regexes; an empty list allows every family     |
+| `metricNameDeny`  | Yes      | Fully-anchored regexes; evaluated after `metricNameAllow`     |
+
+Both list fields must be present on every element -- write `metricNameAllow: []` for a deny-only
+filter. The default is `filters: []` (no filtering), so an existing config with no `filters` key loads
+unchanged.
+
+**Regexes are fully anchored** (`Regex.matches()`), matching Prometheus `relabel_config` /
+`metric_relabel_configs` semantics: `deny: [ "go_" ]` matches nothing, `deny: [ "go_.*" ]` is required
+to match `go_goroutines`.
+
+**Matching is against the metric family, not each series.** A `# HELP` or `# TYPE` line (or `# UNIT`,
+for OpenMetrics) opens a family and the allow/deny verdict is computed once against the family name;
+every sample line that belongs to that family -- the exact name, or the name plus a recognized
+histogram/summary/OpenMetrics suffix (`_bucket`, `_sum`, `_count`, `_created`, `_total`, `_gsum`,
+`_gcount`, `_info`) -- inherits that verdict instead of being matched again. A histogram's `_bucket`,
+`_sum`, and `_count` series are therefore always kept or dropped together, along with the family's
+metadata lines. One consequence worth knowing: once a family is open, a series-level rule such as
+`metricNameDeny: [ "http_req_duration_seconds_bucket" ]` is a silent no-op, since the `_bucket` lines
+inherit the family's verdict rather than being matched themselves. A sample line with no open family
+(a payload with no `TYPE` lines at all) is judged literally on its own full name.
+
+**An empty `metricNameAllow` allows everything.** `metricNameDeny` is applied *after* allow, so deny
+wins on overlap.
+
+!!! note "Fails open on payloads it can't safely filter"
+
+    A non-text `Content-Type` (protobuf, an HTML error body) passes through unfiltered. A body that is
+    not valid UTF-8 also passes through unfiltered and byte-exact rather than risk corrupting it. Both
+    conditions log a warning once per path -- the worst case is bandwidth not saved, never a corrupted
+    payload.
+
+Filters apply by path to both statically configured paths and paths added by
+[dynamic discovery](#dynamic-target-discovery); a filter's `path` is matched the same way regardless
+of which route registered it. An invalid regex fails agent startup rather than surfacing later at
+scrape time.
+
+Two counters, both labeled by `launch_id` and `path`, track filtering and are only created for paths
+that actually have a filter configured:
+
+| Metric                        | Labels              | Description                                   |
+|:-------------------------------|:--------------------|:-----------------------------------------------|
+| `agent_filter_lines_dropped`  | `launch_id`, `path` | Exposition lines dropped by the filter        |
+| `agent_filter_bytes_saved`    | `launch_id`, `path` | Bytes removed from the payload by the filter  |
+
+Not implemented: `dropLabels`, metric renaming/relabeling, and an agent-global filter -- every filter
+is per-path.
+
 ## Consolidated Mode
 
 By default, each path is owned by a single agent. Enable consolidated mode to allow multiple
