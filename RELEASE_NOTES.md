@@ -2,6 +2,40 @@
 
 ---
 
+## Unreleased
+
+### Highlights
+
+- **Agent-side scrape timeouts are now their own metric label.** `upstream_timed_out` separates "the agent told us the target was slow" from `timed_out`, "the agent never answered us." This is the one change here that needs operator attention — see the upgrade note below.
+- **A path-registration race is closed.** An agent reconnecting at exactly the wrong moment could leave a scrape path pointing at a context that was already being torn down, inflating the disconnect counter for the life of the proxy.
+
+### Upgrade Note — metric label change
+
+`proxy_scrape_requests{type}` (and the `outcome` label on `proxy_scrape_request_latency_seconds`) gained a new value, `upstream_timed_out`.
+
+Previously both timeout legs shared the `timed_out` label:
+
+| Label | Meaning | What to do about it |
+|-------|---------|---------------------|
+| `timed_out` | The agent never answered within the proxy's `scrapeRequestTimeoutSecs` (default 90s) | Check the agent is alive and reachable |
+| `upstream_timed_out` | The agent answered promptly to report that its own fetch of the target exceeded `agent.scrapeTimeoutSecs` (default 15s) | Fix the slow target, or raise the agent's timeout |
+
+Because the agent's 15s timeout trips long before the proxy's 90s, **a slow scrape target almost always lands in `upstream_timed_out` now**. Any dashboard, recording rule, or alert matching `type="timed_out"` will stop seeing the majority of what it used to count. Match `type=~"timed_out|upstream_timed_out"` to preserve the old aggregate, or split the two panels — they point at different problems.
+
+This finishes the taxonomy work started in 3.2.0, which pulled `upstream_error` and `content_too_large` out of the catch-all `path_not_found`. It also mirrors the existing `content_too_large` (agent's `maxContentLengthMBytes`) versus `payload_too_large` (proxy's unzip limit) pairing, so every proxy-side label now has a distinctly-named agent-side counterpart.
+
+### Bug Fixes
+
+- **A `registerPath` racing an agent disconnect could strand a dead path.** `Proxy.removeAgentContext` swept the path map before invalidating the agent context, so the in-lock validity re-check added in 3.2.0 was reading a flag the remover had not set yet, and the compensating sweep ran before the racing insert. Worse, a registration blocked on the path-map monitor *during* the sweep was released directly into the unguarded window, so the bad interleaving was sampled preferentially rather than rarely. Invalidating first closes it: a registration racing teardown is now either rejected by the re-check or undone by the sweep. Scrape results were never wrong — consolidated merging masked the dead leg — but the proxy kept a dead `AgentContext` and logged a spurious `agent_disconnected` outcome on every scrape of that path.
+- **The `HttpClientCache` sweeper is now pinned against a throwing `close()`.** The 3.2.0 fix routed every `HttpClient.close()` through a swallowing helper, but its test called that helper directly — reverting the sweeper's own call site left the whole suite green. A regression test now drives a throwing close through the background loop and asserts a *subsequent* entry is still evicted, which only holds if the sweeper coroutine survived.
+
+### Documentation
+
+- **The metric label tables were stale.** Both `docs/metrics-and-grafana.md` and the Monitoring page still described `path_not_found` as "Agent returned a non-200 status for the target" — untrue for every status except 404 since 3.2.0 — and `upstream_error` and `content_too_large` appeared in no operator-facing documentation at all. Both tables now carry the full label set plus an explicit note on the proxy-side/agent-side pairs.
+- The Troubleshooting timeout section is reorganized around *which* timeout fired, since that determines whether to look at the agent or the target. The example `ProxyPayloadTooLarge` alerting rule now matches `content_too_large` as well; its summary claimed to cover the size limit but it only ever matched the proxy-side half.
+
+---
+
 ## 3.2.0
 
 _Released 2026-06-13_
