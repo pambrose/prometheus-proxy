@@ -18,7 +18,12 @@ message RegisterAgentResponse {
   bool valid = 1;
   string reason = 2;
   string agent_id = 3;
-  string proxy_url = 4;
+  // 4 was proxy_url: declared but never read or written anywhere, and easy to mistake for a
+  // server-driven redirect mechanism that does not exist. Agent-side proxy failover is driven by the
+  // agent's own endpoint list (agent.proxy.endpoints), not by the proxy. Reserved so the number and
+  // name can never be reused with different semantics.
+  reserved 4;
+  reserved "proxy_url";
 }
 
 message RegisterPathRequest {
