@@ -57,8 +57,6 @@ import io.prometheus.grpc.ScrapeRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.readByteArray
-import java.nio.charset.CharacterCodingException
-import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.X509TrustManager
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -99,15 +97,6 @@ internal class AgentHttpService(
       trustStorePassword = agent.options.httpsTrustStorePassword,
     )
   }
-
-  // Paths already warned about an unfilterable content type. A scrape recurs every scrape interval
-  // forever, so an unguarded warn here would be a permanent log-spam source.
-  private val contentTypeWarnedPaths = ConcurrentHashMap.newKeySet<String>()
-
-  // Paths already warned about a non-UTF-8 body on a filterable content type. Kept separate from
-  // contentTypeWarnedPaths (distinct condition, distinct message, and independently testable) --
-  // a path that already tripped one guard must still be able to warn once for the other.
-  private val invalidUtf8WarnedPaths = ConcurrentHashMap.newKeySet<String>()
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
@@ -243,55 +232,19 @@ internal class AgentHttpService(
 
       // Filter before the gzip decision so gzip and chunking both see the reduced payload. The
       // maxContentLength guard above deliberately runs against the RAW bytes: it is a memory bound,
-      // and filtering must not become a way around it.
-      val filteredBytes =
-        if (filter == null) {
-          contentBytes // Unfiltered paths keep the pure byte path -- no decode, no cost.
-        } else if (!isFilterableContentType(contentType)) {
-          // Warn once per path -- this recurs on every scrape, so an unguarded warn would spam forever.
-          if (contentTypeWarnedPaths.add(scrapeRequest.path)) {
-            logger.warn {
-              "Skipping metric filter for /${scrapeRequest.path}: content type \"$contentType\" is not text"
-            }
-          }
-          contentBytes
-        } else {
-          // Fail open on undecodable bytes, mirroring the non-filterable-content-type branch above.
-          // Lenient decodeToString() replaces each malformed byte with U+FFFD, which encodes back to
-          // 3 bytes -- silently corrupting the payload, and (if the expansion outgrows what filtering
-          // removed) driving contentBytes.size - bytes.size negative, which Counter.inc() rejects with
-          // IllegalArgumentException, turning a routine scrape into a 503. A strict decode sidesteps
-          // both: on malformed input it throws instead of substituting, so we can detect it and pass
-          // the raw bytes through untouched rather than ever recording a corrupted/negative delta.
-          val decoded =
-            try {
-              contentBytes.decodeToString(throwOnInvalidSequence = true)
-            } catch (expected: CharacterCodingException) {
-              null
-            }
-          if (decoded == null) {
-            // Warn once per path -- this recurs on every scrape, so an unguarded warn would spam forever.
-            if (invalidUtf8WarnedPaths.add(scrapeRequest.path)) {
-              logger.warn {
-                "Skipping metric filter for /${scrapeRequest.path}: response body is not valid UTF-8"
-              }
-            }
-            contentBytes
-          } else {
-            val result = filter.filterText(decoded)
-            // filtered.size <= raw.size is a provable invariant from here on: filterText only removes
-            // whole lines from a successfully strict-decoded string, and re-encoding a string that came
-            // from valid UTF-8 reproduces the exact bytes it was decoded from -- so no clamp is needed.
-            result.text.encodeToByteArray().also { bytes ->
-              // Only filtered paths ever create series here, so cardinality stays bounded.
-              agent.metrics {
-                val path = scrapeRequest.path
-                filterLinesDropped.labels(agent.launchId, path).inc(result.linesDropped.toDouble())
-                filterBytesSaved.labels(agent.launchId, path).inc((contentBytes.size - bytes.size).toDouble())
-              }
-            }
-          }
+      // and filtering must not become a way around it. A null outcome means the filter deliberately
+      // passed the payload through (unfilterable content type, or a body that is not valid UTF-8), so
+      // no metrics are recorded and the raw bytes are used verbatim.
+      val outcome = filter?.filterBytes(contentBytes, contentType)
+      outcome?.also {
+        // Only paths whose filter actually ran ever create series here, so cardinality stays bounded.
+        agent.metrics {
+          val path = scrapeRequest.path
+          filterLinesDropped.labels(agent.launchId, path).inc(it.linesDropped.toDouble())
+          filterBytesSaved.labels(agent.launchId, path).inc(it.bytesSaved.toDouble())
         }
+      }
+      val filteredBytes = outcome?.bytes ?: contentBytes
 
       val zipped = filteredBytes.size > agent.options.minGzipSizeBytes
       ScrapeResults(
@@ -301,7 +254,8 @@ internal class AgentHttpService(
         srStatusCode = statusCode,
         srContentType = contentType,
         srZipped = zipped,
-        srContentAsText = if (!zipped) filteredBytes.decodeToString() else "",
+        // A filtered payload is already in hand as text -- don't decode the bytes it was just encoded to.
+        srContentAsText = if (zipped) "" else (outcome?.text ?: filteredBytes.decodeToString()),
         srContentAsZipped = if (zipped) filteredBytes.zip() else EMPTY_BYTE_ARRAY,
         srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
         scrapeCounterMsg = SUCCESS_MSG,
@@ -410,15 +364,6 @@ internal class AgentHttpService(
         trustStorePath.isNotEmpty() -> SslSettings.getTrustManager(trustStorePath, trustStorePassword)
         else -> null
       }
-
-    /**
-     * Whether a payload of [contentType] is safe to filter line-by-line. Blank, `text/plain`, and
-     * `application/openmetrics-text` are; anything else (protobuf, an HTML error body) is passed
-     * through untouched so a misconfigured filter can never corrupt a payload.
-     */
-    internal fun isFilterableContentType(contentType: String): Boolean =
-      contentType.substringBefore(';').trim().lowercase()
-        .let { it.isEmpty() || it == "text/plain" || it == "application/openmetrics-text" }
 
     private const val INVALID_PATH_MSG = "invalid_path"
     private const val SUCCESS_MSG = "success"

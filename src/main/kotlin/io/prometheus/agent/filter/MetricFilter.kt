@@ -16,6 +16,10 @@
 
 package io.prometheus.agent.filter
 
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import java.nio.charset.CharacterCodingException
+import java.util.concurrent.atomic.AtomicBoolean
+
 /**
  * Outcome of filtering one scraped payload.
  *
@@ -25,6 +29,24 @@ package io.prometheus.agent.filter
 internal data class FilterResult(
   val text: String,
   val linesDropped: Int,
+)
+
+/**
+ * Outcome of filtering one scraped payload's raw bytes.
+ *
+ * [text] is the filtered exposition text that [bytes] encodes, carried alongside so a caller that
+ * needs the string form does not re-decode bytes this class just encoded.
+ *
+ * @param bytes the filtered payload, UTF-8 encoded
+ * @param text the filtered payload as text
+ * @param linesDropped how many lines the filter removed
+ * @param bytesSaved how many bytes filtering removed from the raw payload
+ */
+internal class FilterOutcome(
+  val bytes: ByteArray,
+  val text: String,
+  val linesDropped: Int,
+  val bytesSaved: Int,
 )
 
 /**
@@ -48,9 +70,58 @@ internal data class FilterResult(
  * @see io.prometheus.agent.AgentPathManager
  */
 internal class MetricFilter private constructor(
+  private val path: String,
   private val allow: List<Regex>,
   private val deny: List<Regex>,
 ) {
+  // Latched the first time each fail-open guard trips. A scrape recurs every scrape interval forever,
+  // so an unguarded warn would be a permanent log-spam source. Scoped to this filter instance -- which
+  // is already 1:1 with a path -- so the latches are reclaimed with the filter when a path goes away.
+  private val contentTypeWarned = AtomicBoolean(false)
+  private val invalidUtf8Warned = AtomicBoolean(false)
+
+  /**
+   * Filters [bytes], or returns `null` when the payload was deliberately left untouched.
+   *
+   * Fails open on a non-text [contentType] or a body that is not valid UTF-8, warning once per
+   * condition. A `null` return means "use the raw bytes" and is distinct from a filter that ran and
+   * happened to drop nothing, so a fail-open scrape never records filter metrics.
+   */
+  fun filterBytes(
+    bytes: ByteArray,
+    contentType: String,
+  ): FilterOutcome? {
+    if (!isFilterableContentType(contentType)) {
+      if (contentTypeWarned.compareAndSet(false, true))
+        logger.warn { "Skipping metric filter for /$path: content type \"$contentType\" is not text" }
+      return null
+    }
+
+    // Lenient decodeToString() replaces each malformed byte with U+FFFD, which encodes back to 3 bytes
+    // -- silently corrupting the payload, and (if the expansion outgrows what filtering removed)
+    // driving bytesSaved negative, which Counter.inc() rejects with IllegalArgumentException, turning a
+    // routine scrape into a 503. A strict decode sidesteps both: on malformed input it throws instead
+    // of substituting, so we can detect it and pass the raw bytes through untouched.
+    val decoded =
+      try {
+        bytes.decodeToString(throwOnInvalidSequence = true)
+      } catch (expected: CharacterCodingException) {
+        null
+      }
+    if (decoded == null) {
+      if (invalidUtf8Warned.compareAndSet(false, true))
+        logger.warn { "Skipping metric filter for /$path: response body is not valid UTF-8" }
+      return null
+    }
+
+    val result = filterText(decoded)
+    // filtered.size <= raw.size is a provable invariant here: filterText only removes whole lines from
+    // a successfully strict-decoded string, and re-encoding a string that came from valid UTF-8
+    // reproduces the exact bytes it was decoded from -- so bytesSaved can never go negative.
+    val filtered = result.text.encodeToByteArray()
+    return FilterOutcome(filtered, result.text, result.linesDropped, bytes.size - filtered.size)
+  }
+
   fun filterText(text: String): FilterResult {
     if (text.isEmpty())
       return FilterResult(text, 0)
@@ -59,50 +130,62 @@ internal class MetricFilter private constructor(
     var linesDropped = 0
     var currentFamily: String? = null
     var currentVerdict = true
-    val lines = text.split('\n')
 
-    for ((index, rawLine) in lines.withIndex()) {
+    // Scanned by index rather than text.split('\n'): a multi-megabyte payload would otherwise
+    // materialize one String per line plus the backing List before a single line is judged.
+    var start = 0
+    while (start <= text.length) {
+      val newline = text.indexOf('\n', start)
+      val end = if (newline < 0) text.length else newline
       // Inspect without a trailing \r, but emit the original line verbatim so CRLF survives.
-      val line = rawLine.removeSuffix("\r")
+      val inspectEnd = if (end > start && text[end - 1] == '\r') end - 1 else end
+
       val keep =
         when {
-          line.isBlank() -> {
+          isBlank(text, start, inspectEnd) -> {
             true
           }
 
-          line.startsWith("#") -> {
-            val family = parseCommentFamily(line)
+          text[start] == '#' -> {
+            val family = parseCommentFamily(text.substring(start, inspectEnd))
             if (family == null) {
               true // Unrecognized comment (e.g. "# EOF") passes through untouched.
             } else {
-              // A HELP/TYPE line opens a family: decide once here, then every sample line of the
-              // family inherits the verdict, so histograms and summaries stay intact.
-              currentFamily = family
-              currentVerdict = keepFamily(family)
+              // A HELP/TYPE/UNIT line opens a family: decide once here, then every sample line of the
+              // family inherits the verdict, so histograms and summaries stay intact. Guarded on a
+              // name change so a family's HELP, TYPE, and UNIT lines don't each re-run every regex.
+              if (family != currentFamily) {
+                currentFamily = family
+                currentVerdict = keepFamily(family)
+              }
               currentVerdict
             }
           }
 
           else -> {
-            val name = parseSampleName(line)
+            val nameEnd = sampleNameEnd(text, start, inspectEnd)
             val family = currentFamily
-            if (family != null && belongsToFamily(name, family)) {
+            if (family != null && belongsToFamily(text, start, nameEnd, family)) {
               currentVerdict
             } else {
-              // Not part of the open family -- close it and judge this line on its own name.
+              // Not part of the open family -- close it and judge this line on its own name. This is
+              // the only branch that has to materialize the name, since keepFamily matches regexes.
               currentFamily = null
-              keepFamily(name)
+              keepFamily(text.substring(start, nameEnd))
             }
           }
         }
 
       if (keep) {
-        sb.append(rawLine)
-        if (index != lines.lastIndex)
+        sb.append(text, start, end)
+        if (newline >= 0)
           sb.append('\n')
       } else {
         linesDropped++
       }
+
+      if (newline < 0) break
+      start = newline + 1
     }
 
     return FilterResult(sb.toString(), linesDropped)
@@ -128,7 +211,7 @@ internal class MetricFilter private constructor(
       if (allow.isEmpty() && deny.isEmpty())
         null
       else
-        MetricFilter(allow.map { compile(it, path) }, deny.map { compile(it, path) })
+        MetricFilter(path, allow.map { compile(it, path) }, deny.map { compile(it, path) })
 
     private fun compile(
       pattern: String,
@@ -139,38 +222,84 @@ internal class MetricFilter private constructor(
           throw IllegalArgumentException("Invalid metric filter regex \"$pattern\" for path /$path", it)
         }
 
+    /**
+     * Whether a payload of [contentType] is safe to filter line-by-line. Blank, `text/plain`, and
+     * `application/openmetrics-text` are; anything else (protobuf, an HTML error body) is passed
+     * through untouched so a misconfigured filter can never corrupt a payload.
+     */
+    internal fun isFilterableContentType(contentType: String): Boolean =
+      contentType.substringBefore(';').trim().lowercase()
+        .let { it.isEmpty() || it == "text/plain" || it == "application/openmetrics-text" }
+
+    // Whether text[start, end) is empty or all whitespace, without materializing the range.
+    private fun isBlank(
+      text: String,
+      start: Int,
+      end: Int,
+    ): Boolean {
+      for (i in start until end) {
+        if (!text[i].isWhitespace()) return false
+      }
+      return true
+    }
+
     // Metric name is everything before the first '{' or whitespace, so label values -- which may
-    // contain '}' or '#' -- can never influence matching.
-    internal fun parseSampleName(line: String): String {
-      val end = line.indexOfFirst { it == '{' || it == ' ' || it == '\t' }
-      return if (end < 0) line else line.substring(0, end)
+    // contain '}' or '#' -- can never influence matching. Returns the exclusive end index of the name
+    // within text rather than the name itself: on the hot path the name is only ever compared, and the
+    // comparison can run against the original string.
+    private fun sampleNameEnd(
+      text: String,
+      start: Int,
+      end: Int,
+    ): Int {
+      for (i in start until end) {
+        val c = text[i]
+        if (c == '{' || c == ' ' || c == '\t') return i
+      }
+      return end
     }
 
     // Suffixes a histogram, summary, or OpenMetrics counter family appends to its family name.
     private val FAMILY_SUFFIXES =
       setOf("_bucket", "_sum", "_count", "_created", "_total", "_gsum", "_gcount", "_info")
 
+    // Keywords whose comment line opens a metric family.
+    private val FAMILY_KEYWORDS = listOf("HELP", "TYPE", "UNIT")
+
     // "# HELP foo help text" / "# TYPE foo counter" / "# UNIT foo seconds" -> "foo". Any other
     // comment -> null. The keyword terminator matches either a space or a tab, symmetric with the
     // name terminator below, so "# TYPE\tfoo counter" opens the family just like "# TYPE foo counter".
-    internal fun parseCommentFamily(line: String): String? {
+    private fun parseCommentFamily(line: String): String? {
       val body = line.removePrefix("#").trimStart()
-      val rest =
-        when {
-          body.startsWith("HELP ") || body.startsWith("HELP\t") -> body.substring(5)
-          body.startsWith("TYPE ") || body.startsWith("TYPE\t") -> body.substring(5)
-          body.startsWith("UNIT ") || body.startsWith("UNIT\t") -> body.substring(5)
-          else -> return null
-        }
-      return rest.trimStart().substringBefore(' ').substringBefore('\t').takeIf { it.isNotEmpty() }
+      val keyword = FAMILY_KEYWORDS.firstOrNull { body.startsWith("$it ") || body.startsWith("$it\t") } ?: return null
+      return body.substring(keyword.length + 1)
+        .trimStart()
+        .substringBefore(' ')
+        .substringBefore('\t')
+        .takeIf { it.isNotEmpty() }
     }
 
-    // Exact family name, or the family plus one of its recognized suffixes. Deliberately NOT a
-    // startsWith() test: that would fold "http_requests_total" into an unrelated "http_requests"
-    // family, and fold a standalone "items_count" counter into family "items".
-    internal fun belongsToFamily(
-      name: String,
+    // Whether the metric name at text[start, nameEnd) is the exact family name, or the family plus one
+    // of its recognized suffixes. Deliberately NOT a startsWith() test: that would fold
+    // "http_requests_total" into an unrelated "http_requests" family, and fold a standalone
+    // "items_count" counter into family "items". Compared in place so the overwhelmingly common case --
+    // a sample line belonging to the open family -- allocates nothing.
+    private fun belongsToFamily(
+      text: String,
+      start: Int,
+      nameEnd: Int,
       family: String,
-    ): Boolean = name == family || (name.startsWith(family) && name.substring(family.length) in FAMILY_SUFFIXES)
+    ): Boolean {
+      val nameLength = nameEnd - start
+      if (nameLength < family.length || !text.regionMatches(start, family, 0, family.length))
+        return false
+      if (nameLength == family.length)
+        return true
+      val suffixStart = start + family.length
+      val suffixLength = nameEnd - suffixStart
+      return FAMILY_SUFFIXES.any { it.length == suffixLength && text.regionMatches(suffixStart, it, 0, it.length) }
+    }
+
+    private val logger = logger {}
   }
 }

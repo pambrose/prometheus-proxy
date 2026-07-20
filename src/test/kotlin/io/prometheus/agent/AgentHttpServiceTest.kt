@@ -47,6 +47,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
 import io.prometheus.Agent
+import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.LOOPBACK_HOST
@@ -86,55 +87,16 @@ class AgentHttpServiceTest : StringSpec() {
     return mockAgent
   }
 
-  private fun createMockAgentWithPaths(): Agent {
-    val mockOptions = mockk<AgentOptions>(relaxed = true)
-    every { mockOptions.maxCacheSize } returns 100
-    every { mockOptions.maxCacheAgeMins } returns 30
-    every { mockOptions.maxCacheIdleMins } returns 10
-    every { mockOptions.cacheCleanupIntervalMins } returns 5
-    every { mockOptions.scrapeTimeoutSecs } returns 10
-    every { mockOptions.scrapeMaxRetries } returns 0
-    every { mockOptions.minGzipSizeBytes } returns 1_000_000
-    every { mockOptions.maxContentLengthMBytes } returns 10
-    every { mockOptions.debugEnabled } returns false
-    every { mockOptions.httpClientTimeoutSecs } returns 90
-    every { mockOptions.trustAllX509Certificates } returns false
-
-    val config = ConfigFactory.parseString(
-      """
-      agent {
-        pathConfigs = []
-        filters = []
-        internal {
-          cioTimeoutSecs = 90
-        }
-      }
-      proxy { auth = [] }
-      """.trimIndent(),
-    )
-    val configVals = ConfigVals(config)
-
-    val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
-
-    val mockAgent = mockk<Agent>(relaxed = true)
-    every { mockAgent.options } returns mockOptions
-    every { mockAgent.configVals } returns configVals
-    every { mockAgent.isMetricsEnabled } returns false
-    every { mockAgent.isTestMode } returns true
-    every { mockAgent.grpcService } returns mockGrpcService
-
-    coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
-      valid = true
-      pathId = 1L
-    }
-
-    val pathManager = AgentPathManager(mockAgent)
-    every { mockAgent.pathManager } returns pathManager
-
-    return mockAgent
-  }
-
-  private fun createMockAgentWithRetries(maxRetries: Int): Agent {
+  /**
+   * A mock agent backed by a real [AgentPathManager], so a registered path gets a genuine PathContext.
+   *
+   * [filterHocon] is spliced into `agent.filters` (empty means no filters), which is what makes the
+   * path manager compile and attach a [io.prometheus.agent.filter.MetricFilter] to the path.
+   */
+  private fun createMockAgentWithPaths(
+    filterHocon: String = "",
+    maxRetries: Int = 0,
+  ): Agent {
     val mockOptions = mockk<AgentOptions>(relaxed = true)
     every { mockOptions.maxCacheSize } returns 100
     every { mockOptions.maxCacheAgeMins } returns 30
@@ -142,56 +104,6 @@ class AgentHttpServiceTest : StringSpec() {
     every { mockOptions.cacheCleanupIntervalMins } returns 5
     every { mockOptions.scrapeTimeoutSecs } returns 10
     every { mockOptions.scrapeMaxRetries } returns maxRetries
-    every { mockOptions.minGzipSizeBytes } returns 1_000_000
-    every { mockOptions.maxContentLengthMBytes } returns 10
-    every { mockOptions.debugEnabled } returns false
-    every { mockOptions.httpClientTimeoutSecs } returns 90
-    every { mockOptions.trustAllX509Certificates } returns false
-
-    val config = ConfigFactory.parseString(
-      """
-      agent {
-        pathConfigs = []
-        filters = []
-        internal {
-          cioTimeoutSecs = 90
-        }
-      }
-      proxy { auth = [] }
-      """.trimIndent(),
-    )
-    val configVals = ConfigVals(config)
-
-    val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
-
-    val mockAgent = mockk<Agent>(relaxed = true)
-    every { mockAgent.options } returns mockOptions
-    every { mockAgent.configVals } returns configVals
-    every { mockAgent.isMetricsEnabled } returns false
-    every { mockAgent.isTestMode } returns true
-    every { mockAgent.grpcService } returns mockGrpcService
-
-    coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
-      valid = true
-      pathId = 1L
-    }
-
-    val pathManager = AgentPathManager(mockAgent)
-    every { mockAgent.pathManager } returns pathManager
-
-    return mockAgent
-  }
-
-  // Same shape as createMockAgentWithPaths, but with a caller-supplied `agent.filters` HOCON entry
-  // so a real AgentPathManager attaches a compiled MetricFilter to a registered path's PathContext.
-  private fun createMockAgentWithFilter(filterHocon: String): Agent {
-    val mockOptions = mockk<AgentOptions>(relaxed = true)
-    every { mockOptions.maxCacheSize } returns 100
-    every { mockOptions.maxCacheAgeMins } returns 30
-    every { mockOptions.maxCacheIdleMins } returns 10
-    every { mockOptions.cacheCleanupIntervalMins } returns 5
-    every { mockOptions.scrapeTimeoutSecs } returns 10
-    every { mockOptions.scrapeMaxRetries } returns 0
     every { mockOptions.minGzipSizeBytes } returns 1_000_000
     every { mockOptions.maxContentLengthMBytes } returns 10
     every { mockOptions.debugEnabled } returns false
@@ -232,7 +144,7 @@ class AgentHttpServiceTest : StringSpec() {
     return mockAgent
   }
 
-  // Same as createMockAgentWithFilter, but also wires agent.metrics { ... } to actually invoke its
+  // Same as createMockAgentWithPaths, but also wires agent.metrics { ... } to actually invoke its
   // lambda against a real AgentMetrics instance. A relaxed mockk<Agent> discards a lambda parameter
   // instead of invoking it, so without this wiring the filterLinesDropped/filterBytesSaved recording
   // block in buildScrapeResults's filtering branch is never exercised -- see AgentTest's "metrics
@@ -240,7 +152,7 @@ class AgentHttpServiceTest : StringSpec() {
   // same pattern. Clears the default registry first: AgentMetrics registers its collectors on
   // construction, and re-registering a same-named collector in one JVM throws.
   private fun createMockAgentWithFilterAndMetrics(filterHocon: String): Pair<Agent, AgentMetrics> {
-    val mockAgent = createMockAgentWithFilter(filterHocon)
+    val mockAgent = createMockAgentWithPaths(filterHocon = filterHocon)
     every { mockAgent.launchId } returns "test-launch-id"
 
     CollectorRegistry.defaultRegistry.clear()
@@ -851,7 +763,7 @@ class AgentHttpServiceTest : StringSpec() {
 
       try {
         val port = server.startAndAwaitReady()
-        val mockAgent = createMockAgentWithRetries(3)
+        val mockAgent = createMockAgentWithPaths(maxRetries = 3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
 
@@ -884,7 +796,7 @@ class AgentHttpServiceTest : StringSpec() {
 
       try {
         val port = server.startAndAwaitReady()
-        val mockAgent = createMockAgentWithRetries(3)
+        val mockAgent = createMockAgentWithPaths(maxRetries = 3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
 
@@ -917,7 +829,7 @@ class AgentHttpServiceTest : StringSpec() {
 
       try {
         val port = server.startAndAwaitReady()
-        val mockAgent = createMockAgentWithRetries(3)
+        val mockAgent = createMockAgentWithPaths(maxRetries = 3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
 
@@ -950,7 +862,7 @@ class AgentHttpServiceTest : StringSpec() {
 
       try {
         val port = server.startAndAwaitReady()
-        val mockAgent = createMockAgentWithRetries(2)
+        val mockAgent = createMockAgentWithPaths(maxRetries = 2)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
 
@@ -985,7 +897,7 @@ class AgentHttpServiceTest : StringSpec() {
 
       try {
         val port = server.startAndAwaitReady()
-        val mockAgent = createMockAgentWithRetries(2)
+        val mockAgent = createMockAgentWithPaths(maxRetries = 2)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
 
@@ -1019,7 +931,7 @@ class AgentHttpServiceTest : StringSpec() {
 
       try {
         val port = server.startAndAwaitReady()
-        val mockAgent = createMockAgentWithRetries(3)
+        val mockAgent = createMockAgentWithPaths(maxRetries = 3)
         val service = AgentHttpService(mockAgent)
         mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
 
@@ -1197,7 +1109,7 @@ class AgentHttpServiceTest : StringSpec() {
       try {
         val port = server.startAndAwaitReady()
 
-        val mockAgent = createMockAgentWithRetries(10)
+        val mockAgent = createMockAgentWithPaths(maxRetries = 10)
         // Set a short scrape timeout of 3 seconds
         every { mockAgent.options.scrapeTimeoutSecs } returns 3
         val service = AgentHttpService(mockAgent)
@@ -1627,17 +1539,17 @@ class AgentHttpServiceTest : StringSpec() {
     // ==================== Task 5: content-type filter gate ====================
 
     "isFilterableContentType should accept text and openmetrics types" {
-      AgentHttpService.isFilterableContentType("") shouldBe true
-      AgentHttpService.isFilterableContentType("text/plain") shouldBe true
-      AgentHttpService.isFilterableContentType("text/plain; version=0.0.4; charset=utf-8") shouldBe true
-      AgentHttpService.isFilterableContentType("TEXT/PLAIN") shouldBe true
-      AgentHttpService.isFilterableContentType("application/openmetrics-text; version=1.0.0") shouldBe true
+      MetricFilter.isFilterableContentType("") shouldBe true
+      MetricFilter.isFilterableContentType("text/plain") shouldBe true
+      MetricFilter.isFilterableContentType("text/plain; version=0.0.4; charset=utf-8") shouldBe true
+      MetricFilter.isFilterableContentType("TEXT/PLAIN") shouldBe true
+      MetricFilter.isFilterableContentType("application/openmetrics-text; version=1.0.0") shouldBe true
     }
 
     "isFilterableContentType should reject binary and other types" {
-      AgentHttpService.isFilterableContentType("application/vnd.google.protobuf") shouldBe false
-      AgentHttpService.isFilterableContentType("application/octet-stream") shouldBe false
-      AgentHttpService.isFilterableContentType("text/html") shouldBe false
+      MetricFilter.isFilterableContentType("application/vnd.google.protobuf") shouldBe false
+      MetricFilter.isFilterableContentType("application/octet-stream") shouldBe false
+      MetricFilter.isFilterableContentType("text/html") shouldBe false
     }
 
     // The pure-function tests above pin isFilterableContentType's own truth table, but nothing exercised
@@ -1648,7 +1560,8 @@ class AgentHttpServiceTest : StringSpec() {
     // error body is perfectly valid UTF-8, so with the gate disabled it would be line-filtered and
     // corrupted rather than passed through untouched).
     "content-type gate: a text/html response with a filter configured is passed through unfiltered" {
-      val mockAgent = createMockAgentWithFilter(
+      val mockAgent = createMockAgentWithPaths(
+        filterHocon = 
         """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
       )
       // Content the deny rule would strip in its entirety if the gate let filtering run against it.
@@ -1707,7 +1620,8 @@ class AgentHttpServiceTest : StringSpec() {
       // byte. Deny every family with no blank lines in the payload, so the filtered result is the
       // empty string: if the guard were moved after filtering, or made to compare filteredBytes.size,
       // it would see ~0 bytes and never trip, even though the raw (capped) chunk is over the limit.
-      val mockAgent = createMockAgentWithFilter(
+      val mockAgent = createMockAgentWithPaths(
+        filterHocon = 
         """{ path = "metrics", metricNameAllow = [], metricNameDeny = [".*"] }""",
       )
       val options = mockAgent.options
@@ -1759,7 +1673,8 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     "Fix pass: filtered path emits filtered content on the unzipped text path" {
-      val mockAgent = createMockAgentWithFilter(
+      val mockAgent = createMockAgentWithPaths(
+        filterHocon = 
         """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
       )
       // minGzipSizeBytes stays at the createMockAgentWithFilter default (1_000_000), so this small
@@ -1809,7 +1724,8 @@ class AgentHttpServiceTest : StringSpec() {
     "Fix pass: filtered path emits filtered content on the zipped path (srContentAsZipped)" {
       // Distinct from the unzipped-path test above: zipped/srContentAsZipped is a separate
       // expression from srContentAsText, so it needs its own pin (see AgentHttpService.kt).
-      val mockAgent = createMockAgentWithFilter(
+      val mockAgent = createMockAgentWithPaths(
+        filterHocon = 
         """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
       )
       val options = mockAgent.options
