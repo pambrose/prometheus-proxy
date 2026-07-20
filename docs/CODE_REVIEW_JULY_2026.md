@@ -195,6 +195,13 @@ points at the config flag. Deterministic.
 *successful completion* of the heartbeat task as a disconnect. Add a container/harness test running
 with `heartbeatEnabled=false`.
 
+**Follow-up (half the fix was untested):** the fix has two load-bearing halves — stay alive for the
+connection's lifetime, and terminate promptly once it closes — but `InProcessHeartbeatDisabledTest`
+only asserted the first, and its `finally` block ran the stop under `runCatching`, which discards
+the `TimeoutException` a hung `stopSync` throws. The rejected `awaitCancellation()` alternative
+named above hangs shutdown in exactly that way and the spec would still have reported green. The
+stop is now asserted in the test body, following `InProcessIdleShutdownTest`.
+
 ### 7. [x] `registerPath` races agent removal → permanently dead path
 `proxy/ProxyServiceImpl.kt:117-127` · `proxy/ProxyPathManager.kt:87-131, 191-200` ·
 `Proxy.kt:339-348` — **concurrency (TOCTOU), medium, confirmed**
@@ -255,6 +262,16 @@ pinned the wiring. Covered by `HttpClientCacheTest` → "Finding 9: a throwing c
 must not kill the cleanup loop", which drives a throwing close through the background loop and
 asserts a *subsequent* entry is still evicted. Verified to fail when the call site is reverted.
 
+**Follow-up (over-broad catch):** `closeQuietly` used `runCatching`, which catches `Throwable`, so
+an `OutOfMemoryError` became a `logger.warn` — contradicting the `is Error` rethrow policy this same
+review series established in `Agent.handleConnectionFailure`, `AgentHttpService.fetchContentFromUrl`
+(finding 4, fixed one PR earlier), and `AgentGrpcService.connectAgent`. Sites 218/230 are reached
+from inside the very `catch (Throwable)` block whose `if (e is Error) throw e` finding 4 added, so
+this reopened that hole. Narrowed to `catch (e: Exception)`, which fully meets this finding's goal.
+A bare rethrow at the sweeper site would have been a regression — that scope has no parent link to
+the agent's job, so an escaping `Error` kills the sweeper without terminating the agent — so the
+scope now carries a `CoroutineExceptionHandler` that makes such a death loud instead of silent.
+
 ### 10. [x] All non-2xx upstream responses mislabeled `path_not_found`
 `proxy/ProxyHttpRoutes.kt:305-315 (312), 216-219` — **observability, medium, confirmed**
 
@@ -292,6 +309,18 @@ and `content_too_large` entirely; both are now correct and document the proxy/ag
 
 **Fix:** add `require(... > 0)` checks in the respective options classes, mirroring the existing
 sibling validations (June review finding 27 established the pattern).
+
+**Follow-up (one value missed, one rationale wrong):** `heartbeatCheckPauseMillis` sat unguarded
+between two of the new `require`s while finding 6 promoted it to the poll interval of the keepalive
+loop — `delay()` returns immediately for a non-positive duration and neither loop condition
+suspends, so `0` hot-spins an IO thread for the connection's lifetime. Guarded, matching the
+`discovery.reconcileIntervalSecs` precedent. The backlog comment's claim that a negative value
+"throws at connect time" was also wrong for `-1`: that yields `Channel(-2)`, which kotlinx maps to
+`BUFFERED` (a silent 64-slot channel), and the health check then reports unhealthy from startup —
+only `<= -2` throws. Comment corrected to the stronger rationale. The `minGzipSizeBytes` test named
+"of -1" actually passed `-5`; `-1` is the unset sentinel and is the one negative value whose
+behavior differs by route (`--gzip -1` resolves to the config default, config `-1` throws), so both
+routes are now pinned.
 
 ### 12. [x] `submitScrapeRequest` is a ~125-line god method with `.also { return }` control flow
 `proxy/ProxyHttpRoutes.kt:238-363 (288)` — **maintainability, medium, confirmed**

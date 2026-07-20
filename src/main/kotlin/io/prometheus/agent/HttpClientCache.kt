@@ -19,6 +19,7 @@ package io.prometheus.agent
 import com.pambrose.common.util.runCatchingCancellable
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -70,7 +71,16 @@ internal class HttpClientCache(
   private val cacheSize = AtomicInt(0)
 
   private val accessMutex = Mutex()
-  private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+  // closeQuietly rethrows JVM Errors so the agent can terminate rather than run on corrupted, but this
+  // scope has no parent link to the agent's job -- an Error escaping the sweeper below would kill it
+  // and reach the default handler, leaking every future expired client with no trace in our logs. The
+  // handler cannot keep the coroutine alive, so it exists to make that death loud instead of silent.
+  private val sweeperErrorHandler =
+    CoroutineExceptionHandler { _, e ->
+      logger.error(e) { "HTTP client cache sweeper terminated: expired clients will no longer be evicted" }
+    }
+  private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + sweeperErrorHandler)
 
   // Set to true (under accessMutex) by close(). Once closed, getOrCreateClient() rejects new
   // requests, preventing an in-flight scrape racing shutdown from creating and caching a fresh
@@ -345,13 +355,27 @@ internal class HttpClientCache(
     private const val INITIAL_CAPACITY = 16
     private const val LOAD_FACTOR = 0.75f
 
-    // Closes a client, swallowing and logging any failure so it can never propagate. Critical for the
+    // Closes a client, swallowing and logging any Exception so it can never propagate. Critical for the
     // background sweeper loop: a throwing HttpClient.close() there would break out of the while(isActive)
     // loop and kill the sweeper permanently, leaking every future expired client (finding 9). At the
     // batch-close sites it also keeps one bad close() from aborting the remaining closes.
+    //
+    // Deliberately catches Exception, not Throwable: a JVM Error means the agent should terminate
+    // rather than continue in a corrupted state, matching Agent.handleConnectionFailure,
+    // AgentHttpService.fetchContentFromUrl, and AgentGrpcService.connectAgent. Catching Exception is
+    // enough to meet finding 9's goal. HttpClient.close() does not suspend, so no CancellationException
+    // can arise here.
     internal fun closeQuietly(client: HttpClient) {
       runCatching { client.close() }
-        .onFailure { e -> logger.warn(e) { "Error closing HTTP client: ${e.message}" } }
+        .onFailure { e ->
+          // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.) so the agent terminates
+          // instead of running in a corrupted state. Mirrors the Error-rethrow policy at
+          // AgentHttpService.fetchContentFromUrl(), Agent.handleConnectionFailure(), and connectAgent().
+          if (e is Error)
+            throw e
+
+          logger.warn(e) { "Error closing HTTP client: ${e.message}" }
+        }
     }
   }
 }

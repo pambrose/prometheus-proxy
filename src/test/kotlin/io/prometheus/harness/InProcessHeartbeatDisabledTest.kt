@@ -20,7 +20,9 @@ package io.prometheus.harness
 
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
@@ -41,6 +43,7 @@ import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.common.proxyOptions
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.measureTime
 import io.ktor.server.cio.CIO as ServerCIO
 
 // Finding 6: launchConnectionTask closes the shared connectionContext whenever any connection-lifetime
@@ -105,6 +108,18 @@ class InProcessHeartbeatDisabledTest : StringSpec() {
             response.status shouldBe HttpStatusCode.OK
             response.bodyAsText() shouldContain "test_metric"
           }
+
+          // The fix has two halves and the scrape above only covers the first: the keepalive loop must
+          // also terminate once the connection closes. Assert the stop here rather than leaving it to
+          // the finally, where runCatching would discard the TimeoutException that Guava's timed
+          // awaitTerminated throws on expiry. The alternative rejected in the production comment
+          // (awaitCancellation() as the loop body) hangs stopSync exactly this way, and without this
+          // assertion the spec would still report green while every heartbeatEnabled=false embedded
+          // agent hung on shutdown.
+          val elapsed = measureTime { agent.stopSync(15.seconds) }
+
+          agent.isRunning.shouldBeFalse()
+          elapsed shouldBeLessThan 10.seconds
         } finally {
           if (agent.isRunning) runCatching { agent.stopSync(5.seconds) }
         }
