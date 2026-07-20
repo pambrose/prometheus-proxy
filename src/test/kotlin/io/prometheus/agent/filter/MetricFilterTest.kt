@@ -24,6 +24,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 
 class MetricFilterTest : StringSpec() {
   private fun filter(
@@ -103,6 +104,90 @@ class MetricFilterTest : StringSpec() {
     "CRLF line endings should be preserved on kept lines" {
       val result = filter(deny = ["go_.*"]).filterText("go_goroutines 12\r\nup 1\r\n")
       result.text shouldBe "up 1\r\n"
+    }
+
+    "a denied family should drop its HELP and TYPE lines with it" {
+      val text =
+        """
+        # HELP go_goroutines Number of goroutines
+        # TYPE go_goroutines gauge
+        go_goroutines 12
+        up 1
+        """.trimIndent() + "\n"
+      val result = filter(deny = ["go_.*"]).filterText(text)
+      result.text shouldBe "up 1\n"
+      result.linesDropped shouldBe 3
+    }
+
+    "an allow list should keep a whole histogram family" {
+      val text =
+        """
+        # HELP http_req_duration_seconds Request duration
+        # TYPE http_req_duration_seconds histogram
+        http_req_duration_seconds_bucket{le="0.1"} 5
+        http_req_duration_seconds_bucket{le="+Inf"} 9
+        http_req_duration_seconds_sum 3.2
+        http_req_duration_seconds_count 9
+        go_goroutines 12
+        """.trimIndent() + "\n"
+      val result = filter(allow = ["http_req_duration_seconds"]).filterText(text)
+      result.text shouldContain "http_req_duration_seconds_bucket{le=\"0.1\"} 5"
+      result.text shouldContain "http_req_duration_seconds_sum 3.2"
+      result.text shouldContain "http_req_duration_seconds_count 9"
+      result.text shouldNotContain "go_goroutines"
+      result.linesDropped shouldBe 1
+    }
+
+    "a denied family should drop every suffixed series" {
+      val text =
+        """
+        # TYPE http_req_duration_seconds histogram
+        http_req_duration_seconds_bucket{le="+Inf"} 9
+        http_req_duration_seconds_sum 3.2
+        http_req_duration_seconds_count 9
+        up 1
+        """.trimIndent() + "\n"
+      filter(deny = ["http_.*"]).filterText(text).text shouldBe "up 1\n"
+    }
+
+    "an OpenMetrics counter family should keep its _total and _created series" {
+      val text =
+        """
+        # TYPE requests counter
+        requests_total 7
+        requests_created 1.6e9
+        """.trimIndent() + "\n"
+      filter(allow = ["requests"]).filterText(text).text shouldBe text
+    }
+
+    "a series outside the open family should close it and be judged literally" {
+      val text =
+        """
+        # TYPE items histogram
+        items_sum 3
+        items_count 9
+        unrelated_metric 1
+        """.trimIndent() + "\n"
+      // "unrelated_metric" does not belong to family "items", so the deny rule applies to it directly.
+      val result = filter(deny = ["unrelated_metric"]).filterText(text)
+      result.text shouldContain "items_sum 3"
+      result.text shouldNotContain "unrelated_metric"
+      result.linesDropped shouldBe 1
+    }
+
+    "a sample line with no open family should be judged literally" {
+      // No TYPE line, so each line stands alone -- the documented fallback.
+      val text = "foo_bucket{le=\"1\"} 2\nfoo_sum 3\n"
+      val result = filter(allow = ["foo"]).filterText(text)
+      result.text shouldBe ""
+      result.linesDropped shouldBe 2
+    }
+
+    "a standalone counter named with a family suffix should not be mis-filed" {
+      // Without an open "items" family, items_count is judged on its own full name.
+      val result = filter(deny = ["items"]).filterText("items_count 42\n")
+      result.text shouldBe "items_count 42\n"
+      result.linesDropped shouldBe 0
     }
   }
 }

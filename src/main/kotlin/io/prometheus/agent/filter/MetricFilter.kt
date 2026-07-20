@@ -47,6 +47,8 @@ internal class MetricFilter private constructor(
 
     val sb = StringBuilder(text.length)
     var linesDropped = 0
+    var currentFamily: String? = null
+    var currentVerdict = true
     val lines = text.split('\n')
 
     for ((index, rawLine) in lines.withIndex()) {
@@ -54,12 +56,34 @@ internal class MetricFilter private constructor(
       val line = rawLine.removeSuffix("\r")
       val keep =
         when {
-          line.isBlank() -> true
+          line.isBlank() -> {
+            true
+          }
 
-          // Comment handling arrives with family scoping.
-          line.startsWith("#") -> true
+          line.startsWith("#") -> {
+            val family = parseCommentFamily(line)
+            if (family == null) {
+              true // Unrecognized comment (e.g. "# EOF") passes through untouched.
+            } else {
+              // A HELP/TYPE line opens a family: decide once here, then every sample line of the
+              // family inherits the verdict, so histograms and summaries stay intact.
+              currentFamily = family
+              currentVerdict = keepFamily(family)
+              currentVerdict
+            }
+          }
 
-          else -> keepFamily(parseSampleName(line))
+          else -> {
+            val name = parseSampleName(line)
+            val family = currentFamily
+            if (family != null && belongsToFamily(name, family)) {
+              currentVerdict
+            } else {
+              // Not part of the open family -- close it and judge this line on its own name.
+              currentFamily = null
+              keepFamily(name)
+            }
+          }
         }
 
       if (keep) {
@@ -111,5 +135,29 @@ internal class MetricFilter private constructor(
       val end = line.indexOfFirst { it == '{' || it == ' ' || it == '\t' }
       return if (end < 0) line else line.substring(0, end)
     }
+
+    // Suffixes a histogram, summary, or OpenMetrics counter family appends to its family name.
+    private val FAMILY_SUFFIXES =
+      setOf("_bucket", "_sum", "_count", "_created", "_total", "_gsum", "_gcount", "_info")
+
+    // "# HELP foo help text" / "# TYPE foo counter" -> "foo". Any other comment -> null.
+    internal fun parseCommentFamily(line: String): String? {
+      val body = line.removePrefix("#").trimStart()
+      val rest =
+        when {
+          body.startsWith("HELP ") -> body.removePrefix("HELP ")
+          body.startsWith("TYPE ") -> body.removePrefix("TYPE ")
+          else -> return null
+        }
+      return rest.trimStart().substringBefore(' ').substringBefore('\t').takeIf { it.isNotEmpty() }
+    }
+
+    // Exact family name, or the family plus one of its recognized suffixes. Deliberately NOT a
+    // startsWith() test: that would fold "http_requests_total" into an unrelated "http_requests"
+    // family, and fold a standalone "items_count" counter into family "items".
+    internal fun belongsToFamily(
+      name: String,
+      family: String,
+    ): Boolean = name == family || (name.startsWith(family) && name.substring(family.length) in FAMILY_SUFFIXES)
   }
 }
