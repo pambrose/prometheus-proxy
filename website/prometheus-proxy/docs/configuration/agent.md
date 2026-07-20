@@ -203,6 +203,44 @@ inherit the family's verdict rather than being matched themselves. A sample line
 **An empty `metricNameAllow` allows everything.** `metricNameDeny` is applied *after* allow, so deny
 wins on overlap.
 
+To make family scoping concrete, given this filter:
+
+```hocon
+{ path: "app1_metrics", metricNameAllow: [], metricNameDeny: [ "go_.*" ] }
+```
+
+a scraped payload is transformed like this:
+
+=== "Scraped from the target"
+
+    ```
+    # HELP go_goroutines Number of goroutines
+    # TYPE go_goroutines gauge
+    go_goroutines 12
+    # HELP http_req_duration_seconds Request duration
+    # TYPE http_req_duration_seconds histogram
+    http_req_duration_seconds_bucket{le="0.1"} 5
+    http_req_duration_seconds_bucket{le="+Inf"} 9
+    http_req_duration_seconds_sum 3.2
+    http_req_duration_seconds_count 9
+    ```
+
+=== "Sent to the proxy"
+
+    ```
+    # HELP http_req_duration_seconds Request duration
+    # TYPE http_req_duration_seconds histogram
+    http_req_duration_seconds_bucket{le="0.1"} 5
+    http_req_duration_seconds_bucket{le="+Inf"} 9
+    http_req_duration_seconds_sum 3.2
+    http_req_duration_seconds_count 9
+    ```
+
+The `go_goroutines` family goes entirely, `# HELP` and `# TYPE` lines included. The histogram is
+untouched: `deny` never matched it, and its `_bucket` / `_sum` / `_count` series are evaluated as one
+family rather than individually — which is what stops a filter from delivering a histogram with some
+of its series missing.
+
 !!! note "Fails open on payloads it can't safely filter"
 
     A non-text `Content-Type` (protobuf, an HTML error body) passes through unfiltered. A body that is
