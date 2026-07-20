@@ -215,7 +215,6 @@ class AgentMetricsTest : StringSpec() {
     }
 
     "filter counters should be registered with launch_id and path labels" {
-      CollectorRegistry.defaultRegistry.clear()
       val metrics = AgentMetrics(createMockAgent())
 
       metrics.filterLinesDropped.labels("test-launch-id", "metrics").inc(3.0)

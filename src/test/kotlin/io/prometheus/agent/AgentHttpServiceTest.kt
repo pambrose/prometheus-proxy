@@ -46,6 +46,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
 import io.prometheus.Agent
+import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.grpc.registerPathResponse
@@ -227,6 +228,26 @@ class AgentHttpServiceTest : StringSpec() {
     every { mockAgent.pathManager } returns pathManager
 
     return mockAgent
+  }
+
+  // Same as createMockAgentWithFilter, but also wires agent.metrics { ... } to actually invoke its
+  // lambda against a real AgentMetrics instance. A relaxed mockk<Agent> discards a lambda parameter
+  // instead of invoking it, so without this wiring the filterLinesDropped/filterBytesSaved recording
+  // block in buildScrapeResults's filtering branch is never exercised -- see AgentTest's "metrics
+  // should invoke lambda when metrics enabled" and ProxyServiceImplTest's createMockProxy for the
+  // same pattern. Clears the default registry first: AgentMetrics registers its collectors on
+  // construction, and re-registering a same-named collector in one JVM throws.
+  private fun createMockAgentWithFilterAndMetrics(filterHocon: String): Pair<Agent, AgentMetrics> {
+    val mockAgent = createMockAgentWithFilter(filterHocon)
+    every { mockAgent.launchId } returns "test-launch-id"
+
+    CollectorRegistry.defaultRegistry.clear()
+    val realMetrics = AgentMetrics(mockAgent)
+    every { mockAgent.metrics(any<AgentMetrics.() -> Unit>()) } answers {
+      firstArg<AgentMetrics.() -> Unit>().invoke(realMetrics)
+    }
+
+    return mockAgent to realMetrics
   }
 
   init {
@@ -1814,6 +1835,77 @@ class AgentHttpServiceTest : StringSpec() {
         results.srValidResponse.shouldBeTrue()
         results.srContentAsText shouldBe content
         results.srContentAsText shouldContain "would_be_denied_metric"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // ==================== Fix pass: exercise the recording call site ====================
+    // A relaxed mockk<Agent> never invokes a lambda parameter -- it just returns a default and
+    // discards it -- so the prior suite's createMockAgent*() helpers left the agent.metrics { ... }
+    // recording block in buildScrapeResults's filtering branch as dead code: swapping the two
+    // counters, swapping their label arguments, or inverting the bytes-saved arithmetic would all
+    // still pass every test. This test drives a real filtered scrape with metrics wired through a
+    // real AgentMetrics instance (see createMockAgentWithFilterAndMetrics) and asserts exact counts.
+
+    "Fix pass: filtered scrape records filterLinesDropped and filterBytesSaved with launch_id and path labels" {
+      val (mockAgent, metrics) = createMockAgentWithFilterAndMetrics(
+        """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
+      )
+
+      // The denied family (its TYPE comment line plus both sample lines) is dropped in its entirety;
+      // the allowed family survives untouched. expectedFilteredContent/expectedLinesDropped are
+      // reasoned out independently from MetricFilter's family-scoped semantics (not obtained by
+      // calling filterText), so the assertions below pin an expected value rather than merely
+      // re-deriving whatever the production code happened to produce.
+      val rawContent =
+        "# TYPE allowed_metric counter\n" +
+          "allowed_metric 1\n" +
+          "# TYPE denied_metric counter\n" +
+          "denied_metric 2\n" +
+          "denied_metric 3\n"
+      val expectedFilteredContent =
+        "# TYPE allowed_metric counter\n" +
+          "allowed_metric 1\n"
+      val expectedLinesDropped = 3.0
+      val expectedBytesSaved =
+        (rawContent.encodeToByteArray().size - expectedFilteredContent.encodeToByteArray().size).toDouble()
+
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText(rawContent, ContentType.Text.Plain)
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 304L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe 200
+        results.srValidResponse.shouldBeTrue()
+        results.srZipped.shouldBeFalse()
+        results.srContentAsText shouldBe expectedFilteredContent
+
+        metrics.filterLinesDropped.labels("test-launch-id", "metrics").get() shouldBe expectedLinesDropped
+        metrics.filterBytesSaved.labels("test-launch-id", "metrics").get() shouldBe expectedBytesSaved
 
         service.close()
       } finally {
