@@ -48,7 +48,7 @@ import java.nio.file.Path
  */
 @Suppress("TooManyFunctions")
 object ContainerTestSupport {
-  private const val PROXY_ALIAS = "proxy-host"
+  const val PROXY_ALIAS = "proxy-host"
   private const val AGENT_ALIAS = "agent"
   private const val PROMETHEUS_ALIAS = "prometheus"
   const val METRICS_STUB_ALIAS = "metrics-stub"
@@ -92,21 +92,29 @@ object ContainerTestSupport {
       waitingFor(Wait.forHttp(waitPath).forPort(NGINX_PORT))
     }
 
+  /**
+   * @param alias network alias this proxy answers to. Two proxies in one spec MUST take distinct
+   *   aliases: sharing one makes Docker's embedded DNS round-robin between them non-deterministically,
+   *   which silently turns an endpoint-selection test into a coin flip.
+   * @param logLabel prefix on this proxy's forwarded container logs, so an HA pair is distinguishable.
+   */
   fun proxyContainer(
     network: Network,
     image: ImageFromDockerfile = proxyImage(),
+    alias: String = PROXY_ALIAS,
     env: Map<String, String> = emptyMap(),
     exposedPorts: List<Int> = [PROXY_HTTP_PORT],
     hostFiles: Map<String, String> = emptyMap(),
     wait: WaitStrategy = Wait.forListeningPort(),
+    logLabel: String = alias,
   ): GenericContainer<*> =
     GenericContainer<Nothing>(image).apply {
       withNetwork(network)
-      withNetworkAliases(PROXY_ALIAS)
+      withNetworkAliases(alias)
       withExposedPorts(*exposedPorts.toTypedArray())
       hostFiles.forEach { (hostPath, dest) -> withCopyFileToContainer(MountableFile.forHostPath(hostPath), dest) }
       env.forEach { (key, value) -> withEnv(key, value) }
-      withLogConsumer(logConsumer("proxy"))
+      withLogConsumer(logConsumer(logLabel))
       waitingFor(wait)
     }
 
