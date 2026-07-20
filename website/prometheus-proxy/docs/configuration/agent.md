@@ -114,6 +114,45 @@ Or specify on the command line:
 java -jar prometheus-agent.jar --proxy proxy-host.example.com:50051 --config agent.conf
 ```
 
+### Proxy failover
+
+For redundancy, give the agent an ordered list of proxy endpoints instead of a single hostname. It
+connects to the first that answers and moves to the next on a failed connect; when a working
+connection drops it returns to the head of the list, so a recovered primary is picked up on the next
+reconnect. Only one connection is active at a time.
+
+```hocon
+agent {
+  proxy {
+    port = 50051                                    // Default port for entries that omit one
+    endpoints = [
+      "proxy-a.example.com:50051",                  // Tried first
+      "proxy-b.example.com:50051"                   // Used when proxy-a is unreachable
+    ]
+  }
+}
+```
+
+`--proxy` and `PROXY_HOSTNAME` accept the same list as a comma-separated value, and either one
+**replaces** `endpoints` entirely rather than adding to it:
+
+```bash
+java -jar prometheus-agent.jar --proxy proxy-a.example.com:50051,proxy-b.example.com:50051
+```
+
+A single value behaves exactly as it always has, so existing configurations need no change. `hostname`
+is used only when `endpoints` is empty; the two are never merged. An unparseable entry fails at
+startup rather than surfacing later as a connection error.
+
+!!! warning "All endpoints share one TLS configuration"
+
+    The agent builds a single TLS context and authority override for the whole list. Endpoints with
+    different CAs or certificate SANs fail with an opaque handshake error rather than a clear
+    configuration error.
+
+See [High availability](../production.md#high-availability) for the Prometheus side — in particular,
+scrape an HA pair with `static_config`, never `http_sd_config`.
+
 ## Agent Authentication
 
 If the proxy requires a [pre-shared agent token](../security/index.md#agent-authentication-pre-shared-token),

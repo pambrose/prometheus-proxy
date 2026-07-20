@@ -22,13 +22,58 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
 
 ## High availability
 
-- The proxy is a **single instance per path namespace** — agents connect to one proxy. Run a
-  second, independent proxy with its own agents for a separate failure domain rather than
-  load-balancing one path across two proxies.
+- For **proxy** redundancy, give the agent an ordered list of proxy endpoints. It connects to the
+  first that answers, and on a failed connect moves to the next; when a working connection drops it
+  returns to the head of the list, so a recovered primary is picked up on the next reconnect without
+  any manual step.
+
+    ```hocon
+    agent {
+      proxy {
+        endpoints = [ "proxy-a.example.com:50051", "proxy-b.example.com:50051" ]
+      }
+    }
+    ```
+
+    Equivalently `--proxy proxy-a.example.com:50051,proxy-b.example.com:50051`, or the same
+    comma-separated value in `PROXY_HOSTNAME`.
+
+    Only one connection is active at a time; the agent registers its paths on whichever proxy it is
+    connected to. Point Prometheus at **both** proxies with identical target lists — see
+    [Scraping an HA pair](#scraping-an-ha-pair) below, which has a requirement that is easy to get
+    wrong.
+
+    All endpoints must share the same TLS configuration. The agent builds one TLS context and one
+    authority override for the whole list, so endpoints with different CAs or certificate SANs fail
+    with an opaque handshake error rather than a clear configuration error.
+
 - For **agent** redundancy, use [consolidated mode](advanced.md#consolidated-mode): multiple
   agents register the same path, and the proxy keeps serving it as long as one remains
   connected. This also smooths **rolling upgrades** — the new agent registers before the old
   one drains.
+
+### Scraping an HA pair
+
+!!! warning "Use `static_config`, not `http_sd_config`"
+
+    A standby proxy — one no agent is currently connected to — returns an **empty list** from its
+    service-discovery endpoint. Under `http_sd_config` Prometheus treats that as "these targets no
+    longer exist" and **deletes** them: no `up=0`, no failed scrape, no alert. The series simply stop,
+    which is the one failure mode an HA pair is supposed to make impossible.
+
+    With `static_config`, the standby returns `404` for a path it does not know, Prometheus records
+    `up=0` for that target, and your existing alerting works unchanged.
+
+```yaml
+scrape_configs:
+  - job_name: proxied-metrics
+    static_configs:
+      - targets: ["proxy-a.example.com:8080", "proxy-b.example.com:8080"]
+```
+
+Both proxies are scraped every interval. Exactly one of them has the agent connected and returns the
+metrics; the other returns `404` and shows as `up=0`. Deduplicate in the usual Prometheus HA way
+(distinct `external_labels` plus a downstream deduplicating reader, or `honor_labels`).
 - Set Kubernetes liveness/readiness probes to `/ping` and `/healthcheck` so unhealthy pods are
   restarted and kept out of rotation. See [Kubernetes](kubernetes.md#health-probes-resources).
 
