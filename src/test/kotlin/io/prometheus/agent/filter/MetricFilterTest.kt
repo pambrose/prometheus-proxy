@@ -189,5 +189,53 @@ class MetricFilterTest : StringSpec() {
       result.text shouldBe "items_count 42\n"
       result.linesDropped shouldBe 0
     }
+
+    "a denied family followed by an allowed family should not poison the second family's verdict" {
+      // Regression guard: the verdict must be recomputed unconditionally on every HELP/TYPE line.
+      // A sticky-false bug (only recompute when currentVerdict is already true) would leave "up"
+      // denied here even though nothing denies it.
+      val text =
+        """
+        # HELP go_goroutines Number of goroutines
+        # TYPE go_goroutines gauge
+        go_goroutines 12
+        # HELP up Whether the target is healthy
+        # TYPE up gauge
+        up 1
+        """.trimIndent() + "\n"
+      val result = filter(deny = ["go_.*"]).filterText(text)
+      result.text shouldContain "# HELP up Whether the target is healthy"
+      result.text shouldContain "# TYPE up gauge"
+      result.text shouldContain "up 1"
+      result.text shouldNotContain "go_goroutines"
+      result.linesDropped shouldBe 3
+    }
+
+    "a summary family should be kept or dropped as a whole, including its bare-name quantile samples" {
+      val text =
+        """
+        # HELP x A summary
+        # TYPE x summary
+        x{quantile="0.5"} 10
+        x_sum 100
+        x_count 12
+        """.trimIndent() + "\n"
+      filter(allow = ["x"]).filterText(text).text shouldBe text
+      filter(deny = ["x"]).filterText(text).text shouldBe ""
+    }
+
+    "a denied OpenMetrics family should drop its UNIT line too" {
+      val text =
+        """
+        # HELP requests_seconds Request latency
+        # TYPE requests_seconds summary
+        # UNIT requests_seconds seconds
+        requests_seconds_sum 3.2
+        requests_seconds_count 9
+        """.trimIndent() + "\n"
+      val result = filter(deny = ["requests_seconds"]).filterText(text)
+      result.text shouldBe ""
+      result.linesDropped shouldBe 5
+    }
   }
 }

@@ -30,10 +30,20 @@ internal data class FilterResult(
 /**
  * Drops metric families from a Prometheus text exposition payload by metric name.
  *
- * Deliberately line-oriented rather than a full exposition parser: the format is line-based, so
- * allow/deny filtering needs only the metric-name prefix of each line. Regexes are compiled once at
- * path-registration time (see [createOrNull]), never per scrape, and are matched **fully anchored**
- * to mirror Prometheus's own `relabel_config` semantics.
+ * Stateful and family-scoped rather than a full exposition parser: a `# HELP`/`# TYPE`/`# UNIT`
+ * comment line opens a family and the allow/deny verdict is computed once against the family name;
+ * every subsequent sample line that belongs to that family (exact name match, or the family name plus
+ * a recognized histogram/summary/OpenMetrics suffix -- see [belongsToFamily]) inherits the verdict
+ * without being matched again. A sample line that does not belong to the open family closes it and is
+ * judged literally against its own full name. Regexes are compiled once at path-registration time
+ * (see [createOrNull]), never per scrape, and are matched **fully anchored** to mirror Prometheus's
+ * own `relabel_config` semantics.
+ *
+ * One consequence of family scoping worth calling out: once a family is open, a series-level rule such
+ * as `deny = ["http_req_duration_seconds_bucket"]` is silently a no-op, because `_bucket` lines inherit
+ * the family's verdict rather than being matched against the deny list themselves. This is intended --
+ * it's what keeps a histogram's buckets, sum, and count together -- but it means allow/deny rules only
+ * ever operate at family granularity, never at individual series granularity.
  *
  * @see io.prometheus.agent.AgentPathManager
  */
@@ -140,13 +150,16 @@ internal class MetricFilter private constructor(
     private val FAMILY_SUFFIXES =
       setOf("_bucket", "_sum", "_count", "_created", "_total", "_gsum", "_gcount", "_info")
 
-    // "# HELP foo help text" / "# TYPE foo counter" -> "foo". Any other comment -> null.
+    // "# HELP foo help text" / "# TYPE foo counter" / "# UNIT foo seconds" -> "foo". Any other
+    // comment -> null. The keyword terminator matches either a space or a tab, symmetric with the
+    // name terminator below, so "# TYPE\tfoo counter" opens the family just like "# TYPE foo counter".
     internal fun parseCommentFamily(line: String): String? {
       val body = line.removePrefix("#").trimStart()
       val rest =
         when {
-          body.startsWith("HELP ") -> body.removePrefix("HELP ")
-          body.startsWith("TYPE ") -> body.removePrefix("TYPE ")
+          body.startsWith("HELP ") || body.startsWith("HELP\t") -> body.substring(5)
+          body.startsWith("TYPE ") || body.startsWith("TYPE\t") -> body.substring(5)
+          body.startsWith("UNIT ") || body.startsWith("UNIT\t") -> body.substring(5)
           else -> return null
         }
       return rest.trimStart().substringBefore(' ').substringBefore('\t').takeIf { it.isNotEmpty() }
