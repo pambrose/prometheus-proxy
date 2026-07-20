@@ -253,6 +253,19 @@ Filters apply by path to both statically configured paths and paths added by
 of which route registered it. An invalid regex fails agent startup rather than surfacing later at
 scrape time.
 
+!!! tip "Confirming a filter attached"
+
+    A filter whose `path` does not match a registered path is otherwise silent — it simply never runs.
+    The agent's registration log line for each path reports whether one attached:
+
+    ```text
+    Registered http://app1:9090/metrics as /app1_metrics with labels {} (static) with a metric filter
+    ```
+
+    If the line for your path does not end with `with a metric filter`, the `path` in your `filters`
+    entry does not match the registered path. The `agent_filter_*` counters below are the other way to
+    tell: they are only ever created for paths whose filter actually ran.
+
 Two counters, both labeled by `launch_id` and `path`, track filtering and are only created for paths
 that actually have a filter configured:
 

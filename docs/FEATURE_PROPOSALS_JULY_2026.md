@@ -495,22 +495,53 @@ rule copied from a Prometheus `relabel_config` behaves identically at the agent.
 the family name, so a histogram's `_bucket`/`_sum`/`_count` series (and OpenMetrics's `_total` /
 `_created` / `_gsum` / `_gcount` / `_info` suffixes) are kept or dropped as a unit. Deny is evaluated
 after allow. A non-text payload (e.g. protobuf) or a body that fails strict UTF-8 decoding passes
-through unfiltered and byte-exact rather than risk corrupting it — both fail open with a once-per-path
-warning, an additional guard added during review alongside the `# UNIT` handling above.
+through unfiltered and byte-exact rather than risk corrupting it — both fail open, each warning once
+per filter instance, an additional guard added during review alongside the `# UNIT` handling above. A
+fail-open scrape records no filter metrics at all, which is deliberately distinguishable from a filter
+that ran and happened to drop nothing.
 
 **Scope (unchanged from the MVP cut below).** `dropLabels`, full relabeling, and an agent-global filter
 remain unimplemented, matching the proposal's original MVP boundary and Open Questions.
 
-**Files.** New `agent/filter/MetricFilter.kt`. Modified: `AgentPathManager` (compiles and attaches a
-filter per path at registration time, keyed by path so it applies to both static `pathConfigs` and
-Feature 1 discovered paths), `AgentHttpService` (applies the filter before the gzip/chunk decision),
-`AgentMetrics` (`agent_filter_lines_dropped` / `agent_filter_bytes_saved` counters), `config/config.conf`
-and `reference.conf`.
+**Files.** New `agent/filter/MetricFilter.kt` — owns both the line filtering and the payload-level
+policy wrapped around it (`filterBytes()`: the filterable-content-type gate, the strict UTF-8 decode,
+the two fail-open branches, and their warn latches). Modified: `AgentPathManager` (compiles and
+attaches a filter per path at registration time, keyed by path so it applies to both static
+`pathConfigs` and Feature 1 discovered paths, and reports in the registration log whether one
+attached), `AgentHttpService` (calls `filterBytes()` before the gzip/chunk decision and records the
+counters), `AgentMetrics` (`agent_filter_lines_dropped` / `agent_filter_bytes_saved` counters),
+`config/config.conf` and `reference.conf`.
+
+**Post-merge cleanup (diverged from the first cut).** A quality pass after the feature landed moved
+two things and deleted a third; the descriptions above reflect the result:
+
+- **Filter policy moved behind the filter.** The content-type gate, decode, and fail-open handling
+  were originally a ~50-line branch ladder inlined in `AgentHttpService.buildScrapeResults`. They now
+  sit in `MetricFilter.filterBytes()`, so the exposition-format assumptions live in one file. The two
+  warn-once latches moved with them: they were path-keyed `ConcurrentHashMap` sets in
+  `AgentHttpService` that nothing ever removed from, so with Feature 1's reconcile loop churning paths
+  they grew without bound. They are now `AtomicBoolean`s on the filter instance, which is already 1:1
+  with a path and is reclaimed with it.
+- **`filterText()` scans by index.** The first cut split the payload on `'\n'`, materializing one
+  `String` per line plus the backing list before judging anything — on a multi-megabyte body, tens of
+  MB of garbage per scrape, per filtered path. It now scans the source string by index and appends
+  ranges directly; family membership is compared in place, so a sample line belonging to the open
+  family allocates nothing, and a family's `HELP`/`TYPE`/`UNIT` lines no longer each re-run every
+  regex.
+- **The startup filter/path cross-check was deleted.** It warned when a configured filter path matched
+  no `pathConfigs` entry, but `pathConfigs` is only the static baseline available at construction time
+  — discovered and runtime-registered paths arrive later and were reported as unmatched, which is why
+  it had to sit at debug behind a comment explaining when to ignore it. The signal now comes from
+  `doRegisterPath`, where the filter for a path is actually resolved: the registration log says whether
+  one attached. Correct for all three path sources, and visible at info.
 
 **Tests.** `MetricFilterTest` (anchoring, family scoping, HELP/TYPE/UNIT handling), filter-compilation
-and path-typo-warning cases in `AgentPathManagerTest`, filter-ordering and fail-open cases in
-`AgentHttpServiceTest`, and the Netty-transport harness test `AgentMetricFilterTest` exercising
-per-path filtering end-to-end.
+and registration-log attachment cases in `AgentPathManagerTest` (including a discovered path — the case
+no construction-time cross-check could reach), filter-ordering, fail-open, and
+`isFilterableContentType` truth-table cases in `AgentHttpServiceTest`, and the Netty-transport harness
+test `AgentMetricFilterTest` exercising per-path filtering end-to-end. The content-type cases still
+live in `AgentHttpServiceTest` for history even though the function under test moved to `MetricFilter`;
+relocating them to `MetricFilterTest` is a loose end.
 
 ### Motivation
 
