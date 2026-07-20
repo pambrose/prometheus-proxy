@@ -91,7 +91,11 @@ class AgentPathManagerTest : StringSpec() {
       proxy { auth = [] }
       """.trimIndent(),
     )
-    val configVals = ConfigVals(config)
+    // Merged with the reference config exactly as BaseOptions.readConfig does in production. tscfg emits an
+    // unguarded c.getList() for every list-typed key, so a bare parseString fixture throws
+    // ConfigException.Missing the moment a new list is added to the schema -- and ConfigVals builds BOTH
+    // the agent and proxy trees eagerly, so an agent-side list breaks proxy-only fixtures too.
+    val configVals = ConfigVals(config.withFallback(ConfigFactory.load()).resolve())
 
     val mockAgent = mockk<Agent>(relaxed = true)
     every { mockAgent.grpcService } returns mockGrpcService
@@ -464,7 +468,7 @@ class AgentPathManagerTest : StringSpec() {
         proxy { auth = [] }
         """.trimIndent(),
       )
-      val configVals = ConfigVals(config)
+      val configVals = ConfigVals(config.withFallback(ConfigFactory.load()).resolve())
 
       val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 
@@ -500,7 +504,7 @@ class AgentPathManagerTest : StringSpec() {
         proxy { auth = [] }
         """.trimIndent(),
       )
-      val configVals = ConfigVals(config)
+      val configVals = ConfigVals(config.withFallback(ConfigFactory.load()).resolve())
 
       val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 
@@ -573,7 +577,7 @@ class AgentPathManagerTest : StringSpec() {
         proxy { auth = [] }
         """.trimIndent(),
       )
-      val configVals = ConfigVals(config)
+      val configVals = ConfigVals(config.withFallback(ConfigFactory.load()).resolve())
 
       val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 

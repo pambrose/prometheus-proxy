@@ -57,6 +57,40 @@ class ConfigValsTest : StringSpec() {
       configVals.agent.filters.shouldBeEmpty()
     }
 
+    // ==================== Agent Proxy Endpoints Defaults ====================
+
+    "agent proxy endpoints should default to an empty list" {
+      val configVals = loadDefaultConfigVals()
+      configVals.agent.proxy.endpoints.shouldBeEmpty()
+    }
+
+    // tscfg generates an UNGUARDED c.getList("endpoints") for the list -- unlike the sibling scalars
+    // hostname/port, which get a hasPathOrNull check. Without the agent.proxy.endpoints = [] default in
+    // reference.conf, every pre-failover config (i.e. every config in the wild) would die at load time
+    // with ConfigException.Missing. Deleting that one reference.conf line must fail loudly here rather
+    // than in production, so this test loads a config shaped exactly like an existing deployment's.
+    "a config that predates failover and omits agent.proxy.endpoints should still load" {
+      val config =
+        ConfigFactory.parseString(
+          """
+          agent {
+            proxy {
+              hostname = "some-proxy"
+              port = 50052
+            }
+          }
+          """.trimIndent(),
+        ).withFallback(ConfigFactory.load()).resolve()
+
+      val configVals = ConfigVals(config)
+
+      configVals.agent.proxy.apply {
+        hostname shouldBe "some-proxy"
+        port shouldBe 50052
+        endpoints.shouldBeEmpty()
+      }
+    }
+
     // ==================== Agent HTTP Client Cache Defaults ====================
 
     "agent HTTP client cache config should have correct defaults" {

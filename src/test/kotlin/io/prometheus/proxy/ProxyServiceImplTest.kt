@@ -88,7 +88,11 @@ class ProxyServiceImplTest : StringSpec() {
       }
       """.trimIndent(),
     )
-    val configVals = ConfigVals(config)
+    // Merged with the reference config exactly as BaseOptions.readConfig does in production. tscfg emits an
+    // unguarded c.getList() for every list-typed key, so a bare parseString fixture throws
+    // ConfigException.Missing the moment a new list is added to the schema -- and ConfigVals builds BOTH
+    // the agent and proxy trees eagerly, so an agent-side list breaks proxy-only fixtures too.
+    val configVals = ConfigVals(config.withFallback(ConfigFactory.load()).resolve())
 
     val mockProxy = mockk<Proxy>(relaxed = true)
     every { mockProxy.options } returns mockOptions
