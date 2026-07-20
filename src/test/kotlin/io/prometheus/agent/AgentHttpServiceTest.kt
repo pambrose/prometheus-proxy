@@ -1628,7 +1628,7 @@ class AgentHttpServiceTest : StringSpec() {
       val options = mockAgent.options
       every { options.maxContentLengthMBytes } returns 1
       val maxContentLength = 1 * 1024 * 1024
-      // 40 bytes/unit * 30_000 = 1_200_000 bytes, safely over the 1_048_576-byte limit so the
+      // 39 bytes/unit * 30_000 = 1_170_000 bytes, safely over the 1_048_576-byte limit so the
       // channel read is actually capped (not just reading the whole body under the limit).
       val rawContent = "# TYPE foo_denied counter\nfoo_denied 1\n".repeat(30_000)
       rawContent.encodeToByteArray().size shouldBeGreaterThan maxContentLength
