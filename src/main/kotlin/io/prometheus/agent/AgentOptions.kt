@@ -298,10 +298,10 @@ class AgentOptions(
       val fallback =
         if (configEndpoints.isNotEmpty())
           configEndpoints.joinToString(",") { entry ->
-            parseHostPort(stripScheme(entry.trim()), defaultPort).run { "$host:$port" }
+            parseHostPort(stripScheme(entry.trim()), defaultPort).spec
           }
         else
-          parseHostPort(agentConfigVals.proxy.hostname, defaultPort).run { "$host:$port" }
+          parseHostPort(agentConfigVals.proxy.hostname, defaultPort).spec
       proxyHostname = PROXY_HOSTNAME.getEnv(fallback)
     }
     // Parse eagerly so a malformed endpoint fails at startup with a clear message rather than surfacing

@@ -26,6 +26,9 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.prometheus.agent.AgentGrpcService.Companion.DEFAULT_GRPC_PORT
+import io.prometheus.common.Utils.HostPort
+import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.agentOptions
 
 class AgentOptionsTest : StringSpec() {
@@ -475,5 +478,57 @@ class AgentOptionsTest : StringSpec() {
         )
       }
     }
+
+    // ==================== Failover Endpoint Resolution ====================
+    //
+    // These are the only tests that reach the agent.proxy.endpoints fallback: it is gated behind
+    // `proxyHostname.isEmpty()`, and every other case in this file passes --proxy, which skips it.
+
+    "agent.proxy.endpoints should resolve to an ordered comma-separated spec" {
+      val options = agentOptions(["--name", "test", "--config", ENDPOINTS_CONFIG_FILE], false)
+
+      // Order preserved, agent.proxy.port (50052) applied to the entry that carries no port, and the
+      // IPv6 literal still bracketed so it re-parses to the same host and port it was configured with.
+      options.proxyHostname shouldBe "proxy-a:50052,proxy-b:50443,[2001:db8::1]:50444"
+    }
+
+    "a configured endpoint list should survive the round trip back through the parser" {
+      val options = agentOptions(["--name", "test", "--config", ENDPOINTS_CONFIG_FILE], false)
+
+      parseEndpointList(options.proxyHostname, DEFAULT_GRPC_PORT) shouldBe
+        [
+          HostPort("proxy-a", 50052),
+          HostPort("proxy-b", 50443),
+          HostPort("2001:db8::1", 50444),
+        ]
+    }
+
+    // --proxy overrides agent.proxy.endpoints wholesale rather than merging, matching the precedence
+    // every other option in AgentOptions follows.
+    "an explicit --proxy should override a configured endpoint list wholesale" {
+      val options =
+        agentOptions(["--name", "test", "--config", ENDPOINTS_CONFIG_FILE, "--proxy", "override:1234"], false)
+
+      options.proxyHostname shouldBe "override:1234"
+    }
+
+    "a comma-separated --proxy should resolve to multiple endpoints" {
+      val options = agentOptions(["--name", "test", "--proxy", "first:1234,second:5678"], false)
+
+      parseEndpointList(options.proxyHostname, DEFAULT_GRPC_PORT) shouldBe
+        [HostPort("first", 1234), HostPort("second", 5678)]
+    }
+
+    "a malformed endpoint should fail at option resolution rather than at connect time" {
+      val e =
+        shouldThrow<IllegalArgumentException> {
+          agentOptions(["--name", "test", "--proxy", "good:1234,bad:notaport"], false)
+        }
+      e.message.orEmpty() shouldContain "notaport"
+    }
+  }
+
+  companion object {
+    private const val ENDPOINTS_CONFIG_FILE = "config/test-configs/proxy-endpoints.conf"
   }
 }

@@ -436,7 +436,7 @@ class Agent(
     }
   }
 
-  internal val proxyHost get() = "${grpcService.agentHostName}:${grpcService.agentPort}"
+  internal val proxyHost get() = grpcService.currentEndpoint.spec
 
   internal fun startTimer(): Histogram.Timer? = metrics.scrapeRequestLatency.labels(launchId, agentName).startTimer()
 

@@ -565,5 +565,53 @@ class UtilsTest : StringSpec() {
         }
       e.message.orEmpty() shouldContain "notaport"
     }
+
+    // A scheme-only entry survives the blank filter (the raw text is non-empty) but strips to nothing.
+    // The message must name the offending entry, or an operator gets "must not be blank" with no clue
+    // which of five endpoints is at fault.
+    "parseEndpointList should name a scheme-only entry it rejects" {
+      val e =
+        shouldThrow<IllegalArgumentException> {
+          parseEndpointList("good:$PROXY_AGENT_PORT,http://", PROXY_AGENT_PORT)
+        }
+      e.message.orEmpty() shouldContain "http://"
+    }
+
+    // ==================== HostPort.spec Round-Trip ====================
+
+    // parseHostPort strips the brackets off an IPv6 literal, so rendering it back as "$host:$port"
+    // produces a string that re-parses as a BARE IPv6 address with no port -- silently dialing a
+    // garbage authority on the default port. AgentOptions normalizes every configured endpoint through
+    // exactly this render-then-reparse cycle, so the round trip has to be lossless.
+    "HostPort.spec should round-trip a bracketed IPv6 endpoint through parseEndpointList" {
+      val parsed = parseHostPort("[2001:db8::1]:$PROXY_HTTP_PORT", PROXY_AGENT_PORT)
+      parsed shouldBe HostPort("2001:db8::1", PROXY_HTTP_PORT)
+
+      parsed.spec shouldBe "[2001:db8::1]:$PROXY_HTTP_PORT"
+      parseEndpointList(parsed.spec, PROXY_AGENT_PORT) shouldBe [parsed]
+    }
+
+    "HostPort.spec should round-trip a bare IPv6 host that took the default port" {
+      val parsed = parseHostPort("fe80::1", PROXY_HTTP_PORT)
+      parsed shouldBe HostPort("fe80::1", PROXY_HTTP_PORT)
+
+      parsed.spec shouldBe "[fe80::1]:$PROXY_HTTP_PORT"
+      parseEndpointList(parsed.spec, PROXY_AGENT_PORT) shouldBe [parsed]
+    }
+
+    // The IPv4/DNS render must stay byte-identical to the old "$host:$port" form -- that string is what
+    // every existing deployment's resolved proxyHostname looks like.
+    "HostPort.spec should render an IPv4 or DNS host unchanged" {
+      HostPort("localhost", PROXY_AGENT_PORT).spec shouldBe "localhost:$PROXY_AGENT_PORT"
+      HostPort("10.0.0.1", PROXY_HTTP_PORT).spec shouldBe "10.0.0.1:$PROXY_HTTP_PORT"
+    }
+
+    "HostPort.spec should round-trip a multi-endpoint list including IPv6" {
+      val specs =
+        ["proxy-a", "[2001:db8::1]:$PROXY_HTTP_PORT", "10.0.0.5:$PROXY_HTTP_PORT"]
+          .map { parseHostPort(it, PROXY_AGENT_PORT) }
+
+      parseEndpointList(specs.joinToString(",") { it.spec }, PROXY_AGENT_PORT) shouldBe specs
+    }
   }
 }

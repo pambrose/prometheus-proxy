@@ -136,14 +136,19 @@ internal class AgentGrpcService(
   @Volatile
   private var endpointIndex = 0
 
-  val agentHostName: String get() = endpoints[endpointIndex].host
-  val agentPort: Int get() = endpoints[endpointIndex].port
+  // Read the volatile index ONCE. Two independent reads (one for host, one for port) let a rotation
+  // land between them, so a concurrent reader -- the /debug servlet runs on a Jetty thread -- could
+  // render a host:port pair that was never configured.
+  val currentEndpoint: HostPort get() = endpoints[endpointIndex]
+
+  val agentHostName: String get() = currentEndpoint.host
+  val agentPort: Int get() = currentEndpoint.port
 
   /** Whether more than one proxy endpoint is configured, i.e. whether failover is possible at all. */
   val hasFailoverEndpoints: Boolean get() = endpoints.size > 1
 
   /** All configured endpoints, in priority order, for startup logging. */
-  val endpointsDesc: String get() = endpoints.joinToString(", ") { "${it.host}:${it.port}" }
+  val endpointsDesc: String get() = endpoints.joinToString(", ") { it.spec }
 
   /**
    * Advances to the next endpoint, wrapping at the end, and reports whether the selection changed.
@@ -156,7 +161,7 @@ internal class AgentGrpcService(
       if (endpoints.size <= 1)
         return@withLock false
       endpointIndex = (endpointIndex + 1) % endpoints.size
-      logger.info { "Trying next proxy endpoint: $agentHostName:$agentPort" }
+      logger.info { "Trying next proxy endpoint: ${currentEndpoint.spec}" }
       true
     }
 
@@ -172,7 +177,7 @@ internal class AgentGrpcService(
       if (endpointIndex == 0)
         return@withLock false
       endpointIndex = 0
-      logger.info { "Returning to primary proxy endpoint: $agentHostName:$agentPort" }
+      logger.info { "Returning to primary proxy endpoint: ${currentEndpoint.spec}" }
       true
     }
 

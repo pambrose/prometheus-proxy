@@ -145,7 +145,17 @@ internal object Utils {
   data class HostPort(
     val host: String,
     val port: Int,
-  )
+  ) {
+    /**
+     * Rendering that round-trips back through [parseHostPort].
+     *
+     * [parseHostPort] strips the brackets off an IPv6 literal, so a naive `"$host:$port"` produces a
+     * string that re-parses as a *bare* IPv6 address with no port — silently dialing the wrong
+     * authority on the default port. Re-bracketing any host containing a colon makes the render the
+     * exact inverse of the parse. Identical to `"$host:$port"` for every IPv4/DNS host.
+     */
+    val spec: String get() = if (':' in host) "[$host]:$port" else "$host:$port"
+  }
 
   private fun parsePort(
     portStr: String,
@@ -189,7 +199,13 @@ internal object Utils {
   ): List<HostPort> {
     val entries = spec.split(',').map { it.trim() }.filter { it.isNotEmpty() }
     require(entries.isNotEmpty()) { "No proxy endpoints found in '$spec'" }
-    return entries.map { parseHostPort(stripScheme(it), defaultPort) }
+    return entries.map { entry ->
+      val stripped = stripScheme(entry)
+      // A scheme-only entry ("http://") survives the isNotEmpty filter above but strips to nothing.
+      // parseHostPort would reject it with a message naming neither the entry nor the list, so name it.
+      require(stripped.isNotEmpty()) { "Proxy endpoint '$entry' in '$spec' has no host" }
+      parseHostPort(stripped, defaultPort)
+    }
   }
 
   fun parseHostPort(
