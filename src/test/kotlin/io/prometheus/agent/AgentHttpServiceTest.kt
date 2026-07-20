@@ -1540,5 +1540,21 @@ class AgentHttpServiceTest : StringSpec() {
         trustStorePassword = "",
       ).shouldBeNull()
     }
+
+    // ==================== Task 5: content-type filter gate ====================
+
+    "isFilterableContentType should accept text and openmetrics types" {
+      AgentHttpService.isFilterableContentType("") shouldBe true
+      AgentHttpService.isFilterableContentType("text/plain") shouldBe true
+      AgentHttpService.isFilterableContentType("text/plain; version=0.0.4; charset=utf-8") shouldBe true
+      AgentHttpService.isFilterableContentType("TEXT/PLAIN") shouldBe true
+      AgentHttpService.isFilterableContentType("application/openmetrics-text; version=1.0.0") shouldBe true
+    }
+
+    "isFilterableContentType should reject binary and other types" {
+      AgentHttpService.isFilterableContentType("application/vnd.google.protobuf") shouldBe false
+      AgentHttpService.isFilterableContentType("application/octet-stream") shouldBe false
+      AgentHttpService.isFilterableContentType("text/html") shouldBe false
+    }
   }
 }

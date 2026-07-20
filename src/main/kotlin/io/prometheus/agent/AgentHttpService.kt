@@ -47,6 +47,7 @@ import io.ktor.http.isSuccess
 import io.ktor.utils.io.readRemaining
 import io.prometheus.Agent
 import io.prometheus.agent.HttpClientCache.ClientKey
+import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.appendQueryParams
@@ -56,6 +57,7 @@ import io.prometheus.grpc.ScrapeRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.readByteArray
+import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.X509TrustManager
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -97,6 +99,10 @@ internal class AgentHttpService(
     )
   }
 
+  // Paths already warned about an unfilterable content type. A scrape recurs every scrape interval
+  // forever, so an unguarded warn here would be a permanent log-spam source.
+  private val contentTypeWarnedPaths = ConcurrentHashMap.newKeySet<String>()
+
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
     return if (pathContext != null)
@@ -119,7 +125,7 @@ internal class AgentHttpService(
     val results =
       try {
         withTimeout(agent.options.scrapeTimeoutSecs.seconds) {
-          fetchContent(url, req)
+          fetchContent(url, req, pathContext.filter)
         }
       } catch (e: Throwable) {
         // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
@@ -152,6 +158,7 @@ internal class AgentHttpService(
   internal suspend fun fetchContent(
     url: String,
     scrapeRequest: ScrapeRequest,
+    filter: MetricFilter? = null,
   ): ScrapeResults {
     val clientKey = with(Url(url)) { ClientKey(user, password) }
     val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(clientKey) }
@@ -161,7 +168,7 @@ internal class AgentHttpService(
         url = url,
         setUp = prepareRequestHeaders(scrapeRequest),
       ) { response ->
-        result = buildScrapeResults(response, url, scrapeRequest)
+        result = buildScrapeResults(response, url, scrapeRequest, filter)
       }
       return requireNotNull(result) { "Response handler was not called for ${sanitizeUrl(url)}" }
     } finally {
@@ -185,6 +192,7 @@ internal class AgentHttpService(
     response: HttpResponse,
     url: String,
     scrapeRequest: ScrapeRequest,
+    filter: MetricFilter? = null,
   ): ScrapeResults {
     val statusCode = response.status.value
     val safeUrl = sanitizeUrl(url)
@@ -226,7 +234,26 @@ internal class AgentHttpService(
           scrapeCounterMsg = UNSUCCESSFUL_MSG,
         )
       }
-      val zipped = contentByteSize > agent.options.minGzipSizeBytes
+
+      // Filter before the gzip decision so gzip and chunking both see the reduced payload. The
+      // maxContentLength guard above deliberately runs against the RAW bytes: it is a memory bound,
+      // and filtering must not become a way around it.
+      val filteredBytes =
+        if (filter == null) {
+          contentBytes // Unfiltered paths keep the pure byte path -- no decode, no cost.
+        } else if (!isFilterableContentType(contentType)) {
+          // Warn once per path -- this recurs on every scrape, so an unguarded warn would spam forever.
+          if (contentTypeWarnedPaths.add(scrapeRequest.path)) {
+            logger.warn {
+              "Skipping metric filter for /${scrapeRequest.path}: content type \"$contentType\" is not text"
+            }
+          }
+          contentBytes
+        } else {
+          filter.filterText(contentBytes.decodeToString()).text.encodeToByteArray()
+        }
+
+      val zipped = filteredBytes.size > agent.options.minGzipSizeBytes
       ScrapeResults(
         srAgentId = scrapeRequest.agentId,
         srScrapeId = scrapeRequest.scrapeId,
@@ -234,8 +261,8 @@ internal class AgentHttpService(
         srStatusCode = statusCode,
         srContentType = contentType,
         srZipped = zipped,
-        srContentAsText = if (!zipped) contentBytes.decodeToString() else "",
-        srContentAsZipped = if (zipped) contentBytes.zip() else EMPTY_BYTE_ARRAY,
+        srContentAsText = if (!zipped) filteredBytes.decodeToString() else "",
+        srContentAsZipped = if (zipped) filteredBytes.zip() else EMPTY_BYTE_ARRAY,
         srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
         scrapeCounterMsg = SUCCESS_MSG,
       )
@@ -343,6 +370,15 @@ internal class AgentHttpService(
         trustStorePath.isNotEmpty() -> SslSettings.getTrustManager(trustStorePath, trustStorePassword)
         else -> null
       }
+
+    /**
+     * Whether a payload of [contentType] is safe to filter line-by-line. Blank, `text/plain`, and
+     * `application/openmetrics-text` are; anything else (protobuf, an HTML error body) is passed
+     * through untouched so a misconfigured filter can never corrupt a payload.
+     */
+    internal fun isFilterableContentType(contentType: String): Boolean =
+      contentType.substringBefore(';').trim().lowercase()
+        .let { it.isEmpty() || it == "text/plain" || it == "application/openmetrics-text" }
 
     private const val INVALID_PATH_MSG = "invalid_path"
     private const val SUCCESS_MSG = "success"
