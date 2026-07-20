@@ -84,12 +84,16 @@ internal class AgentPathManager(
       .toMap()
 
   init {
-    // A filter path that matches no static path is almost always a typo. Discovered paths are
-    // excluded: a filter may legitimately target a path that only appears later via discovery.
+    // This only sees the STATIC baseline available at construction time (config-driven pathConfigs).
+    // It cannot know about paths registered later at runtime via registerPath(), or reconciled in by
+    // discovery, so a filter that legitimately targets one of those paths will always miss here -- that
+    // is expected, not a typo. Kept at debug (not warn) because "absent from the static baseline" is a
+    // normal condition for those paths, not an anomaly; it remains a useful diagnostic for spotting a
+    // genuine typo in a purely static deployment.
     val staticPaths = pathConfigs.mapTo(mutableSetOf()) { it.path.removePrefix("/") }
     filtersByPath.keys
       .filterNot { it in staticPaths }
-      .forEach { logger.warn { "Metric filter configured for /$it, which matches no pathConfigs entry" } }
+      .forEach { logger.debug { "Metric filter configured for /$it, which matches no static pathConfigs entry" } }
   }
 
   suspend fun registerPaths() = pathConfigs.forEach { registerPath(it.path, it.url, it.labels) }

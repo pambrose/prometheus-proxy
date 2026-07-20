@@ -600,6 +600,36 @@ class AgentPathManagerTest : StringSpec() {
       manager["metrics"].shouldNotBeNull().filter.shouldNotBeNull()
     }
 
+    "registerPath should attach a filter configured with a leading slash" {
+      // cfg.path normalization (AgentPathManager.kt:81) strips a leading "/" when building
+      // filtersByPath, so a user writing path = "/metrics" in agent.filters must still attach to a
+      // path registered as "metrics". Deleting that removePrefix("/") call passes every other test
+      // (all of which configure filter paths without a leading slash), so it needs its own coverage.
+      val config = ConfigFactory.parseString(
+        """
+        agent {
+          pathConfigs = []
+          filters = [ { path = "/metrics", metricNameAllow = [], metricNameDeny = ["go_.*"] } ]
+        }
+        proxy { auth = [] }
+        """.trimIndent(),
+      )
+      val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+      val mockAgent = mockk<Agent>(relaxed = true)
+      every { mockAgent.grpcService } returns mockGrpcService
+      every { mockAgent.configVals } returns ConfigVals(config)
+      every { mockAgent.isTestMode } returns true
+
+      val manager = AgentPathManager(mockAgent)
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+
+      manager["metrics"].shouldNotBeNull().filter.shouldNotBeNull()
+    }
+
     "registerPath should leave filter null for a path with no configured filter" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)

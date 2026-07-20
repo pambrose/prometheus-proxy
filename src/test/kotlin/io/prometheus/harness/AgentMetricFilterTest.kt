@@ -53,6 +53,11 @@ class AgentMetricFilterTest : StringSpec() {
       CollectorRegistry.defaultRegistry.clear()
 
       val serverName = "metric-filter-${System.nanoTime()}"
+      // Dedicated port, not TestPorts.kt: avoids clashing with the shared harness port (9505) and the
+      // other standalone in-process specs' own dedicated ports (9512, 9525, 9526 -- see
+      // TlsMutualAuthRejectionTest/InProcessIdleShutdownTest/InProcessHeartbeatDisabledTest for the
+      // same pattern). TestPorts.kt holds ports that mirror real default config values shared broadly
+      // across the unit/container suites, not one-off ports owned by a single harness spec.
       val httpPort = 9527
 
       // Two families: go_goroutines is denied by harness.conf, app_requests is not.

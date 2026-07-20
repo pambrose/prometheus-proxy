@@ -1640,6 +1640,61 @@ class AgentHttpServiceTest : StringSpec() {
       AgentHttpService.isFilterableContentType("text/html") shouldBe false
     }
 
+    // The pure-function tests above pin isFilterableContentType's own truth table, but nothing exercised
+    // the gate INSIDE buildScrapeResults: `!isFilterableContentType(contentType)` could be mutated to
+    // `false && !isFilterableContentType(contentType)` -- permanently disabling the gate -- and every
+    // existing test still passed. text/html is deliberately chosen over a binary content type: it is
+    // valid UTF-8, which isolates this gate from the separate invalid-UTF-8 fail-open path (an HTML
+    // error body is perfectly valid UTF-8, so with the gate disabled it would be line-filtered and
+    // corrupted rather than passed through untouched).
+    "content-type gate: a text/html response with a filter configured is passed through unfiltered" {
+      val mockAgent = createMockAgentWithFilter(
+        """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
+      )
+      // Content the deny rule would strip in its entirety if the gate let filtering run against it.
+      val content =
+        "<html><body>\n" +
+          "# TYPE denied_metric counter\n" +
+          "denied_metric 2\n" +
+          "</body></html>\n"
+
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText(content, ContentType.Text.Html)
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 350L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe 200
+        results.srValidResponse.shouldBeTrue()
+        results.srContentAsText shouldBe content
+        results.srContentAsText shouldContain "denied_metric"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
     // ==================== Fix pass: filter/guard ordering properties ====================
     // These pin the three load-bearing properties of buildScrapeResults that had zero coverage:
     // the maxContentLength guard reads RAW bytes; zipped/srContentAsText/srContentAsZipped all read
