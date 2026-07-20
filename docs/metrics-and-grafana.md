@@ -77,19 +77,31 @@ The same options are available under `agent.metrics`.
 
 **`proxy_scrape_requests` type labels:**
 
-| Value                   | Meaning                                                  |
-|-------------------------|----------------------------------------------------------|
-| `success`               | Scrape completed successfully                            |
-| `timed_out`             | Agent did not respond within `scrapeRequestTimeoutSecs`  |
-| `no_agents`             | No agents registered for the requested path              |
-| `invalid_path`          | Requested path is empty or unrecognized                  |
-| `agent_disconnected`    | Agent stream closed before response was received         |
-| `missing_results`       | Internal error: results object was null                  |
-| `path_not_found`        | Agent returned a non-200 status for the target           |
-| `payload_too_large`     | Unzipped content exceeded `maxUnzippedContentSizeMBytes` |
-| `invalid_gzip`          | Gzip decompression failed                                |
-| `proxy_not_running`     | Proxy is shutting down                                   |
-| `invalid_agent_context` | All agents for the path are in an invalid state          |
+| Value                   | Meaning                                                                      |
+|-------------------------|------------------------------------------------------------------------------|
+| `success`               | Scrape completed successfully                                                |
+| `timed_out`             | Agent did not answer within the proxy's `scrapeRequestTimeoutSecs`           |
+| `upstream_timed_out`    | Agent answered, but its own fetch exceeded `agent.scrapeTimeoutSecs` (408/504) |
+| `no_agents`             | No agents registered for the requested path                                  |
+| `invalid_path`          | Requested path is empty or unrecognized                                      |
+| `agent_disconnected`    | Agent stream closed before response was received                             |
+| `missing_results`       | Internal error: results object was null                                      |
+| `path_not_found`        | Agent has no registration for the target path (404)                          |
+| `upstream_error`        | Target returned a non-2xx status not covered above, e.g. 5xx                 |
+| `content_too_large`     | Target response exceeded `agent.http.maxContentLengthMBytes` (413)           |
+| `payload_too_large`     | Unzipped content exceeded `maxUnzippedContentSizeMBytes`                     |
+| `invalid_gzip`          | Gzip decompression failed                                                    |
+| `proxy_not_running`     | Proxy is shutting down                                                       |
+| `invalid_agent_context` | All agents for the path are in an invalid state                              |
+
+Several values come in proxy-side / agent-side pairs, and the distinction determines where to look:
+
+- `timed_out` is the proxy giving up on an unresponsive agent; `upstream_timed_out` is the agent
+  reporting promptly that the *target* was slow. Under stock config the agent's 15s timeout trips
+  well before the proxy's 90s, so `upstream_timed_out` is the common case — raise
+  `agent.scrapeTimeoutSecs` or fix the slow target, rather than touching the proxy timeout.
+- `content_too_large` is the agent's own `maxContentLengthMBytes` limit rejecting the target
+  response; `payload_too_large` is the proxy's unzip limit. Both surface as HTTP 413.
 
 ### Histograms
 

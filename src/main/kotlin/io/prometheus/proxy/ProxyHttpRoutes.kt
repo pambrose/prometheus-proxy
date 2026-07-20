@@ -71,6 +71,11 @@ internal object ProxyHttpRoutes {
   // OpenMetrics end-of-stream marker, stripped from each consolidated agent's body and re-appended once.
   private const val EOF_MARKER = "# EOF"
 
+  // The proxy waited out scrapeRequestTimeoutSecs without the agent answering. Distinct from
+  // upstream_timed_out, which is the agent answering promptly to report that its own fetch of the
+  // target exceeded agent.scrapeTimeoutSecs -- see upstreamErrorLabel.
+  internal const val PROXY_TIMEOUT_LABEL = "timed_out"
+
   fun Routing.handleRequests(proxy: Proxy) {
     handleServiceDiscoveryEndpoint(proxy)
     handleClientRequests(proxy)
@@ -293,7 +298,7 @@ internal object ProxyHttpRoutes {
       if (!scrapeRequest.awaitCompleted(timeoutTime))
         return ScrapeRequestResponse(
           statusCode = HttpStatusCode.ServiceUnavailable,
-          updateMsg = "timed_out",
+          updateMsg = PROXY_TIMEOUT_LABEL,
           fetchDuration = scrapeRequest.ageDuration(),
         )
 
@@ -380,10 +385,17 @@ internal object ProxyHttpRoutes {
   // metric/activity label, so operators can tell a down target (5xx), a scrape timeout (408/504), an
   // oversized payload (413), and a path not registered on the agent (404) apart -- instead of every
   // failure reading as path_not_found (finding 10).
+  //
+  // Each label names the agent-side leg, distinct from the proxy-side label for the same fault:
+  // upstream_timed_out vs PROXY_TIMEOUT_LABEL (the agent's own scrapeTimeoutSecs elapsed, versus the
+  // proxy's scrapeRequestTimeoutSecs elapsed with no answer at all), and content_too_large vs
+  // payload_too_large (the agent's maxContentLengthMBytes, versus the proxy's unzip limit). Under
+  // stock config the agent's 15s timeout trips well before the proxy's 90s, so collapsing the two
+  // timeout legs would have hidden the common case behind the rare one (finding 4).
   internal fun upstreamErrorLabel(statusCode: HttpStatusCode): String =
     when (statusCode) {
       HttpStatusCode.NotFound -> "path_not_found"
-      HttpStatusCode.RequestTimeout, HttpStatusCode.GatewayTimeout -> "timed_out"
+      HttpStatusCode.RequestTimeout, HttpStatusCode.GatewayTimeout -> "upstream_timed_out"
       HttpStatusCode.PayloadTooLarge -> "content_too_large"
       else -> "upstream_error"
     }

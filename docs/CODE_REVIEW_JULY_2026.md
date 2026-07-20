@@ -266,6 +266,17 @@ activity log. Operators cannot distinguish a genuinely unknown path from a down 
 **Fix:** derive the label from the status code (e.g. `upstream_error`, `timed_out`,
 `content_too_large`, with `path_not_found` reserved for the actual 404-unknown-path case).
 
+**Follow-up (label collision + stale docs):** the 408/504 case reused `timed_out`, the same string
+the proxy emits when the agent never answers at all — two faults with opposite remediations in one
+series, and since `agent.scrapeTimeoutSecs` (15s) trips well before the proxy's
+`scrapeRequestTimeoutSecs` (90s), the agent-side leg was the dominant contributor. Split out as
+`upstream_timed_out`, matching the `content_too_large` / `payload_too_large` convention this
+finding already established. The proxy-side literal is now the `PROXY_TIMEOUT_LABEL` constant so
+the two can't silently converge again. The label tables in `docs/metrics-and-grafana.md` and
+`website/prometheus-proxy/docs/monitoring.md` were never updated when this finding landed — they
+still described `path_not_found` as "Agent returned a non-200 status" and omitted `upstream_error`
+and `content_too_large` entirely; both are now correct and document the proxy/agent pairs.
+
 ### 11. [x] Config-value validation gaps for values used in arithmetic/capacity
 `Agent.kt:204, 265` · `proxy/ProxyServiceImpl.kt:241` vs `proxy/ProxyOptions.kt:267-271` ·
 `agent/AgentOptions.kt:317-319` — **input validation, medium, confirmed**

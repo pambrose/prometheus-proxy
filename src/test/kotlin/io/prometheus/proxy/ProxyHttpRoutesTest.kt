@@ -24,6 +24,7 @@ import com.pambrose.common.util.zip
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldNotContain
@@ -736,12 +737,26 @@ class ProxyHttpRoutesTest : StringSpec() {
     // of every failure being labeled path_not_found.
     "Finding 10: upstreamErrorLabel maps status codes to distinct labels" {
       ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.NotFound) shouldBe "path_not_found"
-      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.RequestTimeout) shouldBe "timed_out"
-      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.GatewayTimeout) shouldBe "timed_out"
+      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.RequestTimeout) shouldBe "upstream_timed_out"
+      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.GatewayTimeout) shouldBe "upstream_timed_out"
       ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.PayloadTooLarge) shouldBe "content_too_large"
       ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.InternalServerError) shouldBe "upstream_error"
       ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.BadGateway) shouldBe "upstream_error"
       ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.ServiceUnavailable) shouldBe "upstream_error"
+    }
+
+    // The agent's own scrapeTimeoutSecs (default 15) is well below the proxy's
+    // scrapeRequestTimeoutSecs (default 90), so a slow target trips the agent first and the upstream
+    // leg is the dominant contributor to timeout metrics. Labeling both legs "timed_out" collapsed
+    // them into one series even though they have opposite remediations: raise the proxy timeout / fix
+    // the agent link, versus raise the agent scrape timeout / fix the slow target.
+    "upstreamErrorLabel should not reuse the proxy-side timed_out label for an upstream timeout" {
+      val upstream = ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.RequestTimeout)
+
+      upstream shouldNotBe ProxyHttpRoutes.PROXY_TIMEOUT_LABEL
+      upstream shouldBe "upstream_timed_out"
+      ProxyHttpRoutes.upstreamErrorLabel(HttpStatusCode.GatewayTimeout) shouldNotBe
+        ProxyHttpRoutes.PROXY_TIMEOUT_LABEL
     }
 
     "Finding 10: submitScrapeRequest labels a 500 upstream response upstream_error" {

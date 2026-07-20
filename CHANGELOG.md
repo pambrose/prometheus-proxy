@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Behavior Changes
+
+- **`proxy_scrape_requests{type}` and the latency histogram's `outcome` label gained `upstream_timed_out`.** An agent-reported scrape timeout (408/504 — the agent answered promptly to say its *own* fetch of the target exceeded `agent.scrapeTimeoutSecs`) was previously labeled `timed_out`, the same value the proxy emits when the agent never answers at all within `proxy.internal.scrapeRequestTimeoutSecs`. The two have opposite remediations, and because the agent's 15s default trips well before the proxy's 90s, the agent-side leg was the dominant contributor to the merged series. **Dashboards and alerts matching `type="timed_out"` will stop counting agent-side scrape timeouts** — use `type=~"timed_out|upstream_timed_out"` to match both. This completes the label taxonomy started in 3.2.0, which split `upstream_error` / `content_too_large` out of `path_not_found`
+
+### Bug Fixes
+
+- Fix a registration race that could strand a scrape path pointing at a dead agent. `Proxy.removeAgentContext` swept the path map *before* invalidating the agent context, so a `registerPath` blocked on the path-map monitor during the sweep was released into an unguarded window — the in-lock validity re-check read a flag the remover had not set yet, and the sweep had already run. The context is now invalidated first, so a registration racing teardown is either rejected by the re-check or undone by the sweep. Symptom was a permanently inflated `proxy_scrape_requests{type="agent_disconnected"}` plus a retained dead `AgentContext`; scrape results themselves stayed correct
+- Guard the background `HttpClientCache` sweeper against a throwing `HttpClient.close()`. The 3.2.0-era fix was correct but untested at the call site, so nothing pinned it against regression
+
+### Documentation
+
+- Correct the `proxy_scrape_requests` type-label tables in `docs/metrics-and-grafana.md` and the Monitoring page, which still described `path_not_found` as "Agent returned a non-200 status for the target" and omitted `upstream_error` and `content_too_large` entirely. Both tables now document the full label set and the proxy-side/agent-side pairs operators have to tell apart (`timed_out` / `upstream_timed_out`, `payload_too_large` / `content_too_large`)
+- Rework the Troubleshooting timeout section around which timeout actually fired, and widen the `ProxyPayloadTooLarge` example alert to match `content_too_large` as well — its summary claimed to cover the size limit but only ever matched the proxy-side half
+
+---
+
 ## [3.2.0] - 2026-06-13
 
 ### New Features
