@@ -213,5 +213,16 @@ class AgentMetricsTest : StringSpec() {
       val cacheMetric = samples.find { it.name == "agent_client_cache_size" }
       cacheMetric.shouldNotBeNull()
     }
+
+    "filter counters should be registered with launch_id and path labels" {
+      CollectorRegistry.defaultRegistry.clear()
+      val metrics = AgentMetrics(createMockAgent())
+
+      metrics.filterLinesDropped.labels("test-launch-id", "metrics").inc(3.0)
+      metrics.filterBytesSaved.labels("test-launch-id", "metrics").inc(128.0)
+
+      metrics.filterLinesDropped.labels("test-launch-id", "metrics").get() shouldBe 3.0
+      metrics.filterBytesSaved.labels("test-launch-id", "metrics").get() shouldBe 128.0
+    }
   }
 }

@@ -250,7 +250,15 @@ internal class AgentHttpService(
           }
           contentBytes
         } else {
-          filter.filterText(contentBytes.decodeToString()).text.encodeToByteArray()
+          val result = filter.filterText(contentBytes.decodeToString())
+          result.text.encodeToByteArray().also { bytes ->
+            // Only filtered paths ever create series here, so cardinality stays bounded.
+            agent.metrics {
+              val path = scrapeRequest.path
+              filterLinesDropped.labels(agent.launchId, path).inc(result.linesDropped.toDouble())
+              filterBytesSaved.labels(agent.launchId, path).inc((contentBytes.size - bytes.size).toDouble())
+            }
+          }
         }
 
       val zipped = filteredBytes.size > agent.options.minGzipSizeBytes

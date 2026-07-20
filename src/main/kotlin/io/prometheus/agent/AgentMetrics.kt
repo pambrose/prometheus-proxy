@@ -56,6 +56,20 @@ internal class AgentMetrics(
       .buckets(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0)
       .register()
 
+  val filterLinesDropped =
+    counter {
+      name("agent_filter_lines_dropped")
+      help("Agent metric filter lines dropped")
+      labelNames(LAUNCH_ID, PATH)
+    }
+
+  val filterBytesSaved =
+    counter {
+      name("agent_filter_bytes_saved")
+      help("Agent metric filter bytes saved")
+      labelNames(LAUNCH_ID, PATH)
+    }
+
   init {
     gauge {
       name("agent_start_time_seconds")
@@ -84,5 +98,6 @@ internal class AgentMetrics(
     private const val LAUNCH_ID = "launch_id"
     private const val AGENT_NAME = "agent_name"
     private const val TYPE = "type"
+    private const val PATH = "path"
   }
 }
