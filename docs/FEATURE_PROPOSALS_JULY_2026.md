@@ -682,7 +682,7 @@ If Feature 3 lands first, the UI displays identities but never tokens.
 |-------|---------|-----------|
 | 1st ✅ | **Feature 3** — Per-agent identity & path authorization | **Implemented (MVP)** — closes a known security gap; security blockers stall adoption more than missing features |
 | 2nd ✅ | **Feature 1** — Dynamic target discovery | **Implemented (file-source MVP)** — biggest day-to-day operational relief; Kubernetes/Docker sources still deferred |
-| 3rd | **Feature 4** — Agent-side metric filtering | Best bang-for-buck: strengthens the core value proposition (efficient transport across network boundaries) |
+| 3rd ✅ | **Feature 4** — Agent-side metric filtering | **Implemented (MVP — `metricNameAllow` / `metricNameDeny`)** — strengthens the core value proposition (efficient transport across network boundaries); `dropLabels`, relabeling, and agent-global filters still deferred |
 | 4th | **Feature 2** — Proxy HA / agent failover | Phase 1 is cheap and unlocks redundant deployments |
 | 5th | **Feature 5** — Operational web UI | Highest value once Features 1 and 3 add state worth visualizing (identities, discovery sources) |
 
