@@ -98,6 +98,7 @@ class AgentHttpServiceTest : StringSpec() {
       """
       agent {
         pathConfigs = []
+        filters = []
         internal {
           cioTimeoutSecs = 90
         }
@@ -145,6 +146,7 @@ class AgentHttpServiceTest : StringSpec() {
       """
       agent {
         pathConfigs = []
+        filters = []
         internal {
           cioTimeoutSecs = 90
         }

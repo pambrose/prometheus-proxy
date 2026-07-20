@@ -22,6 +22,7 @@ import com.typesafe.config.ConfigFactory
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
 import io.kotest.matchers.string.shouldNotBeEmpty
@@ -47,6 +48,13 @@ class ConfigValsTest : StringSpec() {
         reconnectPauseSecs shouldBe 3
         scrapeRequestBacklogUnhealthySize shouldBe 25
       }
+    }
+
+    // ==================== Agent Filters Defaults ====================
+
+    "agent filters should default to an empty list" {
+      val configVals = loadDefaultConfigVals()
+      configVals.agent.filters.shouldBeEmpty()
     }
 
     // ==================== Agent HTTP Client Cache Defaults ====================

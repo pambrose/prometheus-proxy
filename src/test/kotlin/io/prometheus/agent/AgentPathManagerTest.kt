@@ -62,6 +62,7 @@ class AgentPathManagerTest : StringSpec() {
       """
       agent {
         pathConfigs = []
+        filters = []
       }
       proxy { auth = [] }
       """.trimIndent(),
@@ -434,6 +435,7 @@ class AgentPathManagerTest : StringSpec() {
               labels = "{}"
             }
           ]
+          filters = []
         }
         proxy { auth = [] }
         """.trimIndent(),
@@ -469,6 +471,7 @@ class AgentPathManagerTest : StringSpec() {
               labels = "{}"
             }
           ]
+          filters = []
         }
         proxy { auth = [] }
         """.trimIndent(),
@@ -541,6 +544,7 @@ class AgentPathManagerTest : StringSpec() {
               labels = "{}"
             }
           ]
+          filters = []
         }
         proxy { auth = [] }
         """.trimIndent(),
