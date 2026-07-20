@@ -18,6 +18,9 @@
 
 package io.prometheus.agent
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -26,6 +29,8 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.kotest.matchers.string.shouldNotContain
+import org.slf4j.LoggerFactory
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -47,7 +52,26 @@ import kotlin.concurrent.atomics.update
 import kotlin.time.Duration.Companion.milliseconds
 
 class AgentPathManagerTest : StringSpec() {
-  private fun createMockAgent(): Agent {
+  // Captures the "Registered ..." lines doRegisterPath emits, which is the only place the agent reports
+  // whether a configured filter actually attached to a path. Mirrors the ListAppender pattern in
+  // ScrapeRequestManagerTest.
+  private suspend fun captureRegistrationLogs(block: suspend () -> Unit): List<String> {
+    val logbackLogger = LoggerFactory.getLogger(AgentPathManager::class.java) as Logger
+    val listAppender = ListAppender<ILoggingEvent>()
+    listAppender.start()
+    logbackLogger.addAppender(listAppender)
+    try {
+      block()
+      return listAppender.list.map { it.formattedMessage }.filter { it.startsWith("Registered ") }
+    } finally {
+      logbackLogger.detachAppender(listAppender)
+      listAppender.stop()
+    }
+  }
+
+  // [filtersHocon] is spliced into `agent.filters` (empty means no filters), which is what makes the
+  // path manager compile and attach a MetricFilter to a matching registered path.
+  private fun createMockAgent(filtersHocon: String = ""): Agent {
     val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 
     // Default happy-path stubs (valid=true, pathId=1); tests needing specific responses re-stub.
@@ -62,6 +86,7 @@ class AgentPathManagerTest : StringSpec() {
       """
       agent {
         pathConfigs = []
+        filters = [$filtersHocon]
       }
       proxy { auth = [] }
       """.trimIndent(),
@@ -434,6 +459,7 @@ class AgentPathManagerTest : StringSpec() {
               labels = "{}"
             }
           ]
+          filters = []
         }
         proxy { auth = [] }
         """.trimIndent(),
@@ -469,6 +495,7 @@ class AgentPathManagerTest : StringSpec() {
               labels = "{}"
             }
           ]
+          filters = []
         }
         proxy { auth = [] }
         """.trimIndent(),
@@ -541,6 +568,7 @@ class AgentPathManagerTest : StringSpec() {
               labels = "{}"
             }
           ]
+          filters = []
         }
         proxy { auth = [] }
         """.trimIndent(),
@@ -568,6 +596,90 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["metrics1"].shouldNotBeNull()
       manager["metrics2"].shouldNotBeNull()
+    }
+
+    "registerPath should attach a configured filter to the path context" {
+      val agent = createMockAgent("""{ path = "metrics", metricNameAllow = [], metricNameDeny = ["go_.*"] }""")
+      val manager = AgentPathManager(agent)
+
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+
+      manager["metrics"].shouldNotBeNull().filter.shouldNotBeNull()
+    }
+
+    "registerPath should attach a filter configured with a leading slash" {
+      // cfg.path normalization in AgentPathManager strips a leading "/" when building filtersByPath,
+      // so a user writing path = "/metrics" in agent.filters must still attach to a path registered as
+      // "metrics". Deleting that removePrefix("/") call passes every other test (all of which
+      // configure filter paths without a leading slash), so it needs its own coverage.
+      val agent = createMockAgent("""{ path = "/metrics", metricNameAllow = [], metricNameDeny = ["go_.*"] }""")
+      val manager = AgentPathManager(agent)
+
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+
+      manager["metrics"].shouldNotBeNull().filter.shouldNotBeNull()
+    }
+
+    "registerPath should leave filter null for a path with no configured filter" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+
+      manager["metrics"].shouldNotBeNull().filter.shouldBeNull()
+    }
+
+    // The registration log is the operator-facing signal that a configured filter found its path -- a
+    // filter whose path does not match any registered path is otherwise silent. These three tests pin
+    // that signal; isTestMode is flipped off because doRegisterPath suppresses the line under test mode.
+    "registerPath should report an attached filter in the registration log" {
+      val agent = createMockAgent("""{ path = "metrics", metricNameAllow = [], metricNameDeny = ["go_.*"] }""")
+      every { agent.isTestMode } returns false
+      val manager = AgentPathManager(agent)
+
+      val logs = captureRegistrationLogs {
+        manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+      }
+
+      logs.single() shouldContain "with a metric filter"
+    }
+
+    "registerPath should not mention a filter when none is configured" {
+      val agent = createMockAgent()
+      every { agent.isTestMode } returns false
+      val manager = AgentPathManager(agent)
+
+      val logs = captureRegistrationLogs {
+        manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+      }
+
+      logs.single() shouldNotContain "metric filter"
+    }
+
+    "reconcileDiscoveredPaths should report an attached filter for a discovered path" {
+      // The signal has to work for discovered paths specifically: they do not exist at construction
+      // time, so no startup-time cross-check against pathConfigs could ever cover this case.
+      val agent = createMockAgent("""{ path = "discovered", metricNameAllow = [], metricNameDeny = ["go_.*"] }""")
+      every { agent.isTestMode } returns false
+      val manager = AgentPathManager(agent)
+
+      val logs = captureRegistrationLogs {
+        manager.reconcileDiscoveredPaths(
+          [DiscoveredPath(name = "d", path = "discovered", url = "http://localhost:$PROMETHEUS_PORT/m", labels = "{}")],
+        )
+      }
+
+      logs.single() shouldContain "with a metric filter"
+    }
+
+    "reconcileDiscoveredPaths should attach a configured filter to a discovered path" {
+      val agent = createMockAgent("""{ path = "discovered", metricNameAllow = [], metricNameDeny = ["go_.*"] }""")
+      val manager = AgentPathManager(agent)
+      manager.reconcileDiscoveredPaths(
+        [DiscoveredPath(name = "d", path = "discovered", url = "http://localhost:$PROMETHEUS_PORT/m", labels = "{}")],
+      )
+
+      manager["discovered"].shouldNotBeNull().filter.shouldNotBeNull()
     }
   }
 }

@@ -75,6 +75,7 @@ agents.
 - ✅ **High performance** - Built with Kotlin coroutines and gRPC
 - ✅ **Secure** - Optional TLS with mutual authentication
 - ✅ **Scalable** - One proxy supports many agents
+- ✅ **Bandwidth-conscious** - Optional per-path metric filtering drops unwanted families at the agent
 - ✅ **Zero changes** to existing Prometheus configuration patterns
 
 ## 🚀 Quick Start
@@ -367,6 +368,52 @@ that did not change. Behavior worth knowing:
 > This is distinct from the [Prometheus Service Discovery](#service-discovery) above: that exposes a
 > discovery endpoint so *Prometheus* can find proxied targets, whereas this lets the *agent* pick up
 > target changes behind the firewall without a restart.
+
+### Metric Filtering (Agent)
+
+By default the agent forwards every metric a target exposes, so chatty or high-cardinality endpoints
+pay full bandwidth across exactly the network boundary this product exists to bridge. An optional
+per-path filter drops whole metric families **at the agent**, before the payload is gzipped and
+chunked, cutting WAN bandwidth and downstream Prometheus cardinality at the source:
+
+```hocon
+agent {
+  pathConfigs: [
+    { name: "app1", path: "app1_metrics", url: "http://app1:9090/metrics" }
+  ]
+
+  filters: [
+    {
+      path: "app1_metrics"          // The pathConfigs (or discovered) path this applies to
+      metricNameAllow: []           // Fully-anchored regexes; empty allows every family
+      metricNameDeny: [ "go_gc_.*", "go_memstats_.*" ]
+    }
+  ]
+}
+```
+
+Both list fields are required on every element — write `metricNameAllow: []` for a deny-only filter.
+The default is `filters: []`, so an existing config with no `filters` key loads unchanged. Behavior
+worth knowing:
+
+- **Regexes are fully anchored**, matching Prometheus `relabel_config` semantics: `"go_"` matches
+  nothing, `"go_.*"` is required to match `go_goroutines`. `metricNameDeny` is applied after
+  `metricNameAllow`, so deny wins on overlap.
+- **Matching is per metric family, not per series.** A `# HELP`/`# TYPE` line opens a family and the
+  verdict is computed once, so a histogram's `_bucket`, `_sum`, and `_count` series are always kept
+  or dropped together with their metadata lines — a filter can never deliver a histogram with some of
+  its series missing.
+- **Fails open.** A non-text `Content-Type` (protobuf, an HTML error body) or a body that is not
+  valid UTF-8 passes through unfiltered and byte-exact. The worst case is bandwidth not saved, never
+  a corrupted payload.
+- **Applies to discovered paths too.** Filters are matched by path, so they cover both
+  `pathConfigs` entries and paths added by [Dynamic Target Discovery](#dynamic-target-discovery-agent).
+- **Observable.** `agent_filter_lines_dropped` and `agent_filter_bytes_saved`, labeled by
+  `launch_id` and `path`, report what each filter is actually removing.
+- **Config-file only.** `filters` is a list, so there is no CLI/env equivalent.
+
+An invalid regex fails agent startup rather than surfacing later on a scrape. Not implemented:
+`dropLabels`, metric renaming/relabeling, and an agent-global filter — every filter is per-path.
 
 ### Performance Tuning
 

@@ -84,6 +84,7 @@ class ProxyServiceImplTest : StringSpec() {
       }
       agent {
         pathConfigs = []
+        filters = []
       }
       """.trimIndent(),
     )

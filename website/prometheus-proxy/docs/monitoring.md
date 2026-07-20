@@ -126,8 +126,14 @@ Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 | `agent_scrape_request_count` | `launch_id`, `type` | Scrape requests processed                          |
 | `agent_scrape_result_count`  | `launch_id`, `type` | Results sent (`non-gzipped`, `gzipped`, `chunked`) |
 | `agent_connect_count`        | `launch_id`, `type` | Connection attempts (`success`, `failure`)         |
+| `agent_filter_lines_dropped` | `launch_id`, `path` | Lines removed by the path's metric filter          |
+| `agent_filter_bytes_saved`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter       |
 
 The `launch_id` label uniquely identifies each agent process lifetime.
+
+The two `agent_filter_*` counters only create series for paths that have a filter configured, so
+they are absent entirely unless [metric filtering](configuration/agent.md#metric-filtering) is in
+use. See that section for what the filter does and does not drop.
 
 ### Histograms
 

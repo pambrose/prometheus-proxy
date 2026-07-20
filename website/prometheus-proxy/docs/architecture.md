@@ -92,6 +92,26 @@ over gRPC, reducing bandwidth between agent and proxy.
 agent.minGzipSizeBytes = 256     // Compress more aggressively
 ```
 
+## Metric Filtering
+
+Chunking and compression both manage the *size* of a payload; neither reduces the content itself. An
+optional per-path filter drops whole metric families at the agent, so unwanted series never cross the
+network boundary at all — cutting bandwidth and downstream Prometheus cardinality at the source.
+
+Filtering runs between the scrape and the gzip decision, so the three mechanisms compose in pipeline
+order:
+
+```
+scrape target -> filter -> gzip (minGzipSizeBytes) -> chunk (chunkContentSizeKbs) -> gRPC
+```
+
+Because the filter runs first, gzip and chunking both see the already-reduced payload. The
+`maxContentLengthMBytes` guard is the deliberate exception: it applies to the raw response, so
+filtering can never be a way around that limit.
+
+Filtering is off by default and configured per path. See
+[Metric Filtering](configuration/agent.md#metric-filtering) for the rules and configuration.
+
 ## Heartbeat
 
 The agent sends periodic heartbeat messages to maintain the gRPC connection during periods of

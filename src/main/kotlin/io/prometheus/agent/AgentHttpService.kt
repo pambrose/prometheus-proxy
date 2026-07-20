@@ -47,6 +47,7 @@ import io.ktor.http.isSuccess
 import io.ktor.utils.io.readRemaining
 import io.prometheus.Agent
 import io.prometheus.agent.HttpClientCache.ClientKey
+import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.appendQueryParams
@@ -119,7 +120,7 @@ internal class AgentHttpService(
     val results =
       try {
         withTimeout(agent.options.scrapeTimeoutSecs.seconds) {
-          fetchContent(url, req)
+          fetchContent(url, req, pathContext.filter)
         }
       } catch (e: Throwable) {
         // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
@@ -152,6 +153,7 @@ internal class AgentHttpService(
   internal suspend fun fetchContent(
     url: String,
     scrapeRequest: ScrapeRequest,
+    filter: MetricFilter? = null,
   ): ScrapeResults {
     val clientKey = with(Url(url)) { ClientKey(user, password) }
     val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(clientKey) }
@@ -161,7 +163,7 @@ internal class AgentHttpService(
         url = url,
         setUp = prepareRequestHeaders(scrapeRequest),
       ) { response ->
-        result = buildScrapeResults(response, url, scrapeRequest)
+        result = buildScrapeResults(response, url, scrapeRequest, filter)
       }
       return requireNotNull(result) { "Response handler was not called for ${sanitizeUrl(url)}" }
     } finally {
@@ -185,6 +187,7 @@ internal class AgentHttpService(
     response: HttpResponse,
     url: String,
     scrapeRequest: ScrapeRequest,
+    filter: MetricFilter? = null,
   ): ScrapeResults {
     val statusCode = response.status.value
     val safeUrl = sanitizeUrl(url)
@@ -226,7 +229,24 @@ internal class AgentHttpService(
           scrapeCounterMsg = UNSUCCESSFUL_MSG,
         )
       }
-      val zipped = contentByteSize > agent.options.minGzipSizeBytes
+
+      // Filter before the gzip decision so gzip and chunking both see the reduced payload. The
+      // maxContentLength guard above deliberately runs against the RAW bytes: it is a memory bound,
+      // and filtering must not become a way around it. A null outcome means the filter deliberately
+      // passed the payload through (unfilterable content type, or a body that is not valid UTF-8), so
+      // no metrics are recorded and the raw bytes are used verbatim.
+      val outcome = filter?.filterBytes(contentBytes, contentType)
+      outcome?.also {
+        // Only paths whose filter actually ran ever create series here, so cardinality stays bounded.
+        agent.metrics {
+          val path = scrapeRequest.path
+          filterLinesDropped.labels(agent.launchId, path).inc(it.linesDropped.toDouble())
+          filterBytesSaved.labels(agent.launchId, path).inc(it.bytesSaved.toDouble())
+        }
+      }
+      val filteredBytes = outcome?.bytes ?: contentBytes
+
+      val zipped = filteredBytes.size > agent.options.minGzipSizeBytes
       ScrapeResults(
         srAgentId = scrapeRequest.agentId,
         srScrapeId = scrapeRequest.scrapeId,
@@ -234,8 +254,9 @@ internal class AgentHttpService(
         srStatusCode = statusCode,
         srContentType = contentType,
         srZipped = zipped,
-        srContentAsText = if (!zipped) contentBytes.decodeToString() else "",
-        srContentAsZipped = if (zipped) contentBytes.zip() else EMPTY_BYTE_ARRAY,
+        // A filtered payload is already in hand as text -- don't decode the bytes it was just encoded to.
+        srContentAsText = if (zipped) "" else (outcome?.text ?: filteredBytes.decodeToString()),
+        srContentAsZipped = if (zipped) filteredBytes.zip() else EMPTY_BYTE_ARRAY,
         srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
         scrapeCounterMsg = SUCCESS_MSG,
       )

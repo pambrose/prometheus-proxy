@@ -20,6 +20,7 @@ import com.pambrose.common.util.runCatchingCancellable
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.agent.discovery.DiscoveredPath
+import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import kotlinx.coroutines.sync.Mutex
@@ -71,6 +72,16 @@ internal class AgentPathManager(
       .onEach {
         logger.info { "Proxy path /${it.path} will be assigned to ${it.url} with labels ${it.labels}" }
       }
+
+  // Compiled once at startup, never per scrape. Keyed by normalized path, so a filter applies to
+  // that path regardless of whether it was registered statically or by discovery.
+  private val filtersByPath: Map<String, MetricFilter> =
+    agentConfigVals.filters
+      .mapNotNull { cfg ->
+        val path = cfg.path.removePrefix("/")
+        MetricFilter.createOrNull(cfg.metricNameAllow, cfg.metricNameDeny, path)?.let { path to it }
+      }
+      .toMap()
 
   suspend fun registerPaths() = pathConfigs.forEach { registerPath(it.path, it.url, it.labels) }
 
@@ -146,9 +157,18 @@ internal class AgentPathManager(
     val path = pathVal.removePrefix("/")
     val labelsJson = labels.defaultEmptyJsonObject()
     val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
-    if (!agent.isTestMode)
-      logger.info { "Registered $url as /$path with labels $labelsJson (${source.name.lowercase()})" }
-    pathContextMap[path] = PathContext(pathId, path, url, labelsJson, source)
+    // Whether a filter attached is only knowable here, where the path is actually resolved -- which is
+    // why it is reported here rather than cross-checked against pathConfigs at construction time, a
+    // baseline that by definition cannot see discovered or runtime-registered paths. Absence of the
+    // suffix on a path you configured a filter for means the two path strings do not match.
+    val filter = filtersByPath[path]
+    if (!agent.isTestMode) {
+      logger.info {
+        "Registered $url as /$path with labels $labelsJson (${source.name.lowercase()})" +
+          if (filter != null) " with a metric filter" else ""
+      }
+    }
+    pathContextMap[path] = PathContext(pathId, path, url, labelsJson, source, filter)
   }
 
   // Lock-free unregistration body; callers MUST hold pathMutex (see doRegisterPath).
@@ -193,5 +213,6 @@ internal class AgentPathManager(
     val url: String,
     val labels: String,
     val source: PathSource,
+    val filter: MetricFilter? = null,
   )
 }

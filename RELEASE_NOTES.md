@@ -6,6 +6,7 @@
 
 ### Highlights
 
+- **Metrics can now be filtered at the agent, before they cross the network.** Until now the full payload always traversed the WAN and filtering happened in Prometheus afterward — the one place dropping data is most valuable was the one place it could not happen. Opt-in and per-path; see below.
 - **Agent-side scrape timeouts are now their own metric label.** `upstream_timed_out` separates "the agent told us the target was slow" from `timed_out`, "the agent never answered us." This is the one change here that needs operator attention — see the upgrade note below.
 - **A path-registration race is closed.** An agent reconnecting at exactly the wrong moment could leave a scrape path pointing at a context that was already being torn down, inflating the disconnect counter for the life of the proxy.
 
@@ -23,6 +24,38 @@ Previously both timeout legs shared the `timed_out` label:
 Because the agent's 15s timeout trips long before the proxy's 90s, **a slow scrape target almost always lands in `upstream_timed_out` now**. Any dashboard, recording rule, or alert matching `type="timed_out"` will stop seeing the majority of what it used to count. Match `type=~"timed_out|upstream_timed_out"` to preserve the old aggregate, or split the two panels — they point at different problems.
 
 This finishes the taxonomy work started in 3.2.0, which pulled `upstream_error` and `content_too_large` out of the catch-all `path_not_found`. It also mirrors the existing `content_too_large` (agent's `maxContentLengthMBytes`) versus `payload_too_large` (proxy's unzip limit) pairing, so every proxy-side label now has a distinctly-named agent-side counterpart.
+
+### New Feature — metric filtering at the agent
+
+Chatty or high-cardinality endpoints previously paid full bandwidth across exactly the boundary this product exists to bridge. An optional per-path filter now drops whole metric families at the agent:
+
+```hocon
+agent {
+  pathConfigs: [
+    { name: "app1", path: "app1_metrics", url: "http://app1:9090/metrics" }
+  ]
+
+  filters: [
+    { path: "app1_metrics", metricNameAllow: [], metricNameDeny: [ "go_gc_.*" ] }
+  ]
+}
+```
+
+**Nothing changes unless you opt in.** The default is `filters: []`, and a config with no `filters` key loads exactly as before. There is no upgrade action for this feature.
+
+Two things are worth knowing before writing a rule:
+
+**Regexes are fully anchored**, the same as Prometheus `relabel_config`. `"go_"` matches nothing; you want `"go_.*"`. Rules copied from a Prometheus config behave identically here, which is the point.
+
+**Matching is per metric family, not per series.** A `# HELP` / `# TYPE` line opens a family and the verdict is computed once, so a histogram's `_bucket`, `_sum`, and `_count` series are always kept or dropped together with their metadata. That is deliberate: it is what stops a filter from handing Prometheus a histogram with some of its series missing. The flip side is that a series-level rule like `metricNameDeny: [ "..._bucket" ]` is a silent no-op — those lines inherit the family's verdict rather than being matched themselves.
+
+Filtering runs before gzip and chunking, so the saving compounds with `minGzipSizeBytes` and `chunkContentSizeKbs`. `maxContentLengthMBytes` still applies to the raw response, so a filter can't be used to slip past that limit.
+
+The filter fails open by design: a non-text `Content-Type` or a body that isn't valid UTF-8 passes through unfiltered and byte-exact, warning once per path. Bandwidth not saved is an acceptable outcome; a corrupted payload is not.
+
+Filters apply by path, so they cover dynamically discovered targets as well as static `pathConfigs` entries. Two new counters, `agent_filter_lines_dropped` and `agent_filter_bytes_saved` (labeled `launch_id` and `path`), report what each filter is removing — and only exist for paths that actually have one.
+
+Not included: `dropLabels`, metric renaming/relabeling, and an agent-global filter. Every filter is per-path.
 
 ### Bug Fixes
 
