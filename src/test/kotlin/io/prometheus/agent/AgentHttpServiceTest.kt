@@ -31,7 +31,9 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.header
@@ -50,6 +52,7 @@ import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.proxy.ProxyUtils.unzip
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import javax.net.ssl.X509TrustManager
@@ -147,6 +150,56 @@ class AgentHttpServiceTest : StringSpec() {
       agent {
         pathConfigs = []
         filters = []
+        internal {
+          cioTimeoutSecs = 90
+        }
+      }
+      proxy { auth = [] }
+      """.trimIndent(),
+    )
+    val configVals = ConfigVals(config)
+
+    val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+
+    val mockAgent = mockk<Agent>(relaxed = true)
+    every { mockAgent.options } returns mockOptions
+    every { mockAgent.configVals } returns configVals
+    every { mockAgent.isMetricsEnabled } returns false
+    every { mockAgent.isTestMode } returns true
+    every { mockAgent.grpcService } returns mockGrpcService
+
+    coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      valid = true
+      pathId = 1L
+    }
+
+    val pathManager = AgentPathManager(mockAgent)
+    every { mockAgent.pathManager } returns pathManager
+
+    return mockAgent
+  }
+
+  // Same shape as createMockAgentWithPaths, but with a caller-supplied `agent.filters` HOCON entry
+  // so a real AgentPathManager attaches a compiled MetricFilter to a registered path's PathContext.
+  private fun createMockAgentWithFilter(filterHocon: String): Agent {
+    val mockOptions = mockk<AgentOptions>(relaxed = true)
+    every { mockOptions.maxCacheSize } returns 100
+    every { mockOptions.maxCacheAgeMins } returns 30
+    every { mockOptions.maxCacheIdleMins } returns 10
+    every { mockOptions.cacheCleanupIntervalMins } returns 5
+    every { mockOptions.scrapeTimeoutSecs } returns 10
+    every { mockOptions.scrapeMaxRetries } returns 0
+    every { mockOptions.minGzipSizeBytes } returns 1_000_000
+    every { mockOptions.maxContentLengthMBytes } returns 10
+    every { mockOptions.debugEnabled } returns false
+    every { mockOptions.httpClientTimeoutSecs } returns 90
+    every { mockOptions.trustAllX509Certificates } returns false
+
+    val config = ConfigFactory.parseString(
+      """
+      agent {
+        pathConfigs = []
+        filters = [$filterHocon]
         internal {
           cioTimeoutSecs = 90
         }
@@ -1032,7 +1085,7 @@ class AgentHttpServiceTest : StringSpec() {
       val spiedService = spyk(service)
       // Mock the internal fetchContent call to throw CancellationException
       coEvery {
-        spiedService.fetchContent(any<String>(), any())
+        spiedService.fetchContent(any<String>(), any(), any())
       } coAnswers {
         throw CancellationException("System shutdown")
       }
@@ -1062,7 +1115,7 @@ class AgentHttpServiceTest : StringSpec() {
 
       val spiedService = spyk(service)
       coEvery {
-        spiedService.fetchContent(any<String>(), any())
+        spiedService.fetchContent(any<String>(), any(), any())
       } coAnswers {
         throw OutOfMemoryError("test OOM")
       }
@@ -1087,7 +1140,7 @@ class AgentHttpServiceTest : StringSpec() {
 
       val spiedService = spyk(service)
       coEvery {
-        spiedService.fetchContent(any<String>(), any())
+        spiedService.fetchContent(any<String>(), any(), any())
       } coAnswers {
         throw StackOverflowError("test stack overflow")
       }
@@ -1155,7 +1208,7 @@ class AgentHttpServiceTest : StringSpec() {
       val spiedService = spyk(service)
       // HttpRequestTimeoutException is a CancellationException, but should be caught and converted to 408
       coEvery {
-        spiedService.fetchContent(any<String>(), any())
+        spiedService.fetchContent(any<String>(), any(), any())
       } coAnswers {
         throw io.ktor.client.plugins.HttpRequestTimeoutException("url", 1000L)
       }
@@ -1486,7 +1539,7 @@ class AgentHttpServiceTest : StringSpec() {
       val spiedService = spyk(service)
       // No cause-accepting constructor exists on CancellationException, so set it via initCause.
       coEvery {
-        spiedService.fetchContent(any<String>(), any())
+        spiedService.fetchContent(any<String>(), any(), any())
       } coAnswers {
         throw CancellationException("wrapped timeout").apply {
           initCause(io.ktor.client.plugins.HttpRequestTimeoutException("url", 1000L))
@@ -1555,6 +1608,217 @@ class AgentHttpServiceTest : StringSpec() {
       AgentHttpService.isFilterableContentType("application/vnd.google.protobuf") shouldBe false
       AgentHttpService.isFilterableContentType("application/octet-stream") shouldBe false
       AgentHttpService.isFilterableContentType("text/html") shouldBe false
+    }
+
+    // ==================== Fix pass: filter/guard ordering properties ====================
+    // These pin the three load-bearing properties of buildScrapeResults that had zero coverage:
+    // the maxContentLength guard reads RAW bytes; zipped/srContentAsText/srContentAsZipped all read
+    // FILTERED bytes; and an unfiltered path is untouched. See task-5-report.md fix pass.
+
+    "Fix pass: maxContentLength guard evaluates raw bytes, not filtered bytes" {
+      // maxContentLengthMBytes must be >= 1 (it's whole megabytes), so the read cap
+      // (maxContentLength + 1 bytes, see buildScrapeResults) is >1MB here -- big enough that the
+      // capped raw chunk actually contains real filterable content rather than a single truncated
+      // byte. Deny every family with no blank lines in the payload, so the filtered result is the
+      // empty string: if the guard were moved after filtering, or made to compare filteredBytes.size,
+      // it would see ~0 bytes and never trip, even though the raw (capped) chunk is over the limit.
+      val mockAgent = createMockAgentWithFilter(
+        """{ path = "metrics", metricNameAllow = [], metricNameDeny = [".*"] }""",
+      )
+      val options = mockAgent.options
+      every { options.maxContentLengthMBytes } returns 1
+      val maxContentLength = 1 * 1024 * 1024
+      // 40 bytes/unit * 30_000 = 1_200_000 bytes, safely over the 1_048_576-byte limit so the
+      // channel read is actually capped (not just reading the whole body under the limit).
+      val rawContent = "# TYPE foo_denied counter\nfoo_denied 1\n".repeat(30_000)
+      rawContent.encodeToByteArray().size shouldBeGreaterThan maxContentLength
+
+      // respondTextWriter uses chunked transfer-encoding (no Content-Length header), so the
+      // pre-read header guard is bypassed and the post-read raw-byte-size guard under test fires.
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondTextWriter(contentType = ContentType.Text.Plain) {
+              write(rawContent)
+            }
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 300L
+          path = "metrics"
+          accept = ""
+          debugEnabled = true
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe HttpStatusCode.PayloadTooLarge.value
+        results.srValidResponse.shouldBeFalse()
+        results.srFailureReason shouldContain "Content size"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "Fix pass: filtered path emits filtered content on the unzipped text path" {
+      val mockAgent = createMockAgentWithFilter(
+        """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
+      )
+      // minGzipSizeBytes stays at the createMockAgentWithFilter default (1_000_000), so this small
+      // payload stays on the non-zipped text path -- srContentAsText is what's under test.
+      val content =
+        "# TYPE allowed_metric counter\nallowed_metric 1\n" +
+          "# TYPE denied_metric counter\ndenied_metric 2\n"
+
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText(content, ContentType.Text.Plain)
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 301L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe 200
+        results.srValidResponse.shouldBeTrue()
+        results.srZipped.shouldBeFalse()
+        results.srContentAsText shouldContain "allowed_metric"
+        results.srContentAsText shouldNotContain "denied_metric"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "Fix pass: filtered path emits filtered content on the zipped path (srContentAsZipped)" {
+      // Distinct from the unzipped-path test above: zipped/srContentAsZipped is a separate
+      // expression from srContentAsText, so it needs its own pin (see AgentHttpService.kt).
+      val mockAgent = createMockAgentWithFilter(
+        """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
+      )
+      val options = mockAgent.options
+      every { options.minGzipSizeBytes } returns 100
+
+      // The allowed block alone is already > 100 bytes, so zipped=true is driven by the FILTERED
+      // size, independent of how much of the denied block also gets stripped out.
+      val allowedBlock =
+        "# TYPE allowed_metric counter\n" + (1..10).joinToString("") { "allowed_metric{i=\"$it\"} $it\n" }
+      val deniedBlock = "# TYPE denied_metric counter\n" + "denied_metric 999\n".repeat(50)
+      val content = allowedBlock + deniedBlock
+
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText(content, ContentType.Text.Plain)
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 302L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe 200
+        results.srValidResponse.shouldBeTrue()
+        results.srZipped.shouldBeTrue()
+
+        val decoded = results.srContentAsZipped.unzip(1_000_000L).text
+        decoded shouldContain "allowed_metric"
+        decoded shouldNotContain "denied_metric"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "Fix pass: a path with no filter passes the payload through byte-identical" {
+      // Content that a filter would drop if one were configured for this path, but
+      // createMockAgentWithPaths registers with filters = [], so pathContext.filter is null.
+      val content = "# TYPE would_be_denied_metric counter\nwould_be_denied_metric 42\n"
+
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText(content, ContentType.Text.Plain)
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+
+        val mockAgent = createMockAgentWithPaths()
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 303L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val results = service.fetchScrapeUrl(request)
+
+        results.srStatusCode shouldBe 200
+        results.srValidResponse.shouldBeTrue()
+        results.srContentAsText shouldBe content
+        results.srContentAsText shouldContain "would_be_denied_metric"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
     }
   }
 }
