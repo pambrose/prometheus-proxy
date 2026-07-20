@@ -83,19 +83,6 @@ internal class AgentPathManager(
       }
       .toMap()
 
-  init {
-    // This only sees the STATIC baseline available at construction time (config-driven pathConfigs).
-    // It cannot know about paths registered later at runtime via registerPath(), or reconciled in by
-    // discovery, so a filter that legitimately targets one of those paths will always miss here -- that
-    // is expected, not a typo. Kept at debug (not warn) because "absent from the static baseline" is a
-    // normal condition for those paths, not an anomaly; it remains a useful diagnostic for spotting a
-    // genuine typo in a purely static deployment.
-    val staticPaths = pathConfigs.mapTo(mutableSetOf()) { it.path.removePrefix("/") }
-    filtersByPath.keys
-      .filterNot { it in staticPaths }
-      .forEach { logger.debug { "Metric filter configured for /$it, which matches no static pathConfigs entry" } }
-  }
-
   suspend fun registerPaths() = pathConfigs.forEach { registerPath(it.path, it.url, it.labels) }
 
   suspend fun registerPath(
@@ -170,9 +157,18 @@ internal class AgentPathManager(
     val path = pathVal.removePrefix("/")
     val labelsJson = labels.defaultEmptyJsonObject()
     val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
-    if (!agent.isTestMode)
-      logger.info { "Registered $url as /$path with labels $labelsJson (${source.name.lowercase()})" }
-    pathContextMap[path] = PathContext(pathId, path, url, labelsJson, source, filtersByPath[path])
+    // Whether a filter attached is only knowable here, where the path is actually resolved -- which is
+    // why it is reported here rather than cross-checked against pathConfigs at construction time, a
+    // baseline that by definition cannot see discovered or runtime-registered paths. Absence of the
+    // suffix on a path you configured a filter for means the two path strings do not match.
+    val filter = filtersByPath[path]
+    if (!agent.isTestMode) {
+      logger.info {
+        "Registered $url as /$path with labels $labelsJson (${source.name.lowercase()})" +
+          if (filter != null) " with a metric filter" else ""
+      }
+    }
+    pathContextMap[path] = PathContext(pathId, path, url, labelsJson, source, filter)
   }
 
   // Lock-free unregistration body; callers MUST hold pathMutex (see doRegisterPath).
