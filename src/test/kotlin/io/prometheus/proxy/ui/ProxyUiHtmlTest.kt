@@ -31,7 +31,7 @@ class ProxyUiHtmlTest : StringSpec() {
   private fun path(
     name: String,
     agents: List<String> = ["1"],
-  ) = PathView(name, agents, agents.map { "agent-$it" }, isConsolidated = agents.size > 1, labels = "{}")
+  ) = PathView(name, agents, labels = "{}")
 
   private fun agent(
     id: String = "1",
@@ -58,7 +58,7 @@ class ProxyUiHtmlTest : StringSpec() {
     agents = agents,
     paths = agents.flatMap { it.paths }.distinct(),
     scrapes = scrapes,
-    health = HealthView(agents.size, 1, 0, 25, 1, 25, 25),
+    health = HealthView(agents.size, 1, 0, 25, 1, 25),
     maxAgentInactivitySecs = 60,
   )
 

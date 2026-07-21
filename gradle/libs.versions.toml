@@ -90,9 +90,6 @@ ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging", versio
 ktor-server-compression = { module = "io.ktor:ktor-server-compression", version.ref = "ktor" }
 ktor-server-html-builder = { module = "io.ktor:ktor-server-html-builder", version.ref = "ktor" }
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktor" }
-ktor-htmx = { module = "io.ktor:ktor-htmx", version.ref = "ktor" }
-ktor-htmx-html = { module = "io.ktor:ktor-htmx-html", version.ref = "ktor" }
-ktor-server-htmx = { module = "io.ktor:ktor-server-htmx", version.ref = "ktor" }
 
 # WebJars
 webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
@@ -155,10 +152,7 @@ ktor = [
   "ktor-server-call-logging",
   "ktor-server-compression",
   "ktor-server-html-builder",
-  "ktor-server-websockets",
-  "ktor-htmx",
-  "ktor-htmx-html",
-  "ktor-server-htmx"
+  "ktor-server-websockets"
 ]
 
 webjars = [

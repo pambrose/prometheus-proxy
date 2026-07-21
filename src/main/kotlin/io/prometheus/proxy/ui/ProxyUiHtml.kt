@@ -16,11 +16,8 @@
 
 package io.prometheus.proxy.ui
 
-import kotlinx.html.BODY
-import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.HTML
-import kotlinx.html.attributes.enumEncode
 import kotlinx.html.body
 import kotlinx.html.button
 import kotlinx.html.div
@@ -74,14 +71,8 @@ internal object ProxyUiHtml {
         renderStatus(snapshot)
       }
       div("md") {
-        div("md-list") {
-          attributes["id"] = AGENT_LIST_ID
-          renderAgentList(snapshot, selectedId, uiPath)
-        }
-        div("md-detail") {
-          attributes["id"] = DETAIL_ID
-          renderDetail(snapshot, selectedId)
-        }
+        renderAgentList(snapshot, selectedId, uiPath)
+        renderDetail(snapshot, selectedId)
       }
       // The one piece htmx does not model: telling the server which agent THIS session is viewing, so
       // the push loop knows whether to send a detail pane. hx-push-url already puts the selection in
@@ -91,9 +82,13 @@ internal object ProxyUiHtml {
   }
 
   /** Status counters. Driven by the timer rather than the event bus -- these drift, they do not change. */
-  fun FlowContent.renderStatus(snapshot: ProxySnapshot) {
+  fun FlowContent.renderStatus(
+    snapshot: ProxySnapshot,
+    oob: Boolean = false,
+  ) {
     span("bar-right") {
       attributes["id"] = STATUS_ID
+      if (oob) attributes["hx-swap-oob"] = "true"
       span("live") {
         span("beacon") {}
         +"live"
@@ -111,14 +106,17 @@ internal object ProxyUiHtml {
     snapshot: ProxySnapshot,
     selectedId: String?,
     uiPath: String,
-  ) {
+    oob: Boolean = false,
+  ) = div("md-list") {
+    attributes["id"] = AGENT_LIST_ID
+    if (oob) attributes["hx-swap-oob"] = "true"
     div("md-head") {
       span { +"Agents" }
       span { +"${snapshot.agents.size}" }
     }
     if (snapshot.agents.isEmpty()) {
       div("empty") { +"No agents connected" }
-      return
+      return@div
     }
     snapshot.agents.forEach { agent ->
       button(classes = "md-row") {
@@ -139,17 +137,20 @@ internal object ProxyUiHtml {
   fun FlowContent.renderDetail(
     snapshot: ProxySnapshot,
     selectedId: String?,
-  ) {
+    oob: Boolean = false,
+  ) = div("md-detail") {
+    attributes["id"] = DETAIL_ID
+    if (oob) attributes["hx-swap-oob"] = "true"
     if (selectedId == null) {
       div("empty pad") { +"Select an agent to see its paths and recent scrapes" }
-      return
+      return@div
     }
     val agent = snapshot.agent(selectedId)
     if (agent == null) {
       // The selected agent disconnected. Say so explicitly rather than leaving a stale pane or a blank
       // one -- a silently frozen detail view is exactly what makes an operator distrust a dashboard.
       div("empty pad gone") { +"Agent $selectedId is no longer connected" }
-      return
+      return@div
     }
 
     div("hero") {
@@ -214,21 +215,9 @@ internal object ProxyUiHtml {
     uiPath: String,
   ): String =
     createHTML().div {
-      div("md-list") {
-        attributes["id"] = AGENT_LIST_ID
-        attributes["hx-swap-oob"] = "true"
-        renderAgentList(snapshot, selectedId, uiPath)
-      }
-      div("md-detail") {
-        attributes["id"] = DETAIL_ID
-        attributes["hx-swap-oob"] = "true"
-        renderDetail(snapshot, selectedId)
-      }
-      span("bar-right") {
-        attributes["id"] = STATUS_ID
-        attributes["hx-swap-oob"] = "true"
-        renderStatus(snapshot)
-      }
+      renderAgentList(snapshot, selectedId, uiPath, oob = true)
+      renderDetail(snapshot, selectedId, oob = true)
+      renderStatus(snapshot, oob = true)
     }
 
   /** The detail pane alone, for the `hx-get` a row click issues. */

@@ -34,9 +34,9 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import io.prometheus.Agent
 import io.prometheus.Proxy
+import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
-import io.prometheus.common.proxyOptions
 import io.prometheus.harness.support.TestUtils.startAgent
 import kotlin.time.Duration.Companion.seconds
 
@@ -53,22 +53,11 @@ class ProxyWebUiTest : StringSpec() {
       CollectorRegistry.defaultRegistry.clear()
 
       val proxy =
-        Proxy(
-          options =
-            proxyOptions(
-              [
-                "--config", CONFIG_FILE,
-                "--agent_port", "$PROXY_GRPC_PORT",
-                "--ui",
-                "--ui_port", "$UI_PORT",
-                "-Dproxy.admin.enabled=false",
-                "-Dproxy.metrics.enabled=false",
-              ],
-            ),
+        startProxy(
+          args = ["--agent_port", "$PROXY_GRPC_PORT", "--ui", "--ui_port", "$UI_PORT"],
           proxyPort = PROXY_HTTP_PORT,
-          inProcessServerName = "",
-          testMode = true,
-        ) { startSync() }
+          configArgs = ["--config", CONFIG_FILE],
+        )
 
       val client = HttpClient(CIO) { install(WebSockets) }
       var agent: Agent? = null
@@ -103,14 +92,10 @@ class ProxyWebUiTest : StringSpec() {
             )
           agent.awaitInitialConnection(20.seconds).shouldBeTrue()
 
-          var sawAgent = false
-          repeat(MAX_FRAMES) {
-            if (!sawAgent) {
-              val text = (incoming.receive() as Frame.Text).readText()
-              if (text.contains(AGENT_NAME)) sawAgent = true
-            }
-          }
-          sawAgent.shouldBeTrue()
+          // any short-circuits, so MAX_FRAMES is a budget rather than a required frame count.
+          (1..MAX_FRAMES)
+            .any { (incoming.receive() as Frame.Text).readText().contains(AGENT_NAME) }
+            .shouldBeTrue()
         }
       } finally {
         agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
@@ -123,15 +108,11 @@ class ProxyWebUiTest : StringSpec() {
       CollectorRegistry.defaultRegistry.clear()
 
       val proxy =
-        Proxy(
-          options =
-            proxyOptions(
-              ["--config", CONFIG_FILE, "--agent_port", "$OFF_GRPC_PORT", "-Dproxy.admin.enabled=false"],
-            ),
+        startProxy(
+          args = ["--agent_port", "$OFF_GRPC_PORT"],
           proxyPort = OFF_HTTP_PORT,
-          inProcessServerName = "",
-          testMode = true,
-        ) { startSync() }
+          configArgs = ["--config", CONFIG_FILE],
+        )
 
       val client = HttpClient(CIO)
       try {

@@ -201,13 +201,19 @@ internal object ProxyHttpRoutes {
     queryParams: String,
   ): List<ScrapeRequestResponse> =
     coroutineScope {
+      // map and awaitAll both preserve order, so zipping recovers which agent produced which response.
+      // That keeps provenance at the one site that needs it, rather than as a field on the response.
       agentContextInfo.agentContexts
         .map { agentContext ->
           async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request) }
         }
         .awaitAll()
+        .also { responses ->
+          agentContextInfo.agentContexts.zip(responses).forEach { (agentContext, response) ->
+            recordScrapeOutcome(path, agentContext.agentId, response, proxy)
+          }
+        }
         .onEach { response ->
-          logActivityForResponse(path, response, proxy)
           // Record latency labeled with the request outcome. This single site covers every outcome
           // — including the timeout and agent-disconnected early returns the old per-request timer
           // missed — since each branch yields a ScrapeRequestResponse with updateMsg + fetchDuration.
@@ -218,8 +224,11 @@ internal object ProxyHttpRoutes {
         }
     }
 
-  private fun logActivityForResponse(
+  // Named for what it now does: this is where a completed scrape becomes observable -- as a text line
+  // on /debug, as a structured record for the web UI, and as an event on the bus.
+  private fun recordScrapeOutcome(
     path: String,
+    agentId: String,
     response: ScrapeRequestResponse,
     proxy: Proxy,
   ) {
@@ -233,7 +242,7 @@ internal object ProxyHttpRoutes {
     proxy.logActivity(status)
     proxy.recordScrape(
       ScrapeRecord(
-        agentId = response.agentId,
+        agentId = agentId,
         path = path,
         statusCode = response.statusCode.value,
         outcome = response.updateMsg,
@@ -242,7 +251,7 @@ internal object ProxyHttpRoutes {
       ),
     )
     proxy.eventBus.emit(
-      ProxyEvent.ScrapeCompleted(response.agentId, path, response.statusCode.isSuccess()),
+      ProxyEvent.ScrapeCompleted(agentId, path, response.statusCode.isSuccess()),
     )
   }
 
@@ -264,7 +273,6 @@ internal object ProxyHttpRoutes {
     val scrapeResults =
       scrapeRequest.scrapeResults
         ?: return ScrapeRequestResponse(
-          agentId = agentContext.agentId,
           statusCode = HttpStatusCode.ServiceUnavailable,
           updateMsg = "missing_results",
           fetchDuration = scrapeRequest.ageDuration(),
@@ -276,7 +284,6 @@ internal object ProxyHttpRoutes {
     // Do not return content on error status codes.
     return if (!statusCode.isSuccess())
       ScrapeRequestResponse(
-        agentId = agentContext.agentId,
         statusCode = statusCode,
         contentType = contentType,
         failureReason = scrapeResults.srFailureReason,
@@ -303,7 +310,6 @@ internal object ProxyHttpRoutes {
         agentContext.writeScrapeRequest(scrapeRequest)
       } catch (_: ClosedSendChannelException) {
         return ScrapeRequestResponse(
-          agentId = agentContext.agentId,
           statusCode = HttpStatusCode.ServiceUnavailable,
           updateMsg = "agent_disconnected",
           fetchDuration = scrapeRequest.ageDuration(),
@@ -313,7 +319,6 @@ internal object ProxyHttpRoutes {
       // Suspends until completed, agent disconnects, or timeout expires.
       if (!scrapeRequest.awaitCompleted(timeoutTime))
         return ScrapeRequestResponse(
-          agentId = agentContext.agentId,
           statusCode = HttpStatusCode.ServiceUnavailable,
           updateMsg = PROXY_TIMEOUT_LABEL,
           fetchDuration = scrapeRequest.ageDuration(),
@@ -362,7 +367,6 @@ internal object ProxyHttpRoutes {
           DecodedContent(scrapeResults.srContentAsText, scrapeResults.srContentAsText.toByteArray().size.toLong())
       } catch (e: ProxyUtils.ZipBombException) {
         return ScrapeRequestResponse(
-          agentId = scrapeRequest.agentContext.agentId,
           statusCode = HttpStatusCode.PayloadTooLarge,
           contentType = Text.Plain.withCharset(Charsets.UTF_8),
           failureReason = e.message ?: "Unzipped content too large",
@@ -372,7 +376,6 @@ internal object ProxyHttpRoutes {
         )
       } catch (e: IOException) {
         return ScrapeRequestResponse(
-          agentId = scrapeRequest.agentContext.agentId,
           statusCode = HttpStatusCode.BadGateway,
           contentType = Text.Plain.withCharset(Charsets.UTF_8),
           failureReason = e.message ?: "Invalid gzipped content",
@@ -390,7 +393,6 @@ internal object ProxyHttpRoutes {
     }
 
     return ScrapeRequestResponse(
-      agentId = scrapeRequest.agentContext.agentId,
       statusCode = statusCode,
       contentType = contentType,
       contentText = decoded.text,
@@ -452,9 +454,6 @@ internal object ProxyHttpRoutes {
 internal data class ScrapeRequestResponse(
   val statusCode: HttpStatusCode,
   val updateMsg: String,
-  // Which agent served this. Carried on the response because executeScrapeRequests loses the
-  // AgentContext at awaitAll(), and the UI needs per-agent attribution to filter a detail pane.
-  val agentId: String = "",
   val contentType: ContentType = Text.Plain.withCharset(Charsets.UTF_8),
   val contentText: String = "",
   val failureReason: String = "",

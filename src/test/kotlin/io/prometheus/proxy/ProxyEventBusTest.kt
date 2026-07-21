@@ -122,16 +122,5 @@ class ProxyEventBusTest : StringSpec() {
 
       seen shouldContainExactly [ProxyEvent.AgentConnected(context.agentId)]
     }
-
-    // AgentConnected and AgentRegistered are distinct on purpose. The transport filter runs before
-    // per-call auth and before registerAgent, so at AgentConnected time the identity fields are still
-    // "Unassigned" and the peer may still be rejected -- anything completing an HTTP/2 handshake gets
-    // that far, including a health probe. Only AgentRegistered means a named, serving agent.
-    "AgentConnected should precede identity assignment" {
-      val context = AgentContext("10.0.1.14:1234")
-      context.agentName shouldBe "Unassigned"
-      context.hostName shouldBe "Unassigned"
-      context.launchId shouldBe "Unassigned"
-    }
   }
 }

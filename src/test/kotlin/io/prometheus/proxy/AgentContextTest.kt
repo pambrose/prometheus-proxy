@@ -468,7 +468,13 @@ class AgentContextTest : StringSpec() {
     "remoteAddr and launchId should be readable" {
       val context = AgentContext("10.0.1.14:54321")
       context.remoteAddr shouldBe "10.0.1.14:54321"
+
+      // AgentConnected is emitted from the transport filter, which runs before registerAgent, so a
+      // just-connected context legitimately has no identity yet. Only AgentRegistered means a named
+      // agent -- the UI renders a placeholder for this state rather than the raw sentinel.
       context.launchId shouldBe "Unassigned"
+      context.agentName shouldBe "Unassigned"
+      context.hostName shouldBe "Unassigned"
 
       val request = mockk<RegisterAgentRequest>()
       every { request.launchId } returns "launch-abc"

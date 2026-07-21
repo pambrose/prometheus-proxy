@@ -53,17 +53,6 @@ class ProxySnapshotTest : StringSpec() {
       agentView(inactivitySecs = 90).evictionCountdownSecs(60) shouldBe 0
     }
 
-    // A path whose agents have all gone is exactly the "why isn't this scraping?" case the UI exists
-    // for, so it must be distinguishable from a healthy path rather than silently vanishing.
-    "a path with no agents should report as orphaned" {
-      PathView("dead_path", emptyList(), emptyList(), isConsolidated = false, labels = "{}")
-        .isOrphaned
-        .shouldBeTrue()
-      PathView("live_path", ["1"], ["team-a-01"], isConsolidated = false, labels = "{}")
-        .isOrphaned
-        .shouldBeFalse()
-    }
-
     "health should compare each size against its own threshold" {
       val health =
         HealthView(
@@ -73,7 +62,6 @@ class ProxySnapshotTest : StringSpec() {
           chunkContextThreshold = 25,
           scrapeMapSize = 25,
           scrapeMapThreshold = 25,
-          backlogThreshold = 25,
         )
       // The proxy's own health checks treat >= threshold as unhealthy, so at-threshold is not healthy.
       health.chunkContextHealthy.shouldBeTrue()

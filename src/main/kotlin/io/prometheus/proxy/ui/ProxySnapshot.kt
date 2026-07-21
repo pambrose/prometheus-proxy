@@ -25,12 +25,8 @@ import kotlin.time.Duration
 internal data class PathView(
   val path: String,
   val agentIds: List<String>,
-  val agentNames: List<String>,
-  val isConsolidated: Boolean,
   val labels: String,
-) {
-  val isOrphaned: Boolean get() = agentIds.isEmpty()
-}
+)
 
 /** One connected agent as the UI shows it. */
 internal data class AgentView(
@@ -59,7 +55,6 @@ internal data class HealthView(
   val chunkContextThreshold: Int,
   val scrapeMapSize: Int,
   val scrapeMapThreshold: Int,
-  val backlogThreshold: Int,
 ) {
   val chunkContextHealthy: Boolean get() = chunkContextSize < chunkContextThreshold
   val scrapeMapHealthy: Boolean get() = scrapeMapSize < scrapeMapThreshold
@@ -78,7 +73,6 @@ internal data class ProxySnapshot(
   val scrapes: List<ScrapeRecord>,
   val health: HealthView,
   val maxAgentInactivitySecs: Long,
-  val at: Instant = Instant.now(),
 ) {
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
@@ -93,9 +87,13 @@ internal data class ProxySnapshot(
      * Deliberately avoids two accessors that look useful and are not:
      * - `ProxyPathManager.toPlainText()` holds the path monitor across a full sort plus a `toString()`
      *   per entry.
-     * - `AgentContextManager.totalAgentScrapeRequestBacklogSize` is O(agents × backlog depth), because
-     *   `ConcurrentLinkedQueue.size()` traverses. It is slowest exactly when backlogs are deep, which
-     *   is when a health view is most likely to be watched.
+     * - `AgentContextManager.totalAgentScrapeRequestBacklogSize`, which recomputes an aggregate the
+     *   `proxy_cumulative_agent_backlog_size` gauge already samples.
+     *
+     * One cost is paid rather than avoided: per-agent `scrapeRequestBacklogSize` is
+     * `ConcurrentLinkedQueue.size()`, an O(depth) traversal, so a collect is O(agents × backlog depth).
+     * That is acceptable only because collects are bounded by the refresh interval — which is why
+     * scrape completions deliberately do not wake the push loop.
      *
      * Cost is two monitor acquisitions per call regardless of how many sessions are connected, which is
      * why the caller collects once and fans out rather than collecting per session.
@@ -106,20 +104,13 @@ internal data class ProxySnapshot(
       // One monitor acquire; values are immutable so they are safe to hold onto.
       val pathInfos = proxy.pathManager.allPathContextInfos()
 
-      val pathsByAgent = mutableMapOf<String, MutableList<PathView>>()
       val paths =
-        pathInfos.map { (path, info) ->
-          val view =
-            PathView(
-              path = path,
-              agentIds = info.agentContexts.map { it.agentId },
-              agentNames = info.agentContexts.map { it.agentName },
-              isConsolidated = info.isConsolidated,
-              labels = info.labels,
-            )
-          info.agentContexts.forEach { pathsByAgent.getOrPut(it.agentId) { mutableListOf() } += view }
-          view
-        }.sortedBy { it.path }
+        pathInfos
+          .map { (path, info) -> PathView(path, info.agentContexts.map { it.agentId }, info.labels) }
+          .sortedBy { it.path }
+
+      // Derived from the already-sorted list, so each agent's paths come out sorted for free.
+      val pathsByAgent = paths.flatMap { view -> view.agentIds.map { it to view } }.groupBy({ it.first }, { it.second })
 
       // Materialize the live entry set before reading fields off it.
       val agents =
@@ -136,7 +127,7 @@ internal data class ProxySnapshot(
               connectTime = context.connectTime,
               inactivity = context.inactivityDuration,
               backlogSize = context.scrapeRequestBacklogSize,
-              paths = pathsByAgent[agentId].orEmpty().sortedBy { it.path },
+              paths = pathsByAgent[agentId].orEmpty(),
             )
           }
           .sortedBy { it.agentName }
@@ -153,7 +144,6 @@ internal data class ProxySnapshot(
             chunkContextThreshold = internal.chunkContextMapUnhealthySize,
             scrapeMapSize = proxy.scrapeRequestManager.scrapeMapSize,
             scrapeMapThreshold = internal.scrapeRequestMapUnhealthySize,
-            backlogThreshold = internal.scrapeRequestBacklogUnhealthySize,
           ),
         maxAgentInactivitySecs = internal.maxAgentInactivitySecs.toLong(),
       )

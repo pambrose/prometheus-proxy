@@ -16,19 +16,24 @@
 
 package io.prometheus.proxy.ui
 
+import com.codahale.metrics.health.HealthCheck
 import com.google.common.util.concurrent.MoreExecutors
 import com.pambrose.common.concurrent.GenericIdleService
 import com.pambrose.common.concurrent.genericServiceListener
+import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.cio.CIO
+import io.ktor.http.content.CachingOptions
 import io.ktor.server.application.install
+import io.ktor.server.cio.CIO
 import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.html.respondHtml
+import io.ktor.server.plugins.cachingheaders.CachingHeaders
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -38,11 +43,14 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import io.prometheus.Proxy
+import io.prometheus.proxy.ProxyEvent
+import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,14 +75,15 @@ import kotlin.time.Duration.Companion.seconds
  *
  * ### How updates reach the browser
  *
- * One shared push loop, not one per session. It wakes on either a [io.prometheus.proxy.ProxyEvent] or a
- * timer tick, collects a single [ProxySnapshot], and fans the same rendered fragments out to every
- * connected session. The wake channel is [Channel.CONFLATED], so a burst of events (a fleet
- * reconnecting) collapses into one collect rather than N.
+ * One shared push loop, not one per session. It wakes on either a topology
+ * [io.prometheus.proxy.ProxyEvent] or a timer tick, collects a single [ProxySnapshot], and fans the same
+ * rendered fragments out to every connected session.
  *
- * The timer exists because the event bus only covers discrete transitions. Backlog depth, map sizes and
- * eviction countdowns drift continuously with no moment to emit from, so they would otherwise sit
- * frozen on screen between topology changes.
+ * **Scrape completions deliberately do not wake it.** They arrive at scrape rate — tens per second on a
+ * busy proxy — and waking on each would run a snapshot collect that often, taking the same path-map
+ * monitor every scrape request takes and defeating the decoupling this service is built around. Scrape
+ * history is a drifting value, so the timer covers it, for the same reason backlog depths and eviction
+ * countdowns are timer-driven.
  */
 internal class ProxyUiService(
   private val proxy: Proxy,
@@ -83,16 +92,18 @@ internal class ProxyUiService(
 ) : GenericIdleService() {
   private val basePath = "/" + uiPath.trim('/')
 
-  // Selection per session: which agent's detail this browser tab is showing. Empty string means none
-  // chosen -- NOT null, because ConcurrentHashMap rejects null values and would throw on insert.
-  private val sessions = ConcurrentHashMap<SessionKey, String>()
+  /** One connected browser: how to reach it, and which agent it is currently viewing. */
+  private class Session(
+    val send: suspend (String) -> Unit,
+  ) {
+    @Volatile
+    var selectedId: String? = null
+  }
+
+  private val sessions = ConcurrentHashMap.newKeySet<Session>()
   private val wake = Channel<Unit>(Channel.CONFLATED)
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val refreshInterval = proxy.proxyConfigVals.ui.refreshIntervalSecs.seconds
-
-  private class SessionKey(
-    val send: suspend (String) -> Unit,
-  )
 
   private val server =
     embeddedServer(
@@ -104,16 +115,27 @@ internal class ProxyUiService(
         }
       },
     ) {
+      // Shares the proxy's own Ktor configuration: compression (htmx.min.js is ~51 KB), StatusPages so
+      // a failure returns a logged 500 rather than a bare one, and DefaultHeaders. Request logging is
+      // off -- a dashboard polling its own socket would drown the proxy's logs.
+      configureKtorServer(isLoggingEnabled = false)
       install(WebSockets)
+      install(CachingHeaders) {
+        // Webjar paths are version-pinned, so their content is immutable by construction.
+        options { _, outgoing ->
+          if (outgoing.contentType?.match(ContentType.Application.JavaScript) == true)
+            CachingOptions(CacheControl.MaxAge(ASSET_MAX_AGE_SECS, visibility = CacheControl.Visibility.Public))
+          else
+            null
+        }
+      }
+
       routing {
-        // Served from the classpath, so the fat JAR is self-contained and the UI works with no outbound
-        // network access -- which is the normal condition for a proxy bridging a firewall.
         // Explicit allowlist rather than staticResources: the webjar layout embeds a version in the
         // path, and an allowlist means there is no path-traversal surface and no dependence on how Ktor
         // interprets a basePackage. Two entries is not worth a generic static handler.
         get("$basePath/assets/{file}") {
-          val resource = ASSETS[call.parameters["file"]]
-          val bytes = resource?.let { javaClass.classLoader.getResourceAsStream(it)?.readBytes() }
+          val bytes = assetBytes[call.parameters["file"]]
           if (bytes == null)
             call.respondText("Not found", ContentType.Text.Plain, HttpStatusCode.NotFound)
           else
@@ -126,28 +148,27 @@ internal class ProxyUiService(
         }
 
         get("$basePath/agents/{agentId}") {
-          val agentId = call.parameters["agentId"]
           call.respondText(
-            ProxyUiHtml.detailFragment(snapshot(), agentId),
+            ProxyUiHtml.detailFragment(snapshot(), call.parameters["agentId"]),
             ContentType.Text.Html,
             HttpStatusCode.OK,
           )
         }
 
         webSocket("$basePath/events") {
-          val key = SessionKey { text -> outgoing.send(Frame.Text(text)) }
-          sessions[key] = NO_SELECTION
+          val session = Session { text -> outgoing.send(Frame.Text(text)) }
+          sessions.add(session)
           try {
             // Render immediately rather than making the browser wait for the first event or tick.
-            push(key, snapshot())
+            push(session, snapshot())
             for (frame in incoming) {
               if (frame is Frame.Text) {
-                sessions[key] = parseSelection(frame.readText()) ?: NO_SELECTION
-                push(key, snapshot())
+                session.selectedId = parseSelection(frame.readText())
+                push(session, snapshot())
               }
             }
           } finally {
-            sessions.remove(key)
+            sessions.remove(session)
           }
         }
       }
@@ -155,7 +176,10 @@ internal class ProxyUiService(
 
   val healthCheck =
     healthCheck {
-      if (isRunning) com.codahale.metrics.health.HealthCheck.Result.healthy() else unhealthyResult()
+      if (isRunning)
+        HealthCheck.Result.healthy()
+      else
+        HealthCheck.Result.unhealthy("$simpleClassName is not running")
     }
 
   init {
@@ -166,8 +190,11 @@ internal class ProxyUiService(
     server.start()
     scope.launch { pushLoop() }
     scope.launch {
-      // Any topology change wakes the loop. Conflated, so a burst collapses into one collect.
-      proxy.eventBus.flow.collect { wake.trySend(Unit) }
+      // Topology changes wake the loop; scrape completions do not -- see the class KDoc. Conflated, so
+      // a burst (a fleet reconnecting at once) collapses into a single collect.
+      proxy.eventBus.flow
+        .filter { it !is ProxyEvent.ScrapeCompleted }
+        .collect { wake.trySend(Unit) }
     }
     logger.info { "Started $simpleClassName on port $uiPort at $basePath" }
   }
@@ -178,7 +205,7 @@ internal class ProxyUiService(
   }
 
   /**
-   * Wakes on an event or, failing that, on the refresh interval; collects once; fans out to all sessions.
+   * Wakes on a topology change or, failing that, on the refresh interval; collects once; fans out.
    *
    * The timeout is what keeps drifting values live. Without it, an idle proxy would freeze its
    * countdowns until the next agent connected.
@@ -188,16 +215,15 @@ internal class ProxyUiService(
       withTimeoutOrNull(refreshInterval) { wake.receive() }
       if (sessions.isEmpty()) continue
       val snapshot = snapshot()
-        sessions.forEach { (key, selectedId) -> push(key, snapshot, selectedId.ifEmpty { null }) }
+      sessions.forEach { push(it, snapshot) }
     }
   }
 
   private suspend fun push(
-    key: SessionKey,
+    session: Session,
     snapshot: ProxySnapshot,
-    selectedId: String? = sessions[key]?.ifEmpty { null },
   ) {
-    runCatching { key.send(ProxyUiHtml.pushFragment(snapshot, selectedId, basePath)) }
+    runCatching { session.send(ProxyUiHtml.pushFragment(snapshot, session.selectedId, basePath)) }
       .onFailure { logger.debug { "Dropping UI session: ${it.simpleClassName}" } }
   }
 
@@ -210,10 +236,24 @@ internal class ProxyUiService(
    */
   private suspend fun snapshot(): ProxySnapshot = withContext(Dispatchers.IO) { ProxySnapshot.collect(proxy) }
 
-  private fun unhealthyResult() =
-    com.codahale.metrics.health.HealthCheck.Result.unhealthy("$simpleClassName is not running")
+  /**
+   * The static assets, read from the classpath once.
+   *
+   * Read once rather than per request: the port has no authentication, so a request loop would
+   * otherwise make the proxy inflate ~51 KB out of the JAR without bound.
+   */
+  private val assetBytes: Map<String, ByteArray> by lazy {
+    ASSETS.mapNotNull { (name, resource) ->
+      javaClass.classLoader.getResourceAsStream(resource)?.use { name to it.readBytes() }
+    }.toMap()
+  }
 
-  override fun toString() = "$simpleClassName{port=$uiPort, path=$basePath, sessions=${sessions.size}}"
+  override fun toString() =
+    toStringElements {
+      add("port", uiPort)
+      add("path", basePath)
+      add("sessions", sessions.size)
+    }
 
   companion object {
     private val logger = logger {}
@@ -230,9 +270,7 @@ internal class ProxyUiService(
         "ws.js" to "META-INF/resources/webjars/htmx-ext-ws/$HTMX_WS_VERSION/dist/ws.js",
       )
 
-    /** Sentinel for "this session has no agent selected"; ConcurrentHashMap forbids null values. */
-    private const val NO_SELECTION = ""
-
+    private const val ASSET_MAX_AGE_SECS = 31_536_000
     private const val GRACE_MILLIS = 2_000L
     private const val TIMEOUT_MILLIS = 5_000L
 
@@ -245,10 +283,12 @@ internal class ProxyUiService(
      */
     internal fun parseSelection(text: String): String? =
       runCatching {
-        json.parseToJsonElement(text).jsonObject["select"]?.jsonPrimitive?.contentOrNull
+        json.parseToJsonElement(text)
+          .jsonObject["select"]
+          ?.jsonPrimitive
+          ?.takeIf { it.isString }
+          ?.content
+          ?.takeIf { it.isNotEmpty() }
       }.getOrNull()
-
-    private val kotlinx.serialization.json.JsonPrimitive.contentOrNull: String?
-      get() = if (isString) content.takeIf { it.isNotEmpty() } else null
   }
 }
