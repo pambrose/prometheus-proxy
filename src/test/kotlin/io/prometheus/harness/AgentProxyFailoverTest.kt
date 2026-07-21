@@ -37,8 +37,8 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
-import io.prometheus.common.agentOptions
-import io.prometheus.common.proxyOptions
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
 import kotlin.time.Duration.Companion.seconds
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -70,29 +70,21 @@ class AgentProxyFailoverTest : StringSpec() {
       stub.start(wait = false)
 
       val client = HttpClient(CIO)
-      val proxyA = startProxyOn(httpPort = PROXY_A_HTTP_PORT, grpcPort = PROXY_A_GRPC_PORT)
+      var proxyA: Proxy? = null
       var proxyB: Proxy? = null
       var agent: Agent? = null
 
       try {
+        proxyA = startProxyOn(httpPort = PROXY_A_HTTP_PORT, grpcPort = PROXY_A_GRPC_PORT)
         proxyB = startProxyOn(httpPort = PROXY_B_HTTP_PORT, grpcPort = PROXY_B_GRPC_PORT)
 
+        // serverName defaults to "" -- Netty transport, so the endpoint the cursor selects is the one
+        // actually dialed. An in-process channel would ignore host and port entirely.
         agent =
-          Agent(
-            options =
-              agentOptions(
-                [
-                  "--config", FAILOVER_CONFIG_FILE,
-                  "--proxy", "$LOOPBACK_HOST:$PROXY_A_GRPC_PORT,$LOOPBACK_HOST:$PROXY_B_GRPC_PORT",
-                  "-Dagent.admin.enabled=false",
-                  "-Dagent.metrics.enabled=false",
-                ],
-                exitOnMissingConfig = false,
-              ),
-            // Empty: Netty transport, so the endpoint the cursor selects is the one actually dialed.
-            inProcessServerName = "",
-            testMode = true,
-          ) { startSync() }
+          startAgent(
+            configArgs = ["--config", FAILOVER_CONFIG_FILE],
+            args = ["--proxy", "$LOOPBACK_HOST:$PROXY_A_GRPC_PORT,$LOOPBACK_HOST:$PROXY_B_GRPC_PORT"],
+          )
 
         agent.awaitInitialConnection(20.seconds).shouldBeTrue()
 
@@ -110,7 +102,7 @@ class AgentProxyFailoverTest : StringSpec() {
 
         // Take the primary down. The agent should re-probe A first (the deliberate failback), fail, and
         // then advance to B.
-        proxyA.stopSync(10.seconds)
+        proxyA.stopSync(STOP_TIMEOUT)
 
         eventually(60.seconds) {
           // Serving through B's OWN http port is the assertion that matters: it can only succeed if the
@@ -127,33 +119,34 @@ class AgentProxyFailoverTest : StringSpec() {
         agent.agentId shouldNotBe ""
         agent.agentId shouldNotBe agentIdOnA
       } finally {
-        agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
+        stopQuietly(agent, proxyB, proxyA)
         client.close()
-        proxyB?.also { runCatching { it.stopSync(10.seconds) } }
-        runCatching { proxyA.stopSync(10.seconds) }
         stub.stop(0, 0)
       }
     }
   }
 
+  // Mirrors ContainerTestSupport.stopQuietly so the two failover specs read as siblings. Stopping an
+  // already-stopped proxy (the one the test deliberately killed) must not mask a real failure.
+  private fun stopQuietly(vararg services: Any?) =
+    services.forEach { service ->
+      runCatching {
+        when (service) {
+          is Agent -> if (service.isRunning) service.stopSync(STOP_TIMEOUT)
+          is Proxy -> service.stopSync(STOP_TIMEOUT)
+        }
+      }
+    }
+
   private fun startProxyOn(
     httpPort: Int,
     grpcPort: Int,
   ): Proxy =
-    Proxy(
-      options =
-        proxyOptions(
-          [
-            "--config", FAILOVER_CONFIG_FILE,
-            "--agent_port", "$grpcPort",
-            "-Dproxy.admin.enabled=false",
-            "-Dproxy.metrics.enabled=false",
-          ],
-        ),
+    startProxy(
+      args = ["--agent_port", "$grpcPort"],
       proxyPort = httpPort,
-      inProcessServerName = "",
-      testMode = true,
-    ) { startSync() }
+      configArgs = ["--config", FAILOVER_CONFIG_FILE],
+    )
 
   companion object {
     private const val FAILOVER_CONFIG_FILE = "config/test-configs/proxy-failover.conf"
@@ -167,6 +160,8 @@ class AgentProxyFailoverTest : StringSpec() {
 
     // Must match the pathConfigs url in proxy-failover.conf, which cannot see a dynamically bound port.
     private const val STUB_PORT = 9534
+
+    private val STOP_TIMEOUT = 10.seconds
 
     private const val METRIC_LINE = "failover_metric_under_test 42"
     private val STUB_BODY =

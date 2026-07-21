@@ -38,6 +38,7 @@ import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.testConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ScrapeRequest
@@ -73,7 +74,7 @@ class ProxyServiceImplTest : StringSpec() {
     val mockScrapeRequestManager = mockk<ScrapeRequestManager>(relaxed = true)
     every { mockScrapeRequestManager.containsScrapeRequest(any()) } returns true
 
-    val config = ConfigFactory.parseString(
+    val configVals = testConfigVals(
       """
       proxy {
         auth = []
@@ -86,13 +87,8 @@ class ProxyServiceImplTest : StringSpec() {
         pathConfigs = []
         filters = []
       }
-      """.trimIndent(),
+      """,
     )
-    // Merged with the reference config exactly as BaseOptions.readConfig does in production. tscfg emits an
-    // unguarded c.getList() for every list-typed key, so a bare parseString fixture throws
-    // ConfigException.Missing the moment a new list is added to the schema -- and ConfigVals builds BOTH
-    // the agent and proxy trees eagerly, so an agent-side list breaks proxy-only fixtures too.
-    val configVals = ConfigVals(config.withFallback(ConfigFactory.load()).resolve())
 
     val mockProxy = mockk<Proxy>(relaxed = true)
     every { mockProxy.options } returns mockOptions

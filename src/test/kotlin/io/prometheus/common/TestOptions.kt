@@ -16,6 +16,7 @@
 
 package io.prometheus.common
 
+import com.typesafe.config.ConfigFactory
 import io.prometheus.agent.AgentOptions
 import io.prometheus.proxy.ProxyOptions
 
@@ -29,3 +30,15 @@ fun agentOptions(
   args: List<String>,
   exitOnMissingConfig: Boolean,
 ): AgentOptions = AgentOptions(args, exitOnMissingConfig)
+
+/**
+ * Builds [ConfigVals] from a HOCON fragment the way `BaseOptions.readConfig` does in production.
+ *
+ * The reference-config merge is mandatory, not cosmetic: tscfg emits an unguarded `c.getList()` for
+ * every list-typed key, so a fixture built from a bare `parseString` throws `ConfigException.Missing`
+ * the moment a new list is added to the schema — and [ConfigVals] eagerly constructs *both* the agent
+ * and proxy trees, so an agent-side list breaks proxy-only fixtures too. Adding `agent.proxy.endpoints`
+ * broke three such fixtures at once.
+ */
+fun testConfigVals(hocon: String): ConfigVals =
+  ConfigVals(ConfigFactory.parseString(hocon.trimIndent()).withFallback(ConfigFactory.load()).resolve())

@@ -221,8 +221,7 @@ class Agent(
       """.trimIndent()
 
     logger.info { "Agent name: $agentName" }
-    if (grpcService.hasFailoverEndpoints)
-      logger.info { "Proxy failover endpoints, tried in order: ${grpcService.endpointsDesc}" }
+    grpcService.failoverEndpointsDesc?.also { logger.info { "Proxy failover endpoints, tried in order: $it" } }
     logger.info { "Proxy reconnect pause time: ${agentConfigVals.internal.reconnectPauseSecs.seconds}" }
     logger.info { "Scrape timeout time: ${options.scrapeTimeoutSecs.seconds}" }
 

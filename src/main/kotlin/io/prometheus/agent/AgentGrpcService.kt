@@ -32,6 +32,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
 import io.prometheus.Agent
+import io.prometheus.agent.AgentOptions.Companion.DEFAULT_GRPC_PORT
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
@@ -145,11 +146,9 @@ internal class AgentGrpcService(
   val agentHostName: String get() = currentEndpoint.host
   val agentPort: Int get() = currentEndpoint.port
 
-  /** Whether more than one proxy endpoint is configured, i.e. whether failover is possible at all. */
-  val hasFailoverEndpoints: Boolean get() = endpoints.size > 1
-
-  /** All configured endpoints, in priority order, for startup logging. */
-  val endpointsDesc: String get() = endpoints.joinToString(", ") { it.spec }
+  /** Endpoints in priority order for startup logging, or null when failover is not configured. */
+  val failoverEndpointsDesc: String?
+    get() = if (endpoints.size > 1) endpoints.joinToString(", ") { it.spec } else null
 
   /**
    * Advances to the next endpoint, wrapping at the end, and reports whether the selection changed.
@@ -167,19 +166,18 @@ internal class AgentGrpcService(
     }
 
   /**
-   * Returns to the first endpoint and reports whether the selection changed.
+   * Returns to the first endpoint.
    *
    * Called after a connection that had succeeded and then dropped, which is what makes the list a
    * priority order rather than a ring: the next cycle re-probes the primary, so recovery of a preferred
    * proxy is picked up without a health prober, a timer, or any per-endpoint state.
    */
-  fun resetEndpoint(): Boolean =
+  fun resetEndpoint() =
     grpcLock.withLock {
-      if (endpointIndex == 0)
-        return@withLock false
-      endpointIndex = 0
-      logger.info { "Returning to primary proxy endpoint: ${currentEndpoint.spec}" }
-      true
+      if (endpointIndex != 0) {
+        endpointIndex = 0
+        logger.info { "Returning to primary proxy endpoint: ${currentEndpoint.spec}" }
+      }
     }
 
   private val tlsContext: TlsContext
@@ -267,10 +265,11 @@ internal class AgentGrpcService(
       if (grpcStarted)
         shutDownChannelLocked()
 
+      val endpoint = currentEndpoint
       channel =
         channel(
-          hostName = agentHostName,
-          port = agentPort,
+          hostName = endpoint.host,
+          port = endpoint.port,
           enableRetry = true,
           tlsContext = tlsContext,
           overrideAuthority = agent.options.overrideAuthority,
@@ -607,9 +606,6 @@ internal class AgentGrpcService(
 
   companion object {
     private val logger = logger {}
-
-    // Shared with AgentOptions, which parses the same endpoint spec up front to validate it.
-    internal const val DEFAULT_GRPC_PORT = 50051
 
     // Max time to wait for the gRPC channel to terminate after shutdownNow() (finding 28).
     private const val CHANNEL_TERMINATION_TIMEOUT_SECS = 5L

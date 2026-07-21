@@ -50,6 +50,7 @@ import io.prometheus.Agent
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.testConfigVals
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
@@ -110,7 +111,7 @@ class AgentHttpServiceTest : StringSpec() {
     every { mockOptions.httpClientTimeoutSecs } returns 90
     every { mockOptions.trustAllX509Certificates } returns false
 
-    val config = ConfigFactory.parseString(
+    val configVals = testConfigVals(
       """
       agent {
         pathConfigs = []
@@ -120,13 +121,8 @@ class AgentHttpServiceTest : StringSpec() {
         }
       }
       proxy { auth = [] }
-      """.trimIndent(),
+      """,
     )
-    // Merged with the reference config exactly as BaseOptions.readConfig does in production. tscfg emits an
-    // unguarded c.getList() for every list-typed key, so a bare parseString fixture throws
-    // ConfigException.Missing the moment a new list is added to the schema -- and ConfigVals builds BOTH
-    // the agent and proxy trees eagerly, so an agent-side list breaks proxy-only fixtures too.
-    val configVals = ConfigVals(config.withFallback(ConfigFactory.load()).resolve())
 
     val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 

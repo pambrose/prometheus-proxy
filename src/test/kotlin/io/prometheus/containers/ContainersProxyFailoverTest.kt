@@ -59,8 +59,8 @@ class ContainersProxyFailoverTest : StringSpec() {
       "agent fails over to the standby proxy endpoint and scrapes resume" {
         val network = Network.newNetwork()
         val metricsStub = metricsStub(network)
-        val proxyA = proxyContainer(network, alias = PROXY_A_ALIAS, logLabel = "proxy-a")
-        val proxyB = proxyContainer(network, alias = PROXY_B_ALIAS, logLabel = "proxy-b")
+        val proxyA = proxyContainer(network, alias = PROXY_A_ALIAS)
+        val proxyB = proxyContainer(network, alias = PROXY_B_ALIAS)
 
         // The endpoint list is config-file-only in this fixture rather than a -D override: dynamic -D
         // params are parsed with PROPERTIES syntax and cannot carry a HOCON list, and the comma form
@@ -121,8 +121,8 @@ class ContainersProxyFailoverTest : StringSpec() {
   }
 
   companion object {
-    // Distinct from ContainerTestSupport.PROXY_ALIAS on purpose -- neither proxy may answer to the
-    // default alias, so nothing can accidentally resolve to "whichever proxy is up".
+    // Deliberately not the default proxy alias -- neither proxy may answer to it, so nothing can
+    // accidentally resolve to "whichever proxy is up". The alias doubles as the container log prefix.
     private const val PROXY_A_ALIAS = "proxy-a"
     private const val PROXY_B_ALIAS = "proxy-b"
 
