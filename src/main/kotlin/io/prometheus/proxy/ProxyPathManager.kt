@@ -236,7 +236,13 @@ internal class ProxyPathManager(
         }
       }
 
-      keysToUpdate.forEach { (k, v) -> pathMap[k] = v }
+      keysToUpdate.forEach { (k, v) ->
+        pathMap[k] = v
+        // A consolidated path surviving the loss of one agent is still a topology change. Without this
+        // the UI would never be woken for it, and unlike the removal case below there is no later
+        // event to self-correct from.
+        proxy.eventBus.emit(ProxyEvent.PathUnregistered(k, agentId))
+      }
 
       keysToRemove.forEach { k ->
         pathMap.remove(k)

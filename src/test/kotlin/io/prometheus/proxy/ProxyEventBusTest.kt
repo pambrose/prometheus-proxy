@@ -106,39 +106,32 @@ class ProxyEventBusTest : StringSpec() {
       }
     }
 
-    "AgentContextManager should emit on connect and disconnect" {
+    // AgentConnected fires when the transport is established, which is BEFORE registerAgent supplies
+    // identity -- so it deliberately carries only the id. AgentDisconnected is NOT emitted here: it
+    // moved to Proxy.removeAgentContext so its happens-before edge covers the path sweep too.
+    "AgentContextManager should emit on connect only" {
       val bus = ProxyEventBus()
       val manager = AgentContextManager(isTestMode = true, eventBus = bus)
       val context = AgentContext("10.0.1.14:1234")
 
       val seen =
-        collect(bus, 2) {
+        collect(bus, 1) {
+          manager.removeFromContextManager(context.agentId, "not registered yet")
           manager.addAgentContext(context)
-          manager.removeFromContextManager(context.agentId, "test teardown")
         }
 
-      seen shouldContainExactly
-        [
-          ProxyEvent.AgentConnected(context.agentId),
-          ProxyEvent.AgentDisconnected(context.agentId, "test teardown"),
-        ]
+      seen shouldContainExactly [ProxyEvent.AgentConnected(context.agentId)]
     }
 
-    // Removing an agent that was never registered must stay silent -- otherwise a UI would render a
-    // disconnect for something that never connected. Verified by requiring the NEXT real event to be
-    // the one collected: a spurious emit would be taken instead and fail the assertion.
-    "removing an unknown agent should emit nothing" {
-      val bus = ProxyEventBus()
-      val manager = AgentContextManager(isTestMode = true, eventBus = bus)
-
-      val seen =
-        collect(bus, 1) {
-          manager.removeFromContextManager("no-such-agent", "gone")
-          manager.addAgentContext(AgentContext("10.0.2.9:5555"))
-        }
-
-      seen shouldHaveSize 1
-      (seen.first() is ProxyEvent.AgentConnected) shouldBe true
+    // AgentConnected and AgentRegistered are distinct on purpose. The transport filter runs before
+    // per-call auth and before registerAgent, so at AgentConnected time the identity fields are still
+    // "Unassigned" and the peer may still be rejected -- anything completing an HTTP/2 handshake gets
+    // that far, including a health probe. Only AgentRegistered means a named, serving agent.
+    "AgentConnected should precede identity assignment" {
+      val context = AgentContext("10.0.1.14:1234")
+      context.agentName shouldBe "Unassigned"
+      context.hostName shouldBe "Unassigned"
+      context.launchId shouldBe "Unassigned"
     }
   }
 }

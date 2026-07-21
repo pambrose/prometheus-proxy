@@ -380,6 +380,11 @@ class Proxy(
     // a path pointing at a dead context that nothing later removes (finding 7).
     val agentContext = agentContextManager.removeFromContextManager(agentId, reason)
     pathManager.removeFromPathManager(agentId, reason)
+    // Emitted here rather than inside removeFromContextManager so the event's happens-before edge
+    // covers BOTH managers. Emitting at removal time let a consumer wake between the two calls and
+    // snapshot a path map that still listed the departed agent.
+    if (agentContext != null)
+      eventBus.emit(ProxyEvent.AgentDisconnected(agentId, reason))
     scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason")
     // Proactively reclaim any in-flight chunked-transfer buffers for this agent (the requests
     // themselves were just failed above) rather than waiting for each stream's orphan sweep.

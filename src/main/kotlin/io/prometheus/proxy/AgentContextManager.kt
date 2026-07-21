@@ -123,7 +123,6 @@ internal class AgentContextManager(
       if (!isTestMode)
         logger.info { "Removed $agentContext for agentId: $agentId ($reason)" }
       agentContext.invalidate()
-      eventBus.emit(ProxyEvent.AgentDisconnected(agentId, reason))
     }
     return agentContext
   }

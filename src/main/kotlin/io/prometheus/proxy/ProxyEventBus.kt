@@ -29,8 +29,27 @@ import kotlinx.coroutines.flow.asSharedFlow
  * sampled on a timer by whoever needs them, not emitted here.
  */
 internal sealed interface ProxyEvent {
-  /** An agent completed registration and is now serving. */
+  /**
+   * A transport was established and an [AgentContext] now exists.
+   *
+   * Emitted from the gRPC transport filter, which runs **before** per-call auth and before
+   * `registerAgent`, so at this point the context's identity fields are still `"Unassigned"` and the
+   * peer may yet be rejected. Anything that completes an HTTP/2 handshake reaches here, including a
+   * health probe or a client with a bad token. Consumers wanting a named, serving agent should wait
+   * for [AgentRegistered].
+   */
   data class AgentConnected(
+    val agentId: String,
+  ) : ProxyEvent
+
+  /**
+   * An agent supplied its identity via `registerAgent`, so `agentName`, `hostName`, `launchId` and
+   * `consolidated` are now populated.
+   *
+   * Without this, an agent that registers no paths would never produce a second event and would show
+   * as `"Unassigned"` indefinitely — [AgentConnected] fires too early to carry identity.
+   */
+  data class AgentRegistered(
     val agentId: String,
   ) : ProxyEvent
 
