@@ -241,6 +241,9 @@ internal object ProxyHttpRoutes {
         contentLength = response.contentText.length,
       ),
     )
+    proxy.eventBus.emit(
+      ProxyEvent.ScrapeCompleted(response.agentId, path, response.statusCode.isSuccess()),
+    )
   }
 
   internal suspend fun submitScrapeRequest(

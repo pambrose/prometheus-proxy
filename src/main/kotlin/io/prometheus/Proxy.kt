@@ -44,6 +44,8 @@ import io.prometheus.proxy.AgentContextManager
 import io.prometheus.proxy.ProxyGrpcService
 import io.prometheus.proxy.ProxyHttpService
 import io.prometheus.proxy.ProxyMetrics
+import io.prometheus.proxy.ProxyEvent
+import io.prometheus.proxy.ProxyEventBus
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRecord
@@ -198,8 +200,15 @@ class Proxy(
   }
 
   internal val metrics by lazy { ProxyMetrics(this) }
+
+  /**
+   * Fan-out bus for topology changes. Declared before the managers because they publish to it.
+   * Always present, even with the UI disabled: emitting into a bus with no subscribers is a no-op.
+   */
+  internal val eventBus = ProxyEventBus()
+
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
-  internal val agentContextManager = AgentContextManager(isTestMode)
+  internal val agentContextManager = AgentContextManager(isTestMode, eventBus)
   internal val scrapeRequestManager = ScrapeRequestManager()
 
   // Per-process id (mirrors Agent.launchId). Intentionally used to label only proxy_start_time_seconds,

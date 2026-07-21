@@ -35,6 +35,10 @@ import kotlin.time.Duration
  */
 internal class AgentContextManager(
   private val isTestMode: Boolean,
+  // Defaulted so tests that do not care about topology events construct a manager with its own private
+  // bus. Emitting into a bus nobody subscribes to is a no-op, so an unshared one changes no behavior.
+  // Proxy passes its shared instance explicitly.
+  private val eventBus: ProxyEventBus = ProxyEventBus(),
 ) {
   // Map agent_id to AgentContext
   private val agentContextMap = ConcurrentHashMap<String, AgentContext>()
@@ -58,6 +62,7 @@ internal class AgentContextManager(
   fun addAgentContext(agentContext: AgentContext): AgentContext? {
     logger.info { "Registering agentId: ${agentContext.agentId}" }
     return agentContextMap.put(agentContext.agentId, agentContext)
+      .also { eventBus.emit(ProxyEvent.AgentConnected(agentContext.agentId)) }
   }
 
   fun getAgentContext(agentId: String) = agentContextMap[agentId]
@@ -118,6 +123,7 @@ internal class AgentContextManager(
       if (!isTestMode)
         logger.info { "Removed $agentContext for agentId: $agentId ($reason)" }
       agentContext.invalidate()
+      eventBus.emit(ProxyEvent.AgentDisconnected(agentId, reason))
     }
     return agentContext
   }
