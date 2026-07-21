@@ -50,6 +50,7 @@ import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.ScrapeRequestManager
+import io.prometheus.proxy.ui.ProxyUiService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
@@ -176,6 +177,11 @@ class Proxy(
   isTestMode = testMode,
 ) {
   private val httpService = ProxyHttpService(this, proxyPort, isTestMode)
+
+  // Null unless proxy.ui.enabled. Off by default, matching the admin and metrics posture: the UI shows
+  // agent names, hostnames, target URLs and recent activity in one place, on a port with no auth.
+  private val uiService =
+    if (options.uiEnabled) ProxyUiService(this, options.uiPort, options.uiPath) else null
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
 
   // Structured counterpart to recentReqs, for the operational web UI. Separate queue rather than a
@@ -241,7 +247,10 @@ class Proxy(
 
       """.trimIndent()
 
+    // Must precede initServletService: the ServiceManager snapshots this list there, so a service
+    // registered afterwards is invisible to it and to the all_services_healthy check.
     addServices(grpcService, httpService)
+    uiService?.also { addServices(it) }
 
     initServletService {
       if (options.debugEnabled) {
@@ -276,6 +285,7 @@ class Proxy(
 
     grpcService.startSync()
     httpService.startSync()
+    uiService?.startSync()
 
     // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to detect
     // agent disconnects. The stale agent cleanup service is the only mechanism to clean up
@@ -297,6 +307,7 @@ class Proxy(
     scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
     agentContextManager.invalidateAllAgentContexts()
     grpcService.stopSync()
+    uiService?.stopSync()
     httpService.stopSync()
     if (agentCleanupServiceEnabled)
       agentCleanupService.stopSync()
@@ -316,6 +327,7 @@ class Proxy(
     healthCheckRegistry
       .apply {
         register("grpc_service", grpcService.healthCheck)
+        uiService?.also { register("ui_service", it.healthCheck) }
         register(
           "chunking_map_check",
           newMapHealthCheck(
