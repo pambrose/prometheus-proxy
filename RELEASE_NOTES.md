@@ -6,6 +6,8 @@
 
 ### Highlights
 
+- **The proxy has a web UI.** Answering "why isn't this target scraping?" no longer means log-diving on two machines: connected agents, their registered paths, their backlog and eviction countdown, and their own recent scrape results are on one screen, updating live. Off by default on its own port — see below.
+
 - **You can now run two proxies and survive losing one.** The proxy was a single point of failure for the entire metrics plane — if it went down, every target behind every agent disappeared from Prometheus at once. Agents now take an ordered list of proxy endpoints and fail over between them, and fail *back* to the primary when it returns. One caveat worth reading before you deploy it: scrape the pair with `static_config`, not `http_sd_config`. See below.
 - **Metrics can now be filtered at the agent, before they cross the network.** Until now the full payload always traversed the WAN and filtering happened in Prometheus afterward — the one place dropping data is most valuable was the one place it could not happen. Opt-in and per-path; see below.
 - **Agent-side scrape timeouts are now their own metric label.** `upstream_timed_out` separates "the agent told us the target was slow" from `timed_out`, "the agent never answered us." This is the one change here that needs operator attention — see the upgrade note below.
@@ -35,6 +37,27 @@ Previously both timeout legs shared the `timed_out` label:
 Because the agent's 15s timeout trips long before the proxy's 90s, **a slow scrape target almost always lands in `upstream_timed_out` now**. Any dashboard, recording rule, or alert matching `type="timed_out"` will stop seeing the majority of what it used to count. Match `type=~"timed_out|upstream_timed_out"` to preserve the old aggregate, or split the two panels — they point at different problems.
 
 This finishes the taxonomy work started in 3.2.0, which pulled `upstream_error` and `content_too_large` out of the catch-all `path_not_found`. It also mirrors the existing `content_too_large` (agent's `maxContentLengthMBytes`) versus `payload_too_large` (proxy's unzip limit) pairing, so every proxy-side label now has a distinctly-named agent-side counterpart.
+
+### New Feature — operational web UI
+
+Enable it with `--ui` (or `UI_ENABLED=true`, or `proxy.ui.enabled = true`) and open `http://<proxy>:8094/ui`.
+
+```hocon
+proxy {
+  ui {
+    enabled = true
+    port = 8094
+  }
+}
+```
+
+Agents are listed on the left; selecting one shows its identity, registered paths, backlog, eviction countdown, and the scrapes it served — with status and duration. The page updates live over a WebSocket, so a disconnect or a new registration appears without a refresh, and an agent that drops while you are looking at it says so explicitly rather than freezing.
+
+**It is off by default and has no authentication or TLS**, exactly like the admin and metrics endpoints. It renders agent names, hostnames, target URLs and recent activity in one place, so treat the port as internal and do not expose it publicly.
+
+It runs on **its own port**, not the admin port. That is partly necessity — the admin port is a servlet container that cannot host WebSockets — and partly design: Kubernetes probes live on the admin port, and you should be able to firewall the UI without taking your liveness checks down with it.
+
+No CDN is involved. htmx ships inside the JAR and is served from the classpath, so the UI works in airgapped deployments, which are common for a product whose purpose is bridging restricted networks.
 
 ### New Feature — proxy high availability
 

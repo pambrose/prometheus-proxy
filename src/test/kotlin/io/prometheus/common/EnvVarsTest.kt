@@ -189,8 +189,8 @@ class EnvVarsTest : StringSpec() {
       }
     }
 
-    "EnvVars enum should have exactly 47 entries" {
-      EnvVars.entries.size shouldBe 47
+    "EnvVars enum should have exactly 50 entries" {
+      EnvVars.entries.size shouldBe 50
     }
 
     "EnvVars entries should contain all defined constants" {
@@ -203,6 +203,9 @@ class EnvVarsTest : StringSpec() {
         "SD_ENABLED",
         "SD_PATH",
         "SD_TARGET_PREFIX",
+        "UI_ENABLED",
+        "UI_PORT",
+        "UI_PATH",
         "REFLECTION_DISABLED",
         "HANDSHAKE_TIMEOUT_SECS",
         "PERMIT_KEEPALIVE_WITHOUT_CALLS",
@@ -257,6 +260,9 @@ class EnvVarsTest : StringSpec() {
         "SD_ENABLED",
         "SD_PATH",
         "SD_TARGET_PREFIX",
+        "UI_ENABLED",
+        "UI_PORT",
+        "UI_PATH",
         "REFLECTION_DISABLED",
         "HANDSHAKE_TIMEOUT_SECS",
         "PERMIT_KEEPALIVE_WITHOUT_CALLS",

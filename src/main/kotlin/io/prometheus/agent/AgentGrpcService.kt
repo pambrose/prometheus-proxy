@@ -146,6 +146,12 @@ internal class AgentGrpcService(
   val agentHostName: String get() = currentEndpoint.host
   val agentPort: Int get() = currentEndpoint.port
 
+  /** All configured endpoints, in priority order, as `host:port` specs. Reported to the proxy at registration. */
+  val endpointSpecs: List<String> get() = endpoints.map { it.spec }
+
+  /** Index into [endpointSpecs] of the endpoint currently in use. */
+  val currentEndpointIndex: Int get() = endpointIndex
+
   /** Endpoints in priority order for startup logging, or null when failover is not configured. */
   val failoverEndpointsDesc: String?
     get() = if (endpoints.size > 1) endpoints.joinToString(", ") { it.spec } else null
@@ -343,6 +349,10 @@ internal class AgentGrpcService(
         // tracked the current endpoint would change targets on every failover and churn the series.
         hostName = hostInfo.hostName
         consolidated = agent.options.consolidated
+        // Reported here rather than on a heartbeat because registration is exactly when this changes:
+        // a failover is a reconnect, so the proxy learns the index at the moment it becomes true.
+        proxyEndpoints.addAll(this@AgentGrpcService.endpointSpecs)
+        currentEndpointIndex = this@AgentGrpcService.currentEndpointIndex
       }
     unaryStub().registerAgent(request)
       .also { response ->

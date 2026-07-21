@@ -201,13 +201,19 @@ internal object ProxyHttpRoutes {
     queryParams: String,
   ): List<ScrapeRequestResponse> =
     coroutineScope {
+      // map and awaitAll both preserve order, so zipping recovers which agent produced which response.
+      // That keeps provenance at the one site that needs it, rather than as a field on the response.
       agentContextInfo.agentContexts
         .map { agentContext ->
           async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request) }
         }
         .awaitAll()
+        .also { responses ->
+          agentContextInfo.agentContexts.zip(responses).forEach { (agentContext, response) ->
+            recordScrapeOutcome(path, agentContext.agentId, response, proxy)
+          }
+        }
         .onEach { response ->
-          logActivityForResponse(path, response, proxy)
           // Record latency labeled with the request outcome. This single site covers every outcome
           // — including the timeout and agent-disconnected early returns the old per-request timer
           // missed — since each branch yields a ScrapeRequestResponse with updateMsg + fetchDuration.
@@ -218,8 +224,11 @@ internal object ProxyHttpRoutes {
         }
     }
 
-  private fun logActivityForResponse(
+  // Named for what it now does: this is where a completed scrape becomes observable -- as a text line
+  // on /debug, as a structured record for the web UI, and as an event on the bus.
+  private fun recordScrapeOutcome(
     path: String,
+    agentId: String,
     response: ScrapeRequestResponse,
     proxy: Proxy,
   ) {
@@ -231,6 +240,19 @@ internal object ProxyHttpRoutes {
         append(" time: ${response.fetchDuration} url: ${response.url}")
       }
     proxy.logActivity(status)
+    proxy.recordScrape(
+      ScrapeRecord(
+        agentId = agentId,
+        path = path,
+        statusCode = response.statusCode.value,
+        outcome = response.updateMsg,
+        durationMillis = response.fetchDuration.inWholeMilliseconds,
+        contentLength = response.contentText.length,
+      ),
+    )
+    proxy.eventBus.emit(
+      ProxyEvent.ScrapeCompleted(agentId, path, response.statusCode.isSuccess()),
+    )
   }
 
   internal suspend fun submitScrapeRequest(

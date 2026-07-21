@@ -37,6 +37,9 @@ import io.prometheus.common.EnvVars.REFLECTION_DISABLED
 import io.prometheus.common.EnvVars.SD_ENABLED
 import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
+import io.prometheus.common.EnvVars.UI_ENABLED
+import io.prometheus.common.EnvVars.UI_PATH
+import io.prometheus.common.EnvVars.UI_PORT
 
 class ProxyOptions(
   args: Array<String>,
@@ -93,6 +96,31 @@ class ProxyOptions(
    */
   @Parameter(names = ["--sd_target_prefix"], description = "Service discovery target prefix")
   var sdTargetPrefix = ""
+    private set
+
+  /**
+   * Enables the Proxy's read-only operational web UI, served from its **own** port ([uiPort]) rather
+   * than the admin or scrape port. Off by default, matching the admin and metrics posture.
+   * Resolved from CLI → [UI_ENABLED] env var → `proxy.ui.enabled` config.
+   */
+  @Parameter(names = ["--ui"], description = "Operational web UI enabled")
+  var uiEnabled = false
+    private set
+
+  /**
+   * TCP port the operational web UI listens on. Deliberately separate from the admin port so the UI can
+   * be firewalled independently of the k8s probe endpoints (`/ping`, `/healthcheck`).
+   * `-1` means "fall back to [UI_PORT] env var, then `proxy.ui.port` config (default `8094`)".
+   */
+  @Parameter(names = ["--ui_port"], description = "Operational web UI port")
+  var uiPort: Int = -1
+    private set
+
+  /**
+   * Base HTTP path the operational web UI is served from. Validated non-empty when [uiEnabled] is `true`.
+   */
+  @Parameter(names = ["--ui_path"], description = "Operational web UI base path")
+  var uiPath = ""
     private set
 
   /**
@@ -188,6 +216,20 @@ class ProxyOptions(
         if (sdEnabled)
           require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
         logger.info { "sdTargetPrefix: $sdTargetPrefix" }
+
+        uiEnabled = resolveBooleanOption(uiEnabled, UI_ENABLED, proxyConfigVals.ui.enabled, "--ui")
+        logger.info { "uiEnabled: $uiEnabled" }
+
+        if (uiPort == -1)
+          uiPort = UI_PORT.getEnv(proxyConfigVals.ui.port)
+        require(uiPort in 1..65535) { "uiPort must be in 1..65535: $uiPort" }
+
+        if (uiPath.isEmpty())
+          uiPath = UI_PATH.getEnv(proxyConfigVals.ui.path)
+        if (uiEnabled)
+          require(uiPath.isNotEmpty()) { "uiPath is empty" }
+        if (uiEnabled)
+          logger.info { "uiPort: $uiPort, uiPath: $uiPath" }
 
         reflectionDisabled =
           resolveBooleanOption(

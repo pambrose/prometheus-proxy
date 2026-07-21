@@ -44,9 +44,13 @@ import io.prometheus.proxy.AgentContextManager
 import io.prometheus.proxy.ProxyGrpcService
 import io.prometheus.proxy.ProxyHttpService
 import io.prometheus.proxy.ProxyMetrics
+import io.prometheus.proxy.ProxyEvent
+import io.prometheus.proxy.ProxyEventBus
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
+import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.ScrapeRequestManager
+import io.prometheus.proxy.ui.ProxyUiService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
@@ -173,7 +177,19 @@ class Proxy(
   isTestMode = testMode,
 ) {
   private val httpService = ProxyHttpService(this, proxyPort, isTestMode)
+
+  // Null unless proxy.ui.enabled. Off by default, matching the admin and metrics posture: the UI shows
+  // agent names, hostnames, target URLs and recent activity in one place, on a port with no auth.
+  private val uiService =
+    if (options.uiEnabled) ProxyUiService(this, options.uiPort, options.uiPath) else null
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
+
+  // Structured counterpart to recentReqs, for the operational web UI. Separate queue rather than a
+  // replacement: the /debug servlet's text format is a stable operator-facing surface, and this one is
+  // sized independently because the UI shows more history than a debug dump needs. EvictingQueue is not
+  // thread-safe, so every access takes its own monitor -- see recordScrape / recentScrapes.
+  private val recentScrapes: EvictingQueue<ScrapeRecord> =
+    EvictingQueue.create(proxyConfigVals.ui.recentScrapesQueueSize)
 
   // Declared before grpcService: createGrpcServer() reads isEnabled to decide whether to install the auth
   // interceptor. Eager construction fail-fasts on invalid proxy.auth config at startup.
@@ -190,8 +206,15 @@ class Proxy(
   }
 
   internal val metrics by lazy { ProxyMetrics(this) }
+
+  /**
+   * Fan-out bus for topology changes. Declared before the managers because they publish to it.
+   * Always present, even with the UI disabled: emitting into a bus with no subscribers is a no-op.
+   */
+  internal val eventBus = ProxyEventBus()
+
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
-  internal val agentContextManager = AgentContextManager(isTestMode)
+  internal val agentContextManager = AgentContextManager(isTestMode, eventBus)
   internal val scrapeRequestManager = ScrapeRequestManager()
 
   // Per-process id (mirrors Agent.launchId). Intentionally used to label only proxy_start_time_seconds,
@@ -224,7 +247,10 @@ class Proxy(
 
       """.trimIndent()
 
+    // Must precede initServletService: the ServiceManager snapshots this list there, so a service
+    // registered afterwards is invisible to it and to the all_services_healthy check.
     addServices(grpcService, httpService)
+    uiService?.also { addServices(it) }
 
     initServletService {
       if (options.debugEnabled) {
@@ -259,6 +285,7 @@ class Proxy(
 
     grpcService.startSync()
     httpService.startSync()
+    uiService?.startSync()
 
     // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to detect
     // agent disconnects. The stale agent cleanup service is the only mechanism to clean up
@@ -280,6 +307,7 @@ class Proxy(
     scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
     agentContextManager.invalidateAllAgentContexts()
     grpcService.stopSync()
+    uiService?.stopSync()
     httpService.stopSync()
     if (agentCleanupServiceEnabled)
       agentCleanupService.stopSync()
@@ -299,6 +327,7 @@ class Proxy(
     healthCheckRegistry
       .apply {
         register("grpc_service", grpcService.healthCheck)
+        uiService?.also { register("ui_service", it.healthCheck) }
         register(
           "chunking_map_check",
           newMapHealthCheck(
@@ -363,6 +392,11 @@ class Proxy(
     // a path pointing at a dead context that nothing later removes (finding 7).
     val agentContext = agentContextManager.removeFromContextManager(agentId, reason)
     pathManager.removeFromPathManager(agentId, reason)
+    // Emitted here rather than inside removeFromContextManager so the event's happens-before edge
+    // covers BOTH managers. Emitting at removal time let a consumer wake between the two calls and
+    // snapshot a path map that still listed the departed agent.
+    if (agentContext != null)
+      eventBus.emit(ProxyEvent.AgentDisconnected(agentId, reason))
     scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason")
     // Proactively reclaim any in-flight chunked-transfer buffers for this agent (the requests
     // themselves were just failed above) rather than waiting for each stream's orphan sweep.
@@ -403,6 +437,21 @@ class Proxy(
       recentReqs.add("${LocalDateTime.now().format(formatter)}: $desc")
     }
   }
+
+  /** Records one completed scrape for the web UI. Cheap and non-blocking; safe from any thread. */
+  internal fun recordScrape(record: ScrapeRecord) {
+    synchronized(recentScrapes) {
+      recentScrapes.add(record)
+    }
+  }
+
+  /**
+   * A point-in-time copy of the recent scrapes, newest first.
+   *
+   * Returns a copy rather than a view: [EvictingQueue] is not thread-safe, so a caller iterating the
+   * live queue while a scrape completes would race. Bounded by `proxy.ui.recentScrapesQueueSize`.
+   */
+  internal fun recentScrapes(): List<ScrapeRecord> = synchronized(recentScrapes) { recentScrapes.reversed() }
 
   /**
    * Checks if a request path corresponds to a Blitz verification request.

@@ -76,19 +76,21 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
   }
 
-  private fun callLogActivityForResponse(
+  private fun callRecordScrapeOutcome(
     path: String,
     response: ScrapeRequestResponse,
     proxy: Proxy,
+    agentId: String = "test-agent",
   ) {
     val method = ProxyHttpRoutes::class.java.getDeclaredMethod(
-      "logActivityForResponse",
+      "recordScrapeOutcome",
+      String::class.java,
       String::class.java,
       ScrapeRequestResponse::class.java,
       Proxy::class.java,
     )
     method.isAccessible = true
-    method.invoke(ProxyHttpRoutes, path, response, proxy)
+    method.invoke(ProxyHttpRoutes, path, agentId, response, proxy)
   }
 
   private fun createSpyProxyForSubmit(
@@ -346,11 +348,13 @@ class ProxyHttpRoutesTest : StringSpec() {
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
-    // ==================== logActivityForResponse Tests ====================
-    // logActivityForResponse is private, so we test it via reflection.
+    // ==================== recordScrapeOutcome Tests ====================
+    // recordScrapeOutcome is private, so we test it via reflection. It is the single point where a
+    // completed scrape becomes observable: the /debug text line asserted here, plus a structured
+    // record for the web UI and an event on the bus.
     // It formats: "/$path - $updateMsg - $statusCode [reason: [$failureReason]] time: $fetchDuration url: $url"
 
-    "logActivityForResponse should format success status without failure reason" {
+    "recordScrapeOutcome should format success status without failure reason" {
       val capturedActivity = slot<String>()
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
@@ -363,7 +367,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         fetchDuration = 150.milliseconds,
       )
 
-      callLogActivityForResponse("metrics", response, mockProxy)
+      callRecordScrapeOutcome("metrics", response, mockProxy)
 
       capturedActivity.captured shouldContain "/metrics - success - 200 OK"
       capturedActivity.captured shouldContain "time: 150ms"
@@ -372,7 +376,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       capturedActivity.captured shouldNotContain "reason:"
     }
 
-    "logActivityForResponse should include failure reason for non-success status" {
+    "recordScrapeOutcome should include failure reason for non-success status" {
       val capturedActivity = slot<String>()
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
@@ -385,14 +389,14 @@ class ProxyHttpRoutesTest : StringSpec() {
         fetchDuration = 50.milliseconds,
       )
 
-      callLogActivityForResponse("missing", response, mockProxy)
+      callRecordScrapeOutcome("missing", response, mockProxy)
 
       capturedActivity.captured shouldContain "/missing - path_not_found - 404 Not Found"
       capturedActivity.captured shouldContain "reason: [Agent not found for path]"
       capturedActivity.captured shouldContain "url: http://localhost:$PROXY_HTTP_PORT/missing"
     }
 
-    "logActivityForResponse should include failure reason for ServiceUnavailable" {
+    "recordScrapeOutcome should include failure reason for ServiceUnavailable" {
       val capturedActivity = slot<String>()
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
@@ -405,7 +409,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         fetchDuration = 5000.milliseconds,
       )
 
-      callLogActivityForResponse("slow-endpoint", response, mockProxy)
+      callRecordScrapeOutcome("slow-endpoint", response, mockProxy)
 
       capturedActivity.captured shouldContain "/slow-endpoint - timed_out - 503 Service Unavailable"
       capturedActivity.captured shouldContain "reason:"

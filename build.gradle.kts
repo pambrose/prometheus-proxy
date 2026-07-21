@@ -72,6 +72,7 @@ dependencies {
 
   implementation(libs.bundles.grpc)
   implementation(libs.bundles.ktor)
+  implementation(libs.bundles.webjars)
   implementation(libs.bundles.common.utils)
   implementation(libs.protobuf.kotlin)
   implementation(libs.grpc.kotlin.stub)

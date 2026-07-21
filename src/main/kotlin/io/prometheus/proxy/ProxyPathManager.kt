@@ -137,6 +137,9 @@ internal class ProxyPathManager(
       }
 
       if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
+      // Inside synchronized(pathMap) on purpose: tryEmit never suspends or blocks, so publishing here
+      // cannot stall a registration, and the event is emitted only once the map actually reflects it.
+      proxy.eventBus.emit(ProxyEvent.PathRegistered(path, agentContext.agentId))
     }
     return null
   }
@@ -191,6 +194,7 @@ internal class ProxyPathManager(
         if (!isTestMode)
           logger.info { "Removed path /$path for $agentInfo" }
       }
+      proxy.eventBus.emit(ProxyEvent.PathUnregistered(path, agentId))
       return unregisterPathResponse {
         valid = true
         reason = ""
@@ -232,7 +236,13 @@ internal class ProxyPathManager(
         }
       }
 
-      keysToUpdate.forEach { (k, v) -> pathMap[k] = v }
+      keysToUpdate.forEach { (k, v) ->
+        pathMap[k] = v
+        // A consolidated path surviving the loss of one agent is still a topology change. Without this
+        // the UI would never be woken for it, and unlike the removal case below there is no later
+        // event to self-correct from.
+        proxy.eventBus.emit(ProxyEvent.PathUnregistered(k, agentId))
+      }
 
       keysToRemove.forEach { k ->
         pathMap.remove(k)
@@ -240,6 +250,7 @@ internal class ProxyPathManager(
             removedPathCount++
             if (!isTestMode)
               logger.info { "Removed path /$k for $it" }
+            proxy.eventBus.emit(ProxyEvent.PathUnregistered(k, agentId))
           } ?: logger.warn { "Missing path /$k for agentId: $agentId" }
       }
     }

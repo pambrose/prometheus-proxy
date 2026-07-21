@@ -97,6 +97,31 @@ When enabled, the following endpoints are available:
 | `GET /threaddump`  | Returns JVM thread dump                           |
 | `GET /debug`       | Proxy debug info (requires `debugEnabled = true`) |
 
+## Web UI
+
+A read-only operational dashboard on its own port. Off by default.
+
+```hocon
+proxy {
+  ui {
+    enabled = false                 // Enable the operational web UI
+    port = 8094                     // Its own port, NOT the admin port
+    path = "ui"                     // Served at http://<proxy>:8094/ui
+    refreshIntervalSecs = 2         // Re-push interval for drifting counters
+    recentScrapesQueueSize = 200    // Scrape records retained for the UI
+  }
+}
+```
+
+Also settable as `--ui` / `--ui_port` / `--ui_path`, or `UI_ENABLED` / `UI_PORT` / `UI_PATH`.
+
+It runs on its own port rather than the admin port, partly because the admin port is a servlet container
+that cannot host WebSockets, and partly so the dashboard can be firewalled without also cutting off the
+`/ping` and `/healthcheck` endpoints Kubernetes probes target.
+
+Like the admin and metrics endpoints, it has **no authentication and no TLS** — treat the port as
+internal. See [Web UI](../web-ui.md) for what it shows.
+
 ## Metrics
 
 Enable internal metrics collection:

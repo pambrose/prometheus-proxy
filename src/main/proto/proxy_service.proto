@@ -12,6 +12,12 @@ message RegisterAgentRequest {
   string host_name = 4;
   reserved 5;
   bool consolidated = 6;
+  // The agent's configured failover endpoints, in priority order, and which one this connection is
+  // using. Reported at registration because that is exactly when it changes -- a failover IS a
+  // reconnect, so the index is accurate whenever the proxy learns it. Both are additive and optional:
+  // an agent predating them simply leaves them unset.
+  repeated string proxy_endpoints = 7;
+  int32 current_endpoint_index = 8;
 }
 
 message RegisterAgentResponse {

@@ -26,6 +26,7 @@ import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -46,7 +47,9 @@ import kotlin.time.TimeSource.Monotonic
  * @see ProxyPathManager
  */
 internal class AgentContext(
-  private val remoteAddr: String,
+  // Readable: the operational UI shows which machine an agent is actually on, which a self-reported
+  // agentName cannot establish.
+  val remoteAddr: String,
 ) {
   val agentId = AGENT_ID_GENERATOR.incrementAndFetch().toString()
 
@@ -54,16 +57,40 @@ internal class AgentContext(
   private val scrapeRequestNotifier = Channel<Unit>(UNLIMITED)
 
   private val clock = Monotonic
+
+  /**
+   * Wall-clock instant this context was created, i.e. when the agent connected.
+   *
+   * Every other timing field is a [Monotonic] [TimeMark], which measures elapsed time correctly but
+   * cannot be rendered as a time of day. Kept separate rather than replacing them: monotonic marks are
+   * immune to clock adjustments and remain the right basis for eviction.
+   */
+  val connectTime: Instant = Instant.now()
   private var lastActivityTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var lastRequestTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var valid by atomicBoolean(true)
 
-  private var launchId: String by nonNullableReference("Unassigned")
+  // Readable rather than private: the UI displays it to distinguish two runs of the same agent name.
+  var launchId: String by nonNullableReference("Unassigned")
+    private set
   var hostName: String by nonNullableReference("Unassigned")
     private set
   var agentName: String by nonNullableReference("Unassigned")
     private set
   var consolidated: Boolean by atomicBoolean(false)
+    private set
+
+  /**
+   * The agent's configured failover endpoints and which one this connection uses.
+   *
+   * Reported at registration, which is exactly when it changes: a failover is a reconnect, so an agent
+   * appearing here on its secondary endpoint has, by definition, just failed over to this proxy. Empty
+   * for an agent predating the fields, or one with no failover configured.
+   */
+  var proxyEndpoints: List<String> by nonNullableReference(emptyList())
+    private set
+
+  var currentEndpointIndex: Int by nonNullableReference(0)
     private set
 
   internal val desc: String
@@ -87,6 +114,8 @@ internal class AgentContext(
     agentName = request.agentName
     hostName = request.hostName
     consolidated = request.consolidated
+    proxyEndpoints = request.proxyEndpointsList.toList()
+    currentEndpointIndex = request.currentEndpointIndex
   }
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {

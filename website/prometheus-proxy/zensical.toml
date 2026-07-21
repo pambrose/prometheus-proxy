@@ -29,6 +29,9 @@ nav = [
     { "Docker" = "docker.md" },
     { "Kubernetes" = "kubernetes.md" },
   ]},
+  { "Operations" = [
+    { "Web UI" = "web-ui.md" },
+  ]},
   { "Configuration" = [
     { "Overview" = "configuration/index.md" },
     { "Agent" = "configuration/agent.md" },

@@ -132,6 +132,9 @@ internal class ProxyServiceImpl(
           agentContext.assignProperties(request)
           agentContext.markActivityTime(false)
           logger.info { "Connected to $agentContext" }
+          // Identity is only populated here; AgentConnected fired at transport-ready, before the agent
+          // had told us who it is.
+          proxy.eventBus.emit(ProxyEvent.AgentRegistered(request.agentId))
           null
         }
       }

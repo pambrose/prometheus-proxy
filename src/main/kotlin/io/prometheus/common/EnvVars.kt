@@ -51,6 +51,15 @@ enum class EnvVars {
   /** Base URL used to build per-target entries in the service-discovery document (e.g. `http://proxy:8080/`). */
   SD_TARGET_PREFIX,
 
+  /** Enables the Proxy's read-only operational web UI on its own port. Default `false`. */
+  UI_ENABLED,
+
+  /** Listen port for the Proxy's operational web UI. Default `8094`. */
+  UI_PORT,
+
+  /** Base HTTP path the operational web UI is served from. Default `ui`. */
+  UI_PATH,
+
   /** Disable the gRPC server reflection service on the Proxy. Default `false` (reflection enabled). */
   REFLECTION_DISABLED,
 

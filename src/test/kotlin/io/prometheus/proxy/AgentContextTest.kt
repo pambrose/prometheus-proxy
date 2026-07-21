@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import com.google.protobuf.LazyStringArrayList
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -32,6 +33,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.grpc.RegisterAgentRequest
+import java.time.Instant
 import kotlinx.coroutines.async
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
@@ -77,6 +79,8 @@ class AgentContextTest : StringSpec() {
       every { request.agentName } returns "my-agent"
       every { request.hostName } returns "agent-host"
       every { request.consolidated } returns true
+      every { request.proxyEndpointsList } returns LazyStringArrayList()
+      every { request.currentEndpointIndex } returns 0
 
       context.assignProperties(request)
 
@@ -394,6 +398,8 @@ class AgentContextTest : StringSpec() {
       every { request.agentName } returns "agent"
       every { request.hostName } returns "host"
       every { request.consolidated } returns true
+      every { request.proxyEndpointsList } returns LazyStringArrayList()
+      every { request.currentEndpointIndex } returns 0
 
       context.assignProperties(request)
 
@@ -457,6 +463,45 @@ class AgentContextTest : StringSpec() {
       // from what lastRequestDuration would be, since both were set from the same markNow().
       val inactivity = context.inactivityDuration
       inactivity.inWholeMilliseconds shouldBeLessThan 50L
+    }
+
+    // ==================== Fields the operational web UI reads ====================
+
+    // remoteAddr and launchId were private and leaked only through toString(). The UI needs both:
+    // remoteAddr is the only field establishing which machine an agent is actually on (agentName is
+    // self-reported), and launchId distinguishes two runs of the same agent name.
+    "remoteAddr and launchId should be readable" {
+      val context = AgentContext("10.0.1.14:54321")
+      context.remoteAddr shouldBe "10.0.1.14:54321"
+
+      // AgentConnected is emitted from the transport filter, which runs before registerAgent, so a
+      // just-connected context legitimately has no identity yet. Only AgentRegistered means a named
+      // agent -- the UI renders a placeholder for this state rather than the raw sentinel.
+      context.launchId shouldBe "Unassigned"
+      context.agentName shouldBe "Unassigned"
+      context.hostName shouldBe "Unassigned"
+
+      val request = mockk<RegisterAgentRequest>()
+      every { request.launchId } returns "launch-abc"
+      every { request.agentName } returns "team-a-01"
+      every { request.hostName } returns "worker-3"
+      every { request.consolidated } returns false
+      every { request.proxyEndpointsList } returns LazyStringArrayList()
+      every { request.currentEndpointIndex } returns 0
+      context.assignProperties(request)
+
+      context.launchId shouldBe "launch-abc"
+    }
+
+    // Every other timing field is a Monotonic TimeMark, which measures elapsed time correctly but
+    // cannot be rendered as a time of day. connectTime exists solely so the UI can show "connected at".
+    "connectTime should be a wall-clock instant set at construction" {
+      val before = Instant.now()
+      val context = AgentContext("10.0.1.14:54321")
+      val after = Instant.now()
+
+      context.connectTime.isBefore(before).shouldBeFalse()
+      context.connectTime.isAfter(after).shouldBeFalse()
     }
   }
 }

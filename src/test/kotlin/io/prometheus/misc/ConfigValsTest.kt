@@ -91,6 +91,36 @@ class ConfigValsTest : StringSpec() {
       }
     }
 
+    // ==================== Proxy UI Defaults ====================
+
+    "proxy ui config should have correct defaults" {
+      val configVals = loadDefaultConfigVals()
+      configVals.proxy.ui.apply {
+        enabled.shouldBeFalse()
+        port shouldBe 8094
+        path shouldBe "ui"
+        refreshIntervalSecs shouldBe 2
+        recentScrapesQueueSize shouldBe 200
+      }
+    }
+
+    // The contrast with the endpoints case above is the point of having both tests: every proxy.ui key
+    // is a SCALAR, so tscfg emits a hasPathOrNull guard for each and for the block itself. A config
+    // predating the UI therefore loads without needing a reference.conf entry at all -- this pins that,
+    // so the guard cannot silently regress into an unguarded getList.
+    "a config that predates the web UI should still load" {
+      val config =
+        ConfigFactory.parseString("proxy { http { port = 9999 } }")
+          .withFallback(ConfigFactory.load())
+          .resolve()
+
+      ConfigVals(config).proxy.apply {
+        http.port shouldBe 9999
+        ui.enabled.shouldBeFalse()
+        ui.port shouldBe 8094
+      }
+    }
+
     // ==================== Agent HTTP Client Cache Defaults ====================
 
     "agent HTTP client cache config should have correct defaults" {
