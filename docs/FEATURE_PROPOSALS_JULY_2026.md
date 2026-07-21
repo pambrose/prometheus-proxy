@@ -788,6 +788,22 @@ so the agent reports these facts at registration. Worth doing once, for both, ra
 Feature 3 identities are also still absent: they live in a gRPC `Context.Key` and are never stored on
 `AgentContext`. That one needs no proto change, only somewhere to put them.
 
+**A departed agent's paths leave no trace — the sharpest limit relative to the feature's own purpose.**
+When an agent disconnects, `ProxyPathManager.removeFromPathManager` *deletes* its paths from `pathMap`
+rather than leaving them empty (`filtered.isEmpty()` routes to `keysToRemove` → `pathMap.remove(k)`), so
+a zero-agent path cannot exist. Combined with an agent-centric layout, that means a path which has
+stopped working is **absent from the UI entirely**: Prometheus gets a 404 and the dashboard shows
+nothing named after it.
+
+That is exactly the question the feature exists to answer — "why isn't `app1_metrics` scraping?" — and
+right now the honest answer from the UI is silence. The data is not wholly gone: `recentScrapes` retains
+up to `recentScrapesQueueSize` records naming the path, but the master-detail layout filters scrapes by
+agent, and the agent is gone too, so nothing surfaces them.
+
+Closing it needs no protocol change, unlike the gaps above — only a view onto state the proxy already
+keeps. Either a path-centric panel (the layout candidate that was considered and not chosen), or a
+"recently departed" section derived from `recentScrapes` naming paths with no current agent.
+
 No authentication — see Security Posture below, which is unchanged and still applies.
 
 **Files.** New `proxy/ui/` package: `ProxyUiService`, `ProxyUiHtml`, `ProxySnapshot`. New
@@ -888,6 +904,11 @@ If Feature 3 lands first, the UI displays identities but never tokens.
   agents, which is correct but reads as agents vanishing during a failover. Even a static "this is
   proxy-a of the pair" banner, or surfacing `launchId` more prominently as the identifier that survives
   a move, would help without any protocol change.
+- **Should the UI show paths that no longer exist?** A departed agent's paths are deleted from the proxy,
+  so a path that stopped working is invisible — the one question the feature was built to answer. Unlike
+  the proto-change items above, the data is already retained in `recentScrapes`; what is missing is a
+  view onto it. A path-centric panel or a "recently departed" list would close it. Worth deciding before
+  the first operator asks.
 ---
 
 ## Suggested Implementation Order

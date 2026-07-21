@@ -115,6 +115,11 @@ will *not* match — that one is assigned by each proxy independently.
 
 - **Read-only.** There is nothing to click that changes proxy state.
 - **No authentication.** Rely on network isolation, as with the admin port.
+- **A disconnected agent's paths disappear.** When an agent drops, the proxy deletes its registered
+  paths, and the dashboard is organized by agent — so a path that has stopped serving is not shown as
+  broken, it is simply absent. If Prometheus reports a target failing and you cannot find that path
+  here, an agent having gone away is the likely reason; check the **Agents** list for what is missing
+  rather than looking for the path.
 - **Failover state is not shown.** An agent's configured endpoint list, and whether it has failed over,
   live entirely on the agent and are not reported to the proxy. See above for following an agent by
   launch ID instead.
