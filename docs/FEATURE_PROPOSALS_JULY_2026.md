@@ -700,6 +700,88 @@ existing `labels` field) is explicitly out of scope until demand is proven.
 
 ## Feature 5: Operational Web UI on the Proxy Admin Port
 
+> **Status: Implemented (MVP — master-detail).** A read-only dashboard on its own Ktor server and port,
+> server-rendered with the Ktor HTML DSL, interactive via htmx, and live over a WebSocket. Off by
+> default. Still deferred: a path-centric view, a dedicated Scrapes view, and any authentication.
+> See **Implementation Notes (As Built)** immediately below — this feature departs from the proposal on
+> two explicit points, and the title above is now wrong.
+
+### Implementation Notes (As Built)
+
+**Port (diverged — NOT the admin port, contrary to this section's own title).** The proposal specifies
+"served from the existing admin port." That is not achievable. The admin port is a raw Jetty 12 `Server`
+constructed inside `common-utils`' `ServletService`, whose only extension point is a
+`path -> jakarta.servlet.Servlet` map; there is no way to attach Ktor routing, a Ktor `Application`, or
+any non-servlet handler, and no way to reach the underlying `Server`. `LambdaServlet` is `GET`-only,
+always-200, and returns a `String` with one fixed content type per instance.
+
+A new `ProxyUiService : GenericIdleService` therefore runs its own Ktor CIO server on **port 8094**,
+mirroring `ProxyHttpService` — a pattern already proven twice in `Proxy.kt`. This also turns out to be
+the better security posture: Kubernetes liveness and readiness probes target `/ping` and `/healthcheck`
+on the admin port, so a shared port could not be firewalled without taking the probes with it.
+
+Rejected alternatives: switching `Proxy` to `common-utils`' `GenericKtorService` (would make the admin
+port Ktor-native, but changes the superclass of both `Proxy` **and** `Agent`, and `KtorServletResponse`
+throws on `setContentLength`/`setBufferSize`, an unverified risk to the dropwizard servlets); and adding
+`/ui` to the scrape port (world-reachable, unauthenticated, plaintext, and the `get("/*")` catch-all
+shadows it).
+
+**Stack (diverged — the proposal's "no framework, no external assets" is not what shipped).** The
+proposal calls for "a single static HTML page with inline CSS/JS … no build toolchain, no framework, no
+external assets." As built: Kotlin/Ktor HTML DSL for rendering, **htmx** for interaction, and a
+**WebSocket** for updates. There is still no build toolchain and no CDN, but htmx is a framework and it
+is a third-party asset.
+
+htmx arrives as a **WebJar** (`org.webjars.npm:htmx.org`, plus `htmx-ext-ws`, since htmx 2.x moved
+WebSocket support out of core), served from the classpath by an explicit two-entry allowlist. That was
+chosen over vendoring the minified files into the repo (no committed third-party JavaScript, versions
+visible to normal dependency tooling) and over a CDN (a proxy bridging a firewall frequently has no
+outbound network access, and a CDN-loaded UI would fail at page open rather than at deploy).
+`ktor-htmx` supplies only Kotlin attribute constants — no JavaScript — so the client library had to come
+from somewhere regardless.
+
+**Layout (chosen from four).** Master-detail: agent list on the left, drill into one on the right. Picked
+by reviewing all four candidates rendered side by side rather than described. It answers the motivating
+question ("why isn't this target scraping?") by putting an agent's paths and its own recent scrapes on
+one screen, and it is the natural home for Feature 3 identities and Feature 1 discovery sources later.
+
+Its known weakness is the one htmx handles least gracefully — per-client selection state. Resolved by
+keeping selection in the **URL** (`hx-push-url`), so it is bookmarkable and reload-safe, with a small
+inline script reading it back and telling the server over the socket. That script is the only
+hand-written JavaScript on the page; everything else is htmx attributes.
+
+**Live updates: an event bus *and* a timer.** A `MutableSharedFlow<ProxyEvent>` was added to the proxy,
+which previously had **zero** observability — every collection was a plain `ConcurrentHashMap` or a
+`synchronized` `HashMap` with no listeners. `tryEmit` with `DROP_OLDEST` never suspends or blocks, which
+is what makes it safe inside `synchronized(pathMap)` and on gRPC transport threads.
+
+The bus alone is not sufficient. It covers *discrete* transitions; backlog depth, map sizes and eviction
+countdowns drift with no moment to emit from, so a ~2s timer covers those. One shared push loop serves
+all sessions — conflated, so a reconnecting fleet collapses into a single snapshot collect.
+
+**Data changes.** `AgentContext.remoteAddr` and `.launchId` became readable (both were private and leaked
+only via `toString()`), and a wall-clock `connectTime` was added because every other timing field is a
+`Monotonic` `TimeMark` that cannot render as a time of day. A parallel `EvictingQueue<ScrapeRecord>` was
+added alongside the `/debug` servlet's text queue, which carries no agent attribution — per-agent scrape
+history could not be built from it without parsing display strings apart.
+
+**Not built.** Path source (static vs discovered) is still unavailable on the proxy: `PathSource` lives
+only in the agent's `AgentPathManager` and `RegisterPathRequest` has no source field, so surfacing it
+needs a `.proto` change. Feature 3 identities are still in a gRPC `Context.Key`, never stored on
+`AgentContext`. No authentication — see Security Posture below, which is unchanged and still applies.
+
+**Files.** New `proxy/ui/` package: `ProxyUiService`, `ProxyUiHtml`, `ProxySnapshot`. New
+`proxy/ProxyEventBus.kt` and `proxy/ScrapeRecord.kt`. Modified: `Proxy` (bus ownership, service
+registration, scrape queue), `AgentContext`, `AgentContextManager`, `ProxyPathManager`,
+`ProxyServiceImpl`, `ProxyHttpRoutes`, `ProxyOptions`, `EnvVars`, `config/config.conf`, `reference.conf`.
+
+**Tests.** `ProxyUiHtmlTest` (fragment structure, out-of-band ids, the disconnected-agent state, and
+selection-message parsing hardened against arbitrary browser input); `ProxyEventBusTest` (ordering,
+non-blocking emit, drop-oldest, per-site emission); `ProxySnapshotTest`; the Netty harness spec
+`ProxyWebUiTest`, which connects an agent **after** the socket is open so the asserted fragment can only
+have come from the push path; and `ContainersWebUiTest`, which exists specifically to catch a fat-JAR
+packaging regression that drops the WebJar resources — verified to fail when the asset path is broken.
+
 ### Motivation
 
 "Why isn't this target scraping?" is the most common operational question this system
@@ -787,7 +869,7 @@ If Feature 3 lands first, the UI displays identities but never tokens.
 | 2nd ✅ | **Feature 1** — Dynamic target discovery | **Implemented (file-source MVP)** — biggest day-to-day operational relief; Kubernetes/Docker sources still deferred |
 | 3rd ✅ | **Feature 4** — Agent-side metric filtering | **Implemented (MVP — `metricNameAllow` / `metricNameDeny`)** — strengthens the core value proposition (efficient transport across network boundaries); `dropLabels`, relabeling, and agent-global filters still deferred |
 | 4th ✅ | **Feature 2** — Proxy HA / agent failover | **Implemented (Phase 1 — agent-side endpoint failover)** — unlocks redundant proxy deployments; Phase 2 multi-homing and Phase 3 clustering still deferred |
-| 5th | **Feature 5** — Operational web UI | Highest value once Features 1 and 3 add state worth visualizing (identities, discovery sources) |
+| 5th ✅ | **Feature 5** — Operational web UI | **Implemented (MVP — master-detail)** — on its own Ktor port rather than the admin port, which cannot host Ktor; server-rendered with htmx and WebSockets |
 
 Cross-cutting notes for every feature:
 
