@@ -97,11 +97,31 @@ State is collected once per update and shared across every connected browser, so
 with the number of open dashboards. Counters that drift rather than change — backlog depth, map sizes,
 eviction countdowns — refresh on `refreshIntervalSecs` rather than on every event.
 
+## Running an HA pair
+
+Each proxy's UI shows **only the agents connected to that proxy**. With
+[proxy failover](production.md#high-availability) configured, an agent holds one connection at a time, so
+it appears on exactly one dashboard.
+
+The consequence to know before an incident: when an agent fails over, it **disappears from one proxy's UI
+and reappears on the other's**, with nothing on either screen explaining why. The agent's own logs record
+the endpoint change; the proxy never learns of it.
+
+To follow an agent across the pair, use its **launch ID**. That value is generated once per agent process,
+so it survives a failover and identifies the same process on whichever proxy it lands on. The agent ID
+will *not* match — that one is assigned by each proxy independently.
+
 ## Limits
 
 - **Read-only.** There is nothing to click that changes proxy state.
 - **No authentication.** Rely on network isolation, as with the admin port.
+- **Failover state is not shown.** An agent's configured endpoint list, and whether it has failed over,
+  live entirely on the agent and are not reported to the proxy. See above for following an agent by
+  launch ID instead.
 - **Path source is not shown.** Whether a path came from static config or
   [dynamic discovery](configuration/agent.md#dynamic-target-discovery) is known only to the agent and is
   not currently sent to the proxy.
 - **Per-agent identities** from [agent authentication](security/index.md) are not surfaced yet.
+
+The last three share one cause: they are facts the agent knows and the registration RPC does not carry.
+Surfacing any of them requires extending that RPC, not just the UI.

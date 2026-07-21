@@ -765,10 +765,30 @@ only via `toString()`), and a wall-clock `connectTime` was added because every o
 added alongside the `/debug` servlet's text queue, which carries no agent attribution — per-agent scrape
 history could not be built from it without parsing display strings apart.
 
-**Not built.** Path source (static vs discovered) is still unavailable on the proxy: `PathSource` lives
-only in the agent's `AgentPathManager` and `RegisterPathRequest` has no source field, so surfacing it
-needs a `.proto` change. Feature 3 identities are still in a gRPC `Context.Key`, never stored on
-`AgentContext`. No authentication — see Security Posture below, which is unchanged and still applies.
+**Not built — and one shared root cause.** Two things operators will ask for are invisible to the UI for
+the *same* structural reason: they are agent-side facts the proxy has no channel to learn.
+
+- **Path source** (static vs discovered, Feature 1). `PathSource` lives only in the agent's
+  `AgentPathManager`; `RegisterPathRequest` carries `agent_id`, `path` and `labels` and nothing else.
+- **Failover state** (Feature 2). The configured endpoint list, the rotation cursor, and whether an agent
+  has failed over all live in `AgentGrpcService` and `Agent.proxyHost`. `RegisterAgentRequest` carries
+  only `agent_id`, `launch_id`, `agent_name`, `host_name` and `consolidated`, so none of it crosses the
+  wire.
+
+The operational consequence of the second is worth stating plainly: in an HA pair each proxy's UI shows
+only *its own* agents, so during a failover an agent silently disappears from one dashboard and appears
+on another with no explanation — at exactly the moment someone is watching. There is a partial thread to
+pull: `launchId` is process-scoped and therefore survives a failover, while `agentId` is proxy-assigned
+from a per-proxy counter and does not. The UI renders both, so an operator *can* correlate the same agent
+process across two proxies by eye. That is a workaround, not a feature.
+
+Closing either properly needs the same change — extending `RegisterPathRequest` / `RegisterAgentRequest`
+so the agent reports these facts at registration. Worth doing once, for both, rather than twice.
+
+Feature 3 identities are also still absent: they live in a gRPC `Context.Key` and are never stored on
+`AgentContext`. That one needs no proto change, only somewhere to put them.
+
+No authentication — see Security Posture below, which is unchanged and still applies.
 
 **Files.** New `proxy/ui/` package: `ProxyUiService`, `ProxyUiHtml`, `ProxySnapshot`. New
 `proxy/ProxyEventBus.kt` and `proxy/ScrapeRecord.kt`. Modified: `Proxy` (bus ownership, service
@@ -859,6 +879,15 @@ If Feature 3 lands first, the UI displays identities but never tokens.
 - Auth on the UI itself (basic auth?) or rely purely on network isolation of the admin
   port? (Recommended: network isolation for v1, matching the existing admin servlets.)
 
+- **Should the proxy learn agent-side state it currently cannot see?** Path source (Feature 1) and
+  failover endpoint/rotation state (Feature 2) are both invisible to the UI because neither crosses the
+  registration RPC. Surfacing either means extending `RegisterPathRequest` / `RegisterAgentRequest`.
+  Doing it once for both is cheaper than twice, but it widens the wire contract for what is currently a
+  display-only benefit — worth confirming demand before spending the proto change.
+- **Should an HA pair's UI acknowledge the other proxy at all?** Today each instance renders only its own
+  agents, which is correct but reads as agents vanishing during a failover. Even a static "this is
+  proxy-a of the pair" banner, or surfacing `launchId` more prominently as the identifier that survives
+  a move, would help without any protocol change.
 ---
 
 ## Suggested Implementation Order
