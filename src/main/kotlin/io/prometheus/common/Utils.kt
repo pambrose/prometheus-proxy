@@ -145,7 +145,17 @@ internal object Utils {
   data class HostPort(
     val host: String,
     val port: Int,
-  )
+  ) {
+    /**
+     * Rendering that round-trips back through [parseHostPort].
+     *
+     * [parseHostPort] strips the brackets off an IPv6 literal, so a naive `"$host:$port"` produces a
+     * string that re-parses as a *bare* IPv6 address with no port — silently dialing the wrong
+     * authority on the default port. Re-bracketing any host containing a colon makes the render the
+     * exact inverse of the parse. Identical to `"$host:$port"` for every IPv4/DNS host.
+     */
+    val spec: String get() = if (':' in host) "[$host]:$port" else "$host:$port"
+  }
 
   private fun parsePort(
     portStr: String,
@@ -156,6 +166,46 @@ internal object Utils {
         ?: throw IllegalArgumentException("Invalid port in '$hostPort': '$portStr' is not a valid integer")
     require(port in 0..65535) { "Port out of range in '$hostPort': $port (must be 0-65535)" }
     return port
+  }
+
+  // Case-insensitive counterpart to String.removePrefix, matching BaseOptions.isUrlPrefix's
+  // case-insensitivity. No-ops when the prefix is absent, so chaining both schemes is safe.
+  private fun String.removePrefixIgnoreCase(prefix: String): String =
+    if (startsWith(prefix, ignoreCase = true)) substring(prefix.length) else this
+
+  internal fun stripScheme(hostPort: String): String =
+    hostPort
+      .removePrefixIgnoreCase(BaseOptions.HTTPS_PREFIX)
+      .removePrefixIgnoreCase(BaseOptions.HTTP_PREFIX)
+
+  /**
+   * Parses a comma-separated `host[:port]` spec into an ordered list of endpoints.
+   *
+   * The ordering is meaningful -- it is the failover priority -- so entries are neither sorted nor
+   * de-duplicated; the list stays a faithful record of what was configured. Blank entries (a trailing
+   * or doubled comma) are dropped, but a malformed entry throws rather than being skipped: silently
+   * discarding it would leave rotation quietly cycling a shorter list than the operator configured.
+   *
+   * A single entry yields a one-element list, which is what keeps every pre-failover configuration
+   * behaving exactly as it did before.
+   *
+   * @param spec one or more `host[:port]` entries separated by commas, each optionally scheme-prefixed
+   * @param defaultPort port applied to any entry that does not carry one
+   * @throws IllegalArgumentException if [spec] yields no entries, or if any entry is malformed
+   */
+  fun parseEndpointList(
+    spec: String,
+    defaultPort: Int,
+  ): List<HostPort> {
+    val entries = spec.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+    require(entries.isNotEmpty()) { "No proxy endpoints found in '$spec'" }
+    return entries.map { entry ->
+      val stripped = stripScheme(entry)
+      // A scheme-only entry ("http://") survives the isNotEmpty filter above but strips to nothing.
+      // parseHostPort would reject it with a message naming neither the entry nor the list, so name it.
+      require(stripped.isNotEmpty()) { "Proxy endpoint '$entry' in '$spec' has no host" }
+      parseHostPort(stripped, defaultPort)
+    }
   }
 
   fun parseHostPort(

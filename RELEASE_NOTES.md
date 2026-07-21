@@ -6,9 +6,20 @@
 
 ### Highlights
 
+- **You can now run two proxies and survive losing one.** The proxy was a single point of failure for the entire metrics plane — if it went down, every target behind every agent disappeared from Prometheus at once. Agents now take an ordered list of proxy endpoints and fail over between them, and fail *back* to the primary when it returns. One caveat worth reading before you deploy it: scrape the pair with `static_config`, not `http_sd_config`. See below.
 - **Metrics can now be filtered at the agent, before they cross the network.** Until now the full payload always traversed the WAN and filtering happened in Prometheus afterward — the one place dropping data is most valuable was the one place it could not happen. Opt-in and per-path; see below.
 - **Agent-side scrape timeouts are now their own metric label.** `upstream_timed_out` separates "the agent told us the target was slow" from `timed_out`, "the agent never answered us." This is the one change here that needs operator attention — see the upgrade note below.
 - **A path-registration race is closed.** An agent reconnecting at exactly the wrong moment could leave a scrape path pointing at a context that was already being torn down, inflating the disconnect counter for the life of the proxy.
+
+### Upgrade Note — the `hostName` service-discovery label changes value
+
+If you use `http_sd_config` and reference the `hostName` label, its value changes in this release.
+
+It is documented as the hostname of the **agent** serving a path, and the proxy reserves it so agents cannot override it — but the agent was sending the *proxy* endpoint it had connected to. Every discovered target therefore carried the same value, and a label meant to identify which internal host serves a path identified nothing. It now reports the agent's own hostname, as documented.
+
+Expect a **one-time series churn** for affected targets: Prometheus treats a changed label set as a new target. Nothing else needs to be done.
+
+This was fixed now rather than later because proxy failover makes the old behavior actively harmful — a value that tracked the current proxy endpoint would change on every failover, churning the series each time.
 
 ### Upgrade Note — metric label change
 
@@ -24,6 +35,48 @@ Previously both timeout legs shared the `timed_out` label:
 Because the agent's 15s timeout trips long before the proxy's 90s, **a slow scrape target almost always lands in `upstream_timed_out` now**. Any dashboard, recording rule, or alert matching `type="timed_out"` will stop seeing the majority of what it used to count. Match `type=~"timed_out|upstream_timed_out"` to preserve the old aggregate, or split the two panels — they point at different problems.
 
 This finishes the taxonomy work started in 3.2.0, which pulled `upstream_error` and `content_too_large` out of the catch-all `path_not_found`. It also mirrors the existing `content_too_large` (agent's `maxContentLengthMBytes`) versus `payload_too_large` (proxy's unzip limit) pairing, so every proxy-side label now has a distinctly-named agent-side counterpart.
+
+### New Feature — proxy high availability
+
+Give the agent an ordered list of proxy endpoints instead of a single hostname:
+
+```hocon
+agent {
+  proxy {
+    endpoints = [ "proxy-a.example.com:50051", "proxy-b.example.com:50051" ]
+  }
+}
+```
+
+Or the same list comma-separated on the command line or in the environment:
+
+```bash
+--proxy proxy-a.example.com:50051,proxy-b.example.com:50051
+PROXY_HOSTNAME=proxy-a.example.com:50051,proxy-b.example.com:50051
+```
+
+The agent connects to the first endpoint that answers. A **failed connect** moves it to the next; a connection that came up and then **dropped** sends it back to the head of the list. That asymmetry is deliberate — it makes the list a priority order rather than a ring, so a recovered primary is picked up on the next reconnect without a health prober, a timer, or anything for you to do.
+
+A single value resolves to a one-element list and behaves exactly as it always has, so **existing configurations need no change**.
+
+#### Scrape the pair with `static_config`, not `http_sd_config`
+
+This is the one thing that will bite you if you skip it.
+
+An agent holds one connection at a time, so a standby proxy has no agents and returns an **empty list** from its service-discovery endpoint. Under `http_sd_config`, Prometheus reads that as "these targets no longer exist" and **deletes** them — no `up=0`, no failed scrape, no alert. The series simply stop, which is precisely the failure an HA pair is supposed to make impossible.
+
+With `static_config`, the standby returns `404` for a path it does not know, Prometheus records `up=0`, and your existing alerting works unchanged:
+
+```yaml
+scrape_configs:
+  - job_name: proxied-metrics
+    static_configs:
+      - targets: ["proxy-a.example.com:8080", "proxy-b.example.com:8080"]
+```
+
+#### Limits
+
+All endpoints share one TLS context and one authority override, so a pair with different CAs or certificate SANs fails with an opaque handshake error rather than a clear configuration error. Simultaneous multi-homing — registering on several proxies at once so both can serve — and true proxy clustering are not part of this release.
 
 ### New Feature — metric filtering at the agent
 

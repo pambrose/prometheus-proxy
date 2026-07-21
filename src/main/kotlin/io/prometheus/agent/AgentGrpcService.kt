@@ -21,6 +21,7 @@ package io.prometheus.agent
 import brave.grpc.GrpcTracing
 import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.pambrose.common.dsl.GrpcDsl.channel
+import com.pambrose.common.util.hostInfo
 import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.utils.TlsContext
@@ -31,14 +32,14 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
 import io.prometheus.Agent
-import io.prometheus.common.BaseOptions.Companion.HTTPS_PREFIX
-import io.prometheus.common.BaseOptions.Companion.HTTP_PREFIX
+import io.prometheus.agent.AgentOptions.Companion.DEFAULT_GRPC_PORT
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.logStreamFailure
-import io.prometheus.common.Utils.parseHostPort
+import io.prometheus.common.Utils.HostPort
+import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.RegisterPathResponse
@@ -125,23 +126,63 @@ internal class AgentGrpcService(
 
   lateinit var channel: ManagedChannel
 
-  val agentHostName: String
-  val agentPort: Int
+  // Ordered failover endpoints, parsed once. Never empty -- parseEndpointList throws on a spec that
+  // yields none, and AgentOptions already validated the same string at startup. A single-endpoint list
+  // (the overwhelmingly common case) makes every rotation call below a no-op, which is what keeps the
+  // pre-failover behavior byte-for-byte intact.
+  private val endpoints: List<HostPort> = parseEndpointList(options.proxyHostname, DEFAULT_GRPC_PORT)
+
+  // Cursor into [endpoints]. Written only under grpcLock, but read without it from Agent.proxyHost on
+  // the run loop (inside log lambdas), hence @Volatile. The list itself is immutable, so publishing the
+  // index safely is enough to publish the selection.
+  @Volatile
+  private var endpointIndex = 0
+
+  // Read the volatile index ONCE. Two independent reads (one for host, one for port) let a rotation
+  // land between them, so a concurrent reader -- the /debug servlet runs on a Jetty thread -- could
+  // render a host:port pair that was never configured.
+  val currentEndpoint: HostPort get() = endpoints[endpointIndex]
+
+  val agentHostName: String get() = currentEndpoint.host
+  val agentPort: Int get() = currentEndpoint.port
+
+  /** Endpoints in priority order for startup logging, or null when failover is not configured. */
+  val failoverEndpointsDesc: String?
+    get() = if (endpoints.size > 1) endpoints.joinToString(", ") { it.spec } else null
+
+  /**
+   * Advances to the next endpoint, wrapping at the end, and reports whether the selection changed.
+   *
+   * Called after a *failed connect*. A `false` return (a single-endpoint list) tells the caller not to
+   * rebuild the channel, so a non-failover agent does exactly what it always did.
+   */
+  fun advanceEndpoint(): Boolean =
+    grpcLock.withLock {
+      if (endpoints.size <= 1)
+        return@withLock false
+      endpointIndex = (endpointIndex + 1) % endpoints.size
+      logger.info { "Trying next proxy endpoint: ${currentEndpoint.spec}" }
+      true
+    }
+
+  /**
+   * Returns to the first endpoint.
+   *
+   * Called after a connection that had succeeded and then dropped, which is what makes the list a
+   * priority order rather than a ring: the next cycle re-probes the primary, so recovery of a preferred
+   * proxy is picked up without a health prober, a timer, or any per-endpoint state.
+   */
+  fun resetEndpoint() =
+    grpcLock.withLock {
+      if (endpointIndex != 0) {
+        endpointIndex = 0
+        logger.info { "Returning to primary proxy endpoint: ${currentEndpoint.spec}" }
+      }
+    }
 
   private val tlsContext: TlsContext
 
   init {
-    // Strip either scheme prefix (case-insensitively, matching BaseOptions.isUrlPrefix); the prefixes
-    // are mutually exclusive so a chain works, and removePrefixIgnoreCase no-ops when absent (finding 42).
-    val schemeStripped =
-      options.proxyHostname
-        .removePrefixIgnoreCase(HTTPS_PREFIX)
-        .removePrefixIgnoreCase(HTTP_PREFIX)
-
-    val parsed = parseHostPort(schemeStripped, DEFAULT_GRPC_PORT)
-    agentHostName = parsed.host
-    agentPort = parsed.port
-
     tlsContext =
       agent.options.run {
         if (isTlsEnabled || trustCertCollectionFilePath.isNotEmpty())
@@ -224,10 +265,11 @@ internal class AgentGrpcService(
       if (grpcStarted)
         shutDownChannelLocked()
 
+      val endpoint = currentEndpoint
       channel =
         channel(
-          hostName = agentHostName,
-          port = agentPort,
+          hostName = endpoint.host,
+          port = endpoint.port,
           enableRetry = true,
           tlsContext = tlsContext,
           overrideAuthority = agent.options.overrideAuthority,
@@ -293,7 +335,13 @@ internal class AgentGrpcService(
         agentId = agent.agentId
         launchId = agent.launchId
         agentName = agent.agentName
-        hostName = agentHostName
+        // This agent's OWN host, not agentHostName -- which is the proxy endpoint being dialed. The
+        // proxy stores this on AgentContext and publishes it as the reserved `hostName` service-discovery
+        // label, documented as "hostnames of agents serving this path", so reporting the proxy's host
+        // made the label identical across every target and useless for identifying anything. It matters
+        // more with failover: hostName participates in Prometheus target identity, so a value that
+        // tracked the current endpoint would change targets on every failover and churn the series.
+        hostName = hostInfo.hostName
         consolidated = agent.options.consolidated
       }
     unaryStub().registerAgent(request)
@@ -558,14 +606,8 @@ internal class AgentGrpcService(
 
   companion object {
     private val logger = logger {}
-    private const val DEFAULT_GRPC_PORT = 50051
 
     // Max time to wait for the gRPC channel to terminate after shutdownNow() (finding 28).
     private const val CHANNEL_TERMINATION_TIMEOUT_SECS = 5L
-
-    // Case-insensitive counterpart to String.removePrefix, so the proxy-hostname scheme strip matches
-    // BaseOptions.isUrlPrefix's case-insensitivity (finding 42). No-ops when the prefix is absent.
-    private fun String.removePrefixIgnoreCase(prefix: String): String =
-      if (startsWith(prefix, ignoreCase = true)) substring(prefix.length) else this
   }
 }

@@ -69,12 +69,20 @@ object TestUtils {
     println(Json.encodeToString(MyEnum.A))
   }
 
+  /**
+   * @param proxyPort HTTP port Prometheus scrapes. Override to stand up more than one proxy at a time.
+   * @param configArgs the `--config` pair. Overridable rather than appendable because `--config` is a
+   *   single-valued JCommander parameter, so a spec needing its own config file must *replace* the
+   *   default rather than pass a second one through [args].
+   */
   fun startProxy(
     serverName: String = "",
     adminEnabled: Boolean = false,
     debugEnabled: Boolean = false,
     metricsEnabled: Boolean = false,
     args: List<String> = emptyList(),
+    proxyPort: Int = PROXY_PORT,
+    configArgs: List<String> = CONFIG_ARG,
   ): Proxy {
 //    logger.apply {
 //      info { getBanner("banners/proxy.txt", logger) }
@@ -83,7 +91,7 @@ object TestUtils {
 
     val proxyOptions = proxyOptions(
       buildList {
-        addAll(CONFIG_ARG)
+        addAll(configArgs)
         addAll(args)
         add("-Dproxy.admin.enabled=$adminEnabled")
         add("-Dproxy.admin.debugEnabled=$debugEnabled")
@@ -92,7 +100,7 @@ object TestUtils {
     )
     return Proxy(
       options = proxyOptions,
-      proxyPort = PROXY_PORT,
+      proxyPort = proxyPort,
       inProcessServerName = serverName,
       testMode = true,
     ) { startSync() }
@@ -107,6 +115,7 @@ object TestUtils {
     chunkContentSizeBytes: Int = -1,
     maxConcurrentClients: Int = -1,
     args: List<String> = emptyList(),
+    configArgs: List<String> = CONFIG_ARG,
   ): Agent {
 //    logger.apply {
 //      info { getBanner("banners/agent.txt", logger) }
@@ -115,7 +124,7 @@ object TestUtils {
 
     val agentOptions = agentOptions(
       args = buildList {
-        addAll(CONFIG_ARG)
+        addAll(configArgs)
         addAll(args)
         add("-Dagent.admin.enabled=$adminEnabled")
         add("-Dagent.admin.debugEnabled=$debugEnabled")

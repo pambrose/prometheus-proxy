@@ -38,6 +38,7 @@ import io.mockk.mockk
 import io.prometheus.Agent
 import io.prometheus.agent.discovery.DiscoveredPath
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.testConfigVals
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.registerPathResponse
@@ -82,16 +83,15 @@ class AgentPathManagerTest : StringSpec() {
     coEvery { mockGrpcService.unregisterPathOnProxy(any()) } returns unregisterPathResponse { valid = true }
 
     // Create a real ConfigVals with minimal config
-    val config = ConfigFactory.parseString(
+    val configVals = testConfigVals(
       """
       agent {
         pathConfigs = []
         filters = [$filtersHocon]
       }
       proxy { auth = [] }
-      """.trimIndent(),
+      """,
     )
-    val configVals = ConfigVals(config)
 
     val mockAgent = mockk<Agent>(relaxed = true)
     every { mockAgent.grpcService } returns mockGrpcService
@@ -442,7 +442,7 @@ class AgentPathManagerTest : StringSpec() {
     }
 
     "toPlainText with configured paths should include path details" {
-      val config = ConfigFactory.parseString(
+      val configVals = testConfigVals(
         """
         agent {
           pathConfigs = [
@@ -462,9 +462,8 @@ class AgentPathManagerTest : StringSpec() {
           filters = []
         }
         proxy { auth = [] }
-        """.trimIndent(),
+        """,
       )
-      val configVals = ConfigVals(config)
 
       val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 
@@ -484,7 +483,7 @@ class AgentPathManagerTest : StringSpec() {
     }
 
     "toPlainText should include URL column for configured paths" {
-      val config = ConfigFactory.parseString(
+      val configVals = testConfigVals(
         """
         agent {
           pathConfigs = [
@@ -498,9 +497,8 @@ class AgentPathManagerTest : StringSpec() {
           filters = []
         }
         proxy { auth = [] }
-        """.trimIndent(),
+        """,
       )
-      val configVals = ConfigVals(config)
 
       val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 
@@ -551,7 +549,7 @@ class AgentPathManagerTest : StringSpec() {
     }
 
     "registerPaths should register all configured paths" {
-      val config = ConfigFactory.parseString(
+      val configVals = testConfigVals(
         """
         agent {
           pathConfigs = [
@@ -571,9 +569,8 @@ class AgentPathManagerTest : StringSpec() {
           filters = []
         }
         proxy { auth = [] }
-        """.trimIndent(),
+        """,
       )
-      val configVals = ConfigVals(config)
 
       val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 

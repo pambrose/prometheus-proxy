@@ -128,10 +128,17 @@ import kotlin.time.Duration.Companion.milliseconds
  *
  * ## High Availability
  *
- * Multiple Proxy instances can run simultaneously for high availability:
+ * Multiple Proxy instances can run simultaneously for high availability. Each proxy is fully
+ * independent — there is no shared state, clustering, or peer awareness between them:
  * - Each proxy can handle the full set of agents
- * - Agents automatically reconnect to available proxies
- * - Load balancers can distribute Prometheus requests across proxies
+ * - An agent configured with an ordered endpoint list (`agent.proxy.endpoints`, or a comma-separated
+ *   `--proxy` / `PROXY_HOSTNAME`) connects to the first endpoint that answers and moves to the next on
+ *   a failed connect, returning to the head of the list once a working connection drops
+ * - An agent holds **one** connection at a time and registers its paths only on that proxy, so a
+ *   standby proxy serves nothing until an agent fails over to it
+ * - Prometheus should scrape every proxy with identical `static_config` target lists. Do not use
+ *   `http_sd_config` for an HA pair: a standby returns an empty target list, which Prometheus treats
+ *   as target deletion rather than as a failed scrape
  *
  * @param options Configuration options for the proxy, typically loaded from command line or config files
  * @param proxyPort Port for the HTTP service that Prometheus scrapes. Defaults to value in options.

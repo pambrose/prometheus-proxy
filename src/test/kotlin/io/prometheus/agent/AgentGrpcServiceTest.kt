@@ -22,6 +22,7 @@ import brave.Tracing
 import com.pambrose.common.concurrent.await
 import com.pambrose.common.service.ZipkinReporterService
 import com.pambrose.common.util.zip
+import com.pambrose.common.util.hostInfo
 import io.grpc.Metadata
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
@@ -29,22 +30,27 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
+import io.prometheus.grpc.RegisterAgentRequest
 import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.agentInfo
 import io.prometheus.grpc.heartBeatResponse
@@ -104,6 +110,21 @@ class AgentGrpcServiceTest : StringSpec() {
     every { mockAgent.metrics(any<AgentMetrics.() -> Unit>()) } answers {}
 
     return mockAgent
+  }
+
+  // try/finally so a failed assertion still tears the channel down -- a leaked service perturbs the
+  // NEXT spec in the file, which turns one failure into a cascade.
+  private fun withService(
+    proxySpec: String,
+    block: (AgentGrpcService) -> Unit,
+  ) {
+    val agent = createMockAgent(proxySpec)
+    val service = AgentGrpcService(agent, agent.options, "test-server")
+    try {
+      block(service)
+    } finally {
+      service.shutDown()
+    }
   }
 
   private suspend fun callProcessScrapeResults(
@@ -1219,6 +1240,101 @@ class AgentGrpcServiceTest : StringSpec() {
       service.channel.isTerminated.shouldBeFalse()
 
       service.shutDown()
+    }
+
+    // ==================== registerAgent Request Contents ====================
+
+    // The proxy stores this on AgentContext and publishes it as the reserved `hostName`
+    // service-discovery label, documented as "hostnames of agents serving this path" -- and its own
+    // tests (AgentContextTest, ProxyTest) are written against that meaning. Sending agentHostName
+    // instead would report the PROXY endpoint: identical across every target, and with failover it
+    // would change on rotation, altering Prometheus target identity and churning the series.
+    "registerAgent should report the agent's own host, not the proxy endpoint" {
+      val agent = createMockAgent("proxy-endpoint-host:$PROXY_AGENT_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+
+      try {
+        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>()
+        val request = slot<RegisterAgentRequest>()
+        coEvery { mockStub.registerAgent(capture(request), any()) } returns registerAgentResponse { valid = true }
+
+        service.grpcStub = mockStub
+        // Bypass withDeadlineAfter so unaryStub() hands back the mock itself.
+        service.unaryDeadlineSecs = 0
+
+        service.registerAgent(CountDownLatch(1))
+
+        request.captured.hostName shouldBe hostInfo.hostName
+        request.captured.hostName shouldNotBe "proxy-endpoint-host"
+        request.captured.hostName shouldNotBe service.agentHostName
+      } finally {
+        service.shutDown()
+      }
+    }
+
+    // ==================== Failover Endpoint Rotation ====================
+
+    // The whole feature must be inert for a single-endpoint agent -- i.e. every deployment that existed
+    // before failover. advanceEndpoint() returns false, which is what tells Agent.run() not to rebuild
+    // the channel, so the retry path stays byte-for-byte what it was.
+    "a single endpoint should report no failover and refuse to rotate" {
+      withService("localhost:$PROXY_AGENT_PORT") { service ->
+        service.failoverEndpointsDesc.shouldBeNull()
+        service.advanceEndpoint().shouldBeFalse()
+        service.currentEndpoint shouldBe HostPort("localhost", PROXY_AGENT_PORT)
+
+        // Failback on a single endpoint is a no-op rather than an error.
+        service.resetEndpoint()
+        service.currentEndpoint shouldBe HostPort("localhost", PROXY_AGENT_PORT)
+      }
+    }
+
+    "a comma-separated list should select the first endpoint and report failover available" {
+      withService("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT") { service ->
+        service.currentEndpoint shouldBe HostPort("first", PROXY_AGENT_PORT)
+        service.failoverEndpointsDesc shouldBe "first:$PROXY_AGENT_PORT, second:$PROXY_HTTP_PORT"
+      }
+    }
+
+    "advanceEndpoint should move to the next endpoint and wrap around" {
+      withService("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT") { service ->
+        service.advanceEndpoint().shouldBeTrue()
+        service.currentEndpoint shouldBe HostPort("second", PROXY_HTTP_PORT)
+
+        service.advanceEndpoint().shouldBeTrue()
+        service.currentEndpoint shouldBe HostPort("first", PROXY_AGENT_PORT)
+      }
+    }
+
+    // resetEndpoint is the entire failback mechanism: without it the agent would stay on whichever
+    // endpoint answered last and never re-probe a recovered primary.
+    "resetEndpoint should return to the primary" {
+      withService("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT") { service ->
+        service.advanceEndpoint().shouldBeTrue()
+        service.currentEndpoint shouldBe HostPort("second", PROXY_HTTP_PORT)
+
+        service.resetEndpoint()
+        service.currentEndpoint shouldBe HostPort("first", PROXY_AGENT_PORT)
+      }
+    }
+
+    // Rotation must never resurrect a channel after a requested stop. advanceEndpoint moves the cursor,
+    // but only resetGrpcStubs builds channels, and its shutDownRequested latch has to keep winning --
+    // bypassing it would reinstate the run-loop deadlock that latch was added to fix.
+    "rotation after a permanent shutdown must not build another channel" {
+      withService("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT") { service ->
+        val originalChannel = service.channel
+
+        service.shutDownChannelPermanently()
+        originalChannel.isShutdown.shouldBeTrue()
+
+        service.advanceEndpoint().shouldBeTrue()
+        service.resetGrpcStubs()
+
+        // Same terminated channel: no new one was created for the rotated-to endpoint.
+        (service.channel === originalChannel).shouldBeTrue()
+        service.channel.isShutdown.shouldBeTrue()
+      }
     }
   }
 }

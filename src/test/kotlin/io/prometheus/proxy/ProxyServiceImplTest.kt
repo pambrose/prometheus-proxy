@@ -38,6 +38,7 @@ import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.testConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ScrapeRequest
@@ -73,7 +74,7 @@ class ProxyServiceImplTest : StringSpec() {
     val mockScrapeRequestManager = mockk<ScrapeRequestManager>(relaxed = true)
     every { mockScrapeRequestManager.containsScrapeRequest(any()) } returns true
 
-    val config = ConfigFactory.parseString(
+    val configVals = testConfigVals(
       """
       proxy {
         auth = []
@@ -86,9 +87,8 @@ class ProxyServiceImplTest : StringSpec() {
         pathConfigs = []
         filters = []
       }
-      """.trimIndent(),
+      """,
     )
-    val configVals = ConfigVals(config)
 
     val mockProxy = mockk<Proxy>(relaxed = true)
     every { mockProxy.options } returns mockOptions

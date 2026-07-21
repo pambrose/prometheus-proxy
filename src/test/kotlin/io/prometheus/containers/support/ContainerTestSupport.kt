@@ -59,15 +59,31 @@ object ContainerTestSupport {
   /** True only when `RUN_CONTAINER_TESTS=true`; otherwise every spec registers a single disabled placeholder. */
   fun containerTestsEnabled(): Boolean = System.getenv("RUN_CONTAINER_TESTS") == "true"
 
-  fun proxyImage(): ImageFromDockerfile =
+  // ONE ImageFromDockerfile per JVM, not one per container.
+  //
+  // Testcontainers gives every ImageFromDockerfile instance its own random
+  // `localhost/testcontainers/<hash>:latest` tag. These were previously functions used as default
+  // parameter values, so each container built its own instance -- and ContainersScalingTest constructs
+  // one agent container per agent, so a single run minted a tag per agent plus one per proxy. The
+  // layers are content-hashed and shared (thousands of leaked tags resolve to only a few hundred image
+  // IDs), but the tags themselves accumulate: they are reaped only by a JVM shutdown hook, which never
+  // fires when a run is killed or times out. Left alone this grows into tens of GB of reclaimable
+  // images, and a bloated image store is a plausible trigger for containerd content GC racing a build
+  // ("NotFound: content digest ...: not found").
+  //
+  // Sharing one instance is the documented way to build an image once and reuse it: the value is a
+  // Future<String> that resolves on first use, so N containers share one build and one tag.
+  val proxyImage: ImageFromDockerfile by lazy {
     ImageFromDockerfile()
       .withFileFromPath("Dockerfile", Path.of("etc/docker/proxy.df"))
       .withFileFromPath("build/libs/prometheus-proxy.jar", Path.of("build/libs/prometheus-proxy.jar"))
+  }
 
-  fun agentImage(): ImageFromDockerfile =
+  val agentImage: ImageFromDockerfile by lazy {
     ImageFromDockerfile()
       .withFileFromPath("Dockerfile", Path.of("etc/docker/agent.df"))
       .withFileFromPath("build/libs/prometheus-agent.jar", Path.of("build/libs/prometheus-agent.jar"))
+  }
 
   fun logConsumer(name: String): Slf4jLogConsumer =
     Slf4jLogConsumer(LoggerFactory.getLogger("container.$name")).withPrefix(name)
@@ -92,9 +108,15 @@ object ContainerTestSupport {
       waitingFor(Wait.forHttp(waitPath).forPort(NGINX_PORT))
     }
 
+  /**
+   * @param alias network alias this proxy answers to. Two proxies in one spec MUST take distinct
+   *   aliases: sharing one makes Docker's embedded DNS round-robin between them non-deterministically,
+   *   which silently turns an endpoint-selection test into a coin flip.
+   */
   fun proxyContainer(
     network: Network,
-    image: ImageFromDockerfile = proxyImage(),
+    image: ImageFromDockerfile = proxyImage,
+    alias: String = PROXY_ALIAS,
     env: Map<String, String> = emptyMap(),
     exposedPorts: List<Int> = [PROXY_HTTP_PORT],
     hostFiles: Map<String, String> = emptyMap(),
@@ -102,11 +124,11 @@ object ContainerTestSupport {
   ): GenericContainer<*> =
     GenericContainer<Nothing>(image).apply {
       withNetwork(network)
-      withNetworkAliases(PROXY_ALIAS)
+      withNetworkAliases(alias)
       withExposedPorts(*exposedPorts.toTypedArray())
       hostFiles.forEach { (hostPath, dest) -> withCopyFileToContainer(MountableFile.forHostPath(hostPath), dest) }
       env.forEach { (key, value) -> withEnv(key, value) }
-      withLogConsumer(logConsumer("proxy"))
+      withLogConsumer(logConsumer(alias))
       waitingFor(wait)
     }
 
@@ -117,7 +139,7 @@ object ContainerTestSupport {
    */
   fun agentContainer(
     network: Network,
-    image: ImageFromDockerfile = agentImage(),
+    image: ImageFromDockerfile = agentImage,
     alias: String = AGENT_ALIAS,
     configResource: String = "containers/agent.conf",
     configText: String? = null,

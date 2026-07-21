@@ -45,7 +45,9 @@ import io.prometheus.common.EnvVars.SCRAPE_MAX_RETRIES
 import io.prometheus.common.EnvVars.SCRAPE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.TRUST_ALL_X509_CERTIFICATES
 import io.prometheus.common.EnvVars.UNARY_DEADLINE_SECS
+import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.Utils.parseHostPort
+import io.prometheus.common.Utils.stripScheme
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(
@@ -69,9 +71,15 @@ class AgentOptions(
   /**
    * Proxy address the Agent connects to. Accepts either `hostname` (port defaults to `agent.proxy.port` from
    * config, normally `50051`) or `hostname:port`.
-   * Empty means "fall back to [PROXY_HOSTNAME] env var, then `agent.proxy.hostname[:port]` from config".
+   *
+   * Accepts a **comma-separated list** for high availability — `proxy1:50051,proxy2:50051`. The agent tries
+   * them in order, first successful connection wins, and rotates on a failed connect. A single value behaves
+   * exactly as it always has.
+   *
+   * Empty means "fall back to [PROXY_HOSTNAME] env var, then `agent.proxy.endpoints` from config, then
+   * `agent.proxy.hostname[:port]`".
    */
-  @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname")
+  @Parameter(names = ["-p", "--proxy"], description = "Proxy hostname, or a comma-separated failover list")
   var proxyHostname = ""
     private set
 
@@ -280,13 +288,22 @@ class AgentOptions(
     val agentConfigVals = configVals.agent
 
     if (proxyHostname.isEmpty()) {
-      val configHostname = agentConfigVals.proxy.hostname
       val defaultPort = agentConfigVals.proxy.port
-      val parsed = parseHostPort(configHostname, defaultPort)
-      val str = "${parsed.host}:${parsed.port}"
-      proxyHostname = PROXY_HOSTNAME.getEnv(str)
+      // agent.proxy.endpoints wins over the legacy hostname/port pair when set. They are deliberately NOT
+      // merged: silently prepending hostname would strand anyone who set it and expected endpoints alone
+      // to apply. The single hostname is promoted to a one-element list so both shapes normalize through
+      // one expression -- agent.proxy.port becomes the per-entry default, and once this string reaches
+      // AgentGrpcService the only default left is 50051.
+      val entries = agentConfigVals.proxy.endpoints.ifEmpty { [agentConfigVals.proxy.hostname] }
+      val fallback = entries.joinToString(",") { parseHostPort(stripScheme(it.trim()), defaultPort).spec }
+      proxyHostname = PROXY_HOSTNAME.getEnv(fallback)
     }
-    logger.info { "proxyHostname: $proxyHostname" }
+    // Parse eagerly so a malformed endpoint fails at startup with a clear message rather than surfacing
+    // later as a connect failure that rotation would paper over by moving to the next endpoint.
+    val endpoints = parseEndpointList(proxyHostname, DEFAULT_GRPC_PORT)
+    val failoverSuffix =
+      if (endpoints.size == 1) "" else " (${endpoints.size} failover endpoints, tried in order)"
+    logger.info { "proxyHostname: $proxyHostname$failoverSuffix" }
 
     if (agentName.isEmpty())
       agentName = AGENT_NAME.getEnv(agentConfigVals.name)
@@ -480,5 +497,11 @@ class AgentOptions(
 
   internal companion object {
     private val logger = logger {}
+
+    // Default port for a proxy endpoint that does not carry one. Lives here rather than in
+    // AgentGrpcService because defaults are an options concern, and AgentGrpcService already depends on
+    // AgentOptions -- the reverse import would have the public options type reaching into the internals
+    // of the gRPC client it configures.
+    internal const val DEFAULT_GRPC_PORT = 50051
   }
 }

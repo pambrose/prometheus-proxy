@@ -151,6 +151,74 @@ machinery that the Kubernetes/Docker watchers plug into later.
 
 ## Feature 2: Proxy High Availability with Agent-Side Failover
 
+> **Status: Implemented (Phase 1 — agent-side endpoint failover).** The agent takes an ordered list of
+> proxy endpoints, connects to the first that answers, advances on a failed connect, and returns to the
+> head of the list when a working connection drops. Still deferred: **Phase 2** (simultaneous
+> multi-homing) and **Phase 3** (proxy clustering). See **Implementation Notes (As Built)** immediately
+> below for the shipped design and where it diverged.
+
+### Implementation Notes (As Built)
+
+**Config (diverged — no new `endpoints` CLI flag).** The proposal assumed a separate `--proxies` flag
+alongside `agent.proxy.endpoints`. As built, the config key exists as proposed, but `--proxy` and
+`PROXY_HOSTNAME` simply accept a **comma-separated** value rather than a second flag being minted —
+commas are illegal in DNS names, so the overload is unambiguous, and it avoids inventing a
+`--proxy` vs `--proxies` precedence rule. `endpoints` is the base when non-empty; env then CLI override
+it *wholesale* (never merged, since silently prepending `hostname` would strand anyone who set
+`agent.proxy.port` expecting it to apply). A single value resolves to a one-element list and behaves
+exactly as before.
+
+An earlier draft of this note claimed a HOCON list forced a config-file-only option, citing the
+constraint behind `proxy.auth` and `agent.filters`. That was wrong: the constraint applies to lists of
+*objects*, not strings — `ConfigVals` already generates a clean `List<String>` for `metricNameAllow`.
+
+**`reference.conf` is load-bearing.** tscfg emits an unguarded `c.getList("endpoints")` for a list-typed
+key, unlike the `hasPathOrNull` check it generates for the sibling `hostname`/`port` scalars, so
+`agent.proxy.endpoints = []` had to be added or every pre-existing config would fail to load. Two
+`ConfigValsTest` cases pin this.
+
+**Rotation (diverged — no `failoverPauseSecs`).** The proposal sketched a separate failover pause. Not
+built: rotation happens inside the existing retry loop, so the existing `RateLimiter` already paces it,
+and a second timing knob would have to compose with a fixed-rate limiter constructed once at startup.
+
+Rotation is driven by one bit already present in the loop: `agentId` is non-empty at the top of an
+iteration only if the previous attempt actually connected. A connection that came up and then dropped
+resets to the head of the list — that is the entire failback mechanism, with no prober, timer, or
+per-endpoint state, and it resolves the proposal's open question about failback affirmatively (contrary
+to its "no automatic failback" recommendation). An attempt that never connected advances instead.
+
+The channel rebuild is the load-bearing part. A `ManagedChannel` is bound to its target address, and
+`connectToProxy()` previously rebuilt only after a *successful* connection, so a run of failures reused
+one channel against one address. Without changing that guard, a cursor would advance an index nothing
+reads. The rebuild on the advance path is conditional on the endpoint actually changing, so a
+single-endpoint agent keeps reusing its channel and leaning on gRPC's own backoff.
+
+**Not built: gRPC-native multi-address resolution.** A custom `NameResolver` or `round_robin` policy
+would break silently in the fat JAR, since `src/shadow/resources/META-INF/services/` pins the provider
+list — it would pass every unit and harness test and fail only in the container suite.
+
+**Constraints.** All endpoints share one TLS context and one `overrideAuthority`, so heterogeneous CAs
+or SANs fail with an opaque handshake error. `launchId` stays process-scoped, so one metric series spans
+both proxies' identity spaces after a switch. No connect failure is terminal, so a bad token on endpoint
+B is indistinguishable from B being down — mitigated by naming the current endpoint in every failure log
+line.
+
+**Files.** New `Utils.parseEndpointList` and `HostPort.spec` (a render that round-trips back through
+`parseHostPort` — the naive `"$host:$port"` form drops the brackets an IPv6 literal needs, so endpoints
+were silently mangled into a bare-IPv6-with-no-port). Modified: `AgentGrpcService` (endpoint list,
+`@Volatile` cursor, `advanceEndpoint`/`resetEndpoint`, single-read `currentEndpoint`), `Agent`
+(rotation wiring, `proxyHost`), `AgentOptions` (resolution + fail-fast validation), `config/config.conf`,
+`reference.conf`, and `ContainerTestSupport.proxyContainer` (which hardcoded one network alias, so two
+proxies round-robined behind one name).
+
+**Tests.** `parseEndpointList` and `HostPort.spec` round-trip cases in `UtilsTest`; rotation and
+shutdown-latch cases in `AgentGrpcServiceTest`; endpoint resolution in `AgentOptionsTest` via a dedicated
+config (that whole block was previously unreachable, since every existing case passes `--proxy`);
+`reference.conf` regression cases in `ConfigValsTest`; the Netty harness spec `AgentProxyFailoverTest`;
+and the two-proxy `ContainersProxyFailoverTest`. Both end-to-end specs were verified to fail when
+`advanceEndpoint()` is forced to return false — an in-process harness spec cannot cover rotation at all,
+because `GrpcDsl` ignores host and port when an in-process server name is supplied.
+
 ### Motivation
 
 A monitoring system needs to be more available than the things it monitors, yet today a
@@ -192,8 +260,12 @@ agent {
 
 `AgentGrpcService`'s existing reconnect loop (`reconnectPauseSecs`) rotates through the
 list instead of hammering one address. Prometheus is configured to scrape *both* proxies
-with identical target lists; the inactive proxy returns 503 for unregistered paths, which
-Prometheus treats as a failed scrape of a duplicate target — standard HA-pair behavior.
+with identical target lists; the inactive proxy returns ~~503~~ **404** for unregistered
+paths (`ProxyHttpRoutes` routes a null agent context to `ProxyUtils.invalidPathResponse`,
+which returns `NotFound`; the 503s are for `proxy_stopped` / `no_agents` /
+`agent_disconnected` / `timed_out`, none of which a standby hits). Either way Prometheus
+scores it `up=0`, so the HA-pair story is unaffected — but the status code was wrong here
+and would have propagated into alert rules.
 
 **Phase 2 — Active-active multi-homing.** The agent maintains simultaneous connections to
 N proxies and registers its paths on all of them. Every proxy can serve every path;
@@ -714,7 +786,7 @@ If Feature 3 lands first, the UI displays identities but never tokens.
 | 1st ✅ | **Feature 3** — Per-agent identity & path authorization | **Implemented (MVP)** — closes a known security gap; security blockers stall adoption more than missing features |
 | 2nd ✅ | **Feature 1** — Dynamic target discovery | **Implemented (file-source MVP)** — biggest day-to-day operational relief; Kubernetes/Docker sources still deferred |
 | 3rd ✅ | **Feature 4** — Agent-side metric filtering | **Implemented (MVP — `metricNameAllow` / `metricNameDeny`)** — strengthens the core value proposition (efficient transport across network boundaries); `dropLabels`, relabeling, and agent-global filters still deferred |
-| 4th | **Feature 2** — Proxy HA / agent failover | Phase 1 is cheap and unlocks redundant deployments |
+| 4th ✅ | **Feature 2** — Proxy HA / agent failover | **Implemented (Phase 1 — agent-side endpoint failover)** — unlocks redundant proxy deployments; Phase 2 multi-homing and Phase 3 clustering still deferred |
 | 5th | **Feature 5** — Operational web UI | Highest value once Features 1 and 3 add state worth visualizing (identities, discovery sources) |
 
 Cross-cutting notes for every feature:
