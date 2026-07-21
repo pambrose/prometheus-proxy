@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import com.google.protobuf.LazyStringArrayList
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -914,6 +915,8 @@ class ProxyPathManagerTest : StringSpec() {
           every { agentName } returns "c1"
           every { hostName } returns "h1"
           every { consolidated } returns true
+          every { proxyEndpointsList } returns LazyStringArrayList()
+          every { currentEndpointIndex } returns 0
         },
       )
       val consolidated2 = AgentContext("remote-c2")
@@ -923,6 +926,8 @@ class ProxyPathManagerTest : StringSpec() {
           every { agentName } returns "c2"
           every { hostName } returns "h2"
           every { consolidated } returns true
+          every { proxyEndpointsList } returns LazyStringArrayList()
+          every { currentEndpointIndex } returns 0
         },
       )
       val newAgent = AgentContext("remote-new")

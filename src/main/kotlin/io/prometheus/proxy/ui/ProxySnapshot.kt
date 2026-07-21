@@ -41,7 +41,25 @@ internal data class AgentView(
   val inactivity: Duration,
   val backlogSize: Int,
   val paths: List<PathView>,
+  val proxyEndpoints: List<String> = emptyList(),
+  val currentEndpointIndex: Int = 0,
 ) {
+  /**
+   * How this agent reached this proxy, when it has failover configured — for example
+   * `"proxy-b:50051 (2 of 2)"`. Null when the agent reported no endpoints, which covers both a
+   * single-endpoint agent and one predating the fields.
+   *
+   * An index above the first is the visible signal that an agent failed over to this proxy, which the
+   * dashboard otherwise cannot show: each proxy sees only its own agents, so a failover looks like a
+   * disappearance on one and an appearance on the other.
+   */
+  val failoverPosition: String?
+    get() =
+      proxyEndpoints
+        .getOrNull(currentEndpointIndex)
+        ?.takeIf { proxyEndpoints.size > 1 }
+        ?.let { "$it (${currentEndpointIndex + 1} of ${proxyEndpoints.size})" }
+
   /** Seconds until the stale-agent cleanup would evict this agent, floored at zero once overdue. */
   fun evictionCountdownSecs(maxInactivitySecs: Long): Long =
     (maxInactivitySecs - inactivity.inWholeSeconds).coerceAtLeast(0)
@@ -128,6 +146,8 @@ internal data class ProxySnapshot(
               inactivity = context.inactivityDuration,
               backlogSize = context.scrapeRequestBacklogSize,
               paths = pathsByAgent[agentId].orEmpty(),
+              proxyEndpoints = context.proxyEndpoints,
+              currentEndpointIndex = context.currentEndpointIndex,
             )
           }
           .sortedBy { it.agentName }

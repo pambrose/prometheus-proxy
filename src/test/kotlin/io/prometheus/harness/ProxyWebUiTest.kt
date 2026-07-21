@@ -125,6 +125,45 @@ class ProxyWebUiTest : StringSpec() {
         runCatching { proxy.stopSync(10.seconds) }
       }
     }
+    // The whole HA story in one assertion: an agent configured with two endpoints, whose primary does
+    // not exist, connects to the secondary -- and this proxy's UI says so. Without the endpoint list on
+    // the wire the dashboard could not distinguish that from a fresh start.
+    "the UI reports an agent that reached this proxy via failover" {
+      CollectorRegistry.defaultRegistry.clear()
+
+      val proxy =
+        startProxy(
+          args = ["--agent_port", "$FAILOVER_GRPC_PORT", "--ui", "--ui_port", "$FAILOVER_UI_PORT"],
+          proxyPort = FAILOVER_HTTP_PORT,
+          configArgs = ["--config", CONFIG_FILE],
+        )
+      val client = HttpClient(CIO)
+      var agent: Agent? = null
+
+      try {
+        // Primary is a port nothing listens on, so the agent must advance to the second entry.
+        agent =
+          startAgent(
+            configArgs = ["--config", CONFIG_FILE],
+            args = ["--proxy", "$LOOPBACK_HOST:$DEAD_PORT,$LOOPBACK_HOST:$FAILOVER_GRPC_PORT"],
+          )
+        agent.awaitInitialConnection(30.seconds).shouldBeTrue()
+
+        eventually(30.seconds) {
+          val listing = client.get("http://$LOOPBACK_HOST:$FAILOVER_UI_PORT/ui").bodyAsText()
+          val agentId = AGENT_ID_PATTERN.find(listing)?.groupValues?.get(1).orEmpty()
+          val detail =
+            client.get("http://$LOOPBACK_HOST:$FAILOVER_UI_PORT/ui/agents/$agentId").bodyAsText()
+
+          detail shouldContain "via $LOOPBACK_HOST:$FAILOVER_GRPC_PORT (2 of 2)"
+          detail shouldContain "failed over"
+        }
+      } finally {
+        agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
+        client.close()
+        runCatching { proxy.stopSync(10.seconds) }
+      }
+    }
   }
 
   companion object {
@@ -141,5 +180,14 @@ class ProxyWebUiTest : StringSpec() {
 
     // Bounded so a push that never carries the agent fails the assertion rather than hanging the suite.
     private const val MAX_FRAMES = 12
+
+    private const val FAILOVER_HTTP_PORT = 9546
+    private const val FAILOVER_GRPC_PORT = 9547
+    private const val FAILOVER_UI_PORT = 9548
+
+    // Nothing listens here, so the agent's first endpoint fails and it advances to the second.
+    private const val DEAD_PORT = 9549
+
+    private val AGENT_ID_PATTERN = """hx-get="/ui/agents/([^"]+)"""".toRegex()
   }
 }

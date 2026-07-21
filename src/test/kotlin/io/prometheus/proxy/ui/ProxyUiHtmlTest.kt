@@ -37,6 +37,8 @@ class ProxyUiHtmlTest : StringSpec() {
     id: String = "1",
     name: String = "team-a-01",
     paths: List<PathView> = [path("app_metrics")],
+    endpoints: List<String> = emptyList(),
+    endpointIndex: Int = 0,
   ) = AgentView(
     agentId = id,
     agentName = name,
@@ -49,6 +51,8 @@ class ProxyUiHtmlTest : StringSpec() {
     inactivity = 2.seconds,
     backlogSize = 0,
     paths = paths,
+    proxyEndpoints = endpoints,
+    currentEndpointIndex = endpointIndex,
   )
 
   private fun snapshot(
@@ -136,6 +140,28 @@ class ProxyUiHtmlTest : StringSpec() {
       ProxyUiService.parseSelection("not json at all").shouldBeNull()
       ProxyUiService.parseSelection("").shouldBeNull()
       ProxyUiService.parseSelection("[1,2,3]").shouldBeNull()
+    }
+
+    // "This agent failed over to us" is the thing an operator cannot otherwise learn from one
+    // dashboard, so it must be visible without hunting through the meta line.
+    "an agent that failed over should be marked in the detail pane" {
+      val failedOver = agent(endpoints = ["proxy-a:50051", "proxy-b:50051"], endpointIndex = 1)
+      val html = ProxyUiHtml.detailFragment(snapshot(agents = [failedOver]), selectedId = "1")
+
+      html shouldContain "via proxy-b:50051 (2 of 2)"
+      html shouldContain "failed over"
+    }
+
+    "an agent on its primary should show its position but not the failed-over marker" {
+      val primary = agent(endpoints = ["proxy-a:50051", "proxy-b:50051"], endpointIndex = 0)
+      val html = ProxyUiHtml.detailFragment(snapshot(agents = [primary]), selectedId = "1")
+
+      html shouldContain "via proxy-a:50051 (1 of 2)"
+      html shouldNotContain "failed over"
+    }
+
+    "an agent without failover configured should show no position line" {
+      ProxyUiHtml.detailFragment(snapshot(), selectedId = "1") shouldNotContain "via "
     }
   }
 }

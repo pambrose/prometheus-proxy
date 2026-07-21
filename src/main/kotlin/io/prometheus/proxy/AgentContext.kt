@@ -80,6 +80,19 @@ internal class AgentContext(
   var consolidated: Boolean by atomicBoolean(false)
     private set
 
+  /**
+   * The agent's configured failover endpoints and which one this connection uses.
+   *
+   * Reported at registration, which is exactly when it changes: a failover is a reconnect, so an agent
+   * appearing here on its secondary endpoint has, by definition, just failed over to this proxy. Empty
+   * for an agent predating the fields, or one with no failover configured.
+   */
+  var proxyEndpoints: List<String> by nonNullableReference(emptyList())
+    private set
+
+  var currentEndpointIndex: Int by nonNullableReference(0)
+    private set
+
   internal val desc: String
     get() = if (consolidated) "consolidated " else ""
 
@@ -101,6 +114,8 @@ internal class AgentContext(
     agentName = request.agentName
     hostName = request.hostName
     consolidated = request.consolidated
+    proxyEndpoints = request.proxyEndpointsList.toList()
+    currentEndpointIndex = request.currentEndpointIndex
   }
 
   suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {

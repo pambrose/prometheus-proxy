@@ -159,6 +159,12 @@ internal object ProxyUiHtml {
         +agent.displayName()
         if (agent.consolidated) span("tag") { +"consolidated" }
       }
+      agent.failoverPosition?.also { position ->
+        div("hero-failover") {
+          +"via $position"
+          if (agent.currentEndpointIndex > 0) span("tag warn") { +"failed over" }
+        }
+      }
       div("hero-meta") {
         +listOf(
           agent.remoteAddr,
@@ -309,6 +315,8 @@ internal object ProxyUiHtml {
     .hero { padding:14px 18px; border-bottom:1px solid var(--line); }
     .hero-title { font-size:15px; font-weight:640; display:flex; align-items:center; gap:9px; }
     .hero-meta { color:var(--ink-3); font-size:11.5px; margin-top:5px; }
+    .hero-failover { font-size:11.5px; margin-top:5px; display:flex; align-items:center; gap:8px; }
+    .tag.warn { background:var(--warn-soft); color:var(--warn); }
     .tag { font-size:10px; background:var(--surface-3); color:var(--ink-2); padding:2px 7px; border-radius:20px; }
     .kv { display:flex; gap:10px; padding:7px 18px; border-bottom:1px solid var(--line-soft); align-items:center; }
     .kv .k { min-width:220px; } .kv .v { color:var(--ink-3); } .kv .t { color:var(--ink-3); min-width:64px; }

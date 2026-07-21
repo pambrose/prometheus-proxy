@@ -103,13 +103,20 @@ Each proxy's UI shows **only the agents connected to that proxy**. With
 [proxy failover](production.md#high-availability) configured, an agent holds one connection at a time, so
 it appears on exactly one dashboard.
 
-The consequence to know before an incident: when an agent fails over, it **disappears from one proxy's UI
-and reappears on the other's**, with nothing on either screen explaining why. The agent's own logs record
-the endpoint change; the proxy never learns of it.
+An agent that reached this proxy by failing over says so. Its detail panel shows the endpoint it
+connected through and its position in the configured list:
 
-To follow an agent across the pair, use its **launch ID**. That value is generated once per agent process,
-so it survives a failover and identifies the same process on whichever proxy it lands on. The agent ID
-will *not* match — that one is assigned by each proxy independently.
+```
+via proxy-b.example.com:50051 (2 of 2)   [failed over]
+```
+
+The **failed over** marker appears whenever the agent is on anything other than its first endpoint — so
+an agent showing up on the standby is distinguishable from one starting fresh there. Agents with a single
+endpoint, or running a version predating this, show no position line.
+
+To follow one specific agent across the pair, use its **launch ID**. That value is generated once per
+agent process, so it survives a failover and identifies the same process on whichever proxy it lands on.
+The agent ID will *not* match — that one is assigned by each proxy independently.
 
 ## Limits
 
@@ -120,13 +127,11 @@ will *not* match — that one is assigned by each proxy independently.
   broken, it is simply absent. If Prometheus reports a target failing and you cannot find that path
   here, an agent having gone away is the likely reason; check the **Agents** list for what is missing
   rather than looking for the path.
-- **Failover state is not shown.** An agent's configured endpoint list, and whether it has failed over,
-  live entirely on the agent and are not reported to the proxy. See above for following an agent by
-  launch ID instead.
 - **Path source is not shown.** Whether a path came from static config or
   [dynamic discovery](configuration/agent.md#dynamic-target-discovery) is known only to the agent and is
   not currently sent to the proxy.
 - **Per-agent identities** from [agent authentication](security/index.md) are not surfaced yet.
 
-The last three share one cause: they are facts the agent knows and the registration RPC does not carry.
-Surfacing any of them requires extending that RPC, not just the UI.
+The last two share one cause: they are facts the agent knows and the registration RPC does not carry.
+Surfacing either requires extending that RPC, not just the UI — which is how failover position was
+added.

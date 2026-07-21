@@ -21,13 +21,17 @@ package io.prometheus.proxy.ui
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import java.time.Instant
 import kotlin.time.Duration.Companion.seconds
 
 class ProxySnapshotTest : StringSpec() {
-  private fun agentView(inactivitySecs: Long) =
-    AgentView(
+  private fun agentView(
+    inactivitySecs: Long,
+    endpoints: List<String> = emptyList(),
+    endpointIndex: Int = 0,
+  ) = AgentView(
       agentId = "1",
       agentName = "team-a-01",
       hostName = "worker-3",
@@ -39,6 +43,8 @@ class ProxySnapshotTest : StringSpec() {
       inactivity = inactivitySecs.seconds,
       backlogSize = 0,
       paths = emptyList(),
+      proxyEndpoints = endpoints,
+      currentEndpointIndex = endpointIndex,
     )
 
   init {
@@ -66,6 +72,35 @@ class ProxySnapshotTest : StringSpec() {
       // The proxy's own health checks treat >= threshold as unhealthy, so at-threshold is not healthy.
       health.chunkContextHealthy.shouldBeTrue()
       health.scrapeMapHealthy.shouldBeFalse()
+    }
+
+    // ==================== Failover position ====================
+
+    // The signal the dashboard otherwise cannot show. Each proxy sees only its own agents, so a
+    // failover looks like a disappearance on one and an appearance on the other; a non-zero index is
+    // what identifies the appearance as a failover rather than a fresh start.
+    "an agent on a secondary endpoint should report its failover position" {
+      agentView(2, ["proxy-a:50051", "proxy-b:50051"], endpointIndex = 1)
+        .failoverPosition shouldBe "proxy-b:50051 (2 of 2)"
+    }
+
+    "an agent on its primary should still report position when failover is configured" {
+      agentView(2, ["proxy-a:50051", "proxy-b:50051"], endpointIndex = 0)
+        .failoverPosition shouldBe "proxy-a:50051 (1 of 2)"
+    }
+
+    // A single-endpoint agent has no failover story, and one predating the proto fields reports
+    // nothing at all -- neither should render a position.
+    "an agent without failover configured should report no position" {
+      agentView(2, ["proxy-a:50051"]).failoverPosition.shouldBeNull()
+      agentView(2, emptyList()).failoverPosition.shouldBeNull()
+    }
+
+    // An index the agent reports but the list cannot support must degrade rather than throw: this is
+    // remote input, and an older or misbehaving agent could send anything.
+    "an out-of-range index should report no position rather than throw" {
+      agentView(2, ["proxy-a:50051", "proxy-b:50051"], endpointIndex = 7).failoverPosition.shouldBeNull()
+      agentView(2, emptyList(), endpointIndex = 3).failoverPosition.shouldBeNull()
     }
   }
 }

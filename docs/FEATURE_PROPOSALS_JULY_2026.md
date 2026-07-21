@@ -770,20 +770,22 @@ the *same* structural reason: they are agent-side facts the proxy has no channel
 
 - **Path source** (static vs discovered, Feature 1). `PathSource` lives only in the agent's
   `AgentPathManager`; `RegisterPathRequest` carries `agent_id`, `path` and `labels` and nothing else.
-- **Failover state** (Feature 2). The configured endpoint list, the rotation cursor, and whether an agent
-  has failed over all live in `AgentGrpcService` and `Agent.proxyHost`. `RegisterAgentRequest` carries
-  only `agent_id`, `launch_id`, `agent_name`, `host_name` and `consolidated`, so none of it crosses the
-  wire.
+**Failover state (Feature 2) — closed, not deferred.** `RegisterAgentRequest` gained
+`proxy_endpoints` and `current_endpoint_index`, so an agent reports its configured failover list and
+which entry this connection uses. The UI renders `via proxy-b:50051 (2 of 2)` plus an explicit
+**failed over** marker whenever the index is above the first.
 
-The operational consequence of the second is worth stating plainly: in an HA pair each proxy's UI shows
-only *its own* agents, so during a failover an agent silently disappears from one dashboard and appears
-on another with no explanation — at exactly the moment someone is watching. There is a partial thread to
-pull: `launchId` is process-scoped and therefore survives a failover, while `agentId` is proxy-assigned
-from a per-proxy counter and does not. The UI renders both, so an operator *can* correlate the same agent
-process across two proxies by eye. That is a workaround, not a feature.
+Registration is the right moment to report it, and that is what makes the feature work rather than
+half-work: a failover *is* a reconnect, so the index is accurate precisely when the proxy learns it. In
+an HA pair each proxy still sees only its own agents, but an agent appearing on the standby now says why
+it is there instead of looking like a fresh start. Both fields are additive and optional, so an agent
+predating them simply reports nothing and the line is omitted.
 
-Closing either properly needs the same change — extending `RegisterPathRequest` / `RegisterAgentRequest`
-so the agent reports these facts at registration. Worth doing once, for both, rather than twice.
+`launchId` remains useful for correlating the same agent process across two proxies by eye — it is
+process-scoped and survives a failover, while `agentId` is per-proxy — but it is no longer the only
+signal.
+
+Closing the remaining path-source gap needs the same kind of change to `RegisterPathRequest`.
 
 Feature 3 identities are also still absent: they live in a gRPC `Context.Key` and are never stored on
 `AgentContext`. That one needs no proto change, only somewhere to put them.

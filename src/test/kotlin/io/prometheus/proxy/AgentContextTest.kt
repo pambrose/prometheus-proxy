@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import com.google.protobuf.LazyStringArrayList
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -78,6 +79,8 @@ class AgentContextTest : StringSpec() {
       every { request.agentName } returns "my-agent"
       every { request.hostName } returns "agent-host"
       every { request.consolidated } returns true
+      every { request.proxyEndpointsList } returns LazyStringArrayList()
+      every { request.currentEndpointIndex } returns 0
 
       context.assignProperties(request)
 
@@ -395,6 +398,8 @@ class AgentContextTest : StringSpec() {
       every { request.agentName } returns "agent"
       every { request.hostName } returns "host"
       every { request.consolidated } returns true
+      every { request.proxyEndpointsList } returns LazyStringArrayList()
+      every { request.currentEndpointIndex } returns 0
 
       context.assignProperties(request)
 
@@ -481,6 +486,8 @@ class AgentContextTest : StringSpec() {
       every { request.agentName } returns "team-a-01"
       every { request.hostName } returns "worker-3"
       every { request.consolidated } returns false
+      every { request.proxyEndpointsList } returns LazyStringArrayList()
+      every { request.currentEndpointIndex } returns 0
       context.assignProperties(request)
 
       context.launchId shouldBe "launch-abc"
