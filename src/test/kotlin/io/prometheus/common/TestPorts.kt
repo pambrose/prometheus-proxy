@@ -27,6 +27,7 @@ object TestPorts {
   const val PROXY_HTTP_PORT = 8080
   const val PROXY_METRICS_PORT = 8082
   const val PROXY_ADMIN_PORT = 8092
+  const val PROXY_UI_PORT = 8094
   const val PROXY_AGENT_PORT = 50051
 
   const val AGENT_METRICS_PORT = 8083
