@@ -46,6 +46,7 @@ import io.prometheus.proxy.ProxyHttpService
 import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
+import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.ScrapeRequestManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -174,6 +175,13 @@ class Proxy(
 ) {
   private val httpService = ProxyHttpService(this, proxyPort, isTestMode)
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
+
+  // Structured counterpart to recentReqs, for the operational web UI. Separate queue rather than a
+  // replacement: the /debug servlet's text format is a stable operator-facing surface, and this one is
+  // sized independently because the UI shows more history than a debug dump needs. EvictingQueue is not
+  // thread-safe, so every access takes its own monitor -- see recordScrape / recentScrapes.
+  private val recentScrapes: EvictingQueue<ScrapeRecord> =
+    EvictingQueue.create(proxyConfigVals.ui.recentScrapesQueueSize)
 
   // Declared before grpcService: createGrpcServer() reads isEnabled to decide whether to install the auth
   // interceptor. Eager construction fail-fasts on invalid proxy.auth config at startup.
@@ -403,6 +411,21 @@ class Proxy(
       recentReqs.add("${LocalDateTime.now().format(formatter)}: $desc")
     }
   }
+
+  /** Records one completed scrape for the web UI. Cheap and non-blocking; safe from any thread. */
+  internal fun recordScrape(record: ScrapeRecord) {
+    synchronized(recentScrapes) {
+      recentScrapes.add(record)
+    }
+  }
+
+  /**
+   * A point-in-time copy of the recent scrapes, newest first.
+   *
+   * Returns a copy rather than a view: [EvictingQueue] is not thread-safe, so a caller iterating the
+   * live queue while a scrape completes would race. Bounded by `proxy.ui.recentScrapesQueueSize`.
+   */
+  internal fun recentScrapes(): List<ScrapeRecord> = synchronized(recentScrapes) { recentScrapes.reversed() }
 
   /**
    * Checks if a request path corresponds to a Blitz verification request.

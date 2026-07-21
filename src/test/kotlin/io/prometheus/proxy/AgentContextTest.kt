@@ -32,6 +32,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.grpc.RegisterAgentRequest
+import java.time.Instant
 import kotlinx.coroutines.async
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
@@ -457,6 +458,37 @@ class AgentContextTest : StringSpec() {
       // from what lastRequestDuration would be, since both were set from the same markNow().
       val inactivity = context.inactivityDuration
       inactivity.inWholeMilliseconds shouldBeLessThan 50L
+    }
+
+    // ==================== Fields the operational web UI reads ====================
+
+    // remoteAddr and launchId were private and leaked only through toString(). The UI needs both:
+    // remoteAddr is the only field establishing which machine an agent is actually on (agentName is
+    // self-reported), and launchId distinguishes two runs of the same agent name.
+    "remoteAddr and launchId should be readable" {
+      val context = AgentContext("10.0.1.14:54321")
+      context.remoteAddr shouldBe "10.0.1.14:54321"
+      context.launchId shouldBe "Unassigned"
+
+      val request = mockk<RegisterAgentRequest>()
+      every { request.launchId } returns "launch-abc"
+      every { request.agentName } returns "team-a-01"
+      every { request.hostName } returns "worker-3"
+      every { request.consolidated } returns false
+      context.assignProperties(request)
+
+      context.launchId shouldBe "launch-abc"
+    }
+
+    // Every other timing field is a Monotonic TimeMark, which measures elapsed time correctly but
+    // cannot be rendered as a time of day. connectTime exists solely so the UI can show "connected at".
+    "connectTime should be a wall-clock instant set at construction" {
+      val before = Instant.now()
+      val context = AgentContext("10.0.1.14:54321")
+      val after = Instant.now()
+
+      context.connectTime.isBefore(before).shouldBeFalse()
+      context.connectTime.isAfter(after).shouldBeFalse()
     }
   }
 }
