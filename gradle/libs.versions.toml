@@ -30,6 +30,10 @@ tcnative = "2.0.75.Final"
 # Ktor
 ktor = "3.5.1"
 
+# WebJars (htmx client assets, served from the classpath -- no CDN, works airgapped)
+htmx = "2.0.10"
+htmxWs = "2.0.4"
+
 # Jetty
 jetty = "11.0.26"
 
@@ -89,6 +93,10 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 ktor-htmx = { module = "io.ktor:ktor-htmx", version.ref = "ktor" }
 ktor-htmx-html = { module = "io.ktor:ktor-htmx-html", version.ref = "ktor" }
 ktor-server-htmx = { module = "io.ktor:ktor-server-htmx", version.ref = "ktor" }
+
+# WebJars
+webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
+webjar-htmx-ws = { module = "org.webjars.npm:htmx-ext-ws", version.ref = "htmxWs" }
 
 # Jetty
 jetty-servlet = { module = "org.eclipse.jetty:jetty-servlet", version.ref = "jetty" }
@@ -151,6 +159,11 @@ ktor = [
   "ktor-htmx",
   "ktor-htmx-html",
   "ktor-server-htmx"
+]
+
+webjars = [
+  "webjar-htmx",
+  "webjar-htmx-ws"
 ]
 
 common-utils = [
