@@ -2,14 +2,24 @@
 
 ---
 
-## Unreleased
+## 4.0.0
+
+_Released 2026-07-25_
+
+This release is a major-version bump for a reason worth stating: two metric/label values change on
+upgrade (the `hostName` service-discovery label and the new `upstream_timed_out` scrape-outcome
+label), so dashboards and alerts may need the one-time adjustments described in the upgrade notes
+below. Everything else — the five new features included — is additive and off by default; configs
+that worked with 3.x work unchanged.
 
 ### Highlights
 
 - **The proxy has a dashboard.** Answering "why isn't this target scraping?" no longer means log-diving on two machines. Two layouts share one live-updating page: **Agents** (`/dashboard`) for drilling into one agent, and **Paths** (`/dashboard/paths`) for one row per target — its URL, the agent behind it, and how its last scrape went. The path view keeps showing a path whose agent has **gone**, marked as such, which is precisely the case that used to vanish from the screen at the moment you went looking for it. Off by default on its own port — see below.
 
 - **You can now run two proxies and survive losing one.** The proxy was a single point of failure for the entire metrics plane — if it went down, every target behind every agent disappeared from Prometheus at once. Agents now take an ordered list of proxy endpoints and fail over between them, and fail *back* to the primary when it returns. One caveat worth reading before you deploy it: scrape the pair with `static_config`, not `http_sd_config`. See below.
+- **Agents can now have their own identities, scoped to the paths they own.** A shared `agentToken` proves that *someone* authorized is connecting, not *who* — so any holder of it could register a path already served by another agent and silently take over its metrics, with nothing on either side reporting a problem. Named identities with path allowlists close that hole and make a single shared proxy safe for multiple teams. Additive: your existing shared token keeps working. See below.
 - **Metrics can now be filtered at the agent, before they cross the network.** Until now the full payload always traversed the WAN and filtering happened in Prometheus afterward — the one place dropping data is most valuable was the one place it could not happen. Opt-in and per-path; see below.
+- **Agents can pick up target changes without a restart.** `pathConfigs` was read once at startup, so onboarding one new target meant restarting the agent — which stops scraping for *every* path that agent serves, not just the one that changed. An agent can now reconcile its registered paths against a watched file, so routine target churn stops being a self-inflicted outage. Off by default; see below.
 - **Agent-side scrape timeouts are now their own metric label.** `upstream_timed_out` separates "the agent told us the target was slow" from `timed_out`, "the agent never answered us." This is the one change here that needs operator attention — see the upgrade note below.
 - **A path-registration race is closed.** An agent reconnecting at exactly the wrong moment could leave a scrape path pointing at a context that was already being torn down, inflating the disconnect counter for the life of the proxy.
 
@@ -40,6 +50,10 @@ This finishes the taxonomy work started in 3.2.0, which pulled `upstream_error` 
 
 ### New Feature — operational dashboard
 
+When a target stops reporting, the question is always the same three-way split: is the agent gone, is the path unregistered, or is the target itself failing? Answering it meant reading proxy logs and agent logs on opposite sides of a firewall — the one boundary that makes correlating two log streams genuinely painful — and the debug servlet only ever showed what was connected *right now*. The state you most wanted to inspect, an agent that had dropped, was precisely the one that left nothing on screen to inspect.
+
+The dashboard puts both sides on one live page and keeps showing a path whose agent has gone, marked as such, so the interesting failure survives long enough to be looked at. If you run a single agent with a couple of paths, a `grep` of the agent log is still faster; the value scales with how many agents you operate and how often you get paged about them.
+
 Enable it with `--dashboard` (or `DASHBOARD_ENABLED=true`, or `proxy.dashboard.enabled = true`) and open `http://<proxy>:8094/dashboard`.
 
 ```hocon
@@ -60,6 +74,10 @@ It runs on **its own port**, not the admin port. That is partly necessity — th
 No CDN is involved. htmx ships inside the JAR and is served from the classpath, so the dashboard works in airgapped deployments, which are common for a product whose purpose is bridging restricted networks.
 
 ### New Feature — proxy high availability
+
+The proxy was a single point of failure for the entire metrics plane — and not for one target, but for every target behind every agent, simultaneously. Losing the host, or simply restarting it to apply a config change, blinded Prometheus to everything on the far side of the firewall at once. Because the proxy exists precisely *because* that side is otherwise unreachable, there is no quick way to route around it while it is down: the monitoring you would use to diagnose the outage is the monitoring that went dark.
+
+Running a pair removes that. It also makes proxy upgrades and config changes routine rather than scheduled, which in practice is the benefit you will notice most often — planned restarts vastly outnumber host failures.
 
 Give the agent an ordered list of proxy endpoints instead of a single hostname:
 
@@ -101,9 +119,49 @@ scrape_configs:
 
 All endpoints share one TLS context and one authority override, so a pair with different CAs or certificate SANs fails with an opaque handshake error rather than a clear configuration error. Simultaneous multi-homing — registering on several proxies at once so both can serve — and true proxy clustering are not part of this release.
 
+### New Feature — per-agent identities and path authorization
+
+`agentToken` was a single shared secret with no notion of *which* agent presented it, and `registerPath` performed no authorization at all. Any agent holding the token could therefore register **any** path — including one already served by another agent — and silently take over its metrics. Nothing fails, nothing alerts: your dashboard keeps drawing a line, it is just someone else's numbers now. This was the high-severity finding in the June 2026 security review, and it was unfixable while every agent looked identical on the wire.
+
+The same root cause produced two operational limits. Rotating the secret meant reconfiguring every agent at once, so there was no way to revoke one decommissioned or misbehaving agent. And because a token mapped to a boolean rather than a name, the proxy could not report *who* registered a path in logs, the debug servlet, or the dashboard.
+
+Named identities fix all three, and as a side effect make multi-tenancy safe: several teams can point agents at one shared proxy without being able to step on each other's paths — an arrangement that was not safe to run before this.
+
+```hocon
+proxy {
+  auth = [
+    { name = team-a, token = "team-a-token", paths = ["team_a_*"] }
+    { name = team-b, token = "team-b-token", paths = ["team_b_*"] }
+    { name = infra,  token = "infra-token",  paths = [] }   // empty = may register any path
+  ]
+}
+```
+
+**No agent-side change is needed.** Each agent presents its identity's token exactly the way it always presented the shared one (`--agent_token`, `AGENT_TOKEN`, or `agent.agentToken`). The proxy resolves the token to an identity and enforces the path allowlist on every `registerPath`.
+
+Patterns are single-segment globs — `*` matches any run of characters, `?` matches one — which is all that is needed because the proxy already rejects multi-segment path registrations. An empty `paths` list authorizes everything. An unknown token is rejected with `UNAUTHENTICATED`; a path outside the identity's patterns fails registration with a "not authorized" reason, which the agent surfaces as a `RequestFailureException`. Consolidated mode still works, provided each participating agent's identity permits the shared path.
+
+Because `proxy.auth` is a list of objects it is **config-file-only** — there is no CLI flag or environment variable, the same constraint that applies to `agent.pathConfigs`. Identity names must be unique and tokens non-empty; the proxy fails fast at startup otherwise.
+
+#### Migrating from a shared token
+
+Adding `proxy.auth` does **not** disable an existing `proxy.agentToken`. When both are set the shared token is honored as an additional **allow-all** identity, and the proxy logs a warning that it is active — so adoption is incremental rather than a flag day:
+
+1. Add a `proxy.auth` entry per agent, leaving `proxy.agentToken` in place. Existing agents keep connecting on the shared token.
+2. Move agents onto their own identity tokens one at a time.
+3. Remove `proxy.agentToken` once every agent presents an identity token, closing the allow-all path.
+
+Step 3 is the one that actually secures anything. Until the shared token is gone, an attacker holding it still has allow-all access — the per-agent entries constrain only the agents that use them.
+
+#### Limits
+
+Identities are read at startup, so **revoking one requires a proxy restart** — there is no hot reload. Identity is derived from the presented token, not from an mTLS client certificate. Tokens live in the config file; there is no env-var or file-based token source yet. And per-agent auth stays off unless you configure it, which keeps the upgrade non-breaking but does mean an untouched deployment is exactly as exposed as it was before.
+
 ### New Feature — metric filtering at the agent
 
-Chatty or high-cardinality endpoints previously paid full bandwidth across exactly the boundary this product exists to bridge. An optional per-path filter now drops whole metric families at the agent:
+The agent-to-proxy hop is usually the expensive one: a WAN link, a metered egress bill, or a constrained tunnel. Filtering with Prometheus `metric_relabel_configs` discards data only *after* it has crossed that link, so the single place where dropping metrics is worth the most was the one place you could not do it. A service exporting the full `go_*` and `process_*` families that nothing in your alerting ever queries can easily be the majority of a payload you are paying to move.
+
+An optional per-path filter now drops whole metric families at the agent, before the bytes are sent:
 
 ```hocon
 agent {
@@ -131,7 +189,60 @@ The filter fails open by design: a non-text `Content-Type` or a body that isn't 
 
 Filters apply by path, so they cover dynamically discovered targets as well as static `pathConfigs` entries. Two new counters, `agent_filter_lines_dropped` and `agent_filter_bytes_saved` (labeled `launch_id` and `path`), report what each filter is removing — and only exist for paths that actually have one.
 
+If your agent and proxy sit on the same LAN, there is nothing here for you — the bytes are effectively free and a filter is just another rule to keep in sync with what your alerts query. The feature pays off in proportion to what the link costs.
+
 Not included: `dropLabels`, metric renaming/relabeling, and an agent-global filter. Every filter is per-path.
+
+### New Feature — dynamic target discovery on the agent
+
+An agent's target list was frozen at startup, so adding one service behind the firewall meant editing config and restarting the process — and a restart takes down scraping for **every path that agent serves**, not just the one that changed. If a single agent fronts twenty services in a network segment, onboarding the twenty-first punches a gap in all twenty: staleness, `up` flapping, alerts firing, and someone explaining that the outage was a config change. That cost is what made the product a poor fit for the environments it is otherwise ideal for — Kubernetes, Docker, autoscaling groups — where the target set churns continuously.
+
+Point the agent at a file instead, and it reconciles its registered paths against that file on an interval. Paths that did not change keep scraping throughout:
+
+```hocon
+agent {
+  discovery {
+    enabled = true
+    file.path = "/etc/prometheus-proxy/targets.conf"   // HOCON or JSON
+    reconcileIntervalSecs = 30
+  }
+}
+```
+
+The file holds a `paths` list of the same `{ name, path, url, labels }` entries as `pathConfigs`, where `path` and `url` are required:
+
+```hocon
+paths = [
+  { name = "app1", path = "app1_metrics", url = "http://app1:9090/metrics" }
+  { name = "app2", path = "app2_metrics", url = "http://app2:9090/metrics" }
+]
+```
+
+Every interval the agent registers newly-listed paths, unregisters removed ones, and re-registers any whose URL or labels changed.
+
+The larger unlock is that the file is a plain list, so something else can generate it: a Kubernetes ConfigMap mounted into the agent pod, an Ansible template, a cron job querying a service registry, a sidecar. Your automation then needs permission only to **write a file** — not to restart processes — which is a considerably safer and more idempotent thing to grant. It also separates volatile targets from stable config, so whatever manages the target list cannot fat-finger your TLS or port settings.
+
+#### Behavior worth knowing before you automate it
+
+Once the file is machine-generated it *will* eventually be bad — a half-written write, an NFS hiccup, a ConfigMap caught mid-swap. The reconciler draws a deliberate line there:
+
+| Situation | Behavior |
+|-----------|----------|
+| File missing / unreadable / malformed | Keeps the last-known-good set; nothing is unregistered |
+| Valid but empty file | Removes all discovered paths |
+| Path in both `pathConfigs` and the file | Static wins; the discovered entry is skipped and logged |
+| Duplicate path within the file | Last entry wins, with the shadowing logged |
+| Proxy rejects a registration | Logged and skipped; retried next interval, the loop continues |
+
+The first two rows look similar and behave oppositely on purpose. An operator who empties the file gets the removal they asked for; a transient bad write does not silently blind your monitoring at the exact moment something is going wrong.
+
+`pathConfigs` entries remain a baseline discovery never touches, so you can pin must-always-work targets in config where automation cannot clobber them and let the file handle the churn. Leaving `pathConfigs` empty gives you discovery-only operation. On the proxy dashboard each path is tagged `cfg` or `disc`, so when a target is unexpectedly present or absent you can immediately tell whether a human or the automation put it there.
+
+Discovery **polls** rather than watching for filesystem events, because inotify is unreliable exactly where this matters most — ConfigMap symlink swaps and some bind mounts. The interval doubles as a periodic full resync that heals any drift.
+
+#### Limits
+
+There is no native Kubernetes or Docker source yet — the `PathDiscoverySource` interface exists so those can be added without touching anything else, but what shipped is the file source. Something still has to write the file, so if you have no config management and no generator, this trades "edit config and restart" for "edit a different file and wait," which is better but not transformative. Change latency is the poll interval (30s by default), not instant. Only the path set hot-reloads: ports, TLS, and auth still require a restart. And like `pathConfigs`, `discovery.file.path` points at a list, so the file itself has no CLI or environment equivalent — though the scalar `enabled`, `file.path`, and `reconcileIntervalSecs` can be set with `-D` overrides.
 
 ### Bug Fixes
 

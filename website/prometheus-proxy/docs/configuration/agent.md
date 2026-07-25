@@ -75,6 +75,18 @@ paths = [
 Every interval the agent registers newly-listed paths, unregisters removed ones, and re-registers a
 path whose URL or labels changed.
 
+Because the file is a plain list, it can be **generated** rather than hand-maintained — a Kubernetes
+`ConfigMap` mounted into the agent pod (see
+[the Kubernetes walkthrough](../kubernetes.md#updating-targets-without-restarting-the-agent)), an
+Ansible template, or a cron job querying a service registry. Automation then needs permission only to
+write a file, never to restart the agent, and the churning target list stays separate from the stable
+config holding ports, TLS, and the proxy address.
+
+A fully annotated version of this file -- required versus defaulted fields, the single-segment `path`
+rule, HOCON substitutions, and the empty-versus-deleted distinction -- ships as
+[`examples/discovery-targets.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/discovery-targets.conf)
+and is shown verbatim on the [Example Configs](../examples.md) page.
+
 | Situation                               | Behavior                                                     |
 |:----------------------------------------|:------------------------------------------------------------|
 | Path in both `pathConfigs` and the file | Static wins; the discovered entry is skipped (logged)       |
@@ -96,6 +108,10 @@ path whose URL or labels changed.
 Dynamic target discovery is distinct from [Prometheus service discovery](../service-discovery.md),
 which exposes an endpoint so *Prometheus* can find proxied targets; discovery instead lets the *agent*
 pick up target changes behind the firewall without a restart.
+
+On the proxy's [dashboard](../web-dashboard.md#the-paths-layout), each path is tagged `cfg` (static)
+or `disc` (discovered), so when a target is unexpectedly present or absent you can tell at a glance
+whether a human or the automation registered it.
 
 ## Proxy Connection
 
@@ -206,9 +222,12 @@ trust store, and `--trust_all_x509` (which disables verification entirely) takes
 
 ## Metric Filtering
 
-Drop unwanted metric families at the agent, before a scraped payload is gzipped and chunked, so the
-bandwidth saving composes with `chunkContentSizeKbs` and `minGzipSizeBytes` above. Filters are declared
-in a top-level `agent.filters` list, keyed by `path` rather than nested inside `pathConfigs`:
+The agent-to-proxy hop is usually the expensive one — a WAN link, metered egress, a constrained
+tunnel — yet filtering with Prometheus `metric_relabel_configs` discards data only *after* it has
+crossed it. Filtering at the agent drops unwanted metric families before they are sent, and it runs
+before the payload is gzipped and chunked, so the saving composes with `chunkContentSizeKbs` and
+`minGzipSizeBytes` above. Filters are declared in a top-level `agent.filters` list, keyed by `path`
+rather than nested inside `pathConfigs`:
 
 ```hocon
 --8<-- "examples/agent-filters.conf"
@@ -355,3 +374,4 @@ See also:
 
 - [`examples/myapps.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/myapps.conf) -- multiple endpoints
 - [`examples/federate.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf) -- Prometheus federation
+- [`examples/discovery-targets.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/discovery-targets.conf) -- a [dynamic discovery](#dynamic-target-discovery) targets file (watched, not passed to `--config`)

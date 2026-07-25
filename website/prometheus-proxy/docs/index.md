@@ -50,8 +50,19 @@ The system comprises two components:
 - **Firewall-friendly** -- only requires an outbound connection from the agent
 - **Preserves pull model** -- Prometheus continues to pull metrics as normal
 - **High performance** -- built with Kotlin coroutines and gRPC streaming
-- **Secure** -- optional TLS with mutual authentication
+- **Secure** -- optional TLS with mutual authentication, plus
+  [per-agent identities](security/index.md#per-agent-identities-and-path-authorization) that scope
+  each agent to the paths it may register
 - **Scalable** -- one proxy supports many agents, each serving multiple paths
+- **Highly available** -- agents [fail over](production.md#high-availability) across an ordered list
+  of proxies, and return to the primary when it recovers
+- **Dynamic** -- agents pick up target changes from a
+  [watched file](configuration/agent.md#dynamic-target-discovery) at runtime, no restart needed
+- **Bandwidth-conscious** -- optional per-path
+  [metric filtering](configuration/agent.md#metric-filtering) drops unwanted families at the agent,
+  before they cross the WAN
+- **Observable** -- a read-only [live dashboard](web-dashboard.md) shows every agent, path, and
+  recent scrape in one place
 - **Zero changes** to existing Prometheus configuration patterns
 
 ## Quick Start
@@ -75,12 +86,12 @@ Get running in under a minute:
     ```bash
     # Start the proxy
     docker run --rm -p 8080:8080 -p 50051:50051 \
-      pambrose/prometheus-proxy:3.2.0
+      pambrose/prometheus-proxy:4.0.0
 
     # Start the agent
     docker run --rm \
       --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-      pambrose/prometheus-agent:3.2.0
+      pambrose/prometheus-agent:4.0.0
     ```
 
 See the [Quick Start Guide](getting-started.md) for detailed instructions.
@@ -94,6 +105,8 @@ See the [Quick Start Guide](getting-started.md) for detailed instructions.
 | **Secure environments**     | Monitor internal services without opening inbound ports       |
 | **Federation**              | Scrape existing Prometheus instances via `/federate` endpoint |
 | **Kubernetes**              | Monitor services across clusters or namespaces                |
+| **Multi-team proxies**      | Share one proxy across teams, each scoped to its own paths    |
+| **Dynamic fleets**          | Reconcile churning targets from a generated file, no restarts |
 
 ## API Reference
 

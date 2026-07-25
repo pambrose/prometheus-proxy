@@ -69,9 +69,14 @@ java -jar prometheus-agent.jar --config myconfig.conf --agent_token "$AGENT_TOKE
 ## Per-Agent Identities and Path Authorization
 
 A single shared `agentToken` authenticates agents but cannot tell them apart: any agent holding the
-token can register **any** path, including one already served by another agent. Define named
-identities under `proxy.auth`, each with its own token and a list of allowed path glob patterns, to
-scope what each agent may register:
+token can register **any** path, including one already served by another agent — silently taking over
+its metrics. Nothing fails and nothing alerts; the dashboard keeps drawing a line, it is just another
+agent's numbers. The shared secret also makes revocation all-or-nothing (rotating it means
+reconfiguring every agent at once) and leaves the proxy unable to say *who* registered a path.
+
+Define named identities under `proxy.auth`, each with its own token and a list of allowed path glob
+patterns, to scope what each agent may register. This closes the takeover hole and makes a shared
+proxy safe for **multiple teams**, none of which can step on another's paths:
 
 ```hocon
 proxy {
@@ -117,6 +122,16 @@ active), so you can adopt per-agent identities incrementally:
 2. Move each agent onto its own identity token, one at a time.
 3. Once every agent presents an identity token, remove `proxy.agentToken` to close the shared
    allow-all path.
+
+Step 3 is the one that actually secures anything: until the shared token is removed, anyone holding
+it still has allow-all access — the per-agent entries constrain only the agents that use them.
+
+!!! note "Current limits"
+
+    Identities are read at startup, so revoking one requires a **proxy restart** — there is no hot
+    reload. Identity derives from the presented token, not from an mTLS client certificate, and
+    tokens live in the proxy's config file (no env-var or file-based token source). Compare tokens'
+    operational weight against [mutual TLS](tls.md) when choosing a posture; the two can be combined.
 
 ## Auth Header Forwarding
 

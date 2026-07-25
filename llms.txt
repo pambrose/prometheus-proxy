@@ -59,6 +59,11 @@ Key RPCs:
 - **Consolidated mode**: Multiple agents can register the same path for redundancy
 - **Auth forwarding**: Proxy forwards `Authorization` headers (basic auth / bearer token) from Prometheus scrape configs to agents over gRPC
 - **Embedded agent**: Agents can run inside other JVM apps via `Agent.startAsyncAgent()`, returning an `EmbeddedAgentInfo` lifecycle handle
+- **Proxy failover** (4.0.0): The agent takes an ordered `agent.proxy.endpoints` list (or comma-separated `--proxy` / `PROXY_HOSTNAME`); a failed connect advances to the next endpoint, a dropped connection retries from the head, so a recovered primary is picked up automatically. Scrape an HA pair with `static_config`, not `http_sd_config` (a standby returns an empty discovery list, which Prometheus treats as target deletion)
+- **Dynamic target discovery** (4.0.0): Opt-in `agent.discovery` reconcile loop keeps registered paths in sync with a watched HOCON/JSON file (`paths` list of `{ name, path, url, labels }`), so targets change at runtime with no agent restart. Static `pathConfigs` are never touched; a read failure keeps the last-known-good set, while a valid-but-empty file removes all discovered paths
+- **Per-agent identities** (4.0.0): `proxy.auth` lists named identities (token + allowed path globs) enforced on every `registerPath`, closing the shared-token hole where any agent could register (and take over) any path. Legacy `proxy.agentToken` is honored as an allow-all identity for migration
+- **Metric filtering** (4.0.0): Optional per-path `agent.filters` (fully-anchored `metricNameAllow` / `metricNameDeny` regexes) drop whole metric families at the agent before gzip/chunking, so unwanted series never cross the WAN. Families are kept or dropped atomically (a histogram's `_bucket`/`_sum`/`_count` stay together); non-text or non-UTF-8 payloads pass through unfiltered (fails open)
+- **Operational dashboard** (4.0.0): Read-only live web UI on its own port (`--dashboard`, default port 8094, off by default, unauthenticated) showing connected agents, registered paths — including paths whose agent has gone — and recent scrape results. Two layouts: `/dashboard` (per-agent) and `/dashboard/paths` (one row per path)
 
 ### Public API Surface
 
@@ -88,12 +93,12 @@ java -jar prometheus-agent.jar --proxy mymachine.local --config myapps.conf
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:3.2.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.0.0
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:3.2.0
+  pambrose/prometheus-agent:4.0.0
 ```
 
 ## Configuration
@@ -126,6 +131,7 @@ agent {
 | `--admin, -r` | `ADMIN_ENABLED` | false | Enable admin endpoints |
 | `--metrics, -e` | `METRICS_ENABLED` | false | Enable internal metrics |
 | `--sd_enabled` | `SD_ENABLED` | false | Service discovery endpoint |
+| `--dashboard` | `DASHBOARD_ENABLED` | false | Read-only operational dashboard (own port, default 8094) |
 | `--cert, -t` | `CERT_CHAIN_FILE_PATH` | | TLS certificate chain |
 | `--key, -k` | `PRIVATE_KEY_FILE_PATH` | | TLS private key |
 | `--trust, -s` | `TRUST_CERT_COLLECTION_FILE_PATH` | | TLS trust certificates |
@@ -134,7 +140,7 @@ agent {
 
 | Option | Env Var | Default | Description |
 |--------|---------|---------|-------------|
-| `--proxy, -p` | `PROXY_HOSTNAME` | localhost | Proxy hostname |
+| `--proxy, -p` | `PROXY_HOSTNAME` | localhost | Proxy hostname; accepts a comma-separated failover list (`proxy-a:50051,proxy-b:50051`) |
 | `--config, -c` | `AGENT_CONFIG` | | Config file or URL (required) |
 | `--name, -n` | `AGENT_NAME` | | Agent name |
 | `--consolidated, -o` | `CONSOLIDATED` | false | Multiple agents per path |
@@ -197,7 +203,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:3.2.0")
+  implementation("com.pambrose:prometheus-proxy:4.0.0")
 }
 ```
 
@@ -205,6 +211,8 @@ dependencies {
 
 - Basic setup: `examples/simple.conf`
 - Multiple apps: `examples/myapps.conf`
+- Metric filtering: `examples/agent-filters.conf`
+- Dynamic discovery targets (watched file, not passed to `--config`): `examples/discovery-targets.conf`
 - TLS (no mutual auth): `examples/tls-no-mutual-auth.conf`
 - TLS (with mutual auth): `examples/tls-with-mutual-auth.conf`
 - Prometheus federation: `examples/federate.conf`
