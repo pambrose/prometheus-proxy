@@ -133,7 +133,7 @@ class AgentHttpServiceTest : StringSpec() {
     every { mockAgent.isTestMode } returns true
     every { mockAgent.grpcService } returns mockGrpcService
 
-    coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+    coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
       valid = true
       pathId = 1L
     }

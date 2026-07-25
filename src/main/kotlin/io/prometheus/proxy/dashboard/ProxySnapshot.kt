@@ -14,21 +14,39 @@
  * limitations under the License.
  */
 
-package io.prometheus.proxy.ui
+package io.prometheus.proxy.dashboard
 
 import io.prometheus.Proxy
 import io.prometheus.proxy.ScrapeRecord
 import java.time.Instant
 import kotlin.time.Duration
 
-/** One registered path as the UI shows it. */
+/**
+ * One path as the dashboard shows it, joined with the last scrape that ran against it.
+ *
+ * A view may be **departed** — a path that is no longer registered but that [lastScrape] still
+ * remembers. Those exist because the proxy deletes a path the moment its last agent goes
+ * ([io.prometheus.proxy.ProxyPathManager.removeFromPathManager]), so an agent-backed view of state can
+ * only ever show what is currently live. A path that stopped serving is the single most useful thing an
+ * operator can be shown, and without this it is the one thing that silently disappears.
+ */
 internal data class PathView(
   val path: String,
   val agentIds: List<String>,
   val labels: String,
-)
+  val targetUrl: String = "",
+  val pathSource: String = "",
+  val lastScrape: ScrapeRecord? = null,
+  val isDeparted: Boolean = false,
+) {
+  /** The agent that last served this path, which for a departed path is the only attribution left. */
+  val servingAgent: String? get() = agentIds.firstOrNull() ?: lastScrape?.agentId
 
-/** One connected agent as the UI shows it. */
+  /** How many agents beyond the first back this path, for the `+N` marker on a consolidated row. */
+  val additionalAgents: Int get() = (agentIds.size - 1).coerceAtLeast(0)
+}
+
+/** One connected agent as the dashboard shows it. */
 internal data class AgentView(
   val agentId: String,
   val agentName: String,
@@ -79,7 +97,7 @@ internal data class HealthView(
 }
 
 /**
- * An immutable point-in-time view of everything the UI renders.
+ * An immutable point-in-time view of everything the dashboard renders.
  *
  * Materialized rather than referencing live state: [io.prometheus.proxy.AgentContextManager.agentContextEntries]
  * is the `ConcurrentHashMap`'s **live entry set**, not a snapshot, so two passes over it can disagree.
@@ -96,11 +114,46 @@ internal data class ProxySnapshot(
 
   companion object {
     /**
+     * Joins each registered path to its most recent scrape, then adds a row for every path the scrape
+     * history remembers but the path map no longer holds.
+     *
+     * Those extra rows are the point of the path-centric layout. `ProxyPathManager` deletes a path the
+     * instant its last agent goes, so a view built only from live registrations cannot show a target
+     * that *stopped* working — the moment an operator most needs to see it. The scrape history outlives
+     * the agent, and is bounded by `proxy.dashboard.recentScrapesQueueSize`, so this cannot grow without limit.
+     *
+     * Pure and separated from [collect] so it is testable without standing up a proxy.
+     *
+     * @param registered live path registrations, without their scrape join
+     * @param scrapes recent scrapes, **newest first** — as [Proxy.recentScrapes] returns them
+     */
+    internal fun buildPathViews(
+      registered: List<PathView>,
+      scrapes: List<ScrapeRecord>,
+    ): List<PathView> {
+      // Newest-first input means the first record per path is already the latest: no sort, no max-by.
+      val latestByPath = scrapes.groupBy { it.path }.mapValues { (_, records) -> records.first() }
+      val registeredPaths = registered.mapTo(mutableSetOf()) { it.path }
+
+      val live = registered.map { it.copy(lastScrape = latestByPath[it.path]) }
+      val departed =
+        latestByPath
+          .filterKeys { it !in registeredPaths }
+          .map { (path, record) ->
+            PathView(path = path, agentIds = emptyList(), labels = "", lastScrape = record, isDeparted = true)
+          }
+
+      // One sorted list rather than two sections, so a departed path sits where the eye expects to find
+      // it instead of somewhere an operator has to think to look.
+      return (live + departed).sortedBy { it.path }
+    }
+
+    /**
      * Collects a snapshot from live proxy state.
      *
      * **Must not run on a Ktor CIO thread.** `ProxyPathManager` guards its map with `synchronized`, and
      * Kotlin's `synchronized` parks the underlying *carrier* thread rather than suspending the
-     * coroutine — so collecting on the event loop would couple the operator UI to scrape latency.
+     * coroutine — so collecting on the event loop would couple the operator dashboard to scrape latency.
      *
      * Deliberately avoids two accessors that look useful and are not:
      * - `ProxyPathManager.toPlainText()` holds the path monitor across a full sort plus a `toString()`
@@ -121,14 +174,30 @@ internal data class ProxySnapshot(
 
       // One monitor acquire; values are immutable so they are safe to hold onto.
       val pathInfos = proxy.pathManager.allPathContextInfos()
+      val scrapes = proxy.recentScrapes()
 
-      val paths =
+      val registered =
         pathInfos
-          .map { (path, info) -> PathView(path, info.agentContexts.map { it.agentId }, info.labels) }
+          .map { (path, info) ->
+            PathView(
+              path = path,
+              agentIds = info.agentContexts.map { it.agentId },
+              labels = info.labels,
+              targetUrl = info.targetUrl,
+              pathSource = info.pathSource,
+            )
+          }
           .sortedBy { it.path }
 
-      // Derived from the already-sorted list, so each agent's paths come out sorted for free.
-      val pathsByAgent = paths.flatMap { view -> view.agentIds.map { it to view } }.groupBy({ it.first }, { it.second })
+      val paths = buildPathViews(registered, scrapes)
+
+      // Derived from the registered list only: a departed path has no agent to attribute it to, and the
+      // agent-centric layout is by definition showing agents that are still here.
+      val pathsByAgent =
+        paths
+          .filterNot { it.isDeparted }
+          .flatMap { view -> view.agentIds.map { it to view } }
+          .groupBy({ it.first }, { it.second })
 
       // Materialize the live entry set before reading fields off it.
       val agents =
@@ -155,11 +224,13 @@ internal data class ProxySnapshot(
       return ProxySnapshot(
         agents = agents,
         paths = paths,
-        scrapes = proxy.recentScrapes(),
+        scrapes = scrapes,
         health =
           HealthView(
             agentCount = agents.size,
-            pathCount = paths.size,
+            // Live registrations only. A departed path is shown in the table but is not something the
+            // proxy is currently serving, so counting it here would overstate the proxy's state.
+            pathCount = registered.size,
             chunkContextSize = proxy.agentContextManager.chunkedContextSize,
             chunkContextThreshold = internal.chunkContextMapUnhealthySize,
             scrapeMapSize = proxy.scrapeRequestManager.scrapeMapSize,

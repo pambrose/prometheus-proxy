@@ -50,7 +50,7 @@ import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.ScrapeRequestManager
-import io.prometheus.proxy.ui.ProxyUiService
+import io.prometheus.proxy.dashboard.ProxyDashboardService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
@@ -178,18 +178,18 @@ class Proxy(
 ) {
   private val httpService = ProxyHttpService(this, proxyPort, isTestMode)
 
-  // Null unless proxy.ui.enabled. Off by default, matching the admin and metrics posture: the UI shows
+  // Null unless proxy.dashboard.enabled. Off by default, matching the admin and metrics posture: the dashboard shows
   // agent names, hostnames, target URLs and recent activity in one place, on a port with no auth.
-  private val uiService =
-    if (options.uiEnabled) ProxyUiService(this, options.uiPort, options.uiPath) else null
+  private val dashboardService =
+    if (options.dashboardEnabled) ProxyDashboardService(this, options.dashboardPort, options.dashboardPath) else null
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
 
-  // Structured counterpart to recentReqs, for the operational web UI. Separate queue rather than a
+  // Structured counterpart to recentReqs, for the operational dashboard. Separate queue rather than a
   // replacement: the /debug servlet's text format is a stable operator-facing surface, and this one is
-  // sized independently because the UI shows more history than a debug dump needs. EvictingQueue is not
+  // sized independently because the dashboard shows more history than a debug dump needs. EvictingQueue is not
   // thread-safe, so every access takes its own monitor -- see recordScrape / recentScrapes.
   private val recentScrapes: EvictingQueue<ScrapeRecord> =
-    EvictingQueue.create(proxyConfigVals.ui.recentScrapesQueueSize)
+    EvictingQueue.create(proxyConfigVals.dashboard.recentScrapesQueueSize)
 
   // Declared before grpcService: createGrpcServer() reads isEnabled to decide whether to install the auth
   // interceptor. Eager construction fail-fasts on invalid proxy.auth config at startup.
@@ -209,7 +209,7 @@ class Proxy(
 
   /**
    * Fan-out bus for topology changes. Declared before the managers because they publish to it.
-   * Always present, even with the UI disabled: emitting into a bus with no subscribers is a no-op.
+   * Always present, even with the dashboard disabled: emitting into a bus with no subscribers is a no-op.
    */
   internal val eventBus = ProxyEventBus()
 
@@ -250,7 +250,7 @@ class Proxy(
     // Must precede initServletService: the ServiceManager snapshots this list there, so a service
     // registered afterwards is invisible to it and to the all_services_healthy check.
     addServices(grpcService, httpService)
-    uiService?.also { addServices(it) }
+    dashboardService?.also { addServices(it) }
 
     initServletService {
       if (options.debugEnabled) {
@@ -285,7 +285,7 @@ class Proxy(
 
     grpcService.startSync()
     httpService.startSync()
-    uiService?.startSync()
+    dashboardService?.startSync()
 
     // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to detect
     // agent disconnects. The stale agent cleanup service is the only mechanism to clean up
@@ -307,7 +307,7 @@ class Proxy(
     scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
     agentContextManager.invalidateAllAgentContexts()
     grpcService.stopSync()
-    uiService?.stopSync()
+    dashboardService?.stopSync()
     httpService.stopSync()
     if (agentCleanupServiceEnabled)
       agentCleanupService.stopSync()
@@ -327,7 +327,7 @@ class Proxy(
     healthCheckRegistry
       .apply {
         register("grpc_service", grpcService.healthCheck)
-        uiService?.also { register("ui_service", it.healthCheck) }
+        dashboardService?.also { register("dashboard_service", it.healthCheck) }
         register(
           "chunking_map_check",
           newMapHealthCheck(
@@ -438,7 +438,7 @@ class Proxy(
     }
   }
 
-  /** Records one completed scrape for the web UI. Cheap and non-blocking; safe from any thread. */
+  /** Records one completed scrape for the dashboard. Cheap and non-blocking; safe from any thread. */
   internal fun recordScrape(record: ScrapeRecord) {
     synchronized(recentScrapes) {
       recentScrapes.add(record)
@@ -449,7 +449,7 @@ class Proxy(
    * A point-in-time copy of the recent scrapes, newest first.
    *
    * Returns a copy rather than a view: [EvictingQueue] is not thread-safe, so a caller iterating the
-   * live queue while a scrape completes would race. Bounded by `proxy.ui.recentScrapesQueueSize`.
+   * live queue while a scrape completes would race. Bounded by `proxy.dashboard.recentScrapesQueueSize`.
    */
   internal fun recentScrapes(): List<ScrapeRecord> = synchronized(recentScrapes) { recentScrapes.reversed() }
 

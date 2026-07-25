@@ -465,9 +465,9 @@ class AgentContextTest : StringSpec() {
       inactivity.inWholeMilliseconds shouldBeLessThan 50L
     }
 
-    // ==================== Fields the operational web UI reads ====================
+    // ==================== Fields the operational dashboard reads ====================
 
-    // remoteAddr and launchId were private and leaked only through toString(). The UI needs both:
+    // remoteAddr and launchId were private and leaked only through toString(). The dashboard needs both:
     // remoteAddr is the only field establishing which machine an agent is actually on (agentName is
     // self-reported), and launchId distinguishes two runs of the same agent name.
     "remoteAddr and launchId should be readable" {
@@ -476,7 +476,7 @@ class AgentContextTest : StringSpec() {
 
       // AgentConnected is emitted from the transport filter, which runs before registerAgent, so a
       // just-connected context legitimately has no identity yet. Only AgentRegistered means a named
-      // agent -- the UI renders a placeholder for this state rather than the raw sentinel.
+      // agent -- the dashboard renders a placeholder for this state rather than the raw sentinel.
       context.launchId shouldBe "Unassigned"
       context.agentName shouldBe "Unassigned"
       context.hostName shouldBe "Unassigned"
@@ -494,7 +494,7 @@ class AgentContextTest : StringSpec() {
     }
 
     // Every other timing field is a Monotonic TimeMark, which measures elapsed time correctly but
-    // cannot be rendered as a time of day. connectTime exists solely so the UI can show "connected at".
+    // cannot be rendered as a time of day. connectTime exists solely so the dashboard can show "connected at".
     "connectTime should be a wall-clock instant set at construction" {
       val before = Instant.now()
       val context = AgentContext("10.0.1.14:54321")

@@ -84,7 +84,7 @@ internal sealed interface ProxyEvent {
  *
  * Before this existed, nothing in the proxy was observable: every collection was a plain
  * `ConcurrentHashMap` or a `synchronized` `HashMap` with no listeners, callbacks, or flows. The
- * operational web UI is the first consumer.
+ * operational dashboard is the first consumer.
  *
  * ### Why emitting is always safe
  *

@@ -36,6 +36,14 @@ message RegisterPathRequest {
   string agent_id = 1;
   string path = 2;
   string labels = 3;
+  // What the agent actually scrapes for this path, and where the registration came from. Both are
+  // agent-side facts the proxy cannot otherwise learn, and both are what let the path-centric dashboard
+  // answer "why isn't this target scraping?" without a second window. Additive and optional: an agent
+  // predating them leaves them empty and the dashboard renders a dash.
+  string target_url = 4;
+  // A PathSource name -- STATIC or DISCOVERED. Carried as a string rather than an enum so an agent
+  // running ahead of the proxy can add a source without the proxy failing to parse it.
+  string path_source = 5;
 }
 
 message RegisterPathResponse {

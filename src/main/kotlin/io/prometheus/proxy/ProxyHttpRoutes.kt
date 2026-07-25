@@ -225,7 +225,7 @@ internal object ProxyHttpRoutes {
     }
 
   // Named for what it now does: this is where a completed scrape becomes observable -- as a text line
-  // on /debug, as a structured record for the web UI, and as an event on the bus.
+  // on /debug, as a structured record for the dashboard, and as an event on the bus.
   private fun recordScrapeOutcome(
     path: String,
     agentId: String,

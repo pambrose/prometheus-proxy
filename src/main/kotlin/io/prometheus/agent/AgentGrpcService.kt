@@ -377,6 +377,8 @@ internal class AgentGrpcService(
   suspend fun registerPathOnProxy(
     pathVal: String,
     labelsJson: String,
+    urlVal: String,
+    sourceVal: String,
   ): RegisterPathResponse =
     unaryStub().registerPath(
       registerPathRequest {
@@ -385,6 +387,10 @@ internal class AgentGrpcService(
         agentId = agent.agentId
         path = pathVal
         labels = labelsJson
+        // The target and its origin are known only here. Reported at registration because that is the
+        // one moment they are established -- a path is re-registered rather than mutated in place.
+        targetUrl = urlVal
+        pathSource = sourceVal
       },
     ).apply {
       agent.markMsgSent()

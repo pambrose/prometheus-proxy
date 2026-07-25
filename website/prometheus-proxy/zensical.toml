@@ -30,7 +30,7 @@ nav = [
     { "Kubernetes" = "kubernetes.md" },
   ]},
   { "Operations" = [
-    { "Web UI" = "web-ui.md" },
+    { "Dashboard" = "web-dashboard.md" },
   ]},
   { "Configuration" = [
     { "Overview" = "configuration/index.md" },

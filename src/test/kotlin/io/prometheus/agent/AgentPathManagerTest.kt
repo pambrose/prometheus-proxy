@@ -76,7 +76,7 @@ class AgentPathManagerTest : StringSpec() {
     val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 
     // Default happy-path stubs (valid=true, pathId=1); tests needing specific responses re-stub.
-    coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+    coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
       valid = true
       pathId = 1L
     }
@@ -106,14 +106,14 @@ class AgentPathManagerTest : StringSpec() {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 123L
       }
 
       manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics", """{"job":"test"}""")
 
-      coVerify { agent.grpcService.registerPathOnProxy("metrics", """{"job":"test"}""") }
+      coVerify { agent.grpcService.registerPathOnProxy("metrics", """{"job":"test"}""", any(), any()) }
 
       val context = manager["metrics"]
       context.shouldNotBeNull()
@@ -126,14 +126,14 @@ class AgentPathManagerTest : StringSpec() {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 456L
       }
 
       manager.registerPath("/metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
 
-      coVerify { agent.grpcService.registerPathOnProxy("metrics", "{}") }
+      coVerify { agent.grpcService.registerPathOnProxy("metrics", "{}", any(), any()) }
 
       val context = manager["metrics"]
       context.shouldNotBeNull()
@@ -144,14 +144,14 @@ class AgentPathManagerTest : StringSpec() {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 789L
       }
 
       manager.registerPath("health", "http://localhost:$PROXY_HTTP_PORT/health")
 
-      coVerify { agent.grpcService.registerPathOnProxy("health", "{}") }
+      coVerify { agent.grpcService.registerPathOnProxy("health", "{}", any(), any()) }
     }
 
     "registerPath should throw when path is empty" {
@@ -180,7 +180,7 @@ class AgentPathManagerTest : StringSpec() {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 123L
       }
@@ -201,7 +201,7 @@ class AgentPathManagerTest : StringSpec() {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 123L
       }
@@ -253,7 +253,7 @@ class AgentPathManagerTest : StringSpec() {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 999L
       }
@@ -272,7 +272,7 @@ class AgentPathManagerTest : StringSpec() {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 1L
       }
@@ -337,7 +337,7 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["a_metrics"].shouldNotBeNull().source shouldBe PathSource.DISCOVERED
       manager["b_metrics"].shouldNotBeNull()
-      coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any()) }
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any(), any(), any()) }
     }
 
     "reconcile unregisters discovered paths no longer desired" {
@@ -368,7 +368,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.reconcileDiscoveredPaths(desired)
 
       // Registered exactly once across two identical reconciles.
-      coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any()) }
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any(), any(), any()) }
     }
 
     "reconcile re-registers a discovered path whose url changed" {
@@ -381,7 +381,7 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["a_metrics"].shouldNotBeNull().url shouldBe "http://a/v2"
       coVerify(exactly = 1) { grpc.unregisterPathOnProxy("a_metrics") }
-      coVerify(exactly = 2) { grpc.registerPathOnProxy("a_metrics", any()) }
+      coVerify(exactly = 2) { grpc.registerPathOnProxy("a_metrics", any(), any(), any()) }
     }
 
     "reconcile skips a discovered path colliding with a static path" {
@@ -397,7 +397,7 @@ class AgentPathManagerTest : StringSpec() {
       context.source shouldBe PathSource.STATIC
       context.url shouldBe "http://static/m"
       // Only the initial static registration happened; the colliding discovered entry was skipped.
-      coVerify(exactly = 1) { grpc.registerPathOnProxy("shared", any()) }
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("shared", any(), any(), any()) }
     }
 
     "reconcile with an empty desired set removes all discovered but keeps static" {
@@ -416,7 +416,7 @@ class AgentPathManagerTest : StringSpec() {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
 
-      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 1L
       }
@@ -525,7 +525,7 @@ class AgentPathManagerTest : StringSpec() {
       val concurrentCalls = AtomicInt(0)
       val maxConcurrent = AtomicInt(0)
 
-      coEvery { agent.grpcService.registerPathOnProxy(any(), any()) } coAnswers {
+      coEvery { agent.grpcService.registerPathOnProxy(any(), any(), any(), any()) } coAnswers {
         val current = concurrentCalls.incrementAndFetch()
         maxConcurrent.update { max -> maxOf(max, current) }
         delay(100.milliseconds) // Simulate slow gRPC call
@@ -580,7 +580,7 @@ class AgentPathManagerTest : StringSpec() {
       every { mockAgent.isTestMode } returns true
       every { mockAgent.agentId } returns "test-agent"
 
-      coEvery { mockGrpcService.registerPathOnProxy(any(), any()) } returns registerPathResponse {
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 1L
       }
@@ -588,8 +588,8 @@ class AgentPathManagerTest : StringSpec() {
       val manager = AgentPathManager(mockAgent)
       manager.registerPaths()
 
-      coVerify { mockGrpcService.registerPathOnProxy("metrics1", "{}") }
-      coVerify { mockGrpcService.registerPathOnProxy("metrics2", "{}") }
+      coVerify { mockGrpcService.registerPathOnProxy("metrics1", "{}", any(), any()) }
+      coVerify { mockGrpcService.registerPathOnProxy("metrics2", "{}", any(), any()) }
 
       manager["metrics1"].shouldNotBeNull()
       manager["metrics2"].shouldNotBeNull()

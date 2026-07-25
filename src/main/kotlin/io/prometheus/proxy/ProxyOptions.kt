@@ -37,9 +37,9 @@ import io.prometheus.common.EnvVars.REFLECTION_DISABLED
 import io.prometheus.common.EnvVars.SD_ENABLED
 import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
-import io.prometheus.common.EnvVars.UI_ENABLED
-import io.prometheus.common.EnvVars.UI_PATH
-import io.prometheus.common.EnvVars.UI_PORT
+import io.prometheus.common.EnvVars.DASHBOARD_ENABLED
+import io.prometheus.common.EnvVars.DASHBOARD_PATH
+import io.prometheus.common.EnvVars.DASHBOARD_PORT
 
 class ProxyOptions(
   args: Array<String>,
@@ -99,28 +99,28 @@ class ProxyOptions(
     private set
 
   /**
-   * Enables the Proxy's read-only operational web UI, served from its **own** port ([uiPort]) rather
+   * Enables the Proxy's read-only operational dashboard, served from its **own** port ([dashboardPort]) rather
    * than the admin or scrape port. Off by default, matching the admin and metrics posture.
-   * Resolved from CLI → [UI_ENABLED] env var → `proxy.ui.enabled` config.
+   * Resolved from CLI → [DASHBOARD_ENABLED] env var → `proxy.dashboard.enabled` config.
    */
-  @Parameter(names = ["--ui"], description = "Operational web UI enabled")
-  var uiEnabled = false
+  @Parameter(names = ["--dashboard"], description = "Operational dashboard enabled")
+  var dashboardEnabled = false
     private set
 
   /**
-   * TCP port the operational web UI listens on. Deliberately separate from the admin port so the UI can
+   * TCP port the operational dashboard listens on. Deliberately separate from the admin port so the dashboard can
    * be firewalled independently of the k8s probe endpoints (`/ping`, `/healthcheck`).
-   * `-1` means "fall back to [UI_PORT] env var, then `proxy.ui.port` config (default `8094`)".
+   * `-1` means "fall back to [DASHBOARD_PORT] env var, then `proxy.dashboard.port` config (default `8094`)".
    */
-  @Parameter(names = ["--ui_port"], description = "Operational web UI port")
-  var uiPort: Int = -1
+  @Parameter(names = ["--dashboard_port"], description = "Operational dashboard port")
+  var dashboardPort: Int = -1
     private set
 
   /**
-   * Base HTTP path the operational web UI is served from. Validated non-empty when [uiEnabled] is `true`.
+   * Base HTTP path the operational dashboard is served from. Validated non-empty when [dashboardEnabled] is `true`.
    */
-  @Parameter(names = ["--ui_path"], description = "Operational web UI base path")
-  var uiPath = ""
+  @Parameter(names = ["--dashboard_path"], description = "Operational dashboard base path")
+  var dashboardPath = ""
     private set
 
   /**
@@ -217,19 +217,20 @@ class ProxyOptions(
           require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
         logger.info { "sdTargetPrefix: $sdTargetPrefix" }
 
-        uiEnabled = resolveBooleanOption(uiEnabled, UI_ENABLED, proxyConfigVals.ui.enabled, "--ui")
-        logger.info { "uiEnabled: $uiEnabled" }
+        dashboardEnabled =
+          resolveBooleanOption(dashboardEnabled, DASHBOARD_ENABLED, proxyConfigVals.dashboard.enabled, "--dashboard")
+        logger.info { "dashboardEnabled: $dashboardEnabled" }
 
-        if (uiPort == -1)
-          uiPort = UI_PORT.getEnv(proxyConfigVals.ui.port)
-        require(uiPort in 1..65535) { "uiPort must be in 1..65535: $uiPort" }
+        if (dashboardPort == -1)
+          dashboardPort = DASHBOARD_PORT.getEnv(proxyConfigVals.dashboard.port)
+        require(dashboardPort in 1..65535) { "dashboardPort must be in 1..65535: $dashboardPort" }
 
-        if (uiPath.isEmpty())
-          uiPath = UI_PATH.getEnv(proxyConfigVals.ui.path)
-        if (uiEnabled)
-          require(uiPath.isNotEmpty()) { "uiPath is empty" }
-        if (uiEnabled)
-          logger.info { "uiPort: $uiPort, uiPath: $uiPath" }
+        if (dashboardPath.isEmpty())
+          dashboardPath = DASHBOARD_PATH.getEnv(proxyConfigVals.dashboard.path)
+        if (dashboardEnabled)
+          require(dashboardPath.isNotEmpty()) { "dashboardPath is empty" }
+        if (dashboardEnabled)
+          logger.info { "dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
 
         reflectionDisabled =
           resolveBooleanOption(

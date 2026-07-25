@@ -27,7 +27,7 @@ import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
-import io.prometheus.common.TestPorts.PROXY_UI_PORT
+import io.prometheus.common.TestPorts.PROXY_DASHBOARD_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.common.proxyOptions
 
@@ -50,30 +50,30 @@ class ProxyOptionsTest : StringSpec() {
       options.sdEnabled.shouldBeFalse()
     }
 
-    // The UI must stay OFF unless asked for, matching the admin and metrics posture -- it renders agent
+    // The dashboard must stay OFF unless asked for, matching the admin and metrics posture -- it renders agent
     // names, hostnames, target URLs and recent activity in one place on a port with no auth and no TLS.
-    "uiEnabled should default to false" {
+    "dashboardEnabled should default to false" {
       val options = proxyOptions(emptyList())
-      options.uiEnabled.shouldBeFalse()
+      options.dashboardEnabled.shouldBeFalse()
     }
 
-    "default uiPort should be $PROXY_UI_PORT and be distinct from the admin port" {
+    "default dashboardPort should be $PROXY_DASHBOARD_PORT and be distinct from the admin port" {
       val options = proxyOptions(emptyList())
-      options.uiPort shouldBe PROXY_UI_PORT
-      // Separate from admin on purpose: k8s probes hit /ping and /healthcheck there, and the UI should
+      options.dashboardPort shouldBe PROXY_DASHBOARD_PORT
+      // Separate from admin on purpose: k8s probes hit /ping and /healthcheck there, and the dashboard should
       // be firewallable without taking the probe endpoints with it.
-      options.uiPort shouldNotBe options.adminPort
+      options.dashboardPort shouldNotBe options.adminPort
     }
 
-    "uiEnabled and uiPort should be settable from the command line" {
-      val options = proxyOptions(["--ui", "--ui_port", "9099", "--ui_path", "dashboard"])
-      options.uiEnabled.shouldBeTrue()
-      options.uiPort shouldBe 9099
-      options.uiPath shouldBe "dashboard"
+    "dashboardEnabled and dashboardPort should be settable from the command line" {
+      val options = proxyOptions(["--dashboard", "--dashboard_port", "9099", "--dashboard_path", "dashboard"])
+      options.dashboardEnabled.shouldBeTrue()
+      options.dashboardPort shouldBe 9099
+      options.dashboardPath shouldBe "dashboard"
     }
 
-    "an out-of-range uiPort should be rejected" {
-      shouldThrow<IllegalArgumentException> { proxyOptions(["--ui_port", "70000"]) }
+    "an out-of-range dashboardPort should be rejected" {
+      shouldThrow<IllegalArgumentException> { proxyOptions(["--dashboard_port", "70000"]) }
     }
 
     "reflectionDisabled should default to false" {

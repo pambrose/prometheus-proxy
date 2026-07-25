@@ -351,7 +351,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     // ==================== recordScrapeOutcome Tests ====================
     // recordScrapeOutcome is private, so we test it via reflection. It is the single point where a
     // completed scrape becomes observable: the /debug text line asserted here, plus a structured
-    // record for the web UI and an event on the bus.
+    // record for the dashboard and an event on the bus.
     // It formats: "/$path - $updateMsg - $statusCode [reason: [$failureReason]] time: $fetchDuration url: $url"
 
     "recordScrapeOutcome should format success status without failure reason" {

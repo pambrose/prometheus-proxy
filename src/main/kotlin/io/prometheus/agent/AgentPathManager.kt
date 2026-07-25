@@ -156,7 +156,7 @@ internal class AgentPathManager(
 
     val path = pathVal.removePrefix("/")
     val labelsJson = labels.defaultEmptyJsonObject()
-    val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson).pathId
+    val pathId = agent.grpcService.registerPathOnProxy(path, labelsJson, url, source.name).pathId
     // Whether a filter attached is only knowable here, where the path is actually resolved -- which is
     // why it is reported here rather than cross-checked against pathConfigs at construction time, a
     // baseline that by definition cannot see discovered or runtime-registered paths. Absence of the

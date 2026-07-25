@@ -57,7 +57,7 @@ agent {
 proxy {
   http {
     port = 8080                       // Listen port for Prometheus scrapes
-    idleTimeoutSecs = 45             // HTTP idle timeout
+    idleTimeoutSecs = 45              // HTTP idle timeout
     requestLoggingEnabled = true      // Log every proxy metrics request
   }
 }
