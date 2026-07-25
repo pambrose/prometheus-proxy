@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 5s # How often to fetch metrics
+
+scrape_configs:
+  - job_name: 'app_metrics1'
+    metrics_path: '/my_app_metrics1'
+    static_configs:
+      - targets: ['localhost:8080', 'localhost:8081']
+
+  - job_name: 'app_metrics2'
+    metrics_path: '/my_app_metrics2'
+    static_configs:
+      - targets: ['localhost:8080', 'localhost:8081']
+

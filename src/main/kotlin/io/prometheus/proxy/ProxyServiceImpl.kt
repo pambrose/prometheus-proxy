@@ -169,7 +169,13 @@ internal class ProxyServiceImpl(
               logger.warn { "Agent identity '${identity.name}' denied registration of path /$normalizedPath" }
               "Agent identity '${identity.name}' is not authorized to register path /$normalizedPath"
             } else {
-              proxy.pathManager.addPath(request.path, request.labels, agentContext)
+              proxy.pathManager.addPath(
+                request.path,
+                request.labels,
+                agentContext,
+                request.targetUrl,
+                request.pathSource,
+              )
             }
           reason.also { agentContext.markActivityTime(false) }
         }

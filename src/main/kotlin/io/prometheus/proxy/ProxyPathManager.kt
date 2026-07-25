@@ -46,6 +46,11 @@ internal class ProxyPathManager(
     // Immutable: mutations replace the pathMap entry with a copy() carrying a new list, so a
     // data-class copy() can never share a still-mutating list with the stored entry.
     val agentContexts: List<AgentContext>,
+    // Reported by the agent at registration. On a consolidated path these describe the FIRST
+    // registrant only -- a later agent joining the path contributes its contexts but not its metadata,
+    // exactly as labels has always behaved. Empty when the agent predates the fields.
+    val targetUrl: String = "",
+    val pathSource: String = "",
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
   }
@@ -74,9 +79,11 @@ internal class ProxyPathManager(
     path: String,
     labels: String,
     agentContext: AgentContext,
+    targetUrl: String = "",
+    pathSource: String = "",
   ): String? {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
-    return multiSegmentPathError(path) ?: addValidatedPath(path, labels, agentContext)
+    return multiSegmentPathError(path) ?: addValidatedPath(path, labels, agentContext, targetUrl, pathSource)
   }
 
   @Suppress("ReturnCount")
@@ -84,6 +91,8 @@ internal class ProxyPathManager(
     path: String,
     labels: String,
     agentContext: AgentContext,
+    targetUrl: String,
+    pathSource: String,
   ): String? {
     synchronized(pathMap) {
       // Re-check validity inside the lock: agent removal (transportTerminated / cleanup eviction) can
@@ -99,7 +108,7 @@ internal class ProxyPathManager(
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
         if (agentInfo == null) {
-          pathMap[path] = AgentContextInfo(true, labels, [agentContext])
+          pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource)
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated) {
             val reason = "Consolidated agent rejected for non-consolidated path /$path"
@@ -119,7 +128,7 @@ internal class ProxyPathManager(
           logger.info { "Overwriting path /$path for ${agentInfo.agentContexts.firstOrNull()}" }
           proxy.metrics { agentDisplacementCount.inc() }
         }
-        pathMap[path] = AgentContextInfo(false, labels, [agentContext])
+        pathMap[path] = AgentContextInfo(false, labels, [agentContext], targetUrl, pathSource)
 
         // Invalidate displaced agent contexts that have no other registered paths.
         // Even live agents are invalidated here — a displaced agent with zero paths
@@ -239,7 +248,7 @@ internal class ProxyPathManager(
       keysToUpdate.forEach { (k, v) ->
         pathMap[k] = v
         // A consolidated path surviving the loss of one agent is still a topology change. Without this
-        // the UI would never be woken for it, and unlike the removal case below there is no later
+        // the dashboard would never be woken for it, and unlike the removal case below there is no later
         // event to self-correct from.
         proxy.eventBus.emit(ProxyEvent.PathUnregistered(k, agentId))
       }

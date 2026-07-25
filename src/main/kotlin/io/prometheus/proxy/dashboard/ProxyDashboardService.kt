@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.prometheus.proxy.ui
+package io.prometheus.proxy.dashboard
 
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.util.concurrent.MoreExecutors
@@ -35,6 +35,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.html.respondHtml
 import io.ktor.server.plugins.cachingheaders.CachingHeaders
 import io.ktor.server.response.respondBytes
+import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -62,15 +63,15 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Read-only operational web UI, served from its own Ktor server on its own port.
+ * Read-only operational dashboard, served from its own Ktor server on its own port.
  *
  * Deliberately **not** the admin port: that one is a Jetty servlet container created inside
  * `common-utils`, whose only extension point is a `path -> Servlet` map — Ktor routing, the HTML DSL,
  * and WebSockets cannot attach to it. Deliberately **not** the scrape port either: that is
- * Prometheus-facing, and mixing an operator surface into it would put the UI on a listener that must
+ * Prometheus-facing, and mixing an operator surface into it would put the dashboard on a listener that must
  * stay predictable.
  *
- * A separate port also means the UI can be firewalled independently of `/ping` and `/healthcheck`,
+ * A separate port also means the dashboard can be firewalled independently of `/ping` and `/healthcheck`,
  * which Kubernetes probes target on the admin port.
  *
  * ### How updates reach the browser
@@ -85,25 +86,29 @@ import kotlin.time.Duration.Companion.seconds
  * history is a drifting value, so the timer covers it, for the same reason backlog depths and eviction
  * countdowns are timer-driven.
  */
-internal class ProxyUiService(
+internal class ProxyDashboardService(
   private val proxy: Proxy,
-  private val uiPort: Int,
-  uiPath: String,
+  private val dashboardPort: Int,
+  dashboardPath: String,
 ) : GenericIdleService() {
-  private val basePath = "/" + uiPath.trim('/')
+  private val basePath = "/" + dashboardPath.trim('/')
 
-  /** One connected browser: how to reach it, and which agent it is currently viewing. */
+  /** One connected browser: how to reach it, which layout it is on, and which agent it is viewing. */
   private class Session(
     val send: suspend (String) -> Unit,
   ) {
+    // Both written by this session's socket coroutine and read by the shared push loop, hence @Volatile.
     @Volatile
     var selectedId: String? = null
+
+    @Volatile
+    var layout: DashboardLayout = DashboardLayout.AGENT
   }
 
   private val sessions = ConcurrentHashMap.newKeySet<Session>()
   private val wake = Channel<Unit>(Channel.CONFLATED)
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-  private val refreshInterval = proxy.proxyConfigVals.ui.refreshIntervalSecs.seconds
+  private val refreshInterval = proxy.proxyConfigVals.dashboard.refreshIntervalSecs.seconds
 
   private val server =
     embeddedServer(
@@ -111,7 +116,7 @@ internal class ProxyUiService(
       configure = {
         connector {
           host = "0.0.0.0"
-          port = uiPort
+          port = dashboardPort
         }
       },
     ) {
@@ -131,6 +136,14 @@ internal class ProxyUiService(
       }
 
       routing {
+        // The dashboard lives under basePath (default /dashboard), so the bare root would otherwise 404. Send it to
+        // the dashboard. Skipped when basePath is already "/" -- there the page route below owns the root, and a
+        // second handler would be a duplicate. Temporary rather than permanent: basePath is configurable,
+        // so a cached 301 would be wrong if it ever changed.
+        if (basePath != "/") {
+          get("/") { call.respondRedirect(basePath, permanent = false) }
+        }
+
         // Explicit allowlist rather than staticResources: the webjar layout embeds a version in the
         // path, and an allowlist means there is no path-traversal surface and no dependence on how Ktor
         // interprets a basePackage. Two entries is not worth a generic static handler.
@@ -144,15 +157,36 @@ internal class ProxyUiService(
 
         get(basePath) {
           val snapshot = snapshot()
-          call.respondHtml { with(ProxyUiHtml) { renderPage(snapshot, null, basePath) } }
+          call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, basePath, DashboardLayout.AGENT) } }
+        }
+
+        // A real page rather than a fragment: switching layout is a navigation, so the browser gets a
+        // fresh document whose region ids match the layout it is now showing.
+        get("$basePath/paths") {
+          val snapshot = snapshot()
+          call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, basePath, DashboardLayout.PATH) } }
         }
 
         get("$basePath/agents/{agentId}") {
-          call.respondText(
-            ProxyUiHtml.detailFragment(snapshot(), call.parameters["agentId"]),
-            ContentType.Text.Html,
-            HttpStatusCode.OK,
-          )
+          val agentId = call.parameters["agentId"]
+          val snapshot = snapshot()
+          // hx-push-url makes this URL the address bar's, so it must survive a reload or a shared link.
+          // A row click is an htmx swap and wants just the detail fragment; a full navigation to the same
+          // URL wants the whole dashboard with the agent selected. htmx marks its own requests with
+          // HX-Request -- except a history-restore, which fetches the full URL expecting a full page.
+          val htmxSwap =
+            call.request.headers["HX-Request"] == "true" &&
+              call.request.headers["HX-History-Restore-Request"] != "true"
+          if (htmxSwap)
+            call.respondText(
+              ProxyDashboardHtml.detailFragment(snapshot, agentId),
+              ContentType.Text.Html,
+              HttpStatusCode.OK,
+            )
+          else
+            call.respondHtml {
+              with(ProxyDashboardHtml) { renderPage(snapshot, agentId, basePath, DashboardLayout.AGENT) }
+            }
         }
 
         webSocket("$basePath/events") {
@@ -163,7 +197,9 @@ internal class ProxyUiService(
             push(session, snapshot())
             for (frame in incoming) {
               if (frame is Frame.Text) {
-                session.selectedId = parseSelection(frame.readText())
+                val text = frame.readText()
+                session.selectedId = parseSelection(text)
+                session.layout = parseLayout(text)
                 push(session, snapshot())
               }
             }
@@ -196,7 +232,7 @@ internal class ProxyUiService(
         .filter { it !is ProxyEvent.ScrapeCompleted }
         .collect { wake.trySend(Unit) }
     }
-    logger.info { "Started $simpleClassName on port $uiPort at $basePath" }
+    logger.info { "Started $simpleClassName on port $dashboardPort at $basePath" }
   }
 
   override fun shutDown() {
@@ -223,16 +259,18 @@ internal class ProxyUiService(
     session: Session,
     snapshot: ProxySnapshot,
   ) {
-    runCatching { session.send(ProxyUiHtml.pushFragment(snapshot, session.selectedId, basePath)) }
-      .onFailure { logger.debug { "Dropping UI session: ${it.simpleClassName}" } }
+    runCatching {
+      session.send(ProxyDashboardHtml.pushFragment(snapshot, session.selectedId, basePath, session.layout))
+    }
+      .onFailure { logger.debug { "Dropping dashboard session: ${it.simpleClassName}" } }
   }
 
   /**
    * Collects a snapshot off the CIO event loop.
    *
    * `ProxyPathManager` guards its map with `synchronized`, and Kotlin's `synchronized` parks the
-   * carrier thread rather than suspending the coroutine — collecting inline would couple this UI to
-   * scrape latency, and worse, couple scrape latency to this UI.
+   * carrier thread rather than suspending the coroutine — collecting inline would couple this dashboard to
+   * scrape latency, and worse, couple scrape latency to this dashboard.
    */
   private suspend fun snapshot(): ProxySnapshot = withContext(Dispatchers.IO) { ProxySnapshot.collect(proxy) }
 
@@ -250,7 +288,7 @@ internal class ProxyUiService(
 
   override fun toString() =
     toStringElements {
-      add("port", uiPort)
+      add("port", dashboardPort)
       add("path", basePath)
       add("sessions", sessions.size)
     }
@@ -290,5 +328,23 @@ internal class ProxyUiService(
           ?.content
           ?.takeIf { it.isNotEmpty() }
       }.getOrNull()
+
+    /**
+     * Reads `{"layout": "PATH"}` from a session message, defaulting to [DashboardLayout.AGENT].
+     *
+     * Same contract as [parseSelection]: anything unexpected -- garbage, a missing field, an unknown
+     * layout name, or a browser predating the field -- resolves to the default rather than throwing
+     * inside the WebSocket loop. Falling back to the agent layout is the safe direction, since that is
+     * what the page served before layouts existed.
+     */
+    internal fun parseLayout(text: String): DashboardLayout =
+      runCatching {
+        json.parseToJsonElement(text)
+          .jsonObject["layout"]
+          ?.jsonPrimitive
+          ?.takeIf { it.isString }
+          ?.content
+          ?.let { name -> DashboardLayout.entries.firstOrNull { it.name == name } }
+      }.getOrNull() ?: DashboardLayout.AGENT
   }
 }

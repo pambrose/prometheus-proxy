@@ -19,7 +19,7 @@ package io.prometheus.proxy
 import java.time.Instant
 
 /**
- * One completed scrape, recorded structurally for the operational web UI.
+ * One completed scrape, recorded structurally for the operational dashboard.
  *
  * The `/debug` servlet's existing recent-requests queue holds pre-formatted strings — readable, but
  * carrying no agent attribution and no field boundaries, so a per-agent view cannot be built from it

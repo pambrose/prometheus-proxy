@@ -4,11 +4,11 @@ icon: lucide/life-buoy
 
 # Troubleshooting
 
-!!! tip "Try the web UI first"
+!!! tip "Try the dashboard first"
 
-    The proxy ships a read-only [operational web UI](web-ui.md) that shows connected agents, the paths
+    The proxy ships a read-only [operational dashboard](web-dashboard.md) that shows connected agents, the paths
     each one backs, and their recent scrape results on one screen. It is off by default; enable it with
-    `--ui` and it will answer most of the questions below without log-diving.
+    `--dashboard` and it will answer most of the questions below without log-diving.
 
 A symptom-driven guide to the failures Prometheus Proxy most commonly produces, with how to
 confirm each cause and how to fix it.

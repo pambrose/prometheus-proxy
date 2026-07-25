@@ -91,24 +91,24 @@ class ConfigValsTest : StringSpec() {
       }
     }
 
-    // ==================== Proxy UI Defaults ====================
+    // ==================== Proxy Dashboard Defaults ====================
 
-    "proxy ui config should have correct defaults" {
+    "proxy dashboard config should have correct defaults" {
       val configVals = loadDefaultConfigVals()
-      configVals.proxy.ui.apply {
+      configVals.proxy.dashboard.apply {
         enabled.shouldBeFalse()
         port shouldBe 8094
-        path shouldBe "ui"
+        path shouldBe "dashboard"
         refreshIntervalSecs shouldBe 2
         recentScrapesQueueSize shouldBe 200
       }
     }
 
-    // The contrast with the endpoints case above is the point of having both tests: every proxy.ui key
+    // The contrast with the endpoints case above is the point of having both tests: every proxy.dashboard key
     // is a SCALAR, so tscfg emits a hasPathOrNull guard for each and for the block itself. A config
-    // predating the UI therefore loads without needing a reference.conf entry at all -- this pins that,
+    // predating the dashboard therefore loads without needing a reference.conf entry at all -- this pins that,
     // so the guard cannot silently regress into an unguarded getList.
-    "a config that predates the web UI should still load" {
+    "a config that predates the dashboard should still load" {
       val config =
         ConfigFactory.parseString("proxy { http { port = 9999 } }")
           .withFallback(ConfigFactory.load())
@@ -116,8 +116,8 @@ class ConfigValsTest : StringSpec() {
 
       ConfigVals(config).proxy.apply {
         http.port shouldBe 9999
-        ui.enabled.shouldBeFalse()
-        ui.port shouldBe 8094
+        dashboard.enabled.shouldBeFalse()
+        dashboard.port shouldBe 8094
       }
     }
 

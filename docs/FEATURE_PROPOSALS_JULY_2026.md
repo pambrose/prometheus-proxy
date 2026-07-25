@@ -702,7 +702,7 @@ existing `labels` field) is explicitly out of scope until demand is proven.
 
 > **Status: Implemented (MVP — master-detail).** A read-only dashboard on its own Ktor server and port,
 > server-rendered with the Ktor HTML DSL, interactive via htmx, and live over a WebSocket. Off by
-> default. Still deferred: a path-centric view, a dedicated Scrapes view, and any authentication.
+> default. Still deferred: a dedicated Scrapes view and any authentication. The path-centric view shipped as a follow-up, alongside `RegisterPathRequest.target_url` / `path_source`.
 > See **Implementation Notes (As Built)** immediately below — this feature departs from the proposal on
 > two explicit points, and the title above is now wrong.
 
@@ -715,7 +715,7 @@ constructed inside `common-utils`' `ServletService`, whose only extension point 
 any non-servlet handler, and no way to reach the underlying `Server`. `LambdaServlet` is `GET`-only,
 always-200, and returns a `String` with one fixed content type per instance.
 
-A new `ProxyUiService : GenericIdleService` therefore runs its own Ktor CIO server on **port 8094**,
+A new `ProxyDashboardService : GenericIdleService` therefore runs its own Ktor CIO server on **port 8094**,
 mirroring `ProxyHttpService` — a pattern already proven twice in `Proxy.kt`. This also turns out to be
 the better security posture: Kubernetes liveness and readiness probes target `/ping` and `/healthcheck`
 on the admin port, so a shared port could not be firewalled without taking the probes with it.
@@ -808,12 +808,12 @@ keeps. Either a path-centric panel (the layout candidate that was considered and
 
 No authentication — see Security Posture below, which is unchanged and still applies.
 
-**Files.** New `proxy/ui/` package: `ProxyUiService`, `ProxyUiHtml`, `ProxySnapshot`. New
+**Files.** New `proxy/dashboard/` package: `ProxyDashboardService`, `ProxyDashboardHtml`, `ProxySnapshot`. New
 `proxy/ProxyEventBus.kt` and `proxy/ScrapeRecord.kt`. Modified: `Proxy` (bus ownership, service
 registration, scrape queue), `AgentContext`, `AgentContextManager`, `ProxyPathManager`,
 `ProxyServiceImpl`, `ProxyHttpRoutes`, `ProxyOptions`, `EnvVars`, `config/config.conf`, `reference.conf`.
 
-**Tests.** `ProxyUiHtmlTest` (fragment structure, out-of-band ids, the disconnected-agent state, and
+**Tests.** `ProxyDashboardHtmlTest` (fragment structure, out-of-band ids, the disconnected-agent state, and
 selection-message parsing hardened against arbitrary browser input); `ProxyEventBusTest` (ordering,
 non-blocking emit, drop-oldest, per-site emission); `ProxySnapshotTest`; the Netty harness spec
 `ProxyWebUiTest`, which connects an agent **after** the socket is open so the asserted fragment can only
@@ -921,7 +921,7 @@ If Feature 3 lands first, the UI displays identities but never tokens.
 | 2nd ✅ | **Feature 1** — Dynamic target discovery | **Implemented (file-source MVP)** — biggest day-to-day operational relief; Kubernetes/Docker sources still deferred |
 | 3rd ✅ | **Feature 4** — Agent-side metric filtering | **Implemented (MVP — `metricNameAllow` / `metricNameDeny`)** — strengthens the core value proposition (efficient transport across network boundaries); `dropLabels`, relabeling, and agent-global filters still deferred |
 | 4th ✅ | **Feature 2** — Proxy HA / agent failover | **Implemented (Phase 1 — agent-side endpoint failover)** — unlocks redundant proxy deployments; Phase 2 multi-homing and Phase 3 clustering still deferred |
-| 5th ✅ | **Feature 5** — Operational web UI | **Implemented (MVP — master-detail)** — on its own Ktor port rather than the admin port, which cannot host Ktor; server-rendered with htmx and WebSockets |
+| 5th ✅ | **Feature 5** — Operational dashboard | **Implemented (MVP — master-detail)** — on its own Ktor port rather than the admin port, which cannot host Ktor; server-rendered with htmx and WebSockets |
 
 Cross-cutting notes for every feature:
 

@@ -47,7 +47,7 @@ import kotlin.time.TimeSource.Monotonic
  * @see ProxyPathManager
  */
 internal class AgentContext(
-  // Readable: the operational UI shows which machine an agent is actually on, which a self-reported
+  // Readable: the operational dashboard shows which machine an agent is actually on, which a self-reported
   // agentName cannot establish.
   val remoteAddr: String,
 ) {
@@ -70,7 +70,7 @@ internal class AgentContext(
   private var lastRequestTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var valid by atomicBoolean(true)
 
-  // Readable rather than private: the UI displays it to distinguish two runs of the same agent name.
+  // Readable rather than private: the dashboard displays it to distinguish two runs of the same agent name.
   var launchId: String by nonNullableReference("Unassigned")
     private set
   var hostName: String by nonNullableReference("Unassigned")
