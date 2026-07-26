@@ -56,7 +56,44 @@ connection is still alive. See [Architecture](architecture.md#heartbeat).
 
 The proxy's HTTP endpoint that returns the list of registered targets in Prometheus
 `http_sd_config` format, so Prometheus can discover proxied paths dynamically. See
-[Service Discovery](service-discovery.md).
+[Service Discovery](service-discovery.md). Distinct from **dynamic target discovery** below,
+which is the agent-side mechanism.
+
+### Dynamic target discovery
+
+The agent-side reconcile loop (`agent.discovery`) that keeps registered paths in sync with a
+watched HOCON/JSON file at runtime, so targets can be added and removed without an agent
+restart. Discovered paths are tagged `disc` on the dashboard; static `pathConfigs` entries
+(`cfg`) are never touched by it. See
+[Dynamic Target Discovery](configuration/agent.md#dynamic-target-discovery).
+
+### Proxy failover
+
+The agent's high-availability mechanism: an ordered `agent.proxy.endpoints` list tried head-first
+on every reconnect, so the agent moves to a standby when a connect fails and returns to the
+primary once it recovers. One connection is active at a time. See
+[High availability](production.md#high-availability).
+
+### Agent identity
+
+A named entry in the proxy's `proxy.auth` list — a token plus allowed path glob patterns — that
+lets the proxy tell agents apart and reject a `registerPath` outside the identity's scope. The
+shared [agent token](#agent-token) is the identity-less predecessor, honored during migration as
+an allow-all identity. See
+[Per-Agent Identities](security/index.md#per-agent-identities-and-path-authorization).
+
+### Metric filter
+
+An optional per-path allow/deny rule set (`agent.filters`) applied at the agent, dropping whole
+metric families before a payload is compressed and sent to the proxy. Regexes are fully
+anchored, and a family's `_bucket`/`_sum`/`_count` series are kept or dropped together. See
+[Metric Filtering](configuration/agent.md#metric-filtering).
+
+### Dashboard
+
+The proxy's read-only, live-updating web page (`proxy.dashboard`, default port `8094`) showing
+connected agents, registered paths — including paths whose agent has gone — and recent scrape
+results. Off by default and unauthenticated. See [Dashboard](web-dashboard.md).
 
 ### Stale agent cleanup
 

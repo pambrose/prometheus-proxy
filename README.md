@@ -20,6 +20,7 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## Table of Contents
 
+- [New Features](#-new-features)
 - [Architecture](#-architecture)
 - [Quick Start](#-quick-start)
 - [Building from Source](#-building-from-source)
@@ -32,6 +33,32 @@ behind a firewall and preserves the native pull-based model architecture.
 - [Troubleshooting](#-troubleshooting)
 - [Documentation](#-documentation)
 - [License](#-license)
+
+## ✨ New Features
+
+Version 4.0.0 (released 2026-07-25) adds five features focused on running the proxy as production
+infrastructure:
+
+- **[Operational Dashboard](https://pambrose.github.io/prometheus-proxy/web-dashboard/)** — A
+  read-only, live-updating web page that answers "why isn't this target scraping?" without log-diving
+  on two machines. It shows every connected agent, every registered path — including paths whose agent
+  has **gone**, precisely the case that used to vanish from view — and how recent scrapes went.
+- **[Proxy High Availability](https://pambrose.github.io/prometheus-proxy/production/#high-availability)** —
+  The proxy is no longer a single point of failure for the entire metrics plane. Agents take an
+  ordered list of proxy endpoints, fail over to a standby when the primary is unreachable, and return
+  to the primary when it recovers — no health prober, no manual step.
+- **[Per-Agent Identities and Path Authorization](https://pambrose.github.io/prometheus-proxy/security/#per-agent-identities-and-path-authorization)** —
+  A shared token can't tell agents apart, so any holder could register — and silently take over — any
+  path. Named identities scope each agent to its own path patterns, enable per-agent revocation, and
+  make one proxy safe to share across teams. Existing shared tokens keep working during migration.
+- **[Metric Filtering at the Agent](https://pambrose.github.io/prometheus-proxy/configuration/agent/#metric-filtering)** —
+  Drop unwanted metric families **before** they cross the WAN, the one place where dropping data pays
+  the most and where Prometheus's own `metric_relabel_configs` can't reach. Per-path allow/deny
+  regexes with Prometheus-compatible anchoring; whole families are kept or dropped atomically.
+- **[Dynamic Target Discovery](https://pambrose.github.io/prometheus-proxy/configuration/agent/#dynamic-target-discovery)** —
+  Add and remove scrape targets by editing a watched file — no agent restart, and unchanged paths
+  never stop scraping. The file can be generated (Kubernetes ConfigMap, Ansible, cron), so automation
+  only needs permission to write a file, never to restart a process.
 
 ## 🏗️ Architecture
 
@@ -73,9 +100,12 @@ agents.
 - ✅ **Firewall-friendly** - Only requires outbound connection from agent
 - ✅ **Preserves pull model** - Prometheus continues to pull as normal
 - ✅ **High performance** - Built with Kotlin coroutines and gRPC
-- ✅ **Secure** - Optional TLS with mutual authentication
+- ✅ **Secure** - Optional TLS with mutual authentication, plus per-agent identities with path authorization
 - ✅ **Scalable** - One proxy supports many agents
+- ✅ **Highly available** - Agents fail over across an ordered list of proxies, and back again
+- ✅ **Dynamic** - Agents pick up target changes from a watched file, no restart needed
 - ✅ **Bandwidth-conscious** - Optional per-path metric filtering drops unwanted families at the agent
+- ✅ **Observable** - A read-only live dashboard shows every agent, path, and recent scrape in one place
 - ✅ **Zero changes** to existing Prometheus configuration patterns
 
 ## 🚀 Quick Start
@@ -141,12 +171,12 @@ If you prefer to build the project from source:
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:3.2.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.0.0
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:3.2.0
+  pambrose/prometheus-agent:4.0.0
 ```
 
 ## 📋 Configuration Examples
@@ -230,8 +260,8 @@ scrape_configs:
 The docker images support multiple architectures (amd64, arm64, s390x, ppc64le):
 
 ```bash
-docker pull pambrose/prometheus-proxy:3.2.0
-docker pull pambrose/prometheus-agent:3.2.0
+docker pull pambrose/prometheus-proxy:4.0.0
+docker pull pambrose/prometheus-agent:4.0.0
 ```
 
 ### Production Docker Setup
@@ -244,7 +274,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
         --restart unless-stopped \
-        pambrose/prometheus-proxy:3.2.0
+        pambrose/prometheus-proxy:4.0.0
 ```
 
 Start an agent container with:
@@ -254,7 +284,7 @@ Start an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         --restart unless-stopped \
-        pambrose/prometheus-agent:3.2.0
+        pambrose/prometheus-agent:4.0.0
 ```
 
 Or use docker-compose: see `etc/compose/proxy.yml` for a working example.
@@ -275,7 +305,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:3.2.0
+    pambrose/prometheus-agent:4.0.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -365,6 +395,11 @@ that did not change. Behavior worth knowing:
 - **Config-file only.** `discovery.file.path` points at a list, so there is no CLI/env equivalent
   (though `enabled`, the path, and the interval are scalars you can also set via `-D`).
 
+Because the file is a plain HOCON/JSON list, it can be **generated** — by a Kubernetes ConfigMap, an
+Ansible template, or a cron job querying a service registry — so your automation only needs permission
+to write a file, not to restart processes. A fully annotated example ships as
+[`examples/discovery-targets.conf`](examples/discovery-targets.conf).
+
 > This is distinct from the [Prometheus Service Discovery](#service-discovery) above: that exposes a
 > discovery endpoint so *Prometheus* can find proxied targets, whereas this lets the *agent* pick up
 > target changes behind the firewall without a restart.
@@ -415,6 +450,45 @@ worth knowing:
 An invalid regex fails agent startup rather than surfacing later on a scrape. Not implemented:
 `dropLabels`, metric renaming/relabeling, and an agent-global filter — every filter is per-path.
 
+### Proxy Failover (High Availability)
+
+A single proxy is a single point of failure for every target behind every agent — losing it (or just
+restarting it to change config) blinds Prometheus to everything on the far side of the firewall at
+once. For redundancy, give the agent an **ordered list** of proxy endpoints instead of one hostname:
+
+```hocon
+agent {
+  proxy {
+    endpoints = [ "proxy-a.example.com:50051", "proxy-b.example.com:50051" ]
+  }
+}
+```
+
+Or comma-separated on the command line / environment (either **replaces** `endpoints` entirely):
+
+```bash
+java -jar prometheus-agent.jar --proxy proxy-a.example.com:50051,proxy-b.example.com:50051
+# or: PROXY_HOSTNAME=proxy-a.example.com:50051,proxy-b.example.com:50051
+```
+
+The agent connects to the first endpoint that answers. A **failed connect** moves it to the next; a
+connection that came up and then **dropped** sends it back to the head of the list, so a recovered
+primary is picked up on the next reconnect with no health prober and no manual step. Only one
+connection is active at a time, and a single value behaves exactly as before — existing configs need
+no change.
+
+Two things to know before deploying a pair:
+
+- **Scrape both proxies with `static_config`, not `http_sd_config`.** A standby proxy has no agents,
+  so its service-discovery endpoint returns an empty list — which Prometheus treats as "these targets
+  no longer exist" and silently **deletes** them: no `up=0`, no alert. With `static_config` the
+  standby 404s, Prometheus records `up=0`, and your alerting works unchanged.
+- **All endpoints share one TLS configuration** (one trust store, one `overrideAuthority`), so proxies
+  with different CAs or certificate SANs fail with an opaque handshake error.
+
+> 📖 **Docs site:
+** [High availability](https://pambrose.github.io/prometheus-proxy/production/#high-availability) for the full Prometheus-side setup, and [Running an HA pair](https://pambrose.github.io/prometheus-proxy/web-dashboard/#running-an-ha-pair) for how the dashboard shows failed-over agents.
+
 ### Performance Tuning
 
 Configure concurrent scraping:
@@ -430,6 +504,26 @@ java -jar prometheus-agent.jar \
 
 > 📖 **Docs site:
 ** [Monitoring guide](https://pambrose.github.io/prometheus-proxy/monitoring/) for the full metrics reference and admin endpoints, plus [Grafana & Alerting](https://pambrose.github.io/prometheus-proxy/grafana/) for ready-to-import dashboards and alert rules.
+
+### Operational Dashboard
+
+The proxy ships a read-only, live-updating dashboard that answers the question this system raises most
+often — *why isn't this target scraping?* — without log-diving on two machines. It shows every
+connected agent, every registered path (including paths whose agent has **gone**, which would otherwise
+vanish exactly when you go looking), and how recent scrapes went:
+
+```bash
+java -jar prometheus-proxy.jar --dashboard    # or DASHBOARD_ENABLED=true / proxy.dashboard.enabled
+```
+
+Then open `http://proxy-host:8094/dashboard`. Two layouts share the page: **Agents** (drill into one
+agent) and **Paths** (one row per target). It runs on its own port — not the admin port — so it can be
+firewalled without cutting off Kubernetes health probes, and it loads no CDN assets, so it works in
+airgapped deployments. Like the admin and metrics endpoints it has **no authentication or TLS**: keep
+the port internal.
+
+> 📖 **Docs site:
+** [Dashboard guide](https://pambrose.github.io/prometheus-proxy/web-dashboard/) for both layouts, the status-bar gauges, and HA-pair behavior.
 
 ### Built-in Metrics
 
@@ -501,6 +595,8 @@ Typesafe Config highlights include:
 |:---------------------------|:---------------------------------------------------------------------------|
 | **Basic setup**            | [`examples/simple.conf`](examples/simple.conf)                             |
 | **Multiple apps**          | [`examples/myapps.conf`](examples/myapps.conf)                             |
+| **Metric filtering**       | [`examples/agent-filters.conf`](examples/agent-filters.conf)               |
+| **Dynamic discovery**      | [`examples/discovery-targets.conf`](examples/discovery-targets.conf)       |
 | **TLS (no mutual auth)**   | [`examples/tls-no-mutual-auth.conf`](examples/tls-no-mutual-auth.conf)     |
 | **TLS (with mutual auth)** | [`examples/tls-with-mutual-auth.conf`](examples/tls-with-mutual-auth.conf) |
 | **Prometheus federation**  | [`examples/federate.conf`](examples/federate.conf)                         |
@@ -631,7 +727,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:3.2.0
+    pambrose/prometheus-proxy:4.0.0
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -639,7 +735,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:3.2.0
+    pambrose/prometheus-agent:4.0.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -816,7 +912,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:3.2.0")
+  implementation("com.pambrose:prometheus-proxy:4.0.0")
 }
 ```
 

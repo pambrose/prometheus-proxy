@@ -87,6 +87,49 @@ Each entry in `pathConfigs` maps a proxy `path` (what Prometheus scrapes) to the
 `url` the agent fetches from. Point `url` at a Kubernetes Service DNS name such as
 `http://my-app.default.svc.cluster.local:8080/metrics`.
 
+### Updating targets without restarting the agent
+
+With `pathConfigs` alone, changing the target list means updating the `ConfigMap` **and restarting
+the agent pod** — which interrupts scraping for every path the agent serves, not just the one that
+changed. [Dynamic target discovery](configuration/agent.md#dynamic-target-discovery) removes the
+restart: mount a *second* `ConfigMap` holding a `paths` list and point `agent.discovery` at it. The
+agent re-reads the file on an interval and reconciles — targets added to the `ConfigMap` start
+scraping within the interval, removed ones unregister, and untouched paths never stop.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-targets
+data:
+  targets.conf: |
+    paths = [
+      { name = "app1", path = "app1_metrics", url = "http://app1.default.svc.cluster.local:9090/metrics" }
+      { name = "app2", path = "app2_metrics", url = "http://app2.default.svc.cluster.local:9090/metrics" }
+    ]
+```
+
+Mount it into the agent pod (e.g. at `/etc/prometheus-proxy/targets.conf`) and enable discovery in
+the agent's main config:
+
+```hocon
+agent {
+  discovery {
+    enabled = true
+    file.path = "/etc/prometheus-proxy/targets.conf"
+    reconcileIntervalSecs = 30
+  }
+}
+```
+
+Discovery **polls** the file rather than using inotify precisely because of how Kubernetes delivers
+`ConfigMap` updates (atomic symlink swaps that file watchers often miss). Note that a kubelet can
+take up to a minute to propagate a `ConfigMap` change to the mounted volume — that delay is
+Kubernetes's, and comes on top of the reconcile interval. A malformed or half-propagated file is
+skipped, keeping the last-known-good target set, so a bad edit never tears down working targets.
+Keep discovery targets in their **own** `ConfigMap`, separate from the agent's main config: whatever
+automation writes the target list then can't touch ports, TLS, or the proxy address.
+
 ### Standalone Deployment
 
 The common pattern is a single agent Deployment per cluster that scrapes several in-cluster
@@ -148,7 +191,13 @@ match the `path` value from the agent `ConfigMap`.
 
     Rather than listing every path by hand, enable the proxy's service-discovery endpoint and
     let Prometheus pull the target list with `http_sd_config`. See
-    [Service Discovery](service-discovery.md).
+    [Service Discovery](service-discovery.md). (This is the *Prometheus-facing* half; the
+    *agent-facing* half — picking up target changes inside the cluster without a restart — is
+    [dynamic target discovery above](#updating-targets-without-restarting-the-agent). The two
+    compose: discovered paths appear in the service-discovery output like any other.
+    **Caveat:** if you run an [HA proxy pair](production.md#high-availability), scrape with
+    `static_config` instead — a standby proxy returns an empty discovery list, which
+    `http_sd_config` treats as "delete these targets".)
 
 ## TLS
 

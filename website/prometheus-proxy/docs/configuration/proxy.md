@@ -106,7 +106,7 @@ proxy {
   dashboard {
     enabled = false                 // Enable the operational dashboard
     port = 8094                     // Its own port, NOT the admin port
-    path = "dashboard"               // Served at http://<proxy>:8094/dashboard
+    path = "dashboard"              // Served at http://<proxy>:8094/dashboard
     refreshIntervalSecs = 2         // Re-push interval for drifting counters
     recentScrapesQueueSize = 200    // Scrape records retained for the dashboard
   }

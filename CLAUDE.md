@@ -33,22 +33,8 @@ Always run lint and build before completing tasks:
 
 ### Useful Make Targets
 
-```bash
-make help            # List all targets with descriptions (auto-extracted from `## …` annotations)
-make tests           # Rerun all checks (lint + tests)
-make nh-tests        # Unit tests only (agent, proxy, common, misc — no harness)
-make ip-tests        # In-process integration tests only
-make netty-tests     # Netty integration tests only
-make tls-tests       # TLS integration tests only
-make container-tests # Full Testcontainers end-to-end suite (proxy + agent + nginx + Prometheus); needs Docker
-make all-tests       # Full suite: `make tests` + `make container-tests`
-make scaling-tests   # Parameter-driven scaling container test (tune via SCALE_* vars); needs Docker
-make regen-certs     # Regenerate the testing/certs TLS fixtures (CA + server + client; 2048-bit)
-make coverage        # Run tests + generate HTML and XML coverage reports
-make coverage-xml    # XML coverage report (for Codacy/Coveralls/etc.)
-make coverage-log    # Print coverage % to console
-make tsconfig        # Regenerate ConfigVals from config/config.conf via tscfg
-```
+Run `make help` for the current target list with descriptions (auto-extracted from `## …` annotations in the
+`Makefile`). The container and scaling targets need Docker.
 
 ## Architecture
 
@@ -63,25 +49,10 @@ Prometheus → Proxy HTTP (:8080) → AgentContext lookup → ScrapeRequest via 
 
 ### Core Components
 
-1. **Proxy (`io.prometheus.Proxy`)** — Runs outside the firewall alongside Prometheus
-   - `ProxyGrpcService` — accepts agent connections on port 50051
-   - `ProxyHttpService` / `ProxyHttpRoutes` — serves proxied metrics on port 8080
-   - `ProxyPathManager` — maps URL paths to agent contexts
-   - `AgentContextManager` — tracks connected agents
-   - `ScrapeRequestManager` — manages scrape request lifecycle with timeouts
-   - `ProxyServiceImpl` — implements the gRPC `ProxyService` definition
-
-2. **Agent (`io.prometheus.Agent`)** — Runs inside the firewall with monitored services
-   - `AgentGrpcService` — connects to proxy, streams scrape requests/responses
-   - `AgentHttpService` — scrapes actual metrics endpoints using Ktor HTTP client
-   - `AgentPathManager` — manages path registrations
-   - `HttpClientCache` — caches HTTP clients keyed by auth credentials (TTL/idle eviction)
-
-3. **Common (`io.prometheus.common/`)** — shared between proxy and agent
-   - `BaseOptions` — CLI argument parsing and config loading (parent of `AgentOptions` / `ProxyOptions`)
-   - `ConfigVals` — type-safe config wrapper (auto-generated from HOCON via tscfg; see `make tsconfig`)
-   - `ScrapeResults` — scrape response data model
-   - `EnvVars` — environment variable mappings
+Source lives under `src/main/kotlin/io/prometheus/{proxy,agent,common}/`. The proxy runs outside the firewall
+alongside Prometheus, the agent runs inside it next to the monitored services, and `common/` holds what both
+share (notably `BaseOptions`, the parent of `AgentOptions` / `ProxyOptions`, and `ConfigVals`, auto-generated
+from HOCON via tscfg — see `make tsconfig`).
 
 ### Public API Surface (Dokka)
 
@@ -98,13 +69,8 @@ When promoting a type from `internal` to `public`, also add a cross-reference to
 
 ### gRPC Service Definition
 
-Defined in `src/main/proto/proxy_service.proto`. Key RPCs:
-
-- `readRequestsFromProxy` — server-streaming: proxy sends scrape requests to agent
-- `writeResponsesToProxy` — client-streaming: agent sends scrape responses back
-- `writeChunkedResponsesToProxy` — client-streaming: chunked responses for large payloads (>32KB default)
-- `registerAgent` / `registerPath` / `unregisterPath` — agent registration lifecycle
-- `sendHeartBeat` — keepalive during inactivity (default 5s)
+Defined in `src/main/proto/proxy_service.proto` — read it for the current RPC set. Note the defaults that
+aren't in the proto: chunked responses kick in above 32KB, and the heartbeat fires every 5s during inactivity.
 
 ### Key Mechanisms
 
@@ -112,6 +78,11 @@ Defined in `src/main/proto/proxy_service.proto`. Key RPCs:
 - **Stale agent cleanup**: `AgentContextCleanupService` evicts inactive agents after `maxAgentInactivitySecs` (default 60s).
 - **Consolidated mode**: Multiple agents can register the same path for redundancy.
 - **Embedded agent**: Agents can run inside other JVM apps via `startAsyncAgent()`.
+- **Proxy failover**: The agent rotates through an ordered `agent.proxy.endpoints` list (`AgentGrpcService.advanceEndpoint` / `resetEndpoint`); failed connects advance, dropped connections retry from the head.
+- **Dynamic target discovery**: `PathDiscoveryService` polls a watched file and calls `AgentPathManager.reconcileDiscoveredPaths`; paths are tagged `STATIC`/`DISCOVERED`, and static entries are never touched.
+- **Per-agent auth**: `AgentAuthManager` + `AgentAuthServerInterceptor` resolve `proxy.auth` identity tokens and enforce path globs on `registerPath`; legacy `proxy.agentToken` maps to an allow-all identity.
+- **Metric filtering**: `MetricFilter` (per-path `agent.filters`) drops whole metric families in `AgentHttpService` before gzip/chunking; fails open on non-text or non-UTF-8 payloads.
+- **Dashboard**: Ktor + htmx (WebJar, no CDN) on its own port, fed by the `ProxyEvent` bus; see `proxy/dashboard/`.
 
 ## Configuration
 
@@ -124,7 +95,7 @@ The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`mak
 `group` and `version` live in `gradle.properties` (single source of truth). The version can be overridden on the command line for CI snapshot publishing:
 
 ```bash
-./gradlew build -PoverrideVersion=3.2.0-SNAPSHOT
+./gradlew build -PoverrideVersion=4.0.0-SNAPSHOT
 ```
 
 `-PoverrideVersion` keeps its `override` prefix because it intentionally only applies when supplied (so the `gradle.properties` default is never accidentally cleared).
@@ -144,16 +115,8 @@ Integration tests in `src/test/kotlin/io/prometheus/harness/`:
 - `TlsNoMutualAuthTest` / `TlsWithMutualAuthTest` — TLS communication tests
 - `support/HarnessSetup.kt` — base class that sets up proxy+agent in test mode
 
-Container tests in `src/test/kotlin/io/prometheus/containers/` — a full Testcontainers suite that builds the proxy and agent images from `etc/docker/*.df`, stands them up alongside an `nginx:1.29-alpine` metrics stub and a `prom/prometheus` container, and verifies the full Prometheus → proxy → agent → endpoint scrape path. Shared container/network/HTTP/PromQL factories live in `support/ContainerTestSupport.kt`. The specs are:
-- `ContainersSmokeTest` — baseline single-metric scrape through proxy and agent
-- `ContainersProxyHttpTest` — proxy/agent HTTP surfaces (registered-path scrapes, 404/503 passthrough, admin servlets, `/metrics`, service discovery)
-- `ContainersConsolidatedTest` — two consolidated agents register the same path; proxy merges responses
-- `ContainersLargePayloadTest` — forces the chunked + gzipped scrape path with a large synthetic payload
-- `ContainersReconnectTest` — agent reconnects to a replacement proxy and scrapes resume
-- `ContainersAgentTokenAuthTest` — pre-shared agent-token authentication on the gRPC channel (match + mismatch)
-- `ContainersDiscoveryTest` — dynamic target discovery: agent reconciles a path from a watched file and serves it
-- `ContainersTlsTest` / `ContainersHttpsTargetTest` — TLS on the gRPC channel and HTTPS upstream targets
-- `ContainersScalingTest` — parameter-driven N-agents × M-endpoints scaling (tune via `SCALE_*` env vars / `make scaling-tests`)
+Container tests in `src/test/kotlin/io/prometheus/containers/` — a full Testcontainers suite that builds the proxy and agent images from `etc/docker/*.df`, stands them up alongside an `nginx:1.29-alpine` metrics stub and a `prom/prometheus` container, and verifies the full Prometheus → proxy → agent → endpoint scrape path. Shared container/network/HTTP/PromQL factories live in `support/ContainerTestSupport.kt`; `ls` that directory
+for the current spec list.
 
 All container specs require Docker and are gated on `RUN_CONTAINER_TESTS=true` (set automatically by `make container-tests` / `make scaling-tests`). Default `./gradlew test` registers placeholders marked SKIPPED.
 
@@ -161,37 +124,13 @@ Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`. Shared test
 
 `EnvVars.getEnv()` reads `java.lang.System.getenv()`, which can't be set in-process, so its parse-and-throw branches aren't reachable by setting an env var in a test. The numeric/boolean parsing is therefore extracted into `internal` companion helpers (`parseBooleanStrict` / `parseIntStrict` / `parseLongStrict`) that the tests call directly. When adding a new typed `getEnv` overload, follow this pattern so the invalid-value path stays testable.
 
-## Documentation Site
-
-Documentation is built with [Zensical](https://zensical.org) (static site generator) and lives in `website/prometheus-proxy/`.
-
-- **Config**: `website/prometheus-proxy/zensical.toml`
-- **Pages**: `website/prometheus-proxy/docs/` (Markdown with pymdownx extensions)
-- **Code snippets**: `src/test/kotlin/website/*.txt` (imported via `--8<--` snippet markers)
-- **Local preview**: `make site` (runs `cd website/prometheus-proxy && uv run --with mkdocs-material zensical serve`)
-- **CI deploy**: `.github/workflows/docs.yml` (builds and deploys to GitHub Pages)
-
-Snippets use dual `base_path` in zensical.toml: first resolves `.txt` files from `src/test/kotlin/website/`, second resolves project-root files like `examples/*.conf`.
-
 ## Shadow JAR Service-File Merging
 
 ShadowJar's default `DuplicatesStrategy` (EXCLUDE) drops duplicate-named entries *before* merging transformers run, so `mergeServiceFiles()` silently loses entries when grpc-core and grpc-netty-shaded both ship a same-named `META-INF/services` file — leaving the fat JAR without a DNS resolver, so the gRPC client defaults to the `unix` scheme on any non-IP hostname. The `agentJar`/`proxyJar` tasks fix this with a `filesMatching()` block that sets `DuplicatesStrategy.INCLUDE` on `META-INF/services/**` and `META-INF/*.kotlin_module` only (everything else keeps first-wins EXCLUDE semantics), letting `ServiceFileTransformer` and `KotlinModuleMetadataTransformer` merge all copies.
 
 As a belt-and-braces guard against future Shadow regressions, the tasks also include `src/shadow/resources/META-INF/services/`, which pins `io.grpc.NameResolverProvider` (DNS + UDS) and `io.grpc.LoadBalancerProvider` (PickFirst + HealthCheckingRoundRobin). The static files don't affect the published Maven jar (they're under `src/shadow/`, not `src/main/`). If gRPC versions change provider class names, update those files to match.
 
-## Publishing
-
-Published to Maven Central as `com.pambrose:prometheus-proxy`. No JitPack.
-
-Repository declarations are centralized in `settings.gradle.kts` via `dependencyResolutionManagement(FAIL_ON_PROJECT_REPOS)` and resolve solely from Maven Central.
-
-Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) require GPG environment variables and a keychain password entry; `make check-gpg-env` validates them up-front.
-
-When bumping the version, update `version` in `gradle.properties` and the `3.2.0` literals in `README.md` and `llms.txt` (Docker tag examples + Maven Central dependency block). The release flow itself is documented in `docs/RELEASE.md`.
-
 ## Code Style
 
-- 2-space indentation for Kotlin, tabs for Makefiles
-- Max line length: 120 characters
-- Kotlinter + detekt enforce style (see `config/detekt/detekt.yml`)
-- Mimic existing code patterns in nearby files
+Formatting is pinned in `.editorconfig` and enforced by kotlinter + detekt (`config/detekt/detekt.yml`) — don't
+restate those rules here. Beyond them: mimic existing code patterns in nearby files.

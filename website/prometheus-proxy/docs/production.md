@@ -13,9 +13,18 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
   agents and vice-versa. See [TLS Setup](security/tls.md).
 - **Set an agent token** (`--agent_token` / `AGENT_TOKEN`) as a lightweight app-level control
   in addition to TLS. An empty token leaves the agent port open and logs a startup warning.
+- **Prefer per-agent identities over one shared token.** A shared token cannot tell agents
+  apart, so any holder can register — and silently take over — any path, including one already
+  served by another agent. Named identities under `proxy.auth` scope each agent to its own path
+  patterns and can be revoked individually. See
+  [Per-Agent Identities](security/index.md#per-agent-identities-and-path-authorization),
+  including the incremental migration path from a shared token.
 - **Segment the network** so only trusted agents can reach the gRPC port (`50051`).
-- **Do not expose the admin port publicly.** `/threaddump` and friends are operational tools,
-  not public endpoints — keep `8092`/`8093` on an internal network only.
+- **Do not expose the admin or dashboard ports publicly.** `/threaddump` and friends are
+  operational tools, not public endpoints — keep `8092`/`8093` on an internal network only. The
+  [dashboard](web-dashboard.md) port (`8094`) is equally unauthenticated and shows agent names,
+  hostnames, and target URLs; it runs on its own port precisely so it can be firewalled without
+  cutting off the `/ping` and `/healthcheck` probes.
 - When forwarding auth headers to targets, **require TLS** so credentials aren't sent in
   plaintext between proxy and agent. See
   [Auth Header Forwarding](security/index.md#auth-header-forwarding).
@@ -103,6 +112,10 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
 - **Import the dashboards and alert rules** from [Grafana & Alerting](grafana.md).
 - Alert on success rate, P99 latency, agent count, and backlog growth — the rules on that page
   cover each.
+- **Enable the [operational dashboard](web-dashboard.md)** (`--dashboard`) on an internal
+  network. Grafana tells you *that* a target is failing; the dashboard shows *why* — which
+  agent backs the path, whether that agent is still connected, and how its recent scrapes
+  went — including paths whose agent has already gone.
 
 ## Logging
 
@@ -120,8 +133,8 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
 ## Pre-flight checklist
 
 - [ ] TLS (ideally mutual) enabled on the gRPC channel
-- [ ] Agent token set, or mutual TLS in place
-- [ ] gRPC port reachable by agents; admin port **not** publicly exposed
+- [ ] Agent token set (per-agent identities where teams share a proxy), or mutual TLS in place
+- [ ] gRPC port reachable by agents; admin and dashboard ports **not** publicly exposed
 - [ ] Metrics enabled and scraped by Prometheus
 - [ ] Dashboards imported and alert rules loaded
 - [ ] `maxConcurrentClients` / timeouts tuned for your targets
