@@ -62,8 +62,7 @@ infrastructure:
 
 ## 🏗️ Architecture
 
-> 📖 **Docs site:
-** [Architecture](https://pambrose.github.io/prometheus-proxy/architecture/) for the full component breakdown and request flow, and the [Glossary](https://pambrose.github.io/prometheus-proxy/glossary/) for the core terms used throughout the docs.
+> 📖 **Docs site:** [Architecture](https://pambrose.github.io/prometheus-proxy/architecture/) for the full component breakdown and request flow, and the [Glossary](https://pambrose.github.io/prometheus-proxy/glossary/) for the core terms used throughout the docs.
 
 The `prometheus-proxy` runtime comprises two services:
 
@@ -110,8 +109,7 @@ agents.
 
 ## 🚀 Quick Start
 
-> 📖 **Docs site:
-** [Quick Start guide](https://pambrose.github.io/prometheus-proxy/getting-started/) walks through these steps with more detail.
+> 📖 **Docs site:** [Quick Start guide](https://pambrose.github.io/prometheus-proxy/getting-started/) walks through these steps with more detail.
 
 **Requirements:** Java 17 or newer
 
@@ -181,8 +179,7 @@ docker run --rm \
 
 ## 📋 Configuration Examples
 
-> 📖 **Docs site:
-** [Agent configuration](https://pambrose.github.io/prometheus-proxy/configuration/agent/) and [Proxy configuration](https://pambrose.github.io/prometheus-proxy/configuration/proxy/) document every config key in depth.
+> 📖 **Docs site:** [Agent configuration](https://pambrose.github.io/prometheus-proxy/configuration/agent/) and [Proxy configuration](https://pambrose.github.io/prometheus-proxy/configuration/proxy/) document every config key in depth.
 
 ### Agent Configuration
 
@@ -252,8 +249,7 @@ scrape_configs:
 
 ## 🐳 Docker Usage
 
-> 📖 **Docs site:
-** [Docker deployment guide](https://pambrose.github.io/prometheus-proxy/docker/) covers compose files, bind mounts, and container configuration. Running on Kubernetes? See the [Kubernetes guide](https://pambrose.github.io/prometheus-proxy/kubernetes/).
+> 📖 **Docs site:** [Docker deployment guide](https://pambrose.github.io/prometheus-proxy/docker/) covers compose files, bind mounts, and container configuration. Running on Kubernetes? See the [Kubernetes guide](https://pambrose.github.io/prometheus-proxy/kubernetes/).
 
 ### Multi-Platform Images
 
@@ -318,8 +314,7 @@ target for `--mount` options.
 If you are running a JVM-based program, you can run with the agent embedded directly in your app and not use an external
 agent. This approach eliminates the need for a separate agent process when your application already runs on the JVM.
 
-> 📖 **Docs site:
-** [Embedded Agent guide](https://pambrose.github.io/prometheus-proxy/embedded-agent/) for the full API surface and lifecycle details.
+> 📖 **Docs site:** [Embedded Agent guide](https://pambrose.github.io/prometheus-proxy/embedded-agent/) for the full API surface and lifecycle details.
 
   ```Java
   // Start embedded agent
@@ -350,8 +345,7 @@ java -jar prometheus-proxy.jar \
 
 Access discovery endpoint at: `http://proxy-host:8080/discovery`
 
-> 📖 **Docs site:
-** [Service Discovery guide](https://pambrose.github.io/prometheus-proxy/service-discovery/) explains the discovery payload format and the Prometheus
+> 📖 **Docs site:** [Service Discovery guide](https://pambrose.github.io/prometheus-proxy/service-discovery/) explains the discovery payload format and the Prometheus
 `http_sd_configs` wiring.
 
 ### Dynamic Target Discovery (Agent)
@@ -486,8 +480,7 @@ Two things to know before deploying a pair:
 - **All endpoints share one TLS configuration** (one trust store, one `overrideAuthority`), so proxies
   with different CAs or certificate SANs fail with an opaque handshake error.
 
-> 📖 **Docs site:
-** [High availability](https://pambrose.github.io/prometheus-proxy/production/#high-availability) for the full Prometheus-side setup, and [Running an HA pair](https://pambrose.github.io/prometheus-proxy/web-dashboard/#running-an-ha-pair) for how the dashboard shows failed-over agents.
+> 📖 **Docs site:** [High availability](https://pambrose.github.io/prometheus-proxy/production/#high-availability) for the full Prometheus-side setup, and [Running an HA pair](https://pambrose.github.io/prometheus-proxy/web-dashboard/#running-an-ha-pair) for how the dashboard shows failed-over agents.
 
 ### Performance Tuning
 
@@ -502,8 +495,7 @@ java -jar prometheus-agent.jar \
 
 ## 📊 Monitoring & Observability
 
-> 📖 **Docs site:
-** [Monitoring guide](https://pambrose.github.io/prometheus-proxy/monitoring/) for the full metrics reference and admin endpoints, plus [Grafana & Alerting](https://pambrose.github.io/prometheus-proxy/grafana/) for ready-to-import dashboards and alert rules.
+> 📖 **Docs site:** [Monitoring guide](https://pambrose.github.io/prometheus-proxy/monitoring/) for the full metrics reference and admin endpoints, plus [Grafana & Alerting](https://pambrose.github.io/prometheus-proxy/grafana/) for ready-to-import dashboards and alert rules.
 
 ### Operational Dashboard
 
@@ -522,8 +514,7 @@ firewalled without cutting off Kubernetes health probes, and it loads no CDN ass
 airgapped deployments. Like the admin and metrics endpoints it has **no authentication or TLS**: keep
 the port internal.
 
-> 📖 **Docs site:
-** [Dashboard guide](https://pambrose.github.io/prometheus-proxy/web-dashboard/) for both layouts, the status-bar gauges, and HA-pair behavior.
+> 📖 **Docs site:** [Dashboard guide](https://pambrose.github.io/prometheus-proxy/web-dashboard/) for both layouts, the status-bar gauges, and HA-pair behavior.
 
 ### Built-in Metrics
 
@@ -535,8 +526,7 @@ Both proxy and agent expose their own metrics:
 
 ## 🔧 Configuration Options
 
-> 📖 **Docs site:
-** [Configuration overview](https://pambrose.github.io/prometheus-proxy/configuration/) and the [CLI Reference](https://pambrose.github.io/prometheus-proxy/cli-reference/) document every option and environment variable.
+> 📖 **Docs site:** [Configuration overview](https://pambrose.github.io/prometheus-proxy/configuration/) and the [CLI Reference](https://pambrose.github.io/prometheus-proxy/cli-reference/) document every option and environment variable.
 
 The proxy and agent use the [Typesafe Config](https://github.com/typesafehub/config) library. Configuration values are
 evaluated in order: **CLI options → environment variables → config file values**.
@@ -577,8 +567,7 @@ Typesafe Config highlights include:
 
 ## 📝 Examples & Use Cases
 
-> 📖 **Docs site:
-** [Example Configs guide](https://pambrose.github.io/prometheus-proxy/examples/) describes each ready-to-run config under
+> 📖 **Docs site:** [Example Configs guide](https://pambrose.github.io/prometheus-proxy/examples/) describes each ready-to-run config under
 `examples/`.
 
 ### Common Scenarios
@@ -604,8 +593,7 @@ Typesafe Config highlights include:
 
 ### Advanced Use Cases
 
-> 📖 **Docs site:
-** [Advanced Topics guide](https://pambrose.github.io/prometheus-proxy/advanced/) covers the Nginx reverse-proxy setup, federation, and other advanced configurations.
+> 📖 **Docs site:** [Advanced Topics guide](https://pambrose.github.io/prometheus-proxy/advanced/) covers the Nginx reverse-proxy setup, federation, and other advanced configurations.
 
 #### Prometheus Federation
 
@@ -669,8 +657,7 @@ port with the pre-shared agent token, mutual TLS, and/or network segmentation.
 
 ## 🔐 Security & TLS
 
-> 📖 **Docs site:
-** [Security overview](https://pambrose.github.io/prometheus-proxy/security/) and the [TLS Setup guide](https://pambrose.github.io/prometheus-proxy/security/tls/) cover agent authentication, mutual TLS, and certificate management in depth.
+> 📖 **Docs site:** [Security overview](https://pambrose.github.io/prometheus-proxy/security/) and the [TLS Setup guide](https://pambrose.github.io/prometheus-proxy/security/tls/) cover agent authentication, mutual TLS, and certificate management in depth.
 
 ### TLS Configuration Details
 
@@ -856,8 +843,7 @@ scrapes, and it takes precedence over `--https_truststore`. Prefer a custom trus
 
 ## 🔧 Troubleshooting
 
-> 📖 **Docs site:
-** [Troubleshooting guide](https://pambrose.github.io/prometheus-proxy/troubleshooting/) is a symptom-driven reference covering more failure modes and fixes.
+> 📖 **Docs site:** [Troubleshooting guide](https://pambrose.github.io/prometheus-proxy/troubleshooting/) is a symptom-driven reference covering more failure modes and fixes.
 
 ### Common Issues
 
