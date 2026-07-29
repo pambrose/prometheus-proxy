@@ -29,6 +29,9 @@ import java.time.Instant
  * Immutable, so a snapshot can hand it to any number of WebSocket sessions without copying.
  *
  * @param agentId the agent that served the scrape, which is what makes a per-agent view possible
+ * @param agentName the agent's configured name, captured here rather than looked up later because the
+ *   record outlives the agent: a departed path's only remaining attribution is the last scrape that ran
+ *   against it, and by then the `AgentContext` holding the name is gone
  * @param path the registered path scraped, without a leading slash
  * @param statusCode the status for this agent's leg of the scrape. On a consolidated path each
  *   participating agent yields its own record, so this is not necessarily the merged status
@@ -39,6 +42,7 @@ import java.time.Instant
  */
 internal data class ScrapeRecord(
   val agentId: String,
+  val agentName: String,
   val path: String,
   val statusCode: Int,
   val outcome: String,

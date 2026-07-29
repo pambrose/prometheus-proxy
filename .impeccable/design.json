@@ -1,0 +1,428 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-29T04:48:00Z",
+  "title": "Design System: prometheus-proxy Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Burnt Orange",
+        "canonical": "#c8461f",
+        "dark": "#ff7043",
+        "note": "Used in exactly two places: focus-visible outlines and the 3px left edge of the current row. Never fills a surface.",
+        "tonalRamp": [
+          "oklch(0.15 0.06 40)",
+          "oklch(0.26 0.10 40)",
+          "oklch(0.37 0.14 40)",
+          "oklch(0.48 0.16 40)",
+          "oklch(0.59 0.17 40)",
+          "oklch(0.70 0.15 40)",
+          "oklch(0.81 0.10 40)",
+          "oklch(0.92 0.05 40)"
+        ]
+      },
+      "ok": {
+        "role": "tertiary",
+        "displayName": "Live Green",
+        "canonical": "#1a7a42",
+        "dark": "#3fb950",
+        "note": "Valid-agent LED, healthy beacon, 2xx pill text, healthy status counters. 4.71:1 on ok-soft, 5.38:1 on surface.",
+        "tonalRamp": [
+          "oklch(0.15 0.05 152)",
+          "oklch(0.26 0.08 152)",
+          "oklch(0.37 0.11 152)",
+          "oklch(0.48 0.13 152)",
+          "oklch(0.59 0.14 152)",
+          "oklch(0.70 0.13 152)",
+          "oklch(0.81 0.09 152)",
+          "oklch(0.92 0.05 152)"
+        ]
+      },
+      "ok-soft": {
+        "role": "tertiary",
+        "displayName": "Live Green Wash",
+        "canonical": "#e3f4ea",
+        "dark": "#12251a",
+        "note": "Backs the 2xx pill and nothing else. Never a row or region background."
+      },
+      "warn": {
+        "role": "tertiary",
+        "displayName": "Drift Amber",
+        "canonical": "#8a5d08",
+        "dark": "#d29922",
+        "note": "True-but-not-yet-failing conditions: the 'failed over' tag, counters near threshold. Has no LED form. 5.07:1 on warn-soft, 5.75:1 on surface.",
+        "tonalRamp": [
+          "oklch(0.15 0.04 70)",
+          "oklch(0.26 0.07 70)",
+          "oklch(0.37 0.10 70)",
+          "oklch(0.48 0.11 70)",
+          "oklch(0.59 0.12 70)",
+          "oklch(0.70 0.12 70)",
+          "oklch(0.81 0.09 70)",
+          "oklch(0.92 0.05 70)"
+        ]
+      },
+      "warn-soft": {
+        "role": "tertiary",
+        "displayName": "Drift Amber Wash",
+        "canonical": "#f9f0da",
+        "dark": "#2a2110",
+        "note": "Backs the 'failed over' tag only."
+      },
+      "crit": {
+        "role": "tertiary",
+        "displayName": "Fault Red",
+        "canonical": "#c02a20",
+        "dark": "#f85149",
+        "note": "Invalid-agent LED, disconnected beacon, non-2xx pill, 'gone' tag, departed rows, disconnected empty state.",
+        "tonalRamp": [
+          "oklch(0.15 0.07 28)",
+          "oklch(0.26 0.11 28)",
+          "oklch(0.37 0.16 28)",
+          "oklch(0.48 0.19 28)",
+          "oklch(0.59 0.19 28)",
+          "oklch(0.70 0.16 28)",
+          "oklch(0.81 0.11 28)",
+          "oklch(0.92 0.05 28)"
+        ]
+      },
+      "crit-soft": {
+        "role": "tertiary",
+        "displayName": "Fault Red Wash",
+        "canonical": "#fbe6e4",
+        "dark": "#2d1512",
+        "note": "Backs non-2xx pills and the 'gone' tag."
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#131820",
+        "dark": "#e7ebf1",
+        "note": "Primary text. Anchors the whole cool blue-grey neutral family — bg, surface, line and ink are all steps of this one ramp.",
+        "tonalRamp": [
+          "oklch(0.15 0.020 255)",
+          "oklch(0.26 0.020 255)",
+          "oklch(0.37 0.018 255)",
+          "oklch(0.48 0.016 255)",
+          "oklch(0.59 0.014 255)",
+          "oklch(0.70 0.012 255)",
+          "oklch(0.81 0.010 255)",
+          "oklch(0.92 0.008 255)"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink Secondary",
+        "canonical": "#48525f",
+        "dark": "#a4aebc",
+        "note": "Neutral tag text. Used sparingly."
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink Tertiary",
+        "canonical": "#626b77",
+        "dark": "#858f9d",
+        "note": "Metadata, timestamps, hostnames, engraved labels, dimmed table columns, empty-state copy. Measured 4.59:1 on surface-2 and 5.40:1 on surface (light); 4.88:1 / 5.37:1 dark. surface-2 is the binding ground -- it sits under every table and section header and is a full tonal step tighter than the reading plane."
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Cold Paper",
+        "canonical": "#f2f5f8",
+        "dark": "#0d1015",
+        "note": "Page ground. Sits just behind the reading plane in light mode; the darkest value in dark mode."
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Reading Plane",
+        "canonical": "#ffffff",
+        "dark": "#151a21",
+        "note": "Where content is read carefully: detail pane, table body, top bar."
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Recessed Plane",
+        "canonical": "#e9edf2",
+        "dark": "#1c222b",
+        "note": "Agent list, section headers, sticky table headers. Always away from the reading plane in contrast."
+      },
+      "surface-3": {
+        "role": "neutral",
+        "displayName": "Pressed Plane",
+        "canonical": "#dde3ea",
+        "dark": "#242c37",
+        "note": "Furthest step from the reading plane: row hover, neutral tag fill, active nav pill."
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Structural Rule",
+        "canonical": "#cfd7e0",
+        "dark": "#2b333f",
+        "note": "1px hairline between regions — bar from body, list from detail."
+      },
+      "line-soft": {
+        "role": "neutral",
+        "displayName": "Soft Rule",
+        "canonical": "#e3e9ef",
+        "dark": "#212934",
+        "note": "1px hairline between rows within a region. Always lower contrast than line, so structure resolves before content."
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "The agent name in the detail hero. The largest text on the surface; weight 640 sits deliberately between regular and bold."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "The base. Agent names, paths, table cells, kv labels — nearly everything."
+      },
+      "body-emphasis": {
+        "displayName": "Body Emphasis",
+        "purpose": "Brand mark and active nav link. Weight carries the difference, not size."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Hero metadata strip, failover line, status bar, and the second line of an agent row. One role: an earlier 11px step for the agent row did the same job half a pixel apart."
+      },
+      "badge": {
+        "displayName": "Badge",
+        "purpose": "Status-code pills. The only place a number is bolded."
+      },
+      "label": {
+        "displayName": "Engraved Label",
+        "purpose": "Section, list, and table column headers. Uppercase at 0.09em — letterspacing does the work a rule or heavier weight would otherwise do."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Tag text only. Shares the Label size but stays 400-weight, mixed case, normal spacing — a tag reports a fact about one row, not a column heading."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "beacon-pulse",
+        "value": "pulse 2.4s ease-out infinite",
+        "purpose": "Healthy connection beacon. Fades between full and 40% opacity — slow enough to read as breathing rather than flashing."
+      },
+      {
+        "name": "beacon-blink",
+        "value": "blink 1s steps(2, start) infinite",
+        "purpose": "Disconnected beacon. Snaps between full and 25% opacity; steps(2) prevents any fade, so it reads as effort rather than decay."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "@media (prefers-reduced-motion: reduce) { animation: none }",
+        "purpose": "Both beacon animations disable. Color and label still carry the full signal."
+      },
+      {
+        "name": "no-transition",
+        "value": "none",
+        "purpose": "The system defines zero CSS transitions. Hover, selection, and live swaps land instantly — an assertion that nothing is being waited on."
+      },
+      {
+        "name": "ws-reconnect-backoff",
+        "value": "min(500 * 2^n, 2000) + random() * 250",
+        "purpose": "Not CSS, but a felt-timing decision: replaces htmx-ext-ws full-jitter backoff (1s→64s) so a LAN dashboard recovers in ~2s instead of sitting dead after the proxy is already back."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "stack",
+        "value": "720px"
+      },
+      {
+        "name": "touch",
+        "value": "(pointer: coarse)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Agent Row Item",
+      "kind": "custom",
+      "refersTo": "row-item",
+      "description": "Full-width list row rendered as a real button, so it is keyboard-operable by construction. Shown at rest and in the current state.",
+      "html": "<div class=\"ds-rows\"><button class=\"ds-row\"><span><span class=\"ds-led ds-led-ok\"></span>agent-us-east-1</span><span class=\"ds-row-sub\">10.4.2.19:41022 &middot; 6 paths</span></button><button class=\"ds-row\" aria-current=\"true\"><span><span class=\"ds-led ds-led-ok\"></span>agent-eu-west-2</span><span class=\"ds-row-sub\">10.9.1.7:52880 &middot; 3 paths</span></button><button class=\"ds-row\"><span><span class=\"ds-led ds-led-crit\"></span>(registering&hellip;)</span><span class=\"ds-row-sub\">10.4.2.31:38104 &middot; 0 paths</span></button></div>",
+      "css": ".ds-rows { --surface:#fff; --surface-2:#e9edf2; --surface-3:#dde3ea; --line-soft:#e3e9ef; --ink:#131820; --ink-3:#626b77; --accent:#c8461f; --ok:#1a7a42; --crit:#c02a20; --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace; background:var(--surface-2); width:262px; font-family:var(--mono); font-size:12.5px; line-height:1.5; } @media (prefers-color-scheme: dark) { .ds-rows { --surface:#151a21; --surface-2:#1c222b; --surface-3:#242c37; --line-soft:#212934; --ink:#e7ebf1; --ink-3:#858f9d; --accent:#ff7043; --ok:#3fb950; --crit:#f85149; } } .ds-row { display:block; width:100%; text-align:left; font:inherit; cursor:pointer; background:none; border:0; border-bottom:1px solid var(--line-soft); border-left:3px solid transparent; padding:10px 15px; color:var(--ink); } .ds-row:hover { background:var(--surface-3); } .ds-row:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; } .ds-row[aria-current=\"true\"] { background:var(--surface); border-left-color:var(--accent); } .ds-row-sub { display:block; color:var(--ink-3); font-size:11.5px; margin-top:2px; } .ds-led { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:7px; } .ds-led-ok { background:var(--ok); } .ds-led-crit { background:var(--crit); }"
+    },
+    {
+      "name": "Status Pill — OK",
+      "kind": "chip",
+      "refersTo": "pill-ok",
+      "description": "A 2xx scrape result. Renders the literal status code — never 'Success', never an icon.",
+      "html": "<span class=\"ds-pill-ok\">200</span>",
+      "css": ".ds-pill-ok { --ok:#1a7a42; --ok-soft:#e3f4ea; font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace; font-size:10.5px; font-weight:600; line-height:1.5; padding:2px 7px; border-radius:20px; background:var(--ok-soft); color:var(--ok); } @media (prefers-color-scheme: dark) { .ds-pill-ok { --ok:#3fb950; --ok-soft:#12251a; } }"
+    },
+    {
+      "name": "Status Pill — Critical",
+      "kind": "chip",
+      "refersTo": "pill-crit",
+      "description": "Any non-2xx scrape result. The only other pill variant that exists.",
+      "html": "<span class=\"ds-pill-crit\">503</span>",
+      "css": ".ds-pill-crit { --crit:#c02a20; --crit-soft:#fbe6e4; font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace; font-size:10.5px; font-weight:600; line-height:1.5; padding:2px 7px; border-radius:20px; background:var(--crit-soft); color:var(--crit); } @media (prefers-color-scheme: dark) { .ds-pill-crit { --crit:#f85149; --crit-soft:#2d1512; } }"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Micro-type capsule in three variants: neutral (consolidated), warn (failed over), crit (gone). Deliberately not the uppercase Label treatment despite the shared 10px size. Warning is a tag here rather than an LED — see The No Amber Dot Rule.",
+      "html": "<span class=\"ds-tags\"><span class=\"ds-tag\">consolidated</span><span class=\"ds-tag ds-tag-warn\">failed over</span><span class=\"ds-tag ds-tag-crit\">gone</span></span>",
+      "css": ".ds-tags { --surface-3:#dde3ea; --ink-2:#48525f; --warn:#8a5d08; --warn-soft:#f9f0da; --crit:#c02a20; --crit-soft:#fbe6e4; display:inline-flex; gap:7px; align-items:center; } @media (prefers-color-scheme: dark) { .ds-tags { --surface-3:#242c37; --ink-2:#a4aebc; --warn:#d29922; --warn-soft:#2a2110; --crit:#f85149; --crit-soft:#2d1512; } } .ds-tag { font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace; font-size:10px; font-weight:400; line-height:1.5; background:var(--surface-3); color:var(--ink-2); padding:2px 7px; border-radius:20px; } .ds-tag-warn { background:var(--warn-soft); color:var(--warn); } .ds-tag-crit { background:var(--crit-soft); color:var(--crit); }"
+    },
+    {
+      "name": "Connection Beacon",
+      "kind": "custom",
+      "refersTo": "led-ok",
+      "description": "The signature component and the only animated element in the system. Severity is carried by a change of tempo — calm 2.4s pulse when live, hard 1s stepped blink when reconnecting — alongside color and a swapped label. Both states shown.",
+      "html": "<div class=\"ds-beacons\"><span class=\"ds-conn\"><span class=\"ds-beacon\"></span>live</span><span class=\"ds-conn ds-conn-down\"><span class=\"ds-beacon\"></span>reconnecting&hellip;</span></div>",
+      "css": ".ds-beacons { --surface:#fff; --ok:#1a7a42; --crit:#c02a20; display:flex; gap:24px; align-items:center; background:var(--surface); padding:11px 15px; font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace; font-size:11.5px; line-height:1.5; } @media (prefers-color-scheme: dark) { .ds-beacons { --surface:#151a21; --ok:#3fb950; --crit:#f85149; } } .ds-conn { display:inline-flex; align-items:center; gap:6px; color:var(--ok); } .ds-beacon { width:7px; height:7px; border-radius:50%; background:var(--ok); animation:ds-pulse 2.4s ease-out infinite; } .ds-conn-down { color:var(--crit); } .ds-conn-down .ds-beacon { background:var(--crit); animation:ds-blink 1s steps(2, start) infinite; } @keyframes ds-pulse { 0%{opacity:1} 70%{opacity:.4} 100%{opacity:1} } @keyframes ds-blink { 0%{opacity:1} 50%{opacity:.25} 100%{opacity:1} } @media (prefers-reduced-motion: reduce) { .ds-beacon, .ds-conn-down .ds-beacon { animation:none } }"
+    },
+    {
+      "name": "Section Header",
+      "kind": "custom",
+      "refersTo": "section-label",
+      "description": "Engraved micro-label with a bare count on the right. The count is never decorated — no pill, no parentheses, no unit noun.",
+      "html": "<div class=\"ds-section\"><span>Registered paths</span><span>6</span></div>",
+      "css": ".ds-section { --surface-2:#e9edf2; --line:#cfd7e0; --ink-3:#626b77; display:flex; justify-content:space-between; padding:9px 15px; font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace; font-size:10px; letter-spacing:0.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; line-height:1.5; border-bottom:1px solid var(--line); background:var(--surface-2); } @media (prefers-color-scheme: dark) { .ds-section { --surface-2:#1c222b; --line:#2b333f; --ink-3:#858f9d; } }"
+    },
+    {
+      "name": "Path Table",
+      "kind": "custom",
+      "refersTo": "table-cell",
+      "description": "The second signature component. Flat by design — no selection, no drill-in; the row is the answer. Sticky engraved header, tabular numerals, nowrap cells inside their own horizontal scroller, and a departed row that stays visible with a 'gone' tag rather than disappearing.",
+      "html": "<div class=\"ds-scroller\"><table class=\"ds-ptable\"><thead><tr><th>Path</th><th>Agent(s)</th><th>Target</th><th>Src</th><th>Last scrape</th><th class=\"ds-num\">Status</th><th class=\"ds-num\">Duration</th></tr></thead><tbody><tr><td>/checkout</td><td>agent-us-east-1</td><td class=\"ds-dim\">http://10.4.2.19:9100/metrics</td><td class=\"ds-dim\">cfg</td><td class=\"ds-dim\">14:22:07</td><td class=\"ds-num\"><span class=\"ds-pill-ok\">200</span></td><td class=\"ds-num ds-dim\">41 ms</td></tr><tr><td>/ledger</td><td>agent-eu-west-2</td><td class=\"ds-dim\">http://10.9.1.7:9100/metrics</td><td class=\"ds-dim\">disc</td><td class=\"ds-dim\">14:22:06</td><td class=\"ds-num\"><span class=\"ds-pill-crit\">503</span></td><td class=\"ds-num ds-dim\">1204 ms</td></tr><tr class=\"ds-departed\"><td>/warehouse</td><td>agent-ap-south-1<span class=\"ds-tag-crit-inline\">gone</span></td><td class=\"ds-dim\">&ndash;</td><td class=\"ds-dim\">cfg</td><td class=\"ds-dim\">14:19:52</td><td class=\"ds-num\"><span class=\"ds-pill-ok\">200</span></td><td class=\"ds-num ds-dim\">88 ms</td></tr></tbody></table></div>",
+      "css": ".ds-scroller { --surface:#fff; --surface-2:#e9edf2; --line:#cfd7e0; --line-soft:#e3e9ef; --ink:#131820; --ink-3:#626b77; --ok:#1a7a42; --ok-soft:#e3f4ea; --crit:#c02a20; --crit-soft:#fbe6e4; overflow-x:auto; background:var(--surface); font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace; font-size:12.5px; line-height:1.5; color:var(--ink); } @media (prefers-color-scheme: dark) { .ds-scroller { --surface:#151a21; --surface-2:#1c222b; --line:#2b333f; --line-soft:#212934; --ink:#e7ebf1; --ink-3:#858f9d; --ok:#3fb950; --ok-soft:#12251a; --crit:#f85149; --crit-soft:#2d1512; } } .ds-ptable { width:100%; border-collapse:collapse; white-space:nowrap; } .ds-ptable th { text-align:left; font-size:10px; letter-spacing:0.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; padding:9px 15px; background:var(--surface-2); border-bottom:1px solid var(--line); position:sticky; top:0; } .ds-ptable td { padding:8px 15px; border-bottom:1px solid var(--line-soft); } .ds-ptable .ds-num { text-align:right; font-variant-numeric:tabular-nums; } .ds-ptable .ds-dim { color:var(--ink-3); } .ds-ptable tr:hover td { background:var(--surface-2); } .ds-ptable tr.ds-departed td:first-child { color:var(--crit); } .ds-tag-crit-inline { font-size:10px; font-weight:400; background:var(--crit-soft); color:var(--crit); padding:2px 7px; border-radius:20px; margin-left:7px; } .ds-ptable .ds-pill-ok { font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:20px; background:var(--ok-soft); color:var(--ok); } .ds-ptable .ds-pill-crit { font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:20px; background:var(--crit-soft); color:var(--crit); }"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Two pill-shaped links switching between the agent and path layouts. Real navigation, not a swap — both layouts are bookmarkable URLs. Focus ring sits outside the pill, unlike the full-bleed row.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\" class=\"ds-nav-link ds-on\" aria-current=\"page\">Agents</a><a href=\"#\" class=\"ds-nav-link\">Paths</a></nav>",
+      "css": ".ds-nav { --surface:#fff; --surface-3:#dde3ea; --ink:#131820; --ink-3:#626b77; --accent:#c8461f; display:flex; gap:4px; background:var(--surface); padding:11px 15px; font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace; font-size:12.5px; line-height:1.5; } @media (prefers-color-scheme: dark) { .ds-nav { --surface:#151a21; --surface-3:#242c37; --ink:#e7ebf1; --ink-3:#858f9d; --accent:#ff7043; } } .ds-nav-link { color:var(--ink-3); text-decoration:none; padding:3px 10px; border-radius:20px; } .ds-nav-link:hover { background:var(--surface-3); color:var(--ink); } .ds-nav-link:focus-visible { outline:2px solid var(--accent); outline-offset:1px; } .ds-nav-link.ds-on { background:var(--surface-3); color:var(--ink); font-weight:600; }"
+    },
+    {
+      "name": "Empty State",
+      "kind": "custom",
+      "refersTo": "empty-state",
+      "description": "A plain sentence in ink-3 — no illustration, no icon, no call to action. The 'gone' variant renders in crit: when state disappears the interface says so rather than freezing or going blank.",
+      "html": "<div class=\"ds-empties\"><div class=\"ds-empty ds-pad\">Select an agent to see its paths and recent scrapes</div><div class=\"ds-empty ds-pad ds-gone\">Agent 7f3a91c2 is no longer connected</div></div>",
+      "css": ".ds-empties { --surface:#fff; --line-soft:#e3e9ef; --ink-3:#626b77; --crit:#c02a20; background:var(--surface); font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace; font-size:12.5px; line-height:1.5; } @media (prefers-color-scheme: dark) { .ds-empties { --surface:#151a21; --line-soft:#212934; --ink-3:#858f9d; --crit:#f85149; } } .ds-empty { color:var(--ink-3); padding:14px 15px; } .ds-empty.ds-pad { padding:22px 18px; } .ds-empty.ds-gone { color:var(--crit); } .ds-empty + .ds-empty { border-top:1px solid var(--line-soft); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Terminal, Grown Up",
+    "overview": "This is a terminal that kept its honesty and gained a spine. Monospace is not a style choice here — it is the operator's native tongue, the same face they read logs, configs, and promtool output in, and switching them out of it at the dashboard boundary would be a small act of condescension. What the terminal gained is everything a TTY never had: four real surface planes, a status palette with semantics instead of ANSI approximations, hairline structure, and full light/dark parity so the page matches whatever the operator's other windows are already doing.\n\nThe register is instrumental and factual. The interface reports; it does not interpret, reassure, or editorialize. A status code is rendered as a number, not as \"Healthy ✓\". A departed agent is labeled gone and left on screen rather than tactfully removed. Absent data gets an en dash, because an empty cell reads as a rendering bug and this surface cannot afford to be mistaken for broken — its entire job is telling an operator whether something is broken. Every visual decision is downstream of that: if the dashboard is ever wrong, or ever looks wrong, it has failed at the one thing it exists to do.\n\nThe system's discipline shows most in what it refuses. There are no shadows, anywhere. There are no transitions, anywhere — hover, selection, and live swaps all land instantly, which is itself a claim about latency the interface then has to keep. The accent color appears in exactly two places on the entire surface. The only thing that moves is a 7px dot reporting whether the socket is alive. This is a system built by subtraction, and the remaining elements are load-bearing.",
+    "keyCharacteristics": [
+      "One typeface — monospace — at 12.5px base, for every role from title to micro-label.",
+      "Zero shadows. Depth is four tonal planes plus two hairline weights.",
+      "Two radii: 0 and fully round. Rectangles hold content; circles report status.",
+      "The accent is used twice: focus rings and the current-row edge. It never fills a surface.",
+      "No CSS transitions. The only animation in the system is the connection beacon.",
+      "Full-bleed layout — no centered container, no max-width, no page margins.",
+      "Complete light/dark parity via prefers-color-scheme; neither theme is the afterthought."
+    ],
+    "rules": [
+      {
+        "name": "The Two Places Rule",
+        "body": "The accent appears on focus rings and the current-row left edge. Nowhere else. It never fills a background, never sets body type, never becomes a button, never appears in a chart. Its rarity is what makes selection findable in a field of monospace at a glance.",
+        "section": "colors"
+      },
+      {
+        "name": "The Paired Status Rule",
+        "body": "Solid status colors carry meaning on type, dots, and borders. Soft status colors have exactly one job: backing a pill or tag. A soft color never becomes a row background, a panel fill, or a section header — a status tint spread across a region would claim the whole region has that status.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Amber Dot Rule",
+        "body": "LEDs and beacons are binary: ok or crit. Warning is a tag, not a lamp. An operator scanning the agent list is answering \"is anything red,\" and a third dot color turns a binary scan into a reading task.",
+        "section": "colors"
+      },
+      {
+        "name": "The Single Face Rule",
+        "body": "One monospace stack, everywhere, no exceptions. Introducing a sans for \"UI chrome\" or a serif for warmth would break the premise: the dashboard reads as an extension of the operator's terminal precisely because it never switches voice.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Any number a reader will compare down a column carries font-variant-numeric: tabular-nums and right-alignment. Durations and status codes already do. A monospace face makes this nearly free — which is one more reason the face is monospace.",
+        "section": "typography"
+      },
+      {
+        "name": "The Engraved Label Rule",
+        "body": "Every region header is 10px, uppercase, 0.09em, weight 600, in ink-3. Small and quiet, but unmistakably a label rather than content. Region headers never get larger; if a region needs more prominence, it gets a hairline, not bigger type.",
+        "section": "typography"
+      },
+      {
+        "name": "The Full Bleed Rule",
+        "body": "No centered container, ever. This is instrumentation, not a document.",
+        "section": "layout"
+      },
+      {
+        "name": "The Contained Scroll Rule",
+        "body": "Wide content scrolls inside its own overflow-x: auto container. The page body never scrolls horizontally. If a new region can outgrow the viewport, it gets its own scroller before it ships.",
+        "section": "layout"
+      },
+      {
+        "name": "The No-Shadow Rule",
+        "body": "Zero shadows. Not for hover, not for panels, not for the \"elevated\" state of anything. If an element needs to separate from its neighbor, it gets a hairline or a tonal step.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Reading Plane Rule",
+        "body": "surface is where content is read. surface-2 and surface-3 are always away from it in contrast, never toward it. When adding a plane, ask which direction from the reading plane it belongs, not whether it is lighter or darker in absolute terms.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Square-or-Circle Rule",
+        "body": "Radius is 0 or fully round. Nothing in between ships. If a new element feels like it wants 6px, it is a container and it wants 0.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Still Interface Rule",
+        "body": "No CSS transitions. Hover, selection, and live swaps land instantly. This is a truth claim: the interface is asserting that nothing is being waited on, and a 150ms ease would make a live push look like a request.",
+        "section": "components"
+      },
+      {
+        "name": "The Named Absence Rule",
+        "body": "Absent data renders as an en dash, never as an empty cell. An empty cell reads as a rendering failure; a dash reads as \"the agent never told us.\" On a surface whose job is reporting failure, the difference is the whole product.",
+        "section": "components"
+      },
+      {
+        "name": "The Say-So Rule",
+        "body": "When state disappears, the interface says so rather than going blank or freezing. A selected agent that disconnects gets a sentence, not a stale pane. A path whose agent departed stays in the table with a gone tag. A silently frozen dashboard is what makes an operator stop trusting it.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do use the monospace stack for every new element. Hierarchy comes from size (15 / 12.5 / 11.5 / 11 / 10.5 / 10), weight (400 / 600 / 640), case, and color — never from a second family.",
+      "Do reach for a hairline or a tonal step when something needs to separate. line between regions, line-soft between rows.",
+      "Do give every new region header the engraved Label treatment: 10px, uppercase, 0.09em, weight 600, ink-3, with a bare count on the right if it has a count.",
+      "Do put tabular-nums and right-alignment on any number that will be compared down a column.",
+      "Do wrap any region that can outgrow the viewport in its own overflow-x: auto scroller.",
+      "Do render absent data as an en dash and departed state as visible-and-labeled.",
+      "Do pair every animation with a prefers-reduced-motion: reduce override, and make sure color and text still carry the full signal when motion is off.",
+      "Do put focus rings inside full-bleed rows (outline-offset: -2px) and outside pills (outline-offset: 1px).",
+      "Do ship every new color as a light/dark pair. Neither theme is the fallback.",
+      "Do check a new color against the worst ground it touches, not the reading plane. surface-2 is the binding case for anything quiet; a value tuned against white alone fails under the table headers.",
+      "Do name one agent the same way in every layout. The path table and the agent list are read against each other, so an internal id in one and a name in the other makes the operator translate.",
+      "Do size the content region with flex, not by subtracting a bar height.",
+      "Do give a state change that is conveyed by color or motion a text equivalent an assistive technology can reach — and keep any live region out of the pushed fragments."
+    ],
+    "donts": [
+      "Don't drift toward a consumer SaaS dashboard — no gradient hero cards, no rounded-2xl, no soft drop shadows, no illustrated empty states, no sparkline that decorates rather than informs. (User-confirmed anti-reference.)",
+      "Don't add a box-shadow. There are zero in the system and that is the elevation strategy, not an oversight.",
+      "Don't add a radius between 0 and fully round. No 4px, no 8px, no 12px.",
+      "Don't fill anything with the accent. It draws focus rings and the current-row edge; that is the complete list.",
+      "Don't use a soft status color as a region or row background. Soft colors back pills and tags only.",
+      "Don't add a third LED color. Warning is a tag, not a lamp.",
+      "Don't add CSS transitions to hover, selection, or live swaps.",
+      "Don't load a webfont, an icon font, an icon package, or any remote asset. PRODUCT.md makes self-containment binding — the proxy ships into networks where the fetch would simply fail.",
+      "Don't introduce a max-width container or center the layout.",
+      "Don't wrap table cells. Paths and target URLs truncate into the scroller; wrapping destroys the column scan.",
+      "Don't remove a departed or failing row to keep the view tidy. Those rows are the product.",
+      "Don't let ink-3 drift lighter. At #626b77 / #858f9d it clears AA on surface-2 by 0.09-0.38, and it carries every timestamp, hostname, label, and dimmed column in the system.",
+      "Don't expose an internal id in the interface. Ids address things in code; names identify them to operators."
+    ]
+  }
+}

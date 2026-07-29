@@ -39,7 +39,8 @@ internal object DashboardFixtures {
     pathSource: String = "",
     lastScrape: ScrapeRecord? = null,
     isDeparted: Boolean = false,
-  ) = PathView(path, agentIds, labels, targetUrl, pathSource, lastScrape, isDeparted)
+    agentNames: List<String> = agentIds.map { "agent-$it" },
+  ) = PathView(path, agentIds, labels, targetUrl, pathSource, lastScrape, isDeparted, agentNames)
 
   fun agentView(
     agentId: String = "1",
@@ -72,7 +73,8 @@ internal object DashboardFixtures {
     durationMillis: Long = 41,
     contentLength: Int = 1800,
     at: Instant = Instant.now(),
-  ) = ScrapeRecord(agentId, path, statusCode, outcome, durationMillis, contentLength, at)
+    agentName: String = "agent-$agentId",
+  ) = ScrapeRecord(agentId, agentName, path, statusCode, outcome, durationMillis, contentLength, at)
 
   /**
    * A snapshot whose `paths` defaults to the agents' own paths, matching what

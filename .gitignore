@@ -70,3 +70,15 @@ __pycache__/
 ### Zensical build output ###
 website/**/site/
 website/**/.cache/
+
+### Agent tooling ###
+# Vendored third-party skills and their hooks. Project-authored skills under .claude/skills/
+# (docs-site, publishing-release) ARE tracked -- they describe how to build this project.
+# Installed general-purpose tooling is not: it is upstream code that would land as a 100+ file
+# diff on every release, it is installed twice for two agent harnesses, and its hook executes
+# on every edit for anyone who clones. The durable output it produces -- DESIGN.md, PRODUCT.md,
+# .impeccable/design.json -- is tracked instead, and is what a compatible harness actually reads.
+.claude/skills/impeccable/
+.claude/settings.local.json
+.github/skills/
+.github/hooks/
