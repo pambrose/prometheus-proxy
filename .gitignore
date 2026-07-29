@@ -84,7 +84,12 @@ website/**/.cache/
 .github/hooks/
 
 # Per-machine state under .impeccable/, which is otherwise a tracked output directory:
-# config.local.json records one developer's hook consent, and live/sessions/ is an append-only
-# recovery journal for an in-progress editing session. Neither describes the project.
+# config.local.json records one developer's hook consent, live/sessions/ is an append-only
+# recovery journal for an in-progress editing session, and the hook.* files are its scratch
+# state -- keyed by session id and holding absolute paths from one machine. None of it
+# describes the project. The tooling also writes these into .git/info/exclude, but that file
+# is local to a single clone, so the rules are duplicated here to cover everyone else's.
 .impeccable/config.local.json
 .impeccable/live/sessions/
+.impeccable/hook.cache.json
+.impeccable/hook.pending.json
