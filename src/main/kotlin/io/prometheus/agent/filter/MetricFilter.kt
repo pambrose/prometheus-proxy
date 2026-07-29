@@ -18,7 +18,7 @@ package io.prometheus.agent.filter
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import java.nio.charset.CharacterCodingException
-import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicBoolean
 
 /**
  * Outcome of filtering one scraped payload.
@@ -92,7 +92,7 @@ internal class MetricFilter private constructor(
     contentType: String,
   ): FilterOutcome? {
     if (!isFilterableContentType(contentType)) {
-      if (contentTypeWarned.compareAndSet(false, true))
+      if (contentTypeWarned.compareAndSet(expectedValue = false, newValue = true))
         logger.warn { "Skipping metric filter for /$path: content type \"$contentType\" is not text" }
       return null
     }
@@ -109,7 +109,7 @@ internal class MetricFilter private constructor(
         null
       }
     if (decoded == null) {
-      if (invalidUtf8Warned.compareAndSet(false, true))
+      if (invalidUtf8Warned.compareAndSet(expectedValue = false, newValue = true))
         logger.warn { "Skipping metric filter for /$path: response body is not valid UTF-8" }
       return null
     }
