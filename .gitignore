@@ -82,3 +82,9 @@ website/**/.cache/
 .claude/settings.local.json
 .github/skills/
 .github/hooks/
+
+# Per-machine state under .impeccable/, which is otherwise a tracked output directory:
+# config.local.json records one developer's hook consent, and live/sessions/ is an append-only
+# recovery journal for an in-progress editing session. Neither describes the project.
+.impeccable/config.local.json
+.impeccable/live/sessions/
