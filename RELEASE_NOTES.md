@@ -68,6 +68,19 @@ both layouts, and both viewport widths, and re-measuring after each fix.
   `java.util.concurrent.atomic` holdout in the codebase. No behavior change.
 - Markdown link formatting fixed in the README's documentation section.
 
+### Dependency updates
+
+Patch-level bumps throughout, none of which change behavior: gRPC 1.83.0 → 1.83.1, Ktor 3.5.1 →
+3.5.2, Logback 1.6.0 → 1.6.1, and common-utils 3.2.1 → 3.2.2. Build-only: the shared convention
+plugins 1.1.0 → 1.1.1, and the Gradle versions plugin 0.54.0 → 0.57.0, which also moves coordinate
+from `com.github.ben-manes.versions` to `io.github.ben-manes.versions`. The documentation site's
+Python lock picks up Zensical 0.0.51 → 0.0.52 and Markdown 3.10.2 → 3.10.3.
+
+If you consume the published artifact, none of this needs anything from you — the runtime bumps are
+transitive and the rest is build tooling. If you build from source, the plugin coordinate change is
+the only one that would announce itself, and it does so immediately: an unresolvable plugin id stops
+Gradle configuration outright rather than failing later.
+
 ---
 
 ## 4.0.0

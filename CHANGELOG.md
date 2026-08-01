@@ -22,7 +22,9 @@ All notable changes to this project are documented in this file.
 ### Internal
 
 - Replace the last `java.util.concurrent.atomic` holdout in the codebase with `kotlin.concurrent.atomics.AtomicBoolean` in `MetricFilter`, matching the named-argument `compareAndSet` idiom used elsewhere. No behavior change
-- Update the documentation site's Python dependency lock (`website/uv.lock`) to current releases
+- Update dependencies: gRPC 1.83.0 → 1.83.1, Ktor 3.5.1 → 3.5.2, Logback 1.6.0 → 1.6.1, common-utils 3.2.1 → 3.2.2, and the `pambrose-gradle-plugins` convention plugins 1.1.0 → 1.1.1
+- Move the Gradle versions plugin to its new coordinate (`com.github.ben-manes.versions` → `io.github.ben-manes.versions`) and update it 0.54.0 → 0.57.0
+- Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.51 → 0.0.52 and Markdown 3.10.2 → 3.10.3
 
 ## [4.0.0] - 2026-07-25
 
