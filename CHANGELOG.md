@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.0.1] - 2026-07-31
+
+### Bug Fixes
+
+- **The dashboard's path layout now identifies agents by name rather than internal id.** `PathView` carried only `agentId`, so the path table showed `1` where the agent list showed the agent's name. The two layouts are meant to be read against each other — find a failing path in one, look that agent up in the other — so an internal id in one view forced a manual translation, and on a proxy with forty agents an impractical one. `ScrapeRecord` and `PathView` now carry `agentName`, and both layouts share one `agentLabel()` helper so an agent that has not finished registering never appears under two different labels. Ids are still used for grouping; only the displayed value changed
+- **Fixed 29 WCAG AA contrast failures in the dashboard; the measured floor is now 4.59:1.** Three tokens were a step too light — `ink-3` (`#78828f` light / `#6f7986` dark), `ok` (`#1f8a4c`) and `warn` (`#a8710a`), the last failing in a state no test fixture had ever rendered. Every failure had the same cause: the colors were tuned against `--surface`, but each also lands on `--surface-2`, a full tonal step tighter, under every table and section header. Contrast was measured from real renders in headless Chrome across both themes, both layouts, and 1280px/390px viewports rather than computed by hand
+- **The dashboard was unusable with a screen reader.** Added the `lang` attribute, a `main` landmark, `scope` on the path table's column headers, and a table caption. Connection loss and recovery are now announced through a polite live region — the beacon reported that state with colour and a change of rhythm, neither of which reaches a screen reader, so the page could go silently stale while still appearing live. The live region is deliberately placed outside every out-of-band region: one the push loop rewrote would re-announce itself on every frame
+- **Fixed a latent 4px page scroll in the dashboard.** The main area sized itself with `calc(100vh - 44px)` against a status bar that actually measures 48px; it now uses column flex and derives the height instead of hard-coding it
+- Dashboard nav links now reach a 44px touch target under `pointer: coarse` only, since target size follows the input device rather than the viewport; status-bar stats no longer wrap mid-phrase at 390px; and a departed count explains why the paths counter can read `0` above three visible rows
+
+### Documentation
+
+- Add `PRODUCT.md` (product truth) and `DESIGN.md` plus its `.impeccable/design.json` sidecar (the dashboard's visual system: color tokens, typography roles, component inventory, and the named rules behind them). `DESIGN.md` records the measured contrast floor so a future color change can be checked against it
+- Fix Markdown link formatting in the documentation-links section of `README.md`
+
+### Internal
+
+- Replace the last `java.util.concurrent.atomic` holdout in the codebase with `kotlin.concurrent.atomics.AtomicBoolean` in `MetricFilter`, matching the named-argument `compareAndSet` idiom used elsewhere. No behavior change
+- Update dependencies: gRPC 1.83.0 → 1.83.1, Ktor 3.5.1 → 3.5.2, Logback 1.6.0 → 1.6.1, common-utils 3.2.1 → 3.2.2, and the `pambrose-gradle-plugins` convention plugins 1.1.0 → 1.1.1
+- Move the Gradle versions plugin to its new coordinate (`com.github.ben-manes.versions` → `io.github.ben-manes.versions`) and update it 0.54.0 → 0.57.0
+- Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.51 → 0.0.52 and Markdown 3.10.2 → 3.10.3
+
 ## [4.0.0] - 2026-07-25
 
 ### Bug Fixes

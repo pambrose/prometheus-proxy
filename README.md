@@ -36,7 +36,13 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## ✨ New Features
 
-Version 4.0.0 (released 2026-07-25) adds five features focused on running the proxy as production
+Version 4.0.1 (released 2026-07-31) is a dashboard patch release: agents are now identified by name
+rather than internal id in the path layout, 29 WCAG AA contrast failures are fixed (measured floor
+4.59:1), and the page is usable with a screen reader — see the
+[changelog](CHANGELOG.md) for the full list. Nothing in it changes configuration, metrics, or the wire
+protocol.
+
+Version 4.0.0 (released 2026-07-25) added five features focused on running the proxy as production
 infrastructure:
 
 - **[Operational Dashboard](https://pambrose.github.io/prometheus-proxy/web-dashboard/)** — A
@@ -169,12 +175,12 @@ If you prefer to build the project from source:
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.0.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.0.1
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.0.0
+  pambrose/prometheus-agent:4.0.1
 ```
 
 ## 📋 Configuration Examples
@@ -256,8 +262,8 @@ scrape_configs:
 The docker images support multiple architectures (amd64, arm64, s390x, ppc64le):
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.0.0
-docker pull pambrose/prometheus-agent:4.0.0
+docker pull pambrose/prometheus-proxy:4.0.1
+docker pull pambrose/prometheus-agent:4.0.1
 ```
 
 ### Production Docker Setup
@@ -270,7 +276,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
         --restart unless-stopped \
-        pambrose/prometheus-proxy:4.0.0
+        pambrose/prometheus-proxy:4.0.1
 ```
 
 Start an agent container with:
@@ -280,7 +286,7 @@ Start an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         --restart unless-stopped \
-        pambrose/prometheus-agent:4.0.0
+        pambrose/prometheus-agent:4.0.1
 ```
 
 Or use docker-compose: see `etc/compose/proxy.yml` for a working example.
@@ -301,7 +307,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:4.0.0
+    pambrose/prometheus-agent:4.0.1
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -509,10 +515,15 @@ java -jar prometheus-proxy.jar --dashboard    # or DASHBOARD_ENABLED=true / prox
 ```
 
 Then open `http://proxy-host:8094/dashboard`. Two layouts share the page: **Agents** (drill into one
-agent) and **Paths** (one row per target). It runs on its own port — not the admin port — so it can be
-firewalled without cutting off Kubernetes health probes, and it loads no CDN assets, so it works in
-airgapped deployments. Like the admin and metrics endpoints it has **no authentication or TLS**: keep
-the port internal.
+agent) and **Paths** (one row per target). Both name the agent serving a path, so the two layouts can
+be read against each other. It runs on its own port — not the admin port — so it can be firewalled
+without cutting off Kubernetes health probes, and it loads no CDN assets, so it works in airgapped
+deployments. Like the admin and metrics endpoints it has **no authentication or TLS**: keep the port
+internal.
+
+Accessibility: text and UI colors clear the WCAG AA contrast thresholds with a measured floor of
+4.59:1, the path table carries proper header semantics, and connection loss and recovery are
+announced to screen readers rather than signalled by colour alone.
 
 > 📖 **Docs site:** [Dashboard guide](https://pambrose.github.io/prometheus-proxy/web-dashboard/) for both layouts, the status-bar gauges, and HA-pair behavior.
 
@@ -714,7 +725,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:4.0.0
+    pambrose/prometheus-proxy:4.0.1
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -722,7 +733,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:4.0.0
+    pambrose/prometheus-agent:4.0.1
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -898,7 +909,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.0.0")
+  implementation("com.pambrose:prometheus-proxy:4.0.1")
 }
 ```
 
