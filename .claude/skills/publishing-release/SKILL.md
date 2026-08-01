@@ -15,4 +15,4 @@ Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-ma
 
 ## Bumping the version
 
-When bumping the version, update `version` in `gradle.properties` and the `4.0.0` literals in `README.md` and `llms.txt` (Docker tag examples + Maven Central dependency block). The release flow itself is documented in `docs/RELEASE.md`.
+When bumping the version, update `version` in `gradle.properties` and the `4.0.1` literals in `README.md` and `llms.txt` (Docker tag examples + Maven Central dependency block). The release flow itself is documented in `docs/RELEASE.md`.

@@ -63,7 +63,7 @@ Key RPCs:
 - **Dynamic target discovery** (4.0.0): Opt-in `agent.discovery` reconcile loop keeps registered paths in sync with a watched HOCON/JSON file (`paths` list of `{ name, path, url, labels }`), so targets change at runtime with no agent restart. Static `pathConfigs` are never touched; a read failure keeps the last-known-good set, while a valid-but-empty file removes all discovered paths
 - **Per-agent identities** (4.0.0): `proxy.auth` lists named identities (token + allowed path globs) enforced on every `registerPath`, closing the shared-token hole where any agent could register (and take over) any path. Legacy `proxy.agentToken` is honored as an allow-all identity for migration
 - **Metric filtering** (4.0.0): Optional per-path `agent.filters` (fully-anchored `metricNameAllow` / `metricNameDeny` regexes) drop whole metric families at the agent before gzip/chunking, so unwanted series never cross the WAN. Families are kept or dropped atomically (a histogram's `_bucket`/`_sum`/`_count` stay together); non-text or non-UTF-8 payloads pass through unfiltered (fails open)
-- **Operational dashboard** (4.0.0): Read-only live web UI on its own port (`--dashboard`, default port 8094, off by default, unauthenticated) showing connected agents, registered paths — including paths whose agent has gone — and recent scrape results. Two layouts: `/dashboard` (per-agent) and `/dashboard/paths` (one row per path)
+- **Operational dashboard** (4.0.0): Read-only live web UI on its own port (`--dashboard`, default port 8094, off by default, unauthenticated) showing connected agents, registered paths — including paths whose agent has gone — and recent scrape results. Two layouts: `/dashboard` (per-agent) and `/dashboard/paths` (one row per path). Both identify agents by name, not internal id, so the two layouts can be read against each other (4.0.1). The page meets WCAG AA (measured contrast floor 4.59:1) and announces connection loss and recovery through a live region (4.0.1); `DESIGN.md` records the visual system and the contrast floor
 
 ### Public API Surface
 
@@ -93,12 +93,12 @@ java -jar prometheus-agent.jar --proxy mymachine.local --config myapps.conf
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.0.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.0.1
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.0.0
+  pambrose/prometheus-agent:4.0.1
 ```
 
 ## Configuration
@@ -203,7 +203,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.0.0")
+  implementation("com.pambrose:prometheus-proxy:4.0.1")
 }
 ```
 

@@ -2,6 +2,74 @@
 
 ---
 
+## 4.0.1
+
+_Released 2026-07-31_
+
+A patch release that fixes the operational dashboard shipped in 4.0.0. Nothing here changes
+configuration, metrics, or the wire protocol — upgrading is a drop-in replacement.
+
+### Highlights
+
+- **The path layout now names the agent instead of showing an internal id.** The dashboard's two
+  layouts are meant to be read against each other — find a failing path in the path view, look that
+  agent up in the agent view — but the path table printed `1` where the agent list printed the agent's
+  name. The correlation the two-layout design exists to support required a manual translation, and on
+  a proxy with forty agents that is not a translation anyone is going to do at 3am.
+
+- **The dashboard is now usable with a screen reader.** It previously had no `lang`, no `main`
+  landmark, no column scopes or caption on the path table, and — most consequentially — no way to
+  announce that the connection had dropped. The live indicator reports that with colour and a change
+  of rhythm, neither of which reaches assistive technology, so the page could go stale while still
+  reading as live.
+
+- **29 contrast failures are fixed; the measured floor is 4.59:1.** These were found by measuring
+  real renders rather than by reading the stylesheet, which is why the count was 29 rather than the
+  handful an eyeball audit would have produced.
+
+### What changed in the dashboard
+
+**Agent identity.** `ScrapeRecord` and `PathView` now carry `agentName` alongside `agentId`, and both
+layouts render through one shared `agentLabel()` so an agent that has not finished registering can
+never appear under two different labels in two places. Ids are still used for grouping and routing;
+only the displayed value changed.
+
+**Contrast.** Three tokens were a step too light: `ink-3` (`#78828f` light / `#6f7986` dark), `ok`
+(`#1f8a4c`), and `warn` (`#a8710a`). Every one of the 29 failures traced to the same mistake — the
+colors were tuned against `--surface`, but each also lands on `--surface-2`, a full tonal step
+tighter, underneath every table and section header. The `warn` token was failing in a state no test
+fixture had ever rendered, so no amount of reviewing the existing screenshots would have caught it.
+The rule that came out of this is recorded in `DESIGN.md`: check a color against the worst ground it
+touches, not its most flattering one.
+
+**Accessibility.** Added `lang`, a `main` landmark, `scope` on the path table's column headers, and a
+caption. Connection loss and recovery are announced through a polite live region. That region sits
+outside every out-of-band region on purpose — one the push loop rewrote would re-announce itself on
+every frame, turning a status message into a metronome. There is a test pinning that placement,
+because it is the kind of thing a later refactor breaks silently.
+
+**Layout.** The main area sized itself with `calc(100vh - 44px)` against a status bar that actually
+measures 48px, which is a latent 4px page scroll; it now uses column flex and derives the height.
+Nav links reach a 44px touch target under `pointer: coarse` only, since target size should follow the
+input device rather than the viewport — a narrow desktop window does not need finger-sized hit areas.
+Status-bar stats no longer wrap mid-phrase at 390px, and a departed count now explains why the paths
+counter can read `0` while three rows are visible.
+
+All of this was verified by driving a live proxy and agent in headless Chrome across both themes,
+both layouts, and both viewport widths, and re-measuring after each fix.
+
+### Also in this release
+
+- `PRODUCT.md` and `DESIGN.md` (with a `.impeccable/design.json` sidecar) now record the dashboard's
+  product and visual systems — color tokens, typography roles, component inventory, and the reasoning
+  behind them. `DESIGN.md` carries the measured contrast floor, so the next color change has
+  something to be checked against.
+- `MetricFilter` now uses `kotlin.concurrent.atomics.AtomicBoolean`, the last
+  `java.util.concurrent.atomic` holdout in the codebase. No behavior change.
+- Markdown link formatting fixed in the README's documentation section.
+
+---
+
 ## 4.0.0
 
 _Released 2026-07-25_
