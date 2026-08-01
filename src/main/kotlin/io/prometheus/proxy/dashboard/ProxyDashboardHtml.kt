@@ -21,10 +21,13 @@ import kotlinx.html.FlowContent
 import kotlinx.html.HTML
 import kotlinx.html.SPAN
 import kotlinx.html.a
+import kotlinx.html.ThScope
 import kotlinx.html.body
 import kotlinx.html.button
+import kotlinx.html.caption
 import kotlinx.html.div
 import kotlinx.html.head
+import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
 import kotlinx.html.script
@@ -77,6 +80,7 @@ internal object ProxyDashboardHtml {
   const val DETAIL_ID = "detail"
   const val STATUS_ID = "status-bar"
   const val PATH_TABLE_ID = "path-table"
+  const val ANNOUNCER_ID = "conn-announce"
 
   /** The full page. Only served on a real navigation; every later update arrives over the socket. */
   fun HTML.renderPage(
@@ -85,6 +89,9 @@ internal object ProxyDashboardHtml {
     dashboardPath: String,
     layout: DashboardLayout = DashboardLayout.AGENT,
   ) {
+    // Declared so assistive tech pronounces agent names, paths, and status text as English rather than
+    // falling back to the listener's system locale.
+    attributes["lang"] = "en"
     head {
       title("prometheus-proxy")
       meta(name = "viewport", content = "width=device-width, initial-scale=1")
@@ -101,16 +108,27 @@ internal object ProxyDashboardHtml {
         renderNav(dashboardPath, layout)
         renderStatus(snapshot)
       }
+      // The one live region on the page. Kept outside every out-of-band id on purpose: a region the push
+      // loop rewrites would re-announce itself on every frame, so this is written only by the socket
+      // lifecycle handlers, which fire when the state actually changes.
+      div("sr-only") {
+        attributes["id"] = ANNOUNCER_ID
+        attributes["role"] = "status"
+        attributes["aria-live"] = "polite"
+      }
+
       when (layout) {
         DashboardLayout.AGENT -> {
-          div("md") {
+          main("md") {
             renderAgentList(snapshot, selectedId, dashboardPath)
             renderDetail(snapshot, selectedId)
           }
         }
 
         DashboardLayout.PATH -> {
-          renderPathTable(snapshot)
+          main {
+            renderPathTable(snapshot)
+          }
         }
       }
       // The one piece htmx does not model: telling the server which agent THIS session is viewing, so
@@ -165,15 +183,16 @@ internal object ProxyDashboardHtml {
       return
     }
     table("ptable") {
+      caption("sr-only") { +"Registered paths and the most recent scrape against each" }
       thead {
         tr {
-          th { +"Path" }
-          th { +"Agent(s)" }
-          th { +"Target" }
-          th { +"Src" }
-          th { +"Last scrape" }
-          th(classes = "num") { +"Status" }
-          th(classes = "num") { +"Duration" }
+          th(scope = ThScope.col) { +"Path" }
+          th(scope = ThScope.col) { +"Agent(s)" }
+          th(scope = ThScope.col) { +"Target" }
+          th(scope = ThScope.col) { +"Src" }
+          th(scope = ThScope.col) { +"Last scrape" }
+          th(scope = ThScope.col, classes = "num") { +"Status" }
+          th(scope = ThScope.col, classes = "num") { +"Duration" }
         }
       }
       tbody {
@@ -182,7 +201,8 @@ internal object ProxyDashboardHtml {
             td { +"/${path.path}" }
             td {
               // A departed path still names who was serving it -- that is usually the whole answer.
-              +(path.servingAgent ?: DASH)
+              // Named the way the agent list names it, so the two layouts can be read against each other.
+              +(path.servingAgent?.let(::agentLabel) ?: DASH)
               if (path.isDeparted) span("tag crit") { +"gone" }
               if (path.additionalAgents > 0) span("dim") { +" +${path.additionalAgents}" }
             }
@@ -227,6 +247,12 @@ internal object ProxyDashboardHtml {
     }
     span { +"${snapshot.health.agentCount} agents" }
     span { +"${snapshot.health.pathCount} paths" }
+    // health.pathCount counts registrations, so a departed path is deliberately absent from it -- which
+    // read as the bar contradicting the table it sits above ("0 paths" over three visible rows). Naming
+    // the departed count separately keeps both numbers true and explains the difference.
+    val departed = snapshot.paths.count { it.isDeparted }
+    if (departed > 0)
+      span("crit") { +"$departed departed" }
     val h = snapshot.health
     span(if (h.chunkContextHealthy && h.scrapeMapHealthy) "ok" else "warn") {
       +"chunks ${h.chunkContextSize}/${h.chunkContextThreshold} · scrapes ${h.scrapeMapSize}/${h.scrapeMapThreshold}"
@@ -406,11 +432,16 @@ internal object ProxyDashboardHtml {
     selectedId: String?,
   ): String = createHTML().div("md-detail") { detailInner(snapshot, selectedId, oob = false) }
 
-  private fun AgentView.displayName(): String =
-    // Identity arrives at registerAgent, which is strictly after the transport filter created this
-    // context -- so a just-connected agent legitimately has none yet. Showing the raw placeholder
-    // would read as corruption rather than as a normal transient state.
-    if (agentName == UNASSIGNED) "(registering…)" else agentName
+  private fun AgentView.displayName(): String = agentLabel(agentName)
+
+  /**
+   * Identity arrives at `registerAgent`, which is strictly after the transport filter created the
+   * context — so a just-connected agent legitimately has none yet. Showing the raw placeholder would
+   * read as corruption rather than as a normal transient state.
+   *
+   * Shared by both layouts so one agent never appears under two different labels.
+   */
+  private fun agentLabel(name: String): String = if (name == UNASSIGNED) "(registering…)" else name
 
   private fun humanize(duration: Duration): String =
     when {
@@ -474,7 +505,24 @@ internal object ProxyDashboardHtml {
       // instant the socket reopens -- the very next push then re-renders the bar in its healthy state.
       // Deliberately not set on 'htmx:wsConnecting': that also fires for the first connect on load, and
       // reacting to it would flash the indicator red before the initial open.
-      function connected(up) { document.body.classList.toggle('ws-down', !up); }
+      //
+      // The same transition is spoken into the live region. The beacon reports this visually with colour
+      // and a change of rhythm, neither of which reaches a screen reader; without this the page goes
+      // silently stale, which is the one failure this dashboard exists to make impossible to miss.
+      // Scoped to the connection alone -- announcing every pushed counter would make the region unusable.
+      var wasDown = false;
+      function announceConn(up) {
+        var region = document.getElementById('$ANNOUNCER_ID');
+        if (!region) return;
+        // Nothing to say about the first successful connect; only a recovery from a real outage.
+        if (!up) region.textContent = 'Connection to the proxy lost. Reconnecting.';
+        else if (wasDown) region.textContent = 'Connection to the proxy restored.';
+      }
+      function connected(up) {
+        document.body.classList.toggle('ws-down', !up);
+        announceConn(up);
+        wasDown = !up;
+      }
       document.body.addEventListener('htmx:wsOpen', function () { connected(true); });
       document.body.addEventListener('htmx:wsClose', function () { connected(false); });
       document.body.addEventListener('htmx:wsError', function () { connected(false); });
@@ -486,28 +534,43 @@ internal object ProxyDashboardHtml {
 
   private val CSS =
     """
+    /* Every quiet colour is set so its *worst* pairing still clears 4.5:1, not just its pairing with
+       --surface. --ink-3 is the binding case: it lands on --surface-2 under the table and section
+       headers, which is a full step closer than the reading plane. */
     :root {
       --bg:#f2f5f8; --surface:#fff; --surface-2:#e9edf2; --surface-3:#dde3ea;
-      --line:#cfd7e0; --line-soft:#e3e9ef; --ink:#131820; --ink-2:#48525f; --ink-3:#78828f;
-      --accent:#c8461f; --ok:#1f8a4c; --ok-soft:#e3f4ea; --warn:#a8710a; --warn-soft:#f9f0da;
+      --line:#cfd7e0; --line-soft:#e3e9ef; --ink:#131820; --ink-2:#48525f; --ink-3:#626b77;
+      --accent:#c8461f; --ok:#1a7a42; --ok-soft:#e3f4ea; --warn:#8a5d08; --warn-soft:#f9f0da;
       --crit:#c02a20; --crit-soft:#fbe6e4;
       --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --bg:#0d1015; --surface:#151a21; --surface-2:#1c222b; --surface-3:#242c37;
-        --line:#2b333f; --line-soft:#212934; --ink:#e7ebf1; --ink-2:#a4aebc; --ink-3:#6f7986;
+        --line:#2b333f; --line-soft:#212934; --ink:#e7ebf1; --ink-2:#a4aebc; --ink-3:#858f9d;
         --accent:#ff7043; --ok:#3fb950; --ok-soft:#12251a; --warn:#d29922; --warn-soft:#2a2110;
         --crit:#f85149; --crit-soft:#2d1512;
       }
     }
+    /* Visible to assistive tech, absent from the render. Used for the connection announcer and the
+       table caption, both of which duplicate something the layout already says visually. */
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+      clip-path:inset(50%); white-space:nowrap; border:0; }
     * { box-sizing:border-box; margin:0; padding:0; }
-    body { background:var(--bg); color:var(--ink); font-family:var(--mono); font-size:12.5px; line-height:1.5; }
+    /* Column flex rather than a `calc(100vh - 44px)` on the content: the bar's height is set by its own
+       content and changes with the touch-target rules below, so any hard-coded number is wrong on some
+       viewport. This makes the content region exactly the remaining space, whatever the bar measures. */
+    body { background:var(--bg); color:var(--ink); font-family:var(--mono); font-size:12.5px; line-height:1.5;
+           display:flex; flex-direction:column; min-height:100vh; }
+    body > main { flex:1; }
     .bar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
            padding:11px 15px; border-bottom:1px solid var(--line); background:var(--surface); }
     .brand { font-weight:600; }
-    .bar-right { display:flex; align-items:center; gap:14px; color:var(--ink-3); font-size:11.5px; }
-    .bar-right .ok { color:var(--ok); } .bar-right .warn { color:var(--warn); }
+    .bar-right { display:flex; align-items:center; flex-wrap:wrap; gap:14px; color:var(--ink-3); font-size:11.5px; }
+    /* Each stat stays whole; the row wraps between them rather than mid-phrase, which at 390px was
+       splitting "0 agents" across two lines. */
+    .bar-right > span { white-space:nowrap; }
+    .bar-right .ok { color:var(--ok); } .bar-right .warn { color:var(--warn); } .bar-right .crit { color:var(--crit); }
     .conn { display:inline-flex; align-items:center; gap:6px; color:var(--ok); }
     .conn .conn-down { display:none; }
     .beacon { width:7px; height:7px; border-radius:50%; background:var(--ok); animation:pulse 2.4s ease-out infinite; }
@@ -521,7 +584,7 @@ internal object ProxyDashboardHtml {
     body.ws-down .beacon { background:var(--crit); animation:blink 1s steps(2, start) infinite; }
     @keyframes blink { 0%{opacity:1} 50%{opacity:.25} 100%{opacity:1} }
     @media (prefers-reduced-motion: reduce) { .beacon, body.ws-down .beacon { animation:none } }
-    .md { display:grid; grid-template-columns:262px 1fr; min-height:calc(100vh - 44px); }
+    .md { display:grid; grid-template-columns:262px 1fr; }
     .md-list { border-right:1px solid var(--line); background:var(--surface-2); }
     .md-head, .section { display:flex; justify-content:space-between; padding:9px 15px; font-size:10px;
       letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600;
@@ -532,7 +595,9 @@ internal object ProxyDashboardHtml {
     .md-row:hover { background:var(--surface-3); }
     .md-row:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
     .md-row[aria-current="true"] { background:var(--surface); border-left-color:var(--accent); }
-    .md-row .host { display:block; color:var(--ink-3); font-size:11px; margin-top:2px; }
+    /* 11.5px, matching .bar-right and .hero-meta: this is the same job -- quiet supporting metadata --
+       and a separate 11px step for it was a size the hierarchy never used. */
+    .md-row .host { display:block; color:var(--ink-3); font-size:11.5px; margin-top:2px; }
     .md-detail { background:var(--surface); }
     .hero { padding:14px 18px; border-bottom:1px solid var(--line); }
     .hero-title { font-size:15px; font-weight:640; display:flex; align-items:center; gap:9px; }
@@ -569,5 +634,11 @@ internal object ProxyDashboardHtml {
     .ptable tr.departed td:first-child { color:var(--crit); }
     .tag.crit { background:var(--crit-soft); color:var(--crit); margin-left:7px; }
     @media (max-width:720px) { .md { grid-template-columns:1fr; } .md-list { border-right:0; border-bottom:1px solid var(--line); } }
+    /* Touch, not width: a 25px pill is a comfortable mouse target and a poor thumb one, and the two do
+       not correlate with viewport size -- a tablet is wide and touch-driven. The dense bar is kept for
+       pointer devices rather than spending vertical space everyone pays for. */
+    @media (pointer: coarse) {
+      .nav a { min-height:44px; display:inline-flex; align-items:center; padding:0 14px; }
+    }
     """.trimIndent()
 }

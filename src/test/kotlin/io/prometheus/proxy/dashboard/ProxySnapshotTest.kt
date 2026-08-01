@@ -99,13 +99,27 @@ class ProxySnapshotTest : StringSpec() {
     // A departed path's only remaining attribution is the scrape record, since its agent list is empty
     // by definition -- so servingAgent has to fall through to it or the row says nothing useful.
     "a path view should name its serving agent, falling back to the last scrape" {
-      DashboardFixtures.pathView(agentIds = ["a1", "a2"]).servingAgent shouldBe "a1"
+      DashboardFixtures.pathView(
+        agentIds = ["a1", "a2"],
+        agentNames = ["team-a-01", "team-a-02"],
+      ).servingAgent shouldBe "team-a-01"
       DashboardFixtures.pathView(
         agentIds = emptyList(),
-        lastScrape = DashboardFixtures.scrapeRecord(agentId = "departed-7"),
+        agentNames = emptyList(),
+        lastScrape = DashboardFixtures.scrapeRecord(agentId = "7", agentName = "departed-07"),
         isDeparted = true,
-      ).servingAgent shouldBe "departed-7"
-      DashboardFixtures.pathView(agentIds = emptyList()).servingAgent.shouldBeNull()
+      ).servingAgent shouldBe "departed-07"
+      DashboardFixtures.pathView(agentIds = emptyList(), agentNames = emptyList()).servingAgent.shouldBeNull()
+    }
+
+    // The two layouts are read against each other: an operator finds a failing path here, then looks
+    // that agent up in the agent list. An internal id in one view and a name in the other would make
+    // that a manual translation step, which is the whole reason servingAgent is a name.
+    "a path view should identify its agent by name, never by internal id" {
+      DashboardFixtures.pathView(
+        agentIds = ["17"],
+        agentNames = ["edge-eu-west-2"],
+      ).servingAgent shouldBe "edge-eu-west-2"
     }
 
     "additional agent count should drive the consolidated marker and never go negative" {
@@ -149,7 +163,15 @@ class ProxySnapshotTest : StringSpec() {
     // The gap this whole layout exists to close. The proxy deletes a path the moment its last agent
     // disconnects, so without this union a target that stopped serving vanishes silently.
     "a scraped path that is no longer registered should appear as departed" {
-      val scrapes = [DashboardFixtures.scrapeRecord(agentId = "agent-9", path = "orphan_metrics", statusCode = 503)]
+      val scrapes =
+        [
+          DashboardFixtures.scrapeRecord(
+            agentId = "9",
+            agentName = "warehouse-01",
+            path = "orphan_metrics",
+            statusCode = 503,
+          ),
+        ]
 
       val views = ProxySnapshot.buildPathViews(emptyList(), scrapes)
 
@@ -157,8 +179,9 @@ class ProxySnapshotTest : StringSpec() {
         path shouldBe "orphan_metrics"
         isDeparted.shouldBeTrue()
         agentIds.shouldBeEmpty()
-        // The departed agent is the only attribution left, and it is what an operator needs.
-        servingAgent shouldBe "agent-9"
+        // The departed agent is the only attribution left, and it is what an operator needs -- by the
+        // name the agent list used for it, not the id, which is why ScrapeRecord captures the name.
+        servingAgent shouldBe "warehouse-01"
         lastScrape?.statusCode shouldBe 503
       }
     }

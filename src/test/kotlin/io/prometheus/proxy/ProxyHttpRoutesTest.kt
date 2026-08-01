@@ -81,16 +81,18 @@ class ProxyHttpRoutesTest : StringSpec() {
     response: ScrapeRequestResponse,
     proxy: Proxy,
     agentId: String = "test-agent",
+    agentName: String = "test-agent-name",
   ) {
     val method = ProxyHttpRoutes::class.java.getDeclaredMethod(
       "recordScrapeOutcome",
+      String::class.java,
       String::class.java,
       String::class.java,
       ScrapeRequestResponse::class.java,
       Proxy::class.java,
     )
     method.isAccessible = true
-    method.invoke(ProxyHttpRoutes, path, agentId, response, proxy)
+    method.invoke(ProxyHttpRoutes, path, agentId, agentName, response, proxy)
   }
 
   private fun createSpyProxyForSubmit(

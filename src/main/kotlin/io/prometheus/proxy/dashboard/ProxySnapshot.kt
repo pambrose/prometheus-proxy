@@ -38,9 +38,17 @@ internal data class PathView(
   val pathSource: String = "",
   val lastScrape: ScrapeRecord? = null,
   val isDeparted: Boolean = false,
+  val agentNames: List<String> = emptyList(),
 ) {
-  /** The agent that last served this path, which for a departed path is the only attribution left. */
-  val servingAgent: String? get() = agentIds.firstOrNull() ?: lastScrape?.agentId
+  /**
+   * The agent that last served this path, named the way the agent list names it.
+   *
+   * Deliberately a name and not an [agentIds] entry: the two layouts are read together — an operator
+   * finds a failing path here and then looks that agent up in the agent view — and an internal id would
+   * force them to translate between the two by hand. For a departed path the name comes from the last
+   * scrape, which is the only attribution that outlives the agent.
+   */
+  val servingAgent: String? get() = agentNames.firstOrNull() ?: lastScrape?.agentName
 
   /** How many agents beyond the first back this path, for the `+N` marker on a consolidated row. */
   val additionalAgents: Int get() = (agentIds.size - 1).coerceAtLeast(0)
@@ -140,6 +148,8 @@ internal data class ProxySnapshot(
         latestByPath
           .filterKeys { it !in registeredPaths }
           .map { (path, record) ->
+            // agentNames stays empty: the agent is gone, so servingAgent falls through to the name the
+            // scrape record captured while it was still here.
             PathView(path = path, agentIds = emptyList(), labels = "", lastScrape = record, isDeparted = true)
           }
 
@@ -185,6 +195,7 @@ internal data class ProxySnapshot(
               labels = info.labels,
               targetUrl = info.targetUrl,
               pathSource = info.pathSource,
+              agentNames = info.agentContexts.map { it.agentName },
             )
           }
           .sortedBy { it.path }

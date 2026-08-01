@@ -55,6 +55,9 @@ class ProxyDashboardHtmlTest : StringSpec() {
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
   ) = DashboardFixtures.snapshot(agents = agents, scrapes = scrapes, paths = paths)
 
+  private fun renderFullPage(layout: DashboardLayout = DashboardLayout.AGENT) =
+    createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard", layout) } }
+
   init {
     "the push fragment should carry out-of-band swaps for every live region" {
       val html = ProxyDashboardHtml.pushFragment(snapshot(), selectedId = "1", dashboardPath = "/dashboard")
@@ -106,8 +109,15 @@ class ProxyDashboardHtmlTest : StringSpec() {
     "the detail pane should show only the selected agent's scrapes" {
       val scrapes =
         [
-          ScrapeRecord("1", "app_metrics", 200, "success", 41, 1800),
-          ScrapeRecord("2", "other_metrics", 503, "agent_disconnected", 0, 0),
+          DashboardFixtures.scrapeRecord(agentId = "1", path = "app_metrics"),
+          DashboardFixtures.scrapeRecord(
+            agentId = "2",
+            path = "other_metrics",
+            statusCode = 503,
+            outcome = "agent_disconnected",
+            durationMillis = 0,
+            contentLength = 0,
+          ),
         ]
       val html = ProxyDashboardHtml.detailFragment(snapshot(scrapes = scrapes), selectedId = "1")
 
@@ -189,22 +199,57 @@ class ProxyDashboardHtmlTest : StringSpec() {
         DashboardFixtures.pathView(
           path = "redis_metrics",
           agentIds = emptyList(),
-          lastScrape = DashboardFixtures.scrapeRecord(agentId = "agent-9", path = "redis_metrics", statusCode = 503),
+          agentNames = emptyList(),
+          lastScrape =
+            DashboardFixtures.scrapeRecord(
+              agentId = "9",
+              agentName = "cache-tier-01",
+              path = "redis_metrics",
+              statusCode = 503,
+            ),
           isDeparted = true,
         )
       val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [departed]), null, "/dashboard", DashboardLayout.PATH)
 
       html shouldContain "/redis_metrics"
       html shouldContain "gone"
-      html shouldContain "agent-9"
+      html shouldContain "cache-tier-01"
       html shouldContain "503"
     }
 
+    // The two layouts are read against each other -- find the failing path here, look the agent up
+    // there. Rendering the internal id in one view and the name in the other made that a manual
+    // translation step, and on a proxy with forty agents an unusable one.
+    "the path table should name its agent the way the agent list does, never by internal id" {
+      val served =
+        DashboardFixtures.pathView(path = "ledger_metrics", agentIds = ["17"], agentNames = ["edge-eu-west-2"])
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldContain "edge-eu-west-2"
+      // The bare id must not appear as the cell's whole contents.
+      html shouldNotContain ">17<"
+    }
+
+    // An agent that has connected but not yet registered gets the same treatment in both layouts, so
+    // one agent never shows up under two different labels.
+    "a path served by a not-yet-registered agent should show the same placeholder as the agent list" {
+      val pending = DashboardFixtures.pathView(path = "new_metrics", agentIds = ["3"], agentNames = ["Unassigned"])
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [pending]), null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldNotContain "Unassigned"
+      html shouldContain "registering"
+    }
+
     "a consolidated path should collapse its extra agents into a count" {
-      val shared = DashboardFixtures.pathView(path = "shared_svc", agentIds = ["a1", "a2", "a3"])
+      val shared =
+        DashboardFixtures.pathView(
+          path = "shared_svc",
+          agentIds = ["a1", "a2", "a3"],
+          agentNames = ["team-a-01", "team-a-02", "team-a-03"],
+        )
       val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [shared]), null, "/dashboard", DashboardLayout.PATH)
 
-      html shouldContain "a1"
+      html shouldContain "team-a-01"
       html shouldContain "+2"
     }
 
@@ -252,6 +297,69 @@ class ProxyDashboardHtmlTest : StringSpec() {
         DashboardLayout.PATH,
       ) shouldContain
         "No paths registered"
+    }
+
+    // ==================== Status bar ====================
+
+    // health.pathCount counts registrations, so departed paths are deliberately absent from it. Left
+    // unexplained that reads as the bar contradicting the table under it -- "0 paths" above three rows.
+    "the status bar should name departed paths so its count stops contradicting the table" {
+      val departed =
+        DashboardFixtures.pathView(
+          path = "orphan_metrics",
+          agentIds = emptyList(),
+          agentNames = emptyList(),
+          lastScrape = DashboardFixtures.scrapeRecord(path = "orphan_metrics"),
+          isDeparted = true,
+        )
+      val snap = DashboardFixtures.snapshot(agents = emptyList(), paths = [departed])
+
+      ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.PATH) shouldContain "1 departed"
+    }
+
+    "the status bar should stay quiet about departed paths when there are none" {
+      ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard") shouldNotContain "departed"
+    }
+
+    // ==================== Accessibility ====================
+
+    // The beacon reports connection state with colour and a change of rhythm, neither of which reaches a
+    // screen reader. Without a live region the page just goes silently stale.
+    "the page should carry a polite live region for connection state" {
+      val html = renderFullPage()
+
+      html shouldContain """id="${ProxyDashboardHtml.ANNOUNCER_ID}""""
+      html shouldContain """aria-live="polite""""
+      html shouldContain """role="status""""
+      html shouldContain "Connection to the proxy lost"
+      html shouldContain "Connection to the proxy restored"
+    }
+
+    // A region the push loop rewrites would re-announce itself on every frame; this one is written only
+    // by the socket lifecycle handlers, so it must stay out of every out-of-band fragment.
+    "the live region must not be part of any pushed fragment" {
+      ProxyDashboardHtml.pushFragment(snapshot(), "1", "/dashboard") shouldNotContain ProxyDashboardHtml.ANNOUNCER_ID
+      ProxyDashboardHtml.pushFragment(
+        snapshot(),
+        null,
+        "/dashboard",
+        DashboardLayout.PATH,
+      ) shouldNotContain ProxyDashboardHtml.ANNOUNCER_ID
+    }
+
+    "the page should declare its language and mark its main region" {
+      val html = renderFullPage()
+
+      html shouldContain """lang="en""""
+      html shouldContain "<main"
+    }
+
+    "the path table should be captioned and its headers scoped" {
+      val html = renderFullPage(DashboardLayout.PATH)
+
+      html shouldContain """scope="col""""
+      html shouldContain "<caption"
+      html shouldContain "Registered paths"
     }
 
     // Layout is derived from the URL on both sides -- the server for the initial render, the browser for

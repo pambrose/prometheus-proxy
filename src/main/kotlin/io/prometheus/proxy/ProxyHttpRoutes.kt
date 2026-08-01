@@ -210,7 +210,7 @@ internal object ProxyHttpRoutes {
         .awaitAll()
         .also { responses ->
           agentContextInfo.agentContexts.zip(responses).forEach { (agentContext, response) ->
-            recordScrapeOutcome(path, agentContext.agentId, response, proxy)
+            recordScrapeOutcome(path, agentContext.agentId, agentContext.agentName, response, proxy)
           }
         }
         .onEach { response ->
@@ -229,6 +229,7 @@ internal object ProxyHttpRoutes {
   private fun recordScrapeOutcome(
     path: String,
     agentId: String,
+    agentName: String,
     response: ScrapeRequestResponse,
     proxy: Proxy,
   ) {
@@ -243,6 +244,7 @@ internal object ProxyHttpRoutes {
     proxy.recordScrape(
       ScrapeRecord(
         agentId = agentId,
+        agentName = agentName,
         path = path,
         statusCode = response.statusCode.value,
         outcome = response.updateMsg,
