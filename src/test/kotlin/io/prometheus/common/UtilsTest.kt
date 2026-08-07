@@ -474,8 +474,21 @@ class UtilsTest : StringSpec() {
       sanitizeUrl("http://host/m?token=s#section") shouldBe "http://host/m?token=***#section"
     }
 
+    // A '#' ahead of the first '?' makes everything after it fragment text per RFC 3986, so "?a=1" here
+    // is not really a query. Redacting it anyway is the safe direction: over-redaction cannot leak a
+    // secret, whereas splitting on '#' first would let a '#' in the path hide one from the redactor.
+    "sanitizeUrl should redact query-looking text that follows a fragment marker" {
+      sanitizeUrl("http://host/m#frag?a=1") shouldBe "http://host/m#frag?a=***"
+    }
+
     "sanitizeUrl should leave a valueless query token untouched" {
       sanitizeUrl("http://host/m?debug&token=s") shouldBe "http://host/m?debug&token=***"
+    }
+
+    // Only the first '=' separates key from value, so a value containing its own '=' (base64 padding,
+    // a signature blob) is replaced whole rather than having its tail survive as a second "key".
+    "sanitizeUrl should redact the entire value when the value itself contains an equals sign" {
+      sanitizeUrl("http://host/m?sig=YWJj=&job=node") shouldBe "http://host/m?sig=***&job=***"
     }
 
     "sanitizeUrl should not modify a URL with no query string" {

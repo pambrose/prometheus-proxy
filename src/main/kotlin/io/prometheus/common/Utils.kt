@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory
 
 internal object Utils {
   private const val REDACTED = "***"
+  private val USERINFO_REGEX = Regex("(://)[^@/?#]+@")
 
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
@@ -43,14 +44,12 @@ internal object Utils {
    * (api_key, access_token, sig, …) cannot be enumerated in advance. The fragment is preserved.
    */
   fun sanitizeUrl(url: String): String {
-    val userRedacted = url.replace(Regex("(://)[^@/?#]+@"), "$1***@")
-    val queryStart = userRedacted.indexOf('?')
-    if (queryStart < 0) return userRedacted
-    val prefix = userRedacted.substring(0, queryStart + 1)
-    val afterQuery = userRedacted.substring(queryStart + 1)
-    val fragmentStart = afterQuery.indexOf('#')
-    val query = if (fragmentStart < 0) afterQuery else afterQuery.substring(0, fragmentStart)
-    val fragment = if (fragmentStart < 0) "" else afterQuery.substring(fragmentStart)
+    val userRedacted = url.replace(USERINFO_REGEX, "$1***@")
+    if ('?' !in userRedacted) return userRedacted
+    val prefix = userRedacted.substringBefore('?') + "?"
+    val afterQuery = userRedacted.substringAfter('?')
+    val query = afterQuery.substringBefore('#')
+    val fragment = if ('#' in afterQuery) "#" + afterQuery.substringAfter('#') else ""
     return prefix + redactQueryValues(query) + fragment
   }
 
@@ -62,12 +61,9 @@ internal object Utils {
     if (encodedQueryParams.isBlank()) encodedQueryParams else redactQueryValues(encodedQueryParams)
 
   private fun redactQueryValues(query: String): String =
-    query
-      .split("&")
-      .joinToString("&") { param ->
-        val eq = param.indexOf('=')
-        if (eq < 0) param else param.substring(0, eq + 1) + REDACTED
-      }
+    query.split("&").joinToString("&") { param ->
+      if ('=' !in param) param else "${param.substringBefore('=')}=$REDACTED"
+    }
 
   /**
    * Appends an already-URL-encoded query string (as produced by Ktor's `formUrlEncode()`, i.e. raw
@@ -171,7 +167,7 @@ internal object Utils {
   // Case-insensitive counterpart to String.removePrefix, matching BaseOptions.isUrlPrefix's
   // case-insensitivity. No-ops when the prefix is absent, so chaining both schemes is safe.
   private fun String.removePrefixIgnoreCase(prefix: String): String =
-    if (startsWith(prefix, ignoreCase = true)) substring(prefix.length) else this
+    if (startsWith(prefix, ignoreCase = true)) drop(prefix.length) else this
 
   internal fun stripScheme(hostPort: String): String =
     hostPort
@@ -241,14 +237,15 @@ internal object Utils {
       }
 
       // Multiple colons without brackets: unbracketed IPv6 (no port)
-      hostPort.indexOf(':') != hostPort.lastIndexOf(':') -> {
+      hostPort.count { it == ':' } > 1 -> {
         HostPort(hostPort, defaultPort)
       }
 
       // Single colon: host:port
       else -> {
-        val colonIndex = hostPort.indexOf(':')
-        HostPort(hostPort.substring(0, colonIndex), parsePort(hostPort.substring(colonIndex + 1), hostPort))
+        val host = hostPort.substringBefore(':')
+        val portStr = hostPort.substringAfter(':')
+        HostPort(host, parsePort(portStr, hostPort))
       }
     }
   }
