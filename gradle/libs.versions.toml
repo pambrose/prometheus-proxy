@@ -1,6 +1,6 @@
 [versions]
 # Toolchain
-gradle-wrapper = "9.6.1"
+gradle-wrapper = "9.7.0"
 jvm = "17"
 
 # Kotlin
