@@ -1,11 +1,22 @@
 #
-# https://help.github.com/articles/dealing-with-line-endings/
+# https://git-scm.com/docs/gitattributes
 #
-# Linux start script should use lf
-/gradlew        text eol=lf binary
 
-# These are Windows script files and should use crlf
-*.bat           text eol=crlf binary
+# Normalize text to LF in the repository, regardless of core.autocrlf.
+* text=auto
 
-# Binary files should be left untouched
+# Must stay LF: several are COPY'd into Linux images.
+*.sh            text eol=lf
+/gradlew        text eol=lf
+
+# Must stay CRLF: cmd.exe mis-parses LF-only batch files.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+
+# Binary files should be left untouched.
 *.jar           binary
+*.png           binary
+
+# Generated — collapse in diffs, exclude from language stats.
+src/main/java/io/prometheus/common/ConfigVals.java linguist-generated=true
+website/uv.lock                                    linguist-generated=true

@@ -16,6 +16,11 @@ indent_size = 4
 indent_style = tab
 indent_size = 4
 
+# Windows scripts must keep CRLF: cmd.exe mis-parses LF-only batch files.
+# Matches the *.bat/*.cmd rules in .gitattributes.
+[*.{bat,cmd}]
+end_of_line = crlf
+
 [*.{kt,kts}]
 indent_size = 2
 ktlint_standard_no-wildcard-imports = disabled
