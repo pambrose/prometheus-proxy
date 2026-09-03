@@ -43,6 +43,7 @@ import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import io.prometheus.BuildConfig
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyEvent
 import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
@@ -297,9 +298,11 @@ internal class ProxyDashboardService(
     private val logger = logger {}
     private val json = Json { ignoreUnknownKeys = true }
 
-    // Must match the WebJar coordinates in libs.versions.toml -- the classpath layout embeds the version.
-    internal const val HTMX_VERSION = "2.0.10"
-    internal const val HTMX_WS_VERSION = "2.0.4"
+    // Generated from libs.versions.toml, since the WebJar classpath layout embeds the version. Reading
+    // them rather than restating them means a dependency bump cannot leave the asset route pointing at
+    // a path that is no longer on the classpath.
+    internal const val HTMX_VERSION = BuildConfig.HTMX_VERSION
+    internal const val HTMX_WS_VERSION = BuildConfig.HTMX_WS_VERSION
 
     /** The only classpath resources this server will serve, by request filename. */
     internal val ASSETS =

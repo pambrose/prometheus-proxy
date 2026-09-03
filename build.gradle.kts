@@ -64,6 +64,12 @@ buildConfig {
   buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
   buildConfigField("String", "APP_RELEASE_DATE", releaseDate.map { "\"$it\"" })
   buildConfigField("long", "BUILD_TIME", buildTime.map { "${it}L" })
+
+  // The WebJar classpath layout embeds the version, so the dashboard's asset paths have to track the
+  // dependency exactly. Sourcing them from the version catalog makes that structural rather than a
+  // hand-maintained constant that goes stale on the next dependency bump and 404s the asset route.
+  buildConfigField("String", "HTMX_VERSION", "\"${libs.versions.htmx.get()}\"")
+  buildConfigField("String", "HTMX_WS_VERSION", "\"${libs.versions.htmxWs.get()}\"")
 }
 
 dependencies {

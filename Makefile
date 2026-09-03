@@ -10,6 +10,7 @@
 VERSION := $(shell sed -n 's/^version=\(.*\)/\1/p' gradle.properties)
 GRADLE_VERSION := $(shell sed -n 's/^gradle-wrapper = "\(.*\)"/\1/p' gradle/libs.versions.toml)
 
+GRADLE := ./gradlew
 TSCFG_VERSION := 1.2.5
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
 IMAGE_PREFIX := pambrose/prometheus
@@ -38,57 +39,57 @@ help:  ## Show this help (list of targets)
 		/^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 stop:  ## Stop the running Gradle daemon
-	./gradlew --stop
+	$(GRADLE) --stop
 
 clean:  ## Remove Gradle build outputs
-	./gradlew clean
+	$(GRADLE) clean
 
 clean-all: clean clean-site  ## clean + remove .gradle cache and docs site
 	rm -rf .gradle
 
 stubs:  ## Regenerate gRPC/protobuf stubs
-	./gradlew generateProto
+	$(GRADLE) generateProto
 
 build:  ## Clean build without tests
-	./gradlew clean generateProto build -x test
+	$(GRADLE) clean generateProto build -x test
 
 # `ti*` tasks are contributed by the org.barfuin.gradle.taskinfo plugin;
 # `tiTree` prints the task graph for the requested build invocation.
 tibuild:  ## Build with taskinfo task tree
-	./gradlew clean generateProto tiTree build -x test
+	$(GRADLE) clean generateProto tiTree build -x test
 
 lint:  ## Run kotlinter and detekt
-	./gradlew lintKotlin detekt
+	$(GRADLE) lintKotlin detekt
 
 detekt:  ## Run detekt static analysis
-	./gradlew detekt
+	$(GRADLE) detekt
 
 detekt-baseline:  ## Refresh detekt baseline
-	./gradlew detektBaseline
+	$(GRADLE) detektBaseline
 
 refresh:  ## Refresh dependencies
-	./gradlew --refresh-dependencies
+	$(GRADLE) --refresh-dependencies
 
 jars: stubs  ## Build the prometheus-{agent,proxy} fat jars
-	./gradlew agentJar proxyJar
+	$(GRADLE) agentJar proxyJar
 
 tests:  ## Run all tests (forces re-execution)
-	./gradlew --rerun-tasks check
+	$(GRADLE) --rerun-tasks check
 
 mini-tests:  ## Run all tests with the MINI harness profile
-	./gradlew --rerun-tasks check -PharnessConfig=MINI
+	$(GRADLE) --rerun-tasks check -PharnessConfig=MINI
 
 nh-tests:  ## Run only the non-harness unit tests
-	./gradlew test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
+	$(GRADLE) test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
 
 ip-tests:  ## Run in-process harness tests
-	./gradlew test --tests "io.prometheus.harness.InProcess*"
+	$(GRADLE) test --tests "io.prometheus.harness.InProcess*"
 
 netty-tests:  ## Run Netty harness tests
-	./gradlew test --tests "io.prometheus.harness.Netty*"
+	$(GRADLE) test --tests "io.prometheus.harness.Netty*"
 
 tls-tests:  ## Run TLS harness tests
-	./gradlew test --tests "io.prometheus.harness.Tls*"
+	$(GRADLE) test --tests "io.prometheus.harness.Tls*"
 
 container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
@@ -96,7 +97,7 @@ container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 		echo "Error: could not detect active Docker context. Is Docker running?" >&2; exit 1; \
 	fi; \
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
-	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true ./gradlew test --tests "io.prometheus.containers.*"
+	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true $(GRADLE) test --tests "io.prometheus.containers.*"
 
 all-tests: tests container-tests  ## Run the full suite: all tests + the container tests
 
@@ -109,7 +110,7 @@ scaling-tests: jars  ## Run the parameter-driven scaling container test (tune vi
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true \
 		$(foreach v,$(SCALE_VARS),$(if $($(v)),$(v)="$($(v))" )) \
-		./gradlew test --tests "io.prometheus.containers.ContainersScalingTest"
+		$(GRADLE) test --tests "io.prometheus.containers.ContainersScalingTest"
 
 # Curated scaling presets. Each delegates to `scaling-tests` with a SCALE_* combo that hammers a
 # different part of the system. They are dev/stress aids — NOT run by `all-tests` or CI (the default
@@ -188,16 +189,16 @@ regen-certs:  ## Regenerate the testing/certs TLS fixtures (CA + server + client
 coverage: coverage-html coverage-xml  ## Generate HTML and XML coverage reports
 
 coverage-html:  ## Generate HTML coverage report
-	./gradlew koverHtmlReport
+	$(GRADLE) koverHtmlReport
 
 coverage-xml:  ## Generate XML coverage report
-	./gradlew koverXmlReport
+	$(GRADLE) koverXmlReport
 
 coverage-log:  ## Print coverage % to console
-	./gradlew koverLog
+	$(GRADLE) koverLog
 
 coverage-verify:  ## Run kover coverage threshold verification
-	./gradlew koverVerify
+	$(GRADLE) koverVerify
 
 coverage-open: coverage-html  ## Open the HTML coverage report
 	open build/reports/kover/html/index.html
@@ -206,7 +207,7 @@ coverage-packages: coverage-xml  ## Print per-package coverage from the XML repo
 	@python3 scripts/coverage_packages.py
 
 coverage-clean:  ## Remove coverage reports and test outputs
-	./gradlew cleanTest
+	$(GRADLE) cleanTest
 	rm -rf build/reports/kover build/kover
 
 # Backwards-compatible alias for the previous `make reports` invocation.
@@ -236,16 +237,16 @@ docker-push: _require-version jars  ## Build and push multi-arch agent/proxy ima
 release: distro docker-push  ## Build distro and push docker images
 
 tree:  ## Print Gradle dependency tree (quiet)
-	./gradlew -q dependencies
+	$(GRADLE) -q dependencies
 
 depends:  ## Print Gradle dependency report
-	./gradlew dependencies
+	$(GRADLE) dependencies
 
 versions:  ## Check for newer dependency versions
-	./gradlew dependencyUpdates --no-configuration-cache --no-parallel
+	$(GRADLE) dependencyUpdates --no-configuration-cache --no-parallel
 
 kdocs:  ## Generate Dokka HTML site
-	./gradlew dokkaGeneratePublicationHtml
+	$(GRADLE) dokkaGeneratePublicationHtml
 
 check-site:  ## Check for outdated website dependencies
 	cd $(WEBSITE_DIR) && env -u VIRTUAL_ENV uv lock --upgrade --dry-run
@@ -261,23 +262,23 @@ site: clean-site  ## Serve the docs site locally with zensical
 	cd $(SITE_DIR) && uv run --with mkdocs-material zensical serve
 
 publish-local: _require-version  ## Publish artifacts to the local Maven repository
-	./gradlew publishToMavenLocal
+	$(GRADLE) publishToMavenLocal
 
 publish-local-snapshot: _require-version  ## Publish a -SNAPSHOT artifact to the local Maven repository
-	./gradlew -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenLocal
+	$(GRADLE) -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenLocal
 
 publish-snapshot: _require-version _check-gpg-env  ## Publish a -SNAPSHOT artifact to Maven Central
-	$(GPG_ENV) ./gradlew -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenCentral
+	$(GPG_ENV) $(GRADLE) -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenCentral
 
 publish-maven-central: _require-version _check-gpg-env  ## Publish a release artifact to Maven Central
-	$(GPG_ENV) ./gradlew publishAndReleaseToMavenCentral
+	$(GPG_ENV) $(GRADLE) publishAndReleaseToMavenCentral
 
 # Gradle's documented upgrade procedure: the first run rewrites
 # gradle-wrapper.properties using the *old* wrapper jar; the second run
 # regenerates the wrapper itself with the new version.
 upgrade-wrapper: _require-gradle-version  ## Upgrade the Gradle wrapper to the catalog version
-	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
-	./gradlew wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
+	$(GRADLE) wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
+	$(GRADLE) wrapper --gradle-version=$(GRADLE_VERSION) --distribution-type=bin
 
 _check-gpg-env:
 	@if [ -z "$$GPG_SIGNING_KEY_ID" ]; then \
