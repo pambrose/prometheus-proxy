@@ -4,20 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build System and Common Commands
 
-Gradle with Kotlin DSL. Java 17+ required. All commands from project root.
+All commands from project root.
 
 ```bash
-./gradlew build                          # Build with tests
-./gradlew build -x test                  # Build without tests
-./gradlew test                           # Run all tests
-./gradlew test --tests "TestClassName"   # Run specific test class
-./gradlew test --tests "io.prometheus.SomeTestClass.someTestMethod"  # Single test method
 ./gradlew --rerun-tasks check            # Force rerun all checks (lint + tests)
 ./gradlew agentJar proxyJar              # Generate standalone JARs
 ./gradlew generateProto                  # Regenerate protobuf stubs
-./gradlew koverHtmlReport                # HTML coverage report (build/reports/kover/html/)
-./gradlew koverXmlReport                 # XML coverage report (CI / Codacy / Coveralls)
-./gradlew koverLog                       # Print coverage % to console
 ```
 
 ### Code Quality
@@ -84,13 +76,7 @@ aren't in the proto: chunked responses kick in above 32KB, and the heartbeat fir
 - **Metric filtering**: `MetricFilter` (per-path `agent.filters`) drops whole metric families in `AgentHttpService` before gzip/chunking; fails open on non-text or non-UTF-8 payloads.
 - **Dashboard**: Ktor + htmx (WebJar, no CDN) on its own port, fed by the `ProxyEvent` bus; see `proxy/dashboard/`.
 
-### Dashboard Design Constraints
-
-`DESIGN.md` is the visual contract (color tokens, typography roles, components) and `PRODUCT.md` the product one; both are tracked, while the tooling that generated them is gitignored. Three constraints in `ProxyDashboardHtml.kt` are load-bearing and easy to undo by accident:
-
-- **The live region must stay outside every `hx-swap-oob` region.** A region the push loop rewrites re-announces itself on every frame. `ProxyDashboardHtmlTest` pins this.
-- **Check a color against `--surface-2`, not `--surface`.** Every token also lands on the tighter ground under tables and section headers, which is where all 29 of the contrast failures fixed in 4.0.1 lived. The measured AA floor is 4.59:1 — `DESIGN.md` records the per-token values.
-- **Both layouts must render agent identity through `agentLabel()`.** The agent and path views are read against each other, so a divergent label (or a raw `agentId`) defeats the correlation they exist for.
+Two load-bearing constraint sets live in `.claude/rules/` and load when you touch the matching files: `dashboard-constraints.md` (dashboard live-region, contrast, and agent-label invariants) and `shadow-jar.md` (fat-JAR service-file merging).
 
 ## Configuration
 
@@ -112,7 +98,6 @@ The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`mak
 
 ## Testing
 
-- **Framework**: Kotest with JUnit 5 runner, MockK for mocking
 - **Coverage**: kotlinx-kover. HTML report: `./gradlew koverHtmlReport`. XML report (CI): `./gradlew koverXmlReport`. Console summary: `./gradlew koverLog` (also runs after `koverXmlReport` / `koverVerify` via `onCheck = true`). Generated gRPC stubs, `BuildConfig`, and `ConfigVals` are excluded from report statistics (configured in `build.gradle.kts` `configureCoverage()`).
 
 ### Test Structure
@@ -131,12 +116,6 @@ All container specs require Docker and are gated on `RUN_CONTAINER_TESTS=true` (
 Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`. Shared test constants live in `src/test/kotlin/io/prometheus/common/TestPorts.kt` (`TestPorts` object) — canonical proxy/agent/Prometheus/nginx port numbers used across the unit, harness, and container suites; reference these instead of hard-coding port literals in new tests.
 
 `EnvVars.getEnv()` reads `java.lang.System.getenv()`, which can't be set in-process, so its parse-and-throw branches aren't reachable by setting an env var in a test. The numeric/boolean parsing is therefore extracted into `internal` companion helpers (`parseBooleanStrict` / `parseIntStrict` / `parseLongStrict`) that the tests call directly. When adding a new typed `getEnv` overload, follow this pattern so the invalid-value path stays testable.
-
-## Shadow JAR Service-File Merging
-
-ShadowJar's default `DuplicatesStrategy` (EXCLUDE) drops duplicate-named entries *before* merging transformers run, so `mergeServiceFiles()` silently loses entries when grpc-core and grpc-netty-shaded both ship a same-named `META-INF/services` file — leaving the fat JAR without a DNS resolver, so the gRPC client defaults to the `unix` scheme on any non-IP hostname. The `agentJar`/`proxyJar` tasks fix this with a `filesMatching()` block that sets `DuplicatesStrategy.INCLUDE` on `META-INF/services/**` and `META-INF/*.kotlin_module` only (everything else keeps first-wins EXCLUDE semantics), letting `ServiceFileTransformer` and `KotlinModuleMetadataTransformer` merge all copies.
-
-As a belt-and-braces guard against future Shadow regressions, the tasks also include `src/shadow/resources/META-INF/services/`, which pins `io.grpc.NameResolverProvider` (DNS + UDS) and `io.grpc.LoadBalancerProvider` (PickFirst + HealthCheckingRoundRobin). The static files don't affect the published Maven jar (they're under `src/shadow/`, not `src/main/`). If gRPC versions change provider class names, update those files to match.
 
 ## Code Style
 
