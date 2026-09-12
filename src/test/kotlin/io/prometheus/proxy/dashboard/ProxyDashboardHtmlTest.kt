@@ -60,7 +60,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
 
   init {
     "the push fragment should carry out-of-band swaps for every live region" {
-      val html = ProxyDashboardHtml.pushFragment(snapshot(), selectedId = "1", dashboardPath = "/dashboard")
+      val html = ProxyDashboardHtml.pushFragment(snapshot(), selectedId = "1", routeBase = "/dashboard")
 
       // Each region is swapped independently by id, which is what lets one frame update the list and
       // the detail pane without re-rendering the page.
@@ -71,7 +71,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     }
 
     "an agent row should carry the htmx attributes that drive selection" {
-      val html = ProxyDashboardHtml.pushFragment(snapshot(), selectedId = null, dashboardPath = "/dashboard")
+      val html = ProxyDashboardHtml.pushFragment(snapshot(), selectedId = null, routeBase = "/dashboard")
 
       // Selection lives in the URL via hx-push-url, so it survives reload and is bookmarkable.
       html shouldContain """hx-get="/dashboard/agents/1""""
@@ -369,6 +369,21 @@ class ProxyDashboardHtmlTest : StringSpec() {
       DashboardLayout.of("/dashboard/paths/") shouldBe DashboardLayout.PATH
       DashboardLayout.of("/dashboard") shouldBe DashboardLayout.AGENT
       DashboardLayout.of("/dashboard/agents/7") shouldBe DashboardLayout.AGENT
+    }
+
+    // ProxyDashboardService hands the renderer a base with no trailing slash, which is empty at a root
+    // mount. Every sub-route must still join with exactly one separator: "//events" is a
+    // protocol-relative URL, which sends the browser to a host named "events".
+    "a root-mounted dashboard should not emit protocol-relative links" {
+      val page =
+        createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "", DashboardLayout.AGENT) } }
+      page shouldContain """ws-connect="/events""""
+      page shouldContain """src="/assets/htmx.min.js""""
+      page shouldContain """href="/paths""""
+      page shouldContain """hx-get="/agents/1""""
+      page shouldNotContain "\"//"
+      // The Agents link is the root itself, which must stay "/" rather than collapse to an empty href.
+      page shouldContain """href="/" class="on""""
     }
 
     "layout parsing should tolerate anything a browser might send" {

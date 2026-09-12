@@ -40,6 +40,7 @@ import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -79,6 +80,10 @@ class ProxyWebDashboardTest : StringSpec() {
           it.status shouldBe HttpStatusCode.OK
           it.bodyAsText() shouldContain "htmx"
         }
+
+        // The asset route is an allowlist, not a classpath lookup, so anything off it is a plain 404.
+        client.get("http://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard/assets/nope.js").status shouldBe
+          HttpStatusCode.NotFound
 
         client.webSocket("ws://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard/events") {
           // The immediate frame on connect, so a browser renders without waiting for a tick.
@@ -273,6 +278,96 @@ class ProxyWebDashboardTest : StringSpec() {
         runCatching { proxy.stopSync(10.seconds) }
       }
     }
+
+    // The browser-to-proxy half of the socket. A row click and a layout switch each send one JSON message;
+    // the service must parse it, record it on the session, and re-render at once rather than on the next
+    // tick. The parsers are unit-tested; this is the only place the session state they feed is exercised.
+    "a selection sent over the WebSocket should switch the pushed regions to that agent and layout" {
+      CollectorRegistry.defaultRegistry.clear()
+
+      val proxy =
+        startProxy(
+          args = ["--agent_port", "$SELECT_GRPC_PORT", "--dashboard", "--dashboard_port", "$SELECT_DASHBOARD_PORT"],
+          proxyPort = SELECT_HTTP_PORT,
+          configArgs = ["--config", CONFIG_FILE],
+        )
+      val client = HttpClient(CIO) { install(WebSockets) }
+      var agent: Agent? = null
+
+      try {
+        agent =
+          startAgent(
+            configArgs = ["--config", CONFIG_FILE],
+            args = ["--proxy", "$LOOPBACK_HOST:$SELECT_GRPC_PORT"],
+          )
+        agent.awaitInitialConnection(20.seconds).shouldBeTrue()
+        val agentId = agent.agentId
+
+        client.webSocket("ws://$LOOPBACK_HOST:$SELECT_DASHBOARD_PORT/dashboard/events") {
+          // Nothing is selected on connect, so the first frame marks no row current.
+          val initial = (incoming.receive() as Frame.Text).readText()
+          initial shouldNotContain SELECTED_ROW
+
+          // A row click sends this exact message; the selection must show up in a pushed agent list.
+          send(Frame.Text("""{"select":"$agentId","layout":"AGENT"}"""))
+          (1..MAX_FRAMES)
+            .any { (incoming.receive() as Frame.Text).readText().contains(SELECTED_ROW) }
+            .shouldBeTrue()
+
+          // Switching layout the same way changes which regions the push carries.
+          send(Frame.Text("""{"layout":"PATH"}"""))
+          (1..MAX_FRAMES)
+            .any {
+              (incoming.receive() as Frame.Text).readText().contains("""id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")
+            }
+            .shouldBeTrue()
+        }
+      } finally {
+        agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
+        client.close()
+        runCatching { proxy.stopSync(10.seconds) }
+      }
+    }
+
+    // The base path is configurable down to "/" itself, and the service special-cases that: the page owns
+    // the root, so the root-to-base redirect is skipped, and every other route hangs directly off "/".
+    "the dashboard can be mounted at the root path" {
+      CollectorRegistry.defaultRegistry.clear()
+
+      val proxy =
+        startProxy(
+          args = [
+            "--agent_port",
+            "$MOUNT_GRPC_PORT",
+            "--dashboard",
+            "--dashboard_port",
+            "$MOUNT_DASHBOARD_PORT",
+            "--dashboard_path",
+            "/",
+          ],
+          proxyPort = MOUNT_HTTP_PORT,
+          configArgs = ["--config", CONFIG_FILE],
+        )
+      // Do not auto-follow, so a redirect would fail the status assertion rather than be hidden.
+      val client = HttpClient(CIO) { followRedirects = false }
+      try {
+        val base = "http://$LOOPBACK_HOST:$MOUNT_DASHBOARD_PORT"
+
+        val page = client.get("$base/")
+        page.status shouldBe HttpStatusCode.OK
+        page.bodyAsText() shouldContain "No agents connected"
+
+        // The rendered links are ProxyDashboardHtmlTest's subject. What only a live server can show is that
+        // the routes registered under a root base actually answer, rather than passing because Ktor happens
+        // to discard an empty path segment.
+        client.get("$base/paths").status shouldBe HttpStatusCode.OK
+        client.get("$base/assets/htmx.min.js").status shouldBe HttpStatusCode.OK
+        client.get("$base/agents/1").bodyAsText() shouldContain "<body"
+      } finally {
+        client.close()
+        runCatching { proxy.stopSync(10.seconds) }
+      }
+    }
   }
 
   companion object {
@@ -312,5 +407,16 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val PATHS_HTTP_PORT = 9555
     private const val PATHS_GRPC_PORT = 9556
     private const val PATHS_DASHBOARD_PORT = 9557
+
+    private const val SELECT_HTTP_PORT = 9570
+    private const val SELECT_GRPC_PORT = 9571
+    private const val SELECT_DASHBOARD_PORT = 9572
+
+    private const val MOUNT_HTTP_PORT = 9573
+    private const val MOUNT_GRPC_PORT = 9574
+    private const val MOUNT_DASHBOARD_PORT = 9575
+
+    // The agent-list row marker for the session's selected agent (the nav uses aria-current="page").
+    private const val SELECTED_ROW = """aria-current="true""""
   }
 }

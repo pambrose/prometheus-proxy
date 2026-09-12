@@ -479,6 +479,50 @@ class AgentOptionsTest : StringSpec() {
       }
     }
 
+    // ==================== Discovery and Content-Length Validation ====================
+    // Both discovery guards fail fast at startup: an empty file path would silently discover nothing, and a
+    // non-positive interval would turn the reconcile loop into a hot spin. They apply only once discovery
+    // is enabled, so the default (disabled) config never trips them.
+
+    // Discovery off is the default, so every guard below needs it switched on first.
+    fun discoveryOptions(vararg extra: String) =
+      agentOptions(["--name", "test", "--proxy", "host", "-Dagent.discovery.enabled=true"] + extra, false)
+
+    "discovery enabled with an empty file path should throw IllegalArgumentException" {
+      // agent.discovery.file.path defaults to empty, so enabling discovery on its own is the misconfig.
+      val exception = shouldThrow<IllegalArgumentException> { discoveryOptions() }
+      exception.message shouldContain "agent.discovery.file.path"
+    }
+
+    "discovery enabled with a non-positive reconcile interval should throw IllegalArgumentException" {
+      val exception =
+        shouldThrow<IllegalArgumentException> {
+          discoveryOptions(DISCOVERY_FILE_ARG, "-Dagent.discovery.reconcileIntervalSecs=0")
+        }
+      exception.message shouldContain "reconcileIntervalSecs"
+    }
+
+    "discovery enabled with a file path and a positive interval should be accepted" {
+      val options = discoveryOptions(DISCOVERY_FILE_ARG, "-Dagent.discovery.reconcileIntervalSecs=5")
+      options.configVals.agent.discovery.file.path shouldBe "discovered.conf"
+      options.configVals.agent.discovery.reconcileIntervalSecs shouldBe 5
+    }
+
+    // A non-positive cap would reject every scrape body, so it fails at startup like the other http limits.
+    "maxContentLengthMBytes of 0 should throw IllegalArgumentException" {
+      val exception =
+        shouldThrow<IllegalArgumentException> {
+          agentOptions(["--name", "test", "--proxy", "host", "--max_content_length_mbytes", "0"], false)
+        }
+      exception.message shouldContain "maxContentLengthMBytes"
+    }
+
+    "maxContentLengthMBytes of 0 from config should throw IllegalArgumentException" {
+      shouldThrow<IllegalArgumentException> {
+        agentOptions(["--name", "test", "--proxy", "host", "-Dagent.http.maxContentLengthMBytes=0"], false)
+      }
+    }
+
     // ==================== Failover Endpoint Resolution ====================
     //
     // These are the only tests that reach the agent.proxy.endpoints fallback: it is gated behind
@@ -526,5 +570,6 @@ class AgentOptionsTest : StringSpec() {
 
   companion object {
     private const val ENDPOINTS_CONFIG_FILE = "config/test-configs/proxy-endpoints.conf"
+    private const val DISCOVERY_FILE_ARG = "-Dagent.discovery.file.path=discovered.conf"
   }
 }

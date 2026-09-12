@@ -286,7 +286,7 @@ class Agent(
       scrapeRequestBacklogSize.store(0)
       lastMsgSentMark = clock.markNow()
 
-      if (grpcService.connectAgent(configVals.agent.transportFilterDisabled)) {
+      if (grpcService.connectAgent()) {
         grpcService.registerAgent(initialConnectionLatch)
         pathManager.registerPaths()
         // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores

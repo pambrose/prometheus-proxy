@@ -309,10 +309,17 @@ internal class AgentGrpcService(
     }
 
   // If successful, will create an agentContext on the Proxy and an interceptor will add an agent_id to the headers`
-  suspend fun connectAgent(transportFilterDisabled: Boolean) =
+  //
+  // Reads options.transportFilterDisabled directly rather than taking it as a parameter. The same field
+  // already decides whether resetGrpcStubs() installs AgentClientInterceptor, and when the caller passed the
+  // value in, the two reads could disagree: Agent.run() sourced it from configVals, which carries only the
+  // config-file value, so an agent given --tf_disabled on the command line sent this RPC in transport-filter
+  // mode while omitting the interceptor, and the proxy rejected it as a config mismatch. One read cannot
+  // disagree with itself.
+  suspend fun connectAgent() =
     runCatchingCancellable {
       logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
-      if (transportFilterDisabled)
+      if (options.transportFilterDisabled)
         unaryStub().connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE).also { agent.agentId = it.agentId }
       else
         unaryStub().connectAgent(EMPTY_INSTANCE)

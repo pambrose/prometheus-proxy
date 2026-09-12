@@ -30,8 +30,27 @@ import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_DASHBOARD_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.common.proxyOptions
+import kotlin.io.path.createTempFile
 
 class ProxyOptionsTest : StringSpec() {
+  // Builds options from a config file. The empty-string guards below are unreachable from the command
+  // line, where an empty value falls back to the config default, and from -D, whose parse rejects an empty
+  // value; a config file is the one place an operator can actually blank a setting out.
+  private fun proxyOptionsWithConfig(
+    hocon: String,
+    vararg args: String,
+  ): ProxyOptions {
+    val file =
+      createTempFile("proxy-options", ".conf").toFile().apply {
+        writeText(hocon.trimIndent())
+      }
+    try {
+      return proxyOptions(["--config", file.absolutePath] + args)
+    } finally {
+      file.delete()
+    }
+  }
+
   init {
     // ==================== Default Values ====================
 
@@ -356,6 +375,55 @@ class ProxyOptionsTest : StringSpec() {
       // Bug #8 fix ensures these values are logged regardless of sdEnabled state
       options.sdPath shouldBe options.configVals.proxy.service.discovery.path
       options.sdTargetPrefix shouldBe options.configVals.proxy.service.discovery.targetPrefix
+    }
+
+    // ==================== Service Discovery and Dashboard Path Validation ====================
+
+    "an empty sdPath should be rejected when service discovery is enabled" {
+      val exception =
+        shouldThrow<IllegalArgumentException> {
+          proxyOptionsWithConfig("""proxy.service.discovery.path = "" """, "--sd_enabled")
+        }
+      exception.message shouldContain "sdPath is empty"
+    }
+
+    "an empty sdTargetPrefix should be rejected when service discovery is enabled" {
+      val exception =
+        shouldThrow<IllegalArgumentException> {
+          proxyOptionsWithConfig("""proxy.service.discovery.targetPrefix = "" """, "--sd_enabled")
+        }
+      exception.message shouldContain "sdTargetPrefix is empty"
+    }
+
+    "an empty sdPath should be accepted while service discovery stays disabled" {
+      // The guard is gated on sdEnabled, so a blank path is harmless until the endpoint is turned on.
+      val options = proxyOptionsWithConfig("""proxy.service.discovery.path = "" """)
+      options.sdEnabled.shouldBeFalse()
+      options.sdPath shouldBe ""
+    }
+
+    "an empty dashboardPath should be rejected when the dashboard is enabled" {
+      val exception =
+        shouldThrow<IllegalArgumentException> {
+          proxyOptionsWithConfig("""proxy.dashboard.path = "" """, "--dashboard")
+        }
+      exception.message shouldContain "dashboardPath is empty"
+    }
+
+    "a non-positive scrapeRequestTimeoutSecs should be rejected" {
+      val exception =
+        shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.scrapeRequestTimeoutSecs=0"]) }
+      exception.message shouldContain "scrapeRequestTimeoutSecs"
+    }
+
+    "proxyAgentPort above 65535 should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["--agent_port", "70000"]) }
+      exception.message shouldContain "proxyAgentPort"
+    }
+
+    "dashboardPort of 0 should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["--dashboard_port", "0"]) }
+      exception.message shouldContain "dashboardPort"
     }
 
     // The startup "agent gRPC port is unauthenticated" warning predates per-agent identities. Left

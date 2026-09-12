@@ -26,6 +26,7 @@ import com.pambrose.common.util.hostInfo
 import io.grpc.Metadata
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.throwables.shouldThrowAny
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -33,7 +34,9 @@ import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -55,10 +58,13 @@ import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.agentInfo
 import io.prometheus.grpc.heartBeatResponse
 import io.prometheus.grpc.registerAgentResponse
+import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
+import io.prometheus.grpc.unregisterPathResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -67,6 +73,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import java.lang.reflect.InvocationTargetException
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
@@ -81,7 +88,13 @@ import kotlin.time.Duration.Companion.seconds
 
 @Suppress("LargeClass")
 class AgentGrpcServiceTest : StringSpec() {
-  private fun createMockAgent(proxyHostname: String): Agent {
+  private fun createMockAgent(
+    proxyHostname: String,
+    keepAliveTimeSecs: Long = -1L,
+    keepAliveTimeoutSecs: Long = -1L,
+    keepAliveWithoutCalls: Boolean = false,
+    transportFilterDisabled: Boolean = false,
+  ): Agent {
     val mockOptions = mockk<AgentOptions>(relaxed = true)
 
     every { mockOptions.proxyHostname } returns proxyHostname
@@ -89,11 +102,11 @@ class AgentGrpcServiceTest : StringSpec() {
     every { mockOptions.certChainFilePath } returns ""
     every { mockOptions.privateKeyFilePath } returns ""
     every { mockOptions.trustCertCollectionFilePath } returns ""
-    every { mockOptions.transportFilterDisabled } returns false
+    every { mockOptions.transportFilterDisabled } returns transportFilterDisabled
     every { mockOptions.chunkContentSizeBytes } returns 32768
-    every { mockOptions.keepAliveTimeSecs } returns -1L
-    every { mockOptions.keepAliveTimeoutSecs } returns -1L
-    every { mockOptions.keepAliveWithoutCalls } returns false
+    every { mockOptions.keepAliveTimeSecs } returns keepAliveTimeSecs
+    every { mockOptions.keepAliveTimeoutSecs } returns keepAliveTimeoutSecs
+    every { mockOptions.keepAliveWithoutCalls } returns keepAliveWithoutCalls
     every { mockOptions.unaryDeadlineSecs } returns 30
     every { mockOptions.overrideAuthority } returns ""
 
@@ -114,9 +127,9 @@ class AgentGrpcServiceTest : StringSpec() {
 
   // try/finally so a failed assertion still tears the channel down -- a leaked service perturbs the
   // NEXT spec in the file, which turns one failure into a cascade.
-  private fun withService(
+  private suspend fun withService(
     proxySpec: String,
-    block: (AgentGrpcService) -> Unit,
+    block: suspend (AgentGrpcService) -> Unit,
   ) {
     val agent = createMockAgent(proxySpec)
     val service = AgentGrpcService(agent, agent.options, "test-server")
@@ -386,7 +399,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.grpcStub = mockStub
       service.unaryDeadlineSecs = 0
 
-      val result = service.connectAgent(transportFilterDisabled = false)
+      val result = service.connectAgent()
 
       result.shouldBeTrue()
       service.shutDown()
@@ -401,14 +414,14 @@ class AgentGrpcServiceTest : StringSpec() {
       service.grpcStub = mockStub
       service.unaryDeadlineSecs = 0
 
-      val result = service.connectAgent(transportFilterDisabled = false)
+      val result = service.connectAgent()
 
       result.shouldBeFalse()
       service.shutDown()
     }
 
     "connectAgent with transportFilterDisabled should assign agentId" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT", transportFilterDisabled = true)
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
@@ -418,7 +431,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.grpcStub = mockStub
       service.unaryDeadlineSecs = 0
 
-      val result = service.connectAgent(transportFilterDisabled = true)
+      val result = service.connectAgent()
 
       result.shouldBeTrue()
       verify { agent.agentId = "assigned-agent-id" }
@@ -1022,6 +1035,213 @@ class AgentGrpcServiceTest : StringSpec() {
         service.registerAgent(latch)
       }
       service.shutDown()
+    }
+
+    // ==================== Empty-argument guards ====================
+    // registerAgent has this test above; every other agentId-bearing RPC carries the same require() and
+    // must fail the same way, before a request is ever built for the stub.
+
+    val target = "http://target:9100/metrics"
+    val emptyArgGuards: List<Triple<String, Boolean, suspend AgentGrpcService.() -> Unit>> =
+      [
+        Triple("pathMapSize on an empty agentId", true) { pathMapSize() },
+        Triple("registerPathOnProxy on an empty agentId", true) {
+          registerPathOnProxy("metrics", "{}", target, "STATIC")
+        },
+        Triple("registerPathOnProxy on an empty path", false) { registerPathOnProxy("", "{}", target, "STATIC") },
+        Triple("unregisterPathOnProxy on an empty agentId", true) { unregisterPathOnProxy("metrics") },
+        Triple("unregisterPathOnProxy on an empty path", false) { unregisterPathOnProxy("") },
+        Triple("readRequestsFromProxy on an empty agentId", true) {
+          readRequestsFromProxy(mockk(relaxed = true), AgentConnectionContext(128))
+        },
+      ]
+
+    emptyArgGuards.forEach { (name, blankAgentId, invocation) ->
+      "$name should throw IllegalArgumentException" {
+        withService("localhost:$PROXY_AGENT_PORT") { service ->
+          if (blankAgentId) every { service.agent.agentId } returns ""
+          shouldThrow<IllegalArgumentException> { service.invocation() }
+        }
+      }
+    }
+
+    // ==================== Path RPC responses ====================
+
+    "registerPathOnProxy should send the path's target and source and mark a message sent" {
+      withService("localhost:$PROXY_AGENT_PORT") { service ->
+        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+        coEvery { mockStub.registerPath(any(), any<Metadata>()) } returns registerPathResponse { valid = true }
+        service.grpcStub = mockStub
+        service.unaryDeadlineSecs = 0
+
+        val response = service.registerPathOnProxy("metrics", "{}", "http://target:9100/metrics", "DISCOVERED")
+
+        response.valid.shouldBeTrue()
+        // The target and its origin exist nowhere on the proxy except via this request.
+        coVerify {
+          mockStub.registerPath(
+            match {
+              it.agentId == "test-agent-123" &&
+                it.path == "metrics" &&
+                it.labels == "{}" &&
+                it.targetUrl == "http://target:9100/metrics" &&
+                it.pathSource == "DISCOVERED"
+            },
+            any<Metadata>(),
+          )
+        }
+        verify { service.agent.markMsgSent() }
+      }
+    }
+
+    "registerPathOnProxy should throw RequestFailureException on invalid response" {
+      withService("localhost:$PROXY_AGENT_PORT") { service ->
+        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+        coEvery { mockStub.registerPath(any(), any<Metadata>()) } returns registerPathResponse {
+          valid = false
+          reason = "not authorized to register path /metrics"
+        }
+        service.grpcStub = mockStub
+        service.unaryDeadlineSecs = 0
+
+        val exception =
+          shouldThrow<RequestFailureException> {
+            service.registerPathOnProxy("metrics", "{}", "http://target:9100/metrics", "STATIC")
+          }
+        exception.message shouldContain "registerPathOnProxy()"
+        exception.message shouldContain "not authorized"
+      }
+    }
+
+    "unregisterPathOnProxy should send the path and mark a message sent" {
+      withService("localhost:$PROXY_AGENT_PORT") { service ->
+        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+        coEvery { mockStub.unregisterPath(any(), any<Metadata>()) } returns unregisterPathResponse { valid = true }
+        service.grpcStub = mockStub
+        service.unaryDeadlineSecs = 0
+
+        val response = service.unregisterPathOnProxy("metrics")
+
+        response.valid.shouldBeTrue()
+        coVerify {
+          mockStub.unregisterPath(match { it.agentId == "test-agent-123" && it.path == "metrics" }, any<Metadata>())
+        }
+        verify { service.agent.markMsgSent() }
+      }
+    }
+
+    "unregisterPathOnProxy should throw RequestFailureException on invalid response" {
+      withService("localhost:$PROXY_AGENT_PORT") { service ->
+        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+        coEvery { mockStub.unregisterPath(any(), any<Metadata>()) } returns unregisterPathResponse {
+          valid = false
+          reason = "Invalid agentId: test-agent-123 (unregisterPath)"
+        }
+        service.grpcStub = mockStub
+        service.unaryDeadlineSecs = 0
+
+        val exception = shouldThrow<RequestFailureException> { service.unregisterPathOnProxy("metrics") }
+        exception.message shouldContain "unregisterPathOnProxy()"
+        exception.message shouldContain "Invalid agentId"
+        // The round trip still happened, so the heartbeat clock was still bumped.
+        verify { service.agent.markMsgSent() }
+      }
+    }
+
+    // ==================== connectAgent Error propagation ====================
+
+    "connectAgent should rethrow a JVM Error rather than report a failed connection" {
+      withService("localhost:$PROXY_AGENT_PORT") { service ->
+        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws StackOverflowError("simulated")
+        service.grpcStub = mockStub
+        service.unaryDeadlineSecs = 0
+
+        // handleConnectionFailure() has the matching test (Bug #8). Here the Error must not collapse into a
+        // routine "could not connect" false, or the run loop would keep retrying on a corrupted JVM.
+        shouldThrow<StackOverflowError> { service.connectAgent() }
+      }
+    }
+
+    // ==================== Backlog and drop accounting ====================
+
+    "readRequestsFromProxy should roll back the backlog increment when the connection context is closed" {
+      withService("localhost:$PROXY_AGENT_PORT") { service ->
+        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+        every { mockStub.readRequestsFromProxy(any(), any()) } returns
+          flowOf(
+            scrapeRequest {
+              agentId = "test-agent-123"
+              scrapeId = 1L
+              path = "/metrics"
+            },
+          )
+        service.grpcStub = mockStub
+
+        // Closed before the request arrives, as when the connection drops between the proxy sending a
+        // request and the agent queueing it.
+        val connectionContext = AgentConnectionContext(128).apply { close() }
+
+        shouldThrow<ClosedSendChannelException> {
+          service.readRequestsFromProxy(mockk(relaxed = true), connectionContext)
+        }
+        // The increment for the undeliverable request is reversed, so the gauge does not drift upward.
+        verify(exactly = 1) { service.agent.decrementBacklog(1) }
+      }
+    }
+
+    "processScrapeResults should count a result as dropped when the response channel has closed" {
+      withService("localhost:$PROXY_AGENT_PORT") { service ->
+        val connectionContext = AgentConnectionContext(128)
+        // A sibling writer's closeAll() has already closed the response channels.
+        val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED).apply { close() }
+        val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
+
+        connectionContext.sendScrapeResults(
+          ScrapeResults(
+            srAgentId = "test-agent-123",
+            srScrapeId = 42L,
+            srValidResponse = true,
+            srStatusCode = 200,
+            srContentType = "text/plain",
+            srZipped = false,
+            srContentAsText = "metric_name 1.0",
+          ),
+        )
+        connectionContext.close()
+
+        val thrown =
+          shouldThrowAny {
+            callProcessScrapeResults(service, service.agent, connectionContext, nonChunkedChannel, chunkedChannel)
+          }
+        ((thrown as? InvocationTargetException)?.targetException ?: thrown)
+          .shouldBeInstanceOf<ClosedSendChannelException>()
+        // The only metrics call is the "dropped" count: the non-gzipped success count sits after the
+        // send that failed, so it is never reached.
+        verify(exactly = 1) { service.agent.metrics(any<AgentMetrics.() -> Unit>()) }
+      }
+    }
+
+    // ==================== Keepalive channel options ====================
+
+    "keepalive options should be applied when the channel is built" {
+      val agent =
+        createMockAgent(
+          "localhost:$PROXY_AGENT_PORT",
+          keepAliveTimeSecs = 30L,
+          keepAliveTimeoutSecs = 10L,
+          keepAliveWithoutCalls = true,
+        )
+      // A network channel rather than the in-process one: the in-process builder accepts the keepalive
+      // calls but ignores them, so only a real channel builder can object to the values. Nothing connects
+      // until an RPC is made, so no proxy needs to be listening.
+      val service = AgentGrpcService(agent, agent.options, "")
+      try {
+        service.channel.isShutdown.shouldBeFalse()
+        service.channel.authority() shouldBe "localhost:$PROXY_AGENT_PORT"
+      } finally {
+        service.shutDown()
+      }
     }
 
     // ==================== Bug #6: grpcStarted should only be true after channel is initialized ====================

@@ -1,5 +1,6 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests scaling-tests all-tests regen-certs \
+        docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
@@ -100,6 +101,12 @@ container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true $(GRADLE) test --tests "io.prometheus.containers.*"
 
 all-tests: tests container-tests  ## Run the full suite: all tests + the container tests
+
+docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
+	@./bin/docker-clean-tests.sh --dry-run --cache
+
+docker-clean:  ## Reclaim Docker disk left by the container tests (ARGS="--all" to include cache and base images)
+	@./bin/docker-clean-tests.sh $(ARGS)
 
 scaling-tests: jars  ## Run the parameter-driven scaling container test (tune via SCALE_* vars; needs Docker)
 	@$(SCALING_BANNER) scaling-tests "$(if $(SCALE_SETTINGS),$(SCALE_SETTINGS),built-in defaults)"
