@@ -105,7 +105,7 @@ all-tests: tests container-tests  ## Run the full suite: all tests + the contain
 docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
 	@./bin/docker-clean-tests.sh --dry-run --cache
 
-docker-clean:  ## Reclaim Docker disk left by the container tests (ARGS="--all" to include cache and base images)
+docker-clean:  ## Reclaim Docker disk left by the container tests (ARGS="--all" to include cache, base and built images)
 	@./bin/docker-clean-tests.sh $(ARGS)
 
 scaling-tests: jars  ## Run the parameter-driven scaling container test (tune via SCALE_* vars; needs Docker)
