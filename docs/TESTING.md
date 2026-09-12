@@ -38,6 +38,18 @@ make all-tests        # Full suite: `make tests` + `make container-tests`
                       #   (container-tests already includes ContainersScalingTest's default table)
 ```
 
+The container tests leave Docker images, containers and networks behind, and a killed or timed-out run
+leaks image tags that nothing reaps. Two targets reclaim that disk:
+
+```bash
+make docker-clean-dry  # Preview what would be reclaimed; removes nothing
+make docker-clean      # Reclaim it (ARGS="--all" also prunes the build cache and base images)
+```
+
+`docker-clean` refuses to run while a test run is in flight, since removing those images would break it.
+It matches only Testcontainers' own images, labels and dangling images, so unrelated images on the host
+are unreachable from its selectors — see the comment block in `bin/docker-clean-tests.sh`.
+
 #### Scaling Presets
 
 For dev/stress work there are curated presets that each delegate to `scaling-tests` with a `SCALE_*` combo that
@@ -284,6 +296,15 @@ End-to-end Testcontainers specs that build the proxy and agent images from `etc/
 alongside `nginx:alpine` metrics stubs (and `prom/prometheus` where needed), and exercise the full
 Prometheus → proxy → agent → endpoint scrape path over real network transport. Every spec is gated on
 `RUN_CONTAINER_TESTS=true`; shared factories live in `containers/support/ContainerTestSupport.kt`.
+
+`containers/support/LoopbackPortBindings.kt` publishes every container port on `127.0.0.1` instead of
+Docker's `0.0.0.0` default. It has no call sites: it is registered through
+`src/test/resources/META-INF/services/org.testcontainers.core.CreateContainerCmdModifier`, which is what
+lets it cover containers built directly by a spec as well as Testcontainers' own Ryuk reaper. Deleting that
+service file silently disables it. Without it a wildcard-published port can collide with a loopback-specific
+listener already on the host — both binds succeed, and the OS then routes the test's requests to the other
+process, which surfaces as a wait strategy timing out against a status the container never produced.
+`ContainersPortBindingTest` pins the binding.
 
 - **ContainersSmokeTest** — baseline: Prometheus scrapes a single metric through the proxy and agent
 - **ContainersProxyHttpTest** — HTTP surfaces: registered-path scrapes, 404/503 passthrough, admin servlets,
