@@ -129,15 +129,30 @@ class AgentGrpcServiceTest : StringSpec() {
   // NEXT spec in the file, which turns one failure into a cascade.
   private suspend fun withService(
     proxySpec: String,
+    transportFilterDisabled: Boolean = false,
     block: suspend (AgentGrpcService) -> Unit,
   ) {
-    val agent = createMockAgent(proxySpec)
+    val agent = createMockAgent(proxySpec, transportFilterDisabled = transportFilterDisabled)
     val service = AgentGrpcService(agent, agent.options, "test-server")
     try {
       block(service)
     } finally {
       service.shutDown()
     }
+  }
+
+  // Most specs then want a stubbed unary RPC, which is the same three lines every time. The deadline has
+  // to go: with one set, unaryStub() derives a fresh stub per call via withDeadlineAfter(), so the mock
+  // installed here would never be consulted.
+  private suspend fun withStubbedService(
+    proxySpec: String,
+    transportFilterDisabled: Boolean = false,
+    block: suspend (AgentGrpcService, ProxyServiceGrpcKt.ProxyServiceCoroutineStub) -> Unit,
+  ) = withService(proxySpec, transportFilterDisabled) { service ->
+    val stub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+    service.grpcStub = stub
+    service.unaryDeadlineSecs = 0
+    block(service, stub)
   }
 
   private suspend fun callProcessScrapeResults(
@@ -391,94 +406,69 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== connectAgent Tests ====================
 
     "connectAgent should return true on successful connection" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
-      service.grpcStub = mockStub
-      service.unaryDeadlineSecs = 0
+        val result = service.connectAgent()
 
-      val result = service.connectAgent()
-
-      result.shouldBeTrue()
-      service.shutDown()
+        result.shouldBeTrue()
+      }
     }
 
     "connectAgent should return false on connection failure" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws RuntimeException("Connection refused")
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws RuntimeException("Connection refused")
-      service.grpcStub = mockStub
-      service.unaryDeadlineSecs = 0
+        val result = service.connectAgent()
 
-      val result = service.connectAgent()
-
-      result.shouldBeFalse()
-      service.shutDown()
+        result.shouldBeFalse()
+      }
     }
 
     "connectAgent with transportFilterDisabled should assign agentId" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT", transportFilterDisabled = true)
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withStubbedService("localhost:$PROXY_AGENT_PORT", transportFilterDisabled = true) { service, mockStub ->
+        coEvery { mockStub.connectAgentWithTransportFilterDisabled(any(), any<Metadata>()) } returns agentInfo {
+          agentId = "assigned-agent-id"
+        }
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      coEvery { mockStub.connectAgentWithTransportFilterDisabled(any(), any<Metadata>()) } returns agentInfo {
-        agentId = "assigned-agent-id"
+        val result = service.connectAgent()
+
+        result.shouldBeTrue()
+        verify { service.agent.agentId = "assigned-agent-id" }
       }
-      service.grpcStub = mockStub
-      service.unaryDeadlineSecs = 0
-
-      val result = service.connectAgent()
-
-      result.shouldBeTrue()
-      verify { agent.agentId = "assigned-agent-id" }
-      service.shutDown()
     }
 
     // ==================== registerAgent Tests ====================
 
     "registerAgent should send request with correct agent details" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse { valid = true }
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse { valid = true }
-      service.grpcStub = mockStub
-      service.unaryDeadlineSecs = 0
+        val latch = CountDownLatch(1)
+        service.registerAgent(latch)
 
-      val latch = CountDownLatch(1)
-      service.registerAgent(latch)
-
-      coVerify {
-        mockStub.registerAgent(
-          match { it.agentId == "test-agent-123" && it.launchId == "launch-123" },
-          any<Metadata>(),
-        )
+        coVerify {
+          mockStub.registerAgent(
+            match { it.agentId == "test-agent-123" && it.launchId == "launch-123" },
+            any<Metadata>(),
+          )
+        }
+        latch.count shouldBe 0L
       }
-      latch.count shouldBe 0L
-      service.shutDown()
     }
 
     "registerAgent should throw RequestFailureException on invalid response" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse {
+          valid = false
+          reason = "Agent already registered"
+        }
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse {
-        valid = false
-        reason = "Agent already registered"
+        val latch = CountDownLatch(1)
+        shouldThrow<RequestFailureException> {
+          service.registerAgent(latch)
+        }
       }
-      service.grpcStub = mockStub
-      service.unaryDeadlineSecs = 0
-
-      val latch = CountDownLatch(1)
-      shouldThrow<RequestFailureException> {
-        service.registerAgent(latch)
-      }
-      service.shutDown()
     }
 
     // ==================== Channel Termination Tests (M9) ====================
@@ -695,35 +685,25 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== sendHeartBeat Tests ====================
 
     "sendHeartBeat should skip when agentId is empty" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      every { agent.agentId } returns ""
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        every { service.agent.agentId } returns ""
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      service.grpcStub = mockStub
-      service.unaryDeadlineSecs = 0
+        val result = service.sendHeartBeat()
 
-      val result = service.sendHeartBeat()
-
-      result shouldBe HeartBeatResult.SUCCESS
-      coVerify(exactly = 0) { mockStub.sendHeartBeat(any(), any<Metadata>()) }
-      service.shutDown()
+        result shouldBe HeartBeatResult.SUCCESS
+        coVerify(exactly = 0) { mockStub.sendHeartBeat(any(), any<Metadata>()) }
+      }
     }
 
     "sendHeartBeat should send request when agentId is set" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse { valid = true }
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse { valid = true }
-      service.grpcStub = mockStub
-      service.unaryDeadlineSecs = 0
+        val result = service.sendHeartBeat()
 
-      val result = service.sendHeartBeat()
-
-      result shouldBe HeartBeatResult.SUCCESS
-      coVerify { mockStub.sendHeartBeat(match { it.agentId == "test-agent-123" }, any<Metadata>()) }
-      service.shutDown()
+        result shouldBe HeartBeatResult.SUCCESS
+        coVerify { mockStub.sendHeartBeat(match { it.agentId == "test-agent-123" }, any<Metadata>()) }
+      }
     }
 
     // ==================== readRequestsFromProxy Tests ====================
@@ -976,53 +956,35 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== sendHeartBeat Error Handling Tests ====================
 
     "sendHeartBeat should return EVICTED when the proxy reports the agent invalid" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse {
+          valid = false
+          reason = "Agent not found"
+        }
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse {
-        valid = false
-        reason = "Agent not found"
+        // An invalid response means the proxy evicted this agent's context. sendHeartBeat classifies it
+        // as EVICTED so startHeartBeat() tears the connection down and reconnects, instead of swallowing
+        // it into a zombie state (finding 2).
+        service.sendHeartBeat() shouldBe HeartBeatResult.EVICTED
       }
-      service.grpcStub = mockStub
-      service.unaryDeadlineSecs = 0
-
-      // An invalid response means the proxy evicted this agent's context. sendHeartBeat classifies it
-      // as EVICTED so startHeartBeat() tears the connection down and reconnects, instead of swallowing
-      // it into a zombie state (finding 2).
-      service.sendHeartBeat() shouldBe HeartBeatResult.EVICTED
-
-      service.shutDown()
     }
 
     "sendHeartBeat should return SUCCESS when the proxy validates the heartbeat" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse { valid = true }
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse { valid = true }
-      service.grpcStub = mockStub
-      service.unaryDeadlineSecs = 0
-
-      service.sendHeartBeat() shouldBe HeartBeatResult.SUCCESS
-
-      service.shutDown()
+        service.sendHeartBeat() shouldBe HeartBeatResult.SUCCESS
+      }
     }
 
     "sendHeartBeat should return TRANSIENT_FAILURE on an RPC exception without throwing" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } throws RuntimeException("Network error")
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } throws RuntimeException("Network error")
-      service.grpcStub = mockStub
-      service.unaryDeadlineSecs = 0
-
-      // A transient RPC failure is classified (not thrown) so the caller can tolerate a bounded number
-      // of consecutive failures before forcing a reconnect (finding 2).
-      service.sendHeartBeat() shouldBe HeartBeatResult.TRANSIENT_FAILURE
-
-      service.shutDown()
+        // A transient RPC failure is classified (not thrown) so the caller can tolerate a bounded number
+        // of consecutive failures before forcing a reconnect (finding 2).
+        service.sendHeartBeat() shouldBe HeartBeatResult.TRANSIENT_FAILURE
+      }
     }
 
     "registerAgent should throw on empty agentId" {
@@ -1068,11 +1030,8 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== Path RPC responses ====================
 
     "registerPathOnProxy should send the path's target and source and mark a message sent" {
-      withService("localhost:$PROXY_AGENT_PORT") { service ->
-        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         coEvery { mockStub.registerPath(any(), any<Metadata>()) } returns registerPathResponse { valid = true }
-        service.grpcStub = mockStub
-        service.unaryDeadlineSecs = 0
 
         val response = service.registerPathOnProxy("metrics", "{}", "http://target:9100/metrics", "DISCOVERED")
 
@@ -1095,14 +1054,11 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "registerPathOnProxy should throw RequestFailureException on invalid response" {
-      withService("localhost:$PROXY_AGENT_PORT") { service ->
-        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         coEvery { mockStub.registerPath(any(), any<Metadata>()) } returns registerPathResponse {
           valid = false
           reason = "not authorized to register path /metrics"
         }
-        service.grpcStub = mockStub
-        service.unaryDeadlineSecs = 0
 
         val exception =
           shouldThrow<RequestFailureException> {
@@ -1114,11 +1070,8 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "unregisterPathOnProxy should send the path and mark a message sent" {
-      withService("localhost:$PROXY_AGENT_PORT") { service ->
-        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         coEvery { mockStub.unregisterPath(any(), any<Metadata>()) } returns unregisterPathResponse { valid = true }
-        service.grpcStub = mockStub
-        service.unaryDeadlineSecs = 0
 
         val response = service.unregisterPathOnProxy("metrics")
 
@@ -1131,14 +1084,11 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "unregisterPathOnProxy should throw RequestFailureException on invalid response" {
-      withService("localhost:$PROXY_AGENT_PORT") { service ->
-        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         coEvery { mockStub.unregisterPath(any(), any<Metadata>()) } returns unregisterPathResponse {
           valid = false
           reason = "Invalid agentId: test-agent-123 (unregisterPath)"
         }
-        service.grpcStub = mockStub
-        service.unaryDeadlineSecs = 0
 
         val exception = shouldThrow<RequestFailureException> { service.unregisterPathOnProxy("metrics") }
         exception.message shouldContain "unregisterPathOnProxy()"
@@ -1151,11 +1101,8 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== connectAgent Error propagation ====================
 
     "connectAgent should rethrow a JVM Error rather than report a failed connection" {
-      withService("localhost:$PROXY_AGENT_PORT") { service ->
-        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws StackOverflowError("simulated")
-        service.grpcStub = mockStub
-        service.unaryDeadlineSecs = 0
 
         // handleConnectionFailure() has the matching test (Bug #8). Here the Error must not collapse into a
         // routine "could not connect" false, or the run loop would keep retrying on a corrupted JVM.
@@ -1166,8 +1113,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== Backlog and drop accounting ====================
 
     "readRequestsFromProxy should roll back the backlog increment when the connection context is closed" {
-      withService("localhost:$PROXY_AGENT_PORT") { service ->
-        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         every { mockStub.readRequestsFromProxy(any(), any()) } returns
           flowOf(
             scrapeRequest {
@@ -1176,7 +1122,6 @@ class AgentGrpcServiceTest : StringSpec() {
               path = "/metrics"
             },
           )
-        service.grpcStub = mockStub
 
         // Closed before the request arrives, as when the connection drops between the proxy sending a
         // request and the agent queueing it.
