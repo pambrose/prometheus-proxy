@@ -216,29 +216,20 @@ class BaseOptionsTest : StringSpec() {
     // ==================== Config File Loading Tests ====================
 
     "should load config from conf file" {
-      val tempDir = createTempDirectory("base-options-test").toFile()
-      try {
-        val confFile = File(tempDir, "test.conf")
-        confFile.writeText(
+      val options =
+        proxyOptionsFromConfig(
           """
           proxy {
             http.port = 9999
           }
-          """.trimIndent(),
+          """,
         )
-
-        val options = proxyOptions(["-c", confFile.absolutePath])
-        options.proxyPort shouldBe 9999
-      } finally {
-        tempDir.deleteRecursively()
-      }
+      options.proxyPort shouldBe 9999
     }
 
     "should load config from json file" {
-      val tempDir = createTempDirectory("base-options-test").toFile()
-      try {
-        val jsonFile = File(tempDir, "test.json")
-        jsonFile.writeText(
+      val options =
+        proxyOptionsFromConfig(
           """
           {
             "proxy": {
@@ -247,27 +238,15 @@ class BaseOptionsTest : StringSpec() {
               }
             }
           }
-          """.trimIndent(),
+          """,
+          suffix = ".json",
         )
-
-        val options = proxyOptions(["-c", jsonFile.absolutePath])
-        options.proxyPort shouldBe 7777
-      } finally {
-        tempDir.deleteRecursively()
-      }
+      options.proxyPort shouldBe 7777
     }
 
     "should load config from properties file" {
-      val tempDir = createTempDirectory("base-options-test").toFile()
-      try {
-        val propsFile = File(tempDir, "test.properties")
-        propsFile.writeText("proxy.http.port=6666")
-
-        val options = proxyOptions(["-c", propsFile.absolutePath])
-        options.proxyPort shouldBe 6666
-      } finally {
-        tempDir.deleteRecursively()
-      }
+      val options = proxyOptionsFromConfig("proxy.http.port=6666", suffix = ".properties")
+      options.proxyPort shouldBe 6666
     }
 
     // ==================== Config File Loading over HTTP (URL branch) ====================
@@ -291,25 +270,18 @@ class BaseOptionsTest : StringSpec() {
     // ==================== Bug #15: Config resolution with single resolve() ====================
 
     "config with variable substitution should resolve correctly" {
-      val tempDir = createTempDirectory("base-options-test").toFile()
-      try {
-        val confFile = File(tempDir, "test-subst.conf")
-        confFile.writeText(
+      val options =
+        proxyOptionsFromConfig(
           $$"""
           proxy {
             http.port = 8888
             admin.port = ${proxy.http.port}
           }
-          """.trimIndent(),
+          """,
         )
-
-        val options = proxyOptions(["-c", confFile.absolutePath])
-        options.proxyPort shouldBe 8888
-        // Variable substitution resolved: admin.port = proxy.http.port = 8888
-        options.configVals.proxy.admin.port shouldBe 8888
-      } finally {
-        tempDir.deleteRecursively()
-      }
+      options.proxyPort shouldBe 8888
+      // Variable substitution resolved: admin.port = proxy.http.port = 8888
+      options.configVals.proxy.admin.port shouldBe 8888
     }
 
     // ==================== Bug #18: URI.toURL() replaces deprecated URL() constructor ====================

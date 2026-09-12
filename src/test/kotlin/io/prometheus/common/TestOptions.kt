@@ -17,6 +17,7 @@
 package io.prometheus.common
 
 import com.typesafe.config.ConfigFactory
+import kotlin.io.path.createTempFile
 import io.prometheus.agent.AgentOptions
 import io.prometheus.proxy.ProxyOptions
 
@@ -42,3 +43,27 @@ fun agentOptions(
  */
 fun testConfigVals(hocon: String): ConfigVals =
   ConfigVals(ConfigFactory.parseString(hocon.trimIndent()).withFallback(ConfigFactory.load()).resolve())
+
+/**
+ * Writes [contents] to a temp file and builds [ProxyOptions] from it via `--config`.
+ *
+ * [suffix] is load-bearing, not cosmetic: `BaseOptions.getConfigSyntax()` picks the parser from the file
+ * extension, so `.json` and `.properties` reach different branches than the default `.conf`.
+ *
+ * A file is the only way to reach some settings at all. An empty string cannot be expressed on the command
+ * line, where a blank value falls back to the config default, nor through `-D`, whose parse rejects one --
+ * so the `require(... .isNotEmpty())` guards in ProxyOptions are only testable this way.
+ */
+fun proxyOptionsFromConfig(
+  contents: String,
+  suffix: String = ".conf",
+  extraArgs: List<String> = emptyList(),
+): ProxyOptions {
+  val file =
+    createTempFile("test-config", suffix).toFile().apply { writeText(contents.trimIndent()) }
+  try {
+    return proxyOptions(["--config", file.absolutePath] + extraArgs)
+  } finally {
+    file.delete()
+  }
+}

@@ -35,12 +35,12 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import io.prometheus.Agent
-import io.prometheus.Proxy
-import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -51,108 +51,146 @@ import kotlin.time.Duration.Companion.seconds
  * ordering is the point — it proves the push path works, not merely that the initial render does.
  */
 class ProxyWebDashboardTest : StringSpec() {
+  /** The proxy, client and optional agent one spec runs against. Torn down by [withDashboard]. */
+  private class DashboardEnv(
+    val client: HttpClient,
+    private val grpcPort: Int,
+    private val configFile: String,
+    dashboardPort: Int,
+  ) {
+    var agent: Agent? = null
+      private set
+
+    /** Origin of the dashboard's own listener; every spec builds its URLs from this. */
+    val base = "http://$LOOPBACK_HOST:$dashboardPort"
+
+    /** The push socket, under the default `/dashboard` base path. */
+    val socketUrl = "ws://$LOOPBACK_HOST:$dashboardPort/dashboard/events"
+
+    /**
+     * Starts an agent against this proxy and waits for it to connect. Recorded so the fixture can stop it,
+     * which is what lets a spec start one mid-test without owning a `finally`.
+     *
+     * @param proxySpec overridable for the failover spec, which needs a dead endpoint ahead of the live one.
+     */
+    suspend fun connectAgent(
+      proxySpec: String = "$LOOPBACK_HOST:$grpcPort",
+      timeout: Duration = 20.seconds,
+    ): Agent =
+      startAgent(configArgs = ["--config", configFile], args = ["--proxy", proxySpec])
+        .also {
+          agent = it
+          it.awaitInitialConnection(timeout).shouldBeTrue()
+        }
+  }
+
+  /**
+   * Stands a dashboard-enabled proxy up on the given ports, hands the block a client and the fixture, and
+   * tears all of it down.
+   *
+   * Eight specs used to repeat this frame verbatim. The only genuinely per-spec inputs are the port triple,
+   * the config file, whether the dashboard is enabled at all, and how the client is built — so those are
+   * the parameters, and everything else (registry reset, proxy args, teardown order) lives here once.
+   */
+  private suspend fun withDashboard(
+    httpPort: Int,
+    grpcPort: Int,
+    dashboardPort: Int,
+    configFile: String = CONFIG_FILE,
+    dashboardEnabled: Boolean = true,
+    extraProxyArgs: List<String> = emptyList(),
+    newClient: () -> HttpClient = { HttpClient(CIO) },
+    block: suspend DashboardEnv.() -> Unit,
+  ) {
+    CollectorRegistry.defaultRegistry.clear()
+
+    val proxy =
+      startProxy(
+        args =
+          buildList {
+            addAll(["--agent_port", "$grpcPort"])
+            if (dashboardEnabled) addAll(["--dashboard", "--dashboard_port", "$dashboardPort"])
+            addAll(extraProxyArgs)
+          },
+        proxyPort = httpPort,
+        configArgs = ["--config", configFile],
+      )
+
+    val env = DashboardEnv(newClient(), grpcPort, configFile, dashboardPort)
+    try {
+      env.block()
+    } finally {
+      env.agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
+      env.client.close()
+      runCatching { proxy.stopSync(10.seconds) }
+    }
+  }
+
   init {
     "the dashboard serves a page and pushes updates over the WebSocket" {
-      CollectorRegistry.defaultRegistry.clear()
-
-      val proxy =
-        startProxy(
-          args = ["--agent_port", "$PROXY_GRPC_PORT", "--dashboard", "--dashboard_port", "$DASHBOARD_PORT"],
-          proxyPort = PROXY_HTTP_PORT,
-          configArgs = ["--config", CONFIG_FILE],
-        )
-
-      val client = HttpClient(CIO) { install(WebSockets) }
-      var agent: Agent? = null
-
-      try {
+      withDashboard(
+        PROXY_HTTP_PORT,
+        PROXY_GRPC_PORT,
+        DASHBOARD_PORT,
+        newClient = { HttpClient(CIO) { install(WebSockets) } },
+      ) {
         // The page must render with no agents at all -- an operator opening the dashboard on a fresh proxy
         // should see an explanation, not a blank pane or a stack trace.
         eventually(20.seconds) {
-          val response = client.get("http://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard")
+          val response = client.get("$base/dashboard")
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldContain "No agents connected"
         }
 
         // htmx itself must be served from the classpath, not a CDN: the fat JAR has to work with no
         // outbound network access, which is the normal condition for a proxy bridging a firewall.
-        client.get("http://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard/assets/htmx.min.js").also {
+        client.get("$base/dashboard/assets/htmx.min.js").also {
           it.status shouldBe HttpStatusCode.OK
           it.bodyAsText() shouldContain "htmx"
         }
 
         // The asset route is an allowlist, not a classpath lookup, so anything off it is a plain 404.
-        client.get("http://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard/assets/nope.js").status shouldBe
-          HttpStatusCode.NotFound
+        client.get("$base/dashboard/assets/nope.js").status shouldBe HttpStatusCode.NotFound
 
-        client.webSocket("ws://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard/events") {
+        client.webSocket(socketUrl) {
           // The immediate frame on connect, so a browser renders without waiting for a tick.
           val initial = (incoming.receive() as Frame.Text).readText()
           initial shouldContain "hx-swap-oob"
 
           // Connect an agent only NOW, with the socket already open, so the frame below can only have
           // been produced by the push path.
-          agent =
-            startAgent(
-              configArgs = ["--config", CONFIG_FILE],
-              args = ["--proxy", "$LOOPBACK_HOST:$PROXY_GRPC_PORT"],
-            )
-          agent.awaitInitialConnection(20.seconds).shouldBeTrue()
+          connectAgent()
 
           // any short-circuits, so MAX_FRAMES is a budget rather than a required frame count.
           (1..MAX_FRAMES)
             .any { (incoming.receive() as Frame.Text).readText().contains(AGENT_NAME) }
             .shouldBeTrue()
         }
-      } finally {
-        agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
-        client.close()
-        runCatching { proxy.stopSync(10.seconds) }
       }
     }
 
     "the dashboard must stay off unless enabled" {
-      CollectorRegistry.defaultRegistry.clear()
-
-      val proxy =
-        startProxy(
-          args = ["--agent_port", "$OFF_GRPC_PORT"],
-          proxyPort = OFF_HTTP_PORT,
-          configArgs = ["--config", CONFIG_FILE],
-        )
-
-      val client = HttpClient(CIO)
-      try {
+      withDashboard(OFF_HTTP_PORT, OFF_GRPC_PORT, OFF_DASHBOARD_PORT, dashboardEnabled = false) {
         // Nothing should be listening on the dashboard port: the feature is opt-in, matching admin and metrics.
-        runCatching { client.get("http://$LOOPBACK_HOST:$OFF_DASHBOARD_PORT/dashboard") }
+        runCatching { client.get("$base/dashboard") }
           .isFailure
           .shouldBeTrue()
-      } finally {
-        client.close()
-        runCatching { proxy.stopSync(10.seconds) }
       }
     }
 
     // The bare root would 404, since the dashboard lives under /dashboard. Sending someone who typed the host:port to
     // the dashboard is the friendly default.
     "the root should redirect to the dashboard base path" {
-      CollectorRegistry.defaultRegistry.clear()
-
-      val proxy =
-        startProxy(
-          args = ["--agent_port", "$ROOT_GRPC_PORT", "--dashboard", "--dashboard_port", "$ROOT_DASHBOARD_PORT"],
-          proxyPort = ROOT_HTTP_PORT,
-          configArgs = ["--config", CONFIG_FILE],
-        )
-      // Do not auto-follow, so the redirect itself is observable rather than its destination.
-      val client = HttpClient(CIO) { followRedirects = false }
-      try {
-        val response = client.get("http://$LOOPBACK_HOST:$ROOT_DASHBOARD_PORT/")
+      withDashboard(
+        ROOT_HTTP_PORT,
+        ROOT_GRPC_PORT,
+        ROOT_DASHBOARD_PORT,
+        // Do not auto-follow, so the redirect itself is observable rather than its destination.
+        newClient = { HttpClient(CIO) { followRedirects = false } },
+      ) {
+        val response = client.get("$base/")
         response.status shouldBe HttpStatusCode.Found
         response.headers["Location"] shouldBe "/dashboard"
-      } finally {
-        client.close()
-        runCatching { proxy.stopSync(10.seconds) }
       }
     }
 
@@ -160,17 +198,8 @@ class ProxyWebDashboardTest : StringSpec() {
     // the whole dashboard, not the bare detail fragment the row-click swap uses. The two are told apart
     // by the HX-Request header htmx sets on its own requests.
     "an agent URL should serve the full page on a plain navigation and a fragment to htmx" {
-      CollectorRegistry.defaultRegistry.clear()
-
-      val proxy =
-        startProxy(
-          args = ["--agent_port", "$NAV_GRPC_PORT", "--dashboard", "--dashboard_port", "$NAV_DASHBOARD_PORT"],
-          proxyPort = NAV_HTTP_PORT,
-          configArgs = ["--config", CONFIG_FILE],
-        )
-      val client = HttpClient(CIO)
-      try {
-        val url = "http://$LOOPBACK_HOST:$NAV_DASHBOARD_PORT/dashboard/agents/1"
+      withDashboard(NAV_HTTP_PORT, NAV_GRPC_PORT, NAV_DASHBOARD_PORT) {
+        val url = "$base/dashboard/agents/1"
 
         // A browser reload sends no HX-Request header -> the full document, shell and all.
         val full = client.get(url).bodyAsText()
@@ -191,9 +220,6 @@ class ProxyWebDashboardTest : StringSpec() {
             header("HX-History-Restore-Request", "true")
           }.bodyAsText()
         restore shouldContain "<body"
-      } finally {
-        client.close()
-        runCatching { proxy.stopSync(10.seconds) }
       }
     }
 
@@ -201,66 +227,33 @@ class ProxyWebDashboardTest : StringSpec() {
     // not exist, connects to the secondary -- and this proxy's dashboard says so. Without the endpoint list on
     // the wire the dashboard could not distinguish that from a fresh start.
     "the dashboard reports an agent that reached this proxy via failover" {
-      CollectorRegistry.defaultRegistry.clear()
-
-      val proxy =
-        startProxy(
-          args = ["--agent_port", "$FAILOVER_GRPC_PORT", "--dashboard", "--dashboard_port", "$FAILOVER_DASHBOARD_PORT"],
-          proxyPort = FAILOVER_HTTP_PORT,
-          configArgs = ["--config", CONFIG_FILE],
-        )
-      val client = HttpClient(CIO)
-      var agent: Agent? = null
-
-      try {
+      withDashboard(FAILOVER_HTTP_PORT, FAILOVER_GRPC_PORT, FAILOVER_DASHBOARD_PORT) {
         // Primary is a port nothing listens on, so the agent must advance to the second entry.
-        agent =
-          startAgent(
-            configArgs = ["--config", CONFIG_FILE],
-            args = ["--proxy", "$LOOPBACK_HOST:$DEAD_PORT,$LOOPBACK_HOST:$FAILOVER_GRPC_PORT"],
-          )
-        agent.awaitInitialConnection(30.seconds).shouldBeTrue()
+        connectAgent(
+          proxySpec = "$LOOPBACK_HOST:$DEAD_PORT,$LOOPBACK_HOST:$FAILOVER_GRPC_PORT",
+          timeout = 30.seconds,
+        )
 
         eventually(30.seconds) {
-          val listing = client.get("http://$LOOPBACK_HOST:$FAILOVER_DASHBOARD_PORT/dashboard").bodyAsText()
+          val listing = client.get("$base/dashboard").bodyAsText()
           val agentId = AGENT_ID_PATTERN.find(listing)?.groupValues?.get(1).orEmpty()
-          val detail =
-            client.get("http://$LOOPBACK_HOST:$FAILOVER_DASHBOARD_PORT/dashboard/agents/$agentId").bodyAsText()
+          val detail = client.get("$base/dashboard/agents/$agentId").bodyAsText()
 
           detail shouldContain "via $LOOPBACK_HOST:$FAILOVER_GRPC_PORT (2 of 2)"
           detail shouldContain "failed over"
         }
-      } finally {
-        agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
-        client.close()
-        runCatching { proxy.stopSync(10.seconds) }
       }
     }
+
     // The full chain in one assertion: the agent reports its target URL and path source at registration,
     // the proxy stores them on the path map, the snapshot joins them, and the table renders them. A break
     // anywhere between the .proto and the CSS fails here.
     "the path layout should show a registered path with its target and source" {
-      CollectorRegistry.defaultRegistry.clear()
-
-      val proxy =
-        startProxy(
-          args = ["--agent_port", "$PATHS_GRPC_PORT", "--dashboard", "--dashboard_port", "$PATHS_DASHBOARD_PORT"],
-          proxyPort = PATHS_HTTP_PORT,
-          configArgs = ["--config", PATHS_CONFIG_FILE],
-        )
-      val client = HttpClient(CIO)
-      var agent: Agent? = null
-
-      try {
-        agent =
-          startAgent(
-            configArgs = ["--config", PATHS_CONFIG_FILE],
-            args = ["--proxy", "$LOOPBACK_HOST:$PATHS_GRPC_PORT"],
-          )
-        agent.awaitInitialConnection(30.seconds).shouldBeTrue()
+      withDashboard(PATHS_HTTP_PORT, PATHS_GRPC_PORT, PATHS_DASHBOARD_PORT, configFile = PATHS_CONFIG_FILE) {
+        connectAgent(timeout = 30.seconds)
 
         eventually(30.seconds) {
-          val table = client.get("http://$LOOPBACK_HOST:$PATHS_DASHBOARD_PORT/dashboard/paths").bodyAsText()
+          val table = client.get("$base/dashboard/paths").bodyAsText()
 
           table shouldContain "/ui_path_metrics"
           // The target URL exists nowhere on the proxy except via the registration RPC.
@@ -271,11 +264,7 @@ class ProxyWebDashboardTest : StringSpec() {
 
         // The agent layout must still be the default, so the new route is additive rather than a
         // redirect that changes what an existing bookmark to /dashboard does.
-        client.get("http://$LOOPBACK_HOST:$PATHS_DASHBOARD_PORT/dashboard").bodyAsText() shouldContain "Agents"
-      } finally {
-        agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
-        client.close()
-        runCatching { proxy.stopSync(10.seconds) }
+        client.get("$base/dashboard").bodyAsText() shouldContain "Agents"
       }
     }
 
@@ -283,27 +272,15 @@ class ProxyWebDashboardTest : StringSpec() {
     // the service must parse it, record it on the session, and re-render at once rather than on the next
     // tick. The parsers are unit-tested; this is the only place the session state they feed is exercised.
     "a selection sent over the WebSocket should switch the pushed regions to that agent and layout" {
-      CollectorRegistry.defaultRegistry.clear()
+      withDashboard(
+        SELECT_HTTP_PORT,
+        SELECT_GRPC_PORT,
+        SELECT_DASHBOARD_PORT,
+        newClient = { HttpClient(CIO) { install(WebSockets) } },
+      ) {
+        val agentId = connectAgent().agentId
 
-      val proxy =
-        startProxy(
-          args = ["--agent_port", "$SELECT_GRPC_PORT", "--dashboard", "--dashboard_port", "$SELECT_DASHBOARD_PORT"],
-          proxyPort = SELECT_HTTP_PORT,
-          configArgs = ["--config", CONFIG_FILE],
-        )
-      val client = HttpClient(CIO) { install(WebSockets) }
-      var agent: Agent? = null
-
-      try {
-        agent =
-          startAgent(
-            configArgs = ["--config", CONFIG_FILE],
-            args = ["--proxy", "$LOOPBACK_HOST:$SELECT_GRPC_PORT"],
-          )
-        agent.awaitInitialConnection(20.seconds).shouldBeTrue()
-        val agentId = agent.agentId
-
-        client.webSocket("ws://$LOOPBACK_HOST:$SELECT_DASHBOARD_PORT/dashboard/events") {
+        client.webSocket(socketUrl) {
           // Nothing is selected on connect, so the first frame marks no row current.
           val initial = (incoming.receive() as Frame.Text).readText()
           initial shouldNotContain SELECTED_ROW
@@ -322,37 +299,20 @@ class ProxyWebDashboardTest : StringSpec() {
             }
             .shouldBeTrue()
         }
-      } finally {
-        agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
-        client.close()
-        runCatching { proxy.stopSync(10.seconds) }
       }
     }
 
     // The base path is configurable down to "/" itself, and the service special-cases that: the page owns
     // the root, so the root-to-base redirect is skipped, and every other route hangs directly off "/".
     "the dashboard can be mounted at the root path" {
-      CollectorRegistry.defaultRegistry.clear()
-
-      val proxy =
-        startProxy(
-          args = [
-            "--agent_port",
-            "$MOUNT_GRPC_PORT",
-            "--dashboard",
-            "--dashboard_port",
-            "$MOUNT_DASHBOARD_PORT",
-            "--dashboard_path",
-            "/",
-          ],
-          proxyPort = MOUNT_HTTP_PORT,
-          configArgs = ["--config", CONFIG_FILE],
-        )
-      // Do not auto-follow, so a redirect would fail the status assertion rather than be hidden.
-      val client = HttpClient(CIO) { followRedirects = false }
-      try {
-        val base = "http://$LOOPBACK_HOST:$MOUNT_DASHBOARD_PORT"
-
+      withDashboard(
+        MOUNT_HTTP_PORT,
+        MOUNT_GRPC_PORT,
+        MOUNT_DASHBOARD_PORT,
+        extraProxyArgs = ["--dashboard_path", "/"],
+        // Do not auto-follow, so a redirect would fail the status assertion rather than be hidden.
+        newClient = { HttpClient(CIO) { followRedirects = false } },
+      ) {
         val page = client.get("$base/")
         page.status shouldBe HttpStatusCode.OK
         page.bodyAsText() shouldContain "No agents connected"
@@ -363,9 +323,6 @@ class ProxyWebDashboardTest : StringSpec() {
         client.get("$base/paths").status shouldBe HttpStatusCode.OK
         client.get("$base/assets/htmx.min.js").status shouldBe HttpStatusCode.OK
         client.get("$base/agents/1").bodyAsText() shouldContain "<body"
-      } finally {
-        client.close()
-        runCatching { proxy.stopSync(10.seconds) }
       }
     }
   }
