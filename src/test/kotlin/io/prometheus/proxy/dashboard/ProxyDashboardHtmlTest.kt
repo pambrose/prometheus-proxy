@@ -371,6 +371,20 @@ class ProxyDashboardHtmlTest : StringSpec() {
       DashboardLayout.of("/dashboard/agents/7") shouldBe DashboardLayout.AGENT
     }
 
+    // Mounted at "/", every route must join onto the base without a doubled slash: "//events" is a
+    // protocol-relative URL, which sends the browser to a host named "events".
+    "a root-mounted dashboard should not emit protocol-relative links" {
+      val page =
+        createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/", DashboardLayout.AGENT) } }
+      page shouldContain """ws-connect="/events""""
+      page shouldContain """src="/assets/htmx.min.js""""
+      page shouldContain """href="/paths""""
+      page shouldContain """hx-get="/agents/1""""
+      page shouldNotContain "\"//"
+      // The Agents link is the root itself, which must stay "/" rather than collapse to an empty href.
+      page shouldContain """href="/" class="on""""
+    }
+
     "layout parsing should tolerate anything a browser might send" {
       ProxyDashboardService.parseLayout("""{"layout":"PATH"}""") shouldBe DashboardLayout.PATH
       ProxyDashboardService.parseLayout("""{"layout":"AGENT"}""") shouldBe DashboardLayout.AGENT

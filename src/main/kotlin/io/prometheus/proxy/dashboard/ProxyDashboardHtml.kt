@@ -96,12 +96,12 @@ internal object ProxyDashboardHtml {
       title("prometheus-proxy")
       meta(name = "viewport", content = "width=device-width, initial-scale=1")
       style { unsafe { raw(CSS) } }
-      script(src = "$dashboardPath/assets/htmx.min.js") {}
-      script(src = "$dashboardPath/assets/ws.js") {}
+      script(src = dashboardPath.route("assets/htmx.min.js")) {}
+      script(src = dashboardPath.route("assets/ws.js")) {}
     }
     body {
       attributes["hx-ext"] = "ws"
-      attributes["ws-connect"] = "$dashboardPath/events"
+      attributes["ws-connect"] = dashboardPath.route("events")
 
       div("bar") {
         span("brand") { +"prometheus-proxy" }
@@ -154,7 +154,7 @@ internal object ProxyDashboardHtml {
       if (layout == DashboardLayout.AGENT) attributes["aria-current"] = "page"
       +"Agents"
     }
-    a(href = "$dashboardPath/paths", classes = if (layout == DashboardLayout.PATH) "on" else null) {
+    a(href = dashboardPath.route("paths"), classes = if (layout == DashboardLayout.PATH) "on" else null) {
       if (layout == DashboardLayout.PATH) attributes["aria-current"] = "page"
       +"Paths"
     }
@@ -284,7 +284,7 @@ internal object ProxyDashboardHtml {
     }
     snapshot.agents.forEach { agent ->
       button(classes = "md-row") {
-        attributes["hx-get"] = "$dashboardPath/agents/${agent.agentId}"
+        attributes["hx-get"] = dashboardPath.route("agents/${agent.agentId}")
         attributes["hx-target"] = "#$DETAIL_ID"
         // outerHTML, so the returned #detail element replaces the old one in place rather than nesting a
         // second #detail inside it (the fragment IS the element, not its inner content).
@@ -433,6 +433,13 @@ internal object ProxyDashboardHtml {
   ): String = createHTML().div("md-detail") { detailInner(snapshot, selectedId, oob = false) }
 
   private fun AgentView.displayName(): String = agentLabel(agentName)
+
+  /**
+   * Joins a route onto the dashboard base path. Plain interpolation breaks when the dashboard is mounted
+   * at the root: a base of "/" would yield "//events", which a browser reads as a protocol-relative URL
+   * and resolves to a host named "events".
+   */
+  private fun String.route(sub: String): String = "${trimEnd('/')}/$sub"
 
   /**
    * Identity arrives at `registerAgent`, which is strictly after the transport filter created the
