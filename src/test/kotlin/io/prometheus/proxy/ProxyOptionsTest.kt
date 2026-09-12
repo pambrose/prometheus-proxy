@@ -42,7 +42,6 @@ class ProxyOptionsTest : StringSpec() {
   ): ProxyOptions {
     val file =
       createTempFile("proxy-options", ".conf").toFile().apply {
-        deleteOnExit()
         writeText(hocon.trimIndent())
       }
     try {

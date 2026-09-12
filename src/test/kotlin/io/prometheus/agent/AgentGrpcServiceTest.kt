@@ -1166,69 +1166,59 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== Backlog and drop accounting ====================
 
     "readRequestsFromProxy should roll back the backlog increment when the connection context is closed" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withService("localhost:$PROXY_AGENT_PORT") { service ->
+        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+        every { mockStub.readRequestsFromProxy(any(), any()) } returns
+          flowOf(
+            scrapeRequest {
+              agentId = "test-agent-123"
+              scrapeId = 1L
+              path = "/metrics"
+            },
+          )
+        service.grpcStub = mockStub
 
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      every { mockStub.readRequestsFromProxy(any(), any()) } returns
-        flowOf(
-          scrapeRequest {
-            agentId = "test-agent-123"
-            scrapeId = 1L
-            path = "/metrics"
-          },
-        )
-      service.grpcStub = mockStub
+        // Closed before the request arrives, as when the connection drops between the proxy sending a
+        // request and the agent queueing it.
+        val connectionContext = AgentConnectionContext(128).apply { close() }
 
-      // Closed before the request arrives, as when the connection drops between the proxy sending a
-      // request and the agent queueing it.
-      val connectionContext = AgentConnectionContext(128).apply { close() }
-
-      try {
         shouldThrow<ClosedSendChannelException> {
           service.readRequestsFromProxy(mockk(relaxed = true), connectionContext)
         }
         // The increment for the undeliverable request is reversed, so the gauge does not drift upward.
-        verify(exactly = 1) { agent.decrementBacklog(1) }
-      } finally {
-        service.shutDown()
+        verify(exactly = 1) { service.agent.decrementBacklog(1) }
       }
     }
 
     "processScrapeResults should count a result as dropped when the response channel has closed" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
+      withService("localhost:$PROXY_AGENT_PORT") { service ->
+        val connectionContext = AgentConnectionContext(128)
+        // A sibling writer's closeAll() has already closed the response channels.
+        val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED).apply { close() }
+        val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
 
-      val connectionContext = AgentConnectionContext(128)
-      // A sibling writer's closeAll() has already closed the response channels.
-      val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED).apply { close() }
-      val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
+        connectionContext.sendScrapeResults(
+          ScrapeResults(
+            srAgentId = "test-agent-123",
+            srScrapeId = 42L,
+            srValidResponse = true,
+            srStatusCode = 200,
+            srContentType = "text/plain",
+            srZipped = false,
+            srContentAsText = "metric_name 1.0",
+          ),
+        )
+        connectionContext.close()
 
-      connectionContext.sendScrapeResults(
-        ScrapeResults(
-          srAgentId = "test-agent-123",
-          srScrapeId = 42L,
-          srValidResponse = true,
-          srStatusCode = 200,
-          srContentType = "text/plain",
-          srZipped = false,
-          srContentAsText = "metric_name 1.0",
-        ),
-      )
-      connectionContext.close()
-
-      try {
         val thrown =
           shouldThrowAny {
-            callProcessScrapeResults(service, agent, connectionContext, nonChunkedChannel, chunkedChannel)
+            callProcessScrapeResults(service, service.agent, connectionContext, nonChunkedChannel, chunkedChannel)
           }
         ((thrown as? InvocationTargetException)?.targetException ?: thrown)
           .shouldBeInstanceOf<ClosedSendChannelException>()
         // The only metrics call is the "dropped" count: the non-gzipped success count sits after the
         // send that failed, so it is never reached.
-        verify(exactly = 1) { agent.metrics(any<AgentMetrics.() -> Unit>()) }
-      } finally {
-        service.shutDown()
+        verify(exactly = 1) { service.agent.metrics(any<AgentMetrics.() -> Unit>()) }
       }
     }
 
