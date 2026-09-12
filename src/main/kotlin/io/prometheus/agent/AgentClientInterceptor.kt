@@ -31,7 +31,6 @@ import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.prometheus.Agent
 import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
-import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 
 internal class AgentClientInterceptor(
   private val agent: Agent,
@@ -53,16 +52,20 @@ internal class AgentClientInterceptor(
               // Grab agent_id from headers if not already assigned
               synchronized(agent) {
                 if (agent.agentId.isEmpty()) {
+                  // takeIf sends a present-but-empty header down the same cancel path as a missing one.
+                  // It used to reach the ?.also branch, which assigned the empty id and only then failed a
+                  // check() -- throwing from the callback the cancel path below exists to avoid, and leaving
+                  // the agent believing it had registered under an id the proxy rejects on every later RPC.
                   headers.get(META_AGENT_ID_KEY)
+                    ?.takeIf { it.isNotEmpty() }
                     ?.also { agentId ->
                       agent.agentId = agentId
-                      check(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
                       logger.info { "Assigned agentId: $agentId to $agent" }
                     } ?: run {
                     // Cancel the call instead of throwing from the listener callback.
                     // Throwing from onHeaders violates the gRPC ClientCall.Listener contract
                     // and can cause undefined transport behavior.
-                    val msg = "Headers missing AGENT_ID key"
+                    val msg = "Headers missing or empty AGENT_ID key"
                     logger.error { msg }
                     delegate.cancel(msg, StatusRuntimeException(Status.INTERNAL.withDescription(msg)))
                     return

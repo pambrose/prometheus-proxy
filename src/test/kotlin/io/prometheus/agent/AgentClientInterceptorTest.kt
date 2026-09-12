@@ -26,6 +26,7 @@ import io.grpc.Metadata
 import io.grpc.MethodDescriptor
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
+import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -204,6 +205,41 @@ class AgentClientInterceptorTest : StringSpec() {
       verify(exactly = 0) { originalListener.onHeaders(any()) }
       // agentId should not have been assigned
       verify(exactly = 0) { mockAgent.agentId = any() }
+    }
+
+    // A header that is present but empty must take the same cancel path as a missing one. Letting it through
+    // reached a check() inside onHeaders, and throwing from a listener callback is exactly what the cancel
+    // path exists to avoid -- the gRPC ClientCall.Listener contract forbids it and the transport behavior is
+    // undefined. It also assigned the empty id to the agent before throwing, so the agent was left believing
+    // it had registered under an id the proxy would reject on every later RPC.
+    "onHeaders should cancel rather than throw when the agent ID header is present but empty" {
+      var currentAgentId = ""
+      val mockAgent = mockk<Agent>(relaxed = true)
+      every { mockAgent.agentId } answers { currentAgentId }
+      every { mockAgent.agentId = any() } answers { currentAgentId = firstArg() }
+
+      val interceptor = AgentClientInterceptor(mockAgent)
+      val mockMethod = mockk<MethodDescriptor<Any, Any>>(relaxed = true)
+
+      val listenerSlot = slot<ClientCall.Listener<Any>>()
+      val mockUnderlyingCall = mockk<ClientCall<Any, Any>>(relaxed = true)
+      every { mockUnderlyingCall.start(capture(listenerSlot), any()) } answers {}
+
+      val mockNextChannel = mockk<Channel>(relaxed = true)
+      every { mockNextChannel.newCall(any<MethodDescriptor<Any, Any>>(), any()) } returns mockUnderlyingCall
+
+      val originalListener = mockk<ClientCall.Listener<Any>>(relaxed = true)
+      val call = interceptor.interceptCall(mockMethod, CallOptions.DEFAULT, mockNextChannel)
+      call.start(originalListener, Metadata())
+
+      val headers = Metadata()
+      headers.put(GrpcConstants.META_AGENT_ID_KEY, "")
+      shouldNotThrowAny { listenerSlot.captured.onHeaders(headers) }
+
+      verify { mockUnderlyingCall.cancel(match { it.contains("AGENT_ID") }, any<StatusRuntimeException>()) }
+      verify(exactly = 0) { originalListener.onHeaders(any()) }
+      // The empty id must never reach the agent, so a later reconnect still sees an unassigned agentId.
+      currentAgentId shouldBe ""
     }
 
     "onHeaders missing agent ID should cancel with INTERNAL status and descriptive message" {
