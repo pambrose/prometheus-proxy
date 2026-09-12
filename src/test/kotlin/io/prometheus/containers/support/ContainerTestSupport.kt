@@ -59,28 +59,41 @@ object ContainerTestSupport {
   /** True only when `RUN_CONTAINER_TESTS=true`; otherwise every spec registers a single disabled placeholder. */
   fun containerTestsEnabled(): Boolean = System.getenv("RUN_CONTAINER_TESTS") == "true"
 
-  // ONE ImageFromDockerfile per JVM, not one per container.
+  /** Stable tag for the proxy image the suite builds. See the comment on [proxyImage]. */
+  const val PROXY_TEST_IMAGE = "prometheus-proxy-test/proxy:latest"
+
+  /** Stable tag for the agent image the suite builds. See the comment on [proxyImage]. */
+  const val AGENT_TEST_IMAGE = "prometheus-proxy-test/agent:latest"
+
+  // ONE ImageFromDockerfile per JVM, under a STABLE tag that outlives the run.
   //
-  // Testcontainers gives every ImageFromDockerfile instance its own random
-  // `localhost/testcontainers/<hash>:latest` tag. These were previously functions used as default
-  // parameter values, so each container built its own instance -- and ContainersScalingTest constructs
-  // one agent container per agent, so a single run minted a tag per agent plus one per proxy. The
-  // layers are content-hashed and shared (thousands of leaked tags resolve to only a few hundred image
-  // IDs), but the tags themselves accumulate: they are reaped only by a JVM shutdown hook, which never
-  // fires when a run is killed or times out. Left alone this grows into tens of GB of reclaimable
-  // images, and a bloated image store is a plausible trigger for containerd content GC racing a build
-  // ("NotFound: content digest ...: not found").
+  // Two leaks live here and they have opposite causes, so the fix for one does not address the other.
   //
-  // Sharing one instance is the documented way to build an image once and reuse it: the value is a
-  // Future<String> that resolves on first use, so N containers share one build and one tag.
+  // The first was one instance per container. These were once functions used as default parameter
+  // values, so every container built its own -- and ContainersScalingTest constructs one agent
+  // container per agent, so a single run minted a tag per agent plus one per proxy. Sharing one
+  // instance is the documented way to build once and reuse: the value is a Future<String> that
+  // resolves on first use, so N containers share one build and one tag.
+  //
+  // The second is the no-arg constructor, which mints a random `localhost/testcontainers/<hash>:latest`
+  // tag and registers a shutdown hook to delete it. The hook *working* is the problem: dropping the tag
+  // strands its content as a dangling ~591MB image that nothing prunes, so every clean run leaked one
+  // per image (21 of them, 4.16GB, measured before this change). A stable tag plus deleteOnExit=false
+  // inverts that. The jar travels in the build context, so an unchanged jar is a cache hit that resolves
+  // to the same image ID and the tag never moves -- nothing goes dangling, and the build is skipped.
+  // Only a real jar change orphans the previous image, which is one per change instead of one per run.
+  //
+  // Keeping the tags also puts them outside bin/docker-clean-tests.sh's localhost/testcontainers/
+  // selector by construction, so routine cleanup cannot undo the reuse; `docker-clean --built` removes
+  // them on the rare occasion a cold rebuild is wanted.
   val proxyImage: ImageFromDockerfile by lazy {
-    ImageFromDockerfile()
+    ImageFromDockerfile(PROXY_TEST_IMAGE, false)
       .withFileFromPath("Dockerfile", Path.of("etc/docker/proxy.df"))
       .withFileFromPath("build/libs/prometheus-proxy.jar", Path.of("build/libs/prometheus-proxy.jar"))
   }
 
   val agentImage: ImageFromDockerfile by lazy {
-    ImageFromDockerfile()
+    ImageFromDockerfile(AGENT_TEST_IMAGE, false)
       .withFileFromPath("Dockerfile", Path.of("etc/docker/agent.df"))
       .withFileFromPath("build/libs/prometheus-agent.jar", Path.of("build/libs/prometheus-agent.jar"))
   }

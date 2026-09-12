@@ -38,17 +38,22 @@ make all-tests        # Full suite: `make tests` + `make container-tests`
                       #   (container-tests already includes ContainersScalingTest's default table)
 ```
 
-The container tests leave Docker images, containers and networks behind, and a killed or timed-out run
-leaks image tags that nothing reaps. Two targets reclaim that disk:
+The suite builds its proxy and agent images under stable tags, so runs reuse them and a clean run now
+leaves nothing behind. They were previously built under a random tag that Testcontainers' shutdown hook
+deleted on exit — which is what stranded the bytes, since dropping the tag orphans the image content as a
+dangling ~591MB layer set that nothing prunes. A killed or timed-out run still leaks its containers,
+networks and any random tags, because that hook never fires. Two targets reclaim that disk:
 
 ```bash
 make docker-clean-dry  # Preview what would be reclaimed; removes nothing
-make docker-clean      # Reclaim it (ARGS="--all" also prunes the build cache and base images)
+make docker-clean      # Reclaim it (ARGS="--all" also prunes the build cache, base and built images)
 ```
 
-`docker-clean` refuses to run while a test run is in flight, since removing those images would break it.
-It matches only Testcontainers' own images, labels and dangling images, so unrelated images on the host
-are unreachable from its selectors — see the comment block in `bin/docker-clean-tests.sh`.
+`docker-clean` keeps the suite's own images by default so runs stay warm; pass `ARGS="--built"` to remove
+them and force a cold rebuild. It refuses to run while a test run is in flight, since removing those
+images would break it. It matches only Testcontainers' own images, labels and dangling images, so
+unrelated images on the host are unreachable from its selectors — see the comment block in
+`bin/docker-clean-tests.sh`.
 
 #### Scaling Presets
 

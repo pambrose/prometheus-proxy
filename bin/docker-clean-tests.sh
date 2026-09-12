@@ -16,19 +16,23 @@
 #
 # Reclaim the Docker disk the Testcontainers suite leaves behind.
 #
-# Every ImageFromDockerfile gets its own random localhost/testcontainers/<hash>:latest tag, reaped only by
-# a JVM shutdown hook that never fires when a run is killed or OOMs. Layers are content-shared, so
-# thousands of tags resolve to a few hundred images, but the tags accumulate and the store bloats. That
-# bloat is not cosmetic: it is a plausible trigger for containerd content GC racing a build, which
-# surfaces as "NotFound: content digest sha256:...: not found" on a later run.
+# The suite's own proxy/agent images build under stable tags (see ContainerTestSupport.kt), so they are
+# reused across runs and are NOT removed by default. Removing them reclaims little and costs a cold
+# rebuild; pass --built on the rare occasion that is what you want.
 #
-# Dropping the tags reclaims nothing on its own -- containerd leaves the content dangling until a prune --
-# so the tag removal and the prune below are one operation, not two choices.
+# What still accumulates is what Testcontainers names for itself. A run that is killed or OOMs leaves
+# its containers, its networks, and any random localhost/testcontainers/<hash>:latest tags behind, since
+# those are reaped only by a JVM shutdown hook that never fires in that case. Dropping a tag reclaims
+# nothing on its own -- containerd leaves the content dangling until a prune -- so the tag removal and
+# the prune below are one operation, not two choices. That bloat is not cosmetic: it is a plausible
+# trigger for containerd content GC racing a build, which surfaces as "NotFound: content digest
+# sha256:...: not found" on a later run.
 #
 # SAFETY. This script never runs `docker image prune -a`, `docker system prune`, or any unfiltered
 # removal. Those delete every unused *tagged* image, which on a development box means the databases,
 # language runtimes, and personal app images that have nothing to do with this repo. Instead:
 #   - images are matched on the localhost/testcontainers/ prefix
+#   - this repo's own test images are matched on the prometheus-proxy-test/ prefix, and only under --built
 #   - containers and networks are matched on Testcontainers' own org.testcontainers=true label
 #   - the prune is dangling-only, which by definition cannot touch a tagged image
 # So an unrelated image is not merely unlikely to be removed; it is unreachable from these selectors.
@@ -43,10 +47,15 @@ readonly TC_LABEL='org.testcontainers=true'
 # Matched by repository, not tag, so a version bump cannot make this stale.
 readonly BASE_IMAGE_PATTERN='^(nginx|prom/prometheus|testcontainers/ryuk):'
 
+# The images this repo builds for the suite, under the stable tags ContainerTestSupport.kt assigns.
+# Kept by default so runs reuse them; --built forces the cold rebuild.
+readonly BUILT_IMAGE_PATTERN='^prometheus-proxy-test/'
+
 dry_run=false
 assume_yes=false
 do_cache=false
 do_base=false
+do_built=false
 force=false
 
 usage() {
@@ -64,7 +73,9 @@ Options:
                   costs a cold rebuild of the proxy/agent images next run.
       --base      Also remove the pulled base images (nginx, prom/prometheus,
                   testcontainers/ryuk). Costs a re-pull next run.
-      --all       --cache and --base together.
+      --built     Also remove this repo's own proxy/agent test images. They are
+                  kept by default so runs reuse them; this forces a cold rebuild.
+      --all       --cache, --base and --built together.
       --force     Proceed even while a test run appears to be in flight. Only use
                   this if you know the run is dead; it will break a live one.
   -h, --help      Show this help.
@@ -80,9 +91,11 @@ while [ $# -gt 0 ]; do
     -y | --yes) assume_yes=true ;;
     --cache) do_cache=true ;;
     --base) do_base=true ;;
+    --built) do_built=true ;;
     --all)
       do_cache=true
       do_base=true
+      do_built=true
       ;;
     --force) force=true ;;
     -h | --help)
@@ -134,6 +147,10 @@ base_image_tags() {
   docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -E "$BASE_IMAGE_PATTERN" || true
 }
 
+built_image_tags() {
+  docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -E "$BUILT_IMAGE_PATTERN" || true
+}
+
 count_of() {
   if [ -z "$1" ]; then
     echo 0
@@ -180,6 +197,8 @@ networks="$(tc_networks)"
 dangling="$(dangling_images)"
 bases=""
 [ "$do_base" = true ] && bases="$(base_image_tags)"
+builts=""
+[ "$do_built" = true ] && builts="$(built_image_tags)"
 
 echo "=== Planned removals ==="
 printf '  %-34s %s\n' 'Testcontainers image tags' "$(count_of "$images")"
@@ -187,6 +206,7 @@ printf '  %-34s %s\n' 'Stopped Testcontainers containers' "$(count_of "$containe
 printf '  %-34s %s\n' 'Testcontainers networks' "$(count_of "$networks")"
 printf '  %-34s %s\n' 'Dangling images (prune)' "$(count_of "$dangling")"
 [ "$do_base" = true ] && printf '  %-34s %s\n' 'Base images (--base)' "$(count_of "$bases")"
+[ "$do_built" = true ] && printf '  %-34s %s\n' 'Built test images (--built)' "$(count_of "$builts")"
 [ "$do_cache" = true ] && printf '  %-34s %s\n' 'Build cache (--cache)' 'all unused entries'
 echo
 
@@ -195,7 +215,7 @@ if [ "$dry_run" = true ]; then
   exit 0
 fi
 
-if [ -z "$images$containers$networks$dangling$bases" ] && [ "$do_cache" = false ]; then
+if [ -z "$images$containers$networks$dangling$bases$builts" ] && [ "$do_cache" = false ]; then
   echo "Nothing to clean up."
   exit 0
 fi
@@ -231,6 +251,11 @@ fi
 if [ -n "$bases" ]; then
   echo "Removing base images ..."
   remove_in_batches "$bases" docker rmi -f
+fi
+
+if [ -n "$builts" ]; then
+  echo "Removing built test images ..."
+  remove_in_batches "$builts" docker rmi -f
 fi
 
 if [ -n "$networks" ]; then
