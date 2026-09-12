@@ -106,77 +106,23 @@ Tests are located in `src/test/kotlin/io/prometheus/` and organized by component
 
 ```
 src/test/kotlin/io/prometheus/
-├── agent/                           # Agent component tests (17 files)
-│   ├── AgentBacklogDriftTest.kt
-│   ├── AgentClientInterceptorTest.kt
-│   ├── AgentConnectionContextTest.kt
-│   ├── AgentContextManagerTest.kt
-│   ├── AgentContextTest.kt
-│   ├── AgentGrpcServiceTest.kt
-│   ├── AgentHttpServiceHeaderTest.kt
-│   ├── AgentHttpServiceTest.kt
-│   ├── AgentMetricsTest.kt
-│   ├── AgentOptionsTest.kt
-│   ├── AgentPathManagerTest.kt
-│   ├── AgentTest.kt
-│   ├── EmbeddedAgentInfoTest.kt
-│   ├── HttpClientCacheTest.kt
-│   ├── RequestFailureExceptionTest.kt
-│   ├── SslSettingsTest.kt
-│   └── TrustAllX509TrustManagerTest.kt
-├── common/                          # Shared utility tests + support (8 files)
-│   ├── BaseOptionsTest.kt
-│   ├── ConfigWrappersTest.kt
-│   ├── ConstantsTest.kt
-│   ├── EmbeddedTestServer.kt
-│   ├── EnvVarsTest.kt
-│   ├── ScrapeResultsTest.kt
-│   ├── TestPorts.kt
-│   └── UtilsTest.kt
-├── proxy/                           # Proxy component tests (21 files)
-│   ├── AgentContextCleanupServiceTest.kt
-│   ├── AgentContextManagerTest.kt
-│   ├── AgentContextTest.kt
-│   ├── ChunkedContextTest.kt
-│   ├── ProxyDynamicConfigTest.kt
-│   ├── ProxyGrpcServiceTest.kt
-│   ├── ProxyHttpConfigTest.kt
-│   ├── ProxyHttpRoutesTest.kt
-│   ├── ProxyHttpServiceTest.kt
-│   ├── ProxyMetricsTest.kt
-│   ├── ProxyOptionsTest.kt
-│   ├── ProxyPathManagerTest.kt
-│   ├── ProxyServerInterceptorTest.kt
-│   ├── ProxyServerTransportFilterTest.kt
-│   ├── ProxyServiceImplTest.kt
-│   ├── ProxyTest.kt
-│   ├── ProxyUtilsTest.kt
-│   ├── RecentReqsSynchronizationTest.kt
-│   ├── ScrapeRequestManagerTest.kt
-│   └── ScrapeRequestWrapperTest.kt
-├── misc/                            # Cross-cutting tests (6 files)
-│   ├── AdminDefaultPathTest.kt
-│   ├── AdminEmptyPathTest.kt
-│   ├── AdminNonDefaultPathTest.kt
-│   ├── ConfigValsTest.kt
-│   ├── DataClassTest.kt
-│   └── OptionsTest.kt
-├── harness/                         # Integration tests (8 files)
-│   ├── HarnessConfig.kt
-│   ├── HarnessConstants.kt
-│   ├── InProcessTestNoAdminMetricsTest.kt
-│   ├── InProcessTestWithAdminMetricsTest.kt
-│   ├── NettyTestNoAdminMetricsTest.kt
-│   ├── NettyTestWithAdminMetricsTest.kt
-│   ├── TlsNoMutualAuthTest.kt
-│   ├── TlsWithMutualAuthTest.kt
-│   └── support/                     # Harness infrastructure (5 files)
-│       ├── AbstractHarnessTests.kt
-│       ├── BasicHarnessTests.kt
-│       ├── HarnessSetup.kt
-│       ├── HarnessSupport.kt
-│       └── HarnessTests.kt
+├── agent/          # Agent component tests
+│   ├── discovery/  # Path-discovery tests
+│   └── filter/     # Metric-filter tests
+├── common/         # Shared utility tests, plus test-only support (TestPorts, EmbeddedTestServer)
+├── proxy/          # Proxy component tests
+│   └── dashboard/  # Dashboard renderer tests and fixtures
+├── misc/           # Cross-cutting tests (admin paths, config classes, options)
+├── harness/        # Integration tests: real proxy + agent, in-process or over Netty
+│   └── support/    # Harness infrastructure (setup, the standard suite, scale configs)
+└── containers/     # Testcontainers end-to-end tests, gated on RUN_CONTAINER_TESTS
+    └── support/    # Container factories and the loopback port-binding hook
 ```
+
+Directories rather than filenames on purpose: a file-by-file listing here duplicates the Test Categories
+section below and rots on the next added spec, which is how this document came to be missing eighteen of
+them at once. The categories below name every spec and say what it pins, which is upkeep that buys
+something.
 
 ## Test Categories
 
@@ -279,6 +225,37 @@ Each integration test class runs a standard suite defined in `AbstractHarnessTes
 6. Handle invalid agent URL gracefully
 7. Timeout when scrape exceeds deadline
 
+#### Targeted harness specs
+
+The classes above all run that same standard suite. These run their own scenario instead, each pinning one
+mechanism that the standard suite cannot reach:
+
+- **AgentDiscoveryTest** — dynamic target discovery: the agent reconciles a watched file's paths, adding,
+  updating and removing them with no restart
+- **AgentMetricFilterTest** — per-path metric filtering: a denied metric family never reaches the proxy
+- **AgentPathAuthTest** — per-agent identity with path-glob authorization, over Netty so the token header
+  actually crosses the wire; a security boundary
+- **AgentProxyFailoverTest** — the agent lands on its second endpoint once the first proxy stops. Netty
+  only: an in-process channel ignores host and port, so failover cannot be expressed there
+- **EmbeddedAgentApiTest** — the public `startAsyncAgent()` handle connects from a config file, reports its
+  identity, and disconnects on `shutdown()`
+- **InProcessHealthCheckTest** — the agent and proxy scrape-backlog health checks through the admin
+  endpoint, including both unhealthy branches
+- **InProcessHeartbeatDisabledTest** — with the heartbeat disabled the connection stays usable and shutdown
+  still completes promptly (finding 6)
+- **InProcessHeartbeatEvictionTest** — a heartbeat reporting eviction tears the channel down so the run
+  loop reconnects, rather than leaving a zombie agent
+- **InProcessIdleShutdownTest** — stopping an idle connected agent must not deadlock (finding 1)
+- **InProcessReconnectTest** — the full disconnect → reconnect → re-register cycle, in-process
+- **InProcessStaleAgentCleanupTest** — the eviction thread staying off, and being forced on by the
+  transport-filter mode
+- **InProcessTransportFilterDisabledTest** — both sides with the transport filter off: a scrape succeeds,
+  and the request stream's own termination is what reclaims the agent context
+- **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
+  selection round-trip, both layouts, and a root-mounted base path
+- **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
+  in-process TLS specs cannot perform (item 28)
+
 #### Harness Infrastructure (`harness/support/`)
 
 - **HarnessSetup** — Base class providing `setupProxyAndAgent()` / `takeDownProxyAndAgent()` lifecycle
@@ -304,7 +281,6 @@ lets it cover containers built directly by a spec as well as Testcontainers' own
 service file silently disables it. Without it a wildcard-published port can collide with a loopback-specific
 listener already on the host — both binds succeed, and the OS then routes the test's requests to the other
 process, which surfaces as a wait strategy timing out against a status the container never produced.
-`ContainersPortBindingTest` pins the binding.
 
 - **ContainersSmokeTest** — baseline: Prometheus scrapes a single metric through the proxy and agent
 - **ContainersProxyHttpTest** — HTTP surfaces: registered-path scrapes, 404/503 passthrough, admin servlets,
@@ -314,6 +290,13 @@ process, which surfaces as a wait strategy timing out against a status the conta
 - **ContainersReconnectTest** — agent reconnects to a replacement proxy and scrapes resume
 - **ContainersAgentTokenAuthTest** — pre-shared agent-token authentication on the gRPC channel
 - **ContainersTlsTest** / **ContainersHttpsTargetTest** — server-only and mutual TLS on gRPC; HTTPS upstreams
+- **ContainersDiscoveryTest** — dynamic target discovery in the packaged JARs: a path reconciled from a
+  watched file, with no static `pathConfigs`, scrapes end to end
+- **ContainersProxyFailoverTest** — two proxies on distinct network aliases; the agent moves to the standby
+  when the active one stops
+- **ContainersWebDashboardTest** — the dashboard against the real fat JAR, which is the point: htmx ships as
+  a WebJar served from the classpath, so a packaging regression would leave the page loading a 404
+- **ContainersPortBindingTest** — every published port binds loopback rather than the wildcard address
 - **ContainersScalingTest** — parameter-driven scaling (see below)
 
 #### Scaling Test (`ContainersScalingTest`)
