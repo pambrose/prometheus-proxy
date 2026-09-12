@@ -35,7 +35,7 @@ jobs:
       # --continue lets the kover report tasks run even if some tests fail, preserving the
       # prior behavior where coverage was still uploaded on test failure.
       - name: Run tests and generate coverage report
-        run: ./gradlew --continue test koverXmlReport koverLog
+        run: ./gradlew --continue test koverVerify koverXmlReport koverLog
 
       - name: Upload test reports on failure
         if: failure()

@@ -58,6 +58,10 @@ val harnessConfigEnv = "HARNESS_CONFIG"
 val generatedSourcesDir = "build/generated"
 val detektConfigDir = "$projectDir/config/detekt"
 
+// Coverage floors enforced by koverVerify; see configureCoverage() for why these values.
+val MIN_LINE_COVERAGE_PCT = 95
+val MIN_BRANCH_COVERAGE_PCT = 87
+
 buildConfig {
   packageName(basePackage)
   buildConfigField("String", "APP_NAME", "\"${project.name}\"")
@@ -408,6 +412,30 @@ fun Project.configureCoverage() {
           format = "<entity> line coverage: <value>%"
           coverageUnits = CoverageUnit.LINE
           aggregationForGroup = AggregationType.COVERED_PERCENTAGE
+        }
+
+        // Floors that catch a slide, not targets to chase. Codecov already gates a PR on dropping more
+        // than a point from its base, but that only runs in CI and only on a PR; these fail the build
+        // locally too, which is where a regression is cheapest to notice.
+        //
+        // Set below the measured values (line 97.4%, branch 90.4% as of this commit) so ordinary churn
+        // does not break the build: deleting a well-covered file moves the total without anything getting
+        // worse. Branch gets the wider margin because it is the noisier of the two -- one new `when` with
+        // several arms shifts it further than a comparable number of new lines shifts line coverage.
+        // Raise them when the real numbers have moved up and stayed there.
+        verify {
+          // Deliberately NOT onCheck. koverVerify has no way to tell "coverage genuinely regressed" from
+          // "no tests ran", so wiring it into `check` fails at 0% for every legitimate test-less
+          // invocation -- `./gradlew build -x test` in CLAUDE.md and `clean build -x test` in ci.yml among
+          // them. Each would need its own -x koverVerify, which is four places to forget. CI runs this
+          // task explicitly alongside the suite (see ci.yml), and `make coverage-verify` runs it locally.
+          onCheck = false
+          rule("Line coverage floor") {
+            minBound(MIN_LINE_COVERAGE_PCT, CoverageUnit.LINE, AggregationType.COVERED_PERCENTAGE)
+          }
+          rule("Branch coverage floor") {
+            minBound(MIN_BRANCH_COVERAGE_PCT, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
+          }
         }
       }
     }
