@@ -355,14 +355,11 @@ class ProxyWebDashboardTest : StringSpec() {
 
         val page = client.get("$base/")
         page.status shouldBe HttpStatusCode.OK
-        val body = page.bodyAsText()
-        body shouldContain "No agents connected"
-        // A "//" prefix would be a protocol-relative URL, sending the browser to a host named "events".
-        body shouldContain """ws-connect="/events""""
-        body shouldContain """src="/assets/htmx.min.js""""
-        body shouldContain """href="/paths""""
-        body shouldNotContain "\"//"
+        page.bodyAsText() shouldContain "No agents connected"
 
+        // The rendered links are ProxyDashboardHtmlTest's subject. What only a live server can show is that
+        // the routes registered under a root base actually answer, rather than passing because Ktor happens
+        // to discard an empty path segment.
         client.get("$base/paths").status shouldBe HttpStatusCode.OK
         client.get("$base/assets/htmx.min.js").status shouldBe HttpStatusCode.OK
         client.get("$base/agents/1").bodyAsText() shouldContain "<body"

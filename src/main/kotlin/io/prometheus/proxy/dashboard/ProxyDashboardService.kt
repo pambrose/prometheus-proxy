@@ -94,6 +94,13 @@ internal class ProxyDashboardService(
 ) : GenericIdleService() {
   private val basePath = "/" + dashboardPath.trim('/')
 
+  // The base with no trailing slash, so every sub-route below joins with a single separator. Empty at a
+  // root mount, where basePath is "/" and plain interpolation would otherwise yield "//events" -- which a
+  // browser reads as a protocol-relative URL and resolves to a host named "events". Normalized here, once,
+  // rather than at each use site: the routes registered below and the links ProxyDashboardHtml renders are
+  // the same URLs, so a rule applied in only one of the two layers is a rule that can disagree with itself.
+  private val routeBase = basePath.trimEnd('/')
+
   /** One connected browser: how to reach it, which layout it is on, and which agent it is viewing. */
   private class Session(
     val send: suspend (String) -> Unit,
@@ -141,14 +148,14 @@ internal class ProxyDashboardService(
         // the dashboard. Skipped when basePath is already "/" -- there the page route below owns the root, and a
         // second handler would be a duplicate. Temporary rather than permanent: basePath is configurable,
         // so a cached 301 would be wrong if it ever changed.
-        if (basePath != "/") {
+        if (routeBase.isNotEmpty()) {
           get("/") { call.respondRedirect(basePath, permanent = false) }
         }
 
         // Explicit allowlist rather than staticResources: the webjar layout embeds a version in the
         // path, and an allowlist means there is no path-traversal surface and no dependence on how Ktor
         // interprets a basePackage. Two entries is not worth a generic static handler.
-        get("$basePath/assets/{file}") {
+        get("$routeBase/assets/{file}") {
           val bytes = assetBytes[call.parameters["file"]]
           if (bytes == null)
             call.respondText("Not found", ContentType.Text.Plain, HttpStatusCode.NotFound)
@@ -158,17 +165,17 @@ internal class ProxyDashboardService(
 
         get(basePath) {
           val snapshot = snapshot()
-          call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, basePath, DashboardLayout.AGENT) } }
+          call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, DashboardLayout.AGENT) } }
         }
 
         // A real page rather than a fragment: switching layout is a navigation, so the browser gets a
         // fresh document whose region ids match the layout it is now showing.
-        get("$basePath/paths") {
+        get("$routeBase/paths") {
           val snapshot = snapshot()
-          call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, basePath, DashboardLayout.PATH) } }
+          call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, DashboardLayout.PATH) } }
         }
 
-        get("$basePath/agents/{agentId}") {
+        get("$routeBase/agents/{agentId}") {
           val agentId = call.parameters["agentId"]
           val snapshot = snapshot()
           // hx-push-url makes this URL the address bar's, so it must survive a reload or a shared link.
@@ -186,11 +193,11 @@ internal class ProxyDashboardService(
             )
           else
             call.respondHtml {
-              with(ProxyDashboardHtml) { renderPage(snapshot, agentId, basePath, DashboardLayout.AGENT) }
+              with(ProxyDashboardHtml) { renderPage(snapshot, agentId, routeBase, DashboardLayout.AGENT) }
             }
         }
 
-        webSocket("$basePath/events") {
+        webSocket("$routeBase/events") {
           val session = Session { text -> outgoing.send(Frame.Text(text)) }
           sessions.add(session)
           try {
@@ -261,7 +268,7 @@ internal class ProxyDashboardService(
     snapshot: ProxySnapshot,
   ) {
     runCatching {
-      session.send(ProxyDashboardHtml.pushFragment(snapshot, session.selectedId, basePath, session.layout))
+      session.send(ProxyDashboardHtml.pushFragment(snapshot, session.selectedId, routeBase, session.layout))
     }
       .onFailure { logger.debug { "Dropping dashboard session: ${it.simpleClassName}" } }
   }

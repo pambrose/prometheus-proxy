@@ -47,6 +47,20 @@ class InProcessHealthCheckTest : StringSpec() {
     private const val PROXY_BACKLOG_THRESHOLD = 2
   }
 
+  // Dropwizard's servlet answers 200 when every check passes and 500 when any fails, with each check's
+  // message in the body, so a status plus a substring is the whole assertion at every call site.
+  private suspend fun healthCheck(
+    port: Int,
+    expected: HttpStatusCode,
+    vararg contains: String,
+  ) = withHttpClient {
+    get("$port/healthcheck".withPrefix()) { response ->
+      response.status shouldBe expected
+      val body = response.bodyAsText()
+      contains.forEach { body shouldContain it }
+    }
+  }
+
   init {
     beforeSpec {
       setupProxyAndAgent(
@@ -81,36 +95,28 @@ class InProcessHealthCheckTest : StringSpec() {
     }
 
     "the proxy health check should report every registered check healthy, the dashboard's included" {
-      withHttpClient {
-        get("$PROXY_ADMIN_PORT/healthcheck".withPrefix()) { response ->
-          response.status shouldBe HttpStatusCode.OK
-          val body = response.bodyAsText()
-          body shouldContain "\"dashboard_service\""
-          body shouldContain "\"agent_scrape_request_backlog\""
-        }
-      }
+      healthCheck(
+        PROXY_ADMIN_PORT,
+        HttpStatusCode.OK,
+        "\"dashboard_service\"",
+        "\"agent_scrape_request_backlog\"",
+      )
     }
 
     "the agent backlog check should turn unhealthy at the threshold and recover below it" {
       val threshold = agent.agentConfigVals.internal.scrapeRequestBacklogUnhealthySize
       try {
         agent.scrapeRequestBacklogSize.store(threshold)
-        withHttpClient {
-          get("$AGENT_ADMIN_PORT/healthcheck".withPrefix()) { response ->
-            response.status shouldBe HttpStatusCode.InternalServerError
-            response.bodyAsText() shouldContain "Scrape request backlog size $threshold >= threshold $threshold"
-          }
-        }
+        healthCheck(
+          AGENT_ADMIN_PORT,
+          HttpStatusCode.InternalServerError,
+          "Scrape request backlog size $threshold >= threshold $threshold",
+        )
       } finally {
         agent.scrapeRequestBacklogSize.store(0)
       }
 
-      withHttpClient {
-        get("$AGENT_ADMIN_PORT/healthcheck".withPrefix()) { response ->
-          response.status shouldBe HttpStatusCode.OK
-          response.bodyAsText() shouldContain "\"scrape_request_backlog_check\""
-        }
-      }
+      healthCheck(AGENT_ADMIN_PORT, HttpStatusCode.OK, "\"scrape_request_backlog_check\"")
     }
 
     "the proxy backlog check should name an agent whose queue reaches the threshold and recover once it is gone" {
@@ -120,21 +126,12 @@ class InProcessHealthCheckTest : StringSpec() {
         repeat(PROXY_BACKLOG_THRESHOLD) {
           backlogged.writeScrapeRequest(ScrapeRequestWrapper(backlogged, "metrics", "", "", "", false))
         }
-        withHttpClient {
-          get("$PROXY_ADMIN_PORT/healthcheck".withPrefix()) { response ->
-            response.status shouldBe HttpStatusCode.InternalServerError
-            response.bodyAsText() shouldContain "Large agent scrape request backlog"
-          }
-        }
+        healthCheck(PROXY_ADMIN_PORT, HttpStatusCode.InternalServerError, "Large agent scrape request backlog")
       } finally {
         proxy.removeAgentContext(backlogged.agentId, "test cleanup")
       }
 
-      withHttpClient {
-        get("$PROXY_ADMIN_PORT/healthcheck".withPrefix()) { response ->
-          response.status shouldBe HttpStatusCode.OK
-        }
-      }
+      healthCheck(PROXY_ADMIN_PORT, HttpStatusCode.OK)
     }
   }
 }

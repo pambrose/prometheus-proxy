@@ -34,14 +34,11 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import io.prometheus.Agent
-import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
-import io.prometheus.common.agentOptions
-import io.prometheus.common.proxyOptions
 import io.prometheus.common.startAndAwaitReady
-import io.prometheus.harness.HarnessConstants.CONFIG_ARG
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
 import kotlin.time.Duration.Companion.seconds
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -66,35 +63,21 @@ class InProcessTransportFilterDisabledTest : StringSpec() {
         }
       val stubPort = stub.startAndAwaitReady()
 
-      val proxyArgs = [
-        "-Dproxy.admin.enabled=false",
-        "-Dproxy.metrics.enabled=false",
-        "--tf_disabled",
-        // Off in config so startUp() has to force the eviction thread on: with no transport filter it is
-        // the only thing that can reclaim a context whose agent died before opening its stream.
-        "-Dproxy.internal.staleAgentCheckEnabled=false",
-      ]
       val proxy =
-        Proxy(
-          options = proxyOptions(CONFIG_ARG + proxyArgs),
+        startProxy(
+          serverName = serverName,
           proxyPort = HTTP_PORT,
-          inProcessServerName = serverName,
-          testMode = true,
-        ) { startSync() }
+          args = [
+            "--tf_disabled",
+            // Off in config so startUp() has to force the eviction thread on: with no transport filter it is
+            // the only thing that can reclaim a context whose agent died before opening its stream.
+            "-Dproxy.internal.staleAgentCheckEnabled=false",
+          ],
+        )
 
       val client = HttpClient(CIO)
       try {
-        val agentArgs = [
-          "-Dagent.admin.enabled=false",
-          "-Dagent.metrics.enabled=false",
-          "--tf_disabled",
-        ]
-        val agent =
-          Agent(
-            options = agentOptions(CONFIG_ARG + agentArgs, exitOnMissingConfig = false),
-            inProcessServerName = serverName,
-            testMode = true,
-          ) { startSync() }
+        val agent = startAgent(serverName = serverName, args = ["--tf_disabled"])
 
         try {
           agent.awaitInitialConnection(10.seconds).shouldBeTrue()

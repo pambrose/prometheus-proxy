@@ -43,7 +43,6 @@ class EmbeddedAgentApiTest : StringSpec() {
       val proxy = startProxy(args = ["--agent_port", "$GRPC_PORT"], proxyPort = HTTP_PORT)
       val configFile =
         createTempFile("embedded-agent", ".conf").toFile().apply {
-          deleteOnExit()
           writeText(
             """
             agent {
@@ -62,10 +61,9 @@ class EmbeddedAgentApiTest : StringSpec() {
       var info: EmbeddedAgentInfo? = null
       try {
         // exitOnMissingConfig = false is the embedded mode: startup failures throw rather than exit.
-        val started = Agent.startAsyncAgent(configFile.absolutePath, exitOnMissingConfig = false)
-        info = started
-        started.agentName shouldBe AGENT_NAME
-        started.launchId shouldHaveLength 15
+        info = Agent.startAsyncAgent(configFile.absolutePath, exitOnMissingConfig = false)
+        info.agentName shouldBe AGENT_NAME
+        info.launchId shouldHaveLength 15
 
         // The handle hides the Agent, so the proxy is the only witness that it actually connected.
         eventually(30.seconds) {
@@ -74,7 +72,7 @@ class EmbeddedAgentApiTest : StringSpec() {
             .shouldBeTrue()
         }
 
-        started.shutdown()
+        info.shutdown()
 
         eventually(30.seconds) {
           proxy.agentContextManager.agentContextSize shouldBe 0

@@ -16,7 +16,6 @@
 package io.prometheus.containers.support
 
 import com.github.dockerjava.api.command.CreateContainerCmd
-import com.github.dockerjava.api.model.ExposedPort
 import com.github.dockerjava.api.model.HostConfig
 import com.github.dockerjava.api.model.Ports
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -57,24 +56,20 @@ import java.net.InetAddress
  * test containers off the local network.
  */
 class LoopbackPortBindings : CreateContainerCmdModifier {
-  override fun modify(cmd: CreateContainerCmd): CreateContainerCmd =
-    cmd.also { if (hostIsLoopback) it.hostConfig?.rebindToLoopback(it.exposedPorts ?: emptyArray()) }
+  override fun modify(cmd: CreateContainerCmd): CreateContainerCmd {
+    if (hostIsLoopback) cmd.hostConfig?.rebindToLoopback()
+    return cmd
+  }
 
-  private fun HostConfig.rebindToLoopback(exposedPorts: Array<ExposedPort>) {
-    // Rewrite the bindings Testcontainers already computed rather than rebuilding from the exposed ports,
-    // so a spec that pinned a fixed host port keeps it -- only the interface is forced. The exposed ports
-    // are the fallback for the ordering where this runs before those bindings exist.
-    val source: Map<ExposedPort, Array<Ports.Binding>?> =
-      portBindings?.bindings?.takeIf { it.isNotEmpty() } ?: exposedPorts.associateWith { null }
-    if (source.isEmpty())
-      return
-
+  // ContainerDef.applyTo() has already put a binding on the host config for every exposed port -- an empty
+  // Ports.Binding for the randomized ones -- and modifiers run after it, so rewriting what is there covers
+  // every published port. Rewriting rather than rebuilding also means a spec that pinned a fixed host port
+  // keeps it; only the interface is forced.
+  private fun HostConfig.rebindToLoopback() {
+    val existing = portBindings?.bindings?.takeIf { it.isNotEmpty() } ?: return
     val rebound = Ports()
-    source.forEach { (exposed, bindings) ->
-      if (bindings.isNullOrEmpty())
-        rebound.bind(exposed, Ports.Binding.bindIp(LOOPBACK_HOST))
-      else
-        bindings.forEach { rebound.bind(exposed, Ports.Binding(LOOPBACK_HOST, it.hostPortSpec)) }
+    existing.forEach { (exposed, bindings) ->
+      bindings.orEmpty().forEach { rebound.bind(exposed, Ports.Binding(LOOPBACK_HOST, it.hostPortSpec)) }
     }
     withPortBindings(rebound)
   }

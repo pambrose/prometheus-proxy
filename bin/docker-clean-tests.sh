@@ -40,7 +40,8 @@ readonly TC_LABEL='org.testcontainers=true'
 
 # Third-party images the suite pulls. Mirrors ContainerTestSupport.kt plus Testcontainers' own reaper.
 # Removing these is safe but costs a re-pull on the next run, hence --base rather than the default.
-readonly BASE_IMAGES='nginx prom/prometheus testcontainers/ryuk'
+# Matched by repository, not tag, so a version bump cannot make this stale.
+readonly BASE_IMAGE_PATTERN='^(nginx|prom/prometheus|testcontainers/ryuk):'
 
 dry_run=false
 assume_yes=false
@@ -130,10 +131,7 @@ dangling_images() {
 }
 
 base_image_tags() {
-  local repo
-  for repo in $BASE_IMAGES; do
-    docker images "$repo" --format '{{.Repository}}:{{.Tag}}' 2>/dev/null || true
-  done
+  docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -E "$BASE_IMAGE_PATTERN" || true
 }
 
 count_of() {
@@ -144,13 +142,14 @@ count_of() {
   fi
 }
 
-# Removes in batches: a single argv with thousands of tags can exceed the exec limit, and one docker
-# call per tag is unusably slow at the scale this leak reaches (5,800 tags observed).
+# Removes in batches: a single argv with thousands of tags can exceed the exec limit, and one docker call
+# per item is unusably slow at the scale this leak reaches (5,800 tags observed). 500 per batch keeps argv
+# near 25KB against a 1MB ARG_MAX. Callers must check for emptiness first -- macOS xargs has no -r.
 remove_in_batches() {
   local items="$1"
   shift
   [ -z "$items" ] && return 0
-  printf '%s\n' "$items" | xargs -n 50 "$@" >/dev/null 2>&1 || true
+  printf '%s\n' "$items" | xargs -n 500 "$@" >/dev/null 2>&1 || true
 }
 
 echo "=== Docker disk usage before ==="
@@ -190,11 +189,6 @@ printf '  %-34s %s\n' 'Dangling images (prune)' "$(count_of "$dangling")"
 [ "$do_base" = true ] && printf '  %-34s %s\n' 'Base images (--base)' "$(count_of "$bases")"
 [ "$do_cache" = true ] && printf '  %-34s %s\n' 'Build cache (--cache)' 'all unused entries'
 echo
-
-if [ "$do_cache" = false ]; then
-  echo "Tip: the build cache is often the biggest single win. Re-run with --cache to include it."
-  echo
-fi
 
 if [ "$dry_run" = true ]; then
   echo "Dry run: nothing was removed."
@@ -241,10 +235,9 @@ fi
 
 if [ -n "$networks" ]; then
   echo "Removing Testcontainers networks ..."
-  # Not batched: docker network rm fails the whole invocation if any one network is still attached.
-  printf '%s\n' "$networks" | while read -r net; do
-    [ -n "$net" ] && docker network rm "$net" >/dev/null 2>&1 || true
-  done
+  # Batched: docker network rm removes every network it can and reports the rest as errors, so one still
+  # attached does not prevent the others from going. A scaling run leaks these by the dozen.
+  remove_in_batches "$networks" docker network rm
 fi
 
 # The step that actually reclaims the bytes. Dangling-only on purpose -- see the SAFETY note above.

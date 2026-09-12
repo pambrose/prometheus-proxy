@@ -286,11 +286,7 @@ class Agent(
       scrapeRequestBacklogSize.store(0)
       lastMsgSentMark = clock.markNow()
 
-      // options, not configVals: options resolves the --tf_disabled flag and the TRANSPORT_FILTER_DISABLED env
-      // var on top of the config value, and AgentGrpcService already reads it to decide whether to install the
-      // agent-id client interceptor. The connect RPC must follow the same answer, or a flag-only setup connects
-      // with the wrong RPC and the proxy rejects it as a transportFilterDisabled mismatch.
-      if (grpcService.connectAgent(options.transportFilterDisabled)) {
+      if (grpcService.connectAgent()) {
         grpcService.registerAgent(initialConnectionLatch)
         pathManager.registerPaths()
         // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores

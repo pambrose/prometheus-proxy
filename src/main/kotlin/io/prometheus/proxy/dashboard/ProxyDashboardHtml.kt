@@ -86,7 +86,7 @@ internal object ProxyDashboardHtml {
   fun HTML.renderPage(
     snapshot: ProxySnapshot,
     selectedId: String?,
-    dashboardPath: String,
+    routeBase: String,
     layout: DashboardLayout = DashboardLayout.AGENT,
   ) {
     // Declared so assistive tech pronounces agent names, paths, and status text as English rather than
@@ -96,16 +96,16 @@ internal object ProxyDashboardHtml {
       title("prometheus-proxy")
       meta(name = "viewport", content = "width=device-width, initial-scale=1")
       style { unsafe { raw(CSS) } }
-      script(src = dashboardPath.route("assets/htmx.min.js")) {}
-      script(src = dashboardPath.route("assets/ws.js")) {}
+      script(src = "$routeBase/assets/htmx.min.js") {}
+      script(src = "$routeBase/assets/ws.js") {}
     }
     body {
       attributes["hx-ext"] = "ws"
-      attributes["ws-connect"] = dashboardPath.route("events")
+      attributes["ws-connect"] = "$routeBase/events"
 
       div("bar") {
         span("brand") { +"prometheus-proxy" }
-        renderNav(dashboardPath, layout)
+        renderNav(routeBase, layout)
         renderStatus(snapshot)
       }
       // The one live region on the page. Kept outside every out-of-band id on purpose: a region the push
@@ -120,7 +120,7 @@ internal object ProxyDashboardHtml {
       when (layout) {
         DashboardLayout.AGENT -> {
           main("md") {
-            renderAgentList(snapshot, selectedId, dashboardPath)
+            renderAgentList(snapshot, selectedId, routeBase)
             renderDetail(snapshot, selectedId)
           }
         }
@@ -147,14 +147,14 @@ internal object ProxyDashboardHtml {
    * explicit click, not on an update, and the socket re-announces the new layout as soon as it opens.
    */
   fun FlowContent.renderNav(
-    dashboardPath: String,
+    routeBase: String,
     layout: DashboardLayout,
   ) = nav("nav") {
-    a(href = dashboardPath, classes = if (layout == DashboardLayout.AGENT) "on" else null) {
+    a(href = routeBase.ifEmpty { "/" }, classes = if (layout == DashboardLayout.AGENT) "on" else null) {
       if (layout == DashboardLayout.AGENT) attributes["aria-current"] = "page"
       +"Agents"
     }
-    a(href = dashboardPath.route("paths"), classes = if (layout == DashboardLayout.PATH) "on" else null) {
+    a(href = "$routeBase/paths", classes = if (layout == DashboardLayout.PATH) "on" else null) {
       if (layout == DashboardLayout.PATH) attributes["aria-current"] = "page"
       +"Paths"
     }
@@ -262,14 +262,14 @@ internal object ProxyDashboardHtml {
   fun FlowContent.renderAgentList(
     snapshot: ProxySnapshot,
     selectedId: String?,
-    dashboardPath: String,
+    routeBase: String,
     oob: Boolean = false,
-  ) = div("md-list") { agentListInner(snapshot, selectedId, dashboardPath, oob) }
+  ) = div("md-list") { agentListInner(snapshot, selectedId, routeBase, oob) }
 
   private fun DIV.agentListInner(
     snapshot: ProxySnapshot,
     selectedId: String?,
-    dashboardPath: String,
+    routeBase: String,
     oob: Boolean,
   ) {
     attributes["id"] = AGENT_LIST_ID
@@ -284,7 +284,7 @@ internal object ProxyDashboardHtml {
     }
     snapshot.agents.forEach { agent ->
       button(classes = "md-row") {
-        attributes["hx-get"] = dashboardPath.route("agents/${agent.agentId}")
+        attributes["hx-get"] = "$routeBase/agents/${agent.agentId}"
         attributes["hx-target"] = "#$DETAIL_ID"
         // outerHTML, so the returned #detail element replaces the old one in place rather than nesting a
         // second #detail inside it (the fragment IS the element, not its inner content).
@@ -402,13 +402,13 @@ internal object ProxyDashboardHtml {
   fun pushFragment(
     snapshot: ProxySnapshot,
     selectedId: String?,
-    dashboardPath: String,
+    routeBase: String,
     layout: DashboardLayout = DashboardLayout.AGENT,
   ): String =
     buildString {
       when (layout) {
         DashboardLayout.AGENT -> {
-          append(createHTML().div("md-list") { agentListInner(snapshot, selectedId, dashboardPath, oob = true) })
+          append(createHTML().div("md-list") { agentListInner(snapshot, selectedId, routeBase, oob = true) })
           append(createHTML().div("md-detail") { detailInner(snapshot, selectedId, oob = true) })
         }
 
@@ -433,13 +433,6 @@ internal object ProxyDashboardHtml {
   ): String = createHTML().div("md-detail") { detailInner(snapshot, selectedId, oob = false) }
 
   private fun AgentView.displayName(): String = agentLabel(agentName)
-
-  /**
-   * Joins a route onto the dashboard base path. Plain interpolation breaks when the dashboard is mounted
-   * at the root: a base of "/" would yield "//events", which a browser reads as a protocol-relative URL
-   * and resolves to a host named "events".
-   */
-  private fun String.route(sub: String): String = "${trimEnd('/')}/$sub"
 
   /**
    * Identity arrives at `registerAgent`, which is strictly after the transport filter created the

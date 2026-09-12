@@ -33,18 +33,9 @@ import org.testcontainers.containers.Network
 import java.net.InetAddress
 
 /**
- * Every published port must bind `127.0.0.1`, never the `0.0.0.0` wildcard Docker uses by default.
- *
- * A wildcard bind does not conflict with a loopback-specific listener already holding the same port, so
- * both binds succeed and Docker reports success. Testcontainers then reaches the container through
- * `localhost`, and BSD hands that connection to the *more specific* listener -- a foreign process --
- * which answers whatever it likes while the container sees no traffic at all. That surfaced as a metrics
- * stub timing out on its own wait strategy against an HTTP 404 it could not have produced, with zero
- * requests in its access log; the colliding listener was an IDE holding a dozen-plus ephemeral loopback
- * ports. Binding the interface explicitly makes the OS choose from ports genuinely free on loopback, so
- * the collision cannot arise.
- *
- * This is the container-side half of the hazard `EmbeddedTestServer.kt` documents for in-process servers.
+ * Asserts the invariant [io.prometheus.containers.support.LoopbackPortBindings] exists to enforce, against
+ * a real container: every published port binds `127.0.0.1` rather than the `0.0.0.0` wildcard, and the
+ * mapped port stays reachable over loopback. That class's KDoc carries the failure mode this prevents.
  */
 class ContainersPortBindingTest : StringSpec() {
   init {
