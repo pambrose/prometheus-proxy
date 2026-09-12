@@ -47,8 +47,10 @@ fun testConfigVals(hocon: String): ConfigVals =
 /**
  * Writes [contents] to a temp file and builds [ProxyOptions] from it via `--config`.
  *
- * [suffix] is load-bearing, not cosmetic: `BaseOptions.getConfigSyntax()` picks the parser from the file
- * extension, so `.json` and `.properties` reach different branches than the default `.conf`.
+ * [suffix] is load-bearing, not cosmetic: the local-file branch of `BaseOptions.readConfig` hands the path
+ * to `ConfigFactory.parseFileAnySyntax`, which selects the parser from the extension, so `.json` and
+ * `.properties` are parsed differently from the default `.conf`. (`BaseOptions.getConfigSyntax` does the
+ * same job for the URL branch, which a local file never reaches.)
  *
  * A file is the only way to reach some settings at all. An empty string cannot be expressed on the command
  * line, where a blank value falls back to the config default, nor through `-D`, whose parse rejects one --

@@ -26,6 +26,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.get
@@ -40,7 +41,6 @@ import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -73,14 +73,13 @@ class ProxyWebDashboardTest : StringSpec() {
      *
      * @param proxySpec overridable for the failover spec, which needs a dead endpoint ahead of the live one.
      */
-    suspend fun connectAgent(
-      proxySpec: String = "$LOOPBACK_HOST:$grpcPort",
-      timeout: Duration = 20.seconds,
-    ): Agent =
+    suspend fun connectAgent(proxySpec: String = "$LOOPBACK_HOST:$grpcPort"): Agent =
       startAgent(configArgs = ["--config", configFile], args = ["--proxy", proxySpec])
         .also {
           agent = it
-          it.awaitInitialConnection(timeout).shouldBeTrue()
+          // A cap, not a wait: this returns as soon as the agent connects, so the generous value is only
+          // ever spent by a test that is already failing.
+          it.awaitInitialConnection(30.seconds).shouldBeTrue()
         }
   }
 
@@ -89,42 +88,58 @@ class ProxyWebDashboardTest : StringSpec() {
    * tears all of it down.
    *
    * Eight specs used to repeat this frame verbatim. The only genuinely per-spec inputs are the port triple,
-   * the config file, whether the dashboard is enabled at all, and how the client is built — so those are
-   * the parameters, and everything else (registry reset, proxy args, teardown order) lives here once.
+   * the config file, the dashboard arguments (empty for the one spec that checks the feature stays off) and
+   * how the client is built — so those are the parameters, and everything else lives here once.
    */
   private suspend fun withDashboard(
     httpPort: Int,
     grpcPort: Int,
     dashboardPort: Int,
     configFile: String = CONFIG_FILE,
-    dashboardEnabled: Boolean = true,
-    extraProxyArgs: List<String> = emptyList(),
+    dashboardArgs: List<String> = ["--dashboard", "--dashboard_port", "$dashboardPort"],
     newClient: () -> HttpClient = { HttpClient(CIO) },
     block: suspend DashboardEnv.() -> Unit,
   ) {
     CollectorRegistry.defaultRegistry.clear()
 
+    val t0 = System.nanoTime()
     val proxy =
       startProxy(
-        args =
-          buildList {
-            addAll(["--agent_port", "$grpcPort"])
-            if (dashboardEnabled) addAll(["--dashboard", "--dashboard_port", "$dashboardPort"])
-            addAll(extraProxyArgs)
-          },
+        args = ["--agent_port", "$grpcPort"] + dashboardArgs,
         proxyPort = httpPort,
         configArgs = ["--config", configFile],
       )
+    val t1 = System.nanoTime()
 
     val env = DashboardEnv(newClient(), grpcPort, configFile, dashboardPort)
+    val t2 = System.nanoTime()
     try {
       env.block()
     } finally {
+      val t3 = System.nanoTime()
       env.agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
+      val t4 = System.nanoTime()
       env.client.close()
+      val t5 = System.nanoTime()
       runCatching { proxy.stopSync(10.seconds) }
+      val t6 = System.nanoTime()
+      println(
+        "TIMING port=" + dashboardPort +
+          " startProxy=" + (t1 - t0) / 1_000_000 +
+          " newClient=" + (t2 - t1) / 1_000_000 +
+          " block=" + (t3 - t2) / 1_000_000 +
+          " stopAgent=" + (t4 - t3) / 1_000_000 +
+          " closeClient=" + (t5 - t4) / 1_000_000 +
+          " stopProxy=" + (t6 - t5) / 1_000_000,
+      )
     }
   }
+
+  private suspend fun DefaultClientWebSocketSession.nextText() = (incoming.receive() as Frame.Text).readText()
+
+  /** Reads frames until one carries [marker]. `any` short-circuits, so MAX_FRAMES is a budget, not a count. */
+  private suspend fun DefaultClientWebSocketSession.awaitFrame(marker: String) =
+    (1..MAX_FRAMES).any { nextText().contains(marker) }.shouldBeTrue()
 
   init {
     "the dashboard serves a page and pushes updates over the WebSocket" {
@@ -154,23 +169,19 @@ class ProxyWebDashboardTest : StringSpec() {
 
         client.webSocket(socketUrl) {
           // The immediate frame on connect, so a browser renders without waiting for a tick.
-          val initial = (incoming.receive() as Frame.Text).readText()
-          initial shouldContain "hx-swap-oob"
+          nextText() shouldContain "hx-swap-oob"
 
           // Connect an agent only NOW, with the socket already open, so the frame below can only have
           // been produced by the push path.
           connectAgent()
 
-          // any short-circuits, so MAX_FRAMES is a budget rather than a required frame count.
-          (1..MAX_FRAMES)
-            .any { (incoming.receive() as Frame.Text).readText().contains(AGENT_NAME) }
-            .shouldBeTrue()
+          awaitFrame(AGENT_NAME)
         }
       }
     }
 
     "the dashboard must stay off unless enabled" {
-      withDashboard(OFF_HTTP_PORT, OFF_GRPC_PORT, OFF_DASHBOARD_PORT, dashboardEnabled = false) {
+      withDashboard(OFF_HTTP_PORT, OFF_GRPC_PORT, OFF_DASHBOARD_PORT, dashboardArgs = []) {
         // Nothing should be listening on the dashboard port: the feature is opt-in, matching admin and metrics.
         runCatching { client.get("$base/dashboard") }
           .isFailure
@@ -229,10 +240,7 @@ class ProxyWebDashboardTest : StringSpec() {
     "the dashboard reports an agent that reached this proxy via failover" {
       withDashboard(FAILOVER_HTTP_PORT, FAILOVER_GRPC_PORT, FAILOVER_DASHBOARD_PORT) {
         // Primary is a port nothing listens on, so the agent must advance to the second entry.
-        connectAgent(
-          proxySpec = "$LOOPBACK_HOST:$DEAD_PORT,$LOOPBACK_HOST:$FAILOVER_GRPC_PORT",
-          timeout = 30.seconds,
-        )
+        connectAgent("$LOOPBACK_HOST:$DEAD_PORT,$LOOPBACK_HOST:$FAILOVER_GRPC_PORT")
 
         eventually(30.seconds) {
           val listing = client.get("$base/dashboard").bodyAsText()
@@ -250,7 +258,7 @@ class ProxyWebDashboardTest : StringSpec() {
     // anywhere between the .proto and the CSS fails here.
     "the path layout should show a registered path with its target and source" {
       withDashboard(PATHS_HTTP_PORT, PATHS_GRPC_PORT, PATHS_DASHBOARD_PORT, configFile = PATHS_CONFIG_FILE) {
-        connectAgent(timeout = 30.seconds)
+        connectAgent()
 
         eventually(30.seconds) {
           val table = client.get("$base/dashboard/paths").bodyAsText()
@@ -282,22 +290,15 @@ class ProxyWebDashboardTest : StringSpec() {
 
         client.webSocket(socketUrl) {
           // Nothing is selected on connect, so the first frame marks no row current.
-          val initial = (incoming.receive() as Frame.Text).readText()
-          initial shouldNotContain SELECTED_ROW
+          nextText() shouldNotContain SELECTED_ROW
 
           // A row click sends this exact message; the selection must show up in a pushed agent list.
           send(Frame.Text("""{"select":"$agentId","layout":"AGENT"}"""))
-          (1..MAX_FRAMES)
-            .any { (incoming.receive() as Frame.Text).readText().contains(SELECTED_ROW) }
-            .shouldBeTrue()
+          awaitFrame(SELECTED_ROW)
 
           // Switching layout the same way changes which regions the push carries.
           send(Frame.Text("""{"layout":"PATH"}"""))
-          (1..MAX_FRAMES)
-            .any {
-              (incoming.receive() as Frame.Text).readText().contains("""id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")
-            }
-            .shouldBeTrue()
+          awaitFrame("""id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")
         }
       }
     }
@@ -309,7 +310,7 @@ class ProxyWebDashboardTest : StringSpec() {
         MOUNT_HTTP_PORT,
         MOUNT_GRPC_PORT,
         MOUNT_DASHBOARD_PORT,
-        extraProxyArgs = ["--dashboard_path", "/"],
+        dashboardArgs = ["--dashboard", "--dashboard_port", "$MOUNT_DASHBOARD_PORT", "--dashboard_path", "/"],
         // Do not auto-follow, so a redirect would fail the status assertion rather than be hidden.
         newClient = { HttpClient(CIO) { followRedirects = false } },
       ) {
