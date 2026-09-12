@@ -31,6 +31,19 @@ java -jar prometheus-proxy.jar --config examples/simple.conf
 java -jar prometheus-agent.jar  --config examples/simple.conf
 ```
 
+## Debugging a local run — `prom-agent.conf`
+
+The same self-monitoring setup as `simple.conf`, turned up for troubleshooting: the proxy's debug
+servlet is enabled on the admin port and the `labels` are dropped so the output stays readable. Two
+toggles are left commented out for when you need them — `transportFilterDisabled` for running behind
+an nginx reverse proxy, and `scrapeTimeoutSecs` for endpoints slower than the 15-second default.
+
+```hocon
+--8<-- "examples/prom-agent.conf"
+```
+
+This is the config behind the bundled *Agent (no auth)* IntelliJ run configuration in `.run/`.
+
 ## Multiple application endpoints — `myapps.conf`
 
 Three application endpoints, each on its own proxy path and tagged with custom `labels`. This
