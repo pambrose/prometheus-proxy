@@ -566,6 +566,44 @@ class AgentOptionsTest : StringSpec() {
         }
       e.message.orEmpty() shouldContain "notaport"
     }
+
+    // ==================== Agent token over cleartext ====================
+
+    // The agent attaches its token to every gRPC call. The channel uses TLS when a certificate and key are set,
+    // or when a trust store alone is set (server-authenticated TLS); otherwise the token crosses the network in
+    // plaintext, where anyone who can observe the traffic can capture and replay it.
+
+    "the agent token is sent in cleartext when no TLS is configured" {
+      AgentOptions.isAgentTokenSentInCleartext(
+        agentToken = "tok",
+        isTlsEnabled = false,
+        trustCertCollectionFilePath = "",
+      ).shouldBeTrue()
+    }
+
+    "the agent token is not sent in cleartext with a trust store alone" {
+      AgentOptions.isAgentTokenSentInCleartext(
+        agentToken = "tok",
+        isTlsEnabled = false,
+        trustCertCollectionFilePath = "/certs/ca.pem",
+      ).shouldBeFalse()
+    }
+
+    "the agent token is not sent in cleartext when TLS is enabled" {
+      AgentOptions.isAgentTokenSentInCleartext(
+        agentToken = "tok",
+        isTlsEnabled = true,
+        trustCertCollectionFilePath = "",
+      ).shouldBeFalse()
+    }
+
+    "nothing is sent in cleartext when the agent has no token" {
+      AgentOptions.isAgentTokenSentInCleartext(
+        agentToken = "",
+        isTlsEnabled = false,
+        trustCertCollectionFilePath = "",
+      ).shouldBeFalse()
+    }
   }
 
   companion object {

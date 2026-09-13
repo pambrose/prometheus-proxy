@@ -32,7 +32,7 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 3  | No backpressure on the scrape queue; timed-out requests still dispatched     | Security      | medium   | ⬜      |
 | 4  | Dashboard: open bind, no Origin check, unlimited sessions, per-frame snapshot | Security      | medium   | ⬜      |
 | 5  | Credentials in target URLs leak to proxy, dashboard, logs                    | Security      | medium   | ⬜      |
-| 6  | Auth warning logic wrong; TLS examples use public test keys                  | Security      | low      | ⬜      |
+| 6  | Auth warning logic wrong; TLS examples use public test keys                  | Security      | low      | ✅      |
 | 7  | One rejected static path takes the whole agent offline                       | Agent         | high     | ✅      |
 | 8  | Failover never leaves a proxy that rejects registration                      | Agent         | medium   | ✅      |
 | 9  | Failed discovery unregister leaves a stale path forever                      | Agent         | medium   | ⬜      |
@@ -165,7 +165,7 @@ the sanitizer before logging or returning them; add the CIO connect-timeout type
 `hasTimeoutCause`. Also avoid dumping whole protos at DEBUG (`AgentGrpcService.kt:462` includes
 `authHeader`).
 
-### 6. [ ] Auth warning logic is wrong; TLS examples use public test keys
+### 6. [x] Auth warning logic is wrong; TLS examples use public test keys
 
 **Severity:** low · **Confidence:** confirmed
 

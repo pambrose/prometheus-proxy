@@ -379,6 +379,21 @@ class AgentOptions(
         trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
       )
 
+      // Checked here, after assignCommonOptions resolves the TLS paths. Qualified with this@AgentOptions because
+      // agentConfigVals is the receiver in this block and has its own config-file agentToken.
+      if (
+        isAgentTokenSentInCleartext(
+          agentToken = this@AgentOptions.agentToken,
+          isTlsEnabled = this@AgentOptions.isTlsEnabled,
+          trustCertCollectionFilePath = this@AgentOptions.trustCertCollectionFilePath,
+        )
+      ) {
+        logger.warn {
+          "agentToken is configured but TLS is not -- the token is sent to the proxy in cleartext and can be " +
+            "captured by anyone who can observe the traffic. Set trustCertCollectionFilePath to use TLS."
+        }
+      }
+
       logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
       logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
 
@@ -503,5 +518,17 @@ class AgentOptions(
     // AgentOptions -- the reverse import would have the public options type reaching into the internals
     // of the gRPC client it configures.
     internal const val DEFAULT_GRPC_PORT = 50051
+
+    /**
+     * True when the agent has a token but its gRPC channel is plaintext, so the token is sent in the clear.
+     *
+     * Mirrors the channel choice in AgentGrpcService: the agent uses TLS when a certificate and key are set,
+     * or when a trust store alone is set (server-authenticated TLS).
+     */
+    internal fun isAgentTokenSentInCleartext(
+      agentToken: String,
+      isTlsEnabled: Boolean,
+      trustCertCollectionFilePath: String,
+    ): Boolean = agentToken.isNotEmpty() && !isTlsEnabled && trustCertCollectionFilePath.isEmpty()
   }
 }
