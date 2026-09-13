@@ -71,9 +71,6 @@ context.
   are required. See remediation item 3.
 - **Silent path displacement.** A non-consolidated registration still overwrites the path's owner, which is
   convenient for redeploys but lets any agent authorized for a path take it over. See remediation item 4.
-- **Startup warning logic.** The "agent port is unauthenticated" warning treats a configured trust store as mutual
-  TLS even when TLS itself is not enabled, and a token configured without TLS travels in cleartext with no warning
-  (finding #6 of `docs/CODE_REVIEW_SEPTEMBER_2026.md`).
 
 ## Affected code
 
@@ -181,6 +178,9 @@ Item 3 is small and non-breaking; item 4 is a behavior change that needs its own
   #1 and #2 of `docs/CODE_REVIEW_SEPTEMBER_2026.md`) — scrape results are accepted only from the agent the scrape
   was sent to, `sendHeartBeat` is bound like the other calls, and filter-disabled deployments bind calls to the
   identity recorded at connect.
+- **Accurate startup warnings** (finding #6 of `docs/CODE_REVIEW_SEPTEMBER_2026.md`) — the "agent port is
+  unauthenticated" warning no longer treats a trust store as mutual TLS unless TLS is enabled, and the proxy and
+  the agent each warn when agent tokens are configured without TLS and would be sent in cleartext.
 
 ## References
 

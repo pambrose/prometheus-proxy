@@ -49,7 +49,8 @@ Both sides must use the **same** value. When set, the agent attaches the token a
 header on every call and the proxy rejects any call with a missing or mismatched token
 (`UNAUTHENTICATED`). When the token is empty (the default), the open behavior is preserved and the
 proxy logs a startup warning — unless mutual TLS is configured, which already authenticates agents.
-The token is never logged.
+The token is never logged. If a token or per-agent identities are configured without TLS, the proxy and the
+agent each log a startup warning that tokens are sent in cleartext.
 
 ```bash
 # Proxy requiring a token

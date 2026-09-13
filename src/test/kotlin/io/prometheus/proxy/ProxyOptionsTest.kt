@@ -412,36 +412,84 @@ class ProxyOptionsTest : StringSpec() {
     // guarded on only the legacy token and mTLS, it fires for a proxy.auth-only config — the very
     // setup the docs recommend — training operators to ignore a security-critical warning.
 
-    "the agent port counts as unauthenticated with no token, no trust store and no identities" {
+    "the agent port counts as unauthenticated with no token, no identities and no mutual TLS" {
       ProxyOptions.isAgentPortUnauthenticated(
         agentToken = "",
-        trustCertCollectionFilePath = "",
         authIdentityCount = 0,
+        isTlsEnabled = false,
+        trustCertCollectionFilePath = "",
       ).shouldBeTrue()
     }
 
     "per-agent identities alone authenticate the agent port" {
       ProxyOptions.isAgentPortUnauthenticated(
         agentToken = "",
-        trustCertCollectionFilePath = "",
         authIdentityCount = 1,
+        isTlsEnabled = false,
+        trustCertCollectionFilePath = "",
       ).shouldBeFalse()
     }
 
     "a legacy agent token alone authenticates the agent port" {
       ProxyOptions.isAgentPortUnauthenticated(
         agentToken = "tok",
-        trustCertCollectionFilePath = "",
         authIdentityCount = 0,
+        isTlsEnabled = false,
+        trustCertCollectionFilePath = "",
       ).shouldBeFalse()
     }
 
-    "a mutual-TLS trust store alone authenticates the agent port" {
+    "mutual TLS alone authenticates the agent port" {
       ProxyOptions.isAgentPortUnauthenticated(
         agentToken = "",
-        trustCertCollectionFilePath = "/certs/ca.pem",
         authIdentityCount = 0,
+        isTlsEnabled = true,
+        trustCertCollectionFilePath = "/certs/ca.pem",
       ).shouldBeFalse()
+    }
+
+    // The gRPC server uses TLS only when both a certificate and a key are set. A trust store on its own leaves
+    // the port in plaintext with no client-certificate check, so it must not silence the warning.
+    "a trust store without TLS enabled does not authenticate the agent port" {
+      ProxyOptions.isAgentPortUnauthenticated(
+        agentToken = "",
+        authIdentityCount = 0,
+        isTlsEnabled = false,
+        trustCertCollectionFilePath = "/certs/ca.pem",
+      ).shouldBeTrue()
+    }
+
+    // Server-only TLS encrypts the channel but does not check who the agent is.
+    "server-only TLS does not authenticate the agent port" {
+      ProxyOptions.isAgentPortUnauthenticated(
+        agentToken = "",
+        authIdentityCount = 0,
+        isTlsEnabled = true,
+        trustCertCollectionFilePath = "",
+      ).shouldBeTrue()
+    }
+
+    // Tokens and identities authenticate agents, but without TLS the tokens cross the network in plaintext, where
+    // anyone who can observe the traffic can capture and replay them.
+
+    "agent tokens are sent in cleartext when a token is configured without TLS" {
+      ProxyOptions.areAgentTokensSentInCleartext(agentToken = "tok", authIdentityCount = 0, isTlsEnabled = false)
+        .shouldBeTrue()
+    }
+
+    "agent tokens are sent in cleartext when identities are configured without TLS" {
+      ProxyOptions.areAgentTokensSentInCleartext(agentToken = "", authIdentityCount = 1, isTlsEnabled = false)
+        .shouldBeTrue()
+    }
+
+    "agent tokens are not sent in cleartext when TLS is enabled" {
+      ProxyOptions.areAgentTokensSentInCleartext(agentToken = "tok", authIdentityCount = 1, isTlsEnabled = true)
+        .shouldBeFalse()
+    }
+
+    "nothing is sent in cleartext when no tokens are configured" {
+      ProxyOptions.areAgentTokensSentInCleartext(agentToken = "", authIdentityCount = 0, isTlsEnabled = false)
+        .shouldBeFalse()
     }
   }
 }

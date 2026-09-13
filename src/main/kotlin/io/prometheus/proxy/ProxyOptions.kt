@@ -328,10 +328,24 @@ class ProxyOptions(
         // Never log the token value -- only whether one is configured.
         logger.info { "agentToken: ${if (agentToken.isEmpty()) "(none)" else "***"}" }
         // Warn only when the agent port is genuinely open to any reachable peer.
-        if (isAgentPortUnauthenticated(agentToken, trustCertCollectionFilePath, proxyConfigVals.auth.size)) {
+        if (
+          isAgentPortUnauthenticated(
+            agentToken = agentToken,
+            authIdentityCount = proxyConfigVals.auth.size,
+            isTlsEnabled = isTlsEnabled,
+            trustCertCollectionFilePath = trustCertCollectionFilePath,
+          )
+        ) {
           logger.warn {
-            "Agent gRPC port is unauthenticated -- no pre-shared agent token and no mutual-TLS trust store " +
-              "are configured. Any reachable peer can register as an agent. Do not expose this port in production."
+            "Agent gRPC port is unauthenticated -- no agent token, per-agent identity (proxy.auth), or mutual TLS " +
+              "is configured. Any reachable peer can register as an agent. Do not expose this port in production."
+          }
+        }
+        if (areAgentTokensSentInCleartext(agentToken, proxyConfigVals.auth.size, isTlsEnabled)) {
+          logger.warn {
+            "Agent tokens are configured but TLS is not enabled on the agent gRPC port -- tokens are sent in " +
+              "cleartext and can be captured by anyone who can observe the traffic. Set certChainFilePath and " +
+              "privateKeyFilePath to enable TLS."
           }
         }
 
@@ -344,7 +358,11 @@ class ProxyOptions(
 
     /**
      * True when the agent gRPC port accepts any reachable peer: no per-agent identities, no legacy
-     * shared token, and no mutual-TLS trust store.
+     * shared token, and no mutual TLS.
+     *
+     * Mutual TLS counts only when TLS is actually enabled (both a certificate and a key) *and* a trust
+     * store is set. The gRPC server ignores a trust store when TLS is off, so a trust store alone leaves the
+     * port in plaintext with no client-certificate check and must not silence the warning.
      *
      * Extracted from the startup warning so the condition is directly testable — asserting on a log
      * line would otherwise need an appender harness. Takes the identity *count* rather than the
@@ -352,9 +370,23 @@ class ProxyOptions(
      */
     internal fun isAgentPortUnauthenticated(
       agentToken: String,
-      trustCertCollectionFilePath: String,
       authIdentityCount: Int,
-    ): Boolean = agentToken.isEmpty() && trustCertCollectionFilePath.isEmpty() && authIdentityCount == 0
+      isTlsEnabled: Boolean,
+      trustCertCollectionFilePath: String,
+    ): Boolean {
+      val isMutualTls = isTlsEnabled && trustCertCollectionFilePath.isNotEmpty()
+      return agentToken.isEmpty() && authIdentityCount == 0 && !isMutualTls
+    }
+
+    /**
+     * True when agents authenticate with tokens (the legacy shared token or per-agent identities) but TLS is
+     * not enabled on the agent port, so every token crosses the network in plaintext.
+     */
+    internal fun areAgentTokensSentInCleartext(
+      agentToken: String,
+      authIdentityCount: Int,
+      isTlsEnabled: Boolean,
+    ): Boolean = (agentToken.isNotEmpty() || authIdentityCount > 0) && !isTlsEnabled
 
     // gRPC timeout fields use -1L as the "leave the gRPC default in place" sentinel (the
     // `> -1L` guards in ProxyGrpcService rely on it). Any other non-positive value is invalid

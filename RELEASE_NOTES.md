@@ -55,6 +55,11 @@ The binding is only as fine-grained as your identities:
 So behind a reverse proxy, a distinct `proxy.auth` token per agent is what actually separates agents.
 With the transport filter enabled, calls are bound by connection and this limit does not apply.
 
+**Startup warnings.** The proxy's "agent gRPC port is unauthenticated" warning stayed silent when only a
+trust store was configured, even though TLS was off and nothing checked client certificates. Mutual TLS
+now counts only when TLS is actually enabled. The proxy and the agent also now warn at startup when agent
+tokens are configured without TLS, because those tokens are sent in cleartext.
+
 ### Agent registration and failover
 
 What the agent does next now depends on how far the previous attempt got:
@@ -92,6 +97,8 @@ response" log is now WARN rather than INFO, since it now means something needs a
 - The CLI reference (`docs/cli-args.md` and the website) now matches the real flags: a nonexistent
   environment variable is gone, the token, dashboard, and HTTPS truststore flags are documented, and the
   `--gzip` and `--proxy` defaults are corrected.
+- The TLS example configs now say plainly that their certificates are committed test fixtures with public
+  private keys, and the no-mutual-auth example no longer turns on `enableTrustAllX509Certificates`.
 - `DESIGN.md` and `PRODUCT.md` moved to `docs/`, and `prom-agent.conf` moved to `examples/` with a stale
   test path removed.
 - The build now enforces coverage floors (line 95%, branch 87%) in CI, and coverage rose to 97.4% line
